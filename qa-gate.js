@@ -17,14 +17,30 @@
 // las piezas van a revisión en vez de entregarse sin verificar.
 //
 // DEFINICIÓN DE "PASAR LA VARA": EXACTAMENTE la del audit de siempre
-// (la fila qa_audit): texto_ok && colores_ok && claims_ok && mobile_ok
-// && brand_ok && anatomia_ok && headline_clear !== false &&
-// headline_empty_space_ok !== false (v862, HUECO VACÍO — el 583 y el
-// 590: el titular tapaba la imagen; el titular va en el hueco vacío,
-// nunca sobre el sujeto). Los checks
-// solo-auditoría (headline_complete, contraste_ok, elementos_ok) NO
-// deciden el pase — pero si TAMBIÉN fallan junto a otro, entran en la
-// corrección para que la regeneración los arregle de una vez.
+// (la fila qa_audit) MÁS los tres checks que eran solo-auditoría,
+// MÁS headline_empty_space_ok (v862, HUECO VACÍO — el 583 y el 590:
+// el titular tapaba la imagen; el titular va en el hueco vacío,
+// nunca sobre el sujeto; si no hay hueco, la pieza sale LIMPIA
+// sin titular).
+// (M183/M188, 2026-11-08/09 — MORA-10): texto_ok, headline_complete,
+// headline_clear, brand_ok, colores_ok, claims_ok, mobile_ok,
+// anatomia_ok, contraste_ok, elementos_ok y headline_empty_space_ok —
+// los 11. Cualquier sub-check en false puebla qa_gate_failed_checks
+// con su nombre y BLOQUEA la entrega: `failed_checks` vacío + un
+// sub-check en false es un bug del gate, no un pase (evidencia: evals
+// 589/593 entregadas con headline_complete=false y failed_checks=[]
+// en producción v803/v851).
+// La definición vieja (solo 7, el resto "SOLO AUDITORÍA") quedó
+// SUPERSEDED: el juez ya marcaba estos fallos y el gate los ignoraba.
+//
+// CORRECCIÓN A NIVEL TEXTO (MORA-10c): un titular roto es un defecto de
+// TEXTO, no de imagen — regenerar la imagen NO lo arregla (probado: 566,
+// 2 intentos, mismo titular). Cuando el fallo es solo de texto
+// (headline_complete), el gate pide al llamador un fallback de texto
+// (adaptador `retext`: siguiente oración completa, o pieza sin titular)
+// y re-evalúa LA MISMA imagen, sin gastar una generación. Si no queda
+// fallback, la pieza va a bandeja con failed_checks poblado: nunca se
+// entrega, nunca se queman generaciones en vano.
 //
 // MÓDULO PURO: sin requires, sin DB, sin llamadas de red. Todo efecto
 // (evaluar, generar, guardar, componer, retener) entra inyectado, así
@@ -34,23 +50,25 @@
 
 const QA_GATE_MAX_ATTEMPTS = 3;
 
-// Checks que deciden el pase (definición del audit, ni uno más ni uno menos).
+// Checks que deciden el pase (M183/M188 + v862: los 11, ni uno más ni uno menos).
+// Orden fijo: el orden en que qaGateFailedChecks los nombra.
 const GATE_CHECKS = [
   ['texto_ok', 'texto'],
+  ['headline_complete', 'headline_complete'],
+  ['headline_clear', 'headline_clear'],
+  ['brand_ok', 'marca'],
   ['colores_ok', 'colores'],
   ['claims_ok', 'claims'],
   ['mobile_ok', 'mobile'],
-  ['brand_ok', 'marca'],
   ['anatomia_ok', 'anatomia'],
-  ['headline_clear', 'headline_clear'],
-  ['headline_empty_space_ok', 'headline_empty_space_ok'],
-];
-// Checks solo-auditoría: no deciden el pase, pero se corrigen si fallan junto a otro.
-const AUDIT_ONLY_CHECKS = [
-  ['headline_complete', 'headline_complete'],
   ['contraste_ok', 'contraste'],
   ['elementos_ok', 'elementos'],
+  ['headline_empty_space_ok', 'headline_empty_space_ok'],
 ];
+// Checks solo-auditoría: NINGUNO desde M183 (2026-11-08). La lista queda
+// como constante vacía para que el concepto no se reintroduzca por
+// accidente: todo check que el juez devuelve decide el pase.
+const AUDIT_ONLY_CHECKS = [];
 
 // Línea de corrección por check (las 4 primeras son las del reintento
 // correctivo 2026-10-16, textuales; el resto son nuevas para el gate).
@@ -70,17 +88,20 @@ const FIX_LINES = {
 
 function qaGatePassed(qa) {
   if (!qa || typeof qa !== 'object') return false;
-  return !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok &&
-    qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false &&
-    qa.headline_empty_space_ok !== false);
+  // Única fuente de verdad: GATE_CHECKS (los 11). Si un check nuevo se
+  // agrega a la lista, pasa a decidir el pase sin tocar esta función.
+  for (const [field] of GATE_CHECKS) {
+    if (qa[field] === false) return false;
+  }
+  return true;
 }
 
-// Todos los checks en false, en orden fijo (decisivos primero). null →
+// Todos los checks en false, en orden fijo (el de GATE_CHECKS). null →
 // ['qa_unavailable'] (fail-closed: sin veredicto no hay pase).
 function qaGateFailedChecks(qa) {
   if (!qa || typeof qa !== 'object') return ['qa_unavailable'];
   const out = [];
-  for (const [field, name] of [...GATE_CHECKS, ...AUDIT_ONLY_CHECKS]) {
+  for (const [field, name] of GATE_CHECKS) {
     if (qa[field] === false) out.push(name);
   }
   return out;
@@ -119,15 +140,31 @@ function qaGateReason(qa) {
 //   composite(absPath) -> void (titular por código o no-op sin titular)
 //   retain(absPath, reason) -> void (retener la imagen rechazada; un error
 //     acá nunca rompe el loop: es diagnóstico)
+//   retext({ abs, failedChecks, qa }) -> { headline } | null (OPCIONAL —
+//     corrección a NIVEL TEXTO, MORA-10c: el llamador recompone LA MISMA
+//     imagen con el siguiente titular (o la deja limpia si headline es
+//     ''); null = no queda fallback de texto (bandeja sin regenerar);
+//     { regenerate: true } = no hay fix de texto pero una imagen nueva
+//     puede salir limpia (texto horneado sin titular compuesto: el loop
+//     sigue el camino normal de regeneración). Si LANZA o devuelve otra
+//     cosa, se trata como null: nunca rompe el loop)
 // Devuelve: { outcome: 'delivered'|'bandeja', path, attempts, failedChecks,
-//   reason, firstQa, finalPrompt }.
+//   reason, firstQa, finalPrompt, headline }.
 //   - outcome 'delivered': el path pasó la vara (o es el original).
-//   - outcome 'bandeja': se agotaron los intentos; el path es el ÚLTIMO
-//     intento (fallido) y el llamador DEBE marcar needs_review=1.
+//   - outcome 'bandeja': se agotaron los intentos (o el texto no tiene
+//     fallback); el path es el ÚLTIMO intento (fallido) y el llamador
+//     DEBE marcar needs_review=1.
 //   - firstQa: la PRIMERA evaluación (la que va a la fila qa_audit, para
 //     que la estadística de Mora no cambie de significado).
 //   - finalPrompt: el prompt que produjo el path final.
-async function runQaGate({ basePrompt, initialAbs, initialPub, maxAttempts, evaluate, generate, save, composite, retain }) {
+//   - headline: el titular en uso al final (solo si se llamó a retext
+//     alguna vez; si no, el llamador ya lo sabe).
+//   - failedChecks NUNCA es [] con un sub-check en false: 'delivered'
+//     solo se devuelve tras un qaGatePassed (los 11 en true).
+// Checks de solo-texto: un fallo que vive en la cadena del titular y que
+// ninguna regeneración de imagen puede arreglar.
+const TEXT_ONLY_CHECKS = new Set(['headline_complete']);
+async function runQaGate({ basePrompt, initialAbs, initialPub, maxAttempts, evaluate, generate, save, composite, retain, retext }) {
   const cap = Math.max(1, Number(maxAttempts) || QA_GATE_MAX_ATTEMPTS);
   let abs = initialAbs;
   let pub = initialPub;
@@ -135,6 +172,7 @@ async function runQaGate({ basePrompt, initialAbs, initialPub, maxAttempts, eval
   let firstQa = null;
   let qa = null;
   let attempts = 0;
+  let headline = undefined; // último titular aplicado por retext (si lo hubo)
   while (true) {
     attempts++;
     try {
@@ -144,13 +182,54 @@ async function runQaGate({ basePrompt, initialAbs, initialPub, maxAttempts, eval
     }
     if (attempts === 1) firstQa = qa;
     if (qaGatePassed(qa)) {
-      return { outcome: 'delivered', path: pub, attempts, failedChecks: [], reason: '', firstQa, finalPrompt };
+      return { outcome: 'delivered', path: pub, attempts, failedChecks: [], reason: '', firstQa, finalPrompt, headline };
     }
     const failedChecks = qaGateFailedChecks(qa);
     const reason = qaGateReason(qa);
+    const textOnly = failedChecks.length > 0 && failedChecks.every((c) => TEXT_ONLY_CHECKS.has(c));
+    // (MORA-10c) Corrección a NIVEL TEXTO antes de decidir regenerar:
+    // si el titular es el problema, se pide el siguiente titular y se
+    // recompone la MISMA imagen. Sin adaptador, o sin fallback, se sigue
+    // el camino viejo (regenerar hasta agotar, luego bandeja).
+    let textFixed = false;
+    let textRegenOk = false;
+    if (retext && failedChecks.includes('headline_complete')) {
+      try {
+        const next = await retext({ abs, failedChecks, qa });
+        if (next && typeof next.headline === 'string') {
+          headline = next.headline;
+          textFixed = true;
+        } else if (next && next.regenerate === true) {
+          textRegenOk = true;
+        }
+      } catch (e) {
+        textFixed = false; // retext que falla = sin fallback (no rompe el loop)
+      }
+    }
+    if (textOnly) {
+      if (textFixed) {
+        // Misma imagen, titular nuevo: re-evaluar sin gastar una generación.
+        // El cap de intentos acota la cadena de fallbacks.
+        if (attempts >= cap) {
+          try { if (retain) await retain(abs, reason); } catch (e) {}
+          return { outcome: 'bandeja', path: pub, attempts, failedChecks, reason, firstQa, finalPrompt, headline };
+        }
+        continue;
+      }
+      if (retext && !textRegenOk) {
+        // Hay adaptador de texto y no queda fallback: la imagen nueva
+        // llevaría el mismo titular roto (566). Bandeja con los checks
+        // poblados, sin quemar generaciones.
+        try { if (retain) await retain(abs, reason); } catch (e) {}
+        return { outcome: 'bandeja', path: pub, attempts, failedChecks, reason, firstQa, finalPrompt, headline };
+      }
+      // Sin adaptador retext, o con { regenerate: true } (texto horneado
+      // sin titular compuesto): la imagen nueva puede salir limpia — cae
+      // al camino de regeneración de abajo (comportamiento anterior).
+    }
     if (attempts >= cap) {
       try { if (retain) await retain(abs, reason); } catch (e) {}
-      return { outcome: 'bandeja', path: pub, attempts, failedChecks, reason, firstQa, finalPrompt };
+      return { outcome: 'bandeja', path: pub, attempts, failedChecks, reason, firstQa, finalPrompt, headline };
     }
     const corrPrompt = qaGateCorrectionPrompt(basePrompt, qa);
     const b64 = await generate(corrPrompt); // si lanza, propaga
@@ -165,6 +244,8 @@ async function runQaGate({ basePrompt, initialAbs, initialPub, maxAttempts, eval
 
 module.exports = {
   QA_GATE_MAX_ATTEMPTS,
+  GATE_CHECKS,
+  AUDIT_ONLY_CHECKS,
   qaGatePassed,
   qaGateFailedChecks,
   qaGateFixesFor,

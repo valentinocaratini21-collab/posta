@@ -731,6 +731,40 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   if (declarIsCut()) out = out.replace(/\s*[!….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
 }
+// (MORA-10c, LOTE v865 — M183/M188) Fallbacks de titular a NIVEL TEXTO.
+// Cuando el gate marca headline_complete=false, el titular NO se arregla
+// regenerando la imagen: se prueba la siguiente oración completa de la
+// misma fuente (el caption que produjo el titular — en los call-sites
+// principales `idea` ES el caption, así que su titulo trae las oraciones)
+// y, si no queda ninguna, la pieza sale SIN titular ('') antes que con
+// una pregunta rota. NO toca makeHeadline ni la regla 5b (eso necesita el
+// OK de Valentino, MORA-10a): esto es el fallback del gate, no un cambio
+// del productor. Pura y exportada para la suite.
+// Devuelve la lista ordenada de candidatos (sin el titular en uso, sin
+// duplicados, sin preguntas cortadas); el '' final es la pieza sin
+// titular y es el último recurso, siempre disponible.
+function qaHeadlineFallbacks(sourceText, usedHeadline, rubro = null) {
+  const used = String(usedHeadline || '').trim();
+  const text = String(sourceText || '').replace(/\s+/g, ' ').trim();
+  const out = [];
+  const seen = new Set([used]);
+  if (text) {
+    const sentences = (text.match(/[^.!?…]+[.!?…]/g) || [text]).map((s) => s.trim()).filter(Boolean);
+    for (let i = 1; i < sentences.length; i++) {
+      let cand = '';
+      try { cand = makeHeadline(sentences.slice(i).join(' '), 6, 70, rubro); } catch (e) { cand = ''; }
+      cand = String(cand || '').trim();
+      if (!cand || seen.has(cand)) continue;
+      // Una pregunta cortada no es fallback válido: el juez la vuelve a
+      // marcar (SIGNOS — «¿» debe cerrar con «?»).
+      if (cand.startsWith('¿') && cand.endsWith('…')) continue;
+      seen.add(cand);
+      out.push(cand);
+    }
+  }
+  out.push(''); // pieza sin titular: último recurso, siempre disponible
+  return out;
+}
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -22003,8 +22037,8 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 - brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena). Si marcás brand_ok=false, el detalle TIENE que nombrar QUÉ marca famosa imita (Mora 2026-10-19, id 482: un brand_ok=false con detalle genérico "recuerda a marcas famosas" sin nombre no es evidencia auditable y no cuenta como falla).
 - detalle: UNA frase concreta sobre ESTA imagen: nombrá un elemento visible (el titular, un objeto, un color) y, si algo falla, qué. PROHIBIDO responder "..." o genéricos tipo "cumple con todos los requisitos" sin nombrar nada visible (Mora 2026-10-18: ids 404/456/459/462 volvieron con detalle "...").
 - anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).
-- contraste_ok (v231, SOLO AUDITORÍA — adopción del estudio de patrones: contraste de texto ≥ 4,5:1 estilo WCAG AA): si la imagen lleva texto, ¿el texto se lee con contraste fuerte contra lo que tiene detrás (fondo, placa o sombra)? Texto claro sobre fondo claro, o texto oscuro sobre fondo oscuro, o letras que se pierden contra una foto cargada → false. Sin texto → true.
-- elementos_ok (v231, SOLO AUDITORÍA — test de sustracción de las reseñas pro de Predis): la pieza tiene UN solo protagonista y UNA sola idea; contá los elementos que compiten: si hay 3 o más focos compitiendo (varios productos protagonistas, carteles, props decorativos que pelean con el héroe) → false. Menos es más: si sacando un elemento la pieza mejora, ese elemento sobra.` },
+- contraste_ok (M183/M188, v865 — BLOQUEA la entrega como los demás checks): si la imagen lleva texto, ¿el texto se lee con contraste fuerte contra lo que tiene detrás (fondo, placa o sombra)? Texto claro sobre fondo claro, o texto oscuro sobre fondo oscuro, o letras que se pierden contra una foto cargada → false. Sin texto → true.
+- elementos_ok (M183/M188, v865 — BLOQUEA la entrega como los demás checks): la pieza tiene UN solo protagonista y UNA sola idea; contá los elementos que compiten: si hay 3 o más focos compitiendo (varios productos protagonistas, carteles, props decorativos que pelean con el héroe) → false. Menos es más: si sacando un elemento la pieza mejora, ese elemento sobra.` },
           { role: 'user', content: [
             { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
@@ -22030,8 +22064,8 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
       claims_ok: parsed.claims_ok !== false,
       mobile_ok: parsed.mobile_ok !== false,
       anatomia_ok: parsed.anatomia_ok !== false, // manos/caras deformadas = pieza descartada
-      contraste_ok: parsed.contraste_ok !== false, // (v231) SOLO auditoría: jamás entra en qaPassed
-      elementos_ok: parsed.elementos_ok !== false, // (v231) SOLO auditoría: test de sustracción
+      contraste_ok: parsed.contraste_ok !== false, // (M183/M188, v865) bloquea la entrega como los demás checks
+      elementos_ok: parsed.elementos_ok !== false, // (M183/M188, v865) bloquea la entrega como los demás checks
       detalle: String(parsed.detalle || '').slice(0, 140),
     };
   } catch (e) {
@@ -22550,6 +22584,18 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   if (!key) throw new Error('Sin clave de OpenAI');
   const profile = getProfile(uid);
   let cleanHeadline = String(headline || '').trim(); // (v862) let: el Gap 6 lo vacía si el titular no quedó en el hueco vacío (pieza limpia)
+  // (MORA-10c, LOTE v865) Titular VIVO del gate: el gate puede cambiarlo
+  // por fallback de texto (siguiente oración completa, o pieza sin titular)
+  // y los adaptadores (evaluate/composite/save/retext) leen ESTA variable,
+  // no el titular original. headlineZone queda siempre en 'top': en v864
+  // (v862) el Gap 6 ya no baja el titular a la zona inferior — lo RETIRA
+  // (pieza limpia) — así que no hay zona inferior que recordar; la variable
+  // se conserva porque los adaptadores composite/retext la leen.
+  // retextCandidates es la cola de fallbacks (null = aún no calculada;
+  // se calcula de ideaObj.titulo en el primer retext).
+  let currentHeadline = cleanHeadline;
+  let headlineZone = 'top';
+  let retextCandidates = null;
   const hexes = parseBrandHexes(settings.brand_colors);
   const dna = readDna(uid);
   const theme = ideaObj.titulo || ideaObj.tema || '';
@@ -22963,6 +23009,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
             const dropped = cleanHeadline;
             fs.copyFileSync(cleanSibling, imgPath);
             cleanHeadline = ''; // (v862) la pieza sale limpia; el gate ya no recompone titular
+            currentHeadline = ''; // (v865×v862) el gate evalúa el titular VIVO: si el Gap 6 lo retiró, no hay titular que juzgar ni que retextar
             console.log(`[concept-shot] titular RETIRADO (pieza limpia): el titular tapaba al sujeto, no quedó en el hueco vacío ("${dropped.slice(0, 40)}")`);
           }
         }
@@ -22977,9 +23024,13 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // degrade a brand card por claims. La pieza NO se entrega antes de
   // pasar la vara: se evalúa el archivo FINAL (con titular compuesto);
   // si falla, el motor la regenera sola con la corrección explícita,
-  // hasta QA_GATE_MAX_ATTEMPTS generaciones en total. Si agota los
-  // intentos, la pieza va a la BANDEJA marcada (needs_review=1, puesto
-  // por el llamador vía resultOut.qaGate) y NUNCA se entrega como
+  // hasta QA_GATE_MAX_ATTEMPTS generaciones en total. (MORA-10c, v865)
+  // Si el fallo es SOLO del titular (headline_complete), NO se regenera
+  // la imagen: el gate pide un fallback de texto (adaptador `retext`:
+  // siguiente oración completa, o pieza sin titular) y re-evalúa la
+  // misma imagen; sin fallback, bandeja sin quemar generaciones. Si
+  // agota los intentos, la pieza va a la BANDEJA marcada (needs_review=1,
+  // puesto por el llamador vía resultOut.qaGate) y NUNCA se entrega como
   // final. Fail-closed: sin veredicto del QA (null) el intento cuenta
   // como fallido. La fila qa_audit sigue siendo UNA por llamada y
   // guarda la PRIMERA evaluación (la estadística de Mora no cambia de
@@ -22997,13 +23048,13 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       evaluate: async (abs) => {
         let b64v = null;
         try { b64v = fs.readFileSync(abs).toString('base64'); } catch (e) { return null; }
-        return qaImageB64(b64v, { headline: cleanHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)) }, key);
+        return qaImageB64(b64v, { headline: currentHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)) }, key);
       },
       generate: async (corrPrompt) => genConceptImage(key, corrPrompt, absRefs, refNote, uid),
       save: async (b64n, corrPrompt) => {
         const nName = saveImageB64(b64n);
         const nAbs = path.join(MEDIA_DIR, nName);
-        if (cleanHeadline) {
+        if (currentHeadline) {
           try {
             const nClean = nName.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
             fs.copyFileSync(nAbs, path.join(MEDIA_DIR, nClean));
@@ -23015,10 +23066,11 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
         return { abs: nAbs, pub: `/media/${nName}` };
       },
       composite: async (nAbs) => {
-        if (!cleanHeadline) return;
+        if (!currentHeadline) return;
         try {
           const { execFileSync } = require('child_process');
-          const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nAbs, '--headline', cleanHeadline, '--out', nAbs];
+          const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nAbs, '--headline', currentHeadline, '--out', nAbs];
+          if (headlineZone === 'bottom') cArgs.push('--zone', 'bottom');
           if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
           // (Lote 7, re-base sobre tipografías v506) El gate es el reemplazo
           // del reintento viejo: su composite lleva la fuente de la marca
@@ -23029,6 +23081,51 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
           execFileSync('python3', cArgs, { timeout: 30000 });
         } catch (e) { console.error('[qa-gate] composite:', e.message); }
       },
+      // (MORA-10c, LOTE v865) Corrección a NIVEL TEXTO: recompone LA MISMA
+      // imagen con el siguiente titular de la cola de fallbacks (o la deja
+      // limpia si el candidato es ''). La base limpia hermana (-clean) es
+      // la que permite recomponer sin regenerar. Devuelve { headline } si
+      // se aplicó, null si no queda fallback (el gate manda a bandeja sin
+      // quemar generaciones) y { regenerate: true } si NO hay titular
+      // compuesto — el fallo es texto horneado y solo una imagen nueva
+      // puede salir limpia. Un error acá nunca rompe el loop: se trata
+      // como null.
+      retext: async ({ abs }) => {
+        try {
+          if (!currentHeadline) return { regenerate: true };
+          if (retextCandidates === null) {
+            retextCandidates = qaHeadlineFallbacks(ideaObj.titulo || ideaObj.tema || '', currentHeadline, profile.category || null);
+          }
+          const cleanSibling = abs.replace(/(\.[a-z0-9]+)$/i, '-clean$1');
+          if (!fs.existsSync(cleanSibling)) return null;
+          const next = retextCandidates.shift();
+          if (next === undefined) return null;
+          fs.copyFileSync(cleanSibling, abs);
+          // (Gap 3) Fallback de fidelidad: la base limpia es la foto SIN
+          // normalizar; se re-normaliza para no perder el encuadre 4:5.
+          if (resultOut && resultOut.fidelity === 'fallback') {
+            try {
+              const { execFileSync } = require('child_process');
+              execFileSync('python3', [path.join(__dirname, 'normalize-photo.py'), '--in', abs, '--out', abs], { timeout: 30000 });
+            } catch (e) { console.error('[qa-gate] retext normalize:', e.message); }
+          }
+          currentHeadline = next;
+          if (next) {
+            const { execFileSync } = require('child_process');
+            const rArgs = [path.join(__dirname, 'composite-headline.py'), '--in', abs, '--headline', next, '--out', abs];
+            if (headlineZone === 'bottom') rArgs.push('--zone', 'bottom');
+            if (hexes && hexes[0]) rArgs.push('--grade', String(hexes[0]));
+            try { rArgs.push('--font', brandFontOf(settings)); } catch (e) {}
+            rArgs.push(...logoSealArgsForUser(uid));
+            execFileSync('python3', rArgs, { timeout: 30000 });
+          }
+          console.log(`[qa-gate] retext: titular → ${next ? `"${next.slice(0, 40)}"` : '(sin titular)'}`);
+          return { headline: next };
+        } catch (e) {
+          console.error('[qa-gate] retext:', e.message);
+          return null;
+        }
+      },
       retain: async (abs, reason) => {
         try { retainQaFailedFile({ uid, postId: null, gate: 'qa-gate', reason, absPath: abs }); } catch (e) {}
       },
@@ -23037,7 +23134,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     gateFinalPrompt = gate.finalPrompt;
     qaGateAttempts = gate.attempts || 1;
     if (qaGateAttempts > 1) postCharacterRegen = true;
-    if (resultOut) resultOut.qaGate = { passed: gate.outcome === 'delivered', attempts: gate.attempts, outcome: gate.outcome, failedChecks: gate.failedChecks, reason: gate.reason };
+    if (resultOut) resultOut.qaGate = { passed: gate.outcome === 'delivered', attempts: gate.attempts, outcome: gate.outcome, failedChecks: gate.failedChecks, reason: gate.reason, headline: currentHeadline };
     try {
       db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
       try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
@@ -23049,7 +23146,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
         const rowQa = { ...fq, qa_gate_attempts: gate.attempts, qa_gate_outcome: gate.outcome, qa_gate_failed_checks: gate.failedChecks, qa_gate_final_path: gate.path };
         db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaGate.qaGatePassed(fq) ? 1 : 0, JSON.stringify(rowQa).slice(0, 4000), auditPath);
       }
-      try { console.log(('[qa-gate] outcome=' + gate.outcome + ' attempts=' + gate.attempts + ' ' + JSON.stringify({ first: fq ? { texto: fq.texto_ok, colores: fq.colores_ok, claims: fq.claims_ok, mobile: fq.mobile_ok, marca: fq.brand_ok, anatomia: fq.anatomia_ok, headline_clear: fq.headline_clear, headline_empty_space_ok: fq.headline_empty_space_ok } : null, failed: gate.failedChecks, reason: gate.reason })).slice(0, 600)); } catch (e) {}
+      try { console.log(('[qa-gate] outcome=' + gate.outcome + ' attempts=' + gate.attempts + ' ' + JSON.stringify({ first: fq ? { texto: fq.texto_ok, colores: fq.colores_ok, claims: fq.claims_ok, mobile: fq.mobile_ok, marca: fq.brand_ok, anatomia: fq.anatomia_ok, headline_clear: fq.headline_clear, headline_complete: fq.headline_complete, headline_empty_space_ok: fq.headline_empty_space_ok } : null, failed: gate.failedChecks, reason: gate.reason })).slice(0, 600)); } catch (e) {}
     } catch (e) { console.error('[qa-gate] db:', e.message); }
     if (gate.outcome === 'bandeja') console.log(`[qa-gate] usuario ${uid}: pieza a bandeja tras ${gate.attempts} intentos (${gate.failedChecks.join(',')}) — needs_review en el llamador`);
   } catch (e) { console.error('[qa-gate]', e.message); throw e; }
@@ -34328,7 +34425,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v864';
+const BUILD_ID = '20261105-v865';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -35019,4 +35116,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks };
