@@ -5896,7 +5896,10 @@ function setupChecklistHtml(title, opts) {
       ? `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Review your first week</b><small>Take a look at the posts I made for you and get them ready.</small></span><span class="setup-go">See my week ${pzIc("arrowRight", 14)}</span></button>`
       : `<button class="setup-row" id="setupWeekRow"><span class="setup-ico">${pzIc('calendar', 20)}</span><span class="setup-txt"><b>Revisá tu primera semana</b><small>Mirá los posteos que armé para vos y dejalos listos.</small></span><span class="setup-go">Ver mi semana ${pzIc("arrowRight", 14)}</span></button>`);
   }
-  if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
+  // (v853) En la app instalada (Capacitor/TestFlight) el paso PWA nunca se
+  // puede completar: el evento appinstalled no dispara en el shell nativo
+  // y la fila quedaba como «Te falta 1 paso» para siempre. Se suprime.
+  if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed() && !(typeof IS_NATIVE !== 'undefined' && IS_NATIVE)) {
     rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">${pzIc('install', 20)}</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar ${pzIc("arrowRight", 14)}</span></button>`);
   }
   // 🔔 Notificaciones: obligatorias. Sin botón de descartar: el paso se cumple
