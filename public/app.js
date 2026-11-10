@@ -22117,8 +22117,9 @@ async function inicioView() {
   // velado a pantalla completa (#/app/ritual). Después de elegir (o
   // si ya se vio hoy, o si hoy no hay paquete) Inicio abre normal.
   try {
-    if ((typeof pzRitualPuertaManana === 'function') && pzRitualPuertaManana(ritEstado, (typeof pzRitualMananaVistaHoy === 'function') ? pzRitualMananaVistaHoy() : false)) {
+    if ((typeof pzRitualPuertaManana === 'function') && pzRitualPuertaManana(ritEstado, (ritEstado && ritEstado.visto_hoy) || ((typeof pzRitualMananaVistaHoy === 'function') ? pzRitualMananaVistaHoy() : false))) {
       try { if (typeof pzRitualMananaMarcarVista === 'function') pzRitualMananaMarcarVista(); } catch (e) {}
+      try { if (typeof pzRitualMananaMarcarVistaServidor === 'function') pzRitualMananaMarcarVistaServidor(); } catch (e) {}
       if (typeof bbGo === 'function') bbGo('#/app/ritual');
       else if (typeof location !== 'undefined') location.hash = '#/app/ritual';
       return `<div id="inicioView" class="hf-wrap"><div class="pz-ritual-conjuro"><div class="pz-ritual-dots"><span></span><span></span><span></span></div></div></div>`;
@@ -22804,6 +22805,13 @@ function pzRitualMananaVistaHoy() {
 function pzRitualMananaMarcarVista() {
   try { localStorage.setItem('pz-ritual-manana-' + pzRitualMananaKey(), '1'); } catch (e) {}
 }
+// (LOTE RITUAL-VISTO-SERVIDOR · v875) Marca el «visto hoy» en el
+// servidor (POST /api/ritual/visto, fire-and-forget, nunca bloquea):
+// es el hecho que comparten la app y el website. Si el POST falla,
+// localStorage queda como respaldo (la puerta usa el OR de los dos).
+function pzRitualMananaMarcarVistaServidor() {
+  try { if (typeof api !== 'undefined' && api && typeof api.post === 'function') { api.post('/api/ritual/visto', {}).catch(() => {}); } } catch (e) {}
+}
 // (LOTE RITUAL-SIN-VELO · 9/11) La selección ya no se escribe: ver
 // ≠ elegir. SelGuardar/SelLimpiar murieron con el gesto de revelar.
 // SelLeer queda solo porque Hoy (v826, lecturas muertas) todavía lo
@@ -22848,8 +22856,13 @@ async function pzRitualCargar() {
   }
   // (LOTE RITUAL-SIN-VELO · 9/11) Sin selección: la hoja rinde la
   // recomendada revelada directo desde el servidor. Ver ≠ elegir:
-  // ver no guarda nada. La confirmación vive solo en [Sale así].
+  // ver no elige nada (solo marca el «visto hoy» del servidor, v875).
+  // La confirmación vive solo en [Sale así].
   box.innerHTML = pzRitualHTML(d, en);
+  // (LOTE RITUAL-VISTO-SERVIDOR · v875) La pantalla se mostró: marcar
+  // el «visto hoy» en el servidor y en localStorage (respaldo).
+  try { if (typeof pzRitualMananaMarcarVista === 'function') pzRitualMananaMarcarVista(); } catch (e) {}
+  try { if (typeof pzRitualMananaMarcarVistaServidor === 'function') pzRitualMananaMarcarVistaServidor(); } catch (e) {}
   // LOTE CUENTA-REGRESIVA: arrancar el tick si se renderizó la cuenta.
   try {
     if (document.getElementById('pzRitualCuenta')) {

@@ -15091,8 +15091,31 @@ app.get('/api/ritual/estado', requireAuth, (req, res) => {
     const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
     const rec = morningPostPush.pickTodayPost(sched, tz, new Date());
     const row = ritualManana.getRow(db, uid, hoy);
-    res.json({ ok: true, tiene_hoy: !!rec, ya_elegido: !!(row && row.picked_post_id), racha: ritualManana.rachaVigente(db, uid, hoy), recomendado_id: rec ? rec.id : null, publicado_hoy: ritualPublicadoHoy(uid, tz, hoy) });
+    res.json({ ok: true, tiene_hoy: !!rec, ya_elegido: !!(row && row.picked_post_id), visto_hoy: !!(row && row.visto_at), racha: ritualManana.rachaVigente(db, uid, hoy), recomendado_id: rec ? rec.id : null, publicado_hoy: ritualPublicadoHoy(uid, tz, hoy) });
   } catch (e) { res.json({ ok: false, error: 'ritual_estado' }); }
+});
+
+// (LOTE RITUAL-VISTO-SERVIDOR · v875) «Visto hoy» como hecho del
+// servidor: la app y el website marcan el visto por acá cuando la
+// pantalla del ritual se muestra. Idempotente y fail-open: si no hay
+// paquete hoy no hay nada que marcar; si falla, el cliente usa su
+// localStorage como respaldo (la puerta nunca se queda colgada).
+app.post('/api/ritual/visto', requireAuth, express.json(), (req, res) => {
+  if (guestBackstop(req, res)) return;
+  const uid = req.session.userId;
+  try {
+    ritualManana.ensureRitualTable(db);
+    const tz = userTz(uid);
+    const hoy = tzToday(tz);
+    const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    const rec = morningPostPush.pickTodayPost(sched, tz, new Date());
+    const r = ritualManana.marcarVisto(db, uid, hoy, rec ? rec.id : null);
+    if (r.error) return res.status(500).json({ ok: false, error: 'ritual_visto' });
+    res.json({ ok: true, visto_hoy: true, ...(r.sin_paquete ? { sin_paquete: true } : {}) });
+  } catch (e) {
+    console.error('[ritual] visto:', e.message);
+    res.status(500).json({ ok: false, error: 'ritual_visto' });
+  }
 });
 
 app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
@@ -15165,7 +15188,7 @@ app.get('/api/ritual/hoy', requireAuth, async (req, res) => {
     // se rearma con la nueva recomendada y sin alternas viejas. Si ya
     // se eligió, la historia no se toca.
     if (!row.picked_post_id && Number(row.recommended_post_id) !== Number(rec.id)) {
-      db.prepare(`UPDATE pz_ritual SET recommended_post_id = ?, alt_post_ids = '[]', picked_post_id = NULL, gold = 0 WHERE user_id = ? AND day_key = ?`).run(rec.id, uid, hoy);
+      db.prepare(`UPDATE pz_ritual SET recommended_post_id = ?, alt_post_ids = '[]', picked_post_id = NULL, gold = 0, visto_at = NULL WHERE user_id = ? AND day_key = ?`).run(rec.id, uid, hoy);
       row = ritualManana.getRow(db, uid, hoy);
     }
     // (LOTE RITUAL-1-OPCION · 6/11) UNA sola carta: la recomendada (o
@@ -34645,7 +34668,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v874';
+const BUILD_ID = '20261105-v875';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

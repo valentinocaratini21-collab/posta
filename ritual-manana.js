@@ -82,6 +82,9 @@ function ensureRitualTable(db) {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, day_key)
   )`);
+  // (LOTE RITUAL-VISTO-SERVIDOR · v875) Columna del «visto hoy»:
+  // migran las DB viejas sin tocar las filas (ya existe → no-op).
+  try { db.exec(`ALTER TABLE pz_ritual ADD COLUMN visto_at TEXT`); } catch (e) { /* ya existe */ }
 }
 
 function getRow(db, uid, dayKey) {
@@ -95,6 +98,31 @@ function upsertRow(db, uid, dayKey, recommendedId) {
     VALUES (?, ?, ?, '[]')
     ON CONFLICT(user_id, day_key) DO UPDATE SET recommended_post_id = excluded.recommended_post_id`)
     .run(uid, dayKey, recommendedId);
+}
+
+// (LOTE RITUAL-VISTO-SERVIDOR · v875) «Visto hoy» como hecho del
+// servidor: cuando la pantalla del ritual se muestra (en la app O en
+// el website), la fila del día queda marcada con visto_at. La puerta
+// matutina lee ese campo en /api/ritual/estado — el website y la app
+// comparten el mismo hecho, aunque tengan storages separados.
+// Idempotente: si ya se marcó hoy, no se toca nada. Si la fila no
+// existe todavía (la puerta dispara antes de abrir el ritual), se
+// crea con la recomendada del día; sin recomendada no hay nada que
+// marcar (sin paquete hoy).
+function marcarVisto(db, uid, dayKey, recommendedId) {
+  try {
+    const row = getRow(db, uid, dayKey);
+    if (row) {
+      if (row.visto_at) return { ok: true, ya: true };
+      db.prepare(`UPDATE pz_ritual SET visto_at = datetime('now') WHERE user_id = ? AND day_key = ?`).run(uid, dayKey);
+      return { ok: true };
+    }
+    const recId = Number(recommendedId);
+    if (!recId) return { ok: true, sin_paquete: true };
+    upsertRow(db, uid, dayKey, recId);
+    db.prepare(`UPDATE pz_ritual SET visto_at = datetime('now') WHERE user_id = ? AND day_key = ?`).run(uid, dayKey);
+    return { ok: true };
+  } catch (e) { return { error: 'db' }; }
 }
 
 // Racha contando hacia atrás desde dayKey (inclusive): días consecutivos
@@ -279,6 +307,7 @@ module.exports = {
   ensureRitualTable,
   getRow,
   upsertRow,
+  marcarVisto,
   rachaHasta,
   rachaVigente,
   totalPicks,
