@@ -11060,6 +11060,18 @@ async function chatExchange({ text, display, extra, pushed }) {
           `<div class="chat-msg ai" data-ts="${its}" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
         ).join(''), its);
       }
+      // (v861 · NOTA DE VOZ) El cambio se aplicó pero el cerebro no dejó
+      // texto ni imagen: sin esta burbuja el intercambio terminaba en
+      // silencio (los 3 puntos se iban y no quedaba nada — el video del
+      // 9/11). Solo cuando la rama no pintó nada visible.
+      if (!replyText && !r.edit.photoFailed && !(Array.isArray(r.edit.images) && r.edit.images.length)) {
+        const _en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+        const _ct = _en ? 'done ✅ I applied the change' : 'listo ✅ ya apliqué el cambio';
+        const cts = Date.now();
+        CHAT.push({ role: 'assistant', text: _ct, ts: cts });
+        chatAppendMsg(boxEdit, chatMsgHtml('assistant', _ct, cts), cts);
+        chatScroll(true);
+      }
       // (LOTE SUBIR-FOTO-CAMBIO · v844) La tarjeta de vista previa o la
       // del carril exprés vuelve con la versión nueva (si no, el cambio
       // quedaba sin botón para confirmar).
@@ -11236,6 +11248,7 @@ let VOICE_REC = null, VOICE_CHUNKS = [], VOICE_TIMER = null, VOICE_START = 0, VO
 let VOICE_STATE = 'idle', VOICE_URL = '', VOICE_BLOB = null, VOICE_DUR = 0;
 let VOICE_FAIL_CODE = '';
 let VOICE_CANCEL = false, VOICE_START_X = 0, VOICE_START_Y = 0, VOICE_EARLY_UP = false, VOICE_ABORTED = false;
+let VOICE_PREVIEW_DONE = false; // (v861) una sola vista previa por grabación
 let VOICE_CTX = null, VOICE_AN = null, VOICE_RAF = 0;
 function vozEn() { try { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); } catch (e) { return false; } }
 function vozHostEl() {
@@ -11415,15 +11428,19 @@ function voiceRenderBar() {
   } else if (VOICE_STATE === 'failed') {
     vozBubbleQuitar();
     var failSub = '';
+    var failMain = en ? 'I could not hear your audio 🙏' : 'no pude escuchar tu audio 🙏';
     try {
       var fc = (typeof VOICE_FAIL_CODE !== 'undefined') ? VOICE_FAIL_CODE : '';
       if (fc === 'bad_audio') failSub = en ? 'the audio did not arrive in a format I can read.' : 'el audio no llegó en un formato que pueda leer.';
       else if (fc === 'no_heard') failSub = en ? 'nothing could be understood from the note.' : 'no se entendió nada de la nota.';
       else if (fc === 'no_key') failSub = en ? 'the audio key is not configured.' : 'falta configurar la clave de audio.';
       else if (fc === 'network') failSub = en ? 'the connection dropped while sending.' : 'se cortó la conexión al enviar.';
+      // (v861) Fallo del mic: otra causa, otro texto (el de audio no aplica).
+      else if (fc === 'mic') { failMain = en ? 'I could not use the microphone 🙏' : 'no pude usar el micrófono 🙏'; failSub = en ? 'check the permission and try again.' : 'revisá el permiso e intentá de nuevo.'; }
     } catch (e2) {}
-    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + (en ? 'I could not hear your audio 🙏' : 'no pude escuchar tu audio 🙏') + (failSub ? '<span style="display:block;font-size:11.5px;color:var(--mut)">' + failSub + '</span>' : '') + '</span><button type="button" class="btn btn-primary" id="vozRetrySend">' + (en ? 'Try sending again' : 'Reintentar envío') + '</button><button type="button" class="btn btn-soft" id="vozRetry">' + (en ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
-    const rs = document.getElementById('vozRetrySend'); if (rs) rs.onclick = () => { if (VOICE_BLOB) { VOICE_STATE = 'preview'; voiceSend(); } };
+    m.innerHTML = '<div class="voz-bar"><span style="font-size:12.5px;flex:1">' + failMain + (failSub ? '<span style="display:block;font-size:11.5px;color:var(--mut)">' + failSub + '</span>' : '') + '</span><button type="button" class="btn btn-primary" id="vozRetrySend">' + (en ? 'Try sending again' : 'Reintentar envío') + '</button><button type="button" class="btn btn-soft" id="vozRetry">' + (en ? 'Record again' : 'Grabar de nuevo') + '</button></div>';
+    // (v861) Sin audio que reenviar (fallo del mic), Reintentar graba de nuevo.
+    const rs = document.getElementById('vozRetrySend'); if (rs) rs.onclick = () => { if (VOICE_BLOB) { VOICE_STATE = 'preview'; voiceSend(); } else { voiceDiscard(); voiceToggle(); } };
     const r = document.getElementById('vozRetry'); if (r) r.onclick = () => { voiceDiscard(); voiceToggle(); };
   } else {
     m.innerHTML = '';
@@ -11474,7 +11491,10 @@ async function voiceToggle() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     // (LOTE MIC-INICIO) En Inicio no hay chat visible: la causa va en la barra, no en chatSay.
     if (vozEnInicio()) { vozFalloInicio(vozEn() ? 'your browser does not support voice notes. write me instead 👇' : 'tu navegador no soporta notas de voz. escribime el pedido 👇'); return; }
-    chatSay('🎙 ' + (vozEn() ? 'your browser does not support voice notes. write me instead 👇' : 'tu navegador no soporta notas de voz. escribime el pedido 👇'));
+    // (v861) El fallo del mic se ve en la barra con [Reintentar] (antes solo
+    // una burbuja sin botón: el cliente quedaba sin forma de reintentarlo).
+    VOICE_FAIL_CODE = 'mic'; VOICE_STATE = 'failed'; voiceRenderBar();
+    try { chatUpdateSendBtn(); } catch (e) {}
     return;
   }
   try {
@@ -11483,6 +11503,7 @@ async function voiceToggle() {
     const mime = pzPickVoiceMime();
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     VOICE_CHUNKS = [];
+    VOICE_PREVIEW_DONE = false;
     VOICE_MIME = pzVoiceMimeEssence(rec.mimeType);
     rec.ondataavailable = e => { if (e.data && e.data.size) VOICE_CHUNKS.push(e.data); };
     rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); voiceCleanup(); voicePreview(); };
@@ -11509,16 +11530,32 @@ async function voiceToggle() {
   } catch (e) {
     // (LOTE MIC-INICIO) En Inicio no hay chat visible: la causa va en la barra, no en chatSay.
     if (vozEnInicio()) { vozFalloInicio(vozEn() ? 'we could not use the microphone. check the permission or write me instead 👇' : 'no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇'); return; }
-    chatSay('🎙 ' + (vozEn() ? 'we could not use the microphone. check the permission or write me instead 👇' : 'no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇'));
+    // (v861) El fallo del mic se ve en la barra con [Reintentar] (antes solo
+    // una burbuja sin botón: el cliente quedaba sin forma de reintentarlo).
+    VOICE_FAIL_CODE = 'mic'; VOICE_STATE = 'failed'; voiceRenderBar();
+    try { chatUpdateSendBtn(); } catch (e) {}
   }
 }
 function voiceStop() {
   const rec = VOICE_REC;
   VOICE_REC = null;
   vozUIgrabando(false);
-  if (rec) { try { rec.stop(); } catch (e) { voiceCleanup(); voicePreview(); } }
+  if (rec) {
+    try { rec.stop(); } catch (e) { voiceCleanup(); voicePreview(); }
+    // (v861 · NOTA DE VOZ) Si el onstop no dispara (Safari), la nota se
+    // perdía en silencio con la píldora trabada: a los 2 s se fuerza la
+    // vista previa/envío con lo grabado. El guard de voicePreview evita el
+    // doble envío si el onstop llega tarde; el !VOICE_REC protege una
+    // grabación nueva empezada en esos 2 s.
+    try { setTimeout(() => { try { if (VOICE_STATE === 'rec' && !VOICE_REC) { voiceCleanup(); voicePreview(); } } catch (e2) {} }, 2000); } catch (e2) {}
+  }
 }
 function voicePreview() {
+  // (v861) Una sola vista previa por grabación: el onstop y el watchdog de
+  // voiceStop pueden disparar los dos; sin este guard la segunda corrida
+  // veía los chunks ya vaciados y pintaba «no se grabó nada» después de mandar.
+  if (VOICE_PREVIEW_DONE) return;
+  VOICE_PREVIEW_DONE = true;
   const chunks = VOICE_CHUNKS; VOICE_CHUNKS = [];
   VOICE_BLOB = new Blob(chunks, { type: VOICE_MIME || 'audio/mp4' });
   VOICE_DUR = Date.now() - VOICE_START;
@@ -11542,7 +11579,7 @@ function voicePreview() {
 }
 function voiceDiscard() {
   try { if (VOICE_URL) URL.revokeObjectURL(VOICE_URL); } catch (e) {}
-  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = []; VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_FAIL_CODE = '';
+  VOICE_URL = ''; VOICE_BLOB = null; VOICE_DUR = 0; VOICE_STATE = 'idle'; VOICE_CHUNKS = []; VOICE_CANCEL = false; VOICE_EARLY_UP = false; VOICE_ABORTED = false; VOICE_FAIL_CODE = ''; VOICE_PREVIEW_DONE = false;
   vozUIgrabando(false);
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
@@ -11551,6 +11588,11 @@ async function voiceSend() {
   if (VOICE_STATE !== 'preview' || !VOICE_BLOB) return;
   const blob = VOICE_BLOB;
   const audioUrl = VOICE_URL;
+  // (v861 · NOTA DE VOZ) Cada nota tiene su burbuja propia: la anterior ya
+  // quedó enviada (su elemento sigue conectado) y el guard de
+  // vozBubbleSending la confundía con la nueva — la 2ª nota en adelante no
+  // pintaba burbuja nunca (el video del 9/11: ni burbuja, ni estado).
+  try { VOICE_BUBBLE_EL = null; VOICE_BUBBLE_URL = ''; VOICE_BUBBLE_TS = 0; } catch (e) {}
   VOICE_STATE = 'sending';
   voiceRenderBar();
   const dataUrl = await new Promise((res) => {
@@ -11561,7 +11603,7 @@ async function voiceSend() {
   });
   if (!dataUrl) { VOICE_STATE = 'failed'; voiceRenderBar(); return; }
   let tr = null; VOICE_FAIL_CODE = '';
-  try { tr = await api.post('/api/ideas/transcribe', { audio: dataUrl }, { timeout: 90000 }); } catch (e) { tr = null; VOICE_FAIL_CODE = (e && e.data && e.data.error) || (e && e.networkError ? 'network' : 'error'); }
+  try { tr = await api.post('/api/ideas/transcribe', { audio: dataUrl }, { timeout: 90000 }); } catch (e) { tr = null; VOICE_FAIL_CODE = (e && e.data && e.data.error) || ((e && (e.networkError || e.name === 'AbortError')) ? 'network' : 'error'); }
   if (!tr || !tr.ok || !tr.transcript) { if (!VOICE_FAIL_CODE) VOICE_FAIL_CODE = (tr && tr.error) || 'no_heard'; VOICE_STATE = 'failed'; voiceRenderBar(); return; }
   const transcript = String(tr.transcript).slice(0, 2000);
   // (LOTE MIC-INICIO) Nota grabada desde Inicio: la nota ya está enviada
@@ -11581,6 +11623,15 @@ async function voiceSend() {
   // reproductor (sin transcripto en la burbuja). El texto exacto sigue
   // yendo al pipeline (CHAT + chatExchange) como siempre.
   vozBubbleEnviada(VOICE_DUR);
+  // (v861) Si la burbuja de audio no quedó (re-render en medio del envío),
+  // el mensaje igual se ve como texto: nunca una nota sin rastro visible.
+  try {
+    const _vb = (typeof VOICE_BUBBLE_EL !== 'undefined') ? VOICE_BUBBLE_EL : null;
+    if (!_vb || !_vb.isConnected) {
+      const _box = document.getElementById('chatBox');
+      if (_box) chatAppendMsg(_box, chatMsgHtml('user', transcript, Date.now()), Date.now());
+    }
+  } catch (e) {}
   CHAT.push({ role: 'user', text: transcript, ts: (typeof VOICE_BUBBLE_TS !== 'undefined' && VOICE_BUBBLE_TS) || Date.now() });
   VOICE_URL = ''; VOICE_BLOB = null; VOICE_STATE = 'idle';
   voiceRenderBar();
