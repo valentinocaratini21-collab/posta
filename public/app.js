@@ -21295,7 +21295,18 @@ function pzHoyTiraDetalleHTML(d, o) {
       : (st === 'draft') ? (en ? 'Draft · to review' : 'Borrador · para revisar')
       : cuando;
     const cuenta = (st === 'scheduled' && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
-    const imp = (st === 'published')
+    // (LOTE IMPULSAR-DUPLICADO · v858 · captura Valentino 9/11 21:41:
+    // un posteo, un lugar) Si este posteo ES el recomendado de la
+    // sección Impulsar (mismo post_id que PZ_HOY_MEJOR y la sección
+    // rinde su botón — datos reales, la misma condición `ok` de
+    // pzHoyImpulsarHTML), el detalle NO rinde su botón: la sección
+    // queda como la única entrada para impulsar ese posteo. Si el
+    // recomendado es otro posteo distinto, el botón de la tarjeta
+    // queda. Sin recomendado (PZ_HOY_MEJOR null) o sin datos reales,
+    // la sección no muestra botón y el detalle conserva el suyo: el
+    // posteo nunca pierde su única entrada.
+    const esRecomendado = (typeof PZ_HOY_MEJOR !== 'undefined' && PZ_HOY_MEJOR && PZ_HOY_MEJOR.post_id != null && String(PZ_HOY_MEJOR.post_id) === String(p.id) && (Number(PZ_HOY_MEJOR.likes || 0) + Number(PZ_HOY_MEJOR.comments || 0) + Number(PZ_HOY_MEJOR.saved || 0)) > 0);
+    const imp = (st === 'published' && !esRecomendado)
       ? `<button type="button" class="btn btn-primary btn-sm" data-pz-boost-post="${esc(String(p.id))}">${en ? 'Boost' : 'Impulsar'}</button>` : '';
     return `<div class="pz-hoy-tira-detalle">${img}<div class="t"><b>${esc(cap1 || nombre)}</b><small>${esc(cuando || '')}</small></div><div class="side">${pill ? `<span class="pz-hoy-hoy-pill">${esc(pill)}</span>` : ''}${cuenta ? `<span class="pz-hoy-cuenta">${esc(cuenta)}</span>` : ''}${imp}</div></div>`;
   } catch (e) { return ''; }
