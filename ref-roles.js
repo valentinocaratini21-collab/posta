@@ -12,7 +12,9 @@
  * la foto de estilo como si fuera el producto, o redibujaba el logo).
  * Ahora cada referencia declara su rol y la nota final las enumera
  * por índice con su instrucción de relación:
- *   logo      → aparece IDÉNTICO, jamás rediseñado.
+ *   logo      → se estampa por código arriba a la izquierda (v869): el
+ *   modelo NO lo dibuja, deja esa esquina limpia; lo usa solo para
+ *   calzar colores y estilo, IDÉNTICO, jamás rediseñado.
  *   product   → el producto REAL del cliente: preservar forma, color,
  *               packaging y etiqueta exactos; solo cambia la escena.
  *   photo     → foto real del cliente (álbum): productos, personas y
@@ -27,7 +29,7 @@
  */
 
 const REF_ROLE_TEXT = {
-  logo: "the client's brand logo — it must appear IDENTICAL (same design, same colors, same art style), never redesigned or reinterpreted",
+  logo: "the client's brand logo — it is stamped afterwards by code as a small seal in the top-left corner: do NOT draw it, do NOT invent a logo, leave the top-left corner clean and empty; use it only to match the brand's colors and style, identical, never redesigned or reinterpreted",
   product: "the client's REAL product photo — preserve the product's exact shape, colors, packaging and label; only the scene around it changes",
   photo: "a real photo from the client — keep its products, people and places recognizable (same look, same photographic style) in a NEW scene",
   character: "the client's recurring character/subject from its feed — keep the SAME character, identical design, colors and proportions, as the protagonist of a NEW scene; never redesign or reinterpret it",

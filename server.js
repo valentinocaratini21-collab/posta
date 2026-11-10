@@ -12147,6 +12147,16 @@ function desiredAlbumTag(tipo, texts) {
 // fidelidad del producto protege su material en v237.
 // Devuelve { refAbs, kind: 'character'|'person', label, house } o null
 // si la cuenta no tiene un protagonista recurrente identificable.
+// (v869) ¿Es la cuenta de la casa (@posty.communitymanager)? La cara de
+// Posty arriba a la izquierda es SOLO para el feed propio de Posty; en los
+// posteos de clientes va SOLO el logo del cliente y la cara de Posty NO aparece.
+function isHouseAccount(uid) {
+  try {
+    const profile = getProfile(uid) || {};
+    const handle = String(profile.ig_username || '').toLowerCase().replace(/^@/, '').trim();
+    return handle === 'posty.communitymanager';
+  } catch (e) { return false; }
+}
 function protagonistRefFor(uid) {
   try {
     const profile = getProfile(uid) || {};
@@ -18568,9 +18578,16 @@ async function refreshLogoPaleta(db, uid) {
   } catch (e) { return false; }
 }
 // Argumentos --logo para composite-headline.py cuando el fundamento tiene
-// logo descargado. Sin logo, []: la pieza sale como hoy, sin sello.
+// logo real. Sin logo, []: la pieza sale limpia, sin sello. (v869)
+// PRIORIDAD: 1) asset kind='logo' subido por el cliente (o confirmado desde
+// una candidata: logoAbsPath lo resuelve a MEDIA_DIR/<basename>; el alta y
+// la confirmación borran el logo anterior, así que hay UNO solo por marca).
+// 2) digest.logo_file (foto de perfil de IG o logo de la web, descargado
+// por refreshLogoPaleta como logo-<uid>.<ext>). Sin ninguno → sin sello.
 function logoSealArgsForUser(uid) {
   try {
+    const asset = logoAbsPath(uid);
+    if (asset) return ['--logo', asset];
     const dg = clientDigest.getDigest(db, uid);
     const f = dg && dg.logo_file;
     if (!f || /[/\\]/.test(String(f))) return [];
@@ -22094,9 +22111,23 @@ function qaFactsLine(dna, digest) {
 // Verifica texto_ok / colores_ok / claims_ok y devuelve el objeto parseado.
 // Devuelve null si el QA no pudo correr (red/timeout): no bloquea, se entrega la imagen.
 // Si el JSON sale roto → texto_ok=false (conservador).
-async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
+async function qaImageB64(b64, { headline, paletteHex, dnaFacts, logoExpected, isHouse }, apiKey) {
   try {
     const hexes = Array.isArray(paletteHex) ? paletteHex : [];
+    // (v869) Checks del logo: solo se preguntan cuando aplican — el modelo
+    // devuelve client_logo_ok solo en posteos de clientes (con o sin logo
+    // real) y no_posty_face solo fuera de la casa. Ausente = pasa (el gate
+    // lee con !== false, como headline_clear).
+    const logoSchemaKeys = (typeof logoExpected === 'boolean') ? ',"client_logo_ok":true' : '';
+    const faceSchemaKeys = (isHouse === false) ? ',"no_posty_face":true' : '';
+    const logoDesc = (typeof logoExpected === 'boolean')
+      ? (logoExpected
+        ? '\n- client_logo_ok: el logo REAL del cliente aparece como un sello chiquito en la esquina superior izquierda, idéntico, sin tapar el producto ni el titular — si tapa el producto o el titular, o si falta el logo → false.'
+        : '\n- client_logo_ok: la imagen NO debe mostrar ningún logo ni sello: un logo dibujado es inventado → false.')
+      : '';
+    const faceDesc = (isHouse === false)
+      ? '\n- no_posty_face: la mascota de Posty (una carita de robot azul) NO debe aparecer JAMÁS en el posteo de un cliente — si aparece cualquier robot azul o cara de mascota en la imagen → false.'
+      : '';
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -22107,7 +22138,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"headline_empty_space_ok":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
+{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"headline_empty_space_ok":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true${logoSchemaKeys}${faceSchemaKeys}}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
 - headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. FRAGMENTO CON INFINITIVO (Mora 2026-10-24, id real 498): también es false si el titular termina en un INFINITIVO que pide complemento y el complemento NO está — "Te voy a ser honesto: tener" (id real 498) es INCOMPLETO: termina en infinitivo sin complemento y sin "…": headline_complete=false. Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
@@ -22119,7 +22150,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 - detalle: UNA frase concreta sobre ESTA imagen: nombrá un elemento visible (el titular, un objeto, un color) y, si algo falla, qué. PROHIBIDO responder "..." o genéricos tipo "cumple con todos los requisitos" sin nombrar nada visible (Mora 2026-10-18: ids 404/456/459/462 volvieron con detalle "...").
 - anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).
 - contraste_ok (M183/M188, v865 — BLOQUEA la entrega como los demás checks): si la imagen lleva texto, ¿el texto se lee con contraste fuerte contra lo que tiene detrás (fondo, placa o sombra)? Texto claro sobre fondo claro, o texto oscuro sobre fondo oscuro, o letras que se pierden contra una foto cargada → false. Sin texto → true.
-- elementos_ok (M183/M188, v865 — BLOQUEA la entrega como los demás checks): la pieza tiene UN solo protagonista y UNA sola idea; contá los elementos que compiten: si hay 3 o más focos compitiendo (varios productos protagonistas, carteles, props decorativos que pelean con el héroe) → false. Menos es más: si sacando un elemento la pieza mejora, ese elemento sobra.` },
+- elementos_ok (M183/M188, v865 — BLOQUEA la entrega como los demás checks): la pieza tiene UN solo protagonista y UNA sola idea; contá los elementos que compiten: si hay 3 o más focos compitiendo (varios productos protagonistas, carteles, props decorativos que pelean con el héroe) → false. Menos es más: si sacando un elemento la pieza mejora, ese elemento sobra.${logoDesc}${faceDesc}` },
           { role: 'user', content: [
             { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
@@ -22147,6 +22178,8 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
       anatomia_ok: parsed.anatomia_ok !== false, // manos/caras deformadas = pieza descartada
       contraste_ok: parsed.contraste_ok !== false, // (M183/M188, v865) bloquea la entrega como los demás checks
       elementos_ok: parsed.elementos_ok !== false, // (M183/M188, v865) bloquea la entrega como los demás checks
+      ...(typeof logoExpected === 'boolean' ? { client_logo_ok: parsed.client_logo_ok !== false } : {}), // (v869) solo en posteos de clientes
+      ...(isHouse === false ? { no_posty_face: parsed.no_posty_face !== false } : {}), // (v869) solo fuera de la casa
       detalle: String(parsed.detalle || '').slice(0, 140),
     };
   } catch (e) {
@@ -22908,6 +22941,13 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   if (characterSent) {
     prompt = `${prompt}\n\n${refRoles.CHARACTER_CLAUSE}${protagonist && protagonist.label ? `\nThe protagonist is: ${protagonist.label}.` : ''}`;
   }
+  // (v869) LOGO DEL CLIENTE ARRIBA A LA IZQUIERDA — el logo se estampa por
+  // código en la esquina superior izquierda (composite-headline.py): el
+  // modelo NO lo dibuja y deja esa esquina limpia y despejada. La cara de
+  // Posty NO aparece en los posteos de clientes.
+  if (!isHouseAccount(uid)) {
+    prompt = `${prompt}\n\nDo not draw any logo, watermark, mascot or platform signature in the image. Leave the top-left corner clean and empty — the client's logo is stamped there afterwards by code. Never draw the Posty mascot (a small blue robot) in a client's post.`;
+  }
   const genOnce = (reinforce) => genConceptImage(key, withStyle(prompt) + (reinforce ? `\n\n${refRoles.FIDELITY_REINFORCE}` : ''), absRefs, refNote, uid);
   const genExtra = (extra) => genConceptImage(key, withStyle(prompt) + (extra ? `\n\n${extra}` : ''), absRefs, refNote, uid);
   let b64;
@@ -23120,6 +23160,10 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   let gateFinalPub = `/media/${imgName}`;
   let gateFinalPrompt = withStyle(prompt);
   let qaGateAttempts = 1; // (AVATAR-POSTY) intentos del QA gate: >1 = la imagen final es otra
+  // (v869) El gate verifica el logo del cliente (si lo hay) y que no haya
+  // cara de Posty en posteos de clientes.
+  const logoExpected = logoSealArgsForUser(uid).length > 0;
+  const housePost = isHouseAccount(uid);
   try {
     const gate = await qaGate.runQaGate({
       basePrompt: withStyle(prompt),
@@ -23129,7 +23173,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       evaluate: async (abs) => {
         let b64v = null;
         try { b64v = fs.readFileSync(abs).toString('base64'); } catch (e) { return null; }
-        return qaImageB64(b64v, { headline: currentHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)) }, key);
+        return qaImageB64(b64v, { headline: currentHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)), logoExpected, isHouse: housePost }, key);
       },
       generate: async (corrPrompt) => genConceptImage(key, corrPrompt, absRefs, refNote, uid),
       save: async (b64n, corrPrompt) => {
@@ -34506,7 +34550,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v868';
+const BUILD_ID = '20261105-v869';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

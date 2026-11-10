@@ -22,10 +22,13 @@
 // el titular tapaba la imagen; el titular va en el hueco vacío,
 // nunca sobre el sujeto; si no hay hueco, la pieza sale LIMPIA
 // sin titular).
+// MÁS client_logo_ok y no_posty_face (v869: el logo del cliente arriba
+// a la izquierda y nunca la cara de Posty en posteos de clientes;
+// ausente = pasa).
 // (M183/M188, 2026-11-08/09 — MORA-10): texto_ok, headline_complete,
 // headline_clear, brand_ok, colores_ok, claims_ok, mobile_ok,
-// anatomia_ok, contraste_ok, elementos_ok y headline_empty_space_ok —
-// los 11. Cualquier sub-check en false puebla qa_gate_failed_checks
+// anatomia_ok, contraste_ok, elementos_ok, headline_empty_space_ok,
+// client_logo_ok y no_posty_face — los 13. Cualquier sub-check en false puebla qa_gate_failed_checks
 // con su nombre y BLOQUEA la entrega: `failed_checks` vacío + un
 // sub-check en false es un bug del gate, no un pase (evidencia: evals
 // 589/593 entregadas con headline_complete=false y failed_checks=[]
@@ -56,6 +59,8 @@ const GATE_CHECKS = [
   ['texto_ok', 'texto'],
   ['headline_complete', 'headline_complete'],
   ['headline_clear', 'headline_clear'],
+  ['client_logo_ok', 'client_logo_ok'],
+  ['no_posty_face', 'no_posty_face'],
   ['brand_ok', 'marca'],
   ['colores_ok', 'colores'],
   ['claims_ok', 'claims'],
@@ -84,11 +89,17 @@ const FIX_LINES = {
   headline_complete: 'the previous attempt\'s visible headline was cut off mid-sentence — the headline must read complete on its own, or end with an ellipsis',
   contraste: 'text in the previous attempt did not contrast enough with what is behind it — strong contrast between text and background',
   elementos: 'the previous attempt had too many competing focal points — one single hero product and one single idea',
+  // (v869) Logo del cliente arriba a la izquierda + nunca la cara de Posty
+  // en posteos de clientes. Ausente = pasa (el evaluador solo los devuelve
+  // cuando aplican: client_logo_ok en posteos de clientes, no_posty_face
+  // solo fuera de la casa).
+  client_logo_ok: "the client's logo must sit small in the top-left corner, identical to the real logo, never covering the product or the headline — if there is no real logo, the piece stays clean with no logo at all",
+  no_posty_face: 'the Posty mascot (small blue robot face) must never appear in a client post — remove any robot mascot or platform face from the image',
 };
 
 function qaGatePassed(qa) {
   if (!qa || typeof qa !== 'object') return false;
-  // Única fuente de verdad: GATE_CHECKS (los 11). Si un check nuevo se
+  // Única fuente de verdad: GATE_CHECKS (los 13). Si un check nuevo se
   // agrega a la lista, pasa a decidir el pase sin tocar esta función.
   for (const [field] of GATE_CHECKS) {
     if (qa[field] === false) return false;

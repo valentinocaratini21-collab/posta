@@ -73,26 +73,51 @@ def wrap(draw, text, font, max_w, max_lines=3):
 # circular en la esquina opuesta al titular (abajo a la derecha si el
 # titular va arriba, y viceversa). Fail-open: si algo falla, la pieza sale
 # sin sello y la generación nunca se rompe. Sin logo no se dibuja nada.
-def stamp_logo(img, logo_path, zone):
+def seal_geometry(W):
+    # (v869) Geometría del sello del logo del cliente: SIEMPRE arriba a la
+    # izquierda, chiquito y discreto. En la grilla el recorte cuadrado del
+    # 4:5 esconde ~135 px de arriba (en 1080×1350): con este margen chico
+    # (1,5% del ancho, mín. 12 px) el sello entra entero en esa franja y NO
+    # se ve desde el feed; se ve al abrir el posteo. El tamaño sigue siendo
+    # 9% del ancho (máx. 110 px): el medallón discreto del lote de
+    # personalización, solo cambia de esquina.
+    d = max(48, min(110, int(W * 0.09)))
+    m = max(12, int(W * 0.015))
+    return m, d
+
+
+def stamp_logo(img, logo_path, zone=None):
+    # (v869) El logo del cliente va arriba a la izquierda (zona fija): la
+    # zona del titular ya no mueve el sello — el parámetro zone queda por
+    # compatibilidad con los call sites y se ignora para la posición.
     try:
         from PIL import Image, ImageDraw
         if not logo_path or not os.path.exists(logo_path):
             return img
         logo = Image.open(logo_path).convert('RGBA')
         W, H = img.size
-        d = max(48, min(110, int(W * 0.09)))
-        side = min(logo.size)
-        logo = logo.crop(((logo.size[0] - side) // 2, (logo.size[1] - side) // 2,
-                          (logo.size[0] + side) // 2, (logo.size[1] + side) // 2))
-        logo = logo.resize((d, d), Image.LANCZOS)
+        m, d = seal_geometry(W)
+        # El logo va ÍNTEGRO, con su aspecto: se ajusta DENTRO del medallón
+        # sin recortar (un logo horizontal recortado a círculo perdería los
+        # costados y quedaría ilegible). El medallón blanco sigue siendo
+        # circular; el logo se centra dentro y se recorta solo a ese círculo.
+        logo.thumbnail((d, d), Image.LANCZOS)
+        canvas = Image.new('RGBA', (d, d), (0, 0, 0, 0))
+        canvas.paste(logo, ((d - logo.size[0]) // 2, (d - logo.size[1]) // 2), logo)
         mask = Image.new('L', (d, d), 0)
         ImageDraw.Draw(mask).ellipse([0, 0, d, d], fill=255)
+        # Recorte circular del logo (como antes): el logo queda dentro del
+        # círculo; fuera de él el lienzo queda transparente. OJO: con paste
+        # ese transparente BORRARÍA el blanco del medallón — por eso se
+        # compone con alpha_composite, que respeta la transparencia.
+        canvas = Image.composite(canvas, Image.new('RGBA', (d, d), (0, 0, 0, 0)), mask)
         badge = Image.new('RGBA', (d + 8, d + 8), (0, 0, 0, 0))
         ImageDraw.Draw(badge).ellipse([0, 0, d + 8, d + 8], fill=(255, 255, 255, 255))
-        badge.paste(logo, (4, 4), mask)
-        m = int(W * 0.04)
-        x = W - m - (d + 8)
-        y = m if zone == 'bottom' else H - m - (d + 8)
+        layer = Image.new('RGBA', (d + 8, d + 8), (0, 0, 0, 0))
+        layer.paste(canvas, (4, 4))
+        badge = Image.alpha_composite(badge, layer)
+        x = m
+        y = m
         shadow = Image.new('RGBA', img.size, (0, 0, 0, 0))
         ImageDraw.Draw(shadow).ellipse([x + 2, y + 3, x + d + 10, y + d + 11], fill=(0, 0, 0, 90))
         img = Image.alpha_composite(img.convert('RGBA'), shadow)
@@ -126,8 +151,9 @@ def main():
     # recompone abajo en vez de pelear con la foto.
     ap.add_argument('--zone', default='top', choices=('top', 'bottom'))
     ap.add_argument('--font', default='montserrat', help='id de tipografia del titular (montserrat, nunito, playfair, oswald, fredoka, poppins; desconocido = montserrat)')
-    # Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1): ruta local del logo
-    # del cliente (foto de perfil de IG descargada). Sin logo, sin sello.
+    # Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1, v869: arriba a la
+    # izquierda, chiquito y discreto): ruta local del logo del cliente
+    # (asset kind='logo' o foto de perfil de IG descargada). Sin logo, sin sello.
     ap.add_argument('--logo', default='')
     a = ap.parse_args()
 
@@ -162,6 +188,13 @@ def main():
     max_w = W - margin_x * 2
     top_y = int(H * 0.045)
     zone_bottom = (a.zone == 'bottom')
+    # (v869) RESERVA DEL SELLO: si hay logo, el titular de arriba baja por
+    # debajo del sello para no chocar con él. El sello vive arriba a la
+    # izquierda; el titular sigue en la banda superior, solo más abajo.
+    # Abajo no hay choque (el sello está arriba), así que no se mueve nada.
+    if a.logo and os.path.exists(a.logo) and not zone_bottom:
+        _sm, _sd = seal_geometry(W)
+        top_y = max(top_y, _sm + _sd + 8 + int(H * 0.02))
 
     draw = ImageDraw.Draw(img)
 
@@ -305,8 +338,8 @@ def main():
         except Exception:
             pass
 
-    # Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1): el logo del cliente
-    # como medallón en la esquina opuesta al titular. Sin logo, sin sello.
+    # Sello del cliente (LOTE PERSONALIZACIÓN · ítem 1, v869): el logo del
+    # cliente como medallón arriba a la izquierda. Sin logo, sin sello.
     img = stamp_logo(img, a.logo, a.zone)
     img.save(a.out)
     print('ok area=%.1f contrast=%s' % (area_pct, ('%.2f' % contrast) if contrast is not None else '-'))

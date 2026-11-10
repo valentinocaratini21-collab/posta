@@ -41,7 +41,7 @@ console.log('A) logo siempre visible');
 ok('A1: composite-headline.py acepta --logo', has(comp, "'--logo'"));
 ok('A2: composite-headline.py tiene stamp_logo (medallón circular)', has(comp, 'def stamp_logo'));
 ok('A3: stamp_logo es fail-open (nunca rompe la pieza)', has(comp, "except Exception:\n        return img"));
-ok('A4: server.js tiene logoSealArgsForUser (6 sitios + definición)', count(srv, 'logoSealArgsForUser(uid)') === 7, count(srv, 'logoSealArgsForUser(uid)'));
+ok('A4: server.js tiene logoSealArgsForUser (6 sitios + definición + logoExpected del gate v869)', count(srv, 'logoSealArgsForUser(uid)') === 8, count(srv, 'logoSealArgsForUser(uid)'));
 ok('A5: los 6 sitios de composición empujan el sello', count(srv, '...logoSealArgsForUser(uid)') === 6, count(srv, '...logoSealArgsForUser(uid)'));
 ok('A6: sin logo no hay sello (logoSealArgsForUser devuelve [])', /function logoSealArgsForUser[\s\S]{0,600}return \[\];/.test(srv));
 ok('A7: el sello va como argumento --logo al compositor', has(srv, "'--logo'"));
@@ -75,7 +75,7 @@ ok('A14: el barrido refresca la paleta del logo si falta', has(srv, 'refreshLogo
       `def px(p, x, y):`,
       `    im = Image.open(p).convert('RGB')`,
       `    return list(im.getpixel((x, y)))`,
-      `print(json.dumps({'sin': px('${tmp}/sin.png', 983, 1253), 'con': px('${tmp}/con.png', 983, 1253), 'conTit': px('${tmp}/con-tit.png', 983, 1253)}))`,
+      `print(json.dumps({'sin': px('${tmp}/sin.png', 68, 68), 'con': px('${tmp}/con.png', 68, 68), 'conTit': px('${tmp}/con-tit.png', 68, 68), 'conOld': px('${tmp}/con.png', 983, 1253)}))`,
     ].join('\n');
     execFileSync('python3', [path.join(DIR, 'composite-headline.py'), '--in', tmp + '/base.png', '--out', tmp + '/sin.png'], { timeout: 30000 });
     execFileSync('python3', [path.join(DIR, 'composite-headline.py'), '--in', tmp + '/base.png', '--out', tmp + '/con.png', '--logo', tmp + '/logo.png'], { timeout: 30000 });
@@ -84,10 +84,11 @@ ok('A14: el barrido refresca la paleta del logo si falta', has(srv, 'refreshLogo
     execFileSync('python3', [path.join(DIR, 'composite-headline.py'), '--in', tmp + '/base.png', '--headline', 'Hola', '--out', tmp + '/malo.png', '--logo', tmp + '/no-existe.png'], { timeout: 30000 });
     fs.writeFileSync(tmp + '/px.py', py);
     const out = JSON.parse(execFileSync('python3', [tmp + '/px.py'], { encoding: 'utf8' }));
-    ok('A15: con --logo el medallón se dibuja (píxel = color del logo)', JSON.stringify(out.con) === JSON.stringify([10, 30, 51]), JSON.stringify(out));
-    ok('A16: sin --logo la esquina queda intacta (sin sello inventado)', JSON.stringify(out.sin) === JSON.stringify([40, 90, 120]), JSON.stringify(out));
-    ok('A17: el sello también se dibuja con titular', JSON.stringify(out.conTit) === JSON.stringify([10, 30, 51]), JSON.stringify(out));
+    ok('A15: con --logo el medallón se dibuja arriba a la izquierda (v869, píxel = color del logo)', JSON.stringify(out.con) === JSON.stringify([10, 30, 51]), JSON.stringify(out));
+    ok('A16: sin --logo la esquina superior izquierda queda intacta (sin sello inventado)', JSON.stringify(out.sin) === JSON.stringify([40, 90, 120]), JSON.stringify(out));
+    ok('A17: el sello también se dibuja arriba a la izquierda con titular', JSON.stringify(out.conTit) === JSON.stringify([10, 30, 51]), JSON.stringify(out));
     ok('A18: logo inexistente no rompe la pieza (fail-open)', fs.existsSync(tmp + '/malo.png'));
+    ok('A19: la esquina vieja (abajo a la derecha) queda intacta — el sello se mudó arriba a la izquierda (v869)', JSON.stringify(out.conOld) === JSON.stringify([40, 90, 120]), JSON.stringify(out));
   } finally {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
   }
@@ -137,7 +138,7 @@ ok('C4: sin captions no hay marcadores', pers.extraerMarcadoresVoz([], []).lengt
 ok('C5: lineaVoz arma la línea del brief con sus palabras', pers.lineaVoz(['Hecho a mano', 'café de especialidad'], 'es').includes('Hecho a mano'));
 ok('C6: lineaVoz vacía es cadena vacía (nada inventado)', pers.lineaVoz([], 'es') === '');
 ok('C7: el digest mina los marcadores de voz del feed', has(digest, 'voz_marcadores = personalizacion.extraerMarcadoresVoz'));
-ok('C8: los captions usan la voz del fundamento (3 sitios)', count(srv, 'lineaVoz(') === 3, count(srv, 'lineaVoz('));
+ok('C8: los captions usan la voz del fundamento (4 sitios — el 4º ya estaba en v859 prístino, pin viejo)', count(srv, 'lineaVoz(') === 4, count(srv, 'lineaVoz('));
 ok('C9: el generador recibe los marcadores de voz (openaiIdeas)', has(gen, 'vozMarcadores'));
 
 // ---------- D) Ítem 4 — LO QUE FUNCIONÓ (YA ESTABA: regresión) ----------
