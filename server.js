@@ -399,7 +399,8 @@ const semanaAprende = require('./semana-aprende'); // 🧠 Semana aprende (ítem
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
 const showcase = require('./showcase'); // 📣 PRUEBA SOCIAL REAL (v370): la primera historia de un cliente pago, con su consentimiento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
-const tasteMemory = require('./taste-memory'); // 🧠 MEMORIA DE GUSTOS (v392): el cliente enseña, Posty anota (registro en el fundamento)
+const tasteMemory = require('./taste-memory');
+const memoriaCliente = require('./memoria-cliente'); // (LOTE v873 · MEMORIA POR CLIENTE) // 🧠 MEMORIA DE GUSTOS (v392): el cliente enseña, Posty anota (registro en el fundamento)
 const postyDislike = require('./posty-dislike'); // 👎 NO ME GUSTA → 3 OPCIONES (30/10)
 const onboarding = require('./onboarding'); // ✨ BIENVENIDA MÁGICA POST-PAGO (2026-10-25): fichas del fundamento + huecos de un toque, nunca un cuestionario
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
@@ -7699,6 +7700,12 @@ app.post('/api/ideas/chat', async (req, res) => {
         notifyOwnerPostChange({ uid, post: firstPost || null, pedido: lastUserMsg }).catch(() => {});
       } catch (e) { console.error('[owner-notify] chat:', e.message); }
     }
+    // (LOTE v873 · MEMORIA POR CLIENTE) Después de cada conversación
+    // del chat, Posty actualiza lo que sabe del cliente (decisiones,
+    // preferencias, correcciones, qué le gustó y qué no). Fire-and-forget:
+    // corre después de responder, nunca frena el chat; si falla (sin
+    // clave, LLM caído, timeout), no se guarda nada y nada cambia.
+    try { setImmediate(() => { try { memoriaCliente.extraerYGuardar(db, uid, openaiKeyFor(uid)).catch(() => {}); } catch (e) {} }); } catch (e) {}
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
@@ -9390,6 +9397,9 @@ app.post('/api/admin/supervision/dictar', requireAdminToken, (req, res) => {
   if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
   const r = supervisionChat.dictar(db, Number(b.user_id), b.texto, { usar_borrador: !!b.usar_borrador });
   if (!r.ok) return res.status(r.error === 'sin_pendiente' ? 404 : 400).json({ ok: false, error: r.error });
+  // (LOTE v873 · MEMORIA POR CLIENTE) La respuesta dictada también es
+  // conversación: Posty actualiza lo que sabe del cliente. Fire-and-forget.
+  try { setImmediate(() => { try { memoriaCliente.extraerYGuardar(db, Number(b.user_id), openaiKeyFor(Number(b.user_id))).catch(() => {}); } catch (e) {} }); } catch (e) {}
   res.json({ ok: true, exchange_id: r.exchange_id, reply_msg_id: r.reply_msg_id, case_id: r.case_id });
 });
 app.post('/api/admin/supervision/borrador', requireAdminToken, (req, res) => {
@@ -11712,6 +11722,15 @@ function ideasInputFor(uid, weekKey) {
     const estBrief = estrategiaSemanaParaBrief(db, uid, weekKey);
     if (estBrief) ideasInput.estrategia = estBrief;
   } catch (e) {}
+  // (LOTE v873 · MEMORIA POR CLIENTE) Lo que Posty aprendió de sus
+  // conversaciones con este cliente (decisiones, preferencias,
+  // correcciones, qué le gustó y qué no) viaja en el brief para que la
+  // generación salga como a él le gusta y no repita lo ya corregido.
+  // Sin memoria, nada cambia (fail-open).
+  try {
+    const memoriaTxt = memoriaCliente.memoriaParaBrief(db, uid);
+    if (memoriaTxt) ideasInput.memoriaCliente = memoriaTxt;
+  } catch (e) {}
   return ideasInput;
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
@@ -11778,6 +11797,15 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
       if (pl) captionInput.propiaLinea = pl;
     } catch (e) {}
   }
+  // (LOTE v873 · MEMORIA POR CLIENTE) Lo que Posty aprendió de sus
+  // conversaciones con este cliente (decisiones, preferencias,
+  // correcciones, qué le gustó y qué no) viaja en el brief del caption
+  // para que salga como a él le gusta y no repita lo ya corregido.
+  // Sin memoria, nada cambia (fail-open).
+  try {
+    const memoriaTxt = memoriaCliente.memoriaParaBrief(db, uid);
+    if (memoriaTxt) captionInput.memoriaCliente = memoriaTxt;
+  } catch (e) {}
   return captionInput;
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
@@ -34617,7 +34645,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v872';
+const BUILD_ID = '20261105-v873';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

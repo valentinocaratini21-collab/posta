@@ -1065,6 +1065,22 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chatmsg_user ON chat_messages(user_id, id);
+-- (LOTE v873 · MEMORIA POR CLIENTE) Lo que Posty aprendió de cada
+-- conversación del chat con un cliente (decisiones, preferencias,
+-- correcciones, qué le gustó y qué no). La lee el generador ANTES de
+-- generar (ideasInputFor / contentInputFor). ejemplo guarda el mensaje
+-- del cliente que justificó la entrada, para auditarla. Tope 30 activas
+-- por cliente (memoria-cliente.js desactiva las más viejas).
+CREATE TABLE IF NOT EXISTS memoria_cliente (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  tipo TEXT NOT NULL DEFAULT 'nota',
+  texto TEXT NOT NULL,
+  ejemplo TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_memoria_cliente_user ON memoria_cliente(user_id, active, created_at);
 -- TRABAJOS ASÍNCRONOS DEL CHAT (LOTE v847 · imagen pedida que nunca llegó):
 -- registro mínimo del trabajo creado por el SERVIDOR cuando arranca (no por
 -- el texto de la IA): el estado visible en el hilo nace de acá y se salda

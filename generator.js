@@ -2010,7 +2010,7 @@ function goldenLine(golden) {
   return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, photoVision, photoVisionLang, casaLinea, propiaLinea }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, photoVision, photoVisionLang, casaLinea, propiaLinea, memoriaCliente }, apiKey) {
   // 🧠 (v232) CEREBRO COMERCIAL: si la pieza declara su intención de
   // venta, el brief la nombra con su ángulo y su prueba concreta: el
   // caption entero trabaja para esa intención y cierra acorde.
@@ -2051,6 +2051,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
 Foto real que acompaña este posteo — lo que SE VE en la foto: ${String(photoVision).slice(0, 300)}. ${photoVisionLang === 'en' ? 'Caption and headline must talk about what is actually visible in the photo or something directly related to it. If the photo shows neither the product, the place nor the team, do NOT write a promotional caption for the product: write about what the photo does show.' : 'El caption y el titular deben hablar de lo que SE VE en la foto o de algo directamente relacionado con ella. Si la foto no muestra el producto, el local ni el equipo del negocio, NO escribas un caption promocional del producto: escribí sobre lo que la foto sí muestra.'}` : '') +
             (voice ? `\n${voice}` : '') +
             (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
+            (memoriaCliente ? `\nMEMORIA DEL CLIENTE — lo que Posty aprendió de este cliente (decisiones, correcciones, qué le gustó y qué no; respetalo en el caption y no repitas lo que ya te corrigió):\n${memoriaCliente}` : '') +
             goldenLine(golden) +
             (casaLinea ? `\n${casaLinea}` : '') +
             (propiaLinea ? `\n${propiaLinea}` : '') +
@@ -2262,7 +2263,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock, casaLinea, propiaLinea }, n, apiKey) {
+async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock, casaLinea, propiaLinea, memoriaCliente }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000),
     method: 'POST',
@@ -2285,6 +2286,7 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
             (voice ? `\n${voice}` : '') +
             (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
+            (memoriaCliente ? `\nMEMORIA DEL CLIENTE — lo que Posty aprendió de este cliente (decisiones, correcciones, qué le gustó y qué no; respetalo en el caption y no repitas lo que ya te corrigió):\n${memoriaCliente}` : '') +
             goldenLine(golden) +
             (casaLinea ? `\n${casaLinea}` : '') +
             (propiaLinea ? `\n${propiaLinea}` : '') +
@@ -2752,7 +2754,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, audiencia, diferencial, lang, ondaElegida, vozMarcadores, testimonioCitas, historiaProducto, estrategia }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, radar, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, aprendizaje, cmBloque, sabeSiempre, tasteBlock, styleLockExtras, casaLinea, propiaLinea, audiencia, diferencial, lang, ondaElegida, vozMarcadores, testimonioCitas, historiaProducto, estrategia, memoriaCliente }, apiKey) {
   const en = lang === 'en';
   // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
   // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
@@ -2819,7 +2821,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${estrategia ? `\nESTRATEGIA DE LA SEMANA (plan de bamboo — guíate por él para elegir temas y ángulos; no es un bloqueo: el fundamento, los vetos y la REGLA CRÍTICA mandan siempre):\n${estrategia}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}${audienciaLine}${diferencialLine}${perspLine}
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${radarLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${aprendizaje ? `\nAPRENDIZAJE DE LA SEMANA ANTERIOR — datos reales de ESTA cuenta (usalo para elegir temas y ángulos nuevos sobre lo que rindió y lo que preguntaron; no repitas la pieza, dale una vuelta nueva):\n${aprendizaje}` : ''}${estrategia ? `\nESTRATEGIA DE LA SEMANA (plan de bamboo — guíate por él para elegir temas y ángulos; no es un bloqueo: el fundamento, los vetos y la REGLA CRÍTICA mandan siempre):\n${estrategia}` : ''}${memoriaCliente ? `\nMEMORIA DEL CLIENTE — lo que Posty aprendió de sus conversaciones con este cliente (decisiones, preferencias, correcciones, qué le gustó y qué no). Usalo para elegir temas y ángulos como a él le gustan y no repitas lo que ya te corrigió:\n${memoriaCliente}` : ''}${cmBloque ? `\nCEREBRO CM — cómo piensa un gran community manager para ESTE negocio (todo con datos reales de esta cuenta, nada inventado):\n${cmBloque}` : ''}${sabeSiempre ? `\n${sabeSiempre}` : ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\n${casaLinea ? `\n${casaLinea}` : ''}\n${propiaLinea ? `\n${propiaLinea}` : ''}${audienciaLine}${diferencialLine}${perspLine}
 Generá las 7 ideas.`,
         },
       ],
