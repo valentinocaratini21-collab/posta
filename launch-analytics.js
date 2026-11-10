@@ -510,6 +510,30 @@ function cohorts(db, fromSql, toSql) {
   return out;
 }
 
+// ---------- M184 — cuentas de test/internas/invitadas ----------
+// La MISMA lista que usa la clasificación M166 de Rina (6/11: los 7
+// registers son 6 test/internos + 1 invitado sin identificador; 0 reales).
+// Marcadores objetivos por dominio del email, NO ids fijos: los invitados
+// nuevos (86-89, guest-*.invalid) caen en la misma clase sin tocar código.
+// Reproduce la tabla M166 exactamente:
+//   @postyhacetodo.com → QA/E2E del equipo (79 qa-login, 81 alta-p0, 82 semana-e2e, 83 stripe-e2e)
+//   @bambooty.test → cuentas de test del equipo (84 Café Aroma)
+//   @guest.invalid → invitados sin identificador (85, 86-89)
+//   @gestyofficemanager.com → cuenta interna de Gesty (80)
+// Sin email no se clasifica como test por código: eso lo clasifica Rina a
+// mano en cada corrida (M175 vigente). Si su clasificación cambia esta
+// lista, el predicado se actualiza en el mismo lote. Acepta el usuario
+// ({email}) o el email directo (string).
+function isTestAccountUser(u) {
+  const email = String((typeof u === 'string' ? u : (u && u.email)) || '').trim().toLowerCase();
+  if (!email) return false;
+  const domain = email.split('@').pop();
+  return domain === 'postyhacetodo.com'
+    || domain === 'bambooty.test'
+    || domain === 'guest.invalid'
+    || domain === 'gestyofficemanager.com';
+}
+
 // ---------- 6) ALERTAS AUTOMÁTICAS ----------
 // Canal real: la superficie admin (este payload alimenta el tablero y, con su
 // forma {sev,text}, el banner de alertas que el admin ya muestra desde
@@ -526,25 +550,35 @@ function computeAlerts(db, opts) {
     try { const r = db.prepare('SELECT email FROM users WHERE id = ?').get(uid); return (r && r.email) || ('usuario ' + uid); } catch (e) { return 'usuario ' + uid; }
   };
   // (a) pago entrante: altas y renovaciones llegan como payment_ok
+  // (M184: los pagos de cuentas de test/internas/invitadas no se celebran
+  // ni se lloran — un payment_ok sin user_id se sigue contando: un pago sin
+  // atribuir sigue siendo señal de pago, no de test.)
   try {
-    const rows = db.prepare("SELECT user_id, created_at FROM events WHERE name = 'payment_ok' AND datetime(created_at) >= datetime('now', '-24 hours') ORDER BY created_at DESC").all();
+    const rows = db.prepare("SELECT e.user_id, e.created_at, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id WHERE e.name = 'payment_ok' AND datetime(e.created_at) >= datetime('now', '-24 hours') ORDER BY e.created_at DESC").all()
+      .filter((r) => !isTestAccountUser(r));
     if (rows.length) out.push({ key: 'payment:' + today, type: 'payment', sev: 'ok',
       title: `🎉 ${rows.length} pago(s) cobrado(s) en 24 h`, detail: rows.map(r => bizName(r.user_id)).slice(0, 8).join(' · '), count: rows.length, at: rows[0].created_at });
-    const fails = db.prepare("SELECT user_id, COUNT(*) AS n FROM events WHERE name = 'payment_failed' AND datetime(created_at) >= datetime('now', '-24 hours') GROUP BY user_id").all();
+    const fails = db.prepare("SELECT e.user_id, u.email, COUNT(*) AS n FROM events e LEFT JOIN users u ON u.id = e.user_id WHERE e.name = 'payment_failed' AND datetime(e.created_at) >= datetime('now', '-24 hours') GROUP BY e.user_id").all()
+      .filter((f) => !isTestAccountUser(f));
     for (const f of fails) out.push({ key: `payfail:${f.user_id}:${today}`, type: 'payment_failed', sev: 'high',
       title: `⚠️ Pago fallido: ${bizName(f.user_id)}`, detail: `${f.n} intento(s) fallido(s) en 24 h — entra la jugada comercial (aviso amable con link de un toque)`, count: f.n });
   } catch (e) {}
   // (b) posteo que falló al publicar (agregado por cuenta)
+  // (M184: el fallo de una cuenta de test no dispara la jugada de culpa nuestra.)
   try {
-    const rows = db.prepare("SELECT user_id, COUNT(*) AS n, MAX(created_at) AS last FROM events WHERE name = 'post_failed' AND datetime(created_at) >= datetime('now', '-24 hours') GROUP BY user_id ORDER BY n DESC").all();
+    const rows = db.prepare("SELECT e.user_id, u.email, COUNT(*) AS n, MAX(e.created_at) AS last FROM events e LEFT JOIN users u ON u.id = e.user_id WHERE e.name = 'post_failed' AND datetime(e.created_at) >= datetime('now', '-24 hours') GROUP BY e.user_id ORDER BY n DESC").all()
+      .filter((f) => !isTestAccountUser(f));
     for (const f of rows) out.push({ key: `postfail:${f.user_id}:${today}`, type: 'post_failed', sev: 'high',
       title: `❌ Publicación fallida: ${bizName(f.user_id)}`, detail: `${f.n} fallo(s) en 24 h — entra la jugada de culpa nuestra (prioridad de regeneración + pieza extra)`, count: f.n, at: f.last });
   } catch (e) {}
   // (c) semana de cliente pago no generada a tiempo (miércoles en adelante, semana vacía)
+  // (M184: la alta «Semana sin generar: Posta» sobre la cuenta test 81 era
+  // falsa alarma — las cuentas de test/internas/invitadas no entran acá.)
   try {
     const weekday = new Date().getUTCDay();
     if (weekday >= 3) {
-      const paid = db.prepare("SELECT id FROM users WHERE plan_status = 'active'").all();
+      const paid = db.prepare("SELECT id, email FROM users WHERE plan_status = 'active'").all()
+        .filter((u) => !isTestAccountUser(u));
       for (const u of paid) {
         const n = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ?').get(u.id, currentWeekKey()).n || 0;
         if (!n) out.push({ key: `weeklate:${u.id}:${currentWeekKey()}`, type: 'week_late', sev: 'high',
@@ -553,9 +587,11 @@ function computeAlerts(db, opts) {
     }
   } catch (e) {}
   // (d) costo de IA sobre el umbral sano del plan (8% alerta · 10% tope del producto)
+  // (M184: el gasto de IA de una cuenta de test no dispara alerta de cliente.)
   try {
     if (opts.costCtx) {
-      const actives = db.prepare("SELECT * FROM users WHERE plan_status = 'active'").all();
+      const actives = db.prepare("SELECT * FROM users WHERE plan_status = 'active'").all()
+        .filter((u) => !isTestAccountUser(u));
       for (const u of actives) {
         const ctx = opts.costCtx(u);
         if (ctx && ctx.planPriceUsd && ctx.monthSpendUsd >= ctx.planPriceUsd * AI_COST_ALERT_PCT / 100) {
@@ -979,7 +1015,7 @@ module.exports = {
   launchEpochMs, epochSql, eraOf, eraCond, eraInfo, normalizeSrc, CHANNELS,
   funnelTotals, funnelByDim, funnelUniques, timeToValue,
   accountSignals, accountHealth, HEALTH_RULES_TEXT, PLAYS, AI_COST_ALERT_PCT, AI_COST_CAP_PCT,
-  accountsOverview, accountPostsDetail, computeAlerts, projection200,
+  accountsOverview, accountPostsDetail, computeAlerts, projection200, isTestAccountUser,
   qualityMetrics, classifyRejections, moneyBoard, cohorts,
   morning, board, founderLetter, rescueStats, autopsyPatterns, sweepAutopsies, snapshotAutopsy,
   syncLearning, dictionaryAudit, EVENT_DICTIONARY, currentWeekKey,

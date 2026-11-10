@@ -8507,9 +8507,13 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
       WHERE datetime(created_at) >= datetime('now', ?) AND ${ec.sql} GROUP BY d, name ORDER BY d DESC LIMIT 600`).all(`-${days} days`, ...ec.params);
   } catch (e) {}
   // Meta 200 suscriptores: suscriptores pagos, MRR y conversión trial→pago.
+  // (M184: los contadores excluyen cuentas de test/internas/invitadas — la
+  // misma lista M166 que usa el panel de growth; si no, la pestaña Funnel
+  // sigue mostrando los 2 suscriptores / $399.900 de las cuentas de test.)
   let goal = { target: 200, subscribers: 0, mrr: 0, trial_to_paid: 0, new_30d: 0 };
   try {
-    const actives = db.prepare(`SELECT plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all();
+    const actives = db.prepare(`SELECT email, plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all()
+      .filter((u) => !LA.isTestAccountUser(u));
     let mrr = 0;
     for (const u of actives) {
       const base = Number(u.mp_base_amount) || 0;
@@ -8701,7 +8705,11 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
   const out = { money: {}, referrals: {}, content: {}, cancel_reasons: [], chat_themes: [] };
   try {
     // Plata
-    const actives = db.prepare(`SELECT plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all();
+    // (M184: subscribers/MRR excluyen cuentas de test/internas/invitadas —
+    // la misma lista M166: 81 y 84 eran los 2 «suscriptores» del panel con
+    // payment_ok 0. cost_per_user_usd usa el mismo denominador real.)
+    const actives = db.prepare(`SELECT email, plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all()
+      .filter((u) => !LA.isTestAccountUser(u));
     let mrr = 0;
     for (const u of actives) {
       const base = Number(u.mp_base_amount) || 0;
@@ -8815,10 +8823,17 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
     } catch (e) { out.ref_clicks = []; }
     try {
       const alerts = [];
-      const reg5 = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE datetime(created_at) >= datetime('now', '-5 days')`).get().c;
+      // (M184: las alertas cuentan solo cuentas reales — los registros y los
+      // pagos de cuentas de test/internas/invitadas no las mueven. Un
+      // payment_ok sin user_id se sigue contando: un pago sin atribuir sigue
+      // siendo señal de pago, no de test.)
+      const reg5 = db.prepare(`SELECT email FROM users WHERE datetime(created_at) >= datetime('now', '-5 days')`).all()
+        .filter((u) => !LA.isTestAccountUser(u)).length;
       if (!reg5) alerts.push({ sev: 'high', text: 'Sin registros en los últimos 5 días.' });
-      const paidCur = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'payment_ok' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
-      const paidPrev = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'payment_ok' AND datetime(created_at) >= datetime('now', '-60 days') AND datetime(created_at) < datetime('now', '-30 days')`).get().c;
+      const paidCur = db.prepare(`SELECT e.user_id, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id WHERE e.name = 'payment_ok' AND datetime(e.created_at) >= datetime('now', '-30 days')`).all()
+        .filter((r) => !LA.isTestAccountUser(r)).length;
+      const paidPrev = db.prepare(`SELECT e.user_id, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id WHERE e.name = 'payment_ok' AND datetime(e.created_at) >= datetime('now', '-60 days') AND datetime(e.created_at) < datetime('now', '-30 days')`).all()
+        .filter((r) => !LA.isTestAccountUser(r)).length;
       if (paidPrev >= 2 && paidCur < paidPrev * 0.5) alerts.push({ sev: 'high', text: `Pagos en caída: ${paidCur} vs ${paidPrev} en los 30 días anteriores.` });
       if (out.money && out.money.ai_cost_30d > 1 && out.money.ai_cost_today > 3 * (out.money.ai_cost_30d / 30))
         alerts.push({ sev: 'high', text: `Gasto de IA disparado hoy: $${out.money.ai_cost_today} vs $${(out.money.ai_cost_30d / 30).toFixed(2)} promedio.` });
@@ -8831,7 +8846,10 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
         HAVING (datetime(u.created_at) < datetime('now', '-7 days') AND last_pub IS NULL)
             OR datetime(last_pub) < datetime('now', '-7 days')
         ORDER BY last_pub ASC NULLS FIRST LIMIT 30`).all();
-      out.churn = (churn || []).map(c => ({
+      // (M184: la lista de churn — y su alerta med — excluye cuentas de
+      // test/internas/invitadas, lista M166. Un trial vencido real sigue
+      // entrando: no es test.)
+      out.churn = (churn || []).filter((c) => !LA.isTestAccountUser(c)).map(c => ({
         email: c.email, plan: c.plan || 'trial', status: c.plan_status,
         days_since_signup: Math.floor((Date.now() - new Date((c.created_at || '').replace(' ', 'T') + 'Z').getTime()) / 864e5),
         last_pub: c.last_pub || null, last_act: c.last_act || null,
@@ -34259,7 +34277,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v862';
+const BUILD_ID = '20261105-v863';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
