@@ -1627,4 +1627,18 @@ db.exec(`CREATE TABLE IF NOT EXISTS sweep_failures (
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sweep_failures_retry ON sweep_failures(next_retry_at)`); } catch (e) {}
 
+// (LOTE ESTRATEGIA-SEMANA · 10/11 · v852) La estrategia de la semana que
+// bamboo escribe para cada cliente (plan día por día + narrativa + qué
+// pesar más + qué no repetir + el PORQUÉ de cada posteo). Una fila por
+// cliente por semana; la generación la lee como entrada que GUÍA, nunca
+// como bloqueo: sin fila, la semana se arma como hoy. La PRIMARY KEY
+// (user_id, week_key) es el índice de la lectura (SQLite la auto-indexa).
+db.exec(`CREATE TABLE IF NOT EXISTS estrategia_semana (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  estrategia_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY(user_id, week_key)
+)`);
+
 module.exports = db;

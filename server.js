@@ -9582,6 +9582,128 @@ app.post('/api/admin/analisis-diario', requireAdminToken, (req, res) => {
   }
 });
 
+// ---------- Estrategia de la semana (LOTE ESTRATEGIA-SEMANA · 10/11 · v852) ----------
+// La estrategia que bamboo escribe para cada cliente (plan día por día +
+// narrativa + qué pesar más + qué no repetir + el PORQUÉ de cada posteo).
+// Viaja como entrada que GUÍA la generación, nunca como bloqueo: sin fila,
+// la semana se arma como hoy (fundamento + learnings). La tabla vive en
+// db.js (boot); acá solo se lee y se escribe por admin.
+// Normaliza y topa una estrategia cruda (del POST o de la DB): sin objeto
+// → null; sin contenido aprovechable → null (estrategia_vacia). Los días
+// sin fecha válida o sin ángulo ni porqué se descartan (fail-open, el
+// resto del plan sobrevive).
+function normalizarEstrategia(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const cap = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  const narrativa = cap(obj.narrativa, 1000);
+  const pesarMas = cap(obj.pesar_mas, 500);
+  const noRepetir = cap(obj.no_repetir, 500);
+  let dias = [];
+  if (Array.isArray(obj.dias)) {
+    for (const d of obj.dias.slice(0, 7)) {
+      if (!d || typeof d !== 'object') continue;
+      const dia = String(d.dia || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) continue;
+      const angulo = cap(d.angulo, 280);
+      const formato = cap(d.formato, 60);
+      const porque = cap(d.porque, 200);
+      const porqueEn = cap(d.porque_en, 200);
+      if (!angulo && !porque) continue;
+      dias.push({ dia, angulo, formato, porque, porque_en: porqueEn });
+    }
+  }
+  if (!narrativa && !pesarMas && !noRepetir && !dias.length) return null;
+  return { narrativa, pesar_mas: pesarMas, no_repetir: noRepetir, dias };
+}
+// Lee la estrategia de la semana para (uid, weekKey). Objeto normalizado
+// o null. Nunca tira: sin fila, sin weekKey o con JSON roto → null (la
+// generación corre como hoy).
+function leerEstrategiaSemana(db, uid, weekKey) {
+  if (!uid || !weekKey || !/^\d{4}-\d{2}-\d{2}$/.test(String(weekKey))) return null;
+  try {
+    const row = db.prepare('SELECT estrategia_json FROM estrategia_semana WHERE user_id = ? AND week_key = ?').get(uid, weekKey);
+    if (!row || !row.estrategia_json) return null;
+    return normalizarEstrategia(JSON.parse(row.estrategia_json)) || null;
+  } catch (e) { return null; }
+}
+// Texto de la estrategia para el brief de ideas (prompt de openaiIdeas).
+// '' sin fila: la generación corre como hoy.
+function estrategiaSemanaParaBrief(db, uid, weekKey) {
+  const est = leerEstrategiaSemana(db, uid, weekKey);
+  if (!est) return '';
+  const lines = [];
+  if (est.narrativa) lines.push('Narrativa de la semana: ' + est.narrativa);
+  if (est.pesar_mas) lines.push('Pesar más: ' + est.pesar_mas);
+  if (est.no_repetir) lines.push('No repetir: ' + est.no_repetir);
+  if (est.dias.length) {
+    lines.push('Plan día por día:');
+    for (const d of est.dias) {
+      const parts = [d.dia, d.angulo, d.formato ? '(' + d.formato + ')' : '', d.porque ? '— ' + d.porque : ''].filter(Boolean).join(' ');
+      lines.push('- ' + parts);
+    }
+  }
+  return lines.join('\n').slice(0, 1200);
+}
+// PORQUÉ del plan para el posteo en la posición `pos` de la semana
+// (0-based, orden final del pool; la ventana empieza en `existing`).
+// Idioma del usuario: porque_en si lang EN y existe, si no porque.
+// '' si no hay entrada para esa posición: el pick conserva su porque.
+function estrategiaPorqueParaPos(db, uid, weekKey, pos, lang) {
+  const est = leerEstrategiaSemana(db, uid, weekKey);
+  if (!est || !Array.isArray(est.dias)) return '';
+  const d = est.dias[pos];
+  if (!d) return '';
+  if (lang === 'en' && d.porque_en) return d.porque_en;
+  return d.porque || '';
+}
+// Aplica el PORQUÉ del plan a los picks de la ventana: cada pick lleva el
+// PORQUÉ de su posición en el plan día por día (el pool final ya está
+// ordenado: la posición es el orden de la semana). `offset` es la posición
+// donde empieza la ventana (los posteos que ya ocupan la semana llevaron
+// las primeras entradas en su corrida). Devuelve cuántos picks llevaron
+// PORQUÉ del plan. Nunca tira: sin fila, nada cambia.
+function aplicarEstrategiaAPicks(db, uid, weekKey, picks, offset) {
+  if (!Array.isArray(picks) || !picks.length) return 0;
+  let n = 0;
+  try {
+    const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
+    for (let i = 0; i < picks.length; i++) {
+      const pq = estrategiaPorqueParaPos(db, uid, weekKey, (offset || 0) + i, lang);
+      if (pq) { picks[i]._estrategiaPorque = pq; n++; }
+    }
+  } catch (e) { /* la estrategia nunca frena la semana */ }
+  return n;
+}
+
+// POST /api/admin/estrategia-semana — bamboo escribe la estrategia de la
+// semana de un cliente. Body: { user_id, week_key, estrategia }.
+// estrategia: { narrativa, pesar_mas, no_repetir, dias: [{ dia, angulo,
+// formato, porque, porque_en }] }. Upsert por (user_id, week_key).
+// POST solo (no hay GET: la estrategia se lee adentro de la generación).
+// No crea ninguna push ni mensaje de chat: es un dato del plan, no un
+// aviso. La estrategia GUÍA, no bloquea: sin fila, la generación corre
+// como hoy.
+app.post('/api/admin/estrategia-semana', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  const uid = Number(b.user_id);
+  if (!uid) return res.status(400).json({ error: 'sin_usuario' });
+  const weekKey = String(b.week_key || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) return res.status(400).json({ error: 'week_key_invalido' });
+  if (!b.estrategia || typeof b.estrategia !== 'object' || Array.isArray(b.estrategia)) return res.status(400).json({ error: 'estrategia_invalida' });
+  const norm = normalizarEstrategia(b.estrategia);
+  if (!norm) return res.status(400).json({ error: 'estrategia_vacia' });
+  try {
+    db.prepare(`INSERT INTO estrategia_semana (user_id, week_key, estrategia_json)
+      VALUES (?,?,?)
+      ON CONFLICT(user_id, week_key) DO UPDATE SET estrategia_json=excluded.estrategia_json`)
+      .run(uid, weekKey, JSON.stringify(norm));
+    res.json({ ok: true, user_id: uid, week_key: weekKey });
+  } catch (e) {
+    console.error('[estrategia-semana]', e.message);
+    res.status(500).json({ error: 'no_pude_guardar' });
+  }
+});
+
 // ---------- Publicidad: billetera + boost de posteos ganadores ----------
 // Billetera (helpers)
 function getAdWallet(userId) {
@@ -11329,6 +11451,15 @@ function ideasInputFor(uid, weekKey) {
   // se ponen DESPUÉS del levelBoosted, igual que vetos y productos.
   try { if (sabeSiempreTxt) ideasInput.sabeSiempre = sabeSiempreTxt; } catch (e) {}
   try { if (semanaElegida) ideasInput.semanaElegida = semanaElegida; } catch (e) {}
+  // (LOTE ESTRATEGIA-SEMANA · 10/11 · v852) La estrategia de la semana
+  // que bamboo escribió (plan día por día + narrativa + qué pesar más +
+  // qué no repetir) viaja como entrada que GUÍA, no como bloqueo: sin
+  // fila (o sin weekKey) la generación corre como hoy. Se pone DESPUÉS
+  // del levelBoosted, igual que vetos y productos.
+  try {
+    const estBrief = estrategiaSemanaParaBrief(db, uid, weekKey);
+    if (estBrief) ideasInput.estrategia = estBrief;
+  } catch (e) {}
   return ideasInput;
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
@@ -16426,6 +16557,17 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         }
       }
     } catch (e) { console.error(`[pipeline:${tag}] semana aprende falló:`, e.message); }
+    // (LOTE ESTRATEGIA-SEMANA · v852) El PORQUÉ del plan aterriza en el
+    // posteo: cada pick de la ventana lleva el PORQUÉ de su posición en
+    // el plan día por día (el pool final ya está ordenado). La ventana
+    // empieza en `existing`: los posteos que ya ocupan la semana
+    // llevaron las primeras entradas en su corrida. Se corre DESPUÉS de
+    // semana-aprende (el plan manda sobre el porque aprendido). Sin
+    // entrada, el pick conserva su porque. Nunca frena la corrida.
+    try {
+      const nEst = aplicarEstrategiaAPicks(db, uid, weekKey, picks, existing);
+      if (nEst) console.log(`[pipeline:${tag}] usuario ${uid}: estrategia de la semana — ${nEst} porqués del plan (semana ${weekKey})`);
+    } catch (e) { console.error(`[pipeline:${tag}] estrategia falló:`, e.message); }
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle, rg_producto, rg_procedencia) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
@@ -16707,7 +16849,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // imagen real (la invariante de siempre).
           if (!isCarousel) {
             try {
-              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, (needRev || (idea._rgSinProducto ? 1 : 0)), '', '', '', '', String((content && content.hookId) || ''), '', salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
+              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea._estrategiaPorque || idea.porque || '').slice(0, 500), weekKey, (needRev || (idea._rgSinProducto ? 1 : 0)), '', '', '', '', String((content && content.hookId) || ''), '', salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
               pendingId = info && info.lastInsertRowid;
               if (pendingId) { runCreatedIds.add(pendingId); stampPostDigest(pendingId, uid, content && content._anchored === false); cmRegistrarPosteo(pendingId, idea, caption, { motivoCalidad }); }
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
@@ -16866,7 +17008,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             if (characterBlocksDelivery(genOut)) { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
             if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, ((characterBlocksDelivery(genOut) || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea._estrategiaPorque || idea.porque || '').slice(0, 500), weekKey, ((characterBlocksDelivery(genOut) || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
             if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(insInfo.lastInsertRowid, idea, caption, { motivoCalidad }); }
           }
           } else {
@@ -16878,7 +17020,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               style_code, style_reason, intent, product_ref, hook_id, sales_intent, sales_angle, rg_producto, rg_procedencia)
               VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
               .run(uid, carouselGen.coverPath, carouselGen.caption, hashtags, JSON.stringify(paths),
-                idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500),
+                idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea._estrategiaPorque || idea.porque || '').slice(0, 500),
                 weekKey, (needRev || carouselGen.needsReview || idea._rgSinProducto) ? 1 : 0,
                 'carousel', `carousel automático (${carouselReason[i] || 'estrategia'} · ${paths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle,
@@ -34014,7 +34156,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v851';
+const BUILD_ID = '20261105-v852';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -34705,4 +34847,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks };
