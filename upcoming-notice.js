@@ -121,6 +121,10 @@ async function processUpcomingNotices(db, opts) {
     out.checked++;
     const mode = modeFor(db, p, user);
     const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
+    // (v856) La historia se nombra historia, no posteo: el aviso de
+    // 30 min decía «este posteo» también para las stories (media_type
+    // 'story') y se leía como que el posteo del feed salía de nuevo.
+    const isStory = String(p.media_type || '') === 'story';
     try {
       // (LOTE PRUEBA-ENTRADA-DIRECTA) Aviso 30 min: NOTIFICACIÓN + EMAIL
       // (ambos, no cascada excluyente). El push se intenta siempre; el
@@ -137,8 +141,8 @@ async function processUpcomingNotices(db, opts) {
         pr = await pushFn(p.user_id, {
           title: mode === 'manual' ? '⏰ Sale en 30 minutos' : '🚀 Publico en 30 min',
           body: mode === 'manual'
-            ? `"${cap}..." — tocá para aprobarlo o frenarlo`
-            : `"${cap}..." — tocá para verlo o frenarlo`,
+            ? (isStory ? `esta historia: "${cap}..." — tocá para aprobarla o frenarla` : `este posteo: "${cap}..." — tocá para aprobarlo o frenarlo`)
+            : (isStory ? `esta historia: "${cap}..." — tocá para verla o frenarla` : `este posteo: "${cap}..." — tocá para verlo o frenarlo`),
           url: `/#/app/semana?post=${p.id}`,
         });
       } catch (e) { pr = { ok: false, reason: 'push_throw: ' + e.message }; }
@@ -175,8 +179,8 @@ async function processUpcomingNotices(db, opts) {
       // aviso queda en el chat de la cuenta y el evento dice la verdad.
       const emailReason = (er && er.reason) || 'sin_email';
       const chatText = mode === 'manual'
-        ? `⏰ en 30 minutos sale este posteo y todavía no me diste tu ok:\n\n"${cap}..."\n\nsi querés que salga, aprobalo desde tu semana 👆`
-        : `🚀 en 30 minutos publico este posteo:\n\n"${cap}..."\n\nsi querés frenarlo o cambiarlo, tocá acá 👆`;
+        ? (isStory ? `⏰ en 30 minutos sale esta historia y todavía no me diste tu ok:\n\n"${cap}..."\n\nsi querés que salga, aprobalo desde tu semana 👆` : `⏰ en 30 minutos sale este posteo y todavía no me diste tu ok:\n\n"${cap}..."\n\nsi querés que salga, aprobalo desde tu semana 👆`)
+        : (isStory ? `🚀 en 30 minutos publico esta historia:\n\n"${cap}..."\n\nsi querés frenarla o cambiarla, tocá acá 👆` : `🚀 en 30 minutos publico este posteo:\n\n"${cap}..."\n\nsi querés frenarlo o cambiarlo, tocá acá 👆`);
       const inChat = chatInsert(db, p.user_id, chatText);
       markNotified(db, p.id);
       trackEvent(db, p.user_id, 'post_upcoming_notice', { post_id: p.id, channel: 'chat', mode, push_reason: pushReason, email_reason: emailReason });

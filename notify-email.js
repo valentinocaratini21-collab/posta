@@ -387,10 +387,14 @@ async function sendUpcomingEmail(db, post, opts) {
     const en = user.lang === 'en';
     const when = dayHourLabel(db, post.user_id, post.scheduled_at, en ? 'en' : undefined);
     const firstLine = String(post.caption || '').split('\n')[0].trim().slice(0, 120);
+    // (v856) La historia se nombra historia, no posteo (mismo fix que
+    // upcoming-notice.js y scheduler.js: el aviso decía «este posteo»
+    // también para las stories).
+    const isStory = String(post.media_type || '') === 'story';
     const img = absoluteMediaUrl(post.image_path, getImageBaseUrl(db, post.user_id));
     const subject = en
-      ? (mode === 'manual' ? '⏰ Going out in 30 minutes: shall we publish it?' : '⏰ Your post goes out in 30 minutes')
-      : (mode === 'manual' ? '⏰ Sale en 30 minutos: ¿lo publicamos?' : '⏰ Tu posteo sale en 30 minutos');
+      ? (mode === 'manual' ? '⏰ Going out in 30 minutes: shall we publish it?' : (isStory ? '⏰ Your story goes out in 30 minutes' : '⏰ Your post goes out in 30 minutes'))
+      : (mode === 'manual' ? '⏰ Sale en 30 minutos: ¿lo publicamos?' : (isStory ? '⏰ Tu historia sale en 30 minutos' : '⏰ Tu posteo sale en 30 minutos'));
     let actionHtml = '';
     if (mode === 'manual') {
       const a = signAction(post.id, 'approve', 4);
@@ -408,18 +412,18 @@ async function sendUpcomingEmail(db, post, opts) {
       actionHtml = en ? `
     <p style="font-size:14px;line-height:1.6;color:#47617A;margin:0;text-align:center">It goes out on its own, as always. If you want to stop it or change it, open your week 👇</p>
     <p style="text-align:center;margin:12px 0 0">
-      <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">See the post</a>
+      <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">${isStory ? 'See the story' : 'See the post'}</a>
     </p>` : `
     <p style="font-size:14px;line-height:1.6;color:#47617A;margin:0;text-align:center">Sale solo, como siempre. Si querés frenarlo o cambiarlo, entrá a tu semana 👇</p>
     <p style="text-align:center;margin:12px 0 0">
-      <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">Ver el posteo</a>
+      <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">${isStory ? 'Ver la historia' : 'Ver el posteo'}</a>
     </p>`;
     }
     const html = emailShell(`
     <p style="font-size:16px;margin:0 0 16px">${en
-      ? (mode === 'manual' ? "This post goes out in 30 minutes and you haven't given me your OK yet 👇" : "In 30 minutes I'll publish this post 👇")
-      : (mode === 'manual' ? 'Este posteo sale en 30 minutos y todavía no me diste tu ok 👇' : 'En 30 minutos publico este posteo 👇')}</p>
-    ${img && post.image_path ? `<img src="${esc(img)}" alt="Posteo" style="width:100%;border-radius:12px;display:block;margin:0 0 16px">` : ''}
+      ? (mode === 'manual' ? (isStory ? "This story goes out in 30 minutes and you haven't given me your OK yet 👇" : "This post goes out in 30 minutes and you haven't given me your OK yet 👇") : (isStory ? "In 30 minutes I'll publish this story 👇" : "In 30 minutes I'll publish this post 👇"))
+      : (mode === 'manual' ? (isStory ? 'Esta historia sale en 30 minutos y todavía no me diste tu ok 👇' : 'Este posteo sale en 30 minutos y todavía no me diste tu ok 👇') : (isStory ? 'En 30 minutos publico esta historia 👇' : 'En 30 minutos publico este posteo 👇'))}</p>
+    ${img && post.image_path ? `<img src="${esc(img)}" alt="${isStory ? 'Historia' : 'Posteo'}" style="width:100%;border-radius:12px;display:block;margin:0 0 16px">` : ''}
     ${firstLine ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">${esc(firstLine)}</p>` : ''}
     ${when ? `<p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33"><b>${en ? `Going out ${esc(when)}` : `Sale el ${esc(when)}`}</b> ${en ? "(your account's time)" : '(hora de tu cuenta)'}</p>` : ''}
     ${actionHtml}`, en ? 'en' : undefined);

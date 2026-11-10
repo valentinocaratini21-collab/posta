@@ -2310,11 +2310,15 @@ async function autopilotPreNotify(db) {
       for (const d of r.detalle) {
         if (d.channel !== 'push' || d.mode !== 'autopilot') continue;
         try {
-          const p = db.prepare('SELECT user_id, caption FROM posts WHERE id = ?').get(d.post_id);
+          const p = db.prepare('SELECT user_id, caption, media_type FROM posts WHERE id = ?').get(d.post_id);
           if (p) {
             const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
+            // (v856) La historia se nombra historia, no posteo.
+            const isStory = String(p.media_type || '') === 'story';
             db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
-              .run(p.user_id, `🚀 En 30 minutos publico este posteo:\n\n"${cap}..."\n\nSi querés frenarlo o cambiarlo, tocá acá 👆`);
+              .run(p.user_id, isStory
+                ? `🚀 En 30 minutos publico esta historia:\n\n"${cap}..."\n\nSi querés frenarla o cambiarla, tocá acá 👆`
+                : `🚀 En 30 minutos publico este posteo:\n\n"${cap}..."\n\nSi querés frenarlo o cambiarlo, tocá acá 👆`);
           }
         } catch (e) {}
       }
