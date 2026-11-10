@@ -1598,7 +1598,9 @@ async function anaAdsCargar(btn) {
 // la deja como la activa. Sin Stripe.js ni formulario propio en la app.
 function anaTarjetaMsgEl() {
   try { if (typeof anaCargarMsgEl === 'function') { const m = anaCargarMsgEl(); if (m) return m; } } catch (e) {}
-  return document.getElementById('anaBoostRecMsg');
+  // (v877) En la hoja Impulsar el mensaje es #pzBoostMsg: si el setup de
+  // Stripe falla desde ahí, el aviso tiene que verse en la hoja.
+  return document.getElementById('anaBoostRecMsg') || document.getElementById('pzBoostMsg');
 }
 async function anaAgregarTarjeta(btn) {
   if (btn) btn.disabled = true;

@@ -17029,7 +17029,16 @@ async function pzBoostCargar(btn) {
     pzBoostPintarBoost();
     decir(gzT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.'));
   } else {
-    decir(pzBoostCargarMotivo((j && j.motivo) || '', monto, j && j.cobroId));
+    const motivo = (j && j.motivo) || '';
+    decir(pzBoostCargarMotivo(motivo, monto, j && j.cobroId));
+    // (v877) Sin tarjeta, el mensaje lleva al flujo: el botón «Agregar
+    // tarjeta» queda pegado al mensaje (mismo patrón que la Billetera,
+    // chunk-analisis.js: anaAgregarTarjetaBtn). El chunk se carga bajo
+    // demanda si todavía no está (el prefetch no lo garantiza).
+    if (motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada') {
+      try { await loadChunk('analisis'); } catch (e) {}
+      try { if (msgEl && typeof anaAgregarTarjetaBtn === 'function') anaAgregarTarjetaBtn(msgEl); } catch (e) {}
+    }
   }
 }
 
