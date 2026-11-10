@@ -996,7 +996,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Hoy', 'Today'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -6197,7 +6197,7 @@ function mzTabsHTML(tab) {
   const on = tab === 'inicio' ? 'inicio'
     : tab === 'chat' ? 'chat' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Hoy', 'Today'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6279,7 +6279,7 @@ function appShell(tab, content) {
       <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Today' : 'Hoy'}</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
