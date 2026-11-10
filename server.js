@@ -2953,6 +2953,20 @@ async function makeIdeaDraft(uid, idea) {
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId);
   const hashtags = String((content && content.hashtags) || '');
+  // DEDUP-7D EN LA RUTA DE IDEAS (Juli, 2026-11-10 — id 589 real, cuenta 87:
+  // duplicado EXACTO del 571, creado 3 días después por esta ruta: los prevs
+  // de generación (weekPrevCaptions) solo ven la semana con el MISMO week_key
+  // y el 571 tiene week_key vacío — el duplicado era invisible. Mismo
+  // re-chequeo que el worker de generateWeekDrafts (v845): contra la semana
+  // VIVA en la DB (7 días, sin mirar week_key) y solo frenan las reglas que
+  // dependen de previos (captionWeekClash, generator.js). Si la lectura
+  // falla, se sigue sin frenar (fail-open, como el worker). La idea queda
+  // pendiente: el llamador responde honesto con reason 'dup'.
+  try {
+    const freshPrevs = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND status IN ('draft', 'scheduled', 'published') AND COALESCE(caption, '') != '' AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 20`).all(uid).map((r) => r.caption);
+    const clash = captionWeekClash(caption, freshPrevs, (getProfile(uid) && getProfile(uid).business_name) || '');
+    if (clash && !clash.ok) { console.log(`[ideas-loop] duplicado 7d, no se crea: ${idea.title} (${clash.reason})`); return { ok: false, reason: 'dup', dup_reason: clash.reason }; }
+  } catch (e) { console.error(`[ideas-loop] chequeo dedup-7d falló (sigo sin frenar):`, e.message); }
   // (v236) SEMANA ACTUAL: el borrador de una idea cae en la semana
   // corriente del usuario, no en la semana en que la idea nació —
   // idea.week_key queda solo como dato de origen en posty_ideas. El
@@ -3215,6 +3229,7 @@ app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res)
       // (v236) Vencida: mensaje honesto y definitivo, no un "probá en
       // un rato" que promete lo que nunca va a pasar.
       if (r.reason === 'stale') return res.status(410).json({ error: 'Esa idea ya pasó de fecha 😅 No la armo para que no publiques algo vencido — el lunes te traigo ideas frescas.' });
+      if (r.reason === 'dup') return res.status(409).json({ error: 'Esa idea ya está en tu semana con el mismo texto 😅 La tenés como borrador o programada — no la duplico.' });
       if (r.reason === 'ai_cap') return res.status(429).json({ error: costs.MSG_CAP || 'Llegamos al tope de trabajo de IA por hoy 😅' });
       if (r.reason === 'no_carousel') return res.status(502).json({ error: 'No pude armar el carrusel ahora 😅 Probá en un rato' });
       return res.status(502).json({ error: 'No pude armar el posteo ahora 😅 Probá en un rato' });
@@ -34668,7 +34683,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v877';
+const BUILD_ID = '20261105-v878';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

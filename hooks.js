@@ -219,11 +219,7 @@ function hookFits(hook, { tema, negocio, hasPrice } = {}) {
 function captionOpenIsGarbled(caption, negocio) {
   const first = String(caption || '').split('\n')[0].trim();
   if (!first) return false;
-  if (/[.,:;]{2,}/.test(first.replace(/\.\.\./g, ''))) return true;
-  if (/\w\.:(?!\/)/.test(first)) return true;
-  if (/\.\s+[a-záéíóúñ]/.test(first)) return true;
-  if (/[¿¡]/.test(first.slice(1))) return true;
-  // EXENCIÓN DEL NOMBRE (2026-10-19): las dos firmas de abajo miran
+  // EXENCIÓN DEL NOMBRE (2026-10-19): las dos firmas de abajo miran (bloque subido arriba: la regla (b’) lo necesita antes de las firmas de puntuación)
   // artículos y mayúsculas, y un nombre de negocio puede contenerlas
   // legítimas ("Lo de Marta", "La Cocina de Ana") sin que haya empalme.
   // Se evalúan sobre `masked`: el caption con el nombre del negocio
@@ -266,6 +262,22 @@ function captionOpenIsGarbled(caption, negocio) {
       masked = masked.replace(new RegExp(esc, 'gi'), 'negocio');
     }
   }
+  if (/[.,:;]{2,}/.test(first.replace(/\.\.\./g, ''))) return true;
+  if (/\w\.:(?!\/)/.test(first)) return true;
+  // (b') LINT v10 (Juli, 2026-11-10) — voz en minúscula: la señal
+  // «punto + minúscula» solo delata costura cuando la línea mezcla
+  // mayúsculas (oraciones que arrancan en mayúscula y siguen en
+  // minúscula). En una apertura escrita TODA en minúscula — ids
+  // 592/593/594 reales (siembra nails, textos exactos aprobados por
+  // Valentino: «este color no se elige en la vidriera. se elige en
+  // la mano.») — el punto + minúscula es el ritmo normal de las
+  // oraciones, no una costura: el lint los marcaba empalmados. Se
+  // evalúa sobre `masked` para que un nombre propio no tape la voz
+  // (un «Posty.» enmascarado a «negocio» no cuenta como mayúscula).
+  // Las demás reglas (puntuación huérfana, nombre duplicado, largo)
+  // siguen corriendo igual sobre la línea en minúscula.
+  if (/[A-ZÁÉÍÓÚÑ]/.test(masked) && /\.\s+[a-záéíóúñ]/.test(first)) return true;
+  if (/[¿¡]/.test(first.slice(1))) return true;
   if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(masked)) return true;
   // (d) LINT v3 (Juli, 2026-10-18) — la firma residual pre-registrada el
   // 17/10 apareció en generación NUEVA: id 406, "Lo que nos dijo una
