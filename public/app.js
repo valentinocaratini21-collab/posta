@@ -21553,7 +21553,6 @@ function pzHoyCardHTML(p, o) {
       : String((p && p.media_type) || '') === 'story' ? '📸 Historia' : '📸 Post';
     const img = (p && p.image_path)
       ? `<img class="pz-hoy-thumb-img" src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
-    const cap1 = String((p && p.caption) || '').split('\n')[0].trim().slice(0, 90);
     const pill = cartita ? pzHoyPillSalida(p, tz, en) : '';
     // (LOTE HOY-SIN-DUPLICADO · 9/11) sinCuando: la tarjeta principal
     // ya lleva la hora en la cabecera («hoy · 19:00»); el badge «Hoy
@@ -21569,9 +21568,14 @@ function pzHoyCardHTML(p, o) {
       : '';
     const notaOk = (!pendiente && st === 'scheduled')
       ? `<div class="pz-hoy-ok">✓ ${esc(pill || cuando || (en ? 'Scheduled' : 'Agendado'))}. ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>` : '';
+    // (LOTE POSTEO-HOY-COMPACTO v859 · 9/11 · mock aprobado por Valentino:
+    // tarjeta horizontal — miniatura 96x120 4:5 a la izquierda + columna
+    // de texto; el caption aparece UNA sola vez, en el cuerpo; la chapita
+    // del caption sobre la foto muere (cap1). Cabecera y botones sin cambio.)
     return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
-      + `<div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${img}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}${cap1 ? `<span class="pz-hoy-cap">${esc(cap1)}</span>` : ''}</div>`
-      + `<div class="pz-hoy-body">${cuentaHtml}${caption ? `<p>${esc(caption)}</p>` : ''}${acciones}${notaOk}</div>`
+      + `<div class="pz-hoy-row"><div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${img}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}</div>`
+      + `<div class="pz-hoy-col">${cuentaHtml}${caption ? `<p>${esc(caption)}</p>` : ''}<div class="pz-hoy-meta">${en ? 'Tap the photo to see the detail →' : 'Tocá la foto para ver el detalle →'}</div></div></div>`
+      + `${acciones}${notaOk}`
       + `</article>`;
   } catch (e) { return ''; }
 }
