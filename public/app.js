@@ -9969,6 +9969,36 @@ function chatEditCommand(text) {
   return false;
 }
 
+// (LOTE FOTOS-VIDEOS v860 · bucle «del 0 al 5») Intercepto determinista
+// del cambio de foto por chat/voz. Devuelve true si consumió el mensaje.
+// Reglas: (a) con IDEA abierta, el editor de la idea (chatEditCommand)
+// manda — la voz con idea abierta ya lo usaba; (b) «cambiar / otra foto»
+// con un posteo vigente (anclado > ancla de Home/Feed > último armado)
+// abre el picker determinista y NUNCA llama al cerebro; (c) sin posteo
+// vigente, el mensaje sigue al cerebro (no hay nada que cambiar).
+// Un «sí» pelado a una propuesta en texto del cerebro NO se intercepta:
+// es ambiguo (puede ser la confirmación de la foto propuesta del msg 568
+// o de cualquier otra cosa) y sigue yendo al cerebro — caveat honesto.
+function pzFotoCambioIntercept(text) {
+  const t = String(text || '').toLowerCase();
+  try {
+    if (typeof CHAT_IDEA !== 'undefined' && CHAT_IDEA) {
+      if (typeof chatEditCommand === 'function' && chatEditCommand(text)) return true;
+    }
+  } catch (e) {}
+  if (!/cambi[áa]r?|cambio|otra foto|otra imagen|foto distinta|otra que|usar otra|imagen.*otra/.test(t)) return false;
+  if (!/foto|imagen/.test(t)) return false;
+  let pid = 0;
+  try { if (typeof PZ_PC_POST !== 'undefined' && PZ_PC_POST) pid = Number(PZ_PC_POST.id || PZ_PC_POST) || 0; } catch (e) {}
+  try { if (!pid && typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) pid = Number(HF_CHAT_ANCHOR.id) || 0; } catch (e) {}
+  try { if (!pid && typeof PZ_SFT_ARMADO_ACTUAL !== 'undefined' && PZ_SFT_ARMADO_ACTUAL && PZ_SFT_ARMADO_ACTUAL.postId) pid = Number(PZ_SFT_ARMADO_ACTUAL.postId) || 0; } catch (e) {}
+  if (!pid) return false;
+  try { api.post('/api/ideas/chat/log', { role: 'user', text, canal: 'chat', kind: 'usar_foto', post_id: pid }); } catch (e) {}
+  try { chatSay(pzSftEn() ? 'Pick the photo you want for this post 👇' : 'Elegí la foto que querés para este posteo 👇'); } catch (e) {}
+  try { pzUsarFotoAbrir(pid); } catch (e) {}
+  return true;
+}
+
 /* (LOTE CHAT-SCROLL · Valentino 5/11 «siempre tiene que arrancar desde
    abajo de todo») El scroll al fondo era UNA asignación sincrónica en el
    momento de pintar, y nada la volvía a afirmar: después de pintar, el
@@ -10499,18 +10529,12 @@ async function chatSend(textArg) {
   // el texto nuevo, la foto nueva): el resto sigue al chat normal.
   try { if (typeof pzTemaOnSend === 'function' && pzTemaOnSend(text, unsent)) return; } catch (e) {}
   const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
-  // (SUBIR-FOTO-PREGUNTAS) UNA foto/video sin instrucción clara → preguntas
-  // con un toque, no envío directo. Multi-foto, ancla, IDEA abierta o texto
-  // con instrucción van por el chat normal.
-  try {
-    const pendientes = CHAT_PHOTOS.filter(p => !p.sent);
-    const conAncla = (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id);
-    const ideaAbierta = (typeof CHAT_IDEA !== 'undefined' && CHAT_IDEA);
-    if (pendientes.length === 1 && !pzSubirFlujo && !ideaAbierta && !conAncla && !pzSubirTieneInstruccion(text)) {
-      pzSubirFotoAbrir(pendientes[0], text);
-      return;
-    }
-  } catch (e) {}
+  // (LOTE FOTOS-VIDEOS v860 · auditoría #20) UNA foto/video suelta YA NO
+  // abre el interrogatorio de subir-foto (4–5 preguntas con «Programalo
+  // así» escondido al pie): la propuesta llega sola como tarjeta con todo
+  // tocable (pzSftDespuesDeSubirChat → pzSftChatProponer, desde la subida).
+  // La hoja de preguntas sigue viva para [Probar de nuevo] (reintento con
+  // las respuestas guardadas) — solo deja de ser la entrada por defecto.
   // AJUSTE ENTRADA DIRECTA: si hay foto pendiente, el texto es la instrucción.
   try { pzSftChatTexto(sendText); } catch (e) {}
   const box = $('#chatBox');
@@ -10929,6 +10953,13 @@ async function chatExchange({ text, display, extra, pushed }) {
     // (LOTE CHAT-SCROLL) La burbuja del usuario es un envío: abajo.
     chatScroll(true);
   }
+  // (LOTE FOTOS-VIDEOS v860 · bucle «del 0 al 5») El cambio de foto por
+  // voz NUNCA va al cerebro: el cerebro respondía «decime cuál foto
+  // querés usar de las que tenemos guardadas (0 a 5)» y no aplicaba nada.
+  // El intercepto abre el picker de fotos guardadas (miniaturas tocables
+  // → vista previa → Confirmar) y corta acá. La voz entra por este mismo
+  // embudo (voiceSend → chatExchange), así que el camino vale igual.
+  try { if (pzFotoCambioIntercept(text)) return; } catch (e) {}
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   // (LOTE C · CHAT-NUEVO · CASO 1) Cada intercambio tiene su propia burbuja
@@ -29875,6 +29906,8 @@ function pzSftChatQuitarBotones() {
   try { const b2 = document.getElementById("pzSftChatBtns2"); if (b2) b2.remove(); } catch (e) {}
 }
 function pzSftChatDecir(texto, botonesHTML) {
+  // (LOTE FOTOS-VIDEOS v860 · #21) Decir algo termina el estado «armando».
+  try { pzSftChatQuitarArmando(); } catch (e) {}
   try { chatSay(texto); } catch (e) {
     try {
       const box = document.getElementById("chatBox");
@@ -30036,6 +30069,9 @@ async function pzSftChatProponer() {
   if (!it) return;
   const token = ++pend.token;
   const en = pzSftEn();
+  // (LOTE FOTOS-VIDEOS v860 · auditoría #21) Estado honesto mientras se
+  // arma: la propuesta tarda (caption por IA) y antes no se veía nada.
+  pzSftChatEstadoArmando(pend, it);
   if (pend.texto) it.vision = pend.texto;
   const arm = await pzSftChatArmarUno(it);
   if (PZ_SFT_CHAT_PENDIENTE !== pend) return;
@@ -30058,7 +30094,7 @@ async function pzSftChatProponer() {
         pend.propuesta = ex.prop;
         ex.prop.itemIdx = pend.idx;
         PZ_SFT_ARMADO_ACTUAL = ex.prop;
-        pzSftChatTarjetaArmada(ex.prop);
+        if (pend.items.length > 1) pzSftChatSemanaAgregar(ex.prop); else pzSftChatTarjetaArmada(ex.prop);
         if (pend.items[pend.idx] === it) pend.idx++;
         if (pend.idx < pend.items.length) pzSftChatProponer();
         return;
@@ -30116,7 +30152,9 @@ async function pzSftChatProponer() {
         : (en ? 'I put together the post for you.' : 'Te armé el posteo.');
     pzSftChatDecir(frase, '');
   }
-  pzSftChatTarjetaArmada(arm.prop);
+  // (LOTE FOTOS-VIDEOS v860 · opción 5) Con varias fotos, las tarjetas no
+  // se acumulan sueltas: van como filas de LA SEMANA en una sola pantalla.
+  if (pend.items.length > 1) pzSftChatSemanaAgregar(arm.prop); else pzSftChatTarjetaArmada(arm.prop);
   // La cadena: la siguiente foto se arma sola (hueco libre siguiente).
   if (pend.items[pend.idx] === it) pend.idx++;
   if (pend.idx < pend.items.length) pzSftChatProponer();
@@ -30186,7 +30224,7 @@ async function pzSftChatAprobarTodas() {
   for (const pid of Object.keys(PZ_SFT_ARMADOS)) {
     const prop = PZ_SFT_ARMADOS[pid]; // (CARRIL EXPRÉS) lo ya publicado hoy no se re-aprueba en semana
     const it = (typeof prop.itemIdx === 'number') ? pend.items[prop.itemIdx] : pend.items.find((x) => x.assetId === prop.assetId);
-    if (!it || it.choice === 'armar' || it.choice === 'expres') continue;
+    if (!it || it.choice === 'armar' || it.choice === 'expres' || it.choice === 'descartado' || it.choice === 'despues') continue;
     if (await pzSftChatAprobarUno(prop, it)) { okN++; pzSftChatMarcarAprobada(prop.postId); }
   }
   pend.propuesta = null;
@@ -30195,7 +30233,7 @@ async function pzSftChatAprobarTodas() {
   while (pend.idx < pend.items.length) {
     const it = pend.items[pend.idx];
     if (!it) break;
-    if (it.choice === 'armar' || it.choice === 'expres') { pend.idx++; continue; } // (CARRIL EXPRÉS) lo ya publicado hoy no se re-aprueba en semana
+    if (it.choice === 'armar' || it.choice === 'expres' || it.choice === 'descartado' || it.choice === 'despues') { pend.idx++; continue; } // (LOTE FOTOS-VIDEOS v860) lo descartado o «después» no se re-aprueba ni se re-arma
     pend.preguntadoIdx = -1;
     if (pend.texto) it.vision = pend.texto;
     const arm = await pzSftChatArmarUno(it);
@@ -30212,12 +30250,17 @@ async function pzSftChatAprobarTodas() {
   }
   pend.aprobandoTodas = false;
   try { render(); } catch (e) {}
-  if (!fallo && pend.items.every((x) => x.choice === 'armar')) {
+  // (LOTE FOTOS-VIDEOS v860) Decidido = aprobado, exprés, descartado o
+  // «después»: lo descartado no se re-arma ni se cuenta como pendiente.
+  const decidido = (x) => x.choice === 'armar' || x.choice === 'expres' || x.choice === 'descartado' || x.choice === 'despues';
+  const aprobables = pend.items.filter((x) => x.choice !== 'descartado' && x.choice !== 'despues').length;
+  if (!fallo && pend.items.every(decidido)) {
     PZ_SFT_CHAT_PENDIENTE = null;
-    pzSftChatDecir(en ? `Done! All ${okN} posts scheduled ✓` : `¡Listo! Los ${okN} posteos quedaron programados ✓`, '');
+    if (okN > 0) pzSftChatDecir(en ? `Done! All ${okN} posts scheduled ✓` : `¡Listo! Los ${okN} posteos quedaron programados ✓`, '');
+    else pzSftChatDecir(en ? 'Done — nothing left to approve.' : 'Listo — no quedó nada por aprobar.', '');
     return;
   }
-  pzSftChatDecir(en ? `I approved ${okN} of ${total} — this one is still pending:` : `Aprobé ${okN} de ${total} — este quedó pendiente:`, '');
+  pzSftChatDecir(en ? `I approved ${okN} of ${aprobables} — this one is still pending:` : `Aprobé ${okN} de ${aprobables} — este quedó pendiente:`, '');
   pzSftChatProponer();
 }
 /* (LOTE CHAT-CLICKS) Marca la tarjeta aprobada EN EL LUGAR (sin
@@ -30226,6 +30269,11 @@ function pzSftChatMarcarAprobada(postId) {
   try {
     const row = document.getElementById('pzSftCardBtns-' + Number(postId));
     if (row) row.innerHTML = '<span style="font-size:13px;color:var(--mut)">✓ ' + (pzSftEn() ? 'Scheduled' : 'Programado') + '</span>';
+  } catch (e) {}
+  // (LOTE FOTOS-VIDEOS v860 · opción 5) La fila de la semana también se marca.
+  try {
+    const wrow = document.getElementById('pzSftSemanaRow-' + Number(postId));
+    if (wrow) { const ch = wrow.lastElementChild; if (ch) { ch.textContent = '✓'; ch.style.color = '#22C55E'; } wrow.style.opacity = '0.75'; }
   } catch (e) {}
 }
 /* (CARRIL EXPRÉS) «Publicar hoy»: un toque publica la pieza HOY, directo,
@@ -30286,6 +30334,8 @@ function pzSftChatMarcarPublicadoHoy(postId, permalink) {
     const card = document.getElementById('pzSftCard-' + Number(postId));
     const cuando = card && card.querySelector ? card.querySelector('.pz-sft-cuando') : null;
     if (cuando) cuando.innerHTML = '<b>' + (en ? 'Published today ✓' : 'Salió hoy ✓') + '</b>';
+    // (LOTE FOTOS-VIDEOS v860) El chip 📅 es lo que se ve: pasa a «Hoy ✓».
+    try { const chip = document.getElementById('pzSftChipCuando-' + Number(postId)); if (chip) chip.textContent = '📅 ' + (en ? 'Today ✓' : 'Hoy ✓'); } catch (e) {}
   } catch (e) {}
 }
 /* Hoy en la zona del cliente (yyyy-mm-dd), para la frase fija. */
@@ -30305,26 +30355,168 @@ function pzSftChatTarjetaArmada(prop) {
   if (!box) { pzSftChatDecir(en ? 'Post ready.' : 'Posteo listo.', pzSftChatBotones()); return; }
   const pid = Number(prop.postId) || 0;
   PZ_SFT_ARMADOS[pid] = prop;
-  // (CARRIL EXPRÉS) El video se muestra como video (con su portada), no
-  // como <img> con la URL del mp4: la tarjeta vieja lo dejaba roto.
-  const img = prop.kind === 'video' && prop.image_path
-    ? `<video class="pz-sft-img" src="${esc(prop.image_path)}" ${prop.thumb ? `poster="${esc(prop.thumb)}"` : ''} controls playsinline preload="metadata" style="width:100%;border-radius:12px;display:block"></video>`
-    : (prop.image_path ? `<img class="pz-sft-img" src="${esc(prop.image_path)}" alt="" style="width:100%;border-radius:12px;display:block" loading="lazy">` : '');
-  // (CARRIL EXPRÉS) Sin slot de semana, la pieza es exprés: sale hoy cuando la acepta.
+  try { const old = document.getElementById('pzSftCard-' + pid); if (old) old.remove(); } catch (e) {}
+  try { pzSftChatQuitarArmando(); } catch (e) {}
+  // (LOTE FOTOS-VIDEOS v860 · opción 3) Tarjeta con todo tocable (mock
+  // aprobado por Valentino): miniatura 96×120 4:5 a la izquierda + caption
+  // (clamp 4, el detalle completo está a un toque) + chips tocables
+  // (día·hora / caption / foto·video) + «Sale así» verde. El video se
+  // muestra con su primer cuadro (nunca bloque de color): sin portada, el
+  // propio <video> hace de miniatura. El botón de aprobar es verde
+  // #22C55E (btn-primary es celeste, por eso va inline).
+  const esVideo = prop.kind === 'video';
+  const media = esVideo && prop.image_path
+    ? `<div style="width:96px;height:120px;flex:0 0 96px;border-radius:14px;overflow:hidden;position:relative"><video src="${esc(prop.image_path)}" ${prop.thumb ? `poster="${esc(prop.thumb)}"` : ''} muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block"></video><span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:rgba(10,30,51,.72);border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;padding-left:2px">▶</span><span style="position:absolute;left:6px;top:6px;background:rgba(255,255,255,.92);color:#0A1E33;font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px">🎬 Reel</span></div>`
+    : (prop.image_path ? `<div style="width:96px;height:120px;flex:0 0 96px;border-radius:14px;overflow:hidden;position:relative"><img class="pz-sft-img" src="${esc(prop.image_path)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block"><span style="position:absolute;left:6px;top:6px;background:rgba(255,255,255,.92);color:#0A1E33;font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px">📸 Post</span></div>` : '');
+  const capCorto = String(prop.caption || '');
+  const detalleTxt = esVideo ? (en ? 'Tap the video to see it →' : 'Tocá el video para verlo →') : (en ? 'Tap the photo to see the detail →' : 'Tocá la foto para ver el detalle →');
+  // (LOTE FOTOS-VIDEOS v860 · #5) La tarjeta dice que es una PROPUESTA:
+  // nada sale hasta «Sale así». Antes decía «Tu posteo está armado» +
+  // «Sale el X a las Y» y se leía como ya programado (el 587).
+  const titulo = esVideo ? (en ? 'Here is your reel, ready 👇' : 'Acá está tu reel, ya armado 👇') : (en ? 'Here is your post, ready 👇' : 'Acá está tu posteo, ya armado 👇');
+  const notaProp = en ? 'This is a draft — nothing goes out until you tap Post it.' : 'Es una propuesta — no sale nada hasta que toques Sale así.';
   const cuando = (prop.dia_label && prop.hora) ? (en ? `Goes out ${prop.dia_label} at ${prop.hora}` : `Sale el ${prop.dia_label} a las ${prop.hora}`) : (prop.expres ? (en ? 'Goes out today when you accept it' : 'Sale hoy cuando lo aceptes') : '');
   const llena = prop.semana_llena ? `<div style="font-size:12px;color:var(--mut);margin-top:4px">${en ? 'This week is full — it goes out next Monday.' : 'Esta semana está completa — sale el lunes que viene.'}</div>` : '';
-  const todas = (PZ_SFT_CHAT_PENDIENTE && PZ_SFT_CHAT_PENDIENTE.items && PZ_SFT_CHAT_PENDIENTE.items.length > 1)
-    ? `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatAprobarTodas()">${en ? 'Approve all' : 'Aprobar todas'}</button>` : '';
-  const otraFoto = (prop.kind === 'video') ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatOtraFoto(${pid})">${en ? 'Another photo' : 'Otra foto'}</button>`;
-  // (CARRIL EXPRÉS) «Publicar hoy» es la acción principal de la tarjeta: un toque publica
-  // la pieza HOY, sin 9:00 ni aviso de 30 min. «Sale así» queda para la semana (sin slot
-  // no hay nada que aprobar en semana: la pieza exprés no lo muestra).
-  const hoyBtn = `<button type="button" class="btn btn-primary btn-sm" onclick="pzSftChatPublicarHoy(${pid})">${en ? 'Publish today' : 'Publicar hoy'}</button>`;
-  const saleAsiBtn = prop.expres ? '' : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it' : 'Sale así'}</button>`;
-  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${en ? 'Your post is ready' : 'Tu posteo está armado'}</div>${img}<div class="pz-sft-cuando" style="font-size:13px;margin:6px 0 2px"><b>${esc(cuando)}</b></div><div class="pz-sft-cap" style="font-size:13px;white-space:pre-wrap">${esc(prop.caption || '')}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${hoyBtn}${saleAsiBtn}${todas}<button type="button" class="btn btn-soft btn-sm" onclick="pzCambioVoz(${pid})">${en ? 'Change something' : 'Cambiar algo'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatCambiarDia(${pid})">${en ? 'Change day' : 'Cambiar día'}</button>${otraFoto}<button type="button" class="btn btn-soft btn-sm" onclick="pzUsarFotoAbrir(${pid})">${en ? 'Use a photo I sent' : 'Usar la foto que envié'}</button></div><div id="pzSftDias-${pid}"></div></div>`;
+  // Chips (mock opción 3): día·hora abre días+horas libres; caption pide
+  // el cambio por voz; foto abre el picker de fotos guardadas (miniaturas
+  // tocables + vista previa + Confirmar). El video no se cambia con
+  // usar-foto (solo fotos): el chip avisa honesto cómo cambiarlo.
+  const chipCuando = (prop.dia_label && prop.hora)
+    ? `<button type="button" id="pzSftChipCuando-${pid}" onclick="pzSftChatCambiarDia(${pid})" style="border:1px solid #2793C8;border-radius:999px;padding:7px 11px;font-size:13px;font-weight:600;background:#EFF8FD;color:#2793C8;cursor:pointer;font-family:inherit">📅 ${esc(prop.dia_label)} · ${esc(prop.hora)}</button>` : '';
+  const chipCaption = `<button type="button" onclick="pzCambioVoz(${pid})" style="border:1px solid #d7e3ec;border-radius:999px;padding:7px 11px;font-size:13px;font-weight:600;background:#fff;color:#0A1E33;cursor:pointer;font-family:inherit">✏️ Caption</button>`;
+  const chipMedia = esVideo
+    ? `<button type="button" onclick="pzSftChatVideoAviso()" style="border:1px solid #d7e3ec;border-radius:999px;padding:7px 11px;font-size:13px;font-weight:600;background:#fff;color:#0A1E33;cursor:pointer;font-family:inherit">🎬 Video</button>`
+    : `<button type="button" onclick="pzUsarFotoAbrir(${pid})" style="border:1px solid #d7e3ec;border-radius:999px;padding:7px 11px;font-size:13px;font-weight:600;background:#fff;color:#0A1E33;cursor:pointer;font-family:inherit">🖼️ ${en ? 'Photo' : 'Foto'}</button>`;
+  // (LOTE FOTOS-VIDEOS v860) «Sale así» es EL botón de aprobar: verde
+  // #22C55E, a lo ancho, primero. «Publicar hoy» (carril exprés) queda
+  // segundo: en la tarjeta de semana es blando; en la exprés (sin «Sale
+  // así») es el único y va verde. [Cambiar día], [Otra foto], [Usar la
+  // foto que envié] y [Cambiar algo] mueren acá: los cubren los chips.
+  const saleAsiBtn = prop.expres ? '' : `<button type="button" class="btn btn-sm" style="background:#22C55E;color:#fff;border:none;box-shadow:0 6px 16px rgba(34,197,94,.42);flex:1 1 100%" onclick="pzSftChatAprobar(this, ${pid})">${en ? 'Post it ✓' : 'Sale así ✓'}</button>`;
+  const hoyBtn = prop.expres
+    ? `<button type="button" class="btn btn-sm" style="background:#22C55E;color:#fff;border:none;box-shadow:0 6px 16px rgba(34,197,94,.42);flex:1 1 100%" onclick="pzSftChatPublicarHoy(${pid})">${en ? 'Publish today' : 'Publicar hoy'}</button>`
+    : `<button type="button" class="btn btn-soft btn-sm" onclick="pzSftChatPublicarHoy(${pid})">${en ? 'Publish today' : 'Publicar hoy'}</button>`;
+  const descartarBtn = `<button type="button" class="btn btn-ghost btn-sm" onclick="pzSftChatDescartar(${pid})">${en ? 'Discard' : 'Descartar'}</button>`;
+  const card = `<div class="chat-msg ai" id="pzSftCard-${pid}" style="max-width:100%;padding:8px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">${esc(titulo)}</div><div style="display:flex;gap:0;cursor:pointer" onclick="location.hash='#/app/post/${pid}'">${media}<div style="flex:1;padding:11px 12px;min-width:0"><div class="pz-sft-cap" style="font-size:13.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">${esc(capCorto)}</div><div style="font-size:12.5px;color:var(--mut);margin-top:6px;font-weight:600">${esc(detalleTxt)}</div></div></div><div style="font-size:12px;color:var(--mut);margin-top:6px">${esc(notaProp)}</div>${prop.hashtags ? `<div style="font-size:12px;color:var(--mut)">${esc(prop.hashtags)}</div>` : ''}${llena}<div class="pz-sft-chips" style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">${chipCuando}${chipCaption}${chipMedia}</div><div id="pzSftCardBtns-${pid}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${saleAsiBtn}${hoyBtn}${descartarBtn}</div><div id="pzSftDias-${pid}"></div><div class="pz-sft-cuando" style="display:none">${esc(cuando)}</div></div>`;
   box.insertAdjacentHTML('beforeend', card);
   try { chatScroll(); } catch (e) {}
 }
+// (LOTE FOTOS-VIDEOS v860 · #21) Burbuja de estado mientras se arma la
+// propuesta: nunca espera a ciegas. Se quita al rendir la tarjeta / la
+// fila de la semana / al decir cualquier mensaje (pzSftChatDecir).
+function pzSftChatEstadoArmando(pend, it) {
+  const en = pzSftEn();
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  try { pzSftChatQuitarArmando(); } catch (e) {}
+  const total = (pend && pend.items) ? pend.items.length : 0;
+  const n = (pend && typeof pend.idx === 'number') ? pend.idx + 1 : 1;
+  const texto = total > 1
+    ? (en ? '⏳ Putting together your post… (' + n + ' of ' + total + ') — usually under a minute.' : '⏳ Armando tu posteo… (' + n + ' de ' + total + ') — suele tardar menos de un minuto.')
+    : (en ? '⏳ Putting together your post… — usually under a minute.' : '⏳ Armando tu posteo… — suele tardar menos de un minuto.');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ai'; div.id = 'pzSftArmando';
+  div.innerHTML = '<div style="font-size:13px;color:var(--mut)">' + esc(texto) + '</div>';
+  box.appendChild(div);
+  try { chatScroll(); } catch (e) {}
+}
+function pzSftChatQuitarArmando() {
+  try { const d = document.getElementById('pzSftArmando'); if (d) d.remove(); } catch (e) {}
+}
+// (LOTE FOTOS-VIDEOS v860 · opción 5) La semana de una vez: una sola
+// pantalla con una fila por posteo armado + «Aprobar toda la semana».
+// Las filas se agregan a medida que se arma cada foto/video (la cadena
+// arma en orden, en huecos consecutivos). Tocás una fila para cambiar
+// ese posteo (abre su tarjeta, opción 3). Sin botón muerto «tocar uno
+// para cambiarlo»: las filas son tocables y la nota lo dice.
+function pzSftChatSemanaAgregar(prop) {
+  const en = pzSftEn();
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  try { pzSftChatQuitarArmando(); } catch (e) {}
+  const pid = Number(prop.postId) || 0;
+  PZ_SFT_ARMADOS[pid] = prop;
+  let screen = document.getElementById('pzSftSemana');
+  if (!screen) {
+    const pend = PZ_SFT_CHAT_PENDIENTE;
+    const total = (pend && pend.items) ? pend.items.length : 0;
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg ai'; wrap.id = 'pzSftSemana'; wrap.style.maxWidth = '100%';
+    wrap.innerHTML = '<div style="font-weight:700;font-size:13px;margin-bottom:4px">' + esc(en ? ('Perfect! I put together the week with all ' + total + ' 👇') : ('¡Perfecto! Te armé la semana con las ' + total + ' 👇')) + '</div>'
+      + '<div style="font-size:12px;color:var(--mut);margin-bottom:8px">' + esc(en ? 'Nothing goes out until you approve — tap a row to change that post.' : 'Nada sale hasta que apruebes — tocá una fila para cambiar ese posteo.') + '</div>'
+      + '<div id="pzSftSemanaRows"></div>'
+      + '<div id="pzSftSemanaBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn btn-sm" style="background:#22C55E;color:#fff;border:none;box-shadow:0 6px 16px rgba(34,197,94,.42);flex:1 1 100%" onclick="pzSftChatAprobarTodas()">' + esc(en ? 'Approve the whole week ✓' : 'Aprobar toda la semana ✓') + '</button></div>';
+    box.appendChild(wrap);
+    screen = wrap;
+    try { chatScroll(); } catch (e) {}
+  }
+  const rows = document.getElementById('pzSftSemanaRows');
+  if (!rows) return;
+  const old = document.getElementById('pzSftSemanaRow-' + pid);
+  if (old) old.remove();
+  rows.insertAdjacentHTML('beforeend', pzSftChatSemanaFilaHtml(prop));
+  try { chatScroll(); } catch (e) {}
+}
+function pzSftChatSemanaFilaHtml(prop) {
+  const en = pzSftEn();
+  const pid = Number(prop.postId) || 0;
+  const esVideo = prop.kind === 'video';
+  const thumb = esVideo
+    ? (prop.thumb ? `<img src="${esc(prop.thumb)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">` : (prop.image_path ? `<video src="${esc(prop.image_path)}" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block"></video>` : ''))
+    : (prop.image_path ? `<img src="${esc(prop.image_path)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">` : '');
+  const diaCorto = String(prop.dia_label || '').split(' ')[0] || '';
+  const weekday = diaCorto ? diaCorto.toUpperCase() : (en ? 'TODAY' : 'HOY');
+  const cap1 = String(prop.caption || '').split('\n')[0].trim();
+  const metaDia = prop.dia_label ? esc(prop.dia_label) : (en ? 'Today' : 'Hoy');
+  const meta = metaDia + (prop.hora ? ' · ' + esc(prop.hora) : '') + ' · ' + (esVideo ? 'Reel' : 'Post');
+  return `<div class="pz-sft-semana-row" id="pzSftSemanaRow-${pid}" onclick="pzSftChatSemanaAbrir(${pid})" role="button" tabindex="0" style="display:flex;gap:11px;border:1px solid #e3e8ee;border-radius:14px;padding:10px;margin-bottom:10px;background:#fff;align-items:center;cursor:pointer"><div style="width:64px;height:80px;flex:0 0 64px;border-radius:10px;overflow:hidden;position:relative;border:1px solid #e3e8ee">${thumb}${esVideo ? '<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:rgba(10,30,51,.72);border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;padding-left:2px">▶</span>' : ''}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:800;color:#2793C8;letter-spacing:.4px">${esc(weekday)}</div><div style="font-size:13.5px;line-height:1.35;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cap1)}</div><div style="font-size:12.5px;color:var(--mut);margin-top:3px;font-weight:600">${meta}</div></div><div style="color:var(--mut);font-size:18px">›</div></div>`;
+}
+function pzSftChatSemanaAbrir(postId) {
+  const prop = (postId && PZ_SFT_ARMADOS[Number(postId)]) || null;
+  if (!prop) return;
+  try { pzSftChatTarjetaArmada(prop); } catch (e) {}
+}
+// (LOTE FOTOS-VIDEOS v860 · #5) Descartar una propuesta: borra el
+// borrador (POST /descartar-propuesta) y la foto queda como material.
+// Quita la tarjeta y la fila de la semana; si no quedan filas, quita
+// la pantalla semana; si todos los ítems están decididos, limpia el
+// pendiente. Si el borrador ya no es descartable (409), igual se quita
+// la tarjeta: la propuesta ya no existe como tal.
+async function pzSftChatDescartar(postId) {
+  const pid = Number(postId) || 0;
+  if (!pid) return;
+  const en = pzSftEn();
+  const pend = PZ_SFT_CHAT_PENDIENTE;
+  try {
+    await api.post('/api/posts/' + pid + '/descartar-propuesta', {});
+  } catch (e) {}
+  try {
+    const card = document.getElementById('pzSftCard-' + pid);
+    if (card) card.remove();
+    const row = document.getElementById('pzSftSemanaRow-' + pid);
+    if (row) row.remove();
+    const rows = document.getElementById('pzSftSemanaRows');
+    if (rows && !rows.children.length) {
+      const screen = document.getElementById('pzSftSemana');
+      if (screen) screen.remove();
+    }
+    const propBorrada = (typeof PZ_SFT_ARMADOS !== 'undefined') ? PZ_SFT_ARMADOS[pid] : null;
+    if (typeof PZ_SFT_ARMADOS !== 'undefined' && PZ_SFT_ARMADOS[pid]) delete PZ_SFT_ARMADOS[pid];
+    if (pend && pend.items) {
+      const it = pend.items.find((x) => x && propBorrada && Number(x.assetId) === Number(propBorrada.assetId));
+      if (it) it.choice = 'descartado';
+      const decidido = (x) => x.choice === 'armar' || x.choice === 'expres' || x.choice === 'descartado' || x.choice === 'despues';
+      if (pend.items.every(decidido)) PZ_SFT_CHAT_PENDIENTE = null;
+    }
+    try { toast(en ? 'Discarded — the photo stays saved as material.' : 'Descartado — la foto queda guardada como material.'); } catch (e) {}
+  } catch (e) {}
+}
+// (LOTE FOTOS-VIDEOS v860) El video no se cambia con usar-foto (solo
+// fotos): el chip 🎬 avisa honesto cómo cambiarlo.
+function pzSftChatVideoAviso() {
+  try { toast(pzSftEn() ? 'To change the video, send another one in the chat 📷' : 'Para cambiar el video, mandá otro por el chat 📷'); } catch (e) {}
+}
+
 // (v846 · CHAT SOLO POR AUDIO) «Cambiar texto» murió con su editor:
 // el cambio se pide por voz con [Cambiar algo] (pzCambioVoz).
 /* (LOTE CHAT-CLICKS · punto 2) «Cambiar día»: píldoras de días libres
@@ -30350,6 +30542,23 @@ async function pzSftChatCambiarDia(postId) {
     }
     html += '<button type="button" class="chat-cap-opt" onclick="pzSftChatCambiarDia(' + Number(prop.postId) + ')"><b>' + esc(en ? 'Cancel' : 'Cancelar') + '</b><span></span></button></div>';
     slot.innerHTML = html;
+    // (LOTE FOTOS-VIDEOS v860) La hora también se cambia acá: mismo día,
+    // otra hora (09:00–21:00, GET /horas-libres). Si el endpoint falla,
+    // quedan solo los días — nunca se rompe el panel.
+    try {
+      const diaActual = String(prop.dia || '');
+      if (diaActual) {
+        const h = await api.get('/api/posts/' + Number(prop.postId) + '/horas-libres?dia=' + encodeURIComponent(diaActual));
+        if (h && h.ok && Array.isArray(h.horas) && h.horas.length) {
+          let hh = '<div style="font-size:12px;color:var(--mut);padding:8px 2px 2px">' + esc(en ? 'Time' : 'Hora') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
+          for (const ho of h.horas) {
+            hh += '<button type="button" class="chat-cap-opt" onclick="pzSftChatMoverDia(' + Number(prop.postId) + ', \'' + String(ho.iso).replace(/'/g, '') + '\', \'' + String(diaActual).replace(/'/g, '') + '\', \'' + String(prop.dia_label || '').replace(/'/g, '') + '\', \'' + String(ho.hora || '').replace(/'/g, '') + '\')"><b>' + esc(ho.hora || '') + '</b><span></span></button>';
+          }
+          hh += '</div>';
+          slot.innerHTML += hh;
+        }
+      }
+    } catch (e) {}
   } catch (e) {
     slot.innerHTML = '<div style="font-size:12px;color:var(--mut);padding:6px 2px">' + esc(en ? 'I could not load the free days.' : 'No pude cargar los días libres.') + '</div>';
   }
@@ -30367,6 +30576,8 @@ async function pzSftChatMoverDia(postId, iso, dia, diaLabel, hora) {
     prop.hora = hora || prop.hora;
     const card = document.getElementById('pzSftCard-' + Number(prop.postId));
     if (card) { const cu = card.querySelector('.pz-sft-cuando'); if (cu) cu.innerHTML = '<b>' + esc(en ? ('Goes out ' + prop.dia_label + ' at ' + prop.hora) : ('Sale el ' + prop.dia_label + ' a las ' + prop.hora)) + '</b>'; }
+    // (LOTE FOTOS-VIDEOS v860) El chip 📅 es lo que se ve: se actualiza con el nuevo día·hora.
+    try { const chip = document.getElementById('pzSftChipCuando-' + Number(prop.postId)); if (chip) chip.textContent = '📅 ' + (prop.dia_label || '') + ' · ' + (prop.hora || ''); } catch (e) {}
     const slot = document.getElementById('pzSftDias-' + Number(prop.postId));
     if (slot) { slot.innerHTML = ''; slot.dataset.open = ''; }
     toast('🗓️ ' + (en ? ('Rescheduled — goes out ' + prop.dia_label + ' at ' + prop.hora) : ('Reprogramado — sale el ' + prop.dia_label + ' a las ' + prop.hora)));
@@ -30517,6 +30728,12 @@ async function pzSftChatDespues() {
   try {
     if (it.assetId) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }); } catch (e) {} }
     else if (it.file && (await pzSftAsegurarAssetTmp(it))) { try { await api.post("/api/album/" + it.assetId + "/choice", { choice: "despues" }); } catch (e) {} }
+  } catch (e) {}
+  // (LOTE FOTOS-VIDEOS v860 · #5) Si este ítem ya tenía un borrador armado
+  // (propuesta), se borra: «Decido después» no deja un posteo fantasma.
+  try {
+    const armadoD = (typeof PZ_SFT_ARMADOS !== 'undefined') ? Object.values(PZ_SFT_ARMADOS).find((p) => p && Number(p.assetId) === Number(it.assetId)) : null;
+    if (armadoD && armadoD.postId) { try { await api.post('/api/posts/' + Number(armadoD.postId) + '/descartar-propuesta', {}); } catch (e) {} delete PZ_SFT_ARMADOS[Number(armadoD.postId)]; }
   } catch (e) {}
   it.choice = "despues";
   pzSftToast(en ? "Left in Pending, with no post." : "Quedó en Pendientes, sin posteo.");

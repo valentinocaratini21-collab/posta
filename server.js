@@ -12644,6 +12644,43 @@ app.post('/api/posts/:id/usar-foto', requireAuth, express.json(), (req, res) => 
     res.json({ ok: true, post_id: post.id, image_path: asset.file_path, thumb: asset.thumb_path || '', cuando });
   } catch (e) { console.error('[usar-foto]', e.message); res.status(500).json({ ok: false, error: 'No pude cambiar la foto' }); }
 });
+
+// POST /api/posts/:id/descartar-propuesta — (LOTE FOTOS-VIDEOS v860 ·
+// auditoría #5) Descartar una propuesta armada al subir una foto/video
+// por el chat: borra el borrador y deja la foto como material. Es la
+// salida honesta de «Decido después» y de [Descartar]: antes, el borrador
+// armado QUEDABA en la DB con su scheduled_at (así quedó el 587, un
+// posteo que nadie pidió). NO es DELETE: ese borra cualquier post y
+// dispara rebuild si la semana queda sin borradores; acá solo se borra
+// un borrador de propuesta (draft + source album-armado/express o
+// source_topic subir-foto-preguntas) sin señal 'approved' — SIN rebuild.
+// Efectos: recordSignal 'rejected' primero (como DELETE), el asset queda
+// libre (upload_choice='despues' en assets, por foto_asset_id o por
+// image_path) y el post se borra. 404 post no encontrado · 409
+// no_descartable (no es una propuesta descartable).
+app.post('/api/posts/:id/descartar-propuesta', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.params.id);
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(id, uid);
+  if (!post) return res.status(404).json({ ok: false, error: 'post_no_encontrado' });
+  const esPropuesta = post.status === 'draft' && (
+    post.source === 'album-armado' || post.source === 'express' || post.source_topic === 'subir-foto-preguntas'
+  );
+  const aprobado = db.prepare("SELECT 1 FROM post_signals WHERE user_id = ? AND post_id = ? AND client_signal = 'approved'").get(uid, id);
+  if (!esPropuesta || aprobado) return res.status(409).json({ ok: false, error: 'no_descartable' });
+  try { recordSignal(uid, post, 'rejected'); } catch (e) {}
+  try {
+    let assetId = post.foto_asset_id || 0;
+    if (!assetId && post.image_path) {
+      const a = db.prepare('SELECT id FROM assets WHERE user_id = ? AND file_path = ?').get(uid, post.image_path);
+      if (a) assetId = a.id;
+    }
+    if (assetId) db.prepare("UPDATE assets SET upload_choice = 'despues' WHERE id = ? AND user_id = ?").run(assetId, uid);
+  } catch (e) {}
+  db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(id, uid);
+  res.json({ ok: true, post_id: id });
+});
+
 // Subida al álbum (v181): fotos como siempre (≤15 MB) y VIDEOS del cliente
 // (mp4/mov, ≤60 MB, ≤90 s validados con ffprobe). El tope de 20 ítems es
 // TOTAL (fotos + videos) para cuidar el disco del volumen. Los videos
@@ -13157,6 +13194,35 @@ app.get('/api/posts/dias-libres', requireAuth, (req, res) => {
     res.json({ ok: true, dias });
   } catch (e) { console.error('[dias-libres]', e.message); res.status(500).json({ ok: false, error: 'No pude ver los días libres' }); }
 });
+
+// GET /api/posts/:id/horas-libres?dia=YYYY-MM-DD — (LOTE FOTOS-VIDEOS v860 ·
+// opción 3) Horas libres de UN día para mover un posteo dentro de ese día
+// (el chip 📅 día·hora abre días + horas). La hora no se valida en el
+// move (server.js save-draft valida solo día + cupo), así que acá la hora
+// propuesta tiene que ser libre de verdad: 09:00–21:00 por hora, en la
+// zona del cliente (zonedWallToUtc), sin la hora actual del posteo.
+// 400 dia_invalido (sin formato YYYY-MM-DD) · 400 no_movable (el posteo
+// ya salió o no se puede mover) · 404 post no encontrado.
+app.get('/api/posts/:id/horas-libres', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.params.id);
+  const dia = String(req.query.dia || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return res.status(400).json({ ok: false, error: 'dia_invalido' });
+  const post = db.prepare('SELECT id, user_id, status, scheduled_at FROM posts WHERE id = ? AND user_id = ?').get(id, uid);
+  if (!post) return res.status(404).json({ ok: false, error: 'post_no_encontrado' });
+  const movable = post.status === 'draft' || post.status === 'scheduled';
+  if (!movable) return res.status(400).json({ ok: false, error: 'no_movable' });
+  const tz = userTz(uid);
+  const actual = post.scheduled_at ? wallInTz(post.scheduled_at, tz) : null;
+  const horas = [];
+  for (let h = 9; h <= 21; h++) {
+    const hh = String(h).padStart(2, '0') + ':00';
+    if (actual && actual.startsWith(dia) && actual.slice(11, 16) === hh) continue;
+    horas.push({ hora: hh, iso: zonedWallToUtc(dia + ' ' + hh, tz) });
+  }
+  res.json({ ok: true, dia, horas });
+});
+
 app.get('/api/posts/:id/rendimiento', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
@@ -34195,7 +34261,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v859';
+const BUILD_ID = '20261105-v860';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
