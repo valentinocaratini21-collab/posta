@@ -51,15 +51,34 @@ for (const [txt, name] of [[app, 'SPA'], [idx, 'shell']]) {
   t(txt.includes('¿Cuántas horas por semana le dedicás a Instagram?'), name + ' espejo Q2');
   t(txt.includes('¿Cuándo fue la última vez que un posteo te trajo un cliente?'), name + ' espejo Q3');
   t(txt.includes('Demostración: así se vería tu feed, no es una promesa de ventas.'), name + ' espejo rótulo demo');
-  t(txt.includes('data-pp-echo="Hoy: {0} posteos por semana, {1} horas tuyas, último cliente: {2}."'), name + ' espejo eco');
   t(txt.includes('Tu feed hoy') && txt.includes('Con Posty'), name + ' espejo paneles');
-  t(txt.includes('A medias, irregular.') && txt.includes('Completo, todos los días, con tu producto real.'), name + ' espejo notas');
+  t(txt.includes('Completo, todos los días, con tu producto real.'), name + ' espejo nota Con Posty');
+  // LOTE HERO+QUIZ: murió el puntaje genérico ("A medias, irregular") y el eco.
+  t(!txt.includes('data-pp-echo'), name + ' espejo sin eco');
+  t(!txt.includes('A medias, irregular.'), name + ' espejo sin A medias');
+  t(txt.includes('pp-verdict-big') && txt.includes('pp-verdict-lines') && txt.includes('pp-verdict-cta'), name + ' espejo bloque veredicto');
+  t(txt.includes('Esto sale de tus respuestas, no es un puntaje genérico.'), name + ' espejo leyenda veredicto');
+  t(txt.includes('Perdés ~<span>') && txt.includes('Pegá tu Instagram y mirá tu semana real'), name + ' espejo veredicto big + CTA');
+  t(txt.includes('Volver a hacer el quiz'), name + ' espejo rehacer quiz');
+  // Opciones del mock (Q1 4 opciones, Q2 rangos, Q3 con "Este mes").
+  t(txt.includes('3–4') && txt.includes('5 o más'), name + ' espejo Q1 4 opciones');
+  t(txt.includes('Menos de 1') && txt.includes('Más de 5'), name + ' espejo Q2 rangos mock');
+  t(txt.includes('Este mes'), name + ' espejo Q3 con Este mes');
 }
 t(idxEn.includes('How many posts a week do you publish?'), 'EN espejo Q1');
 t(idxEn.includes('How many hours a week do you spend on Instagram?'), 'EN espejo Q2');
 t(idxEn.includes('When was the last time a post brought you a customer?'), 'EN espejo Q3');
 t(idxEn.includes('Demonstration: this is how your feed would look, not a sales promise.'), 'EN espejo rótulo demo');
 t(idxEn.includes('Your feed today') && idxEn.includes('With Posty'), 'EN espejo paneles');
+// LOTE HERO+QUIZ (EN): mismo veredicto calculado, en inglés.
+t(!idxEn.includes('Half-done, irregular.'), 'EN espejo sin Half-done');
+t(!idxEn.includes('data-pp-echo'), 'EN espejo sin eco');
+t(idxEn.includes('pp-verdict-big') && idxEn.includes('This comes from your answers, not a generic score.'), 'EN espejo veredicto');
+t(idxEn.includes('You’re losing ~<span>') && idxEn.includes('Drop your Instagram and see your real week'), 'EN espejo veredicto big + CTA');
+t(idxEn.includes('Take the quiz again'), 'EN espejo rehacer quiz');
+t(idxEn.includes('5 or more') && idxEn.includes('3–4'), 'EN espejo Q1 4 opciones');
+t(idxEn.includes('Less than 1') && idxEn.includes('More than 5'), 'EN espejo Q2 rangos mock');
+t(idxEn.includes('This month'), 'EN espejo Q3 con This month');
 // 9 imágenes por panel (hoy con slots, posty directas) en cada superficie.
 for (const [txt, name] of [[app, 'SPA'], [idx, 'shell'], [idxEn, 'EN']]) {
   const m = txt.match(/<span class="pp-slot">/g) || [];
@@ -74,9 +93,15 @@ t(cnt(app, 'function ppMirrorInit()') === 1, 'ppMirrorInit definida una vez');
 t(app.includes('ppMirrorInit();\n  pzPlansSocialMount();'), 'ppMirrorInit llamada en lpInitHero');
 t(!app.includes("pp-mirror\" data-pp-lang=\"es\"") || true, 'placeholder');
 t(!/pp-chip[^>]*onclick/.test(app), 'SPA chips sin onclick');
-t(idx.includes('<script>(function(){var ms=document.querySelectorAll'), 'shell espejo con script inline');
-t(idxEn.includes('<script>(function(){var ms=document.querySelectorAll'), 'EN espejo con script inline');
+t(idx.includes('<script>(function(){var S='), 'shell espejo con script inline');
+t(idxEn.includes('<script>(function(){var S='), 'EN espejo con script inline');
 t(css.includes('.pp-mirror{'), 'CSS bloque .pp-mirror');
+// LOTE HERO+QUIZ: veredicto puro (testeado 48x2) + toggle del campo + CTA.
+t(app.includes('function ppVerdictText('), 'ppVerdictText pura');
+t(app.includes('function ppRenderVerdict('), 'ppRenderVerdict');
+t(app.includes('function lpHeroWebToggle('), 'lpHeroWebToggle');
+t(app.includes('function ppGoTrial('), 'ppGoTrial');
+t(css.includes('.pp-verdict{') && css.includes('.lp-sec{'), 'CSS veredicto + secundarias');
 t(css.includes('.pp-chip[aria-pressed="true"]'), 'CSS chip seleccionado');
 
 // 5. SIN frase de alivio separada ni restos de la promesa.
@@ -100,7 +125,11 @@ t(!css.includes('.pz-mg{') || true, 'placeholder magia');
 
 // 8. Resto de secciones intactas (nada más del hero tocado).
 t(app.includes('#ejemplos') && app.includes('#planes') && app.includes('#faq') && app.includes('#como-funciona'), 'SPA nav secciones intactas');
-t(app.includes('Ver mi semana'), 'SPA formulario Ver mi semana intacto');
+t(app.includes('Ver mi semana gratis'), 'SPA botón campo Ver mi semana gratis');
+const iLv = app.indexOf('function landingView');
+const navHero = app.slice(iLv, app.indexOf('pp-mirror', iLv));
+t(!navHero.includes('Probar gratis') && navHero.includes('Entrar'), 'SPA header sin Probar gratis (queda Entrar)');
+t(app.includes('Prefiero usar mi web') && app.includes('Ver una semana de ejemplo'), 'SPA secundarias como texto');
 t(app.includes('Preguntas') || idx.includes('Preguntas'), 'FAQ presente');
 
 // 9. Versiones y censo (v515, M78 0/0 nuevas desde tarjetas/menús).

@@ -35,28 +35,25 @@ t(/\.lp-ig-wrap\{position:relative;flex:1;min-width:210px;display:flex\}/.test(c
 t(/\.lp-igform \.lp-ig-wrap input\{[^}]*padding-left:46px/.test(css), 'CSS: input con padding-left 46px (logo sin tapar)');
 t(/\.lp-ig-ic\{position:absolute;left:16px;top:50%;transform:translateY\(-50%\);width:22px;height:22px;pointer-events:none/.test(css), 'CSS: .lp-ig-ic centrado a la izquierda, sin capturar toques');
 
-// --- 2) Web del mismo tamaño que IG ---
-// Botón web primario sólido en los dos archivos ES (en EN no hay webform).
-t((idx.match(/btn btn-primary" type="submit">Usar mi web/g) || []).length === 1, 'ES index: botón web primario (no fantasma)');
-t((app.match(/btn btn-primary" type="submit">Usar mi web/g) || []).length === 1, 'app.js: botón web primario (no fantasma)');
-t(!/btn btn-ghost" type="submit">Usar mi web/.test(idx + app), 'ningún botón web fantasma restante');
-// CSS unificado en styles.css (una sola verdad): web = IG en fuente, padding, borde y radio.
-const igIn = /\.lp-igform input\{[^}]*font-size:17px;padding:15px 18px;border:2px solid #D7E5EE;border-radius:999px/.test(css);
-const webIn = /\.lp-webform input\{[^}]*font-size:17px;padding:15px 18px;border:2px solid #D7E5EE;border-radius:999px/.test(css);
-t(igIn, 'CSS: input IG 17px / 15px 18px / borde 2px / radio 999');
-t(webIn, 'CSS: input web IGUAL que IG (17px / 15px 18px / borde 2px / radio 999)');
-const igBtn = /\.lp-igform button\{[^}]*font-size:16px;padding:15px 26px/.test(css);
-const webBtn = /\.lp-webform button\{[^}]*font-size:16px;padding:15px 26px/.test(css);
-t(igBtn, 'CSS: botón IG 16px / 15px 26px');
-t(webBtn, 'CSS: botón web IGUAL que IG (16px / 15px 26px)');
-// El <style> inline viejo de .lp-webform ya no vive en index.html (vive en styles.css).
-t(!idx.includes('.lp-webform input{flex:1;min-width:210px;font-size:16px;padding:12px 18px'), 'ES index: sin <style> inline viejo de webform (16px/12px)');
-t((css.match(/\.lp-webform\{/g) || []).length === 1, 'CSS: .lp-webform definido 1 sola vez (sin duplicar)');
-// Textos y placeholders intactos (nada de cambios de copy).
-t(idx.includes('placeholder="@tu_negocio"') && idx.includes('placeholder="www.tunegocio.com.ar"'), 'ES index: placeholders intactos');
+// --- 2) Web como link de texto, no botón (LOTE HERO+QUIZ) ---
+// El botón "Usar mi web" murió: "Prefiero usar mi web" cambia el MISMO campo
+// de Instagram a modo URL (toggle lpHeroWebToggle, sin segundo formulario).
+t(!idx.includes('lp-webform') && !app.includes('lp-webform') && !idxEn.includes('lp-webform') && !css.includes('lp-webform'), 'sin lp-webform en ningún archivo');
+t(!idx.includes('>Usar mi web') && !app.includes('>Usar mi web'), 'sin botón Usar mi web');
+t(idx.includes('Prefiero usar mi web') && app.includes('Prefiero usar mi web'), 'ES: link Prefiero usar mi web');
+t(idxEn.includes('Use my website instead'), 'EN: link Use my website instead');
+t(app.includes('function lpHeroWebToggle(') && idx.includes('function lpHeroWebToggle(') && idxEn.includes('function lpHeroWebToggle('), 'toggle lpHeroWebToggle en las 3 superficies');
+t(app.includes('/prueba?web=') && idx.includes('/prueba?web=') && idxEn.includes('/en/prueba?web='), 'rama ?web= en las 3 superficies');
+t(app.includes('www.tunegocio.com.ar') && idxEn.includes('yourwebsite.com'), 'placeholders web en el toggle');
+t(app.includes('Ver una semana de ejemplo') && idxEn.includes('See an example week'), 'link semana de ejemplo como texto');
+// CSS: .lp-sec (texto, no botón) y muerte de .lp-webform.
+t(css.includes('.lp-sec{') && css.includes('.lp-sec-link{') && css.includes('.lp-sec-dot{'), 'CSS: .lp-sec + link + punto');
+t(!css.includes('.lp-webform'), 'CSS: sin .lp-webform');
+// Botón del campo con el copy nuevo; logo IG y handler intactos (§1).
+t(idx.includes('Ver mi semana gratis') && app.includes('Ver mi semana gratis'), 'ES: botón Ver mi semana gratis');
+t(idxEn.includes('See my week, free'), 'EN: botón See my week, free');
+t(idx.includes('placeholder="@tu_negocio"'), 'ES index: placeholder IG intacto');
 t(idxEn.includes('placeholder="@your_business"'), 'EN index: placeholder intacto');
-t(app.includes('Ver mi semana') && app.includes('Usar mi web'), 'app.js: textos de botones intactos');
-t(!app.includes('btn btn-ghost" type="submit">Usar mi web'), 'app.js: sin resto del botón fantasma');
 
 console.log(`entrada-logo-ig: ${pass} pass / ${fail} fail`);
 process.exit(fail ? 1 : 0);

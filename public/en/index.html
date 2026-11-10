@@ -81,7 +81,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Gochi+Hand&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261226">
+<link rel="stylesheet" href="/styles.css?v=20261227">
 <link rel="stylesheet" href="/gj.css?v=4">
 <script type="application/ld+json">
 {
@@ -238,7 +238,6 @@
       <a data-posty-chat="" role="button" tabindex="0" style="cursor:pointer">Help</a>
       <a href="/" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Español</a>
       <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a>
-      <a class="btn btn-primary btn-sm" href="/en/prueba">Try it free</a>
     </div>
     <a class="lp-entrar" href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Open menu"><span></span><span></span><span></span></button>
@@ -253,38 +252,39 @@
     <a data-posty-chat="" role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Help</a>
       <a href="/" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Español</a>
     <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a>
-    <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
   </div></div>
   <div id="campBanner" style="display:none;background:#FEC14D;color:#0A1E33;text-align:center;font-weight:800;font-size:14.5px;padding:10px 16px"></div>
   <div class="hero"><div class="wrap">
     <div class="pz-mg pz-mg--heroV"><video class="hero-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty, your community manager, introducing himself"></video></div>
     <div class="pill">🤖 Your community manager</div>
     <h1>“My feed is half-done and brings me no customers”, <span class="hl">Posty posts for you every day with your real product.</span></h1>
-    <div class="pp-mirror" data-pp-lang="en" data-pp-echo="Today: {0} posts a week, {1} hours of yours, last customer: {2}.">
+    <div class="pp-mirror" data-pp-lang="en">
       <p class="pp-q-title">Does your feed sell, or does it just exist?</p>
-      <p class="pp-q-sub">3 taps, 10 seconds: see your feed today vs. with Posty.</p>
+      <p class="pp-q-sub">3 taps, 10 seconds. The result comes from your answers: how much content you lose a week, in your numbers.</p>
       <div class="pp-q">
         <p>How many posts a week do you publish?</p>
         <div class="pp-chips">
           <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="0" aria-pressed="false">0</button>
           <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="1–2" aria-pressed="false">1–2</button>
-          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="3 or more" aria-pressed="false">3 or more</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="3–4" aria-pressed="false">3–4</button>
+          <button type="button" class="pp-chip" data-pp-k="3" data-pp-v="5 or more" aria-pressed="false">5 or more</button>
         </div>
       </div>
       <div class="pp-q">
         <p>How many hours a week do you spend on Instagram?</p>
         <div class="pp-chips">
-          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="0" aria-pressed="false">0</button>
-          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="1–3" aria-pressed="false">1–3</button>
-          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="4 or more" aria-pressed="false">4 or more</button>
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="Less than 1" aria-pressed="false">Less than 1</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="2–5" aria-pressed="false">2–5</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="More than 5" aria-pressed="false">More than 5</button>
         </div>
       </div>
       <div class="pp-q">
         <p>When was the last time a post brought you a customer?</p>
         <div class="pp-chips">
-          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="Never" aria-pressed="false">Never</button>
-          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="Months ago" aria-pressed="false">Months ago</button>
-          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="This week" aria-pressed="false">This week</button>
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="This week" aria-pressed="false">This week</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="This month" aria-pressed="false">This month</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="Months ago" aria-pressed="false">Months ago</button>
+          <button type="button" class="pp-chip" data-pp-k="3" data-pp-v="Never" aria-pressed="false">Never</button>
         </div>
       </div>
       <div class="pp-result" hidden>
@@ -302,7 +302,6 @@
               <span class="pp-slot"><img src="/g-tres.jpg" alt=""></span>
               <span class="pp-slot"><img src="/g-gourmet.jpg" alt=""></span>
             </div>
-            <p class="pp-panel-note">Half-done, irregular.</p>
           </div>
           <div class="pp-panel pp-posty">
             <b>With Posty</b>
@@ -320,15 +319,23 @@
             <p class="pp-panel-note">Complete, every day, with your real product.</p>
           </div>
         </div>
-        <p class="pp-echo"></p>
+        <div class="pp-verdict">
+          <p class="pp-verdict-big"></p>
+          <ul class="pp-verdict-lines"></ul>
+          <p class="pp-verdict-flip"></p>
+          <a class="pp-verdict-cta" href="#" onclick="ppGoTrial(this);return false">Drop your Instagram and see your real week →</a>
+          <p class="pp-verdict-fine">This comes from your answers, not a generic score.</p>
+          <button type="button" class="pp-redo" data-pp-redo>Take the quiz again</button>
+        </div>
         <p class="pp-demo">Demonstration: this is how your feed would look, not a sales promise.</p>
       </div>
     </div>
-    <script>(function(){var ms=document.querySelectorAll('.pp-mirror');ms.forEach(function(m){var ans=[null,null,null];var pats=[[0,7],[0,3,5,8],[0,1,3,4,6,8]];var tpl=m.getAttribute('data-pp-echo')||'';m.querySelectorAll('.pp-q').forEach(function(q,qi){var chips=q.querySelectorAll('.pp-chip');chips.forEach(function(c){c.addEventListener('click',function(){chips.forEach(function(x){x.setAttribute('aria-pressed','false')});c.setAttribute('aria-pressed','true');ans[qi]={k:parseInt(c.getAttribute('data-pp-k'),10),v:c.getAttribute('data-pp-v')};if(ans[0]&&ans[1]&&ans[2]){var res=m.querySelector('.pp-result');res.hidden=false;var slots=m.querySelector('[data-pp-grid="hoy"]').querySelectorAll('.pp-slot');slots.forEach(function(s){s.classList.remove('pp-on')});pats[ans[0].k].forEach(function(i){if(slots[i])slots[i].classList.add('pp-on')});m.querySelector('.pp-echo').textContent=tpl.split('{0}').join(ans[0].v).split('{1}').join(ans[1].v).split('{2}').join(ans[2].v);}})})})})})();</script>
+    <script>(function(){var S={big:function(n){return 'You’re losing ~<span>'+n+(n===1?' post':' posts')+'</span> a week.'},linePosts:function(l,e){return 'You post '+l+' out of 7 days: your feed sits empty '+e+' out of 7 days.'},lineHours:function(h){return 'You spend '+h+(h==='Less than 1'?' hour':' hours')+' a week on Instagram.'},client:['This week a post did bring you a customer: your feed sells, but it depends on you.','It’s been weeks since a post brought you a customer.','It’s been months since a post brought you a customer.','No post has brought you a customer yet: your feed exists, but it doesn’t sell.'],flipHot:'With Posty: <b>the same, every day, without it depending on you.</b> 7 posts a week, with your real product.',flip:'With Posty: <b>7 posts a week, with your real product. You: 0 hours.</b>'};var VAL=[0,1,3,5];function verdict(a){var p=VAL[a[0].k]||0;var e=7-p;return{big:S.big(e),lines:[S.linePosts(a[0].v,e),S.lineHours(a[1].v),S.client[a[2].k]],flip:(p>=5&&a[2].k===0)?S.flipHot:S.flip}}var ms=document.querySelectorAll('.pp-mirror');ms.forEach(function(m){if(m.dataset.ppBound)return;m.dataset.ppBound='1';var ans=[null,null,null];var pats=[[0,7],[0,3,5,8],[0,1,3,4,6,8],[0,1,2,3,4,5,6]];m.querySelectorAll('.pp-q').forEach(function(q,qi){var cs=q.querySelectorAll('.pp-chip');cs.forEach(function(c){c.addEventListener('click',function(){cs.forEach(function(x){x.setAttribute('aria-pressed','false')});c.setAttribute('aria-pressed','true');ans[qi]={k:parseInt(c.getAttribute('data-pp-k'),10),v:c.getAttribute('data-pp-v')};if(ans[0]&&ans[1]&&ans[2]){var r=m.querySelector('.pp-result');r.hidden=false;var sl=m.querySelector('[data-pp-grid="hoy"]').querySelectorAll('.pp-slot');sl.forEach(function(s){s.classList.remove('pp-on')});pats[ans[0].k].forEach(function(i){if(sl[i])sl[i].classList.add('pp-on')});var v=verdict(ans);var b=m.querySelector('.pp-verdict-big');if(b)b.innerHTML=v.big;var u=m.querySelector('.pp-verdict-lines');if(u)u.innerHTML=v.lines.map(function(l){return '<li>'+l+'</li>'}).join('');var f=m.querySelector('.pp-verdict-flip');if(f)f.innerHTML=v.flip}})})});var rd=m.querySelector('[data-pp-redo]');if(rd)rd.addEventListener('click',function(){ans=[null,null,null];m.querySelectorAll('.pp-chip').forEach(function(x){x.setAttribute('aria-pressed','false')});var r=m.querySelector('.pp-result');if(r)r.hidden=true})})})();</script>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad4" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad4)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram"></span>
-      <button class="btn btn-primary" type="submit">See my week <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+      <button class="btn btn-primary" type="submit">See my week, free <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
+    <p class="lp-sec"><a class="lp-sec-link" role="button" tabindex="0" onclick="lpHeroWebToggle(this);return false">Use my website instead</a><span class="lp-sec-dot">·</span><a class="lp-sec-link" href="#ejemplos">See an example week</a></p>
     <p class="lp-igform-note">Drop your Instagram handle and see <b>your</b> real week, with your brand 👆</p>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>We never see your password.</b> You sign in with Meta's official login.</p>
     <div class="hero-note">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
@@ -628,7 +635,7 @@
       </div>
       <form class="lp-igform" onsubmit="var v=lpCleanIg(this.querySelector('input').value);location.href='/en/prueba'+(v?'?ig='+encodeURIComponent(v):'');return false">
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad6" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad6)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram"></span>
-        <button class="btn btn-primary" type="submit">See my week <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+        <button class="btn btn-primary" type="submit">See my week, free <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>We never see your password.</b> You sign in with Meta's official login.</p>
     </div>
@@ -848,9 +855,44 @@ function lpCleanIg(v) {
 function lpGoTrial(e) {
   if (e) e.preventDefault();
   const inp = document.getElementById('lpIg');
+  if (inp && inp.form && inp.form.dataset.webMode === '1') {
+    const w = String(inp.value || '').trim();
+    location.href = w ? '/en/prueba?web=' + encodeURIComponent(w) : '/en/prueba';
+    return false;
+  }
   const v = lpCleanIg(inp && inp.value);
   location.href = '/en/prueba' + (v ? '?ig=' + encodeURIComponent(v) : '');
   return false;
+}
+/* Hero, one action (website hero+quiz lot, mock approved 10/11): the Instagram
+   field IS the trial; "Use my website instead" switches the SAME field to URL
+   mode, no second form, no competing button. */
+function lpHeroWebToggle(link) {
+  var hero = link.closest ? link.closest('.hero') : null;
+  if (!hero) hero = document;
+  var form = hero.querySelector('.lp-igform');
+  if (!form) return;
+  var inp = form.querySelector('input');
+  var note = hero.querySelector('.lp-igform-note');
+  var web = form.dataset.webMode !== '1';
+  form.dataset.webMode = web ? '1' : '';
+  if (inp) {
+    inp.value = '';
+    inp.placeholder = web ? 'yourwebsite.com' : '@your_business';
+    inp.setAttribute('aria-label', web ? 'Your business website' : 'Your Instagram');
+  }
+  if (note) note.innerHTML = web ? 'Drop your business website 👆' : 'Drop your Instagram handle and see <b>your</b> real week, with your brand 👆';
+  link.textContent = web ? 'Use my Instagram instead' : 'Use my website instead';
+  if (inp) inp.focus();
+}
+/* Quiz verdict CTA: back to the ONE action (the field) and focus it. */
+function ppGoTrial(el) {
+  var hero = el.closest ? el.closest('.hero') : null;
+  if (!hero) hero = document;
+  var box = hero.querySelector('.lp-igform');
+  var inp = hero.querySelector('.lp-igform input');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (inp) inp.focus({ preventScroll: true });
 }
 /* — Showcase gallery (2026-10-25, Valentino's order): the paged wall
    becomes ONE swipeable strip of 20 featured businesses — native

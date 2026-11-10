@@ -3563,19 +3563,102 @@ function cleanIgHandle(v) {
 function lpGoTrial(e) {
   if (e) e.preventDefault();
   const inp = document.getElementById('lpIg');
+  if (inp && inp.form && inp.form.dataset.webMode === '1') {
+    const w = String(inp.value || '').trim();
+    location.href = w ? '/prueba?web=' + encodeURIComponent(w) : '/prueba';
+    return false;
+  }
   const ig = cleanIgHandle(inp && inp.value);
   location.href = ig ? '/prueba?ig=' + encodeURIComponent(ig) : '/prueba';
   return false;
 }
+/* Hero, una sola acción (lote website hero+quiz, mock aprobado 10/11): el campo
+   de Instagram ES la prueba; "Prefiero usar mi web" cambia el MISMO campo a
+   modo URL, sin segundo formulario ni botón que compita. */
+function lpHeroWebToggle(link) {
+  var hero = link.closest ? link.closest('.hero') : null;
+  if (!hero) hero = document;
+  var form = hero.querySelector('.lp-igform');
+  if (!form) return;
+  var inp = form.querySelector('input');
+  var note = hero.querySelector('.lp-igform-note');
+  var web = form.dataset.webMode !== '1';
+  form.dataset.webMode = web ? '1' : '';
+  if (inp) {
+    inp.value = '';
+    inp.placeholder = web ? 'www.tunegocio.com.ar' : '@tu_negocio';
+    inp.setAttribute('aria-label', web ? 'La web de tu negocio' : 'Tu Instagram');
+  }
+  if (note) note.innerHTML = web ? 'Pegá la web de tu negocio 👆' : 'Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆';
+  link.textContent = web ? 'Prefiero usar mi Instagram' : 'Prefiero usar mi web';
+  if (inp) inp.focus();
+}
+/* CTA del veredicto del quiz: vuelve a la ÚNICA acción (el campo) y le da foco. */
+function ppGoTrial(el) {
+  var hero = el.closest ? el.closest('.hero') : null;
+  if (!hero) hero = document;
+  var box = hero.querySelector('.lp-igform');
+  var inp = hero.querySelector('.lp-igform input');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (inp) inp.focus({ preventScroll: true });
+}
 let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
-/* PROBLEMA PRIMERO - espejo del hero (Posty, lote 14). */
+/* QUIZ DEL HERO — veredicto calculado (lote website hero+quiz, mock aprobado
+   10/11). El resultado sale de las respuestas del visitante: nada de puntaje
+   genérico (el puntaje "A medias…" murió) ni métricas inventadas. */
+var PP_POST_VAL = [0, 1, 3, 5];
+var PP_STR = {
+  es: {
+    big: function (n) { return 'Perdés ~<span>' + n + (n === 1 ? ' posteo' : ' posteos') + '</span> por semana.'; },
+    linePosts: function (label, empty) { return 'Publicás ' + label + ' de 7 días: tu feed está vacío ' + empty + ' de 7 días.'; },
+    lineHours: function (h) { return 'Le dedicás ' + h + (h === 'Menos de 1' ? ' hora' : ' horas') + ' por semana a Instagram.'; },
+    client: ['Esta semana un posteo sí te trajo un cliente: tu feed vende, pero depende de vos.',
+      'Hace semanas que ningún posteo te trae un cliente.',
+      'Hace meses que ningún posteo te trae un cliente.',
+      'Ningún posteo te trajo un cliente todavía: tu feed existe, pero no vende.'],
+    flipHot: 'Con Posty: <b>lo mismo, todos los días, sin que dependa de vos.</b> 7 posteos por semana, con tu producto real.',
+    flip: 'Con Posty: <b>7 posteos por semana, con tu producto real. Vos: 0 horas.</b>'
+  },
+  en: {
+    big: function (n) { return 'You’re losing ~<span>' + n + (n === 1 ? ' post' : ' posts') + '</span> a week.'; },
+    linePosts: function (label, empty) { return 'You post ' + label + ' out of 7 days: your feed sits empty ' + empty + ' out of 7 days.'; },
+    lineHours: function (h) { return 'You spend ' + h + (h === 'Less than 1' ? ' hour' : ' hours') + ' a week on Instagram.'; },
+    client: ['This week a post did bring you a customer: your feed sells, but it depends on you.',
+      'It’s been weeks since a post brought you a customer.',
+      'It’s been months since a post brought you a customer.',
+      'No post has brought you a customer yet: your feed exists, but it doesn’t sell.'],
+    flipHot: 'With Posty: <b>the same, every day, without it depending on you.</b> 7 posts a week, with your real product.',
+    flip: 'With Posty: <b>7 posts a week, with your real product. You: 0 hours.</b>'
+  }
+};
+/* Pura (sin DOM): la cubren las suites del lote con las 48 combinaciones. */
+function ppVerdictText(lang, postsK, postsLabel, hoursLabel, clientK) {
+  var S = (lang === 'en') ? PP_STR.en : PP_STR.es;
+  var p = PP_POST_VAL[postsK] || 0;
+  var empty = 7 - p;
+  return {
+    big: S.big(empty),
+    lines: [S.linePosts(postsLabel, empty), S.lineHours(hoursLabel), S.client[clientK]],
+    flip: (p >= 5 && clientK === 0) ? S.flipHot : S.flip
+  };
+}
+function ppRenderVerdict(m, lang, ans) {
+  var v = ppVerdictText(lang, ans[0].k, ans[0].v, ans[1].v, ans[2].k);
+  var big = m.querySelector('.pp-verdict-big');
+  if (big) big.innerHTML = v.big;
+  var ul = m.querySelector('.pp-verdict-lines');
+  if (ul) ul.innerHTML = v.lines.map(function (l) { return '<li>' + l + '</li>'; }).join('');
+  var fl = m.querySelector('.pp-verdict-flip');
+  if (fl) fl.innerHTML = v.flip;
+}
+/* PROBLEMA PRIMERO - espejo del hero (Posty, lote 14; veredicto lote hero+quiz). */
 function ppMirrorInit() {
   document.querySelectorAll('.pp-mirror').forEach(function (m) {
     if (m.dataset.ppBound) return;
     m.dataset.ppBound = '1';
+    var lang = m.getAttribute('data-pp-lang') || 'es';
     var ans = [null, null, null];
-    var pats = [[0, 7], [0, 3, 5, 8], [0, 1, 3, 4, 6, 8]];
-    var tpl = m.getAttribute('data-pp-echo') || '';
+    var pats = [[0, 7], [0, 3, 5, 8], [0, 1, 3, 4, 6, 8], [0, 1, 2, 3, 4, 5, 6]];
     m.querySelectorAll('.pp-q').forEach(function (q, qi) {
       var chips = q.querySelectorAll('.pp-chip');
       chips.forEach(function (c) {
@@ -3589,10 +3672,17 @@ function ppMirrorInit() {
             var slots = m.querySelector('[data-pp-grid="hoy"]').querySelectorAll('.pp-slot');
             slots.forEach(function (s) { s.classList.remove('pp-on'); });
             pats[ans[0].k].forEach(function (i) { if (slots[i]) slots[i].classList.add('pp-on'); });
-            m.querySelector('.pp-echo').textContent = tpl.split('{0}').join(ans[0].v).split('{1}').join(ans[1].v).split('{2}').join(ans[2].v);
+            ppRenderVerdict(m, lang, ans);
           }
         });
       });
+    });
+    var redo = m.querySelector('[data-pp-redo]');
+    if (redo) redo.addEventListener('click', function () {
+      ans = [null, null, null];
+      m.querySelectorAll('.pp-chip').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+      var res = m.querySelector('.pp-result');
+      if (res) res.hidden = true;
     });
   });
 }
@@ -4654,7 +4744,6 @@ function landingView(cfg) {
       <a data-posty-chat role="button" tabindex="0" style="cursor:pointer">Ayuda</a>
       <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
       <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
-      <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
     <a class="lp-entrar" href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
@@ -4669,37 +4758,38 @@ function landingView(cfg) {
     <a data-posty-chat role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Ayuda</a>
     <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
     <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
-    <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
     <div class="pz-mg pz-mg--heroV"><video class="hero-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty, tu community manager, presentándose"></video></div>
     <div class="pill">🤖 Tu community manager</div>
     <h1>«Mi feed queda a medias y no me trae clientes», <span class="hl">Posty postea por vos todos los días con tu producto real.</span></h1>
-    <div class="pp-mirror" data-pp-lang="es" data-pp-echo="Hoy: {0} posteos por semana, {1} horas tuyas, último cliente: {2}.">
+    <div class="pp-mirror" data-pp-lang="es">
       <p class="pp-q-title">¿Tu feed vende o solo existe?</p>
-      <p class="pp-q-sub">3 toques, 10 segundos: mirá tu feed hoy vs. con Posty.</p>
+      <p class="pp-q-sub">3 toques, 10 segundos. El resultado sale de tus respuestas: cuánto contenido perdés por semana, en tus números.</p>
       <div class="pp-q">
         <p>¿Cuántos posteos por semana publicás?</p>
         <div class="pp-chips">
           <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="0" aria-pressed="false">0</button>
           <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="1–2" aria-pressed="false">1–2</button>
-          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="3 o más" aria-pressed="false">3 o más</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="3–4" aria-pressed="false">3–4</button>
+          <button type="button" class="pp-chip" data-pp-k="3" data-pp-v="5 o más" aria-pressed="false">5 o más</button>
         </div>
       </div>
       <div class="pp-q">
         <p>¿Cuántas horas por semana le dedicás a Instagram?</p>
         <div class="pp-chips">
-          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="0" aria-pressed="false">0</button>
-          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="1–3" aria-pressed="false">1–3</button>
-          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="4 o más" aria-pressed="false">4 o más</button>
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="Menos de 1" aria-pressed="false">Menos de 1</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="2–5" aria-pressed="false">2–5</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="Más de 5" aria-pressed="false">Más de 5</button>
         </div>
       </div>
       <div class="pp-q">
         <p>¿Cuándo fue la última vez que un posteo te trajo un cliente?</p>
         <div class="pp-chips">
-          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="Nunca" aria-pressed="false">Nunca</button>
-          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="Hace meses" aria-pressed="false">Hace meses</button>
-          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="Esta semana" aria-pressed="false">Esta semana</button>
+          <button type="button" class="pp-chip" data-pp-k="0" data-pp-v="Esta semana" aria-pressed="false">Esta semana</button>
+          <button type="button" class="pp-chip" data-pp-k="1" data-pp-v="Este mes" aria-pressed="false">Este mes</button>
+          <button type="button" class="pp-chip" data-pp-k="2" data-pp-v="Hace meses" aria-pressed="false">Hace meses</button>
+          <button type="button" class="pp-chip" data-pp-k="3" data-pp-v="Nunca" aria-pressed="false">Nunca</button>
         </div>
       </div>
       <div class="pp-result" hidden>
@@ -4717,7 +4807,6 @@ function landingView(cfg) {
               <span class="pp-slot"><img src="/g-tres.jpg" alt=""></span>
               <span class="pp-slot"><img src="/g-gourmet.jpg" alt=""></span>
             </div>
-            <p class="pp-panel-note">A medias, irregular.</p>
           </div>
           <div class="pp-panel pp-posty">
             <b>Con Posty</b>
@@ -4735,22 +4824,23 @@ function landingView(cfg) {
             <p class="pp-panel-note">Completo, todos los días, con tu producto real.</p>
           </div>
         </div>
-        <p class="pp-echo"></p>
+        <div class="pp-verdict">
+          <p class="pp-verdict-big"></p>
+          <ul class="pp-verdict-lines"></ul>
+          <p class="pp-verdict-flip"></p>
+          <a class="pp-verdict-cta" href="#" onclick="ppGoTrial(this);return false">Pegá tu Instagram y mirá tu semana real →</a>
+          <p class="pp-verdict-fine">Esto sale de tus respuestas, no es un puntaje genérico.</p>
+          <button type="button" class="pp-redo" data-pp-redo>Volver a hacer el quiz</button>
+        </div>
         <p class="pp-demo">Demostración: así se vería tu feed, no es una promesa de ventas.</p>
       </div>
     </div>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
-      <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+      <button class="btn btn-primary" type="submit">Ver mi semana gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
-    <form class="lp-webform" onsubmit="var v=this.querySelector('input').value.trim();location.href=v?'/prueba?web='+encodeURIComponent(v):'/prueba';return false">
-      <label for="lpWebInput">¿Preferís? Pegá la web de tu negocio</label>
-      <div class="lp-webform-row">
-        <input id="lpWebInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="www.tunegocio.com.ar" aria-label="La web de tu negocio">
-        <button class="btn btn-primary" type="submit">Usar mi web <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
-      </div>
-    </form>
+    <p class="lp-sec"><a class="lp-sec-link" role="button" tabindex="0" onclick="lpHeroWebToggle(this);return false">Prefiero usar mi web</a><span class="lp-sec-dot">·</span><a class="lp-sec-link" href="#ejemplos">Ver una semana de ejemplo</a></p>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <div class="lp-show" id="ejemplos">
@@ -4852,7 +4942,7 @@ function landingView(cfg) {
       </div>
       <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
-        <button class="btn btn-primary" type="submit">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+        <button class="btn btn-primary" type="submit">Ver mi semana gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
     </div>
