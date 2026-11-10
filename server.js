@@ -21923,10 +21923,11 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
+{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"headline_empty_space_ok":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
 - headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. FRAGMENTO CON INFINITIVO (Mora 2026-10-24, id real 498): también es false si el titular termina en un INFINITIVO que pide complemento y el complemento NO está — "Te voy a ser honesto: tener" (id real 498) es INCOMPLETO: termina en infinitivo sin complemento y sin "…": headline_complete=false. Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
+- headline_empty_space_ok (v862, HUECO VACÍO — el 583 y el 590: el titular tapaba la imagen): el titular está en el HUECO VACÍO detectado de la imagen (el área despejada, sin sujeto ni elementos) y NO tapa al sujeto — ni cara, ni ojos, ni cuerpo, ni manos, ni producto. Si cualquier letra del titular pisa al sujeto o al producto, o si el titular está sobre la imagen en vez de en el hueco vacío → false. Si la imagen NO lleva titular → true.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
@@ -21954,6 +21955,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
       texto_ok: parsed.texto_ok !== false,
       headline_complete: parsed.headline_complete !== false,
       headline_clear: parsed.headline_clear !== false, // 2026-10-04: zona del titular despejada
+      headline_empty_space_ok: parsed.headline_empty_space_ok !== false, // (v862) HUECO VACÍO: titular en el hueco vacío y sin tapar al sujeto
       brand_ok: parsed.brand_ok !== false, // draft 76: la imagen parecía Netflix (estilo de marca ajena)
       colores_ok: parsed.colores_ok !== false,
       claims_ok: parsed.claims_ok !== false,
@@ -22478,7 +22480,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   const key = apiKey || settings.openai_key || process.env.OPENAI_API_KEY || '';
   if (!key) throw new Error('Sin clave de OpenAI');
   const profile = getProfile(uid);
-  const cleanHeadline = String(headline || '').trim();
+  let cleanHeadline = String(headline || '').trim(); // (v862) let: el Gap 6 lo vacía si el titular no quedó en el hueco vacío (pieza limpia)
   const hexes = parseBrandHexes(settings.brand_colors);
   const dna = readDna(uid);
   const theme = ideaObj.titulo || ideaObj.tema || '';
@@ -22875,10 +22877,13 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       compArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
       execFileSync('python3', compArgs, { timeout: 30000 });
       console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
-      // (Gap 6, 2026-10-25) ZONA MEDIDA, como ya hace la PRUEBA: el QA
-      // de texto compuesto mira la pieza terminada y, si el titular de
-      // arriba tapa al sujeto, se recompone UNA vez desde la base
-      // limpia con la zona inferior. Fail-open: sin veredicto del QA
+      // (v862, HUECO VACÍO — el 583 y el 590) ZONA MEDIDA, como ya hace
+      // la PRUEBA: el QA de texto compuesto mira la pieza terminada y,
+      // si el titular tapa al sujeto (no quedó en el hueco vacío), la
+      // pieza sale LIMPIA y la idea vive en el caption — como ya mandan
+      // CALIDAD-55 y SALTO-55. El titular nunca se mueve a otra zona
+      // para probar suerte: en el 583 arriba tapaba la cabeza del robot
+      // y abajo tapó torso y brazos. Fail-open: sin veredicto del QA
       // (null) queda la de arriba, como siempre.
       try {
         const composedBuf = fs.readFileSync(imgPath);
@@ -22886,19 +22891,10 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
         if (zoneQa && zoneQa.passed === false) {
           const cleanSibling = path.join(MEDIA_DIR, imgName.replace(/(\.[a-z0-9]+)$/i, '-clean$1'));
           if (fs.existsSync(cleanSibling)) {
+            const dropped = cleanHeadline;
             fs.copyFileSync(cleanSibling, imgPath);
-            const compArgs2 = [
-              path.join(__dirname, 'composite-headline.py'),
-              '--in', imgPath,
-              '--headline', cleanHeadline,
-              '--out', imgPath,
-              '--zone', 'bottom',
-            ];
-            if (hexes && hexes[0]) compArgs2.push('--grade', String(hexes[0]));
-            compArgs2.push('--font', brandFontOf(settings));
-            compArgs2.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
-            execFileSync('python3', compArgs2, { timeout: 30000 });
-            console.log(`[concept-shot] titular RECOMPUESTO abajo: el QA marcó que arriba tapaba al sujeto ("${cleanHeadline.slice(0, 40)}")`);
+            cleanHeadline = ''; // (v862) la pieza sale limpia; el gate ya no recompone titular
+            console.log(`[concept-shot] titular RETIRADO (pieza limpia): el titular tapaba al sujeto, no quedó en el hueco vacío ("${dropped.slice(0, 40)}")`);
           }
         }
       } catch (e) { console.error('[concept-shot] QA de zona:', e.message); }
@@ -22984,7 +22980,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
         const rowQa = { ...fq, qa_gate_attempts: gate.attempts, qa_gate_outcome: gate.outcome, qa_gate_failed_checks: gate.failedChecks, qa_gate_final_path: gate.path };
         db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaGate.qaGatePassed(fq) ? 1 : 0, JSON.stringify(rowQa).slice(0, 4000), auditPath);
       }
-      try { console.log(('[qa-gate] outcome=' + gate.outcome + ' attempts=' + gate.attempts + ' ' + JSON.stringify({ first: fq ? { texto: fq.texto_ok, colores: fq.colores_ok, claims: fq.claims_ok, mobile: fq.mobile_ok, marca: fq.brand_ok, anatomia: fq.anatomia_ok, headline_clear: fq.headline_clear } : null, failed: gate.failedChecks, reason: gate.reason })).slice(0, 600)); } catch (e) {}
+      try { console.log(('[qa-gate] outcome=' + gate.outcome + ' attempts=' + gate.attempts + ' ' + JSON.stringify({ first: fq ? { texto: fq.texto_ok, colores: fq.colores_ok, claims: fq.claims_ok, mobile: fq.mobile_ok, marca: fq.brand_ok, anatomia: fq.anatomia_ok, headline_clear: fq.headline_clear, headline_empty_space_ok: fq.headline_empty_space_ok } : null, failed: gate.failedChecks, reason: gate.reason })).slice(0, 600)); } catch (e) {}
     } catch (e) { console.error('[qa-gate] db:', e.message); }
     if (gate.outcome === 'bandeja') console.log(`[qa-gate] usuario ${uid}: pieza a bandeja tras ${gate.attempts} intentos (${gate.failedChecks.join(',')}) — needs_review en el llamador`);
   } catch (e) { console.error('[qa-gate]', e.message); throw e; }
@@ -32120,13 +32116,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 }
               }
               pieceEngines[i] = gen.engine;
-              // (v209) DOSIFICACIÓN también en la ruta IA: la pieza
-              // limpia NO compone titular (su imagen cruda ya pasó el QA
-              // de "sin texto"); la pieza con texto compone arriba y
-              // pasa el 4º chequeo del QA sobre la pieza COMPUESTA: el
-              // titular no puede tapar caras, ojos ni el producto o
-              // personaje. Si tapa, se recompone en la zona opuesta —
-              // ese es su reintento (sin regenerar la imagen).
+              // (v209, v862 HUECO VACÍO) DOSIFICACIÓN también en la
+              // ruta IA: la pieza limpia NO compone titular (su imagen
+              // cruda ya pasó el QA de "sin texto"); la pieza con texto
+              // compone arriba y pasa el 4º chequeo del QA sobre la
+              // pieza COMPUESTA: el titular no puede tapar caras, ojos
+              // ni el producto o personaje — tiene que quedar en el
+              // hueco vacío. Si tapa, la pieza sale LIMPIA sin titular
+              // (el 583 y el 590: el titular tapaba la imagen) — ese
+              // es su reintento (sin regenerar la imagen).
               const inkFor = (treatments[i] === 'flat' || treatments[i] === 'poster') ? inkHex : null;
               if (specPosts[i].text_mode === 'clean') {
                 pieceQa[i] = { ...qaInfo, text: null };
@@ -32141,19 +32139,19 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               const textQa = buf ? await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: demoApiKey }) : null;
               if (textQa) textInfo.passed = textQa.passed;
               if (buf && textQa && !textQa.passed && costs.demoAiCapOk()) {
-                const buf2 = await demoAi.compositeDemoPiece({
-                  b64: gen.b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor, zone: 'bottom',
+                // (v862) Sin escape abajo: la pieza sale LIMPIA (el
+                // composite con headline '' no dibuja texto) y la idea
+                // vive en el caption.
+                const bufClean = await demoAi.compositeDemoPiece({
+                  b64: gen.b64, headline: '', gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor,
                 }).catch(() => null);
-                let swapped = false;
-                if (buf2) {
-                  const textQa2 = await demoAi.qaComposedText({ b64: buf2.toString('base64'), zone: 'bottom', apiKey: demoApiKey });
-                  if (textQa2 && textQa2.passed) { buf = buf2; swapped = true; }
-                }
-                textInfo = swapped
-                  ? { passed: true, zone: 'bottom', retried: true }
-                  : { passed: false, zone: 'top', retried: true };
-                if (!swapped) {
-                  console.error(`[posta] demo-ai QA texto: la pieza ${i} (${made[i].headline}) tapa el sujeto según visión y la otra zona no lo resolvió: ${textQa.detalle || ''}`);
+                if (bufClean) {
+                  buf = bufClean;
+                  textInfo = { passed: true, zone: 'none', retried: true };
+                  console.error(`[posta] demo-ai QA texto: la pieza ${i} (${made[i].headline}) tapa el sujeto según visión — sale LIMPIA sin titular: ${textQa.detalle || ''}`);
+                } else {
+                  textInfo = { passed: false, zone: 'top', retried: true };
+                  console.error(`[posta] demo-ai QA texto: la pieza ${i} (${made[i].headline}) tapa el sujeto según visión y no se pudo limpiar: ${textQa.detalle || ''}`);
                 }
               }
               pieceQa[i] = { ...qaInfo, text: textInfo };
@@ -34261,7 +34259,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v861';
+const BUILD_ID = '20261105-v862';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

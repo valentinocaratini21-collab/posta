@@ -17,9 +17,9 @@ let fails = 0, total = 0;
 const ok = (cond, msg) => { total++; if (cond) console.log('  ✓', msg); else { fails++; console.error('  ✗', msg); } };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const PASS = { texto_ok: true, colores_ok: true, claims_ok: true, mobile_ok: true, brand_ok: true, anatomia_ok: true, headline_clear: true, headline_complete: true, detalle: 'todo bien, robot en café' };
+const PASS = { texto_ok: true, colores_ok: true, claims_ok: true, mobile_ok: true, brand_ok: true, anatomia_ok: true, headline_clear: true, headline_complete: true, headline_empty_space_ok: true, detalle: 'todo bien, robot en café' };
 const FAIL_TEXTO = { ...PASS, texto_ok: false, detalle: 'texto garbled en cartel' };
-const FAIL_ALL = { texto_ok: false, colores_ok: false, claims_ok: false, mobile_ok: false, brand_ok: false, anatomia_ok: false, headline_clear: false, headline_complete: false, detalle: 'todo mal' };
+const FAIL_ALL = { texto_ok: false, colores_ok: false, claims_ok: false, mobile_ok: false, brand_ok: false, anatomia_ok: false, headline_clear: false, headline_complete: false, headline_empty_space_ok: false, detalle: 'todo mal' };
 
 // Harness: evaluate responde según una lista (o null); generate/save/
 // composite/retain registran llamadas. Nada de red, nada de IA.
@@ -99,6 +99,7 @@ function harness(evals) {
   console.log('— Parte B: la vara es la del audit, ni más ni menos');
   ok(qaGate.qaGatePassed(PASS) === true, 'todo true → pasa');
   ok(qaGate.qaGatePassed({ ...PASS, headline_clear: false }) === false, 'headline_clear false → NO pasa (definición del audit)');
+  ok(qaGate.qaGatePassed({ ...PASS, headline_empty_space_ok: false }) === false, 'headline_empty_space_ok false → NO pasa (v862 HUECO VACÍO: el 583 y el 590, titular sobre el sujeto)');
   ok(qaGate.qaGatePassed({ ...PASS, headline_complete: false }) === true, 'headline_complete false SOLO → pasa (es solo-auditoría, no decide)');
   ok(qaGate.qaGatePassed({ ...PASS, contraste_ok: false, elementos_ok: false }) === true, 'contraste/elementos false solos → pasan (solo-auditoría)');
   ok(qaGate.qaGatePassed(null) === false && qaGate.qaGatePassed(undefined) === false, 'sin veredicto → NO pasa (fail-closed)');

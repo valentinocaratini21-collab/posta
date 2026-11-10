@@ -986,8 +986,9 @@ async function replacePiecesWithAi({ indexes, capOk, makePiece, onPiece } = {}) 
 // tapa una cara, los ojos o el producto/personaje protagonista? Es la
 // versión IA de la regla "el texto nunca pelea con la foto" (en la ruta
 // de fotos la cumple el selector de zonas de demo_render.py). Si falla,
-// el server recompone en la zona opuesta (ese es el reintento de la
-// pieza; la imagen NO se regenera). Fail-open como el resto del QA:
+// la pieza sale LIMPIA sin titular (v862, HUECO VACÍO — el 583 y el
+// 590: el titular tapaba la imagen; el titular va en el hueco vacío,
+// nunca sobre el sujeto). La imagen NO se regenera. Fail-open como el resto del QA:
 // null = sin veredicto (red/caída) y la pieza sigue su curso.
 const QA_COMPOSED_SYSTEM = [
   'You are a strict visual QA reviewer for a finished Instagram post image.',

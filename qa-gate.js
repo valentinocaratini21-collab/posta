@@ -18,7 +18,10 @@
 //
 // DEFINICIÓN DE "PASAR LA VARA": EXACTAMENTE la del audit de siempre
 // (la fila qa_audit): texto_ok && colores_ok && claims_ok && mobile_ok
-// && brand_ok && anatomia_ok && headline_clear !== false. Los checks
+// && brand_ok && anatomia_ok && headline_clear !== false &&
+// headline_empty_space_ok !== false (v862, HUECO VACÍO — el 583 y el
+// 590: el titular tapaba la imagen; el titular va en el hueco vacío,
+// nunca sobre el sujeto). Los checks
 // solo-auditoría (headline_complete, contraste_ok, elementos_ok) NO
 // deciden el pase — pero si TAMBIÉN fallan junto a otro, entran en la
 // corrección para que la regeneración los arregle de una vez.
@@ -40,6 +43,7 @@ const GATE_CHECKS = [
   ['brand_ok', 'marca'],
   ['anatomia_ok', 'anatomia'],
   ['headline_clear', 'headline_clear'],
+  ['headline_empty_space_ok', 'headline_empty_space_ok'],
 ];
 // Checks solo-auditoría: no deciden el pase, pero se corrigen si fallan junto a otro.
 const AUDIT_ONLY_CHECKS = [
@@ -55,6 +59,7 @@ const FIX_LINES = {
   anatomia: 'the previous attempt had deformed anatomy — natural hands, fingers and faces only; show fewer hands if needed',
   claims: 'the previous attempt showed an invented price, promotion or claim — show only the real product and scene, no prices, no offers, no claim-like elements',
   headline_clear: 'elements intruded into the top headline zone — keep the entire top zone clean, soft and completely empty',
+  headline_empty_space_ok: 'the headline is not in the empty space of the image, or it overlaps the subject — place the headline only in the detected empty space (the clear area with no subject or elements, top, bottom or wherever the empty space is), never over faces, eyes, body, hands or product; if there is no empty space, deliver the image clean with NO headline',
   colores: "the previous attempt did not show the client's brand colors in the scene — weave the exact brand colors into props, clothing, packaging and set details",
   mobile: 'the previous attempt did not work on a phone screen — keep the important subject large, centered and away from the edges, with strong contrast',
   marca: "the previous attempt imitated another brand's look — give the image its own visual identity for this business, never a famous brand's style",
@@ -66,7 +71,8 @@ const FIX_LINES = {
 function qaGatePassed(qa) {
   if (!qa || typeof qa !== 'object') return false;
   return !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok &&
-    qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
+    qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false &&
+    qa.headline_empty_space_ok !== false);
 }
 
 // Todos los checks en false, en orden fijo (decisivos primero). null →
