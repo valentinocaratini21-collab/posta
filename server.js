@@ -8392,6 +8392,73 @@ app.post('/api/admin/regen-post', requireAdminToken, express.json(), async (req,
     res.json({ ok: true, post_id: post.id, user_id: post.user_id, status: 'draft', week_key: post.week_key, unscheduled, title, headline: r.headline || null, text_mode: r.textMode || 'text' });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
+// ---------- (v871) SIEMBRA TIRA NAILS: los 3 posteos exactos del mock ----------
+// Un solo uso, por orden de Valentino (10/11 09:03-09:04, «dale» 09:09):
+// los proximos 3 posteos del producto son la tira nails. Las imagenes ya
+// vienen compuestas (banda + cara arriba a la izquierda, geometria v869)
+// en public/siembra-nails/ — el endpoint solo las copia a MEDIA_DIR
+// (volumen persistente; el repo no es el almacen de medios) e inserta los
+// 3 posteos en sus slots, y pasa a borrador los viejos 591/580/584 con el
+// mismo gesto que el conserje 'no_sale' (status='draft', scheduled_at=NULL,
+// approval='rejected'): sin borrar historia. Idempotente: si ya existe un
+// posteo con source='siembra-nails-v871', no hace nada y devuelve los que
+// hay. Sin confirm=true devuelve el plan (dry-run) sin tocar nada.
+app.post('/api/admin/siembra-nails', requireAdminToken, express.json(), (req, res) => {
+  const UID = 12, WEEK = '2026-11-09', SRC = 'siembra-nails-v871';
+  const OLD = [591, 580, 584];
+  const SEED = [
+    { slot: '2026-11-11T00:00:00.000Z', file: 'tira-nails-1.jpg', media: 'image', cover: null,
+      caption: 'este color no se elige en la vidriera. se elige en la mano. vení y probalo.' },
+    { slot: '2026-11-12T00:00:00.000Z', file: 'tira-nails-2.mp4', media: 'video', cover: 'tira-nails-2-cover.jpg',
+      caption: 'así cae el color antes de llegar a tus manos. mirá cómo se mueve.' },
+    { slot: '2026-11-13T00:00:00.000Z', file: 'tira-nails-3.jpg', media: 'image', cover: null,
+      caption: 'las que vuelven no vuelven por el esmalte. vuelven por el color que les queda. pedilo por nombre.' },
+  ];
+  try {
+    // 1) Fuentes: las 4 piezas compuestas tienen que estar en el repo.
+    const srcDir = path.join(__dirname, 'public', 'siembra-nails');
+    const files = ['tira-nails-1.jpg', 'tira-nails-2.mp4', 'tira-nails-2-cover.jpg', 'tira-nails-3.jpg'];
+    const missing = files.filter((f) => !fs.existsSync(path.join(srcDir, f)));
+    if (missing.length) return res.status(502).json({ ok: false, error: 'faltan piezas en public/siembra-nails: ' + missing.join(', ') });
+    // 2) Idempotencia: si la siembra ya existe, no duplicar.
+    const ya = db.prepare(`SELECT id, scheduled_at, media_type, image_path, caption FROM posts WHERE user_id = ? AND source = ? ORDER BY scheduled_at`).all(UID, SRC);
+    if (ya.length) return res.json({ ok: true, already_seeded: true, posts: ya });
+    // 3) Plan (dry-run): que se ve antes de tocar nada.
+    const old = OLD.map((id) => {
+      const p = db.prepare('SELECT id, status, scheduled_at, media_type FROM posts WHERE id = ? AND user_id = ?').get(id, UID);
+      return p ? { id: p.id, status: p.status, scheduled_at: p.scheduled_at, media_type: p.media_type } : { id, status: 'no_existe' };
+    });
+    if (!req.body || req.body.confirm !== true) {
+      return res.json({ ok: true, dry_run: true, plan: { old, seed: SEED.map((s) => ({ slot: s.slot, file: s.file, media: s.media, caption: s.caption })) } });
+    }
+    // 4) Copiar las piezas a MEDIA_DIR (volumen persistente) antes de tocar la DB.
+    for (const f of files) fs.copyFileSync(path.join(srcDir, f), path.join(MEDIA_DIR, f));
+    // 5) En una transaccion: viejos a borrador (gesto no_sale) + 3 posteos nuevos.
+    const seeded = [], cancelled = [];
+    try { db.exec('BEGIN IMMEDIATE'); } catch (e) { /* ya habia transaccion */ }
+    try {
+      for (const id of OLD) {
+        const p = db.prepare('SELECT id, status FROM posts WHERE id = ? AND user_id = ?').get(id, UID);
+        if (p && (p.status === 'scheduled' || p.status === 'draft')) {
+          db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'rejected', error = '' WHERE id = ?`).run(id);
+          cancelled.push({ id, was: p.status });
+        }
+      }
+      for (const s of SEED) {
+        const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, tipo, week_key, source, needs_review, approval, cover_path)
+          VALUES (?, ?, ?, '', ?, 'scheduled', ?, '', ?, ?, 0, 'approved', ?)`)
+          .run(UID, '/media/' + s.file, s.caption, s.slot, s.media, WEEK, SRC, s.cover ? '/media/' + s.cover : '');
+        seeded.push({ id: r.lastInsertRowid, slot: s.slot, media: s.media, caption: s.caption, image_path: '/media/' + s.file });
+      }
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) {}
+      return res.status(500).json({ ok: false, error: 'siembra abortada: ' + String((e && e.message) || e).slice(0, 200) });
+    }
+    console.log(`[admin] siembra-nails: 3 posteos (${seeded.map((s) => s.id).join(',')}) en slots 10/11, 11/11, 12/11 19:00; viejos a borrador: ${cancelled.map((c) => c.id).join(',') || 'ninguno'}`);
+    res.json({ ok: true, seeded, cancelled });
+  } catch (e) { res.status(500).json({ ok: false, error: String((e && e.message) || e).slice(0, 200) }); }
+});
 // Extensión de prueba por soporte (v182): setea trial_extended_until =
 // ahora + days (default 7) y devuelve el estado efectivo usando el MISMO
 // cálculo del producto (trialEffectiveEnd: max entre fin de trial y
@@ -34550,7 +34617,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v870';
+const BUILD_ID = '20261105-v871';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
