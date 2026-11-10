@@ -62,7 +62,7 @@ const mod = fs.readFileSync(path.join(TREE, 'supervision-chat.js'), 'utf8');
 const lotePresente = srv.includes('supervisionChat.puerta');
 
 // ---- 0 · pines + marcadores del lote ----
-t.check('0a', 'BUILD v849 (estampado)', srv.includes("BUILD_ID = '20261105-v849'"));
+t.check('0a', 'BUILD v854 (estampado)', srv.includes("BUILD_ID = '20261105-v854'"));
 t.check('0b', 'server.js difiere del pin base', PINS.server === '00000000000000000000000000000000' ? (console.log('  (pin server.js sin rellenar)'), true) : md5(path.join(TREE, 'server.js')) !== PINS.server);
 t.check('0c', 'app.js difiere del pin base', PINS.app === '00000000000000000000000000000000' ? (console.log('  (pin app.js sin rellenar)'), true) : md5(path.join(TREE, 'public', 'app.js')) !== PINS.app);
 t.check('0d', 'db.js difiere del pin base', PINS.db === '00000000000000000000000000000000' ? (console.log('  (pin db.js sin rellenar)'), true) : md5(path.join(TREE, 'db.js')) !== PINS.db);
@@ -77,7 +77,7 @@ t.check('1c', 'costos/rate movidos DESPUÉS de la puerta (no gastan IA supervisa
 t.check('1d', 'la puerta responde pending:true + exchange_id', srv.includes("pending: true") && srv.includes('supervision: { exchange_id'));
 t.check('1e', 'la puerta devuelve el acuse fijo (sup.ack), no una respuesta generada', srv.includes('reply: sup.ack'));
 t.check('1f', 'fail-open: la puerta rota sigue con la IA', srv.includes('puerta falló, sigue la IA'));
-t.check('1g', 'SUPERVISION_OFF=1 existe (bypass solo suites)', srv.includes("SUPERVISION_OFF !== '1'"));
+t.check('1g', 'SUPERVISION_OFF=1 existe (bypass solo suites)', srv.includes("SUPERVISION_OFF === '1'"));
 t.check('1h', 'ruta GET /api/admin/supervision/chat', srv.includes("app.get('/api/admin/supervision/chat'"));
 t.check('1i', 'ruta GET /api/admin/supervision/pendientes', srv.includes("app.get('/api/admin/supervision/pendientes'"));
 t.check('1j', 'ruta POST /api/admin/supervision/dictar', srv.includes("app.post('/api/admin/supervision/dictar'"));
@@ -87,7 +87,7 @@ t.check('1m', 'GET /api/ideas/chat devuelve id', srv.includes('SELECT id, role, 
 t.check('1n', 'el panel suma supervision_pendientes (sin tocar buildOwnerPanel)', srv.includes('panel.supervision_pendientes = supervisionChat.listarPendientes'));
 t.check('1o', 'conserje sigue cableado: el pendiente también abre caso', srv.includes("divertToConcierge(db, uidChat, sup.texto)"));
 t.check('1p', 'el desvío conserje viejo sigue intacto (fail-open)', srv.includes('CONCIERGE_ACK') || srv.includes("divertToConcierge(db, uidChat, lastUserText)"));
-t.check('1q', 'EXENCIÓN ADN: turnos de entrevista (ADN incompleto) no pasan por la puerta', srv.includes('EXENCIÓN ADN') && srv.includes("SUPERVISION_OFF !== '1' && !dnaEntrevista"));
+t.check('1q', 'EXENCIÓN ADN ANGOSTADA v854: solo entrevista en curso exime', srv.includes('EXENCIÓN ADN ANGOSTADA') && srv.includes('entrevistaEnCurso(clean, dnaEntrevista)'));
 t.check('1r', 'la exención usa el mismo chequeo del cerebro (dnaMissingFields sobre business_dna)', srv.includes('dnaMissingFields(dna0).length > 0') && srv.includes('dnaRow0'));
 
 // ---- 2 · front (estático) ----

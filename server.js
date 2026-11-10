@@ -6579,15 +6579,23 @@ app.post('/api/ideas/chat', async (req, res) => {
   // sale solo por dictado (POST /api/admin/supervision/dictar). FAIL-SAFE: si
   // la puerta falla, se registra y el flujo sigue con el cerebro como hoy.
   // SUPERVISION_OFF=1 saltea la puerta (SOLO suites que prueban el cerebro).
-  // (EXENCIÓN ADN · decisión de bamboo — registrada en STATUS y en la línea
-  // M36; Valentino puede vetarla) Los turnos de la entrevista de ADN
+  // (EXENCIÓN ADN ANGOSTADA · v854) Los turnos de la entrevista de ADN
   // (onboarding) NO pasan por la puerta: la entrevista es un flujo guionado
   // con preguntas fijas y toques, y si cada turno esperara dictado, la
-  // prueba de un clic («menos de un minuto») se rompería. Condición precisa:
-  // ADN incompleto (dnaMissingFields > 0, el mismo chequeo que usa el
-  // cerebro para arrancar la entrevista) → turno de entrevista → el cerebro
-  // corre como hoy. Solo eso se exime; nada más. Si la lectura falla, la
-  // puerta aplica (la exención no se presume).
+  // prueba de un clic («menos de un minuto») se rompería. Pero la exención
+  // ya NO es «ADN incompleto» a secas (v831): con eso, un usuario con ADN
+  // parcial que nunca contesta la entrevista quedaría exento para siempre.
+  // Ahora solo se exime cuando la entrevista está EN CURSO en este turno
+  // (supervisionChat.entrevistaEnCurso: sin mensaje previo del asistente,
+  // o el último mensaje del asistente preguntó por ADN). Y el dueño
+  // (user 12) NUNCA está exento: su chat siempre pasa por la puerta.
+  // (OBSERVABILIDAD · v854) Cada turno registra su decisión en
+  // supervision_decisiones ('retenido' | 'exento_adn' | 'apagado_off' |
+  // 'fallo_puerta'), legible en GET /api/admin/supervision/decisiones.
+  // El 9/11 la puerta no retuvo 22 mensajes de user 12 sin dejar rastro:
+  // el fail-open era silencioso porque puerta() nunca lanza (devuelve
+  // {ok:false}) y el log '[supervision] puerta falló' solo salta si
+  // puerta() LANZA. Ahora el ok:false también se registra y se loguea.
   let dnaEntrevista = false;
   try {
     const dnaRow0 = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uidChat);
@@ -6595,10 +6603,17 @@ app.post('/api/ideas/chat', async (req, res) => {
     if (dnaRow0 && dnaRow0.dna_json) { try { dna0 = JSON.parse(dnaRow0.dna_json); } catch (e) { dna0 = null; } }
     dnaEntrevista = dnaMissingFields(dna0).length > 0;
   } catch (e) { dnaEntrevista = false; }
-  if (process.env.SUPERVISION_OFF !== '1' && !dnaEntrevista) {
+  const supervisionOff = process.env.SUPERVISION_OFF === '1';
+  const exentoADN = !supervisionOff && uidChat !== OWNER_USER_ID && dnaEntrevista && supervisionChat.entrevistaEnCurso(clean, dnaEntrevista);
+  if (supervisionOff) {
+    supervisionChat.registrarDecision(db, { userId: uidChat, decision: 'apagado_off', detalle: 'SUPERVISION_OFF=1' });
+  } else if (exentoADN) {
+    supervisionChat.registrarDecision(db, { userId: uidChat, decision: 'exento_adn', detalle: 'entrevista ADN en curso' });
+  } else {
     try {
       const sup = supervisionChat.puerta(db, uidChat, clean);
       if (sup && sup.ok) {
+        supervisionChat.registrarDecision(db, { userId: uidChat, decision: 'retenido', detalle: 'exchange ' + sup.exchange_id });
         if (conciergeMode) {
           try {
             const dv0 = supportCases.divertToConcierge(db, uidChat, sup.texto);
@@ -6607,7 +6622,13 @@ app.post('/api/ideas/chat', async (req, res) => {
         }
         return res.json({ reply: sup.ack, idea: null, pending: true, supervision: { exchange_id: sup.exchange_id, estado: 'pendiente' } });
       }
-    } catch (e) { console.error('[supervision] puerta falló, sigue la IA:', e.message); }
+      const motivoFallo = String((sup && sup.error) || 'puerta_fallo');
+      supervisionChat.registrarDecision(db, { userId: uidChat, decision: 'fallo_puerta', detalle: motivoFallo });
+      console.error('[supervision] puerta no retuvo, sigue la IA:', motivoFallo);
+    } catch (e) {
+      supervisionChat.registrarDecision(db, { userId: uidChat, decision: 'fallo_puerta', detalle: 'throw: ' + (e && e.message ? String(e.message).slice(0, 200) : 'sin mensaje') });
+      console.error('[supervision] puerta falló, sigue la IA:', e.message);
+    }
   }
   // (SUPERVISIÓN) Costos/rate: solo corren si la puerta falla o está apagada
   // (fail-open) — el mensaje supervisado no gasta IA ni consume cupo de chat.
@@ -9236,6 +9257,15 @@ app.post('/api/admin/supervision/borrador', requireAdminToken, (req, res) => {
   const r = supervisionChat.guardarBorrador(db, Number(b.user_id), b.texto);
   if (!r.ok) return res.status(r.error === 'sin_pendiente' ? 404 : 400).json({ ok: false, error: r.error });
   res.json({ ok: true, exchange_id: r.exchange_id });
+});
+// (v854 · OBSERVABILIDAD) Conteo de decisiones de la puerta por día +
+// filas recientes. Es lo que distingue desde el admin, sin logs de Railway:
+// 'apagado_off' > 0 = SUPERVISION_OFF=1 en producción (hay que sacarlo en
+// Railway); 'exento_adn' > 0 para el dueño = la exención lo sigue agarrando;
+// 'fallo_puerta' > 0 = la puerta falla (ver el detalle); 'retenido' = retiene.
+app.get('/api/admin/supervision/decisiones', requireAdminToken, (req, res) => {
+  try { res.json(supervisionChat.resumenDecisiones(db, Number(req.query.dias) || 7)); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) => {
   if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
@@ -34156,7 +34186,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v853';
+const BUILD_ID = '20261105-v854';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1107,6 +1107,19 @@ CREATE TABLE IF NOT EXISTS supervision_pendientes (
 );
 CREATE INDEX IF NOT EXISTS idx_supervision_estado ON supervision_pendientes(estado, created_at);
 CREATE INDEX IF NOT EXISTS idx_supervision_usuario ON supervision_pendientes(user_id, estado);
+-- (v854 · OBSERVABILIDAD) Una fila por turno de chat con la decisión de la
+-- puerta: 'retenido' | 'exento_adn' | 'apagado_off' | 'fallo_puerta'.
+-- Sin este registro, un fallo silencioso es indistinguible de la puerta
+-- apagada (caso user 12, 9/11: 22 mensajes, 0 retenidos, sin rastro).
+CREATE TABLE IF NOT EXISTS supervision_decisiones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  decision TEXT NOT NULL DEFAULT '',
+  detalle TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_supervision_decisiones_dia ON supervision_decisiones(created_at, decision);
+CREATE INDEX IF NOT EXISTS idx_supervision_decisiones_usuario ON supervision_decisiones(user_id, created_at);
 -- Mensajes proactivos de la IA (pedidos por chat, no tarjetas): 1 por tipo cada 7 días
 CREATE TABLE IF NOT EXISTS proactive_asks (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
