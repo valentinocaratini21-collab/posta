@@ -21559,7 +21559,7 @@ function pzHoyTiraHTML(dias, o) {
       if (!d) return '';
       const done = d.revelado && d.post && String(d.post.status || '') === 'published';
       const cls = 'pz-semana-dia' + (done ? ' done' : d.esHoy ? ' today' : (d.revelado || d.esPasado) ? '' : ' wait') + (selDia && d.key === selDia.key ? ' sel' : '');
-      const mark = done ? '✓' : d.esHoy ? '•' : '·';
+      const mark = done ? '✓' : d.esHoy ? '•' : ''; // (v874) pendientes: punto hueco, sin marca
       return `<button type="button" class="${cls}" data-pz-hoy-tira-dia="${esc(d.key)}" aria-label="${esc(labels[i] || '')}"><span class="pz-semana-bola">${mark}</span>${labels[i] || ''}</button>`;
     }).join('');
     return `<div class="pz-semana-mini" role="group" aria-label="${en ? 'Your week' : 'Tu semana'}">${strip}</div>`
@@ -22372,11 +22372,15 @@ async function inicioView() {
     PZ_HOY_POST_ID = hoyPostR1 ? String(hoyPostR1.id) : '';
     if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
     const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
+    // (LOTE TIRA-SEMANA-V4 · v874 · 10/11 · decisión Valentino: la tira
+    // sube a primera en Hoy, justo debajo del encabezado fijo — indicador
+    // de semana, no bloque de contenido. El saludo, el posteo de hoy e
+    // Impulsar quedan en su orden, debajo de la tira.)
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
+      + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
-      + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
       + pzHoyImpulsarHTML(mejorHoy, enHome)
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;

@@ -5850,13 +5850,20 @@ body.pz-postchat-open{overflow:hidden}
 /* (LOTE SIMPLIFICAR-APP · PARTE 2 · 9/11 · REDISEÑO SIMPLE: la semana en Hoy
    como fila mini (bolas por día) + línea de insight. Estructura del mock
    posty-app-simple (.week-mini/.day/.ball/.insight); vidrio de la app.) */
-.pz-semana-mini{background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.75);border-radius:18px;padding:13px 10px;display:flex;justify-content:space-between;box-shadow:0 6px 18px rgba(10,30,51,.10);margin-bottom:14px}
-.pz-semana-dia{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;font-weight:900;color:var(--dim);width:40px;background:none;border:none;padding:5px 0;border-radius:12px;cursor:pointer;font-family:inherit}
-.pz-semana-dia.sel{background:rgba(39,147,200,.10)}
-.pz-semana-bola{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;background:#EDF4FA;border:1.5px solid rgba(10,30,51,.08);color:var(--txt)}
-.pz-semana-dia.done .pz-semana-bola{background:#DDF5E3;border-color:transparent;color:var(--green)}
-.pz-semana-dia.today .pz-semana-bola{background:var(--yl);border-color:transparent}
-.pz-semana-dia.wait .pz-semana-bola{border-style:dashed;color:var(--dim)}
+/* (LOTE TIRA-SEMANA-V4 · v874 · 10/11 · decisión Valentino: variante 4
+   «solo puntos, sin tarjeta» — la tira ya no es tarjeta blanca: los puntos
+   flotan sobre el fondo, una hairline los une, hoy es amarillo con glow y
+   lo hecho es azul con tilde blanco (el verde muere: no es color de marca).
+   Vive primera en Hoy, justo debajo del encabezado fijo. Los centros de
+   las 3 bolas caen a 11.5px del tope del botón (márgenes 6/2.5/1.5) y la
+   hairline va a 19.5px; sus extremos son el centro de la 1ª/7ª columna. */
+.pz-semana-mini{position:relative;background:none;border:none;border-bottom:1px solid #eee8db;border-radius:0;padding:8px 10px 12px;display:flex;justify-content:space-between;box-shadow:none;margin-bottom:0}
+.pz-semana-mini::before{content:"";position:absolute;left:calc(10px + (100% - 20px)/14);right:calc(10px + (100% - 20px)/14);top:19.5px;height:1.5px;background:#dfe6ec}
+.pz-semana-dia{position:relative;display:flex;flex:1;flex-direction:column;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--dim);background:none;border:none;padding:0;border-radius:0;cursor:pointer;font-family:inherit}
+.pz-semana-dia.today{color:var(--txt)}
+.pz-semana-bola{width:11px;height:11px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;background:#fff;border:1.5px solid #c6d2dd;color:var(--txt);margin-top:6px}
+.pz-semana-dia.done .pz-semana-bola{width:18px;height:18px;background:var(--cel);border-color:transparent;color:#fff;font-size:10px;margin-top:2.5px}
+.pz-semana-dia.today .pz-semana-bola{width:20px;height:20px;background:var(--yl);border-color:transparent;font-size:15px;margin-top:1.5px;box-shadow:0 0 0 5px rgba(254,193,77,.25)}
 .pz-semana-insight{display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.75);border-radius:18px;padding:14px 16px;margin-bottom:14px;font-size:14px;line-height:1.5;font-weight:700;color:var(--txt);box-shadow:0 6px 18px rgba(10,30,51,.10)}
 .pz-semana-insight svg{flex:0 0 20px;width:20px;height:20px;color:var(--cel);margin-top:1px}
 .pz-semana-insight p{margin:0}
