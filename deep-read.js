@@ -480,7 +480,7 @@ async function classifyDigestPhotos({ photos, items, apiKey, userId, fetchImpl, 
   const sent = sentPhotos.length;
   if (!sent) return {};
   const content = [
-    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). La lista de productos/servicios del negocio es:\n${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}\nPara CADA foto decidí qué producto/servicio de la lista se ve (el NOMBRE EXACTO de la lista) o "" si no se ve ninguno con seguridad. Respondé SOLO este JSON: {"results":[{"i":0,"item":"nombre exacto o vacío","confianza":0.0}]}` },
+    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). La lista de productos/servicios del negocio es:\n${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}\nPara CADA foto decidí qué producto/servicio de la lista se ve (el NOMBRE EXACTO de la lista) o "" si no se ve ninguno con seguridad. Además decime si en la foto se ve LA MARCA del negocio (su logo, su packaging con marca, su letrero, su local con marca): true solo si la marca se ve de verdad, false si no. Respondé SOLO este JSON: {"results":[{"i":0,"item":"nombre exacto o vacío","confianza":0.0,"marca":true}]}` },
     ...imageParts,
   ];
   let data;
@@ -517,7 +517,10 @@ async function classifyDigestPhotos({ photos, items, apiKey, userId, fetchImpl, 
       || names.find((n) => clientDigest.sameItemName(n, itemName));
     if (!match) continue;
     const photo = sentPhotos[idx];
-    if (photo) out[photo.key] = { item: match, confianza: Math.round(Math.min(1, conf) * 100) / 100 };
+    // (v907) La marca DENTRO de la escena: la visión también dice si el
+    // logo/packaging/letrero se ve en la foto. Solo viaja cuando es
+    // true (el mapa sigue siendo {item, confianza} cuando no se ve).
+    if (photo) out[photo.key] = { item: match, confianza: Math.round(Math.min(1, conf) * 100) / 100, ...(res.marca === true ? { marca: true } : {}) };
   }
   return out;
 }

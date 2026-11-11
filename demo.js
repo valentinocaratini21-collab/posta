@@ -479,7 +479,13 @@ function pickWebPhoto(topic, webPool, used, ctx) {
   // (og:image del negocio, temas ['marca']): su propia imagen siempre
   // puede ilustrar sus posteos; cualquier otra foto sin match exacto
   // no se usa — el slot sale como póster de marca, nunca stock.
+  // (v907) LA MARCA DENTRO DE LA FOTO: para el primer posteo wow, el
+  // rango 0 es la foto del producto estrella CON la marca visible en
+  // la escena (vaso con logo, bolsas, local) — la foto de referencia
+  // de Philz (mano con el vaso marrón frente a las bolsas). Solo el
+  // wow usa este rango; el resto de la semana no cambia.
   const tiers = [
+    (w) => !!(topic && topic._wow && productHit(w) && w.marca_visible),
     (w) => productHit(w),
     (w) => !!(topic && topic.tema && w.temas.includes(topic.tema)),
     (ctx && ctx.trialNoStock)
@@ -489,11 +495,12 @@ function pickWebPhoto(topic, webPool, used, ctx) {
   for (let ti = 0; ti < tiers.length; ti++) {
     const hit = webPool.find((w) => {
       if (used.has(w.path)) return false;
-      // El rango 0 puede rescatar una foto cuyos tags de alt/archivo no
-      // alcanzan el mundo (la visión la identificó como EL producto) —
+      // El rescate es del PRODUCTO (la visión lo identificó como EL
+      // producto), no del índice del rango: una foto del producto
+      // cuyos tags no alcanzan el mundo se rescata en cualquier rango —
       // pero NUNCA una con un tema prohibido para este público.
       const gateOk = temasPassGate(w.temas, ctx)
-        || (ti === 0 && productHit(w) && !(w.temas || []).some((x) => ctx.forb.has(x)));
+        || (productHit(w) && !(w.temas || []).some((x) => ctx.forb.has(x)));
       return gateOk && tiers[ti](w);
     });
     if (hit) return hit;
@@ -1362,6 +1369,9 @@ function applyVoiceToTopics(topics, markers) {
     for (let i = 0; i < list.length; i++) {
       const t = list[i];
       if (!t) continue;
+      // (v907) El gancho del primer posteo wow no se toca: la línea de
+      // voz no reescribe su titular (el gancho ES el wow).
+      if (t._wow) continue;
       const hay = norm(`${t.digest_anchor || ''} ${t.headline || ''} ${t.caption || ''}`).split(' ');
       if (!words.some((w) => hay.some((h) => wordMatch(w, h)))) continue;
       const out = list.slice();
@@ -1462,6 +1472,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     for (const w of webPool) {
       const prod = w.url ? clientDigest.photoProductFor(digest, w.url) : null;
       if (prod) w.producto = prod;
+      // (v907) La marca DENTRO de la escena: la foto queda anotada si la
+      // visión vio el logo/packaging/letrero en ella.
+      if (w.url && clientDigest.photoBrandVisible(digest, w.url)) w.marca_visible = true;
     }
   }
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
@@ -1549,6 +1562,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (ISx && ISx.offerProfileFromDigest) demoOfferProfile = ISx.offerProfileFromDigest(digest);
   } catch (e) { /* sin perfiles: comportamiento histórico */ }
   let styleObjs, photos;
+  let wowFirst = null; // (v907) El tema wow del primer posteo de la prueba; lo pone la rama sin foto (trial) y lo lee la dosificación de texto.
   const photoProductOf = new Map(); // (v230) idx → producto, cuando la foto elegida vino del mapa foto→producto
   const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
     && base.styles.every((c) => { const IS = imageStyles(); return IS && IS.getStyle(c); });
@@ -1627,6 +1641,26 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
           }
         }
       } catch (e) { /* el chequeo nunca frena la prueba */ }
+    }
+    // (LOTE PRIMER-POSTEO-ESPECTACULAR · v907) El primer posteo de la
+    // PRUEBA es el wow: la estrella real del fundamento con gancho,
+    // nunca una plantilla genérica del catálogo. Solo en la semana de
+    // prueba (trialNoStock): el slot 0 se reemplaza por el tema wow de
+    // deriveFirstPostWow; si el día 2 repetía la misma estrella, se
+    // canjea por el siguiente tema del digest sin usar (la rotación
+    // día 1 → día 2 se mantiene). El resto de la semana no se toca.
+    wowFirst = null;
+    if (trialNoStock && digest) {
+      try { wowFirst = clientDigest.deriveFirstPostWow(digest, { category: cat, lang }); } catch (e) { wowFirst = null; }
+      if (wowFirst && topics.length) {
+        topics[0] = wowFirst;
+        if (topics.length > 1 && topics[1] && topicProductKey(topics[1]) && topicProductKey(topics[1]) === topicProductKey(wowFirst)) {
+          const inUseWow = new Set(topics.map((t) => topicProductKey(t)).filter(Boolean));
+          const replWow = (digestTopics || []).find((dt) => dt && topicProductKey(dt) && !inUseWow.has(topicProductKey(dt)))
+            || allTopics.find((t) => t && topicProductKey(t) && !inUseWow.has(topicProductKey(t)));
+          if (replWow) topics[1] = replWow;
+        }
+      }
     }
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
     // (La variedad de esqueletos la garantiza enforceSkeletonVariety más
@@ -1804,6 +1838,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       headline,
       subline,
       cta: t.cta,
+      // (v907) Prompt de imagen del primer posteo wow: estrella por
+      // nombre + ritual + negativos (lo que la marca no vende). Viaja en
+      // el spec y lo consume la ruta de imagen; trialPostPrompt lo
+      // muestra en el detalle.
+      image_prompt: t.image_prompt || undefined,
     };
   });
   // (v209) DOSIFICACIÓN DE TEXTO: exactamente 2 piezas de la semana
@@ -1839,6 +1878,22 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       });
       if (worst >= 0 && textModes.filter((m) => m === 'text').length > draftTextN) textModes[worst] = 'clean';
     }
+  }
+  // (v907) El wow del día 1 SE VE: si no es póster (el póster ya tiene
+  // texto) y no quedó con texto, entra en la dosificación y sale la
+  // pieza con texto de menor prioridad — el total sigue siendo el mismo
+  // (la dosificación no crece). Con estilo 'limpia' (0 textos) no se
+  // fuerza: la elección del visitante manda.
+  if (wowFirst && specPosts[0] && !specPosts[0].poster && draftTextN > 0 && textModes[0] !== 'text') {
+    textModes[0] = 'text';
+    let worstWow = -1; let worstWowRank = -1;
+    textModes.forEach((m, j) => {
+      if (m === 'text' && j !== 0 && !posterAt.has(j)) {
+        const r = captions.TEXT_KIND_RANK[topics[j] && topics[j].kind] != null ? captions.TEXT_KIND_RANK[topics[j].kind] : 5;
+        if (r >= worstWowRank) { worstWowRank = r; worstWow = j; }
+      }
+    });
+    if (worstWow >= 0 && textModes.filter((m) => m === 'text').length > draftTextN) textModes[worstWow] = 'clean';
   }
   specPosts.forEach((sp, i) => { sp.text_mode = textModes[i] || 'text'; });
   // (DRAFT-ONBOARDING · 4/11) La campeona de texto marca la pieza

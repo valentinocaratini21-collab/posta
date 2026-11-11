@@ -31195,6 +31195,10 @@ function trialPostPrompt(o) {
   const det = [];
   det.push(T('Estilo: ', 'Style: ') + (sp.style_name || sp.style || '—'));
   det.push(T('Foto: ', 'Photo: ') + (sp.photo_product || (sp.photo ? T('foto real del producto', 'real product photo') : T('sin foto real', 'no real photo'))));
+  // (v907) El prompt de imagen del primer posteo wow (estrella por
+  // nombre + ritual + negativos) se ve en el detalle, como el resto de
+  // las líneas: es el prompt que la generación consume.
+  if (sp.image_prompt) det.push(T('Imagen: ', 'Image: ') + sp.image_prompt);
   det.push(T('Paleta: ', 'Palette: ') + (names.length ? names.join(', ') : T('no observada', 'not observed')));
   det.push(T('Tono: ', 'Tone: ') + (o && o.tone ? o.tone : T('no observado', 'not observed')));
   det.push(T('Motor: ', 'Engine: ') + (post.ai ? (post.engine || 'IA') : T('plantilla', 'template')));
@@ -35252,7 +35256,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v904';
+const BUILD_ID = '20261105-v907';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

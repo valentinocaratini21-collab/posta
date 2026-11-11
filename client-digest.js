@@ -1276,7 +1276,9 @@ function sanitizePhotoEntries(obj) {
     const item = String(v.item || v.nombre || '').replace(/\s+/g, ' ').trim();
     if (item.length < 3) continue;
     const conf = Number(v.confianza != null ? v.confianza : v.confidence);
-    out[String(k).slice(0, 300)] = { item: item.slice(0, 90), confianza: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.8 };
+    // (v907) La marca DENTRO de la escena: si la visión vio el logo /
+    // packaging / letrero en la foto, el dato viaja con la entrada.
+    out[String(k).slice(0, 300)] = { item: item.slice(0, 90), confianza: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.8, ...(v.marca === true ? { marca: true } : {}) };
     if (Object.keys(out).length >= 200) break;
   }
   return out;
@@ -1285,6 +1287,14 @@ function photoProductFor(digest, key) {
   if (!digest || !digest.photo_map || !digest.photo_map.entries || !key) return null;
   const e = digest.photo_map.entries[String(key)];
   return e && e.item ? e.item : null;
+}
+// (v907) ¿La foto muestra LA MARCA del negocio dentro de la escena
+// (logo, packaging con marca, letrero)? Lo dice la visión al clasificar
+// la foto (classifyDigestPhotos → photo_map.entries[].marca).
+function photoBrandVisible(digest, key) {
+  if (!digest || !digest.photo_map || !digest.photo_map.entries || !key) return false;
+  const e = digest.photo_map.entries[String(key)];
+  return !!(e && e.marca === true);
 }
 
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
@@ -1912,6 +1922,203 @@ function deriveTopics(digest, opts) {
   return topics.slice(0, count);
 }
 
+// ---------- (LOTE PRIMER-POSTEO-ESPECTACULAR · v907) EL PRIMER POSTEO
+// DE LA PRUEBA ES EL WOW ----------
+// El primer posteo de la semana de prueba se arma con la identidad REAL
+// de la marca — su producto estrella POR NOMBRE, sus rituales propios,
+// su forma de hacer las cosas — sacado de su IG/web (el fundamento). Si
+// el prompt no nombra el producto estrella real, el posteo sale
+// genérico (caso Philz 595: «Nuevo blend de la casa», plantilla del
+// catálogo que podría ser de cualquier cafetería).
+// Y NUNCA muestra lo que la marca NO vende: los negativos salen de SUS
+// propias palabras (diferencial, bio, temas del feed, onboarding) —
+// patrones de negación, nunca una lista fija. Sin evidencia de un
+// negativo, no se afirma ninguno (honestidad antes que bloqueo).
+function firstSentence(s, max) {
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  const m = t.match(/^[^.;!?\n]+[.;!?\n]?/);
+  const one = (m ? m[0] : t).trim();
+  const lim = max || 140;
+  return one.length > lim ? one.slice(0, lim).trimEnd() + '…' : one;
+}
+// Quita las cláusulas de negación de una frase (la negación vive en los
+// negativos, no en el caption ni en el ritual): «Pour-over taza a taza,
+// sin espresso, sin lattes.» → «Pour-over taza a taza.»
+function stripNegativeClauses(s) {
+  let out = String(s || '');
+  out = out.replace(/,?\s*\bsin\s+[^,.;]+/gi, '');
+  out = out.replace(/,?\s*\bno\s+(?:hacemos|tenemos|vendemos|servimos|usamos|hay)\s+[^,.;]+/gi, '');
+  out = out.replace(/,?\s*\bnada\s+de\s+[^,.;]+/gi, '');
+  out = out.replace(/,?\s*\bwithout\s+[^,.;]+/gi, '');
+  out = out.replace(/,?\s*\bwe\s+don'?t\s+(?:serve|sell|do|make|use|offer)\s+[^,.;]+/gi, '');
+  out = out.replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1').replace(/^[,\s]+/, '').replace(/,$/, '').trim();
+  if (out && !/[.;!]$/.test(out)) out += '.';
+  return out;
+}
+const WOW_NEG_LEAD_STOP = new Set(['de', 'con', 'y', 'ni', 'o', 'para', 'en', 'al', 'la', 'el', 'los', 'las', 'un', 'una', 'nada', 'the', 'a', 'an', 'and', 'or', 'with', 'of', 'any']);
+const WOW_NEG_DROP = new Set(['nada', 'eso', 'esto', 'mas', 'mucho', 'tanto', 'siempre', 'nunca', 'ya', 'todavia', 'anything', 'everything', 'it', 'that', 'this']);
+function brandNegatives(digest) {
+  const texts = [];
+  try {
+    if (digest) {
+      if (digest.diferencial) texts.push(String(digest.diferencial));
+      if (digest.onboarding && digest.onboarding.diferencial) texts.push(String(digest.onboarding.diferencial));
+      if (digest.bio) texts.push(String(digest.bio));
+      if (digest.descripcion) texts.push(String(digest.descripcion));
+      if (Array.isArray(digest.temas_feed)) texts.push(digest.temas_feed.map((x) => String(x || '')).join('. '));
+    }
+  } catch (e) { /* sin texto no hay negativos */ }
+  const hay = texts.join(' | ');
+  if (!hay.trim()) return [];
+  // Patrones de negación (gramática, no productos): el PRODUCTO lo pone
+  // la marca con sus palabras. Se prueban los dos idiomas: el texto del
+  // fundamento puede venir en cualquiera, no lo decide el idioma de la
+  // prueba.
+  const WORD_ES = '[a-záéíóúñü]+';
+  const WORD_EN = '[a-z]+';
+  const pats = [
+    new RegExp('\\bsin\\s+(' + WORD_ES + '(?:\\s+' + WORD_ES + '){0,2})', 'gi'),
+    new RegExp('\\bno\\s+(?:hacemos|tenemos|vendemos|servimos|usamos|hay)\\s+(' + WORD_ES + '(?:\\s+' + WORD_ES + '){0,2})', 'gi'),
+    new RegExp('\\bnada\\s+de\\s+(' + WORD_ES + '(?:\\s+' + WORD_ES + '){0,2})', 'gi'),
+    new RegExp('\\bnunca\\s+(' + WORD_ES + '(?:\\s+' + WORD_ES + '){0,2})', 'gi'),
+    new RegExp('\\bwithout\\s+(' + WORD_EN + '(?:\\s+' + WORD_EN + '){0,2})', 'gi'),
+    new RegExp('\\bwe\\s+don\'?t\\s+(?:serve|sell|do|make|use|offer)\\s+(' + WORD_EN + '(?:\\s+' + WORD_EN + '){0,2})', 'gi'),
+    new RegExp('\\bnever\\s+(' + WORD_EN + '(?:\\s+' + WORD_EN + '){0,2})', 'gi'),
+  ];
+  const base = [];
+  const seen = new Set();
+  for (const re of pats) {
+    let m;
+    while ((m = re.exec(hay)) !== null) {
+      let words = String(m[1] || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(Boolean);
+      while (words.length && WOW_NEG_LEAD_STOP.has(words[0])) words.shift();
+      while (words.length && WOW_NEG_LEAD_STOP.has(words[words.length - 1])) words.pop();
+      if (!words.length) continue;
+      const term = words.join(' ');
+      if (term.length < 3 || WOW_NEG_DROP.has(term) || seen.has(term)) continue;
+      seen.add(term);
+      base.push(term);
+      if (base.length >= 3) break;
+    }
+    if (base.length >= 3) break;
+  }
+  if (!base.length) return [];
+  // Implicaciones visuales: sin latte → tampoco latte art; sin espresso
+  // → tampoco latte art (el latte art se hace con espresso). El
+  // «bebidas con espresso» se agrega en el idioma del prompt, en
+  // deriveFirstPostWow (acá el término es universal: «latte art»).
+  const out = base.slice();
+  const hasLatte = base.some((t) => /latte/.test(t));
+  const hasEspresso = base.some((t) => /espresso/.test(t));
+  const hasMilk = base.some((t) => /leche|milk|lacteo|dairy/.test(t));
+  if ((hasLatte || hasEspresso || hasMilk) && !seen.has('latte art')) { out.push('latte art'); seen.add('latte art'); }
+  return out.slice(0, 4);
+}
+function deriveFirstPostWow(digest, opts) {
+  const o = opts || {};
+  const en = o.lang === 'en';
+  const category = o.category || (digest && digest.category) || 'otro';
+  const business = String((digest && digest.business) || '').trim();
+  if (!digest || !hasFoundation(digest)) return null;
+  // Pre-lanzamiento: presentación, no venta — sin wow.
+  let etapaNow = (digest.etapa === 'pre-lanzamiento') ? digest.etapa : '';
+  if (!etapaNow) { try { const et = detectEtapa(digest); if (et && et.etapa) etapaNow = et.etapa; } catch (e) {} }
+  if (etapaNow === 'pre-lanzamiento') return null;
+  const name = (x) => String((x && (x.nombre || x)) || '').trim();
+  let items = [...(digest.productos || []), ...(digest.servicios || [])].filter((x) => x && (x.nombre || x));
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)));
+  const oosNames = tnOutOfStockNames(digest);
+  if (oosNames.length) items = items.filter((x) => !tnNameMatch(name(x), oosNames));
+  if (!items.length) return null;
+  // La estrella: la misma prioridad que effectiveStarOf (dueño → ventas
+  // reales → inferida ≥0,5); si el dueño dijo qué más vende y no hay
+  // inferida, eso manda (espejo de deriveTopics); si nada de eso, el
+  // ítem real N.º 1 de la lista. La estrella tiene que estar en la
+  // lista (ancla con foto): si el nombre no calza con ningún ítem, el
+  // N.º 1 — nunca un nombre sin evidencia detrás.
+  let starItem = null;
+  try {
+    const eff = effectiveStarOf(digest);
+    if (eff && eff.item) {
+      const si = items.findIndex((x) => sameItemName(name(x), eff.item));
+      if (si >= 0) starItem = items[si];
+    }
+  } catch (e) {}
+  if (!starItem && digest.dueno && digest.dueno.mas_vendido && !digest.inferred_star) {
+    const si = items.findIndex((x) => sameItemName(name(x), digest.dueno.mas_vendido));
+    if (si >= 0) starItem = items[si];
+  }
+  if (!starItem) starItem = items[0];
+  const A = name(starItem);
+  if (A.length < 3) return null;
+  const precio = String(starItem.precio || '').trim();
+  // Familia de servicios (espejo del set de deriveTopics): cambia el
+  // verbo del gancho y el CTA, no la estrella.
+  const SERVICE_FAMILY_CATS = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
+  const serviceFamily = SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''));
+  // Ritual propio: la primera frase del diferencial (sus palabras), sin
+  // las cláusulas de negación (el «sin espresso» vive en los negativos,
+  // no en el caption ni en el ritual).
+  const difRaw = String(digest.diferencial || (digest.onboarding && digest.onboarding.diferencial) || '').trim();
+  const ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  const words = (s) => String(s || '').split(/\s+/).filter(Boolean).length;
+  // Gancho (≤6 palabras, nombre de la estrella INTACTO). Sin artículo:
+  // el género del producto no se conoce y «El Limpieza…» rompería.
+  let headline;
+  const nA = words(A);
+  if (en) {
+    if (nA <= 2) headline = `${A} everyone's asking for`;
+    else if (nA <= 4) headline = serviceFamily ? `Book ${A} today` : `Try ${A} today`;
+    else headline = capWords(A, 6);
+  } else {
+    if (nA <= 2) headline = `${A} que todos piden`;
+    else if (nA <= 4) headline = serviceFamily ? `${A}, reservá hoy` : `${A}, probalo hoy`;
+    else headline = capWords(A, 6);
+  }
+  headline = capWords(headline, 6);
+  // Caption en voz humana, 3 bloques: estrella / detalle concreto /
+  // CTA. El detalle es ritual + precio (lo que haya); sin ninguno, la
+  // línea honesta del favorito de la casa (la estrella lo es por
+  // definición: la más vendida o la inferida).
+  const priceLine = precio ? (en ? `Yours for ${precio}, just like you see it.` : `Lo tenés a ${precio}, como lo ves.`) : '';
+  let detail = [ritual, priceLine].filter(Boolean).join(' ');
+  if (!detail) detail = en ? 'The house favorite, ready for you.' : 'El favorito de la casa, listo para vos.';
+  const ctaLine = serviceFamily
+    ? (en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`)
+    : (en ? `Order yours today by DM 📩` : `Pedilo hoy por DM 📩`);
+  const caption = `${A} ✨\n\n${detail}\n\n${ctaLine}`;
+  const subline = precio ? (en ? `${precio}, just like you see it` : `A ${precio}, como lo ves`) : '';
+  const cta = serviceFamily ? (en ? 'Tell me more' : 'Quiero saber más') : (en ? 'I want mine' : 'Quiero el mío');
+  // Negativos por marca + prompt de imagen: el nombre de la estrella,
+  // el ritual y la prohibición explícita de lo que no vende.
+  let negativos = brandNegatives(digest);
+  if (negativos.some((t) => /espresso/.test(t))) negativos.push(en ? 'espresso-based drinks' : 'bebidas con espresso');
+  negativos = [...new Set(negativos)].slice(0, 4);
+  const biz = business || (en ? 'the house' : 'la casa');
+  const ritualTxt = ritual || (en ? 'made our way' : 'hecho a nuestra manera');
+  let imagePrompt = en
+    ? `Hero photo of ${A} from ${biz}: ${ritualTxt} Real photo from the client, close-up of the product with the brand inside the scene (their cup with their logo, their bags, their store or packaging), natural light, no text over the product. Never as a designed band or applied logo.`
+    : `Foto hero de ${A} de ${biz}: ${ritualTxt} Foto real del cliente, primer plano del producto con la marca dentro de la escena (su vaso con su logo, sus bolsas, su local o su packaging), luz natural, sin texto sobre el producto. Nunca como banda diseñada ni logo aplicado.`;
+  if (negativos.length) imagePrompt += en ? ` DO NOT show: ${negativos.join(', ')}.` : ` NO mostrar: ${negativos.join(', ')}.`;
+  let sales = {};
+  try {
+    const sb = require('./sales-brain');
+    if (sb) sales = sb.trialTopicSales({ kind: 'novedad', digest_anchor: A }, digest, o.lang) || {};
+  } catch (e) { sales = {}; }
+  return {
+    kind: 'novedad',
+    tag: en ? 'NEW' : 'NUEVO',
+    tema: temaForText(A, category, (digest && digest.subcat) || ''),
+    headline, subline, cta, caption,
+    image_prompt: imagePrompt,
+    negativos,
+    _digest: 1, digest_anchor: A,
+    intent: sales.intent || '', angle: sales.angle || '', proof: sales.proof || '',
+    _star: 1, _wow: 1,
+  };
+}
+
 // ---------- persistencia ----------
 function ensureTable(db) {
   try {
@@ -2036,7 +2243,7 @@ module.exports = {
   // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Las líneas rojas son veto, nunca tema.
   isVetoLabelText, isVetoText, vetoTermsFromOnboarding, stripVetoLines, dropVetoTopics,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
-  deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
+  deriveTopics, deriveFirstPostWow, brandNegatives, ensureTable, saveDigest, getStoredDigest, getDigest,
   // (v348) Etapa pre-lanzamiento + remediación admin del fundamento
   detectEtapa, deleteDigest,
   dnaFragmentFromDigest,
@@ -2046,7 +2253,7 @@ module.exports = {
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
   parsePriceNum, sameItemName, detectContradictions, inferStar,
-  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor,
+  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
   questionCandidatesOf, applyDeepBlocks,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
   rubroId,
