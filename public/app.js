@@ -981,6 +981,7 @@ function bbShell(tab, content) {
     oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     impulsar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
+    ads: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
     estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg>',
     feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>',
@@ -996,7 +997,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -1565,6 +1566,7 @@ function mxPoderesBB() {
 function mxTabKey(tab) {
   if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
   if (tab === 'inicio') return 'inicio';
+  if (tab === 'ads') return 'ads';
   if (tab === 'schedule' || tab === 'post') return 'semana';
   return '';
 }
@@ -9167,7 +9169,7 @@ async function trialRebuildWeek() {
 // no devuelve promedio.
 async function pzBoostRecPintar() {
   // (CHAT-SIMPLIFICADO v5 · 10/11) La tarjeta Impulsar sale del Chat:
-  // vive solo en Inicio (pzHoyImpulsarHTML). Retirado acá; la función
+  // vive solo en el tab Ads (LOTE TAB-ADS · 11/11: salió de Inicio). Retirado acá; la función
   // y su llamada se conservan para no romper el cableado ni la auditoría.
   return;
   try {
@@ -16633,19 +16635,179 @@ async function enhanceAdsBoost() {
 // nunca números inventados. Sin el chunk 'analisis' no hay tab (la carta
 // amable de chunkFailHTML). La vuelta de MercadoPago de un topup viejo
 // sigue atendiéndose en bindAds (handlePendingBoost), sin tocarla.
+// ---------- LOTE TAB-ADS · 11/11 ----------
+// El tab Ads (pantalla propia): billetera + posteo recomendado con
+// montos de UN TOQUE + regla de crédito + «Tus impulsos» (historial
+// real de /api/ads/boosts). Reutiliza el riel v885 (pzBoostLoad,
+// pzBoostMontos, pzBoostPuede, pzBoostConfirmar) y la hoja v880 como
+// fallback cuando no se puede impulsar (saldo, gate o moneda). Las
+// reglas v888 (tasa 1425, crédito si el anuncio no se crea, cobro en
+// dólares) no se tocan: este lote solo mueve la superficie a su tab.
+let pzAdsBoosts = [];
+let pzAdsPickDesdeAds = false;
+
 async function adsView() {
-  let __okAn = true;
-  try { await loadChunk('analisis'); } catch (e) { __okAn = false; }
-  if (!__okAn) return chunkFailHTML();
-  let datos = null;
-  try { datos = await anaBilleteraTabDatos(); } catch (e) { datos = null; }
-  // (LOTE ADS-DIRECTO v758) La vista entera la renderiza el chunk
-  // (anaAdsTabHTML: principal o grilla del feed); la recomendación del
-  // mejor posteo vive en Impulsar como una línea (LOTE A, sin carta).
-  const tabHTML = datos
-    ? anaAdsTabHTML()
-    : `<p class="ana-note">${anaT('No pudimos cargar tu billetera ahora. Probá de nuevo.', 'We could not load your wallet right now. Try again.')}</p>`;
-  return `<div class="ads-wrap"><div id="adsTabRoot">${tabHTML}</div></div>`;
+  // (LOTE TAB-ADS · 11/11 · decisión Valentino «quiero que agreguemos el
+  // tab de ads en la app»: el tab Ads es pantalla propia — billetera +
+  // posteo recomendado con montos de un toque + regla de crédito +
+  // historial real. La vista vieja del chunk analisis (anaAdsTabHTML)
+  // queda sin llamadores: la billetera y el impulso viven en pzBoost*.
+  // Sin chunk: la pantalla se rinde directo, sin esperar una descarga.)
+  let s = null;
+  try { s = await pzBoostLoad(); } catch (e) { s = null; }
+  let boosts = null;
+  try { boosts = await api.get('/api/ads/boosts'); } catch (e) { boosts = null; }
+  pzAdsBoosts = (boosts && boosts.ok && Array.isArray(boosts.boosts)) ? boosts.boosts : [];
+  return `<div class="pz-ads"><div id="pzAdsRoot">${pzAdsHTML()}</div></div>`;
+}
+
+function pzAdsMontosCarga() {
+  const b = (pzBoostState && pzBoostState.billetera) || {};
+  if (pzBoostEsMP() && Array.isArray(b.montos_ars) && b.montos_ars.length) return b.montos_ars;
+  if (pzBoostEsMP()) return [10000, 20000, 50000];
+  return [20, 50, 100];
+}
+
+function pzAdsHistorialHTML(boosts) {
+  const list = Array.isArray(boosts) ? boosts : [];
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (!list.length) return `<p class="pz-ads-note">${esc(en ? "You haven't boosted any post yet. When you do, it shows here with its real numbers." : 'Todavía no impulsaste ningún posteo. Cuando lo hagas, aparece acá con sus números reales.')}</p>`;
+  const loc = en ? 'en-US' : 'es-AR';
+  const fechaCorta = (ts) => { try { return new Date(String(ts).replace(' ', 'T')).toLocaleDateString(loc, { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
+  const hasta = (b) => {
+    try {
+      const ini = new Date(String(b.created_at).replace(' ', 'T'));
+      const fin = new Date(ini.getTime() + (Number(b.duration_days) || 7) * 86400000);
+      return fin.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
+    } catch (e) { return ''; }
+  };
+  const chip = (bg, fg, txt) => `<span style="display:inline-block;padding:2px 8px;background:${bg};color:${fg};border-radius:999px;font-size:12px;font-weight:800">${esc(txt)}</span>`;
+  const estadoTxt = (b) => {
+    if (b.status === 'active') return chip('#E6F7EE', '#1FA855', en ? 'Active' : 'Activo');
+    if (b.status === 'pending') return chip('#FFF3D6', '#8A6D00', en ? 'Pending' : 'Pendiente');
+    if (b.status === 'finished') return chip('#EDF1F5', '#47617A', en ? 'Finished' : 'Terminado');
+    if (b.status === 'error') return chip('#FDECEC', '#B3261E', en ? 'Needs review' : 'Revisar');
+    return chip('#EDF1F5', '#47617A', String(b.status || ''));
+  };
+  return list.slice(0, 5).map((b) => {
+    const dias = Number(b.duration_days) || 7;
+    const alcance = Number(b.last_reach || 0);
+    const gastado = Math.floor(Number(b.last_spend_cents || 0) / 100);
+    const montoTxt = '$' + Math.floor(Number(b.budget_cents || 0) / 100).toLocaleString(loc) + ((b.currency && b.currency !== 'USD') ? ' ' + b.currency : '');
+    const det = [(en ? 'Post #' : 'Posteo #') + (b.post_id || '?')];
+    const fIni = fechaCorta(b.created_at); if (fIni) det.push(fIni);
+    const fFin = hasta(b); if (fFin) det.push((en ? 'until ' : 'hasta ') + fFin);
+    if (alcance > 0) det.push((en ? 'Reach ' : 'Alcance ') + alcance.toLocaleString(loc));
+    if (gastado > 0) det.push((en ? 'Spent $' : 'Gastado $') + gastado.toLocaleString(loc));
+    return `<div class="pz-ads-hist-row"><div class="pz-ads-hist-top"><span>${esc(montoTxt)} · ${dias} ${esc(en ? 'days' : 'días')}</span>${estadoTxt(b)}</div><div class="pz-ads-hist-det">${esc(det.join(' · '))}</div></div>`;
+  }).join('') + (list.length > 5 ? `<p class="pz-ads-note">${esc(en ? 'Showing the 5 most recent.' : 'Mostramos los 5 más recientes.')}</p>` : '');
+}
+
+function pzAdsHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = pzBoostState || {};
+  const bil = s.billetera || {};
+  const saldo = pzBoostSaldo();
+  const moneda = (bil.currency || 'USD');
+  const montos = pzBoostMontos();
+  const mMain = montos.length > 1 ? montos[1] : montos[0];
+  const mA = montos[0];
+  const mB = montos.length > 2 ? montos[2] : montos[0];
+  const p = s.selPost || null;
+  const gate = pzBoostGate();
+  const cargas = pzAdsMontosCarga();
+  const saldoTxt = moneda === 'USD'
+    ? (en ? 'Your ads wallet: $' + saldo : 'Tu billetera de ads: $' + saldo)
+    : (en ? 'Your ads wallet: $' + saldo.toLocaleString('en-US') + ' in pesos' : 'Tu billetera de ads: $' + saldo.toLocaleString('es-AR') + ' en pesos');
+  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-top"><b>${esc(en ? 'Wallet' : 'Billetera')}</b><span class="pz-ads-saldo">${esc(saldoTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+  let recHTML = '';
+  if (!p) {
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3"><div class="pz-boost-3d3-title">${esc(en ? 'Boost post' : 'Impulsar posteo')} <span>${esc(en ? 'with Ads' : 'con Ads')}</span></div><p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><button type="button" class="pz-boost-3d3-otro" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button></div></section>`;
+  } else {
+    const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
+    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const nums = pzBoostNumerosComa(p);
+    const linea = (p.recomendado && nums)
+      ? `${esc(en ? 'Your best post this week' : 'El mejor de tu semana')} · <b>${esc(nums)}</b>`
+      : `<b>${esc(nums || (en ? 'Published' : 'Publicado'))}</b>`;
+    const warn = gate.cerrado ? `<p class="pz-boost-warn">${esc(pzBoostMotivo(gate.motivo, mMain))}</p>` : '';
+    const montosHTML = ya
+      ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
+      : `<div class="pz-boost-3d3-montos" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}"><button type="button" class="pz-boost-3d3-main" onclick="pzAdsImpulsar(${mMain}, this)">$${esc(pzBoostFmtMonto(mMain))}<small>${esc(en ? 'RECOMMENDED · 7 DAYS' : 'RECOMENDADO · 7 DÍAS')}</small></button><button type="button" class="pz-boost-3d3-side" onclick="pzAdsImpulsar(${mA}, this)">$${esc(pzBoostFmtMonto(mA))}</button><button type="button" class="pz-boost-3d3-side" onclick="pzAdsImpulsar(${mB}, this)">$${esc(pzBoostFmtMonto(mB))}</button></div>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3"><div class="pz-boost-3d3-title">${esc(en ? 'Boost post' : 'Impulsar posteo')} <span>${esc(en ? 'with Ads' : 'con Ads')}</span></div><div class="pz-boost-3d3-row"><div class="pz-boost-3d3-thumb">${img}</div>${montosHTML}</div><div class="pz-boost-3d3-bottom"><div class="pz-boost-3d3-linea">${linea}</div><button type="button" class="pz-boost-3d3-otro" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button></div>${warn}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
+  }
+  const creditoHTML = `<p class="pz-ads-credito">${esc(en ? 'If the ad is not created, you don’t lose the money: it stays as credit in your wallet.' : 'Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.')}</p>`;
+  const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
+  return `<h1 class="pz-ads-title">Ads</h1>${walletHTML}${recHTML}${creditoHTML}${histHTML}`;
+}
+
+function pzAdsPintar() {
+  const box = document.getElementById('pzAdsRoot');
+  if (!box) return;
+  box.innerHTML = pzAdsHTML();
+}
+
+async function pzAdsRefrescar() {
+  try {
+    const b = await api.get('/api/ads/boosts');
+    if (b && b.ok && Array.isArray(b.boosts)) pzAdsBoosts = b.boosts;
+  } catch (e) {}
+  pzAdsPintar();
+}
+
+// (LOTE TAB-ADS) Un toque en un monto = se envía el ad con ese monto
+// (mismo camino que la hoja v880: pzBoostConfirmar). Si no se puede
+// (saldo, gate o moneda), NO impulsa: se abre la hoja v880 con el
+// aviso y el camino de carga. En éxito la hoja NO se abre: el tab se
+// re-pinta con el posteo como «Impulsado ✓» y el historial nuevo.
+async function pzAdsImpulsar(monto, btn) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
+  if (!pzBoostMontos().includes(m)) return;
+  const p = s.selPost || null;
+  if (!p) return;
+  s.selMonto = m;
+  if (!pzBoostPuede(m)) { pzBoostOpen(p); return; }
+  const j = await pzBoostConfirmar(btn);
+  if (j && j.ok) {
+    try { await pzAdsRefrescar(); } catch (e) {}
+  } else {
+    const msgEl = document.getElementById('pzAdsRecMsg');
+    if (msgEl) msgEl.textContent = pzBoostMotivo((j && j.motivo) || '', m, j && j.cobroId);
+  }
+}
+
+function pzAdsPickOpen() {
+  pzAdsPickDesdeAds = true;
+  pzBoostPickOpen();
+}
+
+async function pzAdsCargar(monto, btn) {
+  const m = Number(monto) || pzBoostMinTopup();
+  const decir = (t) => { const el = document.getElementById('pzAdsMsg'); if (el) el.textContent = t; };
+  if (btn) btn.disabled = true;
+  let j = null;
+  const railMP = pzBoostEsMP();
+  try { j = await api.post('/api/ads/billetera/cargar', railMP ? { montoARS: m } : { montoUSD: m }); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok && j.init_point) {
+    decir(gzT('Te llevamos a Mercado Pago para completar la carga de $' + pzBoostFmtMonto(m) + '.', 'Taking you to Mercado Pago to complete the $' + pzBoostFmtMonto(m) + ' top-up.'));
+    try { window.location.href = j.init_point; } catch (e) {}
+    return;
+  }
+  if (j && j.ok) {
+    const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
+    try { await pzBoostLoad(); } catch (e) {}
+    if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
+    pzAdsPintar();
+    decir(gzT('Listo, cargaste $' + pzBoostFmtMonto(m) + '. Tu billetera tiene $' + pzBoostFmtMonto(nuevoSaldo) + '.', 'Done, you topped up $' + pzBoostFmtMonto(m) + '. Your wallet now has $' + pzBoostFmtMonto(nuevoSaldo) + '.'));
+  } else {
+    decir(pzBoostMotivo((j && j.motivo) || '', m, j && j.cobroId));
+    if (j && (j.motivo === 'sin_cliente_stripe' || j.motivo === 'sin_tarjeta_guardada')) {
+      try { await loadChunk('analisis'); } catch (e) {}
+      try { const msgEl = document.getElementById('pzAdsMsg'); if (msgEl && typeof anaAgregarTarjetaBtn === 'function') anaAgregarTarjetaBtn(msgEl); } catch (e) {}
+    }
+  }
 }
 
 /* ============================================================
@@ -17155,6 +17317,15 @@ function pzBoostPickConfirmar() {
   const s = pzBoostState || {};
   const p = s.selPost || (s.elegibles || []).find((e) => pzBoostKey(e) === s.selId) || null;
   if (!p) return;
+  // (LOTE TAB-ADS) El picker se abrió desde el tab Ads: la elección
+  // cambia la tarjeta del tab (no abre la hoja). La hoja queda para el
+  // toque en un monto que no se puede impulsar.
+  if (pzAdsPickDesdeAds) {
+    pzAdsPickDesdeAds = false;
+    pzBoostCerrar();
+    try { pzAdsPintar(); } catch (e) {}
+    return;
+  }
   pzBoostOpen(p);
 }
 
@@ -17257,7 +17428,7 @@ async function pzBoostConfirmar(btn) {
   const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
   const msgEl = document.getElementById('pzBoostMsg');
   const decir = (t) => { if (msgEl) msgEl.textContent = t; };
-  if (!p || (!p.post_id && !p.ig_media_id)) { decir(pzBoostMotivo('sin_posteo', monto)); return; }
+  if (!p || (!p.post_id && !p.ig_media_id)) { decir(pzBoostMotivo('sin_posteo', monto)); return null; }
   if (btn) btn.disabled = true;
   let j = null;
   // (v846) El reciente sin fila se impulsa por ig_media_id: el servidor
@@ -17285,6 +17456,7 @@ async function pzBoostConfirmar(btn) {
   } else {
     decir(pzBoostMotivo((j && j.motivo) || '', monto, j && j.cobroId));
   }
+  return j;
 }
 
 // Marca «Impulsado ✓» en todos los botones [data-pz-boost-post="<id>"]
@@ -17302,43 +17474,31 @@ function pzBoostMarcarImpulsado(postId) {
 }
 
 function bindAds() {
-  // Si vuelve de MP con pauta pendiente, la atiende Mi semana
+  // (LOTE TAB-ADS · 11/11) El tab Ads ya no es la vista del chunk
+  // analisis: los botones se cablean por onclick en el HTML
+  // (pzAdsCargar, pzAdsImpulsar, pzAdsPickOpen). Acá solo quedan los
+  // retornos externos.
+  // Vuelta de MP con pauta pendiente: la atiende Mi semana.
   try {
     const q = new URLSearchParams((location.hash.split('?')[1] || ''));
     if (q.get('topup') === 'ok' && localStorage.getItem('posta_pending_boost')) {
       location.hash = '#/app/schedule?topup=ok'; return;
     }
   } catch (e) {}
-  // (LOTE AGREGAR-TARJETA) Vuelta de Stripe tras guardar la tarjeta
-  // (?tarjeta=ok): la confirma una sola vez y limpia el parámetro.
-  // La función vive en el chunk analisis (cargado por adsView antes de
-  // pintar el tab); si no está, no se hace nada. Mismo patrón que el
-  // ?topup=ok de arriba: el retorno se atiende en el bind del tab.
-  try { if (typeof anaTarjetaRetorno === 'function') anaTarjetaRetorno(); } catch (e) {}
+  // Vuelta de Stripe tras guardar la tarjeta (?tarjeta=ok): se confirma
+  // una sola vez y se limpia el parámetro. (Antes lo hacía el chunk
+  // analisis — anaTarjetaRetorno —; el tab nuevo no lo carga.)
+  try {
+    const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+    if (q.get('tarjeta') === 'ok') {
+      const m = document.getElementById('pzAdsMsg');
+      if (m) m.textContent = gzT('Tarjeta guardada. Ya podés cargar con un toque.', 'Card saved. You can top up with one tap now.');
+      try { history.replaceState(null, '', location.pathname + '#/app/ads'); } catch (e) {}
+    }
+  } catch (e) {}
   try {
     if (/\?topup=/.test(location.hash)) history.replaceState(null, '', location.pathname + '#/app/ads');
   } catch (e) {}
-  document.querySelectorAll('[data-topup]').forEach(b => b.onclick = async () => {
-    const msg = document.getElementById('adsMsg');
-    b.disabled = true;
-    try {
-      const r = await api.post('/api/ads/topup', { amount_cents: Number(b.dataset.topup), return_to: 'ads' });
-      track('checkout_start', { kind: 'ads_topup' }); trackBeacon();
-      if (r && r.init_point) adsAbrirCheckout(r.init_point); // checkout de MercadoPago (en nativa, en el navegador del sistema)
-      else if (msg) msg.innerHTML = `<div class="err">No se pudo generar el pago</div>`;
-    } catch (e) {
-      if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo generar el pago')}</div>`;
-    }
-    b.disabled = false;
-  });
-  const arc = document.getElementById('adsRecsCard');
-  if (arc) bindAdsRecCards(arc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'ads' });
-  // Empty state "Tus pautas": el CTA lleva a la sección de recomendaciones (misma página).
-  const bgRecs = document.getElementById('adsBoostGoRecs');
-  if (bgRecs) bgRecs.onclick = () => {
-    const sec = document.getElementById('adsRecsSec');
-    if (sec && typeof sec.scrollIntoView === 'function') sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 }
 
 function showStreakCelebration(sk) {
@@ -22601,14 +22761,14 @@ async function inicioView() {
     const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
     // (LOTE TIRA-SEMANA-V4 · v874 · 10/11 · decisión Valentino: la tira
     // sube a primera en Hoy, justo debajo del encabezado fijo — indicador
-    // de semana, no bloque de contenido. El saludo, el posteo de hoy e
-    // Impulsar quedan en su orden, debajo de la tira.)
+    // de semana, no bloque de contenido. El saludo y el posteo de hoy
+    // quedan en su orden, debajo de la tira. LOTE TAB-ADS: Impulsar salió
+    // de Hoy — vive solo en el tab Ads.)
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
       + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
-      + pzHoyImpulsarHTML(mejorHoy, enHome)
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;
   })() : '';

@@ -6078,6 +6078,28 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-boost-3d3-linea{font-size:13px;color:#33475e;line-height:1.35}
 .pz-boost-3d3-linea b{color:#0A1E33}
 .pz-boost-3d3-otro{background:transparent;border:1.5px solid rgba(39,147,200,.55);color:#2793C8;font-size:13px;font-weight:700;border-radius:999px;padding:8px 16px;cursor:pointer;font-family:inherit;white-space:nowrap}
+/* (LOTE TAB-ADS · 11/11) El tab Ads: billetera + recomendado + crédito + historial. La tarjeta del recomendado reutiliza .pz-boost-3d3 (misma pieza que la hoja v880). */
+.pz-ads{max-width:560px;margin:0 auto;padding:6px 14px 90px}
+.pz-ads-title{font-size:22px;font-weight:900;color:#0A1E33;margin:6px 2px 12px}
+.pz-ads-wallet{background:#fff;border:1px solid #EDE4D2;border-radius:18px;padding:14px;box-shadow:0 4px 16px rgba(10,30,51,.08);margin-bottom:14px}
+.pz-ads-wallet-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.pz-ads-wallet-top b{font-size:15px;font-weight:900;color:#0A1E33}
+.pz-ads-saldo{font-size:15px;font-weight:800;color:#0D4E73}
+.pz-ads-cargar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:13px;font-weight:700;color:#47617A}
+.pz-ads-msg{font-size:13px;line-height:1.45;color:#47617A;margin:10px 0 0}
+.pz-ads-msg:empty{display:none}
+.pz-ads-rec{margin-bottom:12px}
+.pz-ads-rec .pz-boost-3d3{margin:0}
+.pz-ads-hecho{flex:1;text-align:center;padding:8px 4px}
+.pz-ads-hecho .pz-boost-tick{width:44px;height:44px;border-radius:50%;background:#E3F5EC;color:#1F9D66;font-size:22px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
+.pz-ads-hecho b{font-size:15px;color:#0A1E33}
+.pz-ads-hecho p{font-size:13px;color:#47617A;line-height:1.45;margin:6px 0 0}
+.pz-ads-credito{font-size:13px;line-height:1.5;color:#47617A;background:#FFF8E1;border:1px solid #F3D27A;border-radius:12px;padding:10px 12px;margin:0 0 16px}
+.pz-ads-hist h2{font-size:16px;font-weight:900;color:#0A1E33;margin:0 2px 8px}
+.pz-ads-note{font-size:13.5px;line-height:1.5;color:#47617A;margin:0 2px 10px}
+.pz-ads-hist-row{padding:10px 2px;border-top:1px solid #EDF1F5}
+.pz-ads-hist-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;font-weight:800;color:#0A1E33}
+.pz-ads-hist-det{font-size:12px;color:#47617A;margin-top:4px}
 
 /* ============ RS-5 · REDISEÑO SIMPLE (mock v10) ============ */
 /* Barra de 3 pestañas: sin CSS nuevo (flex reparte las 3). */
