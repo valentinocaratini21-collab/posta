@@ -1656,24 +1656,47 @@ async function anaAdsCargar(btn) {
 }
 
 // (LOTE AGREGAR-TARJETA) Guardar/cambiar la tarjeta para Ads sin cobrar
-// nada: un toque abre la página alojada por Stripe (Checkout modo
-// setup); al volver a Ads la tarjeta ya está guardada y el siguiente
-// Cargar sale con un toque. Siempre disponible: agregar otra tarjeta
-// la deja como la activa. Sin Stripe.js ni formulario propio en la app.
+// nada. (LOTE AGREGAR-TARJETA-INLINE) El form inline (Stripe Elements) es
+// el camino principal: anaAgregarTarjeta lo abre ahí mismo
+// (pzTarjetaInlineAbrir, en app.js); el checkout alojado (Checkout modo
+// setup) queda como respaldo si Stripe.js o la config no están. Al volver
+// de Stripe (?tarjeta=ok) la tarjeta ya está guardada y el siguiente
+// Cargar sale con un toque.
 function anaTarjetaMsgEl() {
   try { if (typeof anaCargarMsgEl === 'function') { const m = anaCargarMsgEl(); if (m) return m; } } catch (e) {}
   // (v877) En la hoja Impulsar el mensaje es #pzBoostMsg: si el setup de
   // Stripe falla desde ahí, el aviso tiene que verse en la hoja.
-  return document.getElementById('anaBoostRecMsg') || document.getElementById('pzBoostMsg');
+  // (LOTE AGREGAR-TARJETA-INLINE) En el tab Ads el mensaje es #pzAdsMsg:
+  // sin él, el fallo del setup no se veía en ningún lado y el botón
+  // parecía no hacer nada (prueba real 11/11: 5 toques, silencio).
+  return document.getElementById('anaBoostRecMsg') || document.getElementById('pzBoostMsg') || document.getElementById('pzAdsMsg');
 }
-async function anaAgregarTarjeta(btn) {
+async function anaAgregarTarjeta(btn, forzarRedirect) {
+  // Camino principal: el form inline, ahí mismo (sin salir de la app).
+  // Si ya hay un form abierto cerca del botón, no se duplica.
+  if (!forzarRedirect && typeof pzTarjetaInlineAbrir === 'function') {
+    try {
+      if (btn && btn.parentNode && btn.parentNode.querySelector && btn.parentNode.querySelector('.pz-tarjeta-form')) return;
+      const host = document.createElement('div');
+      if (btn && btn.insertAdjacentElement) btn.insertAdjacentElement('afterend', host);
+      else if (btn && btn.parentNode) btn.parentNode.appendChild(host);
+      await pzTarjetaInlineAbrir(host);
+      return;
+    } catch (e) { /* cae al redirect alojado */ }
+  }
   if (btn) btn.disabled = true;
   let j = null;
   try { j = await api.post('/api/billing/stripe/setup', {}); } catch (e) { j = (e && e.data) || null; }
   if (j && j.url) { location.href = j.url; return; }
   if (btn) btn.disabled = false;
   const m = anaTarjetaMsgEl();
-  if (m) m.textContent = anaT('No se pudo abrir el pago seguro. Probá de nuevo en un momento.', "The secure payment page couldn't be opened. Try again in a moment.");
+  if (m) {
+    const motivo = (j && j.motivo) || 'setup_fallido';
+    const txt = (typeof pzTarjetaMotivo === 'function')
+      ? pzTarjetaMotivo(motivo)
+      : anaT('No se pudo abrir el pago seguro. Probá de nuevo en un momento.', "The secure payment page couldn't be opened. Try again in a moment.");
+    m.textContent = txt;
+  }
 }
 // Botón «Agregar tarjeta» / «Cambiar tarjeta» de la billetera: si ya hay
 // una guardada se muestra cuál es (•••• últimos 4) y el botón es para

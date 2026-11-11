@@ -6090,6 +6090,25 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-ads-cargar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:13px;font-weight:700;color:#47617A}
 .pz-ads-msg{font-size:13px;line-height:1.45;color:#47617A;margin:10px 0 0}
 .pz-ads-msg:empty{display:none}
+/* (LOTE AGREGAR-TARJETA-INLINE) Formulario de tarjeta inline en la billetera de Ads */
+.pz-ads-tarjeta{margin-top:10px}
+.pz-ads-tarjeta-btn{width:100%;padding:11px;border:2px solid #DCEFFF;border-radius:12px;background:#fff;font-size:14px;font-weight:800;color:#2793C8;cursor:pointer}
+.pz-tarjeta-form{margin-top:10px;border:1px solid #DCEFFF;border-radius:14px;padding:12px;background:#fff}
+.pz-tarjeta-titulo{font-size:14px;font-weight:900;color:#0A1E33;margin-bottom:10px}
+.pz-tarjeta-campo{margin-bottom:10px}
+.pz-tarjeta-campo label{display:block;font-size:12px;font-weight:800;color:#47617A;margin-bottom:4px}
+.pz-tarjeta-input{border:1px solid #DCEFFF;border-radius:10px;padding:11px 10px;background:#fff;min-height:44px;box-sizing:border-box}
+.pz-tarjeta-input.StripeElement--focus{border-color:#2793C8;box-shadow:0 0 0 3px rgba(39,147,200,.15)}
+.pz-tarjeta-input.StripeElement--invalid{border-color:#B3261E}
+.pz-tarjeta-nombre{width:100%;border:1px solid #DCEFFF;border-radius:10px;padding:11px 10px;font-size:16px;color:#0A1E33;box-sizing:border-box;background:#fff}
+.pz-tarjeta-nombre:focus{outline:none;border-color:#2793C8;box-shadow:0 0 0 3px rgba(39,147,200,.15)}
+.pz-tarjeta-fila{display:flex;gap:10px}
+.pz-tarjeta-fila .pz-tarjeta-campo{flex:1;min-width:0}
+.pz-tarjeta-msg{font-size:13px;line-height:1.45;color:#47617A;margin:8px 0 0}
+.pz-tarjeta-msg:empty{display:none}
+.pz-tarjeta-msg--error{color:#B3261E}
+.pz-tarjeta-acciones{display:flex;gap:8px;margin-top:10px}
+.pz-tarjeta-seguro{font-size:12px;line-height:1.45;color:#8AA0B5;margin:10px 0 0}
 .pz-ads-rec{margin-bottom:12px}
 .pz-ads-rec .pz-boost-3d3{margin:0}
 .pz-ads-hecho{flex:1;text-align:center;padding:8px 4px}

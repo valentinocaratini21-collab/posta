@@ -16895,7 +16895,15 @@ function pzAdsHTML() {
   const amtTxt = moneda === 'USD' ? ('US$' + saldo) : ('$' + saldo.toLocaleString('es-AR'));
   const walSub = en ? 'Credit to boost' : (moneda === 'USD' ? 'Crédito para impulsar' : 'Crédito para impulsar · en pesos');
   const walletSVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 1 0-4h14v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H4"/><circle cx="16.5" cy="14" r="1.3" fill="currentColor" stroke="none"/></svg>';
-  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+  // (LOTE AGREGAR-TARJETA-INLINE) La tarjeta guardada se muestra en la
+  // billetera: si hay, «Cambiar tarjeta •••• last4»; si no, «Agregar
+  // tarjeta». El botón abre el form inline en #pzAdsTarjeta, ahí mismo.
+  const bil = s.billetera || {};
+  const tarjetaBil = (bil && bil.tarjeta) || null;
+  const tarjetaLabel = (tarjetaBil && tarjetaBil.tiene)
+    ? (en ? 'Change card' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : '') : 'Cambiar tarjeta' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : ''))
+    : (en ? 'Add a card' : 'Agregar tarjeta');
+  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><div class="pz-ads-tarjeta"><button type="button" class="pz-ads-tarjeta-btn" onclick="pzTarjetaInlineAbrir(document.getElementById('pzAdsTarjeta'))">${esc(tarjetaLabel)}</button></div><div id="pzAdsTarjeta"></div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
   const kickHTML = `<div class="pz-ads-kick">${esc(en ? 'POSTY RECOMMENDS · BOOST' : 'POSTY RECOMIENDA · IMPULSAR')}</div>`;
   const otroHTML = `<button type="button" class="pz-ads-other" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
   let recHTML = '';
@@ -16967,6 +16975,155 @@ async function pzAdsImpulsar(monto, btn) {
 function pzAdsPickOpen() {
   pzAdsPickDesdeAds = true;
   pzBoostPickOpen();
+}
+
+// (LOTE AGREGAR-TARJETA-INLINE) Formulario de tarjeta INLINE en la
+// billetera de Ads: Stripe Elements (número, vencimiento, CVC + nombre)
+// montado en la misma pantalla, sin redirect ni navegador externo. La
+// tarjeta se guarda vía POST /api/billing/stripe/payment-method y solo
+// viaja el id del PaymentMethod (pm_*): el número nunca toca nuestro
+// servidor. Si Stripe.js o la config no están, el form degrada al
+// checkout alojado (anaAgregarTarjeta, redirect) en vez de quedarse
+// mudo: el error siempre se ve, en el form mismo.
+let pzStripeJsPromise = null;
+function pzStripeJsCargar() {
+  if (typeof window !== 'undefined' && window.Stripe) return Promise.resolve(window.Stripe);
+  if (pzStripeJsPromise) return pzStripeJsPromise;
+  pzStripeJsPromise = new Promise((resolve, reject) => {
+    let done = false;
+    const fail = (e) => { if (!done) { done = true; reject(e); } };
+    const s = document.createElement('script');
+    s.src = 'https://js.stripe.com/v3';
+    s.async = true;
+    s.onload = () => { if (window.Stripe) { done = true; resolve(window.Stripe); } else fail(new Error('stripe_js_sin_stripe')); };
+    s.onerror = () => fail(new Error('stripe_js_no_cargo'));
+    try { document.head.appendChild(s); } catch (e) { fail(e); return; }
+    setTimeout(() => fail(new Error('stripe_js_timeout')), 15000);
+  });
+  pzStripeJsPromise.catch(() => { pzStripeJsPromise = null; });
+  return pzStripeJsPromise;
+}
+async function pzTarjetaConfig() {
+  const j = await api.get('/api/billing/stripe/config');
+  if (!j || !j.ok || !j.publishableKey) throw new Error('stripe_sin_config');
+  return j.publishableKey;
+}
+function pzTarjetaMotivo(motivo) {
+  const m = {
+    stripe_no_configurado: gzT('Los pagos todavía no están configurados. Probá de nuevo en un momento.', 'Payments are not set up yet. Try again in a moment.'),
+    stripe_no_disponible: gzT('No se pudo abrir el formulario seguro. Podés probar con la página de pago seguro.', 'The secure payment form could not be opened. You can try the secure payment page instead.'),
+    setup_fallido: gzT('No se pudo abrir el pago seguro. Probá de nuevo en un momento.', 'The secure payment page could not be opened. Try again in a moment.'),
+    payment_method_invalido: gzT('Esa tarjeta no se pudo usar. Revisá los datos y probá de nuevo.', 'That card could not be used. Check the details and try again.'),
+    adjuntar_fallido: gzT('No se pudo guardar la tarjeta. Revisá los datos y probá de nuevo.', 'The card could not be saved. Check the details and try again.'),
+    tarjeta_invalida: gzT('Revisá los datos de la tarjeta y probá de nuevo.', 'Check the card details and try again.'),
+    stripe_error: gzT('Algo falló en el formulario seguro. Probá de nuevo.', 'Something went wrong with the secure payment form. Try again.'),
+  };
+  return m[motivo] || m.adjuntar_fallido;
+}
+function pzTarjetaFormHTML() {
+  return `<form class="pz-tarjeta-form" onsubmit="return false"><div class="pz-tarjeta-titulo">${esc(gzT('Agregar tarjeta', 'Add a card'))}</div><div class="pz-tarjeta-campo"><label for="pzTarjetaNombre">${esc(gzT('Nombre en la tarjeta', 'Name on the card'))}</label><input id="pzTarjetaNombre" class="pz-tarjeta-nombre" type="text" autocomplete="cc-name" placeholder="${esc(gzT('Como figura en la tarjeta', 'As it appears on the card'))}"></div><div class="pz-tarjeta-campo"><label>${esc(gzT('Número de tarjeta', 'Card number'))}</label><div id="pzTarjetaNum" class="pz-tarjeta-input"></div></div><div class="pz-tarjeta-fila"><div class="pz-tarjeta-campo"><label>${esc(gzT('Vencimiento', 'Expiry'))}</label><div id="pzTarjetaExp" class="pz-tarjeta-input"></div></div><div class="pz-tarjeta-campo"><label>${esc(gzT('CVC', 'CVC'))}</label><div id="pzTarjetaCvc" class="pz-tarjeta-input"></div></div></div><p class="pz-tarjeta-msg"></p><div class="pz-tarjeta-acciones"><button type="button" class="btn btn-primary" onclick="pzTarjetaGuardar(this)">${esc(gzT('Guardar tarjeta', 'Save card'))}</button><button type="button" class="btn btn-ghost" onclick="pzTarjetaInlineCerrar(this)">${esc(gzT('Cancelar', 'Cancel'))}</button></div><p class="pz-tarjeta-seguro">${esc(gzT('Pago seguro con Stripe. Tu tarjeta queda guardada para cargar e impulsar con un toque.', 'Secure payment with Stripe. Your card stays saved so you can top up and boost with one tap.'))}</p></form>`;
+}
+function pzTarjetaHostDe(el) {
+  let n = el;
+  while (n) { if (n._pzTarjeta) return n; n = n.parentNode; }
+  return null;
+}
+async function pzTarjetaInlineAbrir(hostEl) {
+  if (!hostEl) return false;
+  if (hostEl.querySelector && hostEl.querySelector('.pz-tarjeta-form')) return true; // ya abierto: no duplicar
+  hostEl.innerHTML = pzTarjetaFormHTML();
+  hostEl._pzTarjeta = {}; // el Cancelar ya puede encontrar el host
+  const msgEl = hostEl.querySelector ? hostEl.querySelector('.pz-tarjeta-msg') : null;
+  const decir = (t, esError) => { if (msgEl) { msgEl.textContent = t; msgEl.className = 'pz-tarjeta-msg' + (esError ? ' pz-tarjeta-msg--error' : ''); } };
+  decir(gzT('Cargando el pago seguro…', 'Loading the secure payment form…'));
+  let stripeJs, pk;
+  try {
+    const res = await Promise.all([pzStripeJsCargar(), pzTarjetaConfig()]);
+    stripeJs = res[0]; pk = res[1];
+  } catch (e) {
+    // Degrada al checkout alojado: el aviso queda en el form y el botón
+    // abre la página de Stripe (anaAgregarTarjeta con forzarRedirect).
+    decir(pzTarjetaMotivo('stripe_no_disponible'), true);
+    try {
+      const fb = document.createElement('button');
+      fb.type = 'button';
+      fb.className = 'btn btn-primary';
+      fb.textContent = gzT('Abrir el pago seguro', 'Open the secure payment page');
+      fb.onclick = async () => {
+        try { await loadChunk('analisis'); } catch (err) {}
+        if (typeof anaAgregarTarjeta === 'function') { anaAgregarTarjeta(fb, true); return; }
+        decir(pzTarjetaMotivo('setup_fallido'), true);
+      };
+      hostEl.appendChild(fb);
+    } catch (err) {}
+    return false;
+  }
+  try {
+    const stripe = stripeJs(pk);
+    const elements = stripe.elements();
+    const style = { base: { fontSize: '16px', color: '#0A1E33', fontFamily: 'inherit', '::placeholder': { color: '#8AA0B5' } }, invalid: { color: '#B3261E' } };
+    const elNum = elements.create('cardNumber', { style, showIcon: true });
+    const elExp = elements.create('cardExpiry', { style });
+    const elCvc = elements.create('cardCvc', { style });
+    const montar = (el, sel) => { const c = hostEl.querySelector ? hostEl.querySelector(sel) : null; if (c && el.mount) el.mount(c); };
+    montar(elNum, '#pzTarjetaNum');
+    montar(elExp, '#pzTarjetaExp');
+    montar(elCvc, '#pzTarjetaCvc');
+    hostEl._pzTarjeta = { stripe, els: { num: elNum, exp: elExp, cvc: elCvc } };
+    [elNum, elExp, elCvc].forEach((el) => {
+      if (el && el.on) el.on('change', (ev) => {
+        if (ev && ev.error) decir(ev.error.message || pzTarjetaMotivo('tarjeta_invalida'), true);
+        else decir('');
+      });
+    });
+    decir('');
+    return true;
+  } catch (e) {
+    decir(pzTarjetaMotivo('stripe_error'), true);
+    return false;
+  }
+}
+function pzTarjetaInlineCerrar(btn) {
+  const host = pzTarjetaHostDe(btn);
+  if (!host) return;
+  try { host.innerHTML = ''; } catch (e) {}
+  try { delete host._pzTarjeta; } catch (e) {}
+}
+async function pzTarjetaGuardar(btn) {
+  const host = pzTarjetaHostDe(btn);
+  if (!host || !host._pzTarjeta || !host._pzTarjeta.stripe) return;
+  const st = host._pzTarjeta;
+  const msgEl = host.querySelector ? host.querySelector('.pz-tarjeta-msg') : null;
+  const decir = (t, esError) => { if (msgEl) { msgEl.textContent = t; msgEl.className = 'pz-tarjeta-msg' + (esError ? ' pz-tarjeta-msg--error' : ''); } };
+  if (btn) btn.disabled = true;
+  let pm = null;
+  try {
+    const nombreEl = host.querySelector ? host.querySelector('#pzTarjetaNombre') : null;
+    const nombre = String((nombreEl && nombreEl.value) || '').trim();
+    const r = await st.stripe.createPaymentMethod({ type: 'card', card: st.els.num, billing_details: nombre ? { name: nombre } : {} });
+    if (r.error) { decir(r.error.message || pzTarjetaMotivo('tarjeta_invalida'), true); if (btn) btn.disabled = false; return; }
+    pm = r.paymentMethod;
+  } catch (e) {
+    decir(pzTarjetaMotivo('stripe_error'), true);
+    if (btn) btn.disabled = false;
+    return;
+  }
+  let j = null;
+  try { j = await api.post('/api/billing/stripe/payment-method', { paymentMethodId: pm.id }); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    const last4 = (j.tarjeta && j.tarjeta.last4) || '';
+    try { if (typeof pzBoostLoad === 'function') await pzBoostLoad(); } catch (e) {}
+    try { if (typeof pzAdsPintar === 'function') pzAdsPintar(); } catch (e) {}
+    // La re-pintada destruye el form; el aviso va a #pzAdsMsg (que existe
+    // de nuevo tras pintar) para que se vea la confirmación.
+    const msgAds = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('pzAdsMsg') : null;
+    if (msgAds) msgAds.textContent = gzT('Tarjeta guardada' + (last4 ? ' •••• ' + last4 : '') + '. Ya podés cargar con un toque.', 'Card saved' + (last4 ? ' •••• ' + last4 : '') + '. You can top up with one tap now.');
+    try { host.innerHTML = ''; } catch (e) {}
+    try { delete host._pzTarjeta; } catch (e) {}
+    return;
+  }
+  decir(pzTarjetaMotivo((j && j.motivo) || 'adjuntar_fallido'), true);
 }
 
 async function pzAdsCargar(monto, btn) {

@@ -233,8 +233,47 @@ async function createSetupSession(db, client, { user, baseUrl }) {
   if (!client) throw new Error('Stripe no configurado');
   const customerId = await getOrCreateCustomer(db, client, user);
   const params = buildSetupParams({ user: { ...user, stripe_customer_id: customerId }, baseUrl });
-  const session = await client.checkout.sessions.create(params);
-  return { url: session.url, session_id: session.id };
+  try {
+    const session = await client.checkout.sessions.create(params);
+    return { url: session.url, session_id: session.id };
+  } catch (e) {
+    // (LOTE AGREGAR-TARJETA-INLINE) El customer guardado puede estar
+    // inválido en Stripe (borrado, o de otro modo): la sesión no se crea
+    // y el botón parecía no hacer nada. Se limpia el id guardado y se
+    // reintenta una sola vez con un customer nuevo.
+    if (/No such customer/i.test(String((e && e.message) || ''))) {
+      try { db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').run('', user.id); } catch (err) {}
+      const freshId = await getOrCreateCustomer(db, client, { ...user, stripe_customer_id: '' });
+      const params2 = buildSetupParams({ user: { ...user, stripe_customer_id: freshId }, baseUrl });
+      const session2 = await client.checkout.sessions.create(params2);
+      return { url: session2.url, session_id: session2.id };
+    }
+    throw e;
+  }
+}
+// (LOTE AGREGAR-TARJETA-INLINE) Adjunta un PaymentMethod (pm_*) creado por
+// Stripe.js (form inline) al customer del usuario y lo deja como default.
+// El número, el vencimiento y el CVC nunca pasan por acá: solo el id.
+// Reenvío del mismo form: si el PM ya está adjunto a ESTE cliente, se
+// sigue igual (idempotente). Si fijar la default falla, el PM igual queda
+// adjunto y el cobro lo toma como el más reciente (resolverTarjetaGuardada).
+async function adjuntarTarjeta(db, client, user, pmId) {
+  client = client || stripeClient();
+  if (!client) throw new Error('Stripe no configurado');
+  if (!/^pm_[A-Za-z0-9]+$/.test(String(pmId || ''))) throw new Error('PaymentMethod inválido');
+  const customerId = await getOrCreateCustomer(db, client, user);
+  try {
+    await client.paymentMethods.attach(pmId, { customer: customerId });
+  } catch (e) {
+    let pm = null;
+    try { pm = await client.paymentMethods.retrieve(pmId); } catch (err) {}
+    if (!pm || pm.customer !== customerId) throw e;
+  }
+  await fijarTarjetaPorDefecto(client, customerId, pmId);
+  let pm = null;
+  try { pm = await client.paymentMethods.retrieve(pmId); } catch (err) {}
+  const card = (pm && pm.card) || {};
+  return { customerId, brand: card.brand || '', last4: card.last4 || '' };
 }
 // Deja la tarjeta como la de pago por defecto del cliente (la que lee
 // el cobro de la billetera). Idempotente: fijar la misma dos veces no
@@ -395,7 +434,7 @@ module.exports = {
   stripeConfigured, webhookConfigured, stripeClient, _setClient,
   constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, _clearPriceCache, getOrCreateCustomer,
   buildCheckoutParams, createCheckout, createPortalSession,
-  buildSetupParams, createSetupSession, fijarTarjetaPorDefecto,
+  buildSetupParams, createSetupSession, fijarTarjetaPorDefecto, adjuntarTarjeta,
   processEvent, applySubscription,
   lookupKeyFor, planIdFromLookupKey, planIdFromSubscription,
 };

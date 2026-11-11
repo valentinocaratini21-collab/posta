@@ -21157,6 +21157,44 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
   }
 });
 
+// (LOTE AGREGAR-TARJETA-INLINE) Clave pública de Stripe para el form
+// inline (Stripe Elements) en la billetera de Ads. Fail-closed: sin
+// STRIPE_PUBLISHABLE_KEY (o sin secret) → 400; el cliente degrada al
+// checkout alojado. La clave pública no es secreta: es la misma que
+// Stripe.js usa en cualquier checkout público.
+app.get('/api/billing/stripe/config', requireAuth, (req, res) => {
+  const pk = (process.env.STRIPE_PUBLISHABLE_KEY || '').trim();
+  if (!stripeBilling.stripeConfigured() || pk.length < 10) {
+    return res.status(400).json({ ok: false, motivo: 'stripe_no_configurado' });
+  }
+  res.json({ ok: true, publishableKey: pk });
+});
+
+// (LOTE AGREGAR-TARJETA-INLINE) Guardar la tarjeta del form inline:
+// el cliente manda SOLO el id del PaymentMethod (pm_*) creado por
+// Stripe.js; el número, el vencimiento y el CVC nunca tocan nuestro
+// servidor. Se adjunta al customer y queda como default (un toque para
+// Cargar/Impulsar). Reenvío del mismo form: si el PM ya está adjunto a
+// este cliente, se sigue igual (idempotente). Sin Stripe → 400.
+app.post('/api/billing/stripe/payment-method', requireAuth, async (req, res) => {
+  if (!stripeBilling.stripeConfigured()) {
+    return res.status(400).json({ ok: false, motivo: 'stripe_no_configurado' });
+  }
+  const pmId = String((req.body && req.body.paymentMethodId) || '').trim();
+  if (!/^pm_[A-Za-z0-9]+$/.test(pmId)) {
+    return res.status(400).json({ ok: false, motivo: 'payment_method_invalido' });
+  }
+  try {
+    const user = db.prepare('SELECT id, email, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) return res.status(400).json({ ok: false, motivo: 'sin_cuenta' });
+    const out = await stripeBilling.adjuntarTarjeta(db, null, user, pmId);
+    res.json({ ok: true, tarjeta: { brand: out.brand, last4: out.last4 } });
+  } catch (e) {
+    console.error('[stripe] Error adjuntando tarjeta:', e.message);
+    res.status(500).json({ ok: false, motivo: 'adjuntar_fallido' });
+  }
+});
+
 // (LOTE AGREGAR-TARJETA) Guardar una tarjeta para Ads sin cobrar nada:
 // Checkout en modo setup. Un toque desde la billetera (o desde el
 // mensaje de Cargar sin tarjeta) abre la página alojada por Stripe;
@@ -21164,19 +21202,23 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
 // sale con un toque. Siempre disponible (no es de una sola vez): al
 // agregar otra tarjeta, esa pasa a ser la activa (el webhook la deja
 // como default del cliente). Sin Stripe configurado → 400, fail-closed.
+// (LOTE AGREGAR-TARJETA-INLINE) Es el respaldo del form inline: si
+// Stripe.js o la config no están, el cliente cae acá. Los errores
+// llevan motivo estructurado (además del texto, por compatibilidad)
+// para que el cliente muestre un aviso honesto en vez de silencio.
 app.post('/api/billing/stripe/setup', requireAuth, async (req, res) => {
   if (!stripeBilling.stripeConfigured()) {
-    return res.status(400).json({ error: 'Payments are not configured yet.' });
+    return res.status(400).json({ ok: false, motivo: 'stripe_no_configurado', error: 'Payments are not configured yet.' });
   }
   try {
     const user = db.prepare('SELECT id, email, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
-    if (!user) return res.status(400).json({ error: 'Stripe setup is only available for registered accounts.' });
+    if (!user) return res.status(400).json({ ok: false, motivo: 'sin_cuenta', error: 'Stripe setup is only available for registered accounts.' });
     const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
     const out = await stripeBilling.createSetupSession(db, null, { user, baseUrl });
     res.json({ url: out.url });
   } catch (e) {
     console.error('[stripe] Error creando setup:', e.message);
-    res.status(500).json({ error: 'Could not start adding a card: ' + e.message });
+    res.status(500).json({ ok: false, motivo: 'setup_fallido', error: 'Could not start adding a card: ' + e.message });
   }
 });
 
@@ -35210,7 +35252,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v899';
+const BUILD_ID = '20261105-v900';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
