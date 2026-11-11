@@ -22275,8 +22275,9 @@ function pzHoySpeechHTML(o) {
       cuerpo = '';
     } else if (saleSolo) {
       cuerpo = en
-        ? `I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`
-        : `Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`;
+      // (vFRASE · corrección Valentino 11/11 11:51: el anuncio del posteo de hoy está de más — el posteo ya está a la vista; se saca solo esa oración y queda el dato de salida + avisos.)
+        ? `<b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`
+        : `<b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`;
     } else {
       // (v879 · corrección Valentino 10/11 10:04: igual que borrador — el
       // texto está de más y se saca entero; queda solo la tarjeta.)
