@@ -6192,6 +6192,8 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-hoy-hero-link:active{transform:translateY(1px);box-shadow:0 3px 8px rgba(39,147,200,.42),inset 0 1px 0 rgba(255,255,255,.55)}
 .pz-hoy-hero .pz-hoy-ok{background:linear-gradient(180deg,#e6f8ee,#d9f2e4);color:#177245;font-size:14.5px;border-radius:14px;padding:11px 13px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -1px 0 rgba(23,114,69,.10)}
 .pz-hoy-hero .pz-hoy-actions{margin-top:13px}
+/* (REEL-WEBSITE-NORMAL v905 · 11/11 · Valentino: en el navegador de escritorio el reel de «El posteo de hoy» ocupa casi toda la pantalla (héroe 4:5 a todo el ancho, ~1610x2012 px). Solo en viewports anchos el bloque queda capado a tamaño de teléfono y centrado; en el iPhone queda EXACTAMENTE como está.) */
+@media(min-width:761px){.pz-hoy-hoy{max-width:480px;margin-left:auto;margin-right:auto}}
 /* --- Tab Ads como el mock --- */
 .pz-ads-title{font-size:24px;margin:10px 0 2px;letter-spacing:-.01em}
 .pz-ads-sub{color:#5b7186;font-size:14.5px;margin:0 0 16px;font-weight:600}

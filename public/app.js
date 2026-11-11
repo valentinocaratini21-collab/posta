@@ -22184,8 +22184,15 @@ function pzHoyCardHTML(p, o) {
     const fmt = String((p && p.media_type) || '') === 'video' ? '🎬 Reel'
       : String((p && p.media_type) || '') === 'carousel' ? '🖼️ Carrusel'
       : String((p && p.media_type) || '') === 'story' ? '📸 Historia' : '📸 Post';
-    const img = (p && p.image_path)
-      ? `<img class="pz-hoy-thumb-img" src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
+    // (REEL-WEBSITE-NORMAL v905 · 11/11 · un video NO tiene imagen en
+    // image_path (es el .mp4): su póster es cover_path. El <img> apuntando
+    // al .mp4 nunca carga y deja el bloque oscuro + el icono roto. Sin
+    // póster no se rinde <img> (nunca un bloque de color ni el icono roto).
+    const imgSrc = String((p && p.media_type) || '') === 'video'
+      ? String((p && p.cover_path) || '')
+      : String((p && p.image_path) || '');
+    const img = imgSrc
+      ? `<img class="pz-hoy-thumb-img" src="${esc(mv(imgSrc, 640))}" data-full="${esc(imgSrc)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
     const pill = cartita ? pzHoyPillSalida(p, tz, en) : '';
     // (LOTE HOY-SIN-DUPLICADO · 9/11) sinCuando: la tarjeta principal
     // ya lleva la hora en la cabecera («hoy · 19:00»); el badge «Hoy
