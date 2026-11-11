@@ -2348,7 +2348,7 @@ body.hf-sv-open{overflow:hidden}
 .lp-day-meta b{font-size:13px;color:var(--txt)}
 .lp-day-meta span{font-size:11.5px;color:var(--mut)}
 .lp-day-ok{margin:6px 11px 11px;background:var(--yl);color:#0A1E33;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px;align-self:flex-start}
-.lp-week-note{margin:14px 2px 4px;font-size:13px;color:var(--mut);text-align:center}
+.lp-week-note{margin:18px 2px 12px;font-size:14px;color:var(--mut);text-align:center;line-height:1.6}
 .lp-stats{padding:26px 0 10px}
 .lp-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;max-width:1020px;margin:0 auto;text-align:center}
 .lp-stat-n{font-size:clamp(29px,4.2vw,43px);font-weight:800;letter-spacing:-.02em;color:var(--cel);line-height:1.05}
@@ -2710,9 +2710,14 @@ body.hf-sv-open{overflow:hidden}
 .lp-wchip.on{background:var(--cel);border-color:var(--cel);color:#fff}
 .lp-week-grid{transition:opacity .16s ease}
 .lp-week-grid.lp-week-swap{opacity:0}
-.lp-week-bridge{text-align:center;font-size:15px;color:var(--mut);margin:12px 2px 2px}
+.lp-week-bridge{text-align:center;font-size:15px;color:var(--mut);margin:12px 2px 48px;line-height:1.6}
 .lp-week-bridge a{color:var(--cel);font-weight:800;text-decoration:none}
 .lp-week-bridge a:hover{text-decoration:underline}
+/* (v882 · espaciado semana+video) Aire entre la nota, el puente y el título del video. */
+.lp-vp h3{text-align:center;font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0 0 12px}
+.lp-vp .lede{margin-bottom:32px}
+.lp-week-note + .lp-vp{margin-top:36px}
+@media(max-width:760px){.lp-vp h3{font-size:23px}}
 .lp-ctl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:32px;text-align:left}
 .lp-ctl-card{background:#fff;border:2px solid #E3EDF4;border-radius:18px;padding:20px}
 .lp-ctl-ico{font-size:30px;line-height:1;margin-bottom:10px}

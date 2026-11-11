@@ -726,6 +726,10 @@ html{scroll-behavior:smooth}
 .vp-row.vp-top .vp-card video{width:148px;height:263px;aspect-ratio:auto}
 }
 /* (v339) Microcopy de cero riesgo junto al botón del form, pasos
+/* (v882 · espaciado semana+video) El título de video pegado: mismo aire que la home, solo en el bloque de video (único .sec con .vp-row). */
+.sec:has(> .vp-row) h3{text-align:center;font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0 0 12px}
+.sec:has(> .vp-row) > .lede{margin-bottom:32px}
+@media(max-width:760px){.sec:has(> .vp-row) h3{font-size:23px}}
    "Cómo sigue" bajo el formulario y barra fija móvil al formulario. */
 .form-micro{text-align:center;font-size:12.5px;color:var(--mut);margin:10px 0 0;line-height:1.5}
 .next3{margin:24px 0 42px}
