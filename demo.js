@@ -1386,6 +1386,61 @@ function parseEstiloVisual(v) {
   return (s === 'limpia' || s === 'banda' || s === 'editorial') ? s : null;
 }
 
+// (ONBOARDING-SIMPLE · 11/11 · ACT.5) ROTACIÓN DE LA SEMANA: el día 1
+// fija un producto y un ángulo; ningún día repite el producto ni el
+// ángulo del día anterior (Valentino: «cada día el posteo es DISTINTO
+// al anterior»). Producto = digest_anchor normalizado (el ítem real
+// del cliente); ángulo = kind + angle (el tipo de posteo + el ángulo
+// comercial declarado). La pasada solo REEMPLAZA (nunca reordena: el
+// día 1 es la estrella y los slots tienen semántica) con temas del
+// pool fuera de la ventana; si el pool no tiene un reemplazo que no
+// choque con ningún vecino, el slot queda como está (no se inventa
+// un tema). Pura y testeable; la usa buildDemoSpec (generate y stream).
+function topicProductKey(t) {
+  try { return String((t && t.digest_anchor) || '').trim().toLowerCase().replace(/\s+/g, ' '); } catch (e) { return ''; }
+}
+function topicAngleKey(t) {
+  const kind = String((t && t.kind) || '').trim().toLowerCase();
+  const angle = String((t && t.angle) || '').trim().toLowerCase();
+  return kind + ':' + angle;
+}
+function topicsConflict(a, b) {
+  if (!a || !b) return false;
+  const pa = topicProductKey(a), pb = topicProductKey(b);
+  if (pa && pb && pa === pb) return true;
+  if (topicAngleKey(a) === topicAngleKey(b)) return true;
+  return false;
+}
+function enforceTopicRotation(topics, pool) {
+  const win = Array.isArray(topics) ? topics.slice() : [];
+  const rest = (Array.isArray(pool) ? pool : []).filter((t) => t && !win.includes(t));
+  if (win.length < 2) return win;
+  for (let i = 1; i < win.length; i++) {
+    if (!topicsConflict(win[i - 1], win[i])) continue;
+    // El día 1 (i=0) nunca se toca: fija la semana. El slot en conflicto
+    // se reemplaza por el primer tema del pool que no choque con NINGÚN
+    // vecino (anterior y siguiente). Con ancla, primero: no se pierde
+    // un producto real por un relleno sin ancla.
+    const prev = win[i - 1], next = win[i + 1] || null;
+    let candIdx = -1;
+    for (let pass = 0; pass < 2 && candIdx < 0; pass++) {
+      for (let j = 0; j < rest.length; j++) {
+        const c = rest[j];
+        if (pass === 0 && !topicProductKey(c)) continue;
+        if (topicsConflict(prev, c)) continue;
+        if (next && topicsConflict(c, next)) continue;
+        candIdx = j; break;
+      }
+    }
+    if (candIdx >= 0) {
+      const cand = rest[candIdx];
+      rest.splice(candIdx, 1);
+      win[i] = cand;
+    }
+    // Sin candidato: el slot queda (no se inventa un tema).
+  }
+  return win;
+}
 function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null }) {
   // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
   // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
@@ -1464,6 +1519,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       }
     }
   } catch (e) { /* la auditoría nunca frena la prueba */ }
+  // (ONBOARDING-SIMPLE · ACT.5) ROTACIÓN: dos días seguidos nunca muestran
+  // el mismo producto ni el mismo ángulo. Corre ACÁ (ventana cerrada,
+  // antes de estilos/fotos): la foto se elige después, sobre el tema
+  // final, así que nunca se cambia un tema con su foto ya puesta.
+  topics = enforceTopicRotation(topics, allTopics);
   const bar = String(business || '').toUpperCase().slice(0, 26) || (en ? 'YOUR BUSINESS' : 'TU NEGOCIO');
 
   // (v196, acotado en v197) MODO PÓSTER DE MARCA: un perfil de
@@ -1552,7 +1612,13 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
             if (!t || t._digest || posterAt.has(i)) continue;
             const chk = clientDigest.pieceAnchored(`${t.headline || ''} ${t.caption || ''}`, anchors);
             if (chk.ok) continue;
+            // (ONBOARDING-SIMPLE · ACT.5) El reemplazo tampoco repite el
+            // ángulo de los vecinos: el ancla distinta ya la garantiza
+            // inUse; acá se exige además otro ángulo (kind+angle) que el
+            // del día anterior y el siguiente.
             const cand = digestTopics.find((dt) => dt && !inUse.has(dt.digest_anchor)
+              && !(i > 0 && topicsConflict(topics[i - 1], dt))
+              && !(i + 1 < topics.length && topicsConflict(dt, topics[i + 1]))
               && (trialNoStock || topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe, neutralDefault }))));
             if (cand) {
               inUse.add(cand.digest_anchor);
@@ -2828,6 +2894,11 @@ module.exports = {
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.
   trialVoiceEcho,
   applyVoiceToTopics,
+  // (ONBOARDING-SIMPLE · ACT.5) Rotación de la semana de la prueba.
+  enforceTopicRotation,
+  topicProductKey,
+  topicAngleKey,
+  topicsConflict,
   capHeadlineWords: captions.capHeadlineWords,
   assignTextModes: captions.assignTextModes,
   captionEndsWithCta: captions.captionEndsWithCta,

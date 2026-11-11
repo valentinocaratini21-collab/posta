@@ -2504,25 +2504,44 @@ app.post('/api/auth/register', (req, res) => {
 // prueba fresca (trial_ends_at = ahora → paywall directo), con todo su
 // feed conservado. El email queda registrado en trial_used: esa dirección
 // ya usó su prueba, para siempre.
+// (ONBOARDING-SIMPLE · 11/11) Subida de invitado SIN contraseña, nunca:
+// solo el email. El link mágico llega al email y el canje
+// (/api/auth/magic, payload guest_id) sube LA MISMA fila invitada a
+// cuenta real (reloj y posteos intactos). Sin contraseña que recordar.
 app.post('/api/guest/upgrade', requireAuth, async (req, res) => {
   try {
     if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
     const userId = req.session.userId;
     const body = req.body || {};
     const email = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Revisá el email' });
-    if (password.length < 6) return res.status(400).json({ error: 'La contraseña tiene que tener al menos 6 caracteres' });
     if (guestTrial.isGuestEmail(email)) return res.status(400).json({ error: 'Revisá el email' });
-    const row = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
+    const row = db.prepare('SELECT is_guest, lang FROM users WHERE id = ?').get(userId);
     if (!row || !row.is_guest) return res.status(400).json({ error: 'Esta cuenta ya no es invitada' });
-    const hash = bcrypt.hashSync(password, 10);
-    const r = guestTrial.upgradeGuest(db, {
-      userId, email, passwordHash: hash,
-      findUsed: (ig, dom, em) => trialLock.findUsed ? trialLock.findUsed(db, ig || '', dom || '', em || '') : null,
-    });
-    if (r.error === 'email_taken') return res.status(400).json({ error: 'Ese email ya tiene cuenta. Entrá con tu contraseña.' });
-    if (r.error) return res.status(400).json({ error: r.error });
+    // Email con cuenta real: el camino es entrar a ESA cuenta con su
+    // link (no se crea nada nuevo ni se mueve el invitado).
+    const taken = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, userId);
+    if (taken) return res.status(400).json({ error: 'Ese email ya tiene cuenta. Pedí el link de entrada para esa cuenta.' });
+    if (!process.env.RESEND_API_KEY) return res.status(503).json({ error: 'El envío de emails está en mantenimiento 😅 Probá de nuevo en un rato.' });
+    // Rate-limit espejo del magic-request: máx 5 por hora por email.
+    const hourAgo = Date.now() - 3600 * 1000;
+    try {
+      const n = db.prepare('SELECT COUNT(*) AS c FROM magic_tokens WHERE email = ? AND created_at >= ?').get(email, hourAgo).c;
+      if (n >= 5) return res.json({ ok: true, email_sent: true });
+    } catch (e) {}
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const magicLang = (row.lang === 'en' || row.lang === 'es') ? row.lang : 'es';
+    const payload = JSON.stringify({ guest_id: userId, lang: magicLang });
+    try { db.prepare('INSERT INTO magic_tokens (token_hash, email, payload, created_at, expires_at, used) VALUES (?,?,?,?,?,0)').run(tokenHash, email, payload, Date.now(), Date.now() + 15 * 60 * 1000); } catch (e) { return res.status(500).json({ error: 'No pudimos mandar el link todavía.' }); }
+    let emailSent = false;
+    try {
+      const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
+      const link = `${base}/api/auth/magic?token=${token}`;
+      const mr = await magicLinkEmail(email, link, magicLang);
+      if (mr && mr.ok) emailSent = true;
+    } catch (e) { console.error('[guest] upgrade magic email:', e.message); }
+    if (!emailSent) return res.status(500).json({ error: 'No pudimos mandar el link todavía. Probá de nuevo.' });
     // El email queda marcado como "usó su prueba" (para siempre), salvo
     // que el invitado sea de la casa (la allowlist nunca ensucia
     // trial_used: el dogfooding no gasta su "una vez").
@@ -2534,13 +2553,8 @@ app.post('/api/guest/upgrade', requireAuth, async (req, res) => {
         trialLock.recordUsed(db, { email, userId });
       }
     } catch (e) {}
-    track(userId, 'guest_upgrade', r.consumed ? 'consumed' : 'ok');
-    req.session.regenerate((err) => {
-      if (err) return res.status(500).json({ error: 'No se pudo iniciar sesión' });
-      req.session.userId = userId;
-      res.json({ ok: true, consumed: !!r.consumed, trial_ends_at: r.trialEnds,
-        plan_url: r.consumed ? '/#/app/ajustes?plan=1' : null });
-    });
+    track(userId, 'guest_upgrade', 'magic_link');
+    return res.json({ ok: true, email_sent: true });
   } catch (e) {
     console.error('[guest] upgrade falló:', e);
     res.status(500).json({ error: 'No pudimos crear tu cuenta todavía.' });
@@ -3646,6 +3660,24 @@ app.get('/api/auth/magic', (req, res) => {
     const email = row.email;
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     let sessUserId = null;
+    // (ONBOARDING-SIMPLE · 11/11) Subida de invitado por magic link (sin
+    // contraseña): el payload trae guest_id. La MISMA fila invitada pasa
+    // a cuenta real (email + is_guest=0, reloj y posteos intactos).
+    if (payload && payload.guest_id) {
+      const grow = db.prepare('SELECT id, is_guest FROM users WHERE id = ?').get(Number(payload.guest_id));
+      if (grow && grow.is_guest && guestTrial) {
+        const r = guestTrial.upgradeGuest(db, {
+          userId: grow.id, email, passwordHash: '',
+          findUsed: (ig, dom, em) => trialLock.findUsed ? trialLock.findUsed(db, ig || '', dom || '', em || '') : null,
+        });
+        if (!r.error) {
+          sessUserId = grow.id;
+          return req.session.regenerate(() => { req.session.userId = sessUserId; res.redirect(r.consumed ? '/#/app/ajustes?plan=1' : '/#/'); });
+        }
+        // email_taken u otro: el link abre la cuenta real de ese email
+        // (la rama de abajo); el invitado queda como estaba.
+      }
+    }
     if (!user) {
       const code = newReferralCode();
       let referredBy = null;
@@ -11600,6 +11632,25 @@ app.get('/api/ideas/chat', (req, res) => {
   try {
     const w = db.prepare('SELECT posty_welcomed, client_name, trial_import_n FROM users WHERE id = ?').get(uid) || {};
     if (!w.posty_welcomed) {
+      // (ONBOARDING-SIMPLE · 11/11) Invitado sin @: la bienvenida ES la
+      // pregunta por el @ (una sola, conversacional). Se guarda como
+      // mensaje real para que persista en el historial; el welcome
+      // genérico («ya estoy laburando») NO sale sin @, porque Posty no
+      // puede laburar sin saber de quién es el Instagram.
+      const _guest = db.prepare('SELECT is_guest, guest_ig, lang FROM users WHERE id = ?').get(uid) || {};
+      let _profIg = '';
+      try { _profIg = String(((db.prepare('SELECT ig_username FROM profiles WHERE user_id = ?').get(uid) || {}).ig_username) || '').trim(); } catch (e) {}
+      if (_guest.is_guest && !String(_guest.guest_ig || '').trim() && !_profIg) {
+        const _en = String(_guest.lang || '') === 'en';
+        const _ask = _en
+          ? "hi! i'm posty 💙\nwhat's your Instagram? I'll build your week from what you already post 👇"
+          : 'hola! soy posty 💙\n¿cuál es tu Instagram? Así armo tu semana con lo que ya publicás 👇';
+        let _mid = 0;
+        try { const _r = db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(uid, _ask); _mid = _r.lastInsertRowid || 0; } catch (e) {}
+        try { msgs.push({ id: _mid, role: 'assistant', text: _ask, created_at: new Date().toISOString() }); } catch (e) {}
+        db.prepare('UPDATE users SET posty_welcomed = 1 WHERE id = ?').run(uid);
+        return res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome: null, first_pick: null, welcome_regen: false, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+      }
       const _cn = ((w.client_name || '').trim().split(/\s+/)[0]) || '';
       const draftSel = 'id, image_path, caption, COALESCE(client_photo, 0) AS client_photo FROM posts WHERE user_id = ? AND status = \'draft\'';
       const trialDrafts = db.prepare(
@@ -30484,33 +30535,12 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
       }
     } catch (e) {}
     if (kind === 'join') return res.json({ ok: true, user_id: uid, trial_ends_at: trialEnds, concierge: true });
-    if (kind === 'question') {
-      // (LOTE PREGUNTA-DUPLICADA · 7/11) La pregunta guionada NO se inserta
-      // como chat_message: el cliente ya la muestra con su push local y el
-      // poll la ecoaba como segunda burbuja en texto plano (si un tick caía
-      // entre el INSERT y la llegada del POST, el dedup por msg_id no la
-      // cazaba). Como 'answer': SOLO evento del caso, sin chat_message.
-      const text = String(b.text || '').trim().slice(0, 500);
-      if (!text) return res.status(400).json({ ok: false, error: 'texto_vacio' });
-      const q = String(b.question || '').trim().slice(0, 40);
-      let casoId = 0;
-      try {
-        const dv = supportCases.divertToConcierge(db, uid, (q ? q + ': ' : '') + (text || '(sin texto)'));
-        if (dv && dv.ok) casoId = dv.caso_id || 0;
-      } catch (e) {}
-      return res.json({ ok: true, user_id: uid, msg_id: 0, caso_id: casoId, concierge: true });
-    }
-    if (kind === 'answer') {
-      // Respuesta guionada: SOLO evento del caso. Sin chat_message (no
-      // alerta al cron) y sin ACK: la siguiente pregunta ES la respuesta.
-      const q = String(b.question || '').trim().slice(0, 40);
-      const v = String(b.value || '').trim().slice(0, 200);
-      let casoId = 0;
-      try {
-        const dv = supportCases.divertToConcierge(db, uid, (q ? q + ': ' : '') + (v || '(sin respuesta)'));
-        if (dv && dv.ok) casoId = dv.caso_id || 0;
-      } catch (e) {}
-      return res.json({ ok: true, user_id: uid, caso_id: casoId, concierge: true });
+    // (ONBOARDING-SIMPLE · 11/11) Las preguntas guionadas del onboarding
+    // SE SACARON del producto: el @ se pide UNA vez, en el chat de la
+    // app, y la semana sale de lo que ya publican. Estos kinds ya no
+    // existen; el conserje de texto libre ('free') sigue vivo.
+    if (kind === 'question' || kind === 'answer') {
+      return res.status(400).json({ ok: false, error: 'questions_removed' });
     }
     // kind === 'free': texto libre del visitante.
     const text = String(b.text || '').trim().slice(0, 2000);
@@ -30553,6 +30583,18 @@ app.get('/api/trial/chat-onboarding', (req, res) => {
   }
 });
 
+// (ONBOARDING-SIMPLE · 11/11) ¿La sesión actual es de un invitado?
+// La generación de la semana desde el @ (sin las 5 respuestas del
+// cuestionario retirado) solo se habilita para invitados autenticados.
+function isGuestSession(req) {
+  try {
+    const uid = req && req.session && req.session.userId;
+    if (!uid) return false;
+    const row = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(uid);
+    return !!(row && row.is_guest);
+  } catch (e) { return false; }
+}
+
 app.post('/api/guest/start', (req, res) => {
   try {
     if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
@@ -30562,7 +30604,46 @@ app.post('/api/guest/start', (req, res) => {
     const domRaw = String(body.domain || body.web || '').trim();
     const igK = trialLock.normalizeIg(igRaw);
     const domK = trialLock.normalizeDomain(domRaw);
-    if (!igK && !domK) return res.status(400).json({ error: lang === 'en' ? 'Tell me your @ or your website first.' : 'Decime primero tu @ o tu web.' });
+    if (!igK && !domK) {
+      // (ONBOARDING-SIMPLE · 11/11) Entrada SIN @ ni web: el botón de la
+      // prueba entra DIRECTO al producto. Se crea (o se reusa por
+      // dispositivo) la fila invitada sin identidad todavía; Posty pide
+      // el @ DENTRO del chat y la semana se arma ahí (/api/guest/set-ig).
+      // Sin email, sin contraseña, sin preguntas. El reloj de 3 días
+      // arranca ACÁ. Anti-abuso: 1 prueba por dispositivo/IP (la
+      // allowlist y el modo test saltan el control).
+      const testMode0 = trialTestMode(req);
+      const allowlisted0 = trialLock.isAllowlisted(db, '', '');
+      const device0 = String(body.device || '').trim().slice(0, 128);
+      const ip0 = String(req.ip || '').slice(0, 64);
+      if (!testMode0 && !allowlisted0) {
+        const du0 = guestTrial.deviceUsed(db, device0, ip0);
+        if (du0) {
+          const duRow = db.prepare('SELECT id, is_guest, trial_ends_at FROM users WHERE id = ?').get(du0.user_id);
+          if (duRow && duRow.is_guest) {
+            // Mismo dispositivo, mismo invitado: se retoma la prueba
+            // (el reloj sigue corriendo, no hay prueba nueva).
+            return req.session.regenerate((err) => {
+              if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
+              req.session.userId = duRow.id;
+              res.json({ ok: true, user_id: duRow.id, trial_ends_at: duRow.trial_ends_at, posts: 0, resumed: true });
+            });
+          }
+          return res.status(409).json({ error: lang === 'en' ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
+        }
+      }
+      const g0 = guestTrial.createGuest(db, {
+        referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
+        lang, ig: '', domain: '', device: device0,
+      });
+      if (!testMode0 && !allowlisted0) { try { guestTrial.recordDevice(db, device0, ip0, g0.userId); } catch (e) {} }
+      track(null, 'guest_start', 'no-identity');
+      return req.session.regenerate((err) => {
+        if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
+        req.session.userId = g0.userId;
+        res.json({ ok: true, user_id: g0.userId, trial_ends_at: g0.trialEnds, posts: 0, needs_ig: true });
+      });
+    }
     const testMode = trialTestMode(req);
     const allowlisted = trialLock.isAllowlisted(db, igK, domK);
     // Candado permanente + respaldo de 90 días (backfill de locks viejos):
@@ -30617,7 +30698,7 @@ app.post('/api/guest/start', (req, res) => {
       if (row && row.payload) payload = JSON.parse(row.payload);
     } catch (e) {}
     if (!payload || !(payload.posts || []).length) {
-      return res.status(404).json({ error: lang === 'en' ? 'Your week is not ready yet — go back to /prueba and generate it first.' : 'Tu semana todavía no está lista — volvé a /prueba y generala primero.', no_week: true });
+      return res.status(404).json({ error: lang === 'en' ? 'Your week is not ready yet — tell me your @ in the chat and I will build it in a minute.' : 'Tu semana todavía no está lista — contame tu @ en el chat y la armo en un minuto.', no_week: true });
     }
     // Fila invitada (email placeholder: nunca se le manda nada).
     // (LOTE PRUEBA-CHAT) Invitado del chat: se reusa su fila; si no hay,
@@ -30664,6 +30745,71 @@ app.post('/api/guest/start', (req, res) => {
   } catch (e) {
     console.error('[guest] start falló:', e);
     res.status(500).json({ error: 'No pudimos abrir tu feed todavía.' });
+  }
+});
+
+// (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
+// POST /api/guest/set-ig { ig } — requireAuth, solo invitados.
+// Resuelve el cambio de identidad (guest-set-ig.js: fix del @ pegado),
+// importa la semana del caché si está, o devuelve need_generate para
+// que el cliente genere primero (/api/trial/generate, con el gate
+// relajado para invitados) y reintente. La semana que se importa es
+// SIEMPRE la del @ que se acaba de dar, nunca la de un @ viejo.
+app.post('/api/guest/set-ig', requireAuth, async (req, res) => {
+  try {
+    if (!trialLock || !guestTrial || !guestSetIgMod) return res.status(503).json({ error: 'Servicio no disponible' });
+    const userId = req.session.userId;
+    const body = req.body || {};
+    const lang = langOfUser(userId) || 'es';
+    const en = lang === 'en';
+    const igRaw = String(body.ig || '').trim();
+    const device = String(body.device || '').trim().slice(0, 128);
+    const ip = String(req.ip || '').slice(0, 64);
+    const v = guestSetIgMod.resolveSetIg(db, { trialLock, guestTrial }, { userId, ig: igRaw, device, ip });
+    if (!v.ok) {
+      if (v.error === 'need_ig') return res.status(400).json({ ok: false, error: en ? 'Tell me your Instagram @ so I can build your week.' : 'Decime tu @ de Instagram así armo tu semana.', need_ig: true });
+      if (v.error === 'trial_used') return res.status(409).json({ ok: false, error: trialUsedMessage(lang), trial_used: true });
+      if (v.error === 'guest_used') return res.status(409).json({ ok: false, error: en ? 'That Instagram is already in a trial 💛 Log in to your account or pick your plan.' : 'Ese Instagram ya está en una prueba 💛 Entrá a tu cuenta o elegí tu plan.', trial_used: true });
+      if (v.error === 'device_used') return res.status(409).json({ ok: false, error: en ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
+      return res.status(400).json({ ok: false, error: v.error });
+    }
+    if (v.already) {
+      return res.json({ ok: true, already: true, ig: v.ig, posts: v.posts || 0 });
+    }
+    if (v.need_generate) {
+      return res.json({ ok: true, need_generate: true, ig: v.ig, changed: !!v.changed, cleared: v.cleared || 0 });
+    }
+    // Semana cacheada para este @: importar (misma maquinaria que
+    // guest/start, con límite 3 y sin los extras).
+    const cacheKey = v.ig;
+    let payload = null;
+    try {
+      const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
+      if (row && row.payload) payload = JSON.parse(row.payload);
+    } catch (e) {}
+    const nImp = importTrialWeek(userId, v.ig, null, { limit: 3, cacheKey });
+    if (!nImp) return res.json({ ok: true, need_generate: true, ig: v.ig, changed: !!v.changed, cleared: v.cleared || 0 });
+    try { applyTrialLang(userId, v.ig); } catch (e) {}
+    try { seedFromTrialDigest(userId, v.ig, { cacheKey }); } catch (e) {}
+    try { recordTrialImport(userId, v.ig, nImp, false); } catch (e) {}
+    try { streakFromTrialImport(userId, nImp); } catch (e) {}
+    try {
+      const biz = String((payload && payload.business) || '').trim();
+      const cat = String((payload && payload.category) || '').trim();
+      db.prepare(`UPDATE profiles SET ig_username = COALESCE(NULLIF(ig_username, ''), ?), business_name = COALESCE(NULLIF(business_name, ''), ?), category = COALESCE(NULLIF(category, ''), ?) WHERE user_id = ?`)
+        .run(v.ig, biz, cat, userId);
+    } catch (e) {}
+    let sched = null;
+    try { sched = scheduleAllDrafts(userId); } catch (e) { console.error('[guest] set-ig schedule falló:', e.message); }
+    const reply = en
+      ? `done! i just built your week for @${v.ig} from what you already post — it's in your feed, take a look 👇`
+      : `¡listo! ya armé tu semana para @${v.ig} con lo que ya publicás — está en tu feed, mirala 👇`;
+    try { db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(userId, reply); } catch (e) {}
+    track(userId, 'guest_set_ig', v.ig + '|' + nImp);
+    return res.json({ ok: true, ig: v.ig, posts: nImp, scheduled: sched && sched.scheduled ? sched.scheduled.length : 0, changed: !!v.changed, cleared: v.cleared || 0, reply });
+  } catch (e) {
+    console.error('[guest] set-ig falló:', e);
+    res.status(500).json({ ok: false, error: 'No pudimos armar tu semana todavía.' });
   }
 });
 
@@ -30717,6 +30863,9 @@ try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] t
 // El esquema vive en el módulo y se asegura en el arranque (idempotente).
 let guestTrial = null;
 try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catch (e) { console.error('[init] guest-trial no disponible:', e.message); }
+// (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
+let guestSetIgMod = null;
+try { guestSetIgMod = require('./guest-set-ig'); } catch (e) { console.error('[init] guest-set-ig no disponible:', e.message); }
 
 // Identidad del negocio para el candado, desde los campos crudos del form
 // (la normalización robusta vive en el módulo: URL pegada, mayúsculas, @).
@@ -31045,6 +31194,12 @@ function trialHasEvidencedProducts(x) {
   if (mix === 'sin_oferta') return true;
   if (mix !== 'todo') return false;
   const list = (a) => (Array.isArray(a) ? a.map((s) => String(s == null ? '' : (s.nombre || s)).trim()).filter(Boolean) : []);
+  // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Rubro detectado del prefill (voto
+  // multi-señal sobre lo que publican): la mejor señal disponible cuando
+  // no se detectó ningún producto concreto ni la web trajo servicios.
+  // 'otro'/vacío NO es evidencia — sin señal no hay semana.
+  const rubro = String(o.rubro_detectado || '').trim().toLowerCase();
+  if (rubro && rubro !== 'otro') return true;
   return list(o.servicios).length > 0 || list(o.catalogItems).length > 0 || list(o.detectados).length > 0;
 }
 
@@ -31324,8 +31479,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // tocando una imagen: se valida estricto; si viene roto, se ignora
   // (la semana se genera como hoy, nunca se frena).
   const ocEstiloVisual = demo.parseEstiloVisual(fields.estilo_visual);
-  if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
-    return res.status(400).json({ error: lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio' });
+  // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Sin preguntas: el cuestionario
+  // retirado ya no es requisito para nadie — la semana nace de lo que
+  // publican (@ + web). Lo que SÍ se exige es identidad (@ o web): sin
+  // ella no hay nada de lo que armar el primer posteo. La puerta
+  // fail-closed de productos evidenciados SIGUE corriendo abajo (sin
+  // evidencia no hay semana).
+  if (!trialTestMode(req) && !ig && !webRaw) {
+    return res.status(400).json({ error: lang === 'en' ? 'Tell me your Instagram @ or your website first so I can build your first post.' : 'Decime tu @ de Instagram o tu web primero así armo tu primer posteo.' });
   }
   // (FUNDAMENTO-LITERAL · pieza 1) Sin aprobación del espejo no hay semana
   // en el flujo del cuestionario (espejo_flujo=1). Los flujos viejos sin
@@ -31570,7 +31731,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // vuelva a pedir el dato con un toque, en vez de armar una semana con
     // temas genéricos. La estacionalidad solo viste
     // semanas que existen: sin semana, no viste nada.
-    if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
+    if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
     const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
@@ -32244,8 +32405,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // tocando una imagen: se valida estricto; si viene roto, se ignora
   // (la semana se genera como hoy, nunca se frena).
   const ocEstiloVisual = demo.parseEstiloVisual(fields.estilo_visual);
-  if (!trialTestMode(req) && !onboardingAnswersOk(ocAns, { ig, web: webRaw })) {
-    fail(lang === 'en' ? 'Answer the quick questions first so your week comes out tailored to your business' : 'Respondé las preguntas rápidas primero así tu semana sale a medida de tu negocio');
+  // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Sin preguntas: el cuestionario
+  // retirado ya no es requisito para nadie — la semana nace de lo que
+  // publican (@ + web). Lo que SÍ se exige es identidad (@ o web): sin
+  // ella no hay nada de lo que armar el primer posteo. La puerta
+  // fail-closed de productos evidenciados SIGUE corriendo abajo (sin
+  // evidencia no hay semana).
+  if (!trialTestMode(req) && !ig && !webRaw) {
+    fail(lang === 'en' ? 'Tell me your Instagram @ or your website first so I can build your first post.' : 'Decime tu @ de Instagram o tu web primero así armo tu primer posteo.');
     return;
   }
   // (FUNDAMENTO-LITERAL · pieza 1) Sin aprobación del espejo no hay semana
@@ -32670,7 +32837,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     });
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
     // sin producto evidenciado no hay semana ni stream de piezas.
-    if (!trialTestMode(req) && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados })) {
+    if (!trialTestMode(req) && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       fail(lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', { falta_producto: true });
       return;
     }
@@ -35043,7 +35210,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v897';
+const BUILD_ID = '20261105-v898';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

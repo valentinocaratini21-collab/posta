@@ -149,8 +149,10 @@ function createGuest(db, { referralCode, lang, ig, domain, device }) {
 function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
   const em = String(email || '').trim().toLowerCase();
   if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return { error: 'email_invalid' };
-  if (!passwordHash) return { error: 'password_invalid' };
-  const row = db.prepare('SELECT id, is_guest, created_at, trial_ends_at FROM users WHERE id = ?').get(userId);
+  // (ONBOARDING-SIMPLE · 11/11) Sin contraseña, nunca: passwordHash es
+  // opcional; sin él, la fila conserva su hash ('' en invitados) y la
+  // entrada es solo por magic link.
+  const row = db.prepare('SELECT id, is_guest, created_at, trial_ends_at, password_hash FROM users WHERE id = ?').get(userId);
   if (!row) return { error: 'no_user' };
   if (!row.is_guest) return { error: 'not_guest' };
   const taken = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(em, userId);
@@ -162,15 +164,16 @@ function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
       if (hit && Number(hit.user_id) !== Number(userId)) consumed = true;
     }
   } catch (e) {}
+  const keepHash = passwordHash || row.password_hash || '';
   if (consumed) {
     db.prepare(`UPDATE users SET email = ?, password_hash = ?, is_guest = 0 WHERE id = ?`)
-      .run(em, passwordHash, userId);
+      .run(em, keepHash, userId);
     // Reloj consumido: fin = ahora. created_at NO se toca (el min() con
     // trial_ends_at manda igual); la prueba queda vencida → paywall.
     db.prepare(`UPDATE users SET trial_ends_at = ? WHERE id = ?`).run(Date.now(), userId);
   } else {
     db.prepare(`UPDATE users SET email = ?, password_hash = ?, is_guest = 0 WHERE id = ?`)
-      .run(em, passwordHash, userId);
+      .run(em, keepHash, userId);
   }
   const after = db.prepare('SELECT created_at, trial_ends_at FROM users WHERE id = ?').get(userId);
   return { ok: true, consumed, trialEnds: after ? after.trial_ends_at : null, createdAt: after ? after.created_at : null };

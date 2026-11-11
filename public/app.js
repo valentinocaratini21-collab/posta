@@ -993,7 +993,7 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'onboarding' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
@@ -2669,17 +2669,15 @@ function pzGuestAccountSheet(pending) {
   ov.className = 'modal-ov'; ov.id = 'pzGuestSheet'; ov.style.zIndex = '10004'; // (PRUEBA-ENTRADA) por encima de chatfull (300) y de pcsheet (10003): la hoja es un gate duro, nunca puede quedar tapada
   ov.innerHTML = `<div class="modal-card" style="max-width:420px">
     <h2 style="margin:0 0 6px">${en ? 'Create your account 💙' : 'Creá tu cuenta 💙'}</h2>
-    <p class="d" style="margin:0 0 14px">${en ? 'To keep going, Posty needs an account. Your feed, your posts and your trial stay exactly the same.' : 'Para seguir, Posty necesita una cuenta. Tu feed, tus posteos y tu prueba siguen exactamente igual.'}</p>
+    <p class="d" style="margin:0 0 14px">${en ? 'To keep going, Posty needs an account. No password — we send you a link to get in.' : 'Para seguir, Posty necesita una cuenta. Sin contraseña: te mandamos un link para entrar.'}</p>
     <div class="field"><input id="pzGuestEmail" type="email" placeholder="tu@email.com" autocomplete="email"></div>
-    <div class="field"><input id="pzGuestPass" type="password" placeholder="${en ? 'Password (6+ characters)' : 'Contraseña (6+ caracteres)'}" autocomplete="new-password"></div>
     <div id="pzGuestErr" class="err" style="display:none"></div>
-    <button class="btn btn-primary btn-block" id="pzGuestGo">${en ? 'Create my account' : 'Crear mi cuenta'}</button>
+    <button class="btn btn-primary btn-block" id="pzGuestGo">${en ? 'Send me the link' : 'Mandame el link'}</button>
     <button class="btn btn-ghost btn-block" id="pzGuestLater" style="margin-top:8px">${en ? 'Later' : 'Después'}</button>
   </div>`;
   ov.addEventListener('click', (e) => { if (e.target === ov) pzGuestCloseSheet(); });
   document.body.appendChild(ov);
   const emEl = document.getElementById('pzGuestEmail');
-  const pwEl = document.getElementById('pzGuestPass');
   const errEl = document.getElementById('pzGuestErr');
   const goBtn = document.getElementById('pzGuestGo');
   if (emEl) emEl.focus();
@@ -2687,33 +2685,34 @@ function pzGuestAccountSheet(pending) {
   document.getElementById('pzGuestLater').onclick = pzGuestCloseSheet;
   const submit = async () => {
     const email = (emEl.value || '').trim();
-    const password = pwEl.value || '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr(en ? 'Check your email' : 'Revisá el email'); return; }
-    if (password.length < 6) { showErr(en ? 'Password needs 6+ characters' : 'La contraseña tiene que tener 6 caracteres como mínimo'); return; }
-    goBtn.disabled = true; goBtn.textContent = en ? 'Creating…' : 'Creando…';
+    goBtn.disabled = true; goBtn.textContent = en ? 'Sending…' : 'Mandando…';
     try {
-      const r = await api.post('/api/guest/upgrade', { email, password });
-      pzGuestCloseSheet();
-      await refreshSession(true);
-      if (r && r.consumed) {
-        // La prueba de ese email ya se usó con otro @: sin prueba
-        // fresca — el camino honesto es Mi plan, con todo conservado.
-        try { toast(en ? 'That email already used its trial — pick your plan and your feed stays.' : 'Ese email ya usó su prueba — elegí tu plan y tu feed queda igual.'); } catch (e) {}
-        location.hash = '#/app/ajustes?plan=1';
-        PZ_GUEST_PENDING = null;
-        return;
-      }
-      const pend = PZ_GUEST_PENDING; PZ_GUEST_PENDING = null;
-      if (pend) { try { await pend(); } catch (e) { /* el reintento falló: la acción queda para el próximo toque */ } }
-      pzGuestMaybeIgPrompt();
+      const r = await api.post('/api/guest/upgrade', { email });
+      // (ONBOARDING-SIMPLE · 11/11) Sin contraseña, nunca: el link llega
+      // al email y el canje sube ESTA MISMA cuenta (reloj y posteos
+      // intactos). La hoja queda en «revisá tu email» con reintento.
+      ov.innerHTML = `<div class="modal-card" style="max-width:420px">
+        <h2 style="margin:0 0 6px">${en ? 'Check your email 💌' : 'Revisá tu email 💌'}</h2>
+        <p class="d" style="margin:0 0 14px">${en ? 'We sent you a link — open it and you are in, no password needed. Your feed and trial stay exactly the same.' : 'Te mandamos el link — abrilo y entrás, sin contraseña. Tu feed y tu prueba siguen exactamente igual.'}</p>
+        <button class="btn btn-primary btn-block" id="pzGuestOpened">${en ? 'I opened it — continue' : 'Ya lo abrí — seguir'}</button>
+        <button class="btn btn-ghost btn-block" id="pzGuestClose2" style="margin-top:8px">${en ? 'Later' : 'Después'}</button>
+      </div>`;
+      document.getElementById('pzGuestClose2').onclick = pzGuestCloseSheet;
+      document.getElementById('pzGuestOpened').onclick = async () => {
+        pzGuestCloseSheet();
+        await refreshSession(true);
+        const pend = PZ_GUEST_PENDING; PZ_GUEST_PENDING = null;
+        if (pend) { try { await pend(); } catch (e) { /* el reintento falló: la acción queda para el próximo toque */ } }
+        pzGuestMaybeIgPrompt();
+      };
     } catch (e) {
-      goBtn.disabled = false; goBtn.textContent = en ? 'Create my account' : 'Crear mi cuenta';
+      goBtn.disabled = false; goBtn.textContent = en ? 'Send me the link' : 'Mandame el link';
       showErr((e && e.message) || (en ? 'Something failed, try again' : 'Algo falló, probá de nuevo'));
     }
   };
   goBtn.onclick = submit;
-  pwEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  emEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') pwEl.focus(); });
+  emEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
 }
 function pzGuestCloseSheet() { const m = document.getElementById('pzGuestSheet'); if (m) m.remove(); }
 // Prompt de conectar IG (UN CLIC, UNA sola vez): tras crear la cuenta, si
@@ -2754,6 +2753,145 @@ function pzGuestDeviceId() {
     if (!d) { d = 'dvc_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('pz_device_id', d); }
     return d;
   } catch (e) { return ''; }
+}
+// (ONBOARDING-SIMPLE · 11/11 · ACT.4) El @ del invitado, dado en el chat.
+// Flujo: prefill (¿existe el @? ¿qué vende?) -> generate (la semana desde
+// lo publicado, con la evidencia del prefill) -> set-ig (la semana pasa a
+// SU cuenta; si el @ cambió, la semana vieja se borra ANTES de importar).
+// Sin prefill no hay generate: el @ tiene que existir y dejar ver algo.
+// La estrella solo se pide si el prefill no detectó ningún producto y el
+// rubro tampoco es específico (último recurso, en el chat, nunca en un
+// formulario).
+let PZ_GUEST_STAR_FOR = null;
+function pzGuestIg() {
+  try {
+    if (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) return String(PROFILE.ig_username).trim();
+    if (typeof ME !== 'undefined' && ME && ME.guest_ig) return String(ME.guest_ig).trim();
+  } catch (e) {}
+  return '';
+}
+function pzExtractIg(text) {
+  let s = String(text || '').trim();
+  if (!s) return '';
+  // Un email no es un @: si responde con el mail, no inventar un @ de él.
+  s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '').trim();
+  if (!s) return '';
+  let m = s.match(/(?:instagram\.com\/)([A-Za-z0-9._]{1,30})/i);
+  if (m) return m[1].replace(/^\.+|\.+$/g, '');
+  m = s.match(/@([A-Za-z0-9._]{2,30})/);
+  if (m) return m[1].replace(/^\.+|\.+$/g, '');
+  // Palabra suelta: solo si Posty acaba de preguntar por el @ (su último
+  // mensaje lo pide). Sin ese contexto, una palabra suelta es chat, no @.
+  if (/^[A-Za-z0-9._]{2,30}$/.test(s)) {
+    try {
+      const lastA = [...CHAT].reverse().find((x) => x && x.role === 'assistant');
+      if (lastA && /instagram/i.test(String(lastA.text || ''))) return s.toLowerCase();
+    } catch (e) {}
+  }
+  return '';
+}
+function pzGuestChatSay(text) {
+  try {
+    const ts = Date.now();
+    CHAT.push({ role: 'assistant', text, ts });
+    const box = document.getElementById('chatBox');
+    if (box) {
+      chatAppendMsg(box, chatMsgHtml('assistant', text, ts), ts);
+      chatScroll(true);
+    }
+  } catch (e) {}
+}
+async function pzGuestSetIg(ig) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  pzGuestChatSay(en ? `got it — @${ig}. let me look at what you post…` : `dale — @${ig}. ya miro lo que publicás…`);
+  try {
+    const device = (typeof pzGuestDeviceId === 'function') ? pzGuestDeviceId() : '';
+    const pf = await fetch('/api/trial/prefill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig, lang: en ? 'en' : 'es' }) });
+    const pj = await pf.json().catch(() => ({}));
+    if (!pf.ok || !pj || !pj.ok) {
+      pzGuestChatSay(en ? `i couldn't find that Instagram — check the @ and send it again 👇` : `no encontré ese Instagram — fijate el @ y mandámelo de nuevo 👇`);
+      return;
+    }
+    const det = (Array.isArray(pj.productos) ? pj.productos : []).map((p) => String((p && (p.nombre || p)) || '').trim()).filter(Boolean);
+    const category = String(pj.category || '').trim();
+    const rubroOk = !!(category && category.toLowerCase() !== 'otro');
+    if (!det.length && !rubroOk) {
+      PZ_GUEST_STAR_FOR = ig;
+      pzGuestChatSay(en ? `i can see your profile but not what you sell yet — what's the one thing you sell the most?` : `veo tu perfil pero todavía no sé qué vendés — ¿qué es lo que más vendés?`);
+      return;
+    }
+    const fd = new FormData();
+    fd.append('business', String(pj.name || '') || ig);
+    fd.append('ig', ig);
+    fd.append('category', category || 'otro');
+    fd.append('country', en ? 'US' : 'AR');
+    fd.append('tone', 'vos');
+    fd.append('lang', en ? 'en' : 'es');
+    fd.append('producto_mix', 'todo');
+    if (det.length) fd.append('productos_detectados', JSON.stringify(det));
+    if (!det.length && rubroOk) fd.append('rubro_detectado', category);
+    const gr = await fetch('/api/trial/generate', { method: 'POST', body: fd });
+    const gj = await gr.json().catch(() => ({}));
+    if (!gr.ok || !gj || gj.falta_producto) {
+      PZ_GUEST_STAR_FOR = ig;
+      pzGuestChatSay(en ? `i still don't know what you sell — tell me in your own words and i'll build your week around it 👇` : `todavía no sé qué vendés — decímelo con tus palabras y armo tu semana a medida 👇`);
+      return;
+    }
+    const sr = await api.post('/api/guest/set-ig', { ig, device });
+    if (sr && sr.need_generate) {
+      const sr2 = await api.post('/api/guest/set-ig', { ig, device });
+      if (!sr2 || !sr2.ok) throw new Error(String((sr2 && sr2.error) || 'set-ig'));
+      pzGuestSetIgDone(sr2, en);
+      return;
+    }
+    if (!sr || !sr.ok) throw new Error(String((sr && sr.error) || 'set-ig'));
+    pzGuestSetIgDone(sr, en);
+  } catch (e) {
+    const msg = String((e && e.message) || '');
+    if (/trial_used|ya usó su prueba|already used/i.test(msg)) {
+      pzGuestChatSay(en ? `that Instagram already used its one free trial 💛 log in to your account or pick your plan.` : `ese Instagram ya usó su única prueba gratis 💛 entrá a tu cuenta o elegí tu plan.`);
+      return;
+    }
+    pzGuestChatSay(en ? `something failed building your week — send me your @ again and i'll try once more 👇` : `algo falló armando tu semana — mandame tu @ de nuevo y lo intento otra vez 👇`);
+  }
+}
+async function pzGuestSetIgStar(ig, estrella) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  try {
+    const device = (typeof pzGuestDeviceId === 'function') ? pzGuestDeviceId() : '';
+    const fd = new FormData();
+    fd.append('business', ig);
+    fd.append('ig', ig);
+    fd.append('category', 'otro');
+    fd.append('producto_mix', 'libre');
+    fd.append('producto_estrella', String(estrella || '').trim().slice(0, 60));
+    fd.append('lang', en ? 'en' : 'es');
+    const gr = await fetch('/api/trial/generate', { method: 'POST', body: fd });
+    const gj = await gr.json().catch(() => ({}));
+    if (!gr.ok || !gj || gj.falta_producto) {
+      PZ_GUEST_STAR_FOR = ig;
+      pzGuestChatSay(en ? `i still can't see what you sell — tell me the one thing you sell the most, in your own words 👇` : `todavía no veo qué vendés — decime lo que más vendés, con tus palabras 👇`);
+      return;
+    }
+    const sr = await api.post('/api/guest/set-ig', { ig, device });
+    if (!sr || !sr.ok) throw new Error(String((sr && sr.error) || 'set-ig'));
+    pzGuestSetIgDone(sr, en);
+  } catch (e) {
+    pzGuestChatSay(en ? `something failed — send me your @ again and i'll try once more 👇` : `algo falló — mandame tu @ de nuevo y lo intento otra vez 👇`);
+  }
+}
+function pzGuestSetIgDone(sr, en) {
+  pzClearTrialCache();
+  try { if (typeof refreshSession === 'function') refreshSession(true); } catch (e) {}
+  const reply = (sr && sr.reply) || (en ? `done! your week is in your feed — take a look 👇` : `¡listo! tu semana está en tu feed — mirala 👇`);
+  pzGuestChatSay(reply);
+}
+// (ONBOARDING-SIMPLE) Limpieza del @ viejo: cuando el @ cambia, nada del
+// trial anterior (perfil cacheado, onboarding viejo, resumen) sobrevive.
+function pzClearTrialCache() {
+  try { localStorage.removeItem('posta_trial_profile'); } catch (e) {}
+  try { localStorage.removeItem('posta_ob'); } catch (e) {}
+  try { localStorage.removeItem('posta_onboarding_resume_v1'); } catch (e) {}
 }
 // Pantalla cuando hay sesión pero no hay internet: reintentar, nunca pedir login.
 function offlineView() {
@@ -10712,18 +10850,34 @@ async function pzCaptionFeedback(postId, msgId, feedback, btn) {
   }
 }
 async function chatSend(textArg) {
-  // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: el invitado
-  // todavía no manda — primero la hoja de crear cuenta; al crearla,
-  // este mismo chatSend se reintenta con el texto intacto (viaja en el
-  // argumento: ya no hay input que limpiar).
   // (v846 · CHAT SOLO POR AUDIO) El texto llega como argumento (toque
   // en una opción, transcripción de voz o envío programado): el chat
   // ya no tiene campo de texto.
-  if (pzIsGuest()) { pzGuestAccountSheet(() => chatSend(textArg)); return; }
   const text = String(textArg || '').trim();
   // Las fotos se pueden mandar solas, sin texto: antes el botón no hacía nada en ese caso.
   const unsent = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent);
   if (!text && !unsent.length) return;
+  // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Invitado sin @: si el texto parece
+  // un @, ES el @ (no un mensaje para el chat) — la semana se arma desde
+  // ese @ con lo que publican. Si Posty está esperando la estrella (el
+  // prefill no detectó productos), el texto ES la estrella. La burbuja
+  // del usuario se pinta acá (el chatSend normal no corre).
+  if (pzIsGuest() && !pzGuestIg() && text && !unsent.length) {
+    const igHere = pzExtractIg(text);
+    if (igHere || PZ_GUEST_STAR_FOR) {
+      try {
+        const sts = Date.now();
+        CHAT.push({ role: 'user', text, ts: sts });
+        const boxHere = document.getElementById('chatBox');
+        if (boxHere) chatAppendMsg(boxHere, chatMsgHtml('user', text, sts), sts);
+        chatScroll(true);
+      } catch (e) {}
+      if (igHere) { PZ_GUEST_STAR_FOR = null; pzGuestSetIg(igHere); return; }
+      const igStar = PZ_GUEST_STAR_FOR; PZ_GUEST_STAR_FOR = null;
+      pzGuestSetIgStar(igStar, text);
+      return;
+    }
+  }
   // (LOTE REDISENO-R6) El chat por temas se come el envío cuando el tema
   // abierto lo entiende (cambialo, dale, después, un número de consultas,
   // el texto nuevo, la foto nueva): el resto sigue al chat normal.
@@ -12311,6 +12465,15 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // porque no hay nada en camino. Tarjeta honesta con camino a Ajustes.
     // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
     // no corra en este caso.
+    // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Invitado sin @: el camino es el
+    // chat, no Ajustes ni un formulario — Posty pregunta el @ ahí y arma
+    // la semana desde lo que publican.
+    if (noDna && pzIsGuest()) return `<div class="hs-nodna" id="hsNoDna">
+    <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
+    <b>Para armar tus posteos decime tu Instagram ${pzIc('arrowDown', 13)}</b>
+    <p>Posty arma tu semana con lo que ya publicás</p>
+    <a class="btn btn-primary btn-block" href="#/app/chat" style="margin-top:4px">Decirle mi @ a Posty</a>
+  </div>`;
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
     <b>Para armar tus posteos necesito conocer tu negocio ${pzIc('arrowDown', 13)}</b>
@@ -15232,7 +15395,7 @@ async function runAutopilot(n, tag) {
       // Sin datos del negocio no generamos nada: primero el onboarding conversacional.
       // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
       if (r.need_profile) {
-        prog.innerHTML = `<div class="okmsg">para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/schedule" style="color:var(--cel);font-weight:700">hacelo después ${pzIc('arrowRight', 14)}</a></div>`;
+        prog.innerHTML = `<div class="okmsg">para armar tu semana contame tu Instagram en el <a href="#/app/chat" style="color:var(--cel);font-weight:700">chat con Posty</a> y la armo con lo que ya publicás</div>`;
         return;
       }
       ideas = r.ideas || [];
@@ -17793,14 +17956,15 @@ async function maybeAutoStartWeek() {
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding(isReg) {
-  // FASE 4 (autopilot): onboarding si falta el negocio; si no, directo a la
-  // semana. El chat queda como escape hatch en la navegación secundaria.
+  // (ONBOARDING-SIMPLE · 11/11) Sin onboarding: tras el login/registro se
+  // aterriza DIRECTO en el producto (Inicio, con su primer posteo). El
+  // chat queda a un toque en la navegación.
   const homeTab = mzHomeHash();
   const chosen = localStorage.getItem('posta_chosen_plan');
   // Deep-link previo al login: si el guardia nos desvio desde una ruta
   // #/app/* concreta, el destino tras el login es ESA, no el default.
   // Se consume siempre (aunque no se use) para que no salte despues.
-  // En un registro fresco manda el onboarding: la cuenta recien nace.
+  // En un registro fresco la cuenta recien nace: va directo al producto.
   let ret = null;
   try { ret = sessionStorage.getItem('posta_return_to'); sessionStorage.removeItem('posta_return_to'); } catch (e) {}
   const retOk = !isReg && ret && ret.startsWith('#/app/') && ret.split('?')[0] !== '#/app/onboarding';
@@ -17817,8 +17981,9 @@ function postAuthLanding(isReg) {
   } else if (retOk) {
     location.hash = ret;
   } else {
-    location.hash = '#/app/onboarding';
-    OB = freshOB();
+    // (ONBOARDING-SIMPLE) Sin negocio todavía: igual al producto — el @ se
+    // pide en el chat y la semana se arma desde lo que publican.
+    location.hash = homeTab;
   }
 }
 function igDismissKey() {
@@ -17829,7 +17994,6 @@ function maybeShowIgPopup(tab) {
   try {
     if (!ME || !PROFILE) return;
     if (PROFILE.ig_connected) return;
-    if (tab === 'onboarding') return; // no interrumpir el onboarding
     if (document.getElementById('igFirstOverlay')) return;
     let dismissed = null;
     try { dismissed = localStorage.getItem(igDismissKey()); } catch (e) {}
@@ -17923,330 +18087,6 @@ function handleIgResult() {
   }
 }
 
-/* ---------- ONBOARDING (4 pasos) ---------- */
-let OB = null;
-let IG_VERIFIED_AT = null;
-const igSince = (s) => {
-  try {
-    const d = String(s.ig_token_issued_at || '').slice(0, 10).split('-');
-    return d.length === 3 ? `${d[2]}/${d[1]}` : '';
-  } catch (e) { return ''; }
-}; // última verificación manual de la conexión IG (HH:MM)
-let IG_MODE_WARN = false;  // aviso: modo Real elegido sin cuenta conectada
-function freshOB() {
-  return {
-    chat: [],            // [{role:'user'|'assistant', text}]
-    step: 0, total: 8,   // respuestas dadas
-    chips: null, awaitLogo: false, awaitPhotos: false,
-    loading: false, done: false, started: false,
-    phase: 'chat',       // 'chat' | 'summary'
-    mode: 'form',        // FASE 4: 'form' (default, directo) | 'chat' (alternativa conversacional)
-    profile: null, summary: null,
-    colors: [],          // [c1,c2,c3] extraídos del logo
-  };
-}
-// ---- Onboarding diferible: el progreso vive en localStorage ('posta_ob') y se retoma ----
-const OB_KEY = 'posta_ob';
-function saveOB() {
-  try {
-    if (!OB) return;
-    const { loading, _resumePending, ...rest } = OB; // transitorios: no se persisten
-    localStorage.setItem(OB_KEY, JSON.stringify(rest));
-  } catch (e) {}
-}
-function loadOB() {
-  try {
-    const raw = localStorage.getItem(OB_KEY);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (!o || typeof o !== 'object' || !Array.isArray(o.chat) || typeof o.step !== 'number') return null; // corrupto
-    if (o.phase === 'summary' && o.profile) { /* resumen sin confirmar: se retoma */ }
-    else if (o.done || o.step >= (o.total || 8)) return null; // ya terminado: se descarta
-    const clean = Object.assign(freshOB(), o, { loading: false });
-    const last = clean.chat[clean.chat.length - 1];
-    if (clean.phase === 'chat' && !clean.done && last && last.role === 'user') clean._resumePending = true; // la respuesta de la IA quedó en vuelo: se re-pide al entrar
-    return clean;
-  } catch (e) { return null; }
-}
-function clearOB() { try { localStorage.removeItem(OB_KEY); } catch (e) {} }
-// ---- Onboarding conversacional ----
-function obScroll() {
-  const b = $('#obBox');
-  if (b) b.scrollTop = b.scrollHeight;
-}
-async function obNext() {
-  const o = OB; if (!o || o.done || o.phase !== 'chat') return;
-  o.loading = true; render();
-  try {
-    const r = await api.post('/api/onboarding/chat', { history: o.chat.map(m => ({ role: m.role, text: m.text })) });
-    if (r && r.done) { o.done = true; obFinish(); return; }
-    if (r && r.reply) {
-      o.chat.push({ role: 'assistant', text: r.reply });
-      o.step = typeof r.answered === 'number' ? r.answered : o.step;
-      o.chips = r.chips || null;
-      o.awaitLogo = !!r.awaitLogo;
-      o.awaitPhotos = !!r.awaitPhotos;
-    } else {
-      // Sin respuesta válida: sacar el mensaje del usuario para que reintente
-      const ui = o.chat.map((m, i) => m.role === 'user' ? i : -1).filter(i => i >= 0).pop();
-      if (ui !== undefined) o.chat.splice(ui, 1);
-      o.chat.push({ role: 'assistant', text: 'Se me cortó un segundo 😅 ¿me repetís eso?' });
-    }
-  } catch (e) {
-    o.chat.push({ role: 'assistant', text: 'Tuve un problema de conexión 😅 ¿probamos de nuevo? Escribime tu respuesta.' });
-  }
-  o.loading = false; saveOB(); render(); obScroll();
-}
-async function obSend(text) {
-  const o = OB; if (!o || o.loading || o.done || o.phase !== 'chat') return;
-  track('onboarding_step', { step: o.step, total: o.total });
-  o.chat.push({ role: 'user', text: (text || '').trim() });
-  o.chips = null;
-  saveOB();
-  render(); obScroll();
-  obNext();
-}
-async function obFinish() {
-  const o = OB; if (!o) return;
-  o.loading = true; render();
-  try {
-    const qa = [];
-    let lastQ = '';
-    o.chat.forEach(m => {
-      if (m.role === 'assistant') lastQ = m.text;
-      else if (m.role === 'user') { qa.push({ q: lastQ, text: m.text }); lastQ = ''; }
-    });
-    const r = await api.post('/api/onboarding/finish', { history: qa });
-    if (r && r.ok) { o.profile = r.profile; o.summary = r.summary; o.phase = 'summary'; }
-    else o.chat.push({ role: 'assistant', text: 'No pude cerrar la entrevista 😅 ¿me contás de nuevo en una línea qué vendés?' }), o.done = false, o.phase = 'chat';
-  } catch (e) {
-    o.chat.push({ role: 'assistant', text: 'Tuve un problema cerrando 😅 escribime "listo" y lo intentamos de nuevo.' });
-    o.done = false; o.phase = 'chat';
-  }
-  o.loading = false; saveOB(); render(); obScroll();
-}
-// FASE 4: guarda el perfil del onboarding (form directo o entrevista) con el
-// mismo mapeo a /api/profile, y aterriza en la semana. Extraído de obConfirmSave.
-async function obSaveProfile(p, colors) {
-  const cats = ['ropa', 'gastronomia', 'cafeteria', 'belleza', 'barberia', 'fitness', 'salud', 'mascotas', 'servicios', 'educacion', 'tecnologia', 'hogar', 'inmobiliaria', 'eventos', 'viajes', 'arte'];
-  const category = cats.includes(p.category) ? p.category : 'otro';
-  const desc = [p.description, p.audience ? `Cliente ideal: ${p.audience}` : '', p.differentiator ? `Diferencial: ${p.differentiator}` : ''].filter(Boolean).join(' ').slice(0, 600);
-  const igu = String(p.instagram || '').trim().replace(/^@/, '').replace(/\s+/g, '');
-  await api.put('/api/profile', {
-    business_name: p.business_name || 'Mi negocio', category, description: desc,
-    competitors: '', goal: p.goal || 'vender',
-    ig_username: igu,
-    tone: (PROFILE && PROFILE.tone) || 'canchero',
-  });
-  const cols = (colors || []).filter((c, i, a) => c && a.indexOf(c) === i);
-  if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
-  SETTINGS = await api.get('/api/settings');
-  await refreshSession(true);
-  clearOB(); // onboarding confirmado: ya no hay nada que retomar
-  // (Pagos lado app, 2026-10-25) Al terminar el onboarding, el intento de
-  // checkout guardado en el registro (deep link con agente=) manda sobre
-  // posta_chosen_plan y se consume (one-shot). Sin intento, legacy intacto.
-  let checkoutIntent = null;
-  try { checkoutIntent = localStorage.getItem('posta-checkout-intent'); localStorage.removeItem('posta-checkout-intent'); } catch (e) {}
-  const chosenPlan = localStorage.getItem('posta_chosen_plan');
-  location.hash = checkoutIntent ? checkoutIntent : chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/schedule';
-}
-async function obConfirmSave() {
-  const o = OB; if (!o) return;
-  const btn = $('#obConfirm'); if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
-  try {
-    await obSaveProfile(o.profile || {}, o.colors || []);
-  } catch (e) {
-    const m = $('#obMsg'); if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-    if (btn) { btn.disabled = false; btn.innerHTML = pzIc('checkCircle', 14) + ' Todo bien, arranquemos'; }
-  }
-}
-// FASE 4: submit del formulario directo — valida, arma el perfil y guarda.
-async function obFormSubmit() {
-  const o = OB; if (!o) return;
-  const gv = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
-  const msg = $('#obFormMsg');
-  const biz = gv('obfBiz'), cat = gv('obfCat');
-  if (!biz) { if (msg) msg.innerHTML = '<div class="err">Contanos el nombre de tu negocio</div>'; return; }
-  if (!cat) { if (msg) msg.innerHTML = '<div class="err">Elegí tu rubro</div>'; return; }
-  const btn = $('#obFormGo');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
-  try {
-    await obSaveProfile({
-      business_name: biz, category: cat,
-      description: gv('obfDesc'), audience: '', differentiator: '',
-      instagram: gv('obfIg'), goal: gv('obfGoal') || 'vender',
-    }, []);
-    if (msg) msg.innerHTML = '';
-  } catch (e) {
-    if (msg) msg.innerHTML = `<div class="err">${esc((e && e.message) || 'No se pudo guardar')}</div>`;
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Armar mi semana ' + pzIc('arrowRight', 14); }
-  }
-}
-function obSummaryHTML() {
-  const o = OB, p = o.profile || {};
-  const rows = [
-    [pzIc('store', 14), 'Negocio', p.business_name],
-    [pzIc('shirt', 14), 'Rubro', p.category && p.category !== 'otro' ? p.category : ''],
-    [pzIc('target', 14), 'Cliente ideal', p.audience],
-    [pzIc('sparkle', 14), 'Diferencial', p.differentiator],
-    [pzIc('camera', 14), 'Instagram', p.instagram ? '@' + String(p.instagram).replace(/^@/, '') : ''],
-    [pzIc('rocket', 14), 'Objetivo', ({ vender: 'Vender más', seguidores: 'Conseguir seguidores', local: 'Llenar mi local', novedades: 'Contar novedades' })[p.goal] || ''],
-  ].filter(([, , v]) => v);
-  return `<div class="page-head"><div class="ph-ico">${pzIc('idea', 20)}</div><div class="ph-txt"><h1>Esto entendí</h1><p class="sub">Revisalo — con esto armo tu contenido.</p></div></div>
-  <div class="card" style="max-width:640px">
-    <p style="font-size:14px;line-height:1.65;margin:0 0 14px">${esc(o.summary || '')}</p>
-    ${rows.map(([ico, k, v]) => `<div class="cm-tip"><span>${ico}</span><span><b>${esc(k)}:</b> ${esc(v)}</span></div>`).join('')}
-    ${o.colors.length >= 2 ? `<div class="cm-tip"><span>${pzIc('palette', 14)}</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:11.5px">de tu logo</span></span></div>` : ''}
-    <div id="obMsg" style="margin-top:8px"></div>
-    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
-      <button class="btn btn-ghost" id="obFix">${pzIc('pencil', 18)} Corregir</button>
-      <button class="btn btn-primary" id="obConfirm" style="flex:1">${pzIc('checkCircle', 18)} Todo bien, arranquemos</button>
-    </div>
-    <div style="text-align:center;margin-top:14px"><a href="#/app/schedule" style="color:var(--dim);font-size:12.5px">Hacerlo después ${pzIc('arrowRight', 14)}</a></div>
-  </div>`;
-}
-function onboardingView() {
-  const o = OB;
-  // (LOTE GLASS TODAS) Envoltorio para vidrio: las tres variantes usan .card
-  // y sin envoltorio no hay cómo vidriarlas sin tocar .card global.
-  if (o.phase === 'summary' && o.profile) return '<div class="ob-wrap">' + obSummaryHTML() + '</div>';
-  // FASE 4 (autopilot): el default es el formulario directo; la entrevista
-  // conversacional queda como alternativa explícita (modo 'chat').
-  if (o.mode === 'chat') return '<div class="ob-wrap">' + obChatHTML(o) + '</div>';
-  return '<div class="ob-wrap">' + obFormHTML() + '</div>';
-}
-
-// FASE 4 — formulario directo de onboarding (default): 5 datos y listo, sin
-// charla. Guarda con el mismo mapeo que la entrevista (obSaveProfile).
-function obFormHTML() {
-  const cats = [['ropa','shirt','Ropa'],['gastronomia','utensils','Gastronomía'],['cafeteria','cup','Cafetería'],['belleza','lipstick','Belleza'],['barberia','barber','Barbería'],['fitness','dumbbell','Fitness'],['salud','stethoscope','Salud'],['mascotas','paw','Mascotas'],['servicios','wrench','Servicios'],['educacion','book','Educación'],['tecnologia','laptop','Tecnología'],['hogar','home','Hogar y deco'],['inmobiliaria','building','Inmobiliaria'],['eventos','gift','Eventos'],['viajes','send','Viajes'],['arte','palette','Arte y diseño'],['otro','plus','Otro']];
-  const goals = [['vender','Vender más'],['seguidores','Conseguir seguidores'],['local','Llenar mi local'],['novedades','Contar novedades']];
-  return `<div class="page-head"><div class="ph-ico">${pzIc('rocket', 20)}</div><div class="ph-txt"><h1>Contame de tu negocio</h1><p class="sub">5 datos y armo todo por vos — sin charlas.</p></div></div>
-  <div class="card" style="max-width:640px">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después ${pzIc('arrowRight', 14)}</a>
-    </div>
-    <div class="field"><label>Nombre de tu negocio *</label><input id="obfBiz" placeholder="Ej: Café Martínez" maxlength="60" autocomplete="off"></div>
-    <div class="field"><label>Rubro *</label><input type="hidden" id="obfCat" value=""><div class="pz-pick">${cats.map(c => `<button type="button" class="pz-pick-btn" data-pz-pick="${c[0]}" onclick="pzPick(this,'obfCat')">${pzIc(c[1], 20)}<span>${c[2]}</span></button>`).join('')}</div></div>
-    <div class="field"><label>Instagram</label><input id="obfIg" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-    <div class="field"><label>¿Qué buscás con tu Instagram?</label><select id="obfGoal">${goals.map(g => `<option value="${g[0]}">${g[1]}</option>`).join('')}</select></div>
-    <div class="field" style="margin-bottom:6px"><label>¿Qué vendés?</label><textarea id="obfDesc" rows="3" maxlength="600" placeholder="En 1-2 líneas: qué ofrecés y qué te hace diferente"></textarea></div>
-    <div id="obFormMsg" style="margin-top:8px"></div>
-    <button class="btn btn-primary btn-block" id="obFormGo" style="margin-top:14px">Armar mi semana ${pzIc("arrowRight", 14)}</button>
-    <p style="text-align:center;margin:12px 0 0"><button type="button" id="obChatAlt" style="background:none;border:0;color:var(--cel);font-size:12.5px;font-weight:700;cursor:pointer">¿Preferís contármelo charlando? ${pzIc('chat', 15)}</button></p>
-  </div>`;
-}
-
-// Entrevista conversacional (alternativa, ya no default): extraída de
-// onboardingView sin cambios de lógica. Usa /api/onboarding/chat.
-function obChatHTML(o) {
-  if (!o.started || o._resumePending) { o.started = true; o._resumePending = false; setTimeout(() => { if (OB === o && !o.loading && !o.done && o.phase === 'chat') obNext(); }, 60); }
-  const msgs = o.chat.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.role === 'user' && !m.text ? '⏭️ Salteado' : m.text)}</div>`).join('');
-  const pct = Math.round((o.step / o.total) * 100);
-  return `<div class="page-head"><div class="ph-ico">${pzIc('rocket', 20)}</div><div class="ph-txt"><h1>Te conozco primero</h1><p class="sub">Una charla rápida — con esto armo todo por vos.</p></div></div>
-  <div class="card" style="max-width:640px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <span style="font-size:11.5px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
-      <span style="display:flex;gap:10px;align-items:center;flex:none">
-        ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
-        <button type="button" id="obFormAlt" style="background:none;border:0;color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer">Completarlo directo ${pzIc('arrowRight', 14)}</button>
-        <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después ${pzIc('arrowRight', 14)}</a>
-      </span>
-    </div>
-    <div style="height:6px;border-radius:99px;background:var(--line);margin:0 0 14px;overflow:hidden"><div style="height:100%;width:${pct}%;border-radius:99px;background:linear-gradient(90deg,var(--cel),var(--yel));transition:width .4s"></div></div>
-    <div class="chat-box" id="obBox" style="min-height:230px;max-height:48vh">${msgs}${o.loading ? `<div class="chat-msg ai">⏳ …</div>` : ''}</div>
-    ${o.chips && !o.loading ? `<div class="chat-chips" style="margin-top:10px">${o.chips.map(c => `<button data-obchip="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
-    <div class="chat-input-row" style="margin-top:10px">
-      ${o.awaitLogo && !o.loading ? `<button class="btn btn-soft" id="obLogoBtn" title="Subir logo">${pzIc('share', 18)}</button><input type="file" id="obLogoFile" accept="image/*,.pdf,.docx" hidden>` : ''}
-      ${o.awaitPhotos && !o.loading ? `<button class="btn btn-soft" id="obPhotosBtn" title="Subir fotos">${pzIc('camera', 18)}</button><input type="file" id="obPhotosFile" accept="image/*" multiple hidden>` : ''}
-      <input id="obInput" class="in" placeholder="${o.awaitPhotos ? 'O escribí "saltear"' : 'Escribí tu respuesta…'}" maxlength="600" autocomplete="off" ${o.loading ? 'disabled' : ''}>
-      <button class="btn btn-primary" id="obSend" title="Enviar" ${o.loading ? 'disabled' : ''}>${pzIc('send', 16)}</button>
-    </div>
-    ${o.awaitPhotos && !o.loading ? `<div id="obPhotosPrev" class="ob-photos-prev"></div>` : ''}
-    <div id="obMsg" style="margin-top:8px"></div>
-  </div>`;
-}
-
-function bindOnboarding() {
-  const o = OB; if (!o) return;
-  // FASE 4: formulario directo (default) — cableado del form + alternancia
-  // de modo. (Esta función nunca se llamaba: la entrevista estaba sin cablear.)
-  const fGo = $('#obFormGo');
-  if (fGo) fGo.onclick = obFormSubmit;
-  const cAlt = $('#obChatAlt');
-  if (cAlt) cAlt.onclick = () => { o.mode = 'chat'; saveOB(); render(); };
-  const fAlt = $('#obFormAlt');
-  if (fAlt) fAlt.onclick = () => { o.mode = 'form'; saveOB(); render(); };
-  const inp = $('#obInput'), send = $('#obSend');
-  const doSend = () => { if (inp && !inp.disabled) { obSend(inp.value); inp.value = ''; } };
-  if (send) send.onclick = doSend;
-  if (inp) { inp.onkeydown = e => { if (e.key === 'Enter') doSend(); }; if (!inp.disabled) setTimeout(() => { try { inp.focus(); } catch (e) {} }, 150); }
-  const sk = $('#obSkip'); if (sk) sk.onclick = () => obSend('');
-  $$('[data-obchip]').forEach(b => b.onclick = () => obSend(b.dataset.obchip));
-  const lb = $('#obLogoBtn'), lf = $('#obLogoFile');
-  if (lb && lf) {
-    lb.onclick = () => lf.click();
-    lf.onchange = async () => {
-      const orig = lf.files[0]; lf.value = '';
-      if (!orig) return;
-      const msg = $('#obMsg');
-      try {
-        const nm = (orig.name || '').toLowerCase();
-        if (nm.endsWith('.pdf') || nm.endsWith('.docx')) { if (msg) msg.innerHTML = '<div class="hint">⏳ Convirtiendo tu archivo a imagen…</div>'; }
-        const f = await logoFileToImage(orig);
-        await uploadAssetFile(f, 'logo');
-        try {
-          const img = await loadImageFile(f);
-          const cols = extractTopColors(img, 3);
-          o.colors = cols.filter(Boolean).slice(0, 3);
-        } catch (e) { /* mantiene sin colores */ }
-        if (msg) msg.innerHTML = '';
-        obSend('✅ Logo subido');
-      } catch (e) {
-        if (msg) msg.innerHTML = (e && e.cancelled) ? '' : `<div class="err">${esc(e.message)}</div>`;
-      }
-    };
-  }
-  const cf = $('#obConfirm'); if (cf) cf.onclick = obConfirmSave;
-  // Paso de fotos del onboarding: hasta 5 fotos del negocio → biblioteca semilla
-  // para que la IA genere contenido parecido cada semana.
-  const pb = $('#obPhotosBtn'), pf = $('#obPhotosFile'), pv = $('#obPhotosPrev');
-  if (pb && pf) {
-    pb.onclick = () => pf.click();
-    pf.onchange = async () => {
-      const files = [...pf.files].filter(f => f.type.startsWith('image/')).slice(0, 5);
-      pf.value = '';
-      if (!files.length) return;
-      const msg = $('#obMsg');
-      pb.disabled = true;
-      let ok = 0;
-      try {
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          if (pv) pv.insertAdjacentHTML('beforeend', `<span class="ob-ph-thumb"><img src="${URL.createObjectURL(f)}" alt=""></span>`);
-          if (msg) msg.innerHTML = `<div class="hint">${pzIc('clock', 14)} Subiendo ${i + 1} de ${files.length}…</div>`;
-          await uploadAssetFile(f, 'photo');
-          ok++;
-          if (pv && pv.lastElementChild) pv.lastElementChild.classList.add('done');
-        }
-        if (msg) msg.innerHTML = '';
-        obSend(`✅ ${ok} ${ok === 1 ? 'foto subida' : 'fotos subidas'}`);
-      } catch (e) {
-        pb.disabled = false;
-        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudieron subir')}</div>`;
-      }
-    };
-  }
-  const fx = $('#obFix');
-  if (fx) fx.onclick = () => {
-    o.phase = 'chat';
-    o.chat.push({ role: 'assistant', text: 'Dale, decime qué tengo que corregir 👇' });
-    saveOB();
-    render(); obScroll();
-  };
-  obScroll();
-}
 const GOALS = [
   ['vender', 'coin', 'Vender más', 'Que cada post traiga clientes y ventas'],
   ['seguidores', 'chartUp', 'Más seguidores', 'Crecer la comunidad y el alcance'],
@@ -18638,7 +18478,7 @@ function pzPrefetchKick() {
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
   else if (tab === 'video') { location.hash = '#/app/schedule'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
   else if (tab === 'fotos') { location.hash = '#/app/ajustes'; return; } // Mis fotos vive en Ajustes > Mi marca
-  else if (tab === 'onboarding') { if (!OB) OB = loadOB() || freshOB(); content = onboardingView(); }
+  else if (tab === 'onboarding') { location.hash = '#/app/inicio'; return; } // (ONBOARDING-SIMPLE) links viejos aterrizan en el producto
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
   else if (tab === 'ads') { content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web)
@@ -28569,7 +28409,6 @@ function bindApp(tab) {
   if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();
   if (tab === 'inicio') bindInicio();
-  if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)
   if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números
   if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
