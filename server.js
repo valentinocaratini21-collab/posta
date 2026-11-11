@@ -8531,8 +8531,17 @@ app.post('/api/admin/siembra-nails', requireAdminToken, express.json(), (req, re
     const missing = files.filter((f) => !fs.existsSync(path.join(srcDir, f)));
     if (missing.length) return res.status(502).json({ ok: false, error: 'faltan piezas en public/siembra-nails: ' + missing.join(', ') });
     // 2) Idempotencia: si la siembra ya existe, no duplicar.
-    const ya = db.prepare(`SELECT id, scheduled_at, media_type, image_path, caption FROM posts WHERE user_id = ? AND source = ? ORDER BY scheduled_at`).all(UID, SRC);
-    if (ya.length) return res.json({ ok: true, already_seeded: true, posts: ya });
+    const ya = db.prepare(`SELECT id, scheduled_at, media_type, image_path, caption, cover_path FROM posts WHERE user_id = ? AND source = ? ORDER BY scheduled_at`).all(UID, SRC);
+    if (ya.length) {
+      // (REEL-HOY-SIN-POSTER v915 · 11/11 · reparación: el director borraba la portada sembrada del video (cover_path='') en 'natural'/'keep'. Si el video quedó sin portada y el archivo sigue en MEDIA_DIR, se restaura — solo esa columna, idempotente: la segunda llamada ya no ve nada que reparar.)
+      const vid = ya.find((p) => p.media_type === 'video');
+      const faltaPortada = !!(vid && !String(vid.cover_path || '') && fs.existsSync(path.join(MEDIA_DIR, 'tira-nails-2-cover.jpg')));
+      if (faltaPortada && req.body && req.body.confirm === true) {
+        db.prepare(`UPDATE posts SET cover_path = ? WHERE id = ?`).run('/media/tira-nails-2-cover.jpg', vid.id);
+        return res.json({ ok: true, already_seeded: true, portada_reparada: { id: vid.id, cover_path: '/media/tira-nails-2-cover.jpg' }, posts: ya });
+      }
+      return res.json({ ok: true, already_seeded: true, ...(faltaPortada ? { portada_pendiente: { id: vid.id, cover_path: '/media/tira-nails-2-cover.jpg' } } : {}), posts: ya });
+    }
     // 3) Plan (dry-run): que se ve antes de tocar nada.
     const old = OLD.map((id) => {
       const p = db.prepare('SELECT id, status, scheduled_at, media_type FROM posts WHERE id = ? AND user_id = ?').get(id, UID);
@@ -17050,11 +17059,16 @@ async function composeWeekFeed(uid, weekKey, tag) {
       }
       const decision = {
         action: gate.action, frameIx: gate.frameIx, wantFamily: want,
-        targetLum: gate.targetLum || null, graded, reason: gate.reason, coverPath,
+        targetLum: gate.targetLum || null, graded, reason: gate.reason,
+        // (v915 · la portada efectiva: la nueva si el director generó una, si no la que ya había — 'natural'/'keep' no la tocan.)
+        coverPath: coverPath || piece._prevCover || '',
       };
-      try { db.prepare('UPDATE posts SET cover_path = ? WHERE id = ?').run(coverPath, piece.id); } catch (e) {}
-      if (piece._prevCover && piece._prevCover !== coverPath && piece._prevCover.indexOf('/media/feedcover-') === 0) {
-        try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(piece._prevCover))); } catch (e) {}
+      // (REEL-HOY-SIN-POSTER v915 · 11/11 · el director NUNCA borra una portada que ya existe: 'natural' y 'keep' significan «queda la que hay» — escribir '' borró la portada sembrada de 593 (el archivo seguía en /media/, solo se perdió el puntero). Solo se escribe cuando hay una portada NUEVA.)
+      if (coverPath) {
+        try { db.prepare('UPDATE posts SET cover_path = ? WHERE id = ?').run(coverPath, piece.id); } catch (e) {}
+        if (piece._prevCover && piece._prevCover !== coverPath && piece._prevCover.indexOf('/media/feedcover-') === 0) {
+          try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(piece._prevCover))); } catch (e) {}
+        }
       }
       piece._coverDecision = decision;
     }
@@ -35331,7 +35345,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v914';
+const BUILD_ID = '20261105-v915';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

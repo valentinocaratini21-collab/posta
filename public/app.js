@@ -22188,11 +22188,18 @@ function pzHoyCardHTML(p, o) {
     // image_path (es el .mp4): su póster es cover_path. El <img> apuntando
     // al .mp4 nunca carga y deja el bloque oscuro + el icono roto. Sin
     // póster no se rinde <img> (nunca un bloque de color ni el icono roto).
-    const imgSrc = String((p && p.media_type) || '') === 'video'
+    // (REEL-HOY-SIN-POSTER v915 · 11/11 · un video SIN portada NUNCA queda
+    // caption-only: si no hay cover_path, se rinde el <video
+    // preload="metadata"> y el navegador muestra su primer cuadro.)
+    const isVid = String((p && p.media_type) || '') === 'video';
+    const imgSrc = isVid
       ? String((p && p.cover_path) || '')
       : String((p && p.image_path) || '');
     const img = imgSrc
       ? `<img class="pz-hoy-thumb-img" src="${esc(mv(imgSrc, 640))}" data-full="${esc(imgSrc)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
+    const vid = (!img && isVid && p && p.image_path)
+      ? `<video class="pz-hoy-thumb-video" src="${esc(String(p.image_path))}" preload="metadata" muted playsinline></video>` : '';
+    const media = img || vid;
     const pill = cartita ? pzHoyPillSalida(p, tz, en) : '';
     // (LOTE HOY-SIN-DUPLICADO · 9/11) sinCuando: la tarjeta principal
     // ya lleva la hora en la cabecera («hoy · 19:00»); el badge «Hoy
@@ -22230,7 +22237,7 @@ function pzHoyCardHTML(p, o) {
         + (st !== 'published' ? `<button type="button" class="btn btn-ghost" data-pz-hoy-eliminar="${esc(String(p.id))}">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>` : '')
         + `</div>`;
       const esVideo = String((p && p.media_type) || '') === 'video';
-      const heroImg = img ? img.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"') : '';
+      const heroImg = media ? media.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"').replace('class="pz-hoy-thumb-video"', 'class="pz-hoy-hero-video"') : '';
       const heroMedia = heroImg
         ? `<div class="pz-hoy-hero-media" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${heroImg}${esVideo ? `<span class="pz-hoy-hero-reel">▶ Reel</span><span class="pz-hoy-hero-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.54.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg></span>` : ''}</div>`
         : '';
@@ -22243,7 +22250,7 @@ function pzHoyCardHTML(p, o) {
         + `</article>`;
     }
     return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
-      + `<div class="pz-hoy-row"><div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${img}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}</div>`
+      + `<div class="pz-hoy-row"><div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${media}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}</div>`
       + `<div class="pz-hoy-col">${cuentaHtml}${caption ? `<p>${esc(caption)}</p>` : ''}<div class="pz-hoy-meta">${en ? 'Tap the photo to see the detail →' : 'Tocá la foto para ver el detalle →'}</div></div></div>`
       + `${acciones}${notaOk}`
       + `</article>`;
