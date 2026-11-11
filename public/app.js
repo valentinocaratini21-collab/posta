@@ -9861,6 +9861,10 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // (CHAT-SIMPLIFICADO v5 · 10/11) En la pestaña Chat (noVoiceTxt) la
   // barra explicativa no se rinde: quedan camarita + mic. El resto de
   // las superficies conserva su texto (los strings siguen en el bundle).
+  // (BARRA-CHAT v903 · 11/11 · Valentino: la barra del Chat se veía vacía
+  // y sin terminar — en el Chat (noVoiceTxt) ahora lleva una pista corta
+  // en el medio, para que la barra se lea terminada. El chat sigue siendo
+  // solo voz, sin teclado.)
   return `
   ${wrap}
     ${title}${desc}
@@ -9872,7 +9876,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     <div class="pz-voicebar">
       <div class="pz-voice-primary">
         <button class="pz-cam-btn" id="chatPhotoBtn" type="button" title="Mandar una foto o video" aria-label="Mandar una foto o video">${pzIc('camera', 20)}</button>
-        ${noVoiceTxt ? '' : `<div class="pz-voice-txt"><b>${gzT('Hablarle a Posty', 'Talk to Posty')}</b><small>${gzT('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.', 'Tap the big microphone and tell it anything, like on WhatsApp.')}</small></div>`}
+        ${noVoiceTxt ? `<div class="pz-voice-txt pz-voice-txt--corto"><span>${gzT('tocá el micrófono y hablame', 'tap the mic and talk to me')}</span></div>` : `<div class="pz-voice-txt"><b>${gzT('Hablarle a Posty', 'Talk to Posty')}</b><small>${gzT('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.', 'Tap the big microphone and tell it anything, like on WhatsApp.')}</small></div>`}
         <button class="pz-mic-big" id="chatMicSend" type="button" title="Hablarle a Posty" aria-label="Hablarle a Posty: tocá para grabar">${pzIc('mic', 26)}</button>
       </div>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>

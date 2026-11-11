@@ -6137,6 +6137,9 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-voice-txt{flex:1;min-width:0}
 .pz-voice-txt b{display:block;font-size:15.5px;font-weight:900;line-height:1.25;color:var(--txt)}
 .pz-voice-txt small{display:block;color:var(--mut);font-weight:700;font-size:12.5px;line-height:1.4;margin-top:1px}
+/* (BARRA-CHAT v903 · 11/11) Pista corta en la barra del Chat: llena el medio entre camarita y micrófono para que la barra se lea terminada. */
+.pz-voice-txt--corto{display:flex;align-items:center}
+.pz-voice-txt--corto span{font-size:14px;font-weight:700;color:var(--mut);line-height:1.35}
 .pz-voice-hint{font-size:12px;font-weight:700;color:var(--mut);text-align:center;line-height:1.4;margin:0}
 /* --- Chat: un mensaje de Posty por día (regla 13) --- */
 .pz-daily-msg{gap:7px}
