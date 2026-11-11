@@ -1418,6 +1418,34 @@ function captionPasses(caption, input) {
       return { ok: false, reason: 'superlativo vacío: "más barato" sin ningún precio concreto no sale — se muestra el precio real' };
     }
   }
+  // SUPERLATIVO-PROPIO (Juli, 2026-11-11 — ids 591/564/569 reales): el
+  // superlativo sobre la OFERTA PROPIA ("los mejores diseños, textos y
+  // hashtags", "la mejor selección de granos") sin prueba es humo de
+  // folleto: el checklist lo prohíbe (ítem 1: nunca "lo mejor"/"la mejor
+  // calidad" sin decir QUÉ) pero la puerta no lo miraba — 591 pasó con
+  // ok=true el 10/11. Regla angosta: superlativo + sustantivo de oferta
+  // propia en la misma oración (a lo sumo 2 palabras entre ambos), sin
+  // dato de prueba en esa oración (dígito, $, %, premio, elegido/votado,
+  // reseñas, estrellas, años, "según", ranking). Excepciones: "del
+  // barrio" (caso #3100 aceptado: "El mejor café de especialidad del
+  // barrio") y la cita de cliente ("dice/dijo": la palabra es del
+  // cliente, no del negocio). "Lo mejor" a secas ("Y lo mejor, vos solo
+  // aprobás", id 587) es otra clase (muletilla) y NO entra acá.
+  {
+    const OFERTA = 'disenos|textos|hashtags|productos|servicios|precios|granos|cafe|contenido|equipo|atencion|calidad|seleccion|experiencia|resultados|trabajo|sabor|carta|menu|local|marca|blend';
+    // OJO: los escapes de prueba van con \b — sin él, "granos" contiene
+    // "anos" y "segundo" contiene "segun": la prueba se auto-otorgaba
+    // (id 564 real: "la mejor selección de granos" pasaba por "anos").
+    const PROOF = /[\d$%]|\bpremio\w*|\belegid\w*|\bvotad\w*|\bresenas\b|\bestrellas?\b|\banos\b|\bsegun\b|\branking\b|\bgano\b/;
+    for (const sent of low.split(/[.!?…\n]+/)) {
+      const m = sent.match(new RegExp('\\b((?:los|las) mejores|el mejor|la mejor)\\b(?:\\s+[a-z]+){0,2}\\s+\\b(' + OFERTA + ')\\b'));
+      if (!m) continue;
+      if (/\bdel barrio\b|\bde tu barrio\b/.test(sent)) continue;
+      if (/\bdice\b|\bdijo\b/.test(sent)) continue;
+      if (PROOF.test(sent)) continue;
+      return { ok: false, reason: `superlativo propio sin prueba: "${m[0].trim()}" es humo de folleto — o hay dato real (premio, reseñas, años, precio) o se baja a algo verificable (el producto, el dato, la escena)` };
+    }
+  }
   // REGALO-SIN-MECANICA / SORTEO-SIN-BASES (CALIDAD-11): sorteo, premio o
   // regalo sin mecánica (qué se sortea, cómo se participa, cuándo se anuncia)
   // no sale. "Participás siguiéndonos" o "etiqueten a 2 amigos" SÍ cuentan

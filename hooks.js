@@ -446,7 +446,18 @@ function captionOpenIsGarbled(caption, negocio) {
     const hits = first.toLowerCase().split(biz).length - 1;
     if (hits >= 2) return true;
   }
-  if (first.split(/\s+/).length > 26) return true;
+  // (l) LINT v11 (Juli, 2026-11-11) — el tope de 26 palabras medía la
+  // PRIMERA LÍNEA entera: un caption de una sola línea (sin \n\n) con
+  // varias oraciones cortas — ids 592/570 reales (30/33 palabras en la
+  // línea, primera oración de 10/24) — se marcaba empalmado aunque su
+  // apertura es limpia. La apertura es la primera ORACIÓN, no la primera
+  // línea: se mide el segmento hasta el primer terminador (. ! ? …). Una
+  // primera oración de más de 26 palabras sigue siendo apertura corrida
+  // y se frena igual (la línea sin terminador cae entera, como antes).
+  {
+    const firstSent = first.split(/[.!?…]/)[0] || first;
+    if (firstSent.split(/\s+/).filter(Boolean).length > 26) return true;
+  }
   return false;
 }
 
