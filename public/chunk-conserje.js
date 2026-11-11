@@ -92,6 +92,29 @@ function conserjeFotoHTML(it, grande) {
   return '<div style="border-radius:14px;background:#2793C8;display:flex;align-items:center;justify-content:center;height:' + h + 'px;color:#fff;font-size:44px;font-weight:800">' + esc(ini) + '</div>';
 }
 
+// Mini de la revisión (solo el detalle, v887): la foto COMPLETA en
+// chiquito (96×96, contain — sin recortar), con el fondo oscuro actual
+// detrás. conserjeFotoHTML NO se toca: la lista sigue con 180px cover.
+function conserjeMiniFotoHTML(it) {
+  const url = it && it.post && it.post.image_url ? it.post.image_url : '';
+  if (url) {
+    return '<div style="width:96px;height:96px;flex:none;border-radius:12px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center"><img src="' + esc(url) + '" alt="" style="width:96px;height:96px;object-fit:contain;display:block"></div>';
+  }
+  const ini = String((it && it.business_name) || '?').trim().charAt(0).toUpperCase() || '?';
+  return '<div style="width:96px;height:96px;flex:none;border-radius:12px;background:#2793C8;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:800">' + esc(ini) + '</div>';
+}
+
+// El «Ver más» del caption solo aparece si el texto no entra en 3 líneas.
+// Fail-soft en vm (document.querySelector puede no existir): try/catch.
+function conserjeCapAjustar() {
+  try {
+    const txt = document.querySelector('.cj-cap-txt');
+    const mas = document.querySelector('[data-cj="cap-mas"]');
+    if (!txt || !mas) return;
+    if (txt.scrollHeight <= txt.clientHeight + 1) mas.style.display = 'none';
+  } catch (e) {}
+}
+
 function conserjeFichaHTML(f) {
   if (!f || !f.ok) return '';
   const v = f.vende || {};
@@ -158,11 +181,16 @@ function conserjeDetalleHTML(it, d) {
   if (p) {
     // Un toque por decisión, sin confirmaciones: los botones son grandes
     // (52 px) y van justo después del posteo, sin bajar a buscarlos.
-    botones = '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'
-      + '<button class="btn btn-primary" style="min-height:52px;font-size:16px" data-cj="decidir" data-decision="sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '">✓ Sale así</button>'
-      + '<button class="btn btn-secondary" style="min-height:52px;font-size:16px" data-cj="arreglar" data-user="' + esc(String(it.user_id)) + '">Pedir que lo arregle</button>'
-      + '<button class="btn btn-secondary" style="min-height:52px;font-size:16px" data-cj="decidir" data-decision="no_sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '">✕ No sale</button>'
+    // (v887) Un toque por decisión, sin confirmaciones: los dos botones
+    // van A LA PAR (flex:1) justo debajo de la fila del posteo. «Sale así»
+    // es VERDE #14743F, como en el mock aprobado; «Editar» reusa el flujo
+    // arreglar existente (mismo data-cj, mismo textarea). «No sale» queda
+    // como link chico debajo: no se pierde ninguna decisión.
+    botones = '<div style="display:flex;gap:8px;margin-top:12px">'
+      + '<button class="btn" style="flex:1;min-height:52px;font-size:16px;background:#14743F;color:#fff" data-cj="decidir" data-decision="sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '">✓ Sale así</button>'
+      + '<button class="btn btn-secondary" style="flex:1;min-height:52px;font-size:16px" data-cj="arreglar" data-user="' + esc(String(it.user_id)) + '">✎ Editar</button>'
       + '</div>'
+      + '<div style="text-align:center;margin-top:10px"><button type="button" data-cj="decidir" data-decision="no_sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '" style="background:none;border:0;color:#B3261E;font-size:13.5px;font-weight:700;padding:6px 0;cursor:pointer">✕ No sale</button></div>'
       + '<div id="cjArreglo" style="display:none;margin-top:12px"><label style="font-size:13px;font-weight:700" for="cjArregloNota">Qué hay que arreglar</label>'
       + '<textarea id="cjArregloNota" rows="2" placeholder="Ej.: que no hable del precio, que el producto se vea entero" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;margin-top:6px"></textarea>'
       + '<button class="btn btn-primary" style="margin-top:8px;min-height:48px;font-size:15px" data-cj="decidir" data-decision="arreglar" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '" data-nota="1">Enviar arreglo</button></div>';
@@ -175,13 +203,22 @@ function conserjeDetalleHTML(it, d) {
     + '<div style="font-size:20px;font-weight:800">' + esc(it.business_name || '') + '</div>'
     + '<div style="margin-top:4px">' + conserjeEtapaDot(f.etapa) + '</div>'
     + '<div style="font-size:13px;color:var(--mut);margin-top:6px">' + conteoDet.decididos + ' de ' + conteoDet.total + ' revisados</div>'
-    + '<div style="margin-top:12px">' + conserjeFotoHTML(it, true) + '</div>'
     + (p ? '<div style="font-size:17px;font-weight:800;margin-top:12px;line-height:1.35">' + esc(p.titulo) + '</div>'
-      + '<div style="font-size:13px;color:var(--mut);margin-top:4px">' + esc(p.cuando || 'Mañana · hora por confirmar') + (p.tipo ? ' · ' + esc(p.tipo) : '') + '</div>'
       + (p.status === 'draft' ? '<div style="font-size:13px;color:var(--mut);margin-top:2px">Propuesta · todavía no está programada</div>' : '')
-      // El dueño ve el posteo COMPLETO (caption incluido) aunque para el
-      // cliente siga oculto/velado: sin el texto no se puede decidir.
-      + (p.caption ? '<div class="card" style="padding:14px;margin-top:12px"><div style="font-size:12px;font-weight:800;color:var(--mut)">TEXTO DEL POSTEO</div><div style="font-size:14px;line-height:1.6;margin-top:6px;white-space:pre-wrap">' + esc(p.caption) + '</div></div>' : '') : '')
+      // (v887) Fila de revisión: foto completa en chiquito a la izquierda,
+      // caption a la derecha. El dueño ve el posteo COMPLETO aunque para el
+      // cliente siga oculto/velado: sin el texto no se puede decidir — el
+      // caption entero sigue en el HTML, recortado a 3 líneas con «Ver más»
+      // que lo expande en el mismo lugar (sin navegar).
+      + '<style>.cj-cap-txt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.cj-cap-txt.cj-cap-full{display:block;-webkit-line-clamp:unset;overflow:visible}</style>'
+      + '<div style="display:flex;gap:12px;margin-top:12px;align-items:flex-start">' + conserjeMiniFotoHTML(it)
+      + '<div style="flex:1;min-width:0">'
+      + (p.caption
+        ? '<div class="cj-cap-txt" style="font-size:14px;line-height:1.6;white-space:pre-wrap">' + esc(p.caption) + '</div>'
+          + '<button type="button" data-cj="cap-mas" style="background:none;border:0;color:#2793C8;font-size:13px;font-weight:700;padding:4px 0;cursor:pointer">Ver más</button>'
+        : '<div style="font-size:13.5px;color:var(--mut)">Sin texto todavía.</div>')
+      + '<div style="font-size:13px;color:var(--mut);margin-top:4px">' + esc(p.cuando || 'Mañana · hora por confirmar') + (p.tipo ? ' · ' + esc(p.tipo) : '') + '</div>'
+      + '</div></div>' : '')
     + (it.necesita_atencion && it.motivo_atencion ? '<div class="card" style="padding:14px;margin-top:12px;background:#FFF6D6;border:1px solid #FEC14D"><div style="font-weight:800;font-size:14px">⚠ Qué pasó</div><div style="font-size:13.5px;line-height:1.55;margin-top:4px">' + esc(it.motivo_atencion) + '</div><div style="font-size:12.5px;color:var(--mut);margin-top:6px">No sale hasta que lo revises.</div></div>' : '')
     + (dec ? '<div class="card" style="padding:14px;margin-top:12px"><div style="font-size:13.5px">Ya decidiste: <b>' + esc(conserjeEtiquetaCorta(dec)) + '</b>' + (dec.nota ? ' — ' + esc(dec.nota) : '') + '</div><div style="font-size:12.5px;color:var(--mut)">Podés cambiarlo: elegí de nuevo abajo.</div></div>' : '')
     + botones
@@ -204,7 +241,7 @@ function conserjeRender() {
   const fechaTxt = conserjeFechaLinda(d.fecha);
   if (conserjeEstado.vistaId) {
     const it = (d.items || []).concat(d.sin_posteo || []).find((x) => String(x.user_id) === String(conserjeEstado.vistaId));
-    if (it) { card.innerHTML = conserjeDetalleHTML(it, d); return; }
+    if (it) { card.innerHTML = conserjeDetalleHTML(it, d); conserjeCapAjustar(); return; }
     conserjeEstado.vistaId = null;
   }
   const atencion = (d.items || []).filter((i) => i.necesita_atencion);
@@ -311,6 +348,14 @@ async function bindConserje() {
     if (acc === 'arreglar') {
       const box = $('#cjArreglo');
       if (box) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
+      return;
+    }
+    if (acc === 'cap-mas') {
+      const txt = document.querySelector('.cj-cap-txt');
+      if (txt) {
+        const full = txt.classList.toggle('cj-cap-full');
+        t.textContent = full ? 'Ver menos' : 'Ver más';
+      }
       return;
     }
     if (acc === 'nota-guardar') {

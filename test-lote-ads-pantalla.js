@@ -44,7 +44,7 @@ const sliceFn = (src, from, to) => {
   t(cnt(app, 'autofetch') === 0, 'censo app: autofetch 0');
   t(cnt(app, 'pcDayKeyShift') === 6, 'censo app: pcDayKeyShift 6');
   t(cnt(app, '/aprobar') === 1, 'censo app: /aprobar 1');
-  t(app.includes("const CHUNK_V = '20261105-v849'"), 'CHUNK_V v849 (bump chunk-conserje)');
+  t(app.includes("const CHUNK_V = '20261105-v887'"), 'CHUNK_V v849 (bump chunk-conserje)');
   t(md5(app) === '6a7f4907239d1d70fc5c2f97fc42dc8e', 'app.js md5 (re-pin v849)');
   t(md5(css) === '64d34e3d4550385ae46b127b766927e1', 'styles.css md5 (re-pin v846)');
   t(cnt(srv, "app.get('/api/ads") + cnt(srv, "app.post('/api/ads") === 14, 'server: 14 rutas /api/ads (12 + feed + auto del lote ads-directo)');

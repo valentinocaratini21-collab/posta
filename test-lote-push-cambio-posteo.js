@@ -85,7 +85,7 @@ function parteA() {
   check('A0 BUILD v849 en server.js', srvSrc.includes("const BUILD_ID = '20261105-v849';"));
   check('A0b index ES con app.js?v=580 y styles?v=20261223 sin cambio', idxSrc.includes('app.js?v=580') && idxSrc.includes('styles.css?v=20261225') && !idxSrc.includes('app.js?v=576'));
   check('A0b2 index EN no carga app.js (página estática) y styles?v=20261223 sin cambio', !idxEnSrc.includes('app.js?v=') && idxEnSrc.includes('styles.css?v=20261225'));
-  check('A0c CHUNK_V v849 en app.js (chunk-conserje cambió)', appSrc.includes("const CHUNK_V = '20261105-v849';"));
+  check('A0c CHUNK_V v849 en app.js (chunk-conserje cambió)', appSrc.includes("const CHUNK_V = '20261105-v887';"));
   // §1 el helper y sus piezas
   check('A1 existe OWNER_USER_ID = 12 documentado', srvSrc.includes('const OWNER_USER_ID = 12;'));
   for (const f of ['function ownerPostChangeFechaTxt(', 'function ownerPostChangePedidoLinea(', 'function ownerPostChangeFechaCorta(', 'async function notifyOwnerPostChange(']) {
