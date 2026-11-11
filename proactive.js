@@ -74,12 +74,26 @@ function checkTriggers(db, userId) {
   } catch (e) {}
 
   try {
-    // 3. Borradores sin revisar (>24h).
-    const drafts = db.prepare(`
+    // 3. Borradores sin revisar (>24h) — SOLO de la semana vigente (CONTEO-9H).
+    // Un borrador viejo de semanas anteriores NUNCA cuenta: si la semana ya
+    // está programada, no hay pendientes y este mensaje no debe salir.
+    // (11/11: user 12 recibió «4 posteos esperando tu revisión» por los
+    // borradores viejos 581/584/586/580 mientras la semana 2026-11-09 ya
+    // estaba programada.)
+    let curMon = '';
+    try {
+      const st = db.prepare(`SELECT timezone FROM settings WHERE user_id = ?`).get(userId);
+      const tz = (st && st.timezone) || 'America/Argentina/Buenos_Aires';
+      const streaks = require('./streaks');
+      curMon = streaks.mondayKeyOf(streaks.tzToday(tz));
+    } catch (e) {}
+    // Fail-closed: si no se pudo calcular la semana vigente, no contar nada.
+    const drafts = curMon ? db.prepare(`
       SELECT COUNT(*) AS n FROM posts
       WHERE user_id = ? AND status = 'draft'
+      AND week_key = ?
       AND created_at < datetime('now', '-24 hours')
-    `).get(userId);
+    `).get(userId, curMon) : { n: 0 };
     if (drafts && drafts.n >= 2) {
       const sent = wasSentRecently(db, userId, 'drafts_pending', 44);
       if (!sent) {
