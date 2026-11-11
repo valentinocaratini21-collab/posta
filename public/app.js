@@ -9004,7 +9004,10 @@ function chatAppendMsg(box, html, ts) {
 
 // HTML de un mensaje del chat: si trae el marcador de logo candidato,
 // renderiza el banner confirmable; si no, la burbuja normal.
-function chatMsgHtml(role, text, ts, id) {
+function chatMsgHtml(role, text, ts, id, reply, cap) {
+  // reply: cita al responder deslizando (5º, lote video — en v879 sin usar).
+  // cap: propuesta de caption (6º, LOTE CAPTION-BOTONES):
+  // {post_id, text, estado, msg_id} o null.
   text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
   // (LOTE CHAT-MUSE · «…») Una fila guardada con texto «…» es el artefacto
   // del tipeo viejo: nunca se rinde.
@@ -9055,6 +9058,26 @@ function chatMsgHtml(role, text, ts, id) {
     const tid = tf[1];
     const cleanT = chatStripTrabajoMarker(text);
     return `<div class="chat-msg ai pz-trabajo-fallo" data-trabajo-id="${esc(tid)}"${mid} data-ts="${Number(ts) || ''}"><div>${linkifyEsc(cleanT)}</div><div style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" data-trabajo-retry="${esc(tid)}">${pzIc('refresh', 14)} ${esc(gzT('Reintentar', 'Retry'))}</button></div>${chatHoraHtml(ts)}</div>`;
+  }
+  // (LOTE CAPTION-BOTONES) Propuesta de caption nuevo: el mensaje de Posty
+  // lleva los botones «Me gusta así» / «Cambiar algo», atados al posteo y a
+  // la propuesta (cap.post_id, cap.msg_id). Solo en mensajes de Posty con
+  // propuesta pendiente; si ya se respondió, se muestra el estado en chico
+  // (sin botones). La cita del caption solo se rinde si el texto del
+  // mensaje no la trae ya (el dictado la incluye, no duplicar).
+  if (cap && Number(cap.post_id) && role !== 'user') {
+    const capPostId = Number(cap.post_id);
+    const capMsgId = Number(cap.msg_id || id || 0);
+    const capEstado = String(cap.estado || '');
+    const capText = String(cap.text || '');
+    const enCap = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const capInText = !!capText && String(text || '').includes(capText.slice(0, 40));
+    const capQuote = (!capInText && capText)
+      ? `<div style="background:rgba(39,147,200,.08);border-left:3px solid #2793C8;border-radius:8px;padding:8px 10px;margin-top:8px;font-size:14px">«${esc(capText)}»</div>` : '';
+    const capBtns = (capEstado === 'gusta' || capEstado === 'cambiar')
+      ? `<div style="font-size:12px;color:var(--mut);margin-top:8px">${capEstado === 'gusta' ? (enCap ? '✓ Applied — that’s the caption' : '✓ Aplicado — ese es el caption') : (enCap ? 'Change requested — tell me what to change 👇' : 'Pediste un cambio — decime qué le cambio 👇')}</div>`
+      : `<div class="pz-caption-btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzCaptionFeedback(${capPostId}, ${capMsgId}, 'gusta', this)">${enCap ? 'I like it like this 👍' : 'Me gusta así 👍'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzCaptionFeedback(${capPostId}, ${capMsgId}, 'cambiar', this)">${enCap ? 'Change something' : 'Cambiar algo'}</button></div>`;
+    return `<div class="chat-msg ai pz-caption-propuesta"${mid} data-ts="${Number(ts) || ''}" data-caption-post="${capPostId}" data-caption-msg="${capMsgId}"><div>${linkifyEsc(text)}</div>${capQuote}${capBtns}${chatHoraHtml(ts)}</div>`;
   }
   if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}"${mid} data-ts="${Number(ts) || ''}">${linkifyEsc(text)}${chatHoraHtml(ts)}</div>`;
   const imgPath = (m[1] || '').trim();
@@ -9184,11 +9207,11 @@ async function chatLoadHistory() {
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
-        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0 }))
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0, cap: (m.caption_post_id && String(m.caption_text || '').trim()) ? { post_id: Number(m.caption_post_id), text: String(m.caption_text), estado: String(m.caption_estado || ''), msg_id: Number(m.id) || 0 } : null }))
         .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
       const box = $('#chatBox');
       if (box) {
-        box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id)).join('');
+        box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap)).join('');
         // (v846 · ÚLTIMO ABAJO) El re-render no se come la burbuja de voz
         // optimista en vuelo: si sigue enviando, vuelve en su lugar por ts.
         try {
@@ -9669,7 +9692,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // explica qué se le puede pedir al chat («hola! soy Posty. decime qué
   // necesitás...»). Sin historial abre con ese saludo; con historial, directo
   // en el chat: historial + input.
-  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id)).join('');
+  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
@@ -10648,6 +10671,44 @@ function chatIsShortCommand(t) {
   return w.length > 0 && w.length <= 6;
 }
 
+// (LOTE CAPTION-BOTONES) Feedback de la propuesta de caption («Me gusta
+// así» / «Cambiar algo»): un toque, sin recargar. Los mensajes que devuelve
+// el servidor se agregan al chat; los botones de la tarjeta se reemplazan
+// por el estado (para que no se vuelva a votar). Si ya estaba respondido
+// (ya_respondido), solo se marca el estado, sin duplicar mensajes.
+async function pzCaptionFeedback(postId, msgId, feedback, btn) {
+  const pid = Number(postId);
+  const mid = Number(msgId);
+  if (!pid || !mid || (feedback !== 'gusta' && feedback !== 'cambiar')) return;
+  const enFb = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const card = (btn && btn.closest) ? btn.closest('.pz-caption-propuesta') : null;
+  const markResolved = (fb) => {
+    try {
+      if (!card) return;
+      const row = card.querySelector('.pz-caption-btns');
+      if (!row) return;
+      row.outerHTML = `<div style="font-size:12px;color:var(--mut);margin-top:8px">${fb === 'gusta' ? (enFb ? '✓ Applied — that’s the caption' : '✓ Aplicado — ese es el caption') : (enFb ? 'Change requested — tell me what to change 👇' : 'Pediste un cambio — decime qué le cambio 👇')}</div>`;
+    } catch (e) {}
+  };
+  try { if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; }); } catch (e) {}
+  let r;
+  try { r = await api.post(`/api/posts/${pid}/caption-feedback`, { feedback, msg_id: mid }); } catch (e) { r = null; }
+  if (!r || !r.ok) {
+    try { bbToast(enFb ? 'Could not save it, try again 🙏' : 'no se pudo guardar, probá de nuevo 🙏'); } catch (e) {}
+    try { if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; }); } catch (e) {}
+    return;
+  }
+  markResolved(r.feedback || feedback);
+  const box = document.getElementById('chatBox');
+  if (box && Array.isArray(r.messages)) {
+    for (const m of r.messages) {
+      const ts = Date.now();
+      CHAT.push({ role: m.role, text: m.text, ts });
+      chatAppendMsg(box, chatMsgHtml(m.role, m.text, ts, m.id), ts);
+    }
+    chatScroll(true);
+  }
+}
 async function chatSend(textArg) {
   // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: el invitado
   // todavía no manda — primero la hoja de crear cuenta; al crearla,

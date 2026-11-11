@@ -1339,6 +1339,16 @@ CREATE TABLE IF NOT EXISTS chat_seen_photos (
   PRIMARY KEY (user_id, photo_hash)
 );
 `);
+// (LOTE CAPTION-BOTONES) Propuesta de caption nuevo en el chat: el mensaje
+// de Posty que propone un caption lleva el posteo y el texto propuesto, para
+// que «Me gusta así» lo aplique aunque el cliente recargue. caption_estado:
+// '' = pendiente, 'gusta' = aceptado, 'cambiar' = pidió cambio. Van ACÁ,
+// fuera del db.exec de arriba (dentro del template literal rompería la
+// sintaxis) y DESPUÉS del CREATE TABLE (en DB nueva, antes del CREATE el
+// ALTER falla en silencio).
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_post_id INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_estado TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CHAT-MUSE) Limpieza única: filas de assistant con texto «…»
 // (artefacto del tipeo viejo). Idempotente: tras la primera pasada no
 // queda ninguna; la guarda pzChatSaveReply impide que vuelvan a nacer.

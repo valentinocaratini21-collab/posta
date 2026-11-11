@@ -9507,10 +9507,27 @@ app.post('/api/admin/supervision/dictar', requireAdminToken, (req, res) => {
   if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
   const r = supervisionChat.dictar(db, Number(b.user_id), b.texto, { usar_borrador: !!b.usar_borrador });
   if (!r.ok) return res.status(r.error === 'sin_pendiente' ? 404 : 400).json({ ok: false, error: r.error });
+  // (LOTE CAPTION-BOTONES) Propuesta de caption: si el dictado trae
+  // caption_post_id + caption_text, se atan al mensaje recién enviado para
+  // que el cliente vea los botones «Me gusta así» / «Cambiar algo». El
+  // posteo tiene que ser del usuario; si no, el mensaje sale igual pero
+  // sin propuesta (caption_attached: false).
+  let captionAttached = false;
+  const capPostId = Number(b.caption_post_id || 0);
+  const capText = String(b.caption_text || '').trim();
+  if (capPostId && capText) {
+    try {
+      const p = db.prepare('SELECT id FROM posts WHERE id = ? AND user_id = ?').get(capPostId, Number(b.user_id));
+      if (p) {
+        db.prepare(`UPDATE chat_messages SET caption_post_id = ?, caption_text = ? WHERE id = ? AND user_id = ? AND role = 'assistant'`).run(capPostId, capText.slice(0, 2000), r.reply_msg_id, Number(b.user_id));
+        captionAttached = true;
+      }
+    } catch (e) { /* sin columnas: la propuesta no se ata, el mensaje igual salió */ }
+  }
   // (LOTE v873 · MEMORIA POR CLIENTE) La respuesta dictada también es
   // conversación: Posty actualiza lo que sabe del cliente. Fire-and-forget.
   try { setImmediate(() => { try { memoriaCliente.extraerYGuardar(db, Number(b.user_id), openaiKeyFor(Number(b.user_id))).catch(() => {}); } catch (e) {} }); } catch (e) {}
-  res.json({ ok: true, exchange_id: r.exchange_id, reply_msg_id: r.reply_msg_id, case_id: r.case_id });
+  res.json({ ok: true, exchange_id: r.exchange_id, reply_msg_id: r.reply_msg_id, case_id: r.case_id, caption_attached: captionAttached });
 });
 app.post('/api/admin/supervision/borrador', requireAdminToken, (req, res) => {
   const b = req.body || {};
@@ -11561,7 +11578,12 @@ app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
 app.get('/api/ideas/chat', (req, res) => {
   if (!req.session.userId) return res.json({ messages: [], welcome: req.query.lang === 'en' ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works." : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   const uid = req.session.userId;
-  const msgs = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse();
+  // (LOTE CAPTION-BOTONES) La propuesta de caption viaja con el mensaje
+  // (caption_post_id + caption_text + caption_estado). Si la DB todavía no
+  // tiene las columnas, cae al SELECT plano (sin botones, sin romper).
+  let msgs = [];
+  try { msgs = db.prepare(`SELECT id, role, text, caption_post_id, caption_text, caption_estado, created_at FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse(); }
+  catch (e) { msgs = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse(); }
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
@@ -13238,6 +13260,58 @@ app.post('/api/posts/:id/descartar-propuesta', requireAuth, express.json(), (req
   } catch (e) {}
   db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(id, uid);
   res.json({ ok: true, post_id: id });
+});
+
+// (LOTE CAPTION-BOTONES) Feedback del cliente sobre un caption propuesto en
+// el chat: «Me gusta así» lo aplica al posteo; «Cambiar algo» abre el flujo
+// de cambio (Posty pregunta qué cambiar; la próxima propuesta vuelve a
+// llevar los botones). Patrón del video-feedback: la propuesta vive en el
+// mensaje (caption_post_id + caption_text + caption_estado) para que
+// funcione aunque el cliente recargue. Ownership: el posteo Y el mensaje
+// tienen que ser del usuario. Idempotente: si la propuesta ya se respondió,
+// no se re-aplica ni se duplican mensajes.
+app.post('/api/posts/:id/caption-feedback', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const postId = Number(req.params.id);
+  const fb = String((req.body || {}).feedback || '').toLowerCase();
+  const msgId = Number((req.body || {}).msg_id || 0);
+  if (!postId || !msgId || (fb !== 'gusta' && fb !== 'cambiar')) return res.status(400).json({ ok: false, error: 'feedback_invalido' });
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+  if (!post) return res.status(404).json({ ok: false, error: 'post_no_encontrado' });
+  let msg = null;
+  try { msg = db.prepare('SELECT id, user_id, role, caption_post_id, caption_text, caption_estado FROM chat_messages WHERE id = ? AND user_id = ?').get(msgId, uid); } catch (e) { msg = null; }
+  if (!msg || msg.role !== 'assistant' || Number(msg.caption_post_id || 0) !== postId || !String(msg.caption_text || '').trim()) return res.status(404).json({ ok: false, error: 'propuesta_no_encontrada' });
+  const en = langOfUser(uid) === 'en';
+  const estado = String(msg.caption_estado || '');
+  if (estado === 'gusta' || estado === 'cambiar') {
+    return res.json({ ok: true, postId, feedback: estado, ya_respondido: true, publicado: String(post.status || '') === 'published' });
+  }
+  const caption = String(msg.caption_text || '').trim();
+  const publicado = String(post.status || '') === 'published';
+  const msgs = [];
+  try {
+    if (fb === 'gusta') {
+      db.prepare('UPDATE posts SET caption = ? WHERE id = ? AND user_id = ?').run(caption, postId, uid);
+      db.prepare(`UPDATE chat_messages SET caption_estado = 'gusta' WHERE id = ?`).run(msgId);
+      const u = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', en ? 'i like it like this 👍' : 'me gusta así 👍');
+      const ack = publicado
+        ? (en ? 'done! the caption is updated here. on instagram it updates separately — the published post can’t be edited from here.' : 'listo! el caption quedó actualizado acá. en instagram se actualiza aparte — el posteo ya publicado no lo puedo editar desde acá.')
+        : (en ? 'done! that’s the caption going out 👍' : 'listo! ese es el caption que sale 👍');
+      const a = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', ack);
+      msgs.push({ id: Number(u.lastInsertRowid), role: 'user', text: en ? 'i like it like this 👍' : 'me gusta así 👍' });
+      msgs.push({ id: Number(a.lastInsertRowid), role: 'assistant', text: ack });
+    } else {
+      db.prepare(`UPDATE chat_messages SET caption_estado = 'cambiar' WHERE id = ?`).run(msgId);
+      const u = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', en ? 'i want to change something' : 'quiero cambiar algo');
+      const q = en
+        ? 'tell me what you want to change — the tone, a word, shorter or longer? you can write it or send a voice note 👇'
+        : 'decime qué le cambio: ¿el tono, alguna palabra, más corto o más largo? escribilo o mandame una nota de voz 👇';
+      const a = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', q);
+      msgs.push({ id: Number(u.lastInsertRowid), role: 'user', text: en ? 'i want to change something' : 'quiero cambiar algo' });
+      msgs.push({ id: Number(a.lastInsertRowid), role: 'assistant', text: q });
+    }
+  } catch (e) {}
+  res.json({ ok: true, postId, feedback: fb, publicado, messages: msgs });
 });
 
 // Subida al álbum (v181): fotos como siempre (≤15 MB) y VIDEOS del cliente
@@ -30469,9 +30543,11 @@ app.get('/api/trial/chat-onboarding', (req, res) => {
     const after = Math.max(0, parseInt(String((req.query && req.query.after) || '0'), 10) || 0);
     let rows = [];
     try {
-      rows = db.prepare('SELECT id, role, text FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || [];
-    } catch (e) { rows = []; }
-    return res.json({ ok: true, user_id: uid, messages: rows.map((r) => ({ id: r.id, role: r.role, text: r.text })) });
+      rows = db.prepare('SELECT id, role, text, caption_post_id, caption_text, caption_estado FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || [];
+    } catch (e) {
+      try { rows = db.prepare('SELECT id, role, text FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || []; } catch (e2) { rows = []; }
+    }
+    return res.json({ ok: true, user_id: uid, messages: rows.map((r) => ({ id: r.id, role: r.role, text: r.text, caption_post_id: r.caption_post_id || null, caption_text: r.caption_text || '', caption_estado: r.caption_estado || '' })) });
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'No pudimos leer el chat todavía.' });
   }
@@ -34967,7 +35043,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v890';
+const BUILD_ID = '20261105-v891';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
