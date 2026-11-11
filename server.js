@@ -19267,6 +19267,10 @@ async function homeProfileFromRead(handle, data) {
     highlights: [], // la lectura pública no las expone: jamás inventadas
     recents: posts.map((x, i) => ({
       img: (loc.photos && loc.photos[i]) || null,
+      // (LOTE PERFIL-GRILLA-5-DE-10 · v912) URL remota de la miniatura:
+      // la unión en lectura parcial re-localiza desde acá las
+      // conservadas (la /media caduca a las 72 h). El front la ignora.
+      src: (x && x.thumb) || null,
       type: x.type === 'GraphVideo' ? 'video' : x.type === 'GraphSidecar' ? 'carousel' : 'image',
       taken_at: (typeof x.taken_at === 'number' && x.taken_at > 0) ? x.taken_at : null,
       shortcode: x.shortcode || null,
@@ -19279,6 +19283,48 @@ async function homeProfileFromRead(handle, data) {
     })).filter((r) => r.img),
     captured_at: Date.now(),
   };
+}
+// (LOTE PERFIL-GRILLA-5-DE-10 · v912 · causa raíz) La lectura del
+// embed es UNA página sin paginación: con carruseles se llena de
+// hijos y los posteos viejos quedan afuera (caso real
+// @posty.communitymanager: 10 posteos, el embed trae solo los 6 más
+// nuevos + 5 láminas; los 4 viejos son invisibles para el snapshot).
+// El encabezado, en cambio, trae el conteo REAL de Instagram
+// (posts_count): conteo y grilla divergen por construcción — 10
+// contra 5. Dos guardas fail-closed, con la misma regla de
+// completitud que ya usa reconcilePublishedMirror (lectura parcial
+// NO toca nada):
+//  · homeRecentsUnion: en lectura PARCIAL (recents < posts_count),
+//    la unión con los recents del snapshot previo conserva los
+//    posteos que la página truncó; en lectura COMPLETA se reemplaza
+//    (un borrado real sale de la grilla).
+//  · homeLiveGridComplete: la ventana viva solo filtra cuando cubre
+//    el feed entero; con ventana parcial el cliente no esconde nada
+//    (antes borraba del DOM posteos vivos ausentes de la ventana).
+function homeRecentsUnion(newRecents, postsCount, prevRecents) {
+  const fresh = Array.isArray(newRecents) ? newRecents.slice() : [];
+  if (typeof postsCount !== 'number' || !(postsCount > 0)) return fresh;
+  if (fresh.length >= postsCount) return fresh;
+  const seen = new Set();
+  for (const r of fresh) { if (r && r.shortcode) seen.add(String(r.shortcode)); }
+  const keep = [];
+  for (const r of (Array.isArray(prevRecents) ? prevRecents : [])) {
+    if (!r || !r.shortcode || !r.img) continue;
+    if (seen.has(String(r.shortcode))) continue;
+    seen.add(String(r.shortcode));
+    keep.push(r);
+  }
+  if (!keep.length) return fresh;
+  const out = fresh.concat(keep);
+  out.sort((a, b) => ((typeof b.taken_at === 'number' ? b.taken_at : 0) - (typeof a.taken_at === 'number' ? a.taken_at : 0)));
+  return out;
+}
+function homeLiveGridComplete(recents, postsCount) {
+  // Solo se puede probar parcialidad con conteo real: sin conteo, el
+  // comportamiento vigente manda (la ventana vacía ya devuelve
+  // complete:false en el endpoint).
+  if (typeof postsCount !== 'number' || !(postsCount >= 0)) return true;
+  return (Array.isArray(recents) ? recents.length : 0) >= postsCount;
 }
 async function homeProfileReadAndStore(uid, handle) {
   const data = await feedAudit.fetchAuditData(handle).catch(() => null);
@@ -19365,6 +19411,31 @@ async function homeProfileReadAndStore(uid, handle) {
         }
       } catch (e) { /* sin seguidos por API: la home nunca se cae por esto */ }
     }
+    // (LOTE PERFIL-GRILLA-5-DE-10 · v912) Unión en lectura parcial
+    // (ver homeRecentsUnion): la página truncada no encoge la grilla.
+    // Las conservadas se re-localizan desde su src cuando la hay (la
+    // miniatura /media caduca a las 72 h); sin src o si falla, se
+    // conserva el img previo y se cura en la próxima lectura completa.
+    try {
+      const prevSnap = homeSnapshotGet(uid);
+      const prevRecents = (prevSnap && prevSnap.payload && Array.isArray(prevSnap.payload.recents)) ? prevSnap.payload.recents : [];
+      if (Array.isArray(payload.recents) && typeof payload.posts_count === 'number' && payload.posts_count > 0 && payload.recents.length < payload.posts_count && prevRecents.length) {
+        const beforeCodes = new Set(payload.recents.map((r) => r && r.shortcode).filter(Boolean).map(String));
+        payload.recents = homeRecentsUnion(payload.recents, payload.posts_count, prevRecents);
+        const kept = payload.recents.filter((r) => r && r.shortcode && !beforeCodes.has(String(r.shortcode)));
+        if (kept.length) {
+          try {
+            const withSrc = kept.filter((r) => r.src);
+            if (withSrc.length) {
+              const loc = { handle: payload.username || handle, photos: withSrc.map((r) => r.src) };
+              await feedAudit.localizeTrialPhotos(loc, MEDIA_DIR);
+              withSrc.forEach((r, i) => { if (loc.photos && loc.photos[i]) r.img = loc.photos[i]; });
+            }
+          } catch (e) { /* se conservan con el img previo */ }
+          payload.recents = payload.recents.filter((r) => r && r.img);
+        }
+      }
+    } catch (e) { /* sin unión: queda la lectura nueva, como hoy */ }
     homeSnapshotPut(uid, handle, payload);
     // (2026-10-24) Reconciliación del espejo: con la lectura completa
     // recién hecha, los publicados propios que ya NO están en la grilla
@@ -19564,6 +19635,12 @@ app.get('/api/home/live-grid', requireAuth, async (req, res) => {
     } catch (e) { payload = null; }
     if (!payload || !Array.isArray(payload.recents)) return res.json({ ok: true, complete: false });
     const total = (typeof payload.posts_count === 'number' && Number.isFinite(payload.posts_count)) ? payload.posts_count : null;
+    // (LOTE PERFIL-GRILLA-5-DE-10 · v912) Ventana parcial = no
+    // filtrar: si la lectura fresca trae menos recents que el conteo
+    // real, la ventana NO cubre el feed y el cliente borraría del DOM
+    // posteos vivos ausentes de la ventana (caso real: 10 posteos,
+    // ventana de 6). Fail-closed, como la ventana vacía de arriba.
+    if (!homeLiveGridComplete(payload.recents, total)) return res.json({ ok: true, complete: false });
     const codes = [];
     for (const r of payload.recents) { if (r && r.shortcode) codes.push(String(r.shortcode)); }
     // Ventana vacía con cuenta no vacía = lectura sospechosa (parse
@@ -35254,7 +35331,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v912';
+const BUILD_ID = '20261105-v913';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -35945,4 +36022,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
