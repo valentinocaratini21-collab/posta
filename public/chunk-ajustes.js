@@ -52,6 +52,7 @@ function ajustesView() {
     : (q.get('estilos') || q.get('marca')) ? 'marca'
     : q.get('referidos') ? 'referidos'
     : q.get('negocio') ? 'negocio'
+    : q.get('contacto') ? 'contacto'
     : q.get('avanzado') ? 'avanzado' : '';
   const ajHid = (s) => (ajInitSec && ajInitSec !== s) ? ' hidden' : '';
   // Resúmenes de una línea para las filas de la vista plana (texto plano, sin HTML).
@@ -150,6 +151,7 @@ function ajustesView() {
       <div class="row" data-ajnav="auto"><span class="k">${ajEn ? 'Posty on autopilot' : 'Posty en automático'}</span><span class="v" id="ajStAutoMenu"></span><span class="chev">›</span></div>
       <div class="row" data-ajnav="marca"><span class="k">${ajEn ? 'Your brand' : 'Tu marca'}</span><span class="v">${esc(stBrandTx)}</span><span class="chev">›</span></div>
       <div class="row" data-ajnav="pagina"><span class="k">${ajEn ? 'Your page' : 'Tu página'}</span><span class="v">${esc(stPageTx) || (ajEn ? 'Your link in bio' : 'Tu link en la bio')}</span><span class="chev">›</span></div>
+      <div class="row" data-ajnav="contacto"><span class="k">${pzIc('help', 20)} ${ajEn ? 'Something not working? Contact us' : '¿Algo no funciona? Contactanos'}</span><span class="v">${ajEn ? 'We help you' : 'Te ayudamos'}</span><span class="chev">›</span></div>
       <div class="row" data-ajnav="avanzado"><span class="k">${ajEn ? 'Advanced settings' : 'Configuración avanzada'}</span><span class="v">${ajEn ? 'Meta embed URL' : 'Dirección de embed de Meta'}</span><span class="chev">›</span></div>
       <div class="row" onclick="bbGo('#/app/terminos')"><span class="k">${pzIc('shield', 20)} ${ajEn ? 'Terms and Conditions' : 'Términos y Condiciones'}</span><span class="v">${ajEn ? 'Version 1.0 · November 9, 2026' : 'Versión 1.0 · 9 de noviembre de 2026'}</span><span class="chev">›</span></div>
     </div>
@@ -316,6 +318,15 @@ function ajustesView() {
       <span id="pageMsg"></span>
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página ${pzIc('arrowRight', 13)}</a>
     </div>
+  </div></div>
+  <div class="card ajsec ajflat"${ajHid('contacto')} id="ajsec-contacto"><div class="ajsec-h"><h3>${pzIc('help', 20)} ${ajEn ? 'Contact us' : 'Contactanos'}</h3></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">${ajEn ? 'If something is not working or you have a problem, write to us and we will help.' : 'Si algo no anda o tenés un problema, escribinos y te ayudamos.'}</p>
+    <div class="field"><label>${ajEn ? 'What happened?' : '¿Qué te pasa?'}</label><textarea id="s_contactoTexto" rows="4" maxlength="2000" placeholder="${ajEn ? 'Tell us what is not working…' : 'Contanos qué no anda…'}"></textarea><div class="hint">${ajEn ? 'It goes straight to the Posty team, with your account.' : 'Llega directo al equipo de Posty, con tu cuenta.'}</div></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnContactoEnviar" type="button">${ajEn ? 'Send' : 'Enviar'}</button>
+      <span id="contactoMsg"></span>
+    </div>
+    <div id="contactoOk" style="display:none;margin-top:12px" class="okmsg">${pzIc('checkCircle', 15)} ${ajEn ? 'Done, we got it. We will write to you soon.' : 'Listo, ya nos llegó. Te escribimos en breve.'}</div>
   </div></div>
   <details class="card int-advanced"${ajHid('avanzado')} id="ajsec-avanzado"${ajInitSec === 'avanzado' ? ' open' : ''}><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
@@ -586,7 +597,7 @@ function ajPushNativeOn(r) {
 // Las filas del menú navegan por hash
 // (#/app/ajustes?plan=1, ...) y ajustesView ya nace en la pantalla destino
 // cuando la URL trae el deep-link, sin flash.
-const AJ_SECCIONES = ['notif', 'plan', 'auto', 'conex', 'marca', 'pagina', 'avanzado'];
+const AJ_SECCIONES = ['notif', 'plan', 'auto', 'conex', 'marca', 'pagina', 'contacto', 'avanzado'];
 function ajNav(id) {
   if (!id || AJ_SECCIONES.indexOf(id) === -1) return;
   const menu = document.getElementById('ajMenu');
@@ -632,6 +643,7 @@ function bindSettings() {
       if (pq.get('pagina')) return 'pagina';
       if (pq.get('estilos') || pq.get('marca')) return 'marca';
       if (pq.get('referidos')) return 'referidos';
+      if (pq.get('contacto')) return 'contacto';
       if (pq.get('avanzado')) return 'avanzado';
     } catch (e) {}
     return '';
@@ -705,6 +717,34 @@ function bindSettings() {
       if (msg) msg.innerHTML = '<span style="color:#c0392b;font-size:12.5px">' + esc((e && e.message) || 'No se pudo guardar') + '</span>';
     }
     btnSavePage.disabled = false;
+  };
+  // (LOTE AJUSTES-CONTACTO) Botón «¿Algo no funciona? Contactanos»: un
+  // campo y enviar. El mensaje abre un caso de soporte (POST
+  // /api/soporte/contacto) y el cliente ve la confirmación en el acto.
+  // Sin texto no se envía nada. Doble toque no duplica el caso (el
+  // servidor devuelve el mismo caso por dedup_key).
+  const btnContactoEnviar = $('#btnContactoEnviar');
+  if (btnContactoEnviar) btnContactoEnviar.onclick = async () => {
+    const ta = $('#s_contactoTexto'); const msg = $('#contactoMsg'); const okBox = $('#contactoOk');
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const texto = ((ta && ta.value) || '').trim();
+    if (okBox) okBox.style.display = 'none';
+    if (!texto) { if (msg) msg.textContent = en ? 'Tell us what happened first.' : 'Contanos qué te pasa primero.'; return; }
+    btnContactoEnviar.disabled = true;
+    if (msg) msg.textContent = '';
+    try {
+      const r = await api.post('/api/soporte/contacto', { texto });
+      if (r && r.ok) {
+        if (ta) ta.value = '';
+        if (okBox) okBox.style.display = '';
+        if (msg) msg.textContent = '';
+      } else {
+        if (msg) msg.textContent = en ? 'We could not send it. Try again.' : 'No se pudo enviar. Probá de nuevo.';
+      }
+    } catch (e) {
+      if (msg) msg.textContent = en ? 'We could not send it. Try again.' : 'No se pudo enviar. Probá de nuevo.';
+    }
+    btnContactoEnviar.disabled = false;
   };
   // v282: "Tus números" salió de Ajustes — vive en su pantalla propia (tab
   // numeros → statsView/bindStats en app.js). Acá ya no se bindea stats.

@@ -5941,6 +5941,28 @@ app.post('/api/settings/language', requireAuth, express.json(), (req, res) => {
     res.status(500).json({ ok: false, error: 'No pude cambiarlo 😅' });
   }
 });
+// (LOTE AJUSTES-CONTACTO · base v879) Botón «¿Algo no funciona?
+// Contactanos» de Ajustes: el cliente describe el problema y el mensaje
+// abre un caso de soporte tipo 'ayuda' (support_cases, el mismo panel
+// que usa el equipo: GET /api/admin/support/cases + overview). No es
+// chat: es un camino aparte de soporte, con el contexto del cliente
+// (user_id). Doble toque con el mismo texto NO duplica el caso: la
+// dedup_key devuelve el caso ya abierto. Sin texto no se envía nada.
+app.post('/api/soporte/contacto', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const texto = String((req.body && (req.body.texto || req.body.mensaje)) || '').trim().slice(0, 2000);
+    if (!texto) return res.status(400).json({ ok: false, error: 'texto_vacio' });
+    const dedupKey = 'contacto:' + uid + ':' + crypto.createHash('md5').update(texto, 'utf8').digest('hex');
+    const r = supportCases.openCase(db, { userId: uid, tipo: 'ayuda',
+      titulo: 'Ayuda pedida desde Ajustes', detalle: texto,
+      siguientePaso: 'Responder al cliente', dedupKey });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, caso_id: r.caso.id, duplicado: !!r.duplicado });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude enviarlo 😅' });
+  }
+});
 // Chequear calidad de un borrador sin publicarlo.
 app.get('/api/posts/:id/quality', requireAuth, (req, res) => {
   try {
@@ -34945,7 +34967,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v889';
+const BUILD_ID = '20261105-v890';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
