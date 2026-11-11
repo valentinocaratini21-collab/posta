@@ -30542,10 +30542,11 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
         // Con posteos, la prueba ya se usó: no hay chat nuevo.
         if (nPosts > 0) return res.status(409).json({ ok: false, error: 'trial_used', trial_used: true });
       }
-      const du = guestTrial.deviceUsed(db, device, ip);
-      // El dispositivo del propio invitado (reuso) no es de otro usuario.
-      if (du && !(entered && String(du.user_id) === String(entered.id)))
-        return res.status(409).json({ ok: false, error: 'device_used', device_used: true });
+      // (LOTE PRUEBA-POR-NEGOCIO · 11/11) La prueba es por NEGOCIO, no por
+      // dispositivo: un negocio nuevo nunca se bloquea porque el dispositivo
+      // o la IP ya hayan probado con otro negocio. Los candados de negocio
+      // (consumido / invitado con posteos) de arriba ya hacen cumplir la
+      // regla de una prueba por negocio.
     }
     // Invitado temprano: reusa is_guest=1 con 0 posteos o crea uno nuevo.
     let uid = null;
@@ -30722,16 +30723,13 @@ app.post('/api/guest/start', (req, res) => {
         reuseGuest = { userId: entered.id, trialEnds };
       }
     }
-    // Anti-abuso: una prueba por dispositivo/IP (la allowlist y el modo
-    // test saltan este control; el anti-spam 5/día por IP sigue aparte).
+    // (LOTE PRUEBA-POR-NEGOCIO · 11/11) La prueba es por NEGOCIO, no por
+    // dispositivo/IP: un negocio nuevo nunca se bloquea porque este
+    // dispositivo o esta IP ya hayan probado con otro negocio. Los candados
+    // de negocio de arriba (consumido / invitado con posteos) ya hacen
+    // cumplir una prueba por negocio; el anti-spam 5/día por IP sigue aparte.
     const device = String(body.device || '').trim().slice(0, 128);
     const ip = String(req.ip || '').slice(0, 64);
-    if (!testMode && !allowlisted) {
-      const du = guestTrial.deviceUsed(db, device, ip);
-      // (LOTE PRUEBA-CHAT) El dispositivo que usó el chat ES el del
-      // invitado que se reusa: no es "de otro usuario".
-      if (du && !(reuseGuest && String(du.user_id) === String(reuseGuest.userId))) return res.status(409).json({ error: lang === 'en' ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
-    }
     // Semana: del caché por @, o por dominio si entró solo con web.
     const cacheKey = igK || ('web:' + domK);
     let payload = null;
@@ -35256,7 +35254,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v905';
+const BUILD_ID = '20261105-v912';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

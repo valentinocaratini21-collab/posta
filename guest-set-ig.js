@@ -126,12 +126,11 @@ function resolveSetIg(db, deps, opts) {
       }
     }
   } catch (e) {}
-  try {
-    if (guestTrial && guestTrial.deviceUsed) {
-      const du = guestTrial.deviceUsed(db, o.device || '', o.ip || '');
-      if (du && Number(du.user_id) !== Number(userId)) return { ok: false, error: 'device_used' };
-    }
-  } catch (e) {}
+  // (LOTE PRUEBA-POR-NEGOCIO · 11/11) La prueba es por NEGOCIO, no por
+  // dispositivo: poner el @ de un negocio nuevo nunca se bloquea porque el
+  // dispositivo o la IP ya hayan probado con otro negocio. Los candados de
+  // negocio de arriba (consumido / otro invitado con posteos) ya hacen
+  // cumplir una prueba por negocio.
   // FIX @ PEGADO: @ distinto + semana vieja puesta → borrar la semana vieja
   // ANTES de importar la nueva (importTrialWeek no corre si ya hay posteos).
   let cleared = 0;
