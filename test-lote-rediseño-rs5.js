@@ -302,28 +302,18 @@ const sliceBetween = (src, from, to) => {
     vm.runInContext(recSrc, ctx);
     return ctx;
   };
+  // (CHAT-SIMPLIFICADO v5 · 10/11 · re-pineo) La tarjeta Impulsar salió
+  // del Chat: pzBoostRecPintar se retira (early return) y ya NO pinta
+  // nada en el hilo, aunque haya mejor posteo. La tarjeta vive solo en
+  // Inicio (pzHoyImpulsarHTML). La función y su llamada se conservan.
   const ctxR = makeRecCtx(MEJOR, 'es');
   await vm.runInContext('pzBoostRecPintar()', ctxR);
-  t(ctxR.__chatBox.children.length === 1, 'VM boost-chat: con mejor posteo, la tarjeta se agrega al final del hilo');
-  const recCard = ctxR.__chatBox.children[0];
-  t(recCard.id === 'pzBoostRecCard' && recCard.className === 'pz-boost-rec-card', 'VM boost-chat: la tarjeta tiene id y clase propias');
-  t(recCard.innerHTML.includes('POSTY RECOMIENDA · IMPULSAR'), 'VM boost-chat: tag «POSTY RECOMIENDA · IMPULSAR»');
-  t(recCard.innerHTML.includes('Café de especialidad recién tostado'), 'VM boost-chat: caption real del mejor posteo');
-  t(recCard.innerHTML.includes('/media/cafe-mejor.jpg'), 'VM boost-chat: miniatura real del mejor posteo');
-  t(recCard.innerHTML.includes('El mejor de tu semana: 500 de alcance, 40 me gusta, 5 comentarios.'), 'VM boost-chat: texto de RS-4 con los números reales');
-  t(recCard.innerHTML.includes('Impulsar este posteo'), 'VM boost-chat: CTA «Impulsar este posteo»');
+  t(ctxR.__chatBox.children.length === 0, 'VM boost-chat: con mejor posteo, la tarjeta YA NO se agrega al hilo (salió del Chat)');
   await vm.runInContext('pzBoostRecPintar()', ctxR);
-  t(ctxR.__chatBox.children.length === 1, 'VM boost-chat: segunda llamada no duplica la tarjeta');
-  recCard.querySelector('.pz-boost-rec-cta').click();
-  t(ctxR.__opened === 42 && ctxR.__store['pzBoostRecOff'] === '1', 'VM boost-chat: el CTA abre la hoja con el post_id 42 y apaga la tarjeta por la sesión');
-  // Dismiss con ×.
+  t(ctxR.__chatBox.children.length === 0, 'VM boost-chat: segunda llamada tampoco pinta nada');
   const ctxR2 = makeRecCtx(MEJOR, 'es');
   await vm.runInContext('pzBoostRecPintar()', ctxR2);
-  t(ctxR2.__chatBox.children.length === 1, 'VM boost-chat: tarjeta presente antes del dismiss');
-  ctxR2.__chatBox.children[0].querySelector('.pz-boost-rec-x').click();
-  t(ctxR2.__chatBox.children.length === 0 && ctxR2.__store['pzBoostRecOff'] === '1', 'VM boost-chat: la × quita la tarjeta y la apaga por la sesión');
-  await vm.runInContext('pzBoostRecPintar()', ctxR2);
-  t(ctxR2.__chatBox.children.length === 0, 'VM boost-chat: tras descartar, no vuelve a aparecer en la sesión');
+  t(ctxR2.__chatBox.children.length === 0, 'VM boost-chat: sin tarjeta en el Chat, no hay dismiss que probar acá');
   // Sin mejor: nada. Sin engagement: nada.
   const ctxR3 = makeRecCtx(null, 'es');
   await vm.runInContext('pzBoostRecPintar()', ctxR3);
@@ -334,8 +324,10 @@ const sliceBetween = (src, from, to) => {
   // EN espejado.
   const ctxR5 = makeRecCtx(MEJOR, 'en');
   await vm.runInContext('pzBoostRecPintar()', ctxR5);
-  t(ctxR5.__chatBox.children.length === 1 && ctxR5.__chatBox.children[0].innerHTML.includes('POSTY RECOMMENDS · BOOST') && ctxR5.__chatBox.children[0].innerHTML.includes('Boost this post'),
-    'VM boost-chat: EN espejado (tag y CTA en inglés, caption y números reales)');
+  t(ctxR5.__chatBox.children.length === 0, 'VM boost-chat: EN tampoco pinta la tarjeta en el Chat');
+  // Impulsar vive solo en Inicio: la sección sigue existiendo y rinde la tarjeta.
+  t(app.includes('function pzHoyImpulsarHTML') && app.includes('pz-boost-rec-card'),
+    'VM boost-chat: Impulsar sigue en Inicio (pzHoyImpulsarHTML con su tarjeta)');
 
   // ---------- 7. (e) Copy «jardín» fuera ----------
   t(!app.includes('Jardín en flor') && !app.includes('Maestro del jardín') && !app.includes('cómo crece tu jardín') && !app.includes('Ver tu jardín') && !app.includes('Tu jardín, antes'),

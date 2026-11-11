@@ -9143,6 +9143,10 @@ async function trialRebuildWeek() {
 // (descartar o impulsar la apagan). No inventa promedios: el endpoint
 // no devuelve promedio.
 async function pzBoostRecPintar() {
+  // (CHAT-SIMPLIFICADO v5 · 10/11) La tarjeta Impulsar sale del Chat:
+  // vive solo en Inicio (pzHoyImpulsarHTML). Retirado acá; la función
+  // y su llamada se conservan para no romper el cableado ni la auditoría.
+  return;
   try {
     if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pzBoostRecOff')) return;
     const box = document.getElementById('chatBox');
@@ -9656,7 +9660,7 @@ function chatNextWeekHTML() {
   const more = w.n > w.total ? (en ? ` · and <b>${w.n - w.total} more</b> on hold` : ` · y <b>${w.n - w.total} más</b> en espera`) : '';
   return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
 }
-function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips, noUpRow) {
+function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips, noUpRow, noVoiceTxt) {
   // (v442 · Corrección de Valentino 02:20, actualizada LOTE C · CHAT-NUEVO)
   // En la pantalla principal (mainScr: Inicio y Semana) el chat va SIN
   // prólogo: sin la línea de estado de la semana (chatNextWeekHTML — esa
@@ -9691,6 +9695,9 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // SACAR-IDEAS (decisión Valentino 3/11: «No quiero que aparezca mas»):
   // (LOTE SIMPLIFICAR-APP · PARTE 1 · 9/11: la fila «Subir fotos o video»
   // salió — la única subida es por el chat (#chatFile).)
+  // (CHAT-SIMPLIFICADO v5 · 10/11) En la pestaña Chat (noVoiceTxt) la
+  // barra explicativa no se rinde: quedan camarita + mic. El resto de
+  // las superficies conserva su texto (los strings siguen en el bundle).
   return `
   ${wrap}
     ${title}${desc}
@@ -9702,11 +9709,11 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     <div class="pz-voicebar">
       <div class="pz-voice-primary">
         <button class="pz-cam-btn" id="chatPhotoBtn" type="button" title="Mandar una foto o video" aria-label="Mandar una foto o video">${pzIc('camera', 20)}</button>
-        <div class="pz-voice-txt"><b>${gzT('Hablarle a Posty', 'Talk to Posty')}</b><small>${gzT('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.', 'Tap the big microphone and tell it anything, like on WhatsApp.')}</small></div>
+        ${noVoiceTxt ? '' : `<div class="pz-voice-txt"><b>${gzT('Hablarle a Posty', 'Talk to Posty')}</b><small>${gzT('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.', 'Tap the big microphone and tell it anything, like on WhatsApp.')}</small></div>`}
         <button class="pz-mic-big" id="chatMicSend" type="button" title="Hablarle a Posty" aria-label="Hablarle a Posty: tocá para grabar">${pzIc('mic', 26)}</button>
       </div>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
-      <p class="pz-voice-hint">${gzT('Todo se responde tocando o hablando.', 'Everything is answered by tapping or talking.')}</p>
+      ${noVoiceTxt ? '' : `<p class="pz-voice-hint">${gzT('Todo se responde tocando o hablando.', 'Everything is answered by tapping or talking.')}</p>`}
     </div>
     <div id="chatMsg"></div>
     <div id="mcFaltan"></div>
@@ -23909,12 +23916,9 @@ function chatFullView() {
     <button type="button" class="pz-chatfull-back" onclick="pzGoBack()" aria-label="${en ? 'Back' : 'Volver'}">${pzIc('chevronLeft', 22)}</button>
     <img class="chat-face" src="ai-avatar.png" alt="Posty">
     <div class="pz-chatfull-tit"><b>Posty<span class="pdot">.</span></b><span class="pz-chatfull-est" id="pzChatEstado">${en ? 'online' : 'en línea'}</span></div>
-    <div class="pz-chatfull-acts">
-      <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 20)}</button>
-      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button>
-    </div>
+    <!-- (CHAT-SIMPLIFICADO v5 · 10/11) Sin compartir ni tuerca en el Chat: quedan atrás, avatar, «Posty.» y «en línea». La tuerca vive en Ajustes; compartir, en el shell de Inicio. -->
   </header>
-  ${chatCardHTML(true, true, true, true, true, true, true)}
+  ${chatCardHTML(true, true, true, true, true, true, true, true)}
 </div>`;
 }
 // Sincroniza la altura de la pantalla con el viewport visible real.
@@ -24149,7 +24153,10 @@ function pzTemaBurbujaPostyHTML(html, textoPlano) {
   } catch (e) {}
 }
 function pzTemaQuickHTML(ops) {
-  return '<div class="pz-tema-quick" role="group" aria-label="' + esc(pzTemaT('Respuestas para tocar', 'Tap answers')) + '">'
+  // (CHAT-SIMPLIFICADO v5 · 10/11) Las respuestas para tocar son chips
+  // chicos en una línea (.pz-tema-chips), no botones grandes: el hilo
+  // se ve. Mismo data-tema-op, mismo binding, misma acción.
+  return '<div class="pz-tema-quick pz-tema-chips" role="group" aria-label="' + esc(pzTemaT('Respuestas para tocar', 'Tap answers')) + '">'
     + ops.map((o) => '<button type="button" data-tema-op="' + esc(o.id) + '" class="' + (o.primary ? 'primary' : '') + '"' + (o.hora ? ' data-tema-hora="' + esc(o.hora) + '"' : '') + (o.foto ? ' data-tema-foto="' + esc(o.foto) + '"' : '') + '>' + esc(o.text) + '</button>').join('')
     + '</div>';
 }
@@ -24241,9 +24248,9 @@ function pzTemaPintar() {
       + '<p class="pz-daily-intro">' + esc(pzTemaT('Hola, este es tu posteo de hoy. Aprobalo con un toque, o cambialo tocando — sin escribir nada.', "Hi, this is today's post. Approve it with a tap, or change it by tapping — no typing needed.")) + '</p>'
       + (p.imagen ? '<div class="pz-tema-thumb"><img src="' + esc(p.imagen) + '" alt=""><div><b>' + esc(titulo) + '</b><span>' + esc(meta) + '</span></div></div>' : '')
       + pzTemaQuickHTML([
-        { id: 'hoy-aprobar', text: pzTemaT('Dale, publicalo ✓', 'Go ahead, publish it ✓'), primary: true },
+        { id: 'hoy-aprobar', text: pzTemaT('Dale ✓', 'Publish ✓'), primary: true },
         { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it') },
-        { id: 'hoy-despues', text: pzTemaT('Lo miro después', "I'll check it later") },
+        { id: 'hoy-despues', text: pzTemaT('Después', 'Later') },
       ])
       + (lunesPend ? pzTemaLunesBoxHTML(lunesPend) : '')
       + '<p class="pz-one-a-day">' + esc(pzTemaT('Eso es todo por hoy: un solo mensaje de Posty por día. Mañana llega el de mañana, en este mismo hilo.', "That's all for today: one Posty message a day. Tomorrow's arrives tomorrow, in this same thread.")) + '</p>'
@@ -24320,8 +24327,16 @@ function pzTemaBindQuick() {
 function pzTemaSetQuick(ops) {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap) return;
-  const q = wrap.querySelector('.pz-tema-quick');
-  if (!q) return;
+  let q = wrap.querySelector('.pz-tema-quick');
+  if (!q) {
+    // (CHAT-SIMPLIFICADO v5) Las chips se quitan al responder
+    // (pzTemaResolverHoy): el flujo de cambio re-crea la fila acá.
+    q = document.createElement('div');
+    const card = wrap.querySelector('.pz-tema');
+    const one = wrap.querySelector('.pz-one-a-day');
+    if (card) { if (one) card.insertBefore(q, one); else card.appendChild(q); }
+    else wrap.appendChild(q);
+  }
   q.outerHTML = pzTemaQuickHTML(ops);
   pzTemaBindQuick();
 }
@@ -24336,6 +24351,10 @@ function pzTemaReactivar() {
     const wrap = document.getElementById('pzTemaWrap');
     if (!wrap) return;
     wrap.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = false; b.classList.remove('picked'); });
+    // (CHAT-SIMPLIFICADO v5) Si las chips ya se quitaron al responder y
+    // la acción falló, no hay botones que reactivar: se repinta el tema
+    // (vuelve la fila de chips para reintentar).
+    if (!wrap.querySelector('.pz-tema-quick')) { try { pzTemaPintar(); } catch (e) {} }
   } catch (e) {}
 }
 function pzTemaSetSub(text) {
@@ -24516,6 +24535,38 @@ function pzTemaHoraChips() {
     return out;
   } catch (e) { return []; }
 }
+// (CHAT-SIMPLIFICADO v5 · 10/11) Al responder el mensaje del día, las
+// chips desaparecen y el posteo queda como mensaje normal del hilo: la
+// tarjeta se clona (sin chips, sin la línea de un-mensaje-por-día ni la
+// caja de los lunes) y se pega como burbuja Posty al final del hilo, en
+// orden (antes que la burbuja del usuario con la respuesta). Solo sesión:
+// no se persiste en CHAT ni se loguea; al recargar, el tema ya está
+// respondido y no vuelve a pintarse. Una sola vez por posteo (reintentos
+// tras un fallo no duplican la burbuja).
+var PZ_TEMA_RESUELTOS = {};
+function pzTemaResolverHoy() {
+  try {
+    const wrap = document.getElementById('pzTemaWrap');
+    const box = document.getElementById('chatBox');
+    if (!wrap || !box) return;
+    const tema = pzTemaActual();
+    if (!tema || tema.kind !== 'hoy' || !tema.post || !tema.post.id) return;
+    const key = 'hoy:' + tema.post.id;
+    if (PZ_TEMA_RESUELTOS[key]) return;
+    PZ_TEMA_RESUELTOS[key] = 1;
+    const card = wrap.querySelector('.pz-tema.pz-daily-msg');
+    if (!card) return;
+    const q = wrap.querySelector('.pz-tema-quick');
+    if (q) q.remove();
+    const clon = card.cloneNode(true);
+    const q2 = clon.querySelector('.pz-tema-quick'); if (q2) q2.remove();
+    const one = clon.querySelector('.pz-one-a-day'); if (one) one.remove();
+    const lun = clon.querySelector('.pz-monday-box'); if (lun) lun.remove();
+    const ets = Date.now();
+    chatAppendMsg(box, '<div class="chat-msg ai" data-ts="' + ets + '">' + clon.innerHTML + chatHoraHtml(ets) + '</div>', ets);
+    try { chatScroll(); } catch (e) {}
+  } catch (e) {}
+}
 function pzTemaElegir(op, btn, textoLibre) {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap || !PZ_TEMA) return;
@@ -24531,6 +24582,10 @@ function pzTemaElegir(op, btn, textoLibre) {
   try {
     wrap.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = true; if (b === btn) b.classList.add('picked'); });
   } catch (e) {}
+  // (CHAT-SIMPLIFICADO v5) Responder el mensaje del día quita las chips
+  // y deja el posteo como mensaje normal del hilo (solo stage 'topic':
+  // en el flujo de cambio las chips se reemplazan, no se quitan).
+  try { if (tema && tema.kind === 'hoy' && PZ_TEMA.stage === 'topic' && (op === 'hoy-aprobar' || op === 'hoy-cambialo' || op === 'hoy-despues')) pzTemaResolverHoy(); } catch (e) {}
   pzTemaBurbujaUsuario(label);
   if (op === 'hoy-aprobar') { pzTemaAprobarHoy(); return; }
   if (op === 'hoy-despues') {
