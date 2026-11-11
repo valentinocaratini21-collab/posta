@@ -481,6 +481,13 @@ const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','u
 // y cierra con "…" (paso 9b de makeHeadline). Lista cerrada de Mora.
 // Espejo en generator.js.
 const HEADLINE_INFINITIVES = new Set(['tener','hacer','querer','poder','buscar','necesitar','lograr','conseguir','ofrecer','vender','comprar','pagar','pedir','armar','abrir','cerrar','crear','lanzar','empezar','seguir','dejar','poner','sacar','dar','ver','saber']);
+// (MORA-10a, 2026-11-10, id real 566) Posesivos para el patrón
+// "para que + posesivo + sustantivo" sin verbo: si un titular
+// declarativo cortado termina en "para que tu [sustantivo]", la
+// cláusula de finalidad tiene sujeto pero no verbo y lleva "…".
+// Espejo en generator.js.
+const HEADLINE_POSESIVOS_SING = new Set(['tu','mi','su','nuestro','nuestra','vuestro','vuestra']);
+const HEADLINE_POSESIVOS_PLUR = new Set(['mis','tus','sus','nuestros','nuestras','vuestros','vuestras']);
 // Quita palabras "colgadas" del final (preposiciones, artículos, conjunciones).
 function sinColgada(words) {
   const w = words.slice();
@@ -716,6 +723,24 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     // recién salida") deja un titular de estilo nominal completo y NO
     // lleva "…" (test-character-lock (f): no-pregunta intacta).
     if (['de', 'del', 'para'].includes(seedWordsQ[ow.length])) return true;
+    // 9c) PARA QUE + POSESIVO + SUSTANTIVO SIN VERBO (MORA-10a,
+    // 2026-11-10, id real 566 — "3 consejos para que tu Instagram"):
+    // la cláusula de finalidad "para que tu [sustantivo]" tiene sujeto
+    // pero no verbo: el sustantivo es el sujeto de la cláusula y el
+    // verbo venía después en la oración. Si el titular termina en ese
+    // patrón y la oración sigue, el verbo no llegó: el titular está
+    // cortado y lleva "…". Un verbo conjugado tras el posesivo ("para
+    // que tu vendas") sí cierra la cláusula y NO dispara: tras posesivo
+    // SINGULAR, una terminación -as/-es/-an/-en es verbal (un sustantivo
+    // plural no concuerda con posesivo singular). Espejo en generator.js.
+    if (ow.length >= 4) {
+      const r4 = ow[ow.length - 4], q3 = ow[ow.length - 3], p2 = ow[ow.length - 2], w1 = ow[ow.length - 1];
+      if (r4 === 'para' && q3 === 'que' && (HEADLINE_POSESIVOS_SING.has(p2) || HEADLINE_POSESIVOS_PLUR.has(p2))) {
+        const esVerbo = /ar$|er$|ir$/.test(w1) || HEADLINE_INFINITIVES.has(w1) ||
+          (HEADLINE_POSESIVOS_SING.has(p2) && /(as|es|an|en)$/.test(w1));
+        if (!esVerbo) return true;
+      }
+    }
     // 9b) INFINITIVO COLGADO (MORA-6, 2026-10-24, id real 498 — 3ª
     // ocurrencia de la clase TITULAR INCOMPLETO): la ÚLTIMA palabra
     // conservada es un infinitivo que exige complemento
@@ -22273,7 +22298,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts, logoExpected, i
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
 {"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"headline_empty_space_ok":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true${logoSchemaKeys}${faceSchemaKeys}}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
-- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. FRAGMENTO CON INFINITIVO (Mora 2026-10-24, id real 498): también es false si el titular termina en un INFINITIVO que pide complemento y el complemento NO está — "Te voy a ser honesto: tener" (id real 498) es INCOMPLETO: termina en infinitivo sin complemento y sin "…": headline_complete=false. Si la imagen NO lleva texto → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. FRAGMENTO CON INFINITIVO (Mora 2026-10-24, id real 498): también es false si el titular termina en un INFINITIVO que pide complemento y el complemento NO está — "Te voy a ser honesto: tener" (id real 498) es INCOMPLETO: termina en infinitivo sin complemento y sin "…": headline_complete=false. PREGUNTA CORTADA (MORA-10d, id real 596 — FALSO PASE del juez): una pregunta cortada NUNCA es un titular válido — "…" NO cierra una "¿". Si el titular abre con ¿ y termina en "…" (ej. "¿cuántas veces te pasó…" — id 596, el juez la dio por buena y estaba cortada), es headline_complete=false: la pregunta tiene que estar completa y cerrar con "?" o no ser titular. La "…" solo vale para un fragmento declarativo, nunca para una pregunta. PARA QUE + POSESIVO + SUSTANTIVO (MORA-10a, id real 566): también es false si el titular termina en "para que tu [sustantivo]" sin verbo y sin "…" — "3 consejos para que tu Instagram" (id 566) es INCOMPLETO: falta el verbo que la cláusula "para que" exige. Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
 - headline_empty_space_ok (v862, HUECO VACÍO — el 583 y el 590: el titular tapaba la imagen): el titular está en el HUECO VACÍO detectado de la imagen (el área despejada, sin sujeto ni elementos) y NO tapa al sujeto — ni cara, ni ojos, ni cuerpo, ni manos, ni producto. Si cualquier letra del titular pisa al sujeto o al producto, o si el titular está sobre la imagen en vez de en el hueco vacío → false. Si la imagen NO lleva titular → true.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
@@ -34683,7 +34708,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v882';
+const BUILD_ID = '20261105-v883';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

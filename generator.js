@@ -42,6 +42,13 @@ const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','u
 // el titular es un fragmento ("Te voy a ser honesto: tener", id real 498)
 // y cierra con "…" (paso 9b de makeHeadline). Lista cerrada de Mora.
 const HEADLINE_INFINITIVES = new Set(['tener','hacer','querer','poder','buscar','necesitar','lograr','conseguir','ofrecer','vender','comprar','pagar','pedir','armar','abrir','cerrar','crear','lanzar','empezar','seguir','dejar','poner','sacar','dar','ver','saber']);
+// (MORA-10a, 2026-11-10, id real 566) Posesivos para el patrón
+// "para que + posesivo + sustantivo" sin verbo: si un titular
+// declarativo cortado termina en "para que tu [sustantivo]", la
+// cláusula de finalidad tiene sujeto pero no verbo y lleva "…".
+// Espejo en server.js.
+const HEADLINE_POSESIVOS_SING = new Set(['tu','mi','su','nuestro','nuestra','vuestro','vuestra']);
+const HEADLINE_POSESIVOS_PLUR = new Set(['mis','tus','sus','nuestros','nuestras','vuestros','vuestras']);
 function sinColgada(words) {
   const w = words.slice();
   while (w.length > 1 && HEADLINE_DANGLING.has(String(w[w.length - 1]).toLowerCase().replace(/[.,;:!?¿¡()"“”'']/g, ''))) w.pop();
@@ -221,6 +228,24 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     // recién salida") deja un titular de estilo nominal completo y NO
     // lleva "…" (test-character-lock (f): no-pregunta intacta).
     if (['de', 'del', 'para'].includes(seedWordsQ[ow.length])) return true;
+    // 9c) PARA QUE + POSESIVO + SUSTANTIVO SIN VERBO (MORA-10a,
+    // 2026-11-10, id real 566 — "3 consejos para que tu Instagram"):
+    // la cláusula de finalidad "para que tu [sustantivo]" tiene sujeto
+    // pero no verbo: el sustantivo es el sujeto de la cláusula y el
+    // verbo venía después en la oración. Si el titular termina en ese
+    // patrón y la oración sigue, el verbo no llegó: el titular está
+    // cortado y lleva "…". Un verbo conjugado tras el posesivo ("para
+    // que tu vendas") sí cierra la cláusula y NO dispara: tras posesivo
+    // SINGULAR, una terminación -as/-es/-an/-en es verbal (un sustantivo
+    // plural no concuerda con posesivo singular). Espejo en server.js.
+    if (ow.length >= 4) {
+      const r4 = ow[ow.length - 4], q3 = ow[ow.length - 3], p2 = ow[ow.length - 2], w1 = ow[ow.length - 1];
+      if (r4 === 'para' && q3 === 'que' && (HEADLINE_POSESIVOS_SING.has(p2) || HEADLINE_POSESIVOS_PLUR.has(p2))) {
+        const esVerbo = /ar$|er$|ir$/.test(w1) || HEADLINE_INFINITIVES.has(w1) ||
+          (HEADLINE_POSESIVOS_SING.has(p2) && /(as|es|an|en)$/.test(w1));
+        if (!esVerbo) return true;
+      }
+    }
     // 9b) INFINITIVO COLGADO (MORA-6, 2026-10-24, id real 498 — 3ª
     // ocurrencia de la clase TITULAR INCOMPLETO): la ÚLTIMA palabra
     // conservada es un infinitivo que exige complemento
