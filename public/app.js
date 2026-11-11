@@ -16746,6 +16746,16 @@ function pzBoostNumeros(p) {
   return parts.length ? parts.join(' · ') : gzT('Publicado', 'Published');
 }
 
+// (v880) Números del posteo con coma («5 de alcance, 1 me gusta»),
+// como en la línea de la 3D-3H. Solo alcance y me gusta (el mock no
+// muestra comentarios). Vacío si no hay métricas.
+function pzBoostNumerosComa(p) {
+  const parts = [];
+  if (Number(p.reach || 0) > 0) parts.push(gzT(Number(p.reach) + ' de alcance', Number(p.reach) + ' reach'));
+  if (Number(p.likes || 0) > 0) parts.push(gzT(Number(p.likes) + ' me gusta', Number(p.likes) + ' likes'));
+  return parts.join(', ');
+}
+
 function pzBoostRecTexto(p) {
   const r = Number(p.reach || 0), l = Number(p.likes || 0), c = Number(p.comments || 0);
   const nums = (r > 0 || l > 0 || c > 0)
@@ -16879,23 +16889,31 @@ function pzBoostPintarPick() {
   if (go) go.disabled = !s.selId;
 }
 
+// (v880) Hoja Impulsar 3D-3H dorado premium horizontal (diseño elegido
+// por Valentino 10/11): título «Impulsar posteo con Ads», foto del
+// posteo a la izquierda (entera, 96×120, 4:5, contain, marco dorado),
+// los 3 montos apilados a la derecha ($50 grande dorado RECOMENDADO,
+// $20 y $100), cada monto impulsa con UN TOQUE, y abajo la línea del
+// mejor de la semana + «Elegir otro posteo» (abre el picker). No van:
+// el título de sección, el caption truncado, el «Por eso Posty te
+// recomienda...» ni el botón celeste de confirmar (los montos SON la
+// acción). Si un monto no puede impulsar (saldo, gate o moneda), el
+// toque NO impulsa: la hoja muestra el aviso y el camino de carga
+// (que degrada a «Agregar tarjeta» si no hay tarjeta, camino v877).
 function pzBoostPintarBoost() {
   const body = document.getElementById('pzBoostBody');
   if (!body) return;
   const s = pzBoostState || pzBoostNewState();
   const p = s.selPost;
+  const xBtn = `<button type="button" class="pz-boost-3d3-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button>`;
   if (!p) {
-    body.innerHTML = `<div class="pz-boost-head"><b>${esc(gzT('Impulsar posteo', 'Boost post'))}</b><button type="button" class="pz-boost-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button></div>
-    <p class="pz-boost-note" style="margin:14px 0">${esc(gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.'))}</p>`;
+    body.innerHTML = `<div class="pz-boost-3d3">${xBtn}
+    <p class="pz-boost-note" style="margin:14px 0">${esc(gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.'))}</p></div>`;
     return;
   }
   const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
-  const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
-  const head = `<div class="pz-boost-head"><b>${esc(gzT('Impulsar posteo', 'Boost post'))}</b><button type="button" class="pz-boost-x" onclick="pzBoostCerrar()" aria-label="${esc(gzT('Cerrar', 'Close'))}">×</button></div>
-  <div class="pz-boost-post">${img}<div><b>${esc(pzBoostTitulo(p))}</b><small>${esc(gzT('Publicado · impulso por 7 días', 'Published · 7-day boost'))}</small></div></div>
-  <p class="pz-boost-rec">${esc(pzBoostRecTexto(p))}</p>`;
   if (ya) {
-    body.innerHTML = head + `<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Este posteo ya está impulsado', 'This post is already boosted'))}</b><p>${esc(gzT('Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.', 'It has an active 7-day boost. Pick another post to boost.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div>`;
+    body.innerHTML = `<div class="pz-boost-3d3">${xBtn}<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Este posteo ya está impulsado', 'This post is already boosted'))}</b><p>${esc(gzT('Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.', 'It has an active 7-day boost. Pick another post to boost.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div></div>`;
     return;
   }
   const monto = Number(s.selMonto) || 50;
@@ -16904,26 +16922,37 @@ function pzBoostPintarBoost() {
   const gate = pzBoostGate();
   const conv = !!s.conversionPendiente;
   const falta = saldo < monto;
-  const puede = !gate.cerrado && !monedaARS && !falta;
   const warn = monedaARS
     ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('saldo_ars_pendiente', monto))}</p>`
     : gate.cerrado
       ? `<p class="pz-boost-warn">${esc(pzBoostMotivo(gate.motivo, monto))}</p>`
       : falta
         ? `<p class="pz-boost-warn">${esc(gzT('Te faltan $' + (monto - saldo) + ' · cargalo acá mismo, sin ir a otra pantalla.', 'You’re $' + (monto - saldo) + ' short · top it up right here, without leaving this screen.'))}</p>`
-        : `<p class="pz-boost-warn ok">${esc(gzT('✓ Alcanza para este impulso.', '✓ Enough for this boost.'))}</p>`;
+        : '';
   const notaConv = conv ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('conversion_pendiente', monto))}</p>` : '';
-  body.innerHTML = head + `
-  <div class="pz-boost-hero"><span class="pz-boost-hero-amt">$${monto}</span><span class="pz-boost-hero-txt">${esc(gzT('por 7 días', 'for 7 days'))}</span><p>${esc(gzT('Te recomiendo este monto para este posteo. Confirmalo con un toque.', 'I recommend this amount for this post. Confirm it with one tap.'))}</p></div>
-  <button type="button" class="pz-boost-amt-link" id="pzBoostCambiarMonto" onclick="pzBoostToggleMontos()">${esc(s.montosAbierto ? gzT('Ocultar montos', 'Hide amounts') : gzT('Cambiar monto', 'Change amount'))}</button>
-  <div class="pz-boost-amts" id="pzBoostAmts" style="display:${s.montosAbierto ? 'grid' : 'none'}" role="group" aria-label="${esc(gzT('Otro monto del impulso', 'Another boost amount'))}">
-    ${[20, 50, 100].map((x) => `<button type="button" class="pz-boost-amt${x === monto ? ' on' : ''}" onclick="pzBoostElegirMonto(${x})">$${x}<small>${esc(gzT('7 días', '7 days'))}</small></button>`).join('')}
-  </div>
-  <div class="pz-boost-bal"><span>${esc(gzT('Tu saldo', 'Your balance'))}</span><b>$${saldo}</b></div>
-  ${warn}${notaConv}
-  <button type="button" class="btn btn-block pz-boost-load" onclick="pzBoostCargar(this)">${esc(gzT('Cargar $' + monto + ' ahora', 'Top up $' + monto + ' now'))}</button>
-  <button type="button" class="btn btn-primary btn-block" style="margin-top:9px" onclick="pzBoostConfirmar(this)" ${puede ? '' : 'disabled'}>${esc(gzT('Impulsar por $' + monto + ' · 7 días', 'Boost for $' + monto + ' · 7 days'))}</button>
-  <p class="pz-boost-msg" id="pzBoostMsg"></p>`;
+  const cargar = falta ? `<button type="button" class="btn btn-block pz-boost-load" onclick="pzBoostCargar(this)">${esc(gzT('Cargar $' + monto + ' ahora', 'Top up $' + monto + ' now'))}</button>` : '';
+  const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+  const nums = pzBoostNumerosComa(p);
+  const linea = (p.recomendado && nums)
+    ? `${esc(gzT('El mejor de tu semana', 'Your best post this week'))} · <b>${esc(nums)}</b>`
+    : `<b>${esc(nums || gzT('Publicado', 'Published'))}</b>`;
+  body.innerHTML = `<div class="pz-boost-3d3">${xBtn}
+    <div class="pz-boost-3d3-title">${esc(gzT('Impulsar posteo', 'Boost post'))} <span>${esc(gzT('con Ads', 'with Ads'))}</span></div>
+    <div class="pz-boost-3d3-row">
+      <div class="pz-boost-3d3-thumb">${img}</div>
+      <div class="pz-boost-3d3-montos" role="group" aria-label="${esc(gzT('Monto del impulso', 'Boost amount'))}">
+        <button type="button" class="pz-boost-3d3-main" onclick="pzBoostImpulsarMonto(50, this)">$50<small>${esc(gzT('RECOMENDADO · 7 DÍAS', 'RECOMMENDED · 7 DAYS'))}</small></button>
+        <button type="button" class="pz-boost-3d3-side" onclick="pzBoostImpulsarMonto(20, this)">$20</button>
+        <button type="button" class="pz-boost-3d3-side" onclick="pzBoostImpulsarMonto(100, this)">$100</button>
+      </div>
+    </div>
+    <div class="pz-boost-3d3-bottom">
+      <div class="pz-boost-3d3-linea">${linea}</div>
+      <button type="button" class="pz-boost-3d3-otro" onclick="pzBoostPickOpen()">↻ ${esc(gzT('Elegir otro posteo', 'Choose another post'))}</button>
+    </div>
+    ${warn}${notaConv}${cargar}
+    <p class="pz-boost-msg" id="pzBoostMsg"></p>
+  </div>`;
 }
 
 function pzBoostPintarExito(p, monto) {
@@ -17011,6 +17040,32 @@ function pzBoostToggleMontos() {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   s.montosAbierto = !s.montosAbierto;
   pzBoostPintarBoost();
+}
+
+// (v880) ¿Se puede impulsar con este monto con un toque? Misma
+// condición que habilitaba el confirmar: gate abierto, moneda USD y
+// saldo suficiente. Si no se puede, el toque NO impulsa: la hoja
+// muestra el aviso y el camino de carga (que degrada a «Agregar
+// tarjeta» si no hay tarjeta, camino v877). Nunca se rompe.
+function pzBoostPuede(monto) {
+  const s = pzBoostState || {};
+  const m = Number(monto) || 50;
+  const gate = pzBoostGate();
+  const monedaARS = ((s.billetera && s.billetera.currency) || 'USD') !== 'USD';
+  const saldo = pzBoostSaldoUSD();
+  return !gate.cerrado && !monedaARS && saldo >= m;
+}
+
+// (v880) Un toque en un monto = se envía el ad con ese monto (mismo
+// camino que el confirmar). Si no se puede (saldo, gate o moneda), no
+// impulsa: repinta la hoja con el aviso y el camino de carga.
+async function pzBoostImpulsarMonto(monto, btn) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const m = Number(monto) || 50;
+  if (![20, 50, 100].includes(m)) return;
+  s.selMonto = m;
+  if (!pzBoostPuede(m)) { pzBoostPintarBoost(); return; }
+  await pzBoostConfirmar(btn);
 }
 
 async function pzBoostCargar(btn) {

@@ -6043,6 +6043,25 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-boost-msg{font-size:13.5px;font-weight:700;color:var(--txt);line-height:1.5;margin-top:10px}
 .pz-boost-load{background:#FEC14D!important;color:#231a02!important}
 
+/* ============ v880 · Impulsar 3D-3H dorado premium horizontal ============ */
+.pz-boost-3d3{position:relative;background:linear-gradient(180deg,#fffdf6 0%,#fff 40%,#FFFBEE 100%);border:1.5px solid rgba(254,193,77,.65);border-radius:26px;box-shadow:0 0 0 4px rgba(254,193,77,.14),0 26px 52px rgba(10,30,51,.24),0 5px 12px rgba(10,30,51,.10);padding:16px 16px 14px}
+.pz-boost-3d3-x{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:0;background:var(--bg2);color:var(--dim);font-size:19px;line-height:1;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center}
+.pz-boost-3d3-title{font-size:19px;font-weight:800;color:#0A1E33;letter-spacing:-.01em;text-align:center}
+.pz-boost-3d3-title span{color:#B98A12}
+.pz-boost-3d3-row{display:flex;gap:16px;align-items:stretch;margin-top:12px}
+.pz-boost-3d3-thumb{width:96px;height:120px;flex:none;border-radius:14px;overflow:hidden;background:#fff;border:3px solid #FEC14D;box-shadow:0 0 0 4px rgba(254,193,77,.20),0 16px 28px rgba(10,30,51,.30),0 4px 10px rgba(10,30,51,.16)}
+.pz-boost-3d3-thumb img{width:100%;height:100%;object-fit:contain;display:block}
+.pz-boost-3d3-montos{display:flex;flex-direction:column;gap:8px;flex:1}
+.pz-boost-3d3-main{border:0;cursor:pointer;font-family:inherit;font-size:20px;font-weight:800;color:#0A1E33;padding:12px 0 10px;border-radius:16px;background:linear-gradient(180deg,#FFDE7A 0%,#FEC14D 45%,#F0A92E 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -3px 0 rgba(180,120,10,.35),0 6px 0 #C78F16,0 14px 24px rgba(185,138,18,.40)}
+.pz-boost-3d3-main small{display:block;font-size:9px;font-weight:700;letter-spacing:.02em;color:#6d5310;margin-top:2px;white-space:nowrap}
+.pz-boost-3d3-main:active{transform:translateY(2px);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -3px 0 rgba(180,120,10,.35),0 4px 0 #C78F16,0 8px 16px rgba(185,138,18,.40)}
+.pz-boost-3d3-side{cursor:pointer;font-family:inherit;font-size:15px;font-weight:800;color:#0A1E33;padding:9px 0 8px;border-radius:14px;background:#fff;border:1.5px solid #E8D9AE;box-shadow:inset 0 2px 0 rgba(255,255,255,.9),0 3px 0 #E0CFA4,0 6px 12px rgba(10,30,51,.12)}
+.pz-boost-3d3-side:active{transform:translateY(2px);box-shadow:inset 0 2px 0 rgba(255,255,255,.9),0 1px 0 #E0CFA4,0 3px 6px rgba(10,30,51,.12)}
+.pz-boost-3d3-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px}
+.pz-boost-3d3-linea{font-size:13px;color:#33475e;line-height:1.35}
+.pz-boost-3d3-linea b{color:#0A1E33}
+.pz-boost-3d3-otro{background:transparent;border:1.5px solid rgba(39,147,200,.55);color:#2793C8;font-size:13px;font-weight:700;border-radius:999px;padding:8px 16px;cursor:pointer;font-family:inherit;white-space:nowrap}
+
 /* ============ RS-5 · REDISEÑO SIMPLE (mock v10) ============ */
 /* Barra de 3 pestañas: sin CSS nuevo (flex reparte las 3). */
 /* --- Chat: la voz es la entrada principal (regla 12) --- */
