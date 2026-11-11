@@ -8439,6 +8439,15 @@ app.post('/api/admin/regen-post', requireAdminToken, express.json(), async (req,
     res.json({ ok: true, post_id: post.id, user_id: post.user_id, status: 'draft', week_key: post.week_key, unscheduled, title, headline: r.headline || null, text_mode: r.textMode || 'text' });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
+// (v884) Captions APROBADOS por Valentino 12:19 («Claro, así sí») para la
+// tira nails — el caption promociona a Posty y muestra que Posty trabaja con
+// el rubro, nunca vende el servicio del rubro. Fuente única para la siembra
+// y la corrección (los 3 posteos ya sembrados llevan los captions viejos).
+const SIEMBRA_NAILS_CAPTIONS = {
+  '2026-11-11T00:00:00.000Z': 'Así queda un posteo de uñas cuando lo hace posty. La foto, el color, el caption: todo listo. Si tenés un salón, esto lo hago por vos todos los días.',
+  '2026-11-12T00:00:00.000Z': 'así se mueve el color cuando posty lo postea. un video así cada semana, para tu salón, sin que muevas un dedo.',
+  '2026-11-13T00:00:00.000Z': 'las que vuelven no vuelven por el esmalte. vuelven por el color que les queda. y ese posteo lo hizo posty.',
+};
 // ---------- (v871) SIEMBRA TIRA NAILS: los 3 posteos exactos del mock ----------
 // Un solo uso, por orden de Valentino (10/11 09:03-09:04, «dale» 09:09):
 // los proximos 3 posteos del producto son la tira nails. Las imagenes ya
@@ -8455,11 +8464,11 @@ app.post('/api/admin/siembra-nails', requireAdminToken, express.json(), (req, re
   const OLD = [591, 580, 584];
   const SEED = [
     { slot: '2026-11-11T00:00:00.000Z', file: 'tira-nails-1.jpg', media: 'image', cover: null,
-      caption: 'este color no se elige en la vidriera. se elige en la mano. vení y probalo.' },
+      caption: SIEMBRA_NAILS_CAPTIONS['2026-11-11T00:00:00.000Z'] },
     { slot: '2026-11-12T00:00:00.000Z', file: 'tira-nails-2.mp4', media: 'video', cover: 'tira-nails-2-cover.jpg',
-      caption: 'así cae el color antes de llegar a tus manos. mirá cómo se mueve.' },
+      caption: SIEMBRA_NAILS_CAPTIONS['2026-11-12T00:00:00.000Z'] },
     { slot: '2026-11-13T00:00:00.000Z', file: 'tira-nails-3.jpg', media: 'image', cover: null,
-      caption: 'las que vuelven no vuelven por el esmalte. vuelven por el color que les queda. pedilo por nombre.' },
+      caption: SIEMBRA_NAILS_CAPTIONS['2026-11-13T00:00:00.000Z'] },
   ];
   try {
     // 1) Fuentes: las 4 piezas compuestas tienen que estar en el repo.
@@ -8504,6 +8513,45 @@ app.post('/api/admin/siembra-nails', requireAdminToken, express.json(), (req, re
     }
     console.log(`[admin] siembra-nails: 3 posteos (${seeded.map((s) => s.id).join(',')}) en slots 10/11, 11/11, 12/11 19:00; viejos a borrador: ${cancelled.map((c) => c.id).join(',') || 'ninguno'}`);
     res.json({ ok: true, seeded, cancelled });
+  } catch (e) { res.status(500).json({ ok: false, error: String((e && e.message) || e).slice(0, 200) }); }
+});
+// ---------- (v884) CORREGIR CAPTIONS TIRA NAILS: los 3 posteos ya sembrados ----------
+// v871 aterrizó 11:59 y la siembra se ejecutó 12:00 con los captions VIEJOS
+// (vendían hacerse las uñas). Valentino aprobó los nuevos 12:19 («Claro,
+// así sí»): el caption promociona a Posty y muestra que Posty trabaja con
+// el rubro. Este endpoint actualiza SOLO los captions de los 3 posteos con
+// source='siembra-nails-v871' (por slot), sin tocar status, scheduled_at,
+// image_path, cover_path, media_type ni nada más. Idempotente: si el
+// caption ya es el aprobado, no lo toca y lo reporta como ya_correcto —
+// la segunda llamada devuelve los mismos posteos con los mismos captions
+// y cambiados=0. Sin confirm=true devuelve el plan (dry-run) sin tocar nada.
+app.post('/api/admin/siembra-nails/corregir-captions', requireAdminToken, express.json(), (req, res) => {
+  const UID = 12, SRC = 'siembra-nails-v871';
+  try {
+    const rows = db.prepare(`SELECT id, scheduled_at, status, caption, image_path, media_type, cover_path FROM posts WHERE user_id = ? AND source = ? ORDER BY scheduled_at`).all(UID, SRC);
+    const plan = rows.map((p) => ({
+      id: p.id,
+      slot: p.scheduled_at,
+      caption_actual: p.caption,
+      caption_nuevo: SIEMBRA_NAILS_CAPTIONS[p.scheduled_at] || null,
+      ya_correcto: p.caption === SIEMBRA_NAILS_CAPTIONS[p.scheduled_at],
+    }));
+    const sinCaption = plan.filter((x) => !x.caption_nuevo);
+    if (sinCaption.length) return res.status(502).json({ ok: false, error: 'slot sin caption aprobado: ' + sinCaption.map((x) => x.id + '@' + x.slot).join(', ') });
+    if (!req.body || req.body.confirm !== true) {
+      return res.json({ ok: true, dry_run: true, plan });
+    }
+    const posts = [];
+    let cambiados = 0;
+    for (const p of plan) {
+      if (!p.ya_correcto) {
+        db.prepare(`UPDATE posts SET caption = ? WHERE id = ?`).run(p.caption_nuevo, p.id);
+        cambiados++;
+      }
+      posts.push({ id: p.id, slot: p.slot, caption: p.caption_nuevo, cambiado: !p.ya_correcto });
+    }
+    console.log(`[admin] siembra-nails/corregir-captions: ${cambiados} actualizados, ${posts.length - cambiados} ya correctos`);
+    res.json({ ok: true, posts, cambiados });
   } catch (e) { res.status(500).json({ ok: false, error: String((e && e.message) || e).slice(0, 200) }); }
 });
 // Extensión de prueba por soporte (v182): setea trial_extended_until =
@@ -34708,7 +34756,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v883';
+const BUILD_ID = '20261105-v884';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

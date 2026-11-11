@@ -13,7 +13,7 @@
  * historia). Idempotente (source='siembra-nails-v871'); sin confirm=true
  * devuelve el plan (dry-run) sin tocar nada.
  * Cubre, con boot aislado (DB temporal, sin tocar produccion):
- *  A) estaticos: BUILD v871 x1, cero v860; endpoint presente; las 4 piezas
+ *  A) estaticos: BUILD v884 x1 (re-pineo v884), cero v860; endpoint presente; las 4 piezas
  *     en public/siembra-nails con sus md5; captions exactos x1; slots
  *     exactos; app.js y styles.css sin tocar (censo del release);
  *     la cara esta arriba a la izquierda (pixel) y la banda es #F9E9E3.
@@ -49,14 +49,17 @@ function md5(p) { return crypto.createHash('md5').update(fs.readFileSync(p)).dig
 
 // ---------- §A: estaticos ----------
 console.log('— §A: estaticos');
-t((SRV.match(/20261105-v871/g) || []).length === 1, '§A: BUILD v871 x1 en server.js', 'n=' + (SRV.match(/20261105-v871/g) || []).length);
+t((SRV.match(/20261105-v884/g) || []).length === 1, '§A: BUILD v884 x1 en server.js (re-pineo v884)', 'n=' + (SRV.match(/20261105-v884/g) || []).length);
 t(!SRV.includes('20261105-v860'), '§A: cero v860 en server.js');
 t(SRV.includes("app.post('/api/admin/siembra-nails'"), '§A: endpoint /api/admin/siembra-nails presente');
 t(SRV.includes("source = 'siembra-nails-v871'") || SRV.includes("SRC = 'siembra-nails-v871'"), '§A: source siembra-nails-v871');
 const CAPS = [
-  'este color no se elige en la vidriera. se elige en la mano. vení y probalo.',
-  'así cae el color antes de llegar a tus manos. mirá cómo se mueve.',
-  'las que vuelven no vuelven por el esmalte. vuelven por el color que les queda. pedilo por nombre.',
+  // (v884) Captions APROBADOS por Valentino 12:19 («Claro, así sí») —
+  // promocionan a Posty, no venden hacerse las uñas. Los viejos se
+  // reemplazaron en server.js (constante SIEMBRA_NAILS_CAPTIONS).
+  'Así queda un posteo de uñas cuando lo hace posty. La foto, el color, el caption: todo listo. Si tenés un salón, esto lo hago por vos todos los días.',
+  'así se mueve el color cuando posty lo postea. un video así cada semana, para tu salón, sin que muevas un dedo.',
+  'las que vuelven no vuelven por el esmalte. vuelven por el color que les queda. y ese posteo lo hizo posty.',
 ];
 for (const c of CAPS) t((SRV.match(new RegExp(c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length === 1, '§A: caption exacto x1: ' + c.slice(0, 40) + '…');
 for (const s of ['2026-11-11T00:00:00.000Z', '2026-11-12T00:00:00.000Z', '2026-11-13T00:00:00.000Z']) {
@@ -165,7 +168,7 @@ function queryDb(sql, ...params) {
     if (!boot.up) { console.log(bootOut.split('\n').slice(-30).join('\n')); }
     else {
       const v = await (await fetch(`http://127.0.0.1:${PORT}/api/version`)).json();
-      t(String(v.build || v.version || JSON.stringify(v)).includes('20261105-v871'), '§B: /api/version v871', JSON.stringify(v).slice(0, 120));
+      t(String(v.build || v.version || JSON.stringify(v)).includes('20261105-v884'), '§B: /api/version v884 (re-pineo v884)', JSON.stringify(v).slice(0, 120));
       // Dry-run: no toca nada.
       const dry = await admin('POST', '/api/admin/siembra-nails', {});
       t(dry.status === 200 && dry.json && dry.json.dry_run === true, '§B: dry-run sin confirm (200 + dry_run)', dry.status + ' ' + JSON.stringify(dry.json).slice(0, 160));
