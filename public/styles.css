@@ -3889,6 +3889,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    si llega una versión más grande se cambia el archivo sin tocar el código. */
 .logo-img{height:34px;width:auto;display:block}
 .logo-img-foot{height:40px;width:auto;display:block}
+/* (login-logo-posty) logo de auth a 55px: el «posty.» se lee a ~23px,
+   igual que el texto actual; NO toca .logo-img del website (34px). */
+.logo-img-auth{height:55px;width:auto;display:block}
+@media(max-width:760px){.logo-img-auth{height:44px}}
 @media(max-width:760px){.logo-img{height:28px}.logo-img-foot{height:34px}}
 @media(max-width:760px){.sello-cabecera{width:28px;height:28px}}
 

@@ -5407,7 +5407,7 @@ function authView(mode) {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}"><img class="sello-cabecera" src="/logo-bambooty.png" width="34" height="34" alt="Bambooty">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}"><img class="logo-img logo-img-auth" src="/posty-logo.png" width="226" height="62" alt="Posty"></a>
     <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? S.navCreate : S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -5436,7 +5436,7 @@ function forgotView() {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}"><img class="sello-cabecera" src="/logo-bambooty.png" width="34" height="34" alt="Bambooty">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}"><img class="logo-img logo-img-auth" src="/posty-logo.png" width="226" height="62" alt="Posty"></a>
     <div class="nav-links"><a href="#/login">${S.navLogin}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -5456,7 +5456,7 @@ function resetView() {
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}"><img class="sello-cabecera" src="/logo-bambooty.png" width="34" height="34" alt="Bambooty">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="${homeHref}" onclick="try{sessionStorage.setItem('posta_ver_web','1')}catch(e){}"><img class="logo-img logo-img-auth" src="/posty-logo.png" width="226" height="62" alt="Posty"></a>
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${S.resetH2}</h2>

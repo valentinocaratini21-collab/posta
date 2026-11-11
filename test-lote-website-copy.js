@@ -390,10 +390,10 @@ t(logoBuf.length >= 24 && logoBuf.readUInt32BE(16) === 226 && logoBuf.readUInt32
 t(count(indexSrc, 'posty-logo.png') === 1, 'logo: header ES shell referencia /posty-logo.png');
 t(has(indexSrc, 'alt="Posty"'), 'logo: header ES alt Posty');
 t(count(enSrc, 'posty-logo.png') === 2, 'logo: header+pie EN referencian /posty-logo.png');
-t(count(appSrc, 'posty-logo.png') === 2, 'logo: landingView header + pie ES referencian /posty-logo.png');
+t(count(appSrc, 'posty-logo.png') === 5, 'logo: posty-logo.png ×5 en app.js (landingView header + pie ES + 3 auth)');
 t(count(indexSrc, 'logo-bambooty.png') === 0, 'logo: cero sello Bambooty en index.html');
 t(count(enSrc, 'logo-bambooty.png') === 0, 'logo: cero sello Bambooty en en/index.html');
-t(count(appSrc, 'logo-bambooty.png') === 3, 'logo: sello Bambooty queda solo 3x en app.js (auth, fuera de alcance)');
+t(count(appSrc, 'logo-bambooty.png') === 0, 'logo: sello Bambooty en 0 en app.js (auth ahora usa posty-logo.png)');
 t(has(stylesSrc, '.logo-img{height:34px'), 'logo: styles.css regla .logo-img');
 t(has(stylesSrc, '.logo-img-foot{height:40px'), 'logo: styles.css regla .logo-img-foot');
 t(has(stylesSrc, '@media(max-width:760px){.logo-img{height:28px}'), 'logo: styles.css .logo-img móvil');
