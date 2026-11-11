@@ -22341,19 +22341,16 @@ async function inicioView() {
       PZ_RITUAL_ESTADO = { tieneHoy: !!ritEstado.tiene_hoy, yaElegido: !!ritEstado.ya_elegido };
     }
   } catch (e) {}
-  // (LOTE PROXIMO-RITUAL · ajuste mañana 5/11) Puerta matutina: una
-  // sola vez por mañana, antes de elegir, Inicio redirige al paquete
-  // velado a pantalla completa (#/app/ritual). Después de elegir (o
-  // si ya se vio hoy, o si hoy no hay paquete) Inicio abre normal.
-  try {
-    if ((typeof pzRitualPuertaManana === 'function') && pzRitualPuertaManana(ritEstado, (ritEstado && ritEstado.visto_hoy) || ((typeof pzRitualMananaVistaHoy === 'function') ? pzRitualMananaVistaHoy() : false))) {
-      try { if (typeof pzRitualMananaMarcarVista === 'function') pzRitualMananaMarcarVista(); } catch (e) {}
-      try { if (typeof pzRitualMananaMarcarVistaServidor === 'function') pzRitualMananaMarcarVistaServidor(); } catch (e) {}
-      if (typeof bbGo === 'function') bbGo('#/app/ritual');
-      else if (typeof location !== 'undefined') location.hash = '#/app/ritual';
-      return `<div id="inicioView" class="hf-wrap"><div class="pz-ritual-conjuro"><div class="pz-ritual-dots"><span></span><span></span><span></span></div></div></div>`;
-    }
-  } catch (e) {}
+  // (LOTE INICIO-SIN-SALUDO · 11/11 · orden Valentino «entrar directo
+  // al inicio») La puerta matutina murió: con posteo nuevo, entrar a
+  // la app ya NO redirige al paquete a pantalla completa (#/app/ritual).
+  // Inicio rinde normal (la grilla, con la carta de hoy abierta arriba)
+  // y el posteo se ve ahí mismo, sin saludo. El ritual sigue vivo en
+  // #/app/ritual (la carta lo abre para confirmar/cambiar; la push de
+  // las 9:00 también) pero ya no es la entrada. ritEstado y
+  // PZ_RITUAL_ESTADO se conservan: la grilla los usa para la carta.
+  // pzRitualPuertaManana queda como función pura (la usan los tests);
+  // ya nada la llama desde Inicio.
   if (!Array.isArray(allPosts)) allPosts = [];
   const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
   REVIEW_DRAFTS = drafts; // el chat de la hoja edita borradores, igual que en Schedule
@@ -23216,13 +23213,17 @@ function pzRitualHTML(d, en) {
       : `<div class="pz-ritual-slot sil${s.hoy ? ' hoy' : ''}" title="${esc(s.etiqueta)}">${diaEn}<span>${pasoSinSalir ? '🔒' : '✦'}</span></div>`;
     return `<div class="pz-ritual-slotcol">${inner}</div>`;
   }).join('');
-  const head = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><b>${en ? 'good morning' : 'buen día'}</b><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
-  <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
+  // (LOTE INICIO-SIN-SALUDO · 11/11) El saludo de la mañana (título de
+  // hora + paquete + racha) murió: la hoja ya no lleva ceremonia arriba
+  // del posteo. `head` se retiró (solo lo usaban la revelada y la
+  // elegida); `headSinSaludo` queda para la rama de la tarde (próximo)
+  // y el vacío, que no se tocan.
   // (LOTE POST-OCULTO-RESPIRA · 6/11 · corrección Valentino 17:32, misma
   // que el destapado) La pantalla velada se ve de tarde a noche, no a la
   // mañana: SIN saludo de hora del día — solo «te traje tu paquete de
-  // hoy». El saludo de la mañana queda solo en el ritual de la mañana
-  // (revelada / elegida). Sin saludo nuevo.
+  // hoy». (LOTE INICIO-SIN-SALUDO · 11/11) El saludo de la mañana murió:
+  // `headSinSaludo` queda solo para la rama de la tarde (próximo) y el
+  // vacío, que no se tocan. Sin saludo nuevo.
   const headSinSaludo = `<div class="pz-ritual-head"><img class="pz-ritual-ava" src="ai-avatar.png" alt="Posty"><div><span>${en ? 'I brought your pack for today' : 'te traje tu paquete de hoy'}</span></div></div>
   <p class="pz-ritual-racha">${esc(rachaTx)}</p>`;
   // (LOTE POST-OCULTO-RESPIRA · 6/11 · mock v2c, estado tardecita
@@ -23261,7 +23262,7 @@ function pzRitualHTML(d, en) {
   }
   if (d.elegida) {
     const picked = (d.cartas || []).find((c) => Number(c.id) === Number(d.elegida)) || d.cartas[0];
-    return `<div class="pz-ritual-wrap-in">${head}${pzRitualAnalisisHTML(d)}
+    return `<div class="pz-ritual-wrap-in">${pzRitualAnalisisHTML(d)}
   <div class="pz-ritual-listo"><h2>${en ? 'Done — this one goes out today' : 'Listo, hoy sale esta'}</h2>${d.dorada ? `<p class="pz-ritual-hito">✦ ${en ? 'Golden card: a milestone day' : 'Carta dorada: día de hito'}</p>` : ''}
   ${picked ? pzRitualCardHTML(picked, d, en) : ''}
   <p class="pz-ritual-nota">${(d.recomendada && d.recomendada.hora_salida) ? (en ? 'It goes out today at ' + esc(d.recomendada.hora_salida) : 'Sale hoy a las ' + esc(d.recomendada.hora_salida)) : (en ? 'It goes out today.' : 'Sale hoy.')}</p></div>
@@ -23276,36 +23277,27 @@ function pzRitualHTML(d, en) {
   // velo, v826). Ver ≠ elegir: rendir revelada no guarda selección
   // ni confirma. La aprobación vive solo en [Sale así]
   // (pzRitualConfirmar). Sin confirmación, el servidor sigue
-  // publicando la recomendada (v687 intacto). Antes de las 9:00 se
-  // suma el aviso de las 9:00 para confirmar.
+  // publicando la recomendada (v687 intacto). (LOTE INICIO-SIN-SALUDO
+  // · 11/11) El aviso de las 9:00 murió con la ceremonia: la hora de
+  // salida vive como dato de la tarjeta, no como anuncio.
   const rec = d.recomendada || ((d.cartas && d.cartas[0]) || null);
-  // Antes de las 9:00 (abre_a en el futuro): el posteo ya se ve en
-  // Hoy, así que la hoja rinde revelada igual, con el aviso de las
-  // 9:00. `abre_a`/`ahora` vienen del servidor (la zona es la de la
-  // cuenta); si faltan, no hay aviso (la hoja sigue revelada).
-  let preAviso = false;
-  try {
-    if (d.abre_a) {
-      const sesgo = d.ahora ? (Date.parse(d.ahora) - Date.now()) : 0;
-      const falta = Date.parse(d.abre_a) - (Date.now() + sesgo);
-      preAviso = Number.isFinite(falta) && falta > 0;
-    }
-  } catch (e) { preAviso = false; }
+  // (LOTE INICIO-SIN-SALUDO · 11/11) El aviso de las 9:00 murió con la
+  // ceremonia: la hora de salida vive como dato de la tarjeta (abajo),
+  // no como anuncio. `preAviso`/`abre_a` ya no se leen acá.
   if (rec) {
     const img = rec.media_type === 'video'
       ? `<video src="${esc(rec.imagen)}" muted playsinline controls preload="metadata" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block"></video>`
       : `<img src="${esc(mv(rec.imagen, 640))}" data-full="${esc(rec.imagen)}" onerror="__imgFb(this)" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block" alt="">`;
-    const avisoPre = preAviso ? (en
-      ? 'It goes out today at ' + esc(rec.hora_salida || '7:00 PM') + ' — we’ll let you know at 9:00 AM to confirm.'
-      : 'Sale hoy a las ' + esc(rec.hora_salida || '19:00') + ' — te avisamos a las 9:00 para confirmar.') : '';
-    return `<div class="pz-ritual-wrap-in">${head}${pzRitualAnalisisHTML(d)}
+    // (LOTE INICIO-SIN-SALUDO · 11/11) La hora de salida es dato de la
+    // tarjeta (debajo del caption), no ceremonia: sin el titular de
+    // ceremonia, sin sparkrow, sin aviso de las 9:00. Sin hora, no hay
+    // línea (fail-closed: nunca una hora inventada).
+    const horaDato = rec.hora_salida ? (en ? 'It goes out today at ' + esc(rec.hora_salida) : 'Sale hoy a las ' + esc(rec.hora_salida)) : '';
+    return `<div class="pz-ritual-wrap-in">${pzRitualAnalisisHTML(d)}
   <div class="pz-ritual-revelada pz-ritual-reveal" data-pz-ritual-revelada="1" data-post-id="${rec.id}">
-  <div class="pz-ritual-sparkrow"><span>✦</span><span>✦</span><span>✦</span></div>
-  <h2>${en ? 'This one goes out today' : 'Hoy sale este'}</h2>
-  ${avisoPre ? `<p class="pz-ritual-nota">${avisoPre}</p>` : ''}
   ${img}
   <div class="pz-ritual-carta-tx">${rec.recomendada ? `<span class="pz-ritual-badge rec">${en ? 'Recommended' : 'Recomendada'}</span>` : ''}${rec.rubro ? `<span class="pz-ritual-badge rubro">${esc(rec.rubro)}</span>` : ''}
-  <p class="pcard-cap" data-full="${esc(rec.caption || rec.caption_corta || '')}">${esc(rec.caption_corta || '')}</p></div>
+  <p class="pcard-cap" data-full="${esc(rec.caption || rec.caption_corta || '')}">${esc(rec.caption_corta || '')}</p>${horaDato ? `<p class="pz-ritual-nota">${horaDato}</p>` : ''}</div>
   <button type="button" class="pz-ritual-ok" data-pz-ritual-ok="${rec.id}">${en ? 'Post it like this' : 'Sale así'}</button>
   <button type="button" class="pz-ritual-cambio" data-pz-ritual-cambio="${rec.id}">${en ? 'Change something' : 'Cambiar algo'}</button>
   <p class="pz-ritual-nota">${en ? 'The one you confirm goes out today and into your album.' : 'La que confirmes sale hoy y va al álbum.'}</p>
