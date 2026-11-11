@@ -6188,6 +6188,9 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-hoy-hero-caption{font-size:16.5px;line-height:1.45;margin:13px 2px 8px;font-weight:600;color:var(--txt)}
 /* (BOTON-VER-POSTEO · 11/11 · Valentino: el botón «Ver el posteo completo» tiene que verse claramente clickeable — antes era solo texto sin fondo ni borde y no se notaba que era un botón. Ahora: fondo sólido celeste, texto blanco, ancho completo, flecha →.) */
 .pz-hoy-hero-link{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-align:center;color:#fff;font-weight:800;font-size:16px;margin:0 0 13px;background:var(--cel);border:0;border-radius:999px;padding:13px 18px;cursor:pointer;font-family:inherit;box-shadow:0 6px 16px rgba(39,147,200,.42),inset 0 1px 0 rgba(255,255,255,.55)}
+/* (LOTE BOTONES-INICIO v914) Tres botones bajo el caption del héroe */
+.pz-hoy-tres{display:flex;gap:8px;margin:2px 2px 13px}
+.pz-hoy-tres .btn{flex:1;padding:10px 6px}
 .pz-hoy-hero-link::after{content:'→'}
 .pz-hoy-hero-link:active{transform:translateY(1px);box-shadow:0 3px 8px rgba(39,147,200,.42),inset 0 1px 0 rgba(255,255,255,.55)}
 .pz-hoy-hero .pz-hoy-ok{background:linear-gradient(180deg,#e6f8ee,#d9f2e4);color:#177245;font-size:14.5px;border-radius:14px;padding:11px 13px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -1px 0 rgba(23,114,69,.10)}

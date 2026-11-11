@@ -22218,6 +22218,17 @@ function pzHoyCardHTML(p, o) {
     // la franja verde de Agendado. Solo lo usa pzHoyHoyHTML (hero:true);
     // la compacta de abajo sigue para el resto de tarjetas.)
     if (o && o.hero) {
+      // (LOTE BOTONES-INICIO v914 · idea Valentino: tres botones bajo el
+      // caption del posteo de hoy, en Inicio, para no navegar: Editar
+      // abre el chat anclado (mismo camino que «Cambialo»),
+      // Frenar = pcHold (solo programados), Eliminar = DELETE con
+      // confirmación (no en publicados). Rechazar y Rehacer NO van acá:
+      // quedan en el detalle. Solo el héroe, no la compacta.
+      const tres = `<div class="pz-hoy-tres">`
+        + `<button type="button" class="btn btn-soft" data-pz-hoy-cambiar="${esc(String(p.id))}">${pzIc('pencil', 16)} ${en ? 'Edit' : 'Editar'}</button>`
+        + (st === 'scheduled' ? `<button type="button" class="btn btn-ghost" data-pz-hoy-frenar="${esc(String(p.id))}">⏸ ${en ? 'Hold' : 'Frenar'}</button>` : '')
+        + (st !== 'published' ? `<button type="button" class="btn btn-ghost" data-pz-hoy-eliminar="${esc(String(p.id))}">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>` : '')
+        + `</div>`;
       const esVideo = String((p && p.media_type) || '') === 'video';
       const heroImg = img ? img.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"') : '';
       const heroMedia = heroImg
@@ -22226,6 +22237,7 @@ function pzHoyCardHTML(p, o) {
       return `<article class="card pz-hoy-card pz-hoy-hero" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
         + heroMedia
         + (caption ? `<p class="pz-hoy-hero-caption">${esc(caption)}</p>` : '')
+        + tres
         + (heroImg ? `<button type="button" class="pz-hoy-hero-link" data-pz-hoy-detalle="${esc(String(p.id))}">${en ? 'See the full post' : 'Ver el posteo completo'}</button>` : '')
         + `${acciones}${notaOk}`
         + `</article>`;
@@ -22456,6 +22468,24 @@ function pzHoyCambiar(id) {
   try { hfOpenChatForPost(p); } catch (e) {}
 }
 
+// (LOTE BOTONES-INICIO v914) Eliminar el posteo de hoy desde Inicio:
+// confirmación simple + DELETE vigente (mismo patrón que apvDelete en el
+// detalle). En Inicio ya estamos: tras borrar solo se re-renderiza.
+async function pzHoyEliminar(id, btn) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (!window.confirm(en ? 'Delete this post permanently?' : '¿Eliminar este posteo para siempre?')) return;
+  if (btn) btn.disabled = true;
+  try {
+    await api.del('/api/posts/' + encodeURIComponent(id));
+    toast(pzIc('trash', 14) + (en ? ' Deleted' : ' Eliminado'));
+  } catch (e) {
+    toast('😅 ' + esc((e && e.message) || (en ? 'Could not delete' : 'No se pudo eliminar')));
+    if (btn) btn.disabled = false;
+    return;
+  }
+  try { render(); } catch (e) {}
+}
+
 // Contador del conserje: solo con token de admin guardado (el dueño).
 // Sin token, sin revisión o sin clientes que revisar, la entrada se
 // quita (fail-closed: nunca un botón que no lleva a ningún lado). El
@@ -22489,6 +22519,9 @@ function pzHoyBind(root) {
   root.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
   root.querySelectorAll('[data-pz-hoy-aprobar]').forEach((b) => { b.onclick = () => pzHoyAprobarUno(b); });
   root.querySelectorAll('[data-pz-hoy-cambiar]').forEach((b) => { b.onclick = () => pzHoyCambiar(b.getAttribute('data-pz-hoy-cambiar')); });
+  // (LOTE BOTONES-INICIO v914) Frenar y Eliminar del héroe de Inicio.
+  root.querySelectorAll('[data-pz-hoy-frenar]').forEach((b) => { b.onclick = () => { try { pcHold(b.getAttribute('data-pz-hoy-frenar')); } catch (e) {} }; });
+  root.querySelectorAll('[data-pz-hoy-eliminar]').forEach((b) => { b.onclick = () => { try { pzHoyEliminar(b.getAttribute('data-pz-hoy-eliminar'), b); } catch (e) {} }; });
   root.querySelectorAll('[data-pz-hoy-detalle]').forEach((el) => {
     const go = () => { const id = el.getAttribute('data-pz-hoy-detalle'); if (id) location.hash = '#/app/post/' + encodeURIComponent(id); };
     el.onclick = go;
