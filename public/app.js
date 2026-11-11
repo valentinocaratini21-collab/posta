@@ -16671,7 +16671,7 @@ function pzAdsMontosCarga() {
 function pzAdsHistorialHTML(boosts) {
   const list = Array.isArray(boosts) ? boosts : [];
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  if (!list.length) return `<p class="pz-ads-note">${esc(en ? "You haven't boosted any post yet. When you do, it shows here with its real numbers." : 'Todavía no impulsaste ningún posteo. Cuando lo hagas, aparece acá con sus números reales.')}</p>`;
+  if (!list.length) return `<div class="pz-ads-empty"><b>${esc(en ? "You haven't boosted any post yet." : 'Todavía no impulsaste ningún posteo.')}</b>${esc(en ? 'When you do, it shows here with its real numbers.' : 'Cuando lo hagas, aparece acá con sus números reales.')}</div>`;
   const loc = en ? 'en-US' : 'es-AR';
   const fechaCorta = (ts) => { try { return new Date(String(ts).replace(' ', 'T')).toLocaleDateString(loc, { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
   const hasta = (b) => {
@@ -16706,9 +16706,14 @@ function pzAdsHistorialHTML(boosts) {
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
-  const bil = s.billetera || {};
   const saldo = pzBoostSaldo();
-  const moneda = (bil.currency || 'USD');
+  // (LOTE POST-GRANDE-ADS-LINDO · ARS · 11/11 · Valentino: la moneda
+  // mostrada es la del RIEL de pago (billing_provider → pzBoostEsMP),
+  // no la de la billetera: la billetera puede ir rezagada del riel
+  // (migra USD→ARS solo con saldo 0) y los montos y el cobro ya siguen
+  // el riel. Con la moneda de la billetera, un MP con billetera en
+  // USD veía montos ARS rotulados «US$» / «dólares».)
+  const moneda = pzBoostEsMP() ? 'ARS' : 'USD';
   const montos = pzBoostMontos();
   const mMain = montos.length > 1 ? montos[1] : montos[0];
   const mA = montos[0];
@@ -16716,31 +16721,50 @@ function pzAdsHTML() {
   const p = s.selPost || null;
   const gate = pzBoostGate();
   const cargas = pzAdsMontosCarga();
-  const saldoTxt = moneda === 'USD'
-    ? (en ? 'Your ads wallet: $' + saldo : 'Tu billetera de ads: $' + saldo)
-    : (en ? 'Your ads wallet: $' + saldo.toLocaleString('en-US') + ' in pesos' : 'Tu billetera de ads: $' + saldo.toLocaleString('es-AR') + ' en pesos');
-  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-top"><b>${esc(en ? 'Wallet' : 'Billetera')}</b><span class="pz-ads-saldo">${esc(saldoTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+  // (LOTE POST-GRANDE-ADS-LINDO · 11/11 · el tab Ads como el mock
+  // inicio-y-ads-mock-3-tabs: título + subtítulo, billetera con ícono y
+  // monto a la derecha, tarjeta del recomendado con kick + foto +
+  // motivo, 3 montos en fila con RECOMENDADO · 7 DÍAS, botón grande,
+  // fineprint de crédito, «Elegir otro posteo» como link, «Tus
+  // impulsos». Misma funcionalidad: mismos montos, mismo recomendado,
+  // misma billetera, mismo historial, mismas rutas/API, mismos ids y
+  // onclicks (pzAdsCargar / pzAdsImpulsar / pzAdsPickOpen).)
+  const amtTxt = moneda === 'USD' ? ('US$' + saldo) : ('$' + saldo.toLocaleString('es-AR'));
+  const walSub = en ? 'Credit to boost' : (moneda === 'USD' ? 'Crédito para impulsar' : 'Crédito para impulsar · en pesos');
+  const walletSVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 1 0-4h14v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H4"/><circle cx="16.5" cy="14" r="1.3" fill="currentColor" stroke="none"/></svg>';
+  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+  const kickHTML = `<div class="pz-ads-kick">${esc(en ? 'POSTY RECOMMENDS · BOOST' : 'POSTY RECOMIENDA · IMPULSAR')}</div>`;
+  const otroHTML = `<button type="button" class="pz-ads-other" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
   let recHTML = '';
+  const creditoTxt = en
+    ? (moneda === 'USD' ? 'Charged in dollars. If the ad is not created, you don’t lose the money: it stays as credit in your wallet.' : 'Charged in pesos. If the ad is not created, you don’t lose the money: it stays as credit in your wallet.')
+    : (moneda === 'USD' ? 'Se cobra en dólares. Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.' : 'Se cobra en pesos. Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.');
   if (!p) {
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3"><div class="pz-boost-3d3-title">${esc(en ? 'Boost post' : 'Impulsar posteo')} <span>${esc(en ? 'with Ads' : 'con Ads')}</span></div><p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><button type="button" class="pz-boost-3d3-otro" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button></div></section>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><p class="pz-ads-credito">${esc(creditoTxt)}</p></div></section>${otroHTML}`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
     const nums = pzBoostNumerosComa(p);
+    const caption = String((p && p.caption) || '').trim();
     const linea = (p.recomendado && nums)
-      ? `${esc(en ? 'Your best post this week' : 'El mejor de tu semana')} · <b>${esc(nums)}</b>`
+      ? `${esc(en ? 'Your best post this week' : 'El mejor de tu semana')}: <b>${esc(nums)}</b>${esc(en ? '. That is why Posty recommends this one and not another.' : '. Por eso Posty te recomienda este y no otro.')}`
       : `<b>${esc(nums || (en ? 'Published' : 'Publicado'))}</b>`;
     const warn = gate.cerrado ? `<p class="pz-boost-warn">${esc(pzBoostMotivo(gate.motivo, mMain))}</p>` : '';
+    const monedaChica = moneda === 'USD' ? (en ? 'dollars' : 'dólares') : 'pesos';
+    const amountBtn = (m) => {
+      const sel = m === mMain;
+      const tag = sel ? `<span class="pz-ads-tag">${esc(en ? 'RECOMMENDED · 7 DAYS' : 'RECOMENDADO · 7 DÍAS')}</span>` : '';
+      return `<button type="button" class="pz-ads-amount${sel ? ' sel' : ''}" onclick="pzAdsImpulsar(${m}, this)">${tag}<b>$${esc(pzBoostFmtMonto(m))}</b><small>${esc(monedaChica)}</small></button>`;
+    };
     const montosHTML = ya
       ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
-      : `<div class="pz-boost-3d3-montos" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}"><button type="button" class="pz-boost-3d3-main" onclick="pzAdsImpulsar(${mMain}, this)">$${esc(pzBoostFmtMonto(mMain))}<small>${esc(en ? 'RECOMMENDED · 7 DAYS' : 'RECOMENDADO · 7 DÍAS')}</small></button><button type="button" class="pz-boost-3d3-side" onclick="pzAdsImpulsar(${mA}, this)">$${esc(pzBoostFmtMonto(mA))}</button><button type="button" class="pz-boost-3d3-side" onclick="pzAdsImpulsar(${mB}, this)">$${esc(pzBoostFmtMonto(mB))}</button></div>`;
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3"><div class="pz-boost-3d3-title">${esc(en ? 'Boost post' : 'Impulsar posteo')} <span>${esc(en ? 'with Ads' : 'con Ads')}</span></div><div class="pz-boost-3d3-row"><div class="pz-boost-3d3-thumb">${img}</div>${montosHTML}</div><div class="pz-boost-3d3-bottom"><div class="pz-boost-3d3-linea">${linea}</div><button type="button" class="pz-boost-3d3-otro" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button></div>${warn}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
+      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div>`;
+    const bigBtn = ya ? '' : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mMain}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(mMain))}</button>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div>${caption ? `<h4>${esc(caption)}</h4>` : ''}<p>${linea}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(creditoTxt)}</p>${warn}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${otroHTML}`;
   }
-  const creditoHTML = `<p class="pz-ads-credito">${esc(en ? 'If the ad is not created, you don’t lose the money: it stays as credit in your wallet.' : 'Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.')}</p>`;
   const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
-  return `<h1 class="pz-ads-title">Ads</h1>${walletHTML}${recHTML}${creditoHTML}${histHTML}`;
+  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${recHTML}${histHTML}`;
 }
-
 function pzAdsPintar() {
   const box = document.getElementById('pzAdsRoot');
   if (!box) return;
@@ -22180,6 +22204,24 @@ function pzHoyCardHTML(p, o) {
     // tarjeta horizontal — miniatura 96x120 4:5 a la izquierda + columna
     // de texto; el caption aparece UNA sola vez, en el cuerpo; la chapita
     // del caption sobre la foto muere (cap1). Cabecera y botones sin cambio.)
+    // (LOTE POST-GRANDE-ADS-LINDO · 11/11 · decisión Valentino: el posteo
+    // de hoy MÁS GRANDE — héroe a todo el ancho como el mock: foto 4:5
+    // grande, caption completo sin recorte, «Ver el posteo completo» y
+    // la franja verde de Agendado. Solo lo usa pzHoyHoyHTML (hero:true);
+    // la compacta de abajo sigue para el resto de tarjetas.)
+    if (o && o.hero) {
+      const esVideo = String((p && p.media_type) || '') === 'video';
+      const heroImg = img ? img.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"') : '';
+      const heroMedia = heroImg
+        ? `<div class="pz-hoy-hero-media" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${heroImg}${esVideo ? `<span class="pz-hoy-hero-reel">▶ Reel</span><span class="pz-hoy-hero-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.54.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg></span>` : ''}</div>`
+        : '';
+      return `<article class="card pz-hoy-card pz-hoy-hero" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
+        + heroMedia
+        + (caption ? `<p class="pz-hoy-hero-caption">${esc(caption)}</p>` : '')
+        + (heroImg ? `<button type="button" class="pz-hoy-hero-link" data-pz-hoy-detalle="${esc(String(p.id))}">${en ? 'See the full post' : 'Ver el posteo completo'}</button>` : '')
+        + `${acciones}${notaOk}`
+        + `</article>`;
+    }
     return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
       + `<div class="pz-hoy-row"><div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${img}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}</div>`
       + `<div class="pz-hoy-col">${cuentaHtml}${caption ? `<p>${esc(caption)}</p>` : ''}<div class="pz-hoy-meta">${en ? 'Tap the photo to see the detail →' : 'Tocá la foto para ver el detalle →'}</div></div></div>`
@@ -22209,7 +22251,7 @@ function pzHoyHoyHTML(p, o) {
     const cuentaHtml = cuenta
       ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at))}">${esc(cuenta)}</span>` : '';
     return `<div class="pz-hoy-hoy"><div class="pz-hoy-hoy-head"><h3>${en ? 'TODAY\u2019S POST' : 'EL POSTEO DE HOY'}</h3><span class="pz-hoy-hoy-right"><span class="pz-hoy-hoy-pill">${esc(pill)}</span>${cuentaHtml}</span></div>`
-      + pzHoyCardHTML(p, { cartita: false, sinCuando: true, en, tz, prop: (o && o.prop) || null })
+      + pzHoyCardHTML(p, { cartita: false, sinCuando: true, en, tz, prop: (o && o.prop) || null, hero: true })
       + `</div>`;
   } catch (e) { return ''; }
 }
