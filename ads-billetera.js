@@ -211,12 +211,21 @@ async function cargarBilleteraARS(input) {
 // `debitar({ clienteId, montoUSD | montoARS, ref, campaignId })` devuelve
 // { ok, saldoNuevo }. `registrar` recibe { tipo: 'exito' |
 // 'debito_fallido', ..., feeCents }.
+// (LOTE v888 · decisión Valentino 10/11 14:17) `cobrarDirecto` (solo USD):
+// cuando la billetera es ARS con saldo > 0, el saldo en pesos NO bloquea
+// el cobro en dólares — queda como crédito en pesos y el impulso se cobra
+// DIRECTO con la tarjeta guardada de Stripe, sin tocar la billetera. Con
+// `cobrarDirecto` NO se mira el saldo ni se debita: el anuncio se crea
+// primero y recién ahí se cobra; si el anuncio no se crea, NO se cobra
+// nada; si el cobro falla tras crear el anuncio, `debito_fallido` (el ad
+// existe: revisión manual). `cobrarDirecto({ clienteId, montoUSD, ref,
+// campaignId })` devuelve { ok, cobroId }.
 async function impulsarConSaldo(input) {
   const {
     clienteId, posteoId, montoUSD, montoARS, moneda, zona, env,
     adsConfigurado, paginaAutorizada, permisoAds, conversionARS,
     saldoCentsUSD, saldoCentsARS, splitARS,
-    fecha, buscarDebito, crearAnuncio, debitar, registrar, demo,
+    fecha, buscarDebito, crearAnuncio, debitar, cobrarDirecto, registrar, demo,
   } = input || {};
   // (LOTE RIEL-SUSCRIPCION v878) La moneda del impulso es la de la
   // billetera: 'USD' (riel Stripe, como antes) o 'ARS' (riel Mercado
@@ -272,10 +281,13 @@ async function impulsarConSaldo(input) {
     }
   }
   const saldoCents = esARS ? saldoCentsARS : saldoCentsUSD;
-  if (!(typeof saldoCents === 'number' && saldoCents >= monto * 100)) {
+  // (v888) Con cobro directo no hay saldo que mirar: la billetera no se
+  // toca (el saldo viejo en pesos queda como crédito en pesos).
+  const cobroDirecto = !esARS && typeof cobrarDirecto === 'function';
+  if (!cobroDirecto && !(typeof saldoCents === 'number' && saldoCents >= monto * 100)) {
     return no('saldo_insuficiente');
   }
-  if (typeof crearAnuncio !== 'function' || typeof debitar !== 'function') {
+  if (typeof crearAnuncio !== 'function' || (typeof debitar !== 'function' && !cobroDirecto)) {
     return no('sin_proveedores');
   }
   let anuncio = null;
@@ -291,10 +303,13 @@ async function impulsarConSaldo(input) {
   if (!anuncio || !anuncio.ok) {
     return no('anuncio_fallido');
   }
-  // El ad SÍ se creó: recién ahora se debita el saldo.
+  // El ad SÍ se creó: recién ahora se cobra — del saldo, o directo con
+  // la tarjeta guardada (v888: la billetera no se toca).
   let deb = null;
   try {
-    deb = await debitar({ clienteId, ...(esARS ? { montoARS } : { montoUSD }), ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null });
+    deb = cobroDirecto
+      ? await cobrarDirecto({ clienteId, montoUSD, ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null })
+      : await debitar({ clienteId, ...(esARS ? { montoARS } : { montoUSD }), ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null });
   } catch (e) { deb = { ok: false, motivo: 'saldo_insuficiente' }; }
   if (!deb || !deb.ok) {
     if (typeof registrar === 'function') {
@@ -321,6 +336,52 @@ async function impulsarConSaldo(input) {
     ok: true, anuncioId: anuncio.anuncioId || null, posteoId, ...(esARS ? { montoARS } : { montoUSD }),
     dias: DIAS_BILLETERA, saldoNuevo: (deb.saldoNuevo != null ? deb.saldoNuevo : null), ref,
   };
+}
+
+// ── Crédito por anuncio no creado (LOTE v888 · decisión Valentino 10/11
+// 14:17) ──
+// Si el anuncio NO se crea DESPUÉS de cobrar (el flujo directo cobra
+// primero y crea después), el monto NO se devuelve a la tarjeta: queda
+// como crédito en la billetera del cliente para usar después. Idempotente:
+// el ref es 'credito_' + cobroId y `yaAcreditado(ref)` dice si ese cobro
+// ya se acreditó (un segundo llamado no acredita dos veces). Moneda del
+// crédito: USD (el cobro fue en dólares). Si la billetera es ARS con
+// saldo 0, se migra a USD antes de acreditar (misma regla que
+// cargarBilletera); si es ARS con saldo > 0, se acredita igual y se marca
+// moneda_mezclada (el dinero nunca se pierde; el llamador loguea el
+// aviso). `leerBilletera()` devuelve { currency, balance_cents };
+// `mover(cents, kind, ref, note)` devuelve { ok, saldoNuevo };
+// `fijarMoneda(moneda)` cambia la moneda de la billetera.
+// Devuelve { ok, ya_acreditado, saldoNuevo, moneda_mezclada }.
+async function acreditarCreditoAnuncioFallido(input) {
+  const { clienteId, montoUSD, cobroId, leerBilletera, mover, yaAcreditado, fijarMoneda } = input || {};
+  const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
+  if (!clienteId) return no('sin_cliente');
+  if (!validarMontoUSD(montoUSD)) return no('monto_invalido');
+  if (!cobroId) return no('sin_cobro');
+  if (typeof leerBilletera !== 'function' || typeof mover !== 'function') return no('sin_proveedores');
+  const ref = 'credito_' + String(cobroId);
+  if (typeof yaAcreditado === 'function') {
+    let ya = false;
+    try { ya = await yaAcreditado(ref); } catch (e) { ya = false; }
+    if (ya) return { ok: true, ya_acreditado: true, saldoNuevo: null, moneda_mezclada: false };
+  }
+  let w = null;
+  try { w = await leerBilletera(); } catch (e) { w = null; }
+  let monedaMezclada = false;
+  if (w && w.currency === 'ARS') {
+    if (w.balance_cents === 0) {
+      if (typeof fijarMoneda === 'function') {
+        try { await fijarMoneda('USD'); } catch (e) { /* seguir: mover acredita igual */ }
+      }
+    } else {
+      monedaMezclada = true;
+    }
+  }
+  let r = null;
+  try { r = await mover(montoUSD * 100, 'credito_anuncio_fallido', ref, 'Crédito por anuncio no creado (sin reembolso)'); } catch (e) { r = { ok: false }; }
+  if (!r || !r.ok) return no('acreditar_fallido', { moneda_mezclada: monedaMezclada });
+  return { ok: true, ya_acreditado: false, saldoNuevo: (r.saldoNuevo != null ? r.saldoNuevo : null), moneda_mezclada: monedaMezclada };
 }
 
 // Elegibles para el picker: posteos publicados con ig_media_id (los únicos
@@ -423,6 +484,7 @@ module.exports = {
   cargarBilletera,
   cargarBilleteraARS,
   impulsarConSaldo,
+  acreditarCreditoAnuncioFallido,
   elegiblesParaAds,
   feedParaAds,
   getAutoTopup,

@@ -17168,7 +17168,14 @@ async function pzBoostCargar(btn) {
     try { await pzBoostLoad(); } catch (e) {}
     if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
     pzBoostPintarBoost();
-    decir(gzT('Listo, cargaste $' + pzBoostFmtMonto(montoCarga) + '. Tu billetera tiene $' + pzBoostFmtMonto(nuevoSaldo) + '.', 'Done, you topped up $' + pzBoostFmtMonto(montoCarga) + '. Your wallet now has $' + pzBoostFmtMonto(nuevoSaldo) + '.'));
+    // (LOTE v888) Cobro directo: la carga NO se cobró — el cobro en
+    // dólares va directo al impulsar con la tarjeta guardada. El saldo
+    // en pesos queda guardado (nuevoSaldo es el saldo viejo, sin tocar).
+    if (j.cobro_directo) {
+      decir(gzT('El cobro en dólares se hace directo al impulsar, con tu tarjeta guardada. Tu saldo en pesos queda guardado para usarlo en pesos. Tu billetera tiene $' + pzBoostFmtMonto(nuevoSaldo) + '.', 'The dollar charge happens directly when you boost, with your saved card. Your peso balance stays saved for peso boosts. Your wallet has $' + pzBoostFmtMonto(nuevoSaldo) + '.'));
+    } else {
+      decir(gzT('Listo, cargaste $' + pzBoostFmtMonto(montoCarga) + '. Tu billetera tiene $' + pzBoostFmtMonto(nuevoSaldo) + '.', 'Done, you topped up $' + pzBoostFmtMonto(montoCarga) + '. Your wallet now has $' + pzBoostFmtMonto(nuevoSaldo) + '.'));
+    }
   } else {
     const motivo = (j && j.motivo) || '';
     decir(pzBoostCargarMotivo(motivo, montoCarga, j && j.cobroId));

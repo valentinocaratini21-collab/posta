@@ -10142,6 +10142,35 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
             VALUES (?,?,?,0,0,0,'ARS','error','engagement',7,?)`)
             .run(uid, rec.posteoId, post.ig_media_id, `cobro ${rec.cobroId || ''} sin anuncio: ${rec.error || ''}`);
+          // (LOTE v888 · decisión Valentino 10/11 14:17) El cobro quedó en
+          // Stripe pero el anuncio no se creó: SIN reembolso — el monto
+          // queda como CRÉDITO en la billetera del cliente (USD) para usar
+          // después. Idempotente por cobroId (un reintento no acredita dos
+          // veces). Si la acreditación falla, el tablero lo ve en el log y
+          // en la fila 'error' de arriba.
+          if (rec.tipo === 'anuncio_fallido' && rec.cobroId) {
+            try {
+              const cred = await adsBilletera.acreditarCreditoAnuncioFallido({
+                clienteId: uid, montoUSD: monto, cobroId: rec.cobroId,
+                leerBilletera: async () => getAdWallet(uid),
+                mover: async (cents, kind, ref, note) => {
+                  try { return { ok: true, saldoNuevo: adWalletMove(uid, cents, kind, ref, note) }; }
+                  catch (e) { return { ok: false, motivo: 'acreditar_fallido' }; }
+                },
+                yaAcreditado: async (ref) => {
+                  try {
+                    const f = db.prepare(`SELECT id FROM ad_transactions WHERE user_id = ? AND ref = ? AND kind = 'credito_anuncio_fallido'`).get(uid, ref);
+                    return !!f;
+                  } catch (e) { return false; }
+                },
+                fijarMoneda: async (moneda) => {
+                  try { db.prepare(`UPDATE ad_wallets SET currency = ? WHERE user_id = ?`).run(moneda, uid); } catch (e) { /* seguir */ }
+                },
+              });
+              if (!cred.ok) console.warn('[ads] credito_anuncio_fallido fallido', uid, rec.cobroId, cred.motivo);
+              else if (cred.moneda_mezclada) console.warn('[ads] credito_anuncio_fallido en billetera ARS con saldo: el crédito USD quedó junto al saldo en pesos, sin conversión', uid, rec.cobroId);
+            } catch (e) { console.warn('[ads] credito_anuncio_fallido error', uid, rec.cobroId, String((e && e.message) || e)); }
+          }
         }
       },
     });
@@ -10206,7 +10235,9 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
     // true = el token trae ads_management; false = no lo trae (bloqueado
     // claro, sin botones); null = no configurado o no se pudo verificar
     // (Meta lento/caído: carrera de 3 s, nunca se cuelga la carta).
-    // conversion_pendiente: true mientras la tasa USD→ARS no esté definida.
+    // conversion_pendiente: (v888) la tasa tiene default en código (1425,
+    // decisión Valentino 10/11), así que el gate ya no se dispara desde el
+    // servidor — el campo queda en false por compatibilidad.
     let adsPermiso = null;
     try {
       if (metaAds.adsConfigured()) {
@@ -10257,11 +10288,14 @@ app.get('/api/ads/config', requireAuth, (req, res) => {
 // preferencia de checkout, presupuestos $5.000/$10.000/$20.000; el gasto
 // ya es pesos, sin conversión). La billetera tiene UNA moneda por usuario
 // y nunca se mezcla: con saldo > 0 en la otra moneda, la carga se rechaza
-// ('saldo_ars_pendiente' para la carga USD, 'saldo_usd_pendiente' para la
-// carga ARS); con saldo 0, la primera carga migra la moneda. Sin tasa
-// USD→ARS → conversion_pendiente SIN gasto (solo el flujo USD); sin
-// permiso ads_management → ads_sin_permiso SIN gasto; sin reembolso
-// automático (registro + revisión manual).
+// ('saldo_usd_pendiente' para la carga ARS); la carga USD con saldo ARS >
+// 0 NO se rechaza (v888): el saldo en pesos queda como crédito en pesos y
+// el cobro en dólares va directo con la tarjeta guardada (cobro_directo).
+// Con saldo 0, la primera carga migra la moneda. (v888) La tasa USD→ARS
+// tiene default en código (1425): el gate conversion_pendiente ya no se
+// dispara desde el servidor (solo el flujo USD); sin permiso
+// ads_management → ads_sin_permiso SIN gasto; sin reembolso automático
+// (registro + revisión manual; el monto queda como crédito, v888).
 
 // (LOTE RIEL-SUSCRIPCION v878) El riel de cobro de Impulsar es el de la
 // suscripción del usuario (server.js:4194, `billing_provider`): stripe si
@@ -10399,6 +10433,22 @@ app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, r
     const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
     const client = stripeBilling.stripeConfigured() ? stripeBilling.stripeClient() : null;
     const w0 = getAdWallet(uid);
+    // (LOTE v888 · decisión Valentino 10/11 14:17) Billetera ARS con saldo
+    // > 0: el saldo en pesos NO bloquea el cobro en dólares — queda como
+    // crédito en pesos y el impulso se cobra DIRECTO con la tarjeta
+    // guardada. La carga NO se cobra acá: solo se valida que la tarjeta
+    // exista (el cobro directo pasa en /impulsar) y se avisa con
+    // cobro_directo para que la app muestre el mensaje correcto. La
+    // billetera no se toca. (El gate 'saldo_ars_pendiente' del módulo
+    // cargarBilletera queda como red de seguridad: la carga en dólares
+    // nunca mezcla monedas en la billetera.)
+    if (w0.currency === 'ARS' && w0.balance_cents > 0) {
+      if (!client) return res.status(409).json({ ok: false, motivo: 'stripe_no_configurado' });
+      if (!stripeCustomer) return res.status(409).json({ ok: false, motivo: 'sin_cliente_stripe' });
+      const tarjeta = await destacadoCobro.resolverTarjetaGuardada(client, stripeCustomer);
+      if (!tarjeta) return res.status(409).json({ ok: false, motivo: 'sin_tarjeta_guardada' });
+      return res.json({ ok: true, cobro_directo: true, montoUSD, balance_cents: w0.balance_cents, currency: 'ARS' });
+    }
     const r = await adsBilletera.cargarBilletera({
       clienteId: uid, montoUSD, monedaActual: w0.currency, saldoActual: w0.balance_cents, ref,
       demo: !!((getSettings(uid) || {}).demo_mode),
@@ -10750,10 +10800,14 @@ app.get('/api/ads/billetera/hoy', requireAuth, async (req, res) => {
 
 // Impulsar con saldo: el cliente elige posteo + monto; Posty hace el resto.
 // El débito ocurre SOLO cuando el ad se creó bien en Meta; si la creación
-// falla, NO se debita nada. Sin tasa → conversion_pendiente sin gasto; sin
-// permiso ads_management → ads_sin_permiso sin gasto; sin saldo →
+// falla, NO se debita nada. (v888: la tasa tiene default 1425, el gate
+// conversion_pendiente ya no se dispara desde el servidor); sin permiso
+// ads_management → ads_sin_permiso sin gasto; sin saldo →
 // saldo_insuficiente; reintento del mismo impulso → el ya creado, sin
-// segundo débito. Sin reembolso automático.
+// segundo débito. Sin reembolso automático. (LOTE v888) Billetera ARS con
+// saldo + impulso USD: el saldo en pesos NO bloquea — queda como crédito
+// en pesos y el cobro va DIRECTO con la tarjeta guardada de Stripe, sin
+// tocar la billetera (después de crear el anuncio, mismo orden).
 app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -10764,7 +10818,8 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
     // cliente: montoARS → ARS (riel MP), montoUSD → USD (riel Stripe).
     // Si trae montoARS, es ARS aunque la billetera sea USD (el saldo se
     // mira en ARS y da saldo_insuficiente); si trae montoUSD, es USD
-    // aunque la billetera sea ARS (el gate saldo_ars_pendiente frena).
+    // aunque la billetera sea ARS (v888: el saldo en pesos NO bloquea —
+    // queda como crédito en pesos y el cobro va directo con la tarjeta).
     const montoARSReq = Number(req.body.montoARS);
     const esARS = Number.isFinite(montoARSReq);
     const montoARS = esARS ? montoARSReq : 0;
@@ -10805,13 +10860,16 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
       return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
     }
     const w = getAdWallet(uid);
-    // (LOTE RIEL-SUSCRIPCION v878) El gate 'saldo_ars_pendiente' es del
-    // flujo USD: una billetera ARS con saldo no se puede gastar en
-    // dólares. En el flujo ARS esa misma billetera ES la que se gasta
-    // (el gasto ya es pesos, sin conversión), así que el gate no corre.
-    if (!esARS && w.currency === 'ARS' && w.balance_cents > 0) {
-      return res.status(409).json({ ok: false, motivo: 'saldo_ars_pendiente' });
-    }
+    // (LOTE v888 · decisión Valentino 10/11 14:17) El saldo en pesos NO
+    // bloquea el cobro en dólares: queda como crédito en pesos y el
+    // impulso se cobra DIRECTO con la tarjeta guardada de Stripe, sin
+    // tocar la billetera. En el flujo ARS esa misma billetera ES la que
+    // se gasta (el gasto ya es pesos, sin conversión), así que el bypass
+    // no corre ahí. (El gate 'saldo_ars_pendiente' del módulo
+    // cargarBilletera queda como red de seguridad: la carga en dólares
+    // nunca mezcla monedas en la billetera.)
+    const cobroDirectoUSD = !esARS && w.currency === 'ARS' && w.balance_cents > 0;
+    const stripeCustomerImp = cobroDirectoUSD ? (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })() : '';
     const saldoCentsUSD = w.currency === 'USD' ? w.balance_cents : 0;
     const saldoCentsARS = w.currency === 'ARS' ? w.balance_cents : 0;
     const r = await adsBilletera.impulsarConSaldo({
@@ -10841,6 +10899,20 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
           return { ok: true, saldoNuevo: after };
         } catch (e) { return { ok: false, motivo: 'saldo_insuficiente' }; }
       },
+      // (LOTE v888) Cobro directo: solo cuando la billetera es ARS con
+      // saldo. El módulo lo usa en vez de debitar (el anuncio ya se creó).
+      ...(cobroDirectoUSD ? {
+        cobrarDirecto: async (d) => {
+          try {
+            const cob = await destacadoCobro.cobrarImpulso({
+              client: stripeBilling.stripeClient(), customerId: stripeCustomerImp,
+              montoUSD: d.montoUSD, posteoId: d.posteoId, weekKey: mondayKeyOf(tzToday(userTz(uid))), dias: 7,
+            });
+            if (!cob || !cob.ok) return { ok: false, motivo: (cob && cob.motivo) || 'cobro_fallido' };
+            return { ok: true, cobroId: cob.cobroId, saldoNuevo: null };
+          } catch (e) { return { ok: false, motivo: 'cobro_fallido' }; }
+        },
+      } : {}),
       registrar: async (rec) => {
         const monedaRec = esARS ? 'ARS' : 'USD';
         const budgetRec = esARS ? rec.montoARS * 100 : rec.montoUSD * 100;
@@ -34873,7 +34945,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v887';
+const BUILD_ID = '20261105-v888';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

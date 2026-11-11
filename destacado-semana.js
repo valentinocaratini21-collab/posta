@@ -177,13 +177,17 @@ function montosFijos() {
 }
 
 // Tasa USD→ARS como config (env IMPULSO_TASA_ARS, pesos por dólar).
-// Sin definir o inválida → null: el flujo falla cerrado con
-// conversion_pendiente ANTES de cobrar. La tasa la define Valentino;
-// acá nunca se inventa. Devuelve (montoUSD) => centavos ARS.
+// (LOTE v888 · decisión Valentino 10/11 14:17) La tasa ES 1425: es el
+// default en código cuando el env no está o es inválido. El env, si es
+// válido (> 0), sigue mandando. Sin default la tasa era null y el flujo
+// USD fallaba cerrado con conversion_pendiente ANTES de cobrar; con el
+// default aprobado el gate se levanta con el deploy. Devuelve
+// (montoUSD) => centavos ARS.
+const IMPULSO_TASA_ARS_DEFAULT = 1425; // (v888) tasa aprobada por Valentino 10/11
 function conversionARSFromEnv(env) {
   const raw = env && env.IMPULSO_TASA_ARS != null ? String(env.IMPULSO_TASA_ARS).trim() : '';
   const tasa = Number(raw);
-  if (!raw || !Number.isFinite(tasa) || tasa <= 0) return null;
+  if (!raw || !Number.isFinite(tasa) || tasa <= 0) return (montoUSD) => Math.round(Number(montoUSD) * IMPULSO_TASA_ARS_DEFAULT * 100);
   return (montoUSD) => Math.round(Number(montoUSD) * tasa * 100);
 }
 
@@ -391,6 +395,7 @@ module.exports = {
   montosFijos,
   validarMonto,
   conversionARSFromEnv,
+  IMPULSO_TASA_ARS_DEFAULT,
   boostHabilitado,
   crearImpulso,
   procesarImpulso,

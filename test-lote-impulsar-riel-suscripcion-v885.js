@@ -4,9 +4,10 @@
 // (preferencia de checkout, el preapproval NO permite un cargo extra
 // off-session — ver STATUS.md §«La incógnita de MP»), Stripe → USD
 // (off-session con la tarjeta guardada, el flujo de siempre).
-// Base: v884 (BUILD 20261105-v884). Re-basado por anclas sobre v884 por
-// el re-estampador; fusión v880+v885 en la hoja 3D-3H (ver STATUS.md).
-// BUILD estampado a v885, ?v= a 597 y CHUNK_V a v885 por el re-estampador.
+// Base: v887 (BUILD 20261105-v887). Re-pineado a v888 por el
+// re-estampador (B6/B9/B11/B22/C2/C16/C17); fusión v880+v885 en la hoja
+// 3D-3H intacta (ver STATUS.md). BUILD estampado a v888, ?v= a 604 y
+// CHUNK_V a v887 por el re-estampador.
 // Uso: node test-lote-impulsar-riel-suscripcion-v885.js
 // (§C boot requiere npm install previo en release/; si no hay
 // node_modules, §C se salta con aviso y el resto corre igual.)
@@ -16,9 +17,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { DatabaseSync } = require('node:sqlite');
 const ROOT = __dirname;
-const BUILD_ESPERADO = '20261105-v885'; // (re-pineado por el preparador v885)
+const BUILD_ESPERADO = '20261105-v888'; // (re-pineado por el re-estampador v888)
 const PUERTO = 18754;
-const DATA_DIR = path.join(ROOT, '..', 'boot-data-v885');
+const DATA_DIR = path.join(ROOT, '..', 'boot-data-v888');
 const AD = require('./ads-billetera.js');
 
 let ok = 0, mal = 0, saltados = 0;
@@ -152,12 +153,12 @@ check('A10 · ref ARS distinto del ref USD (sin colisión de namespace)', AD.ref
   check('B3 · server.js: /cargar rama MP (railCobro === mp + montoARS + mp_no_configurado + init_point)', srv.includes("railCobro(uid) === 'mp'") && srv.includes('validarMontoARS(montoARS)') && srv.includes("motivo: 'mp_no_configurado'") && srv.includes('init_point: r.init_point'));
   check('B4 · server.js: /cargar MP usa createTopupPreference + ref adtopup_<uid>_<rand>', srv.includes('mp.createTopupPreference') && srv.includes('adtopup_${uid}_'));
   check('B5 · server.js: /impulsar rama ARS (esARS + montoARS + boost_ars + splitARS)', srv.includes('const esARS') && srv.includes('montoARS') && srv.includes('boost_ars') && srv.includes('splitARS'));
-  check('B6 · server.js: /impulsar gate saldo_ars_pendiente solo para USD', srv.includes("motivo: 'saldo_ars_pendiente'") && srv.includes("if (!esARS && w.currency === 'ARS'"));
+  check('B6 · server.js: /impulsar YA NO tiene el gate 409 saldo_ars_pendiente (v888: bypass cobro directo)', !srv.includes("motivo: 'saldo_ars_pendiente'") && srv.includes('const cobroDirectoUSD = !esARS') && srv.includes('cobrarDirecto: async (d) =>') && srv.includes('cobrarImpulso({'));
   check('B7 · server.js: /api/ads/topup espejo (saldo_usd_pendiente)', srv.includes("motivo: 'saldo_usd_pendiente'"));
   check('B8 · server.js: webhook migra USD+0 → ARS antes de acreditar', (srv.match(/UPDATE ad_wallets SET currency = 'ARS'/g) || []).length >= 3);
-  check('B9 · server.js: BUILD v885 ×1, sin resto de v864', srv.includes("20261105-v885") && !srv.includes('20261105-v864'));
+  check('B9 · server.js: BUILD v888 ×1, sin resto de v885', srv.includes("20261105-v888") && !srv.includes('20261105-v885'));
   check('B10 · app.js: helpers pzBoostEsMP / pzBoostFmtMonto / pzBoostMontos / pzBoostSaldo / pzBoostMinTopup', app.includes('function pzBoostEsMP()') && app.includes('function pzBoostFmtMonto(n)') && app.includes('function pzBoostMontos()') && app.includes('function pzBoostSaldo()') && app.includes('function pzBoostMinTopup()'));
-  check('B11 · app.js: CHUNK_V v885 ×1, sin resto de v850 ni v878 (re-pineado por el re-estampador v885)', (app.match(/CHUNK_V = '20261105-v885'/g) || []).length === 1 && !app.includes("20261105-v850") && !app.includes("20261105-v878"));
+  check('B11 · app.js: CHUNK_V v887 ×1, sin resto de v850 ni v878 (re-pineado por el re-estampador v888)', (app.match(/CHUNK_V = '20261105-v887'/g) || []).length === 1 && !app.includes("20261105-v850") && !app.includes("20261105-v878"));
   check('B12 · app.js: pzBoostConfirmar manda montoARS en MP', app.includes('montoARS: monto') && app.includes('railMP ? { montoARS: monto }'));
   check('B13 · app.js: pzBoostCargar redirige a init_point en MP', app.includes('j.init_point') && app.includes('window.location.href = j.init_point'));
   check('B14 · app.js: pzBoostMotivo caso saldo_usd_pendiente + monto_invalido por riel', app.includes("case 'saldo_usd_pendiente'") && app.includes("Ese monto no es válido. Elegí $5.000, $10.000 o $20.000"));
@@ -168,7 +169,7 @@ check('A10 · ref ARS distinto del ref USD (sin colisión de namespace)', AD.ref
   check('B19 · chunk-analisis.js: botón Agregar tarjeta intacto en la billetera (v877)', chk.includes('anaAgregarTarjetaBtn(anaCargarMsgEl())'));
   check('B20 · chunk-analisis.js: auto-topup vedado en MP (anaAdsRutaImpulsar)', chk.includes("d.billetera.billing_provider") && chk.includes("=== 'mp'") && chk.includes('cargar_y_impulsar') && chk.includes('d.auto_topup'));
   check('B21 · chunk-analisis.js: saldo_usd_pendiente en anaCargarMotivo / anaBoostRecMotivo', chk.includes('saldo_usd_pendiente'));
-  check('B22 · index ES: ?v=597 ×1, sin resto de 596', idx.includes('app.js?v=597') && !idx.includes('app.js?v=596'));
+  check('B22 · index ES: ?v=604 ×1, sin resto de 597', idx.includes('app.js?v=604') && !idx.includes('app.js?v=597'));
   check('B23 · ads-billetera.js: header documenta que MP no permite cargo extra', leer('ads-billetera.js').includes('el preapproval de MP no permite un cargo extra'));
   // (RE-ESTAMPADOR v885) Pins de la fusión v880+v885: la hoja 3D-3H de
   // v880 no existía cuando se escribió el lote; sin estos pins, en riel
@@ -223,7 +224,7 @@ check('A10 · ref ARS distinto del ref USD (sin colisión de namespace)', AD.ref
       }
       check('C1 · boot levanta y /api/version responde', vivo, out.slice(-500));
       const ver = await req('/api/version');
-      check('C2 · /api/version = BUILD del HEAD (v885; yo no estampo)', ver.body && ver.body.build === BUILD_ESPERADO, JSON.stringify(ver.body));
+      check('C2 · /api/version = BUILD del HEAD (v888, estampado por el re-estampador)', ver.body && ver.body.build === BUILD_ESPERADO, JSON.stringify(ver.body));
 
       async function register(email) {
         const r = await req('/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'test-v878-x' }) });
@@ -276,15 +277,16 @@ check('A10 · ref ARS distinto del ref USD (sin colisión de namespace)', AD.ref
       const iST2 = await req('/api/ads/billetera/impulsar', { method: 'POST', headers: H(st.cookie), body: JSON.stringify({ posteoId: 999999, montoUSD: 50 }) });
       check('C15 · Stripe /impulsar posteo inexistente: 404 posteo_no_encontrado', iST2.status === 404 && iST2.body && iST2.body.motivo === 'posteo_no_encontrado', iST2.status + ' ' + JSON.stringify(iST2.body));
       const iMP3 = await req('/api/ads/billetera/impulsar', { method: 'POST', headers: H(mp.cookie), body: JSON.stringify({ posteoId: postMP, montoUSD: 50 }) });
-      // El gate de billetera (saldo_ars_pendiente) está DESPUÉS de
+      // (v888) El bypass de billetera (cobroDirectoUSD) está DESPUÉS de
       // adsConfigured: sin Meta, el USD también llega a ads_no_configurado.
-      // Que el gate dispare para USD y no para ARS se verifica en §A (el
-      // módulo) + §B6 (código): en el boot offline no es alcanzable.
-      check('C16 · MP /impulsar montoUSD 50: llega a ads_no_configurado (gate Meta antes que billetera)', iMP3.status === 503 && iMP3.body && iMP3.body.motivo === 'ads_no_configurado', iMP3.status + ' ' + JSON.stringify(iMP3.body));
+      // Que el bypass dispare para USD y no para ARS se verifica en §A
+      // (el módulo, suite v888) + §B6 (código): en el boot offline no es
+      // alcanzable.
+      check('C16 · MP /impulsar montoUSD 50: llega a ads_no_configurado (gate Meta antes que el bypass)', iMP3.status === 503 && iMP3.body && iMP3.body.motivo === 'ads_no_configurado', iMP3.status + ' ' + JSON.stringify(iMP3.body));
 
-      const bundle = await req('/app.js?v=20261105-v885');
-      check('C17 · bundle servido /app.js?v=20261105-v885: trae pzBoostEsMP + CHUNK_V v885 (re-pineado por el re-estampador v885)', bundle.status === 200 && bundle.txt.includes('function pzBoostEsMP()') && bundle.txt.includes("CHUNK_V = '20261105-v885'"), 'status ' + bundle.status);
-      const chunk = await req('/chunk-analisis.js?v=20261105-v885');
+      const bundle = await req('/app.js?v=20261105-v887');
+      check('C17 · bundle servido /app.js?v=20261105-v887: trae pzBoostEsMP + CHUNK_V v887 (re-pineado por el re-estampador v888)', bundle.status === 200 && bundle.txt.includes('function pzBoostEsMP()') && bundle.txt.includes("CHUNK_V = '20261105-v887'"), 'status ' + bundle.status);
+      const chunk = await req('/chunk-analisis.js?v=20261105-v887');
       check('C18 · chunk servido: trae anaEsMP + anaAgregarTarjetaBtn (respaldo v877)', chunk.status === 200 && chunk.txt.includes('function anaEsMP()') && chunk.txt.includes('anaAgregarTarjetaBtn'), 'status ' + chunk.status);
     } finally {
       // Matar el boot por PID exacto de node y verificar el puerto libre.

@@ -69,11 +69,21 @@ const cnt = (s, sub) => (s.split(sub).length - 1);
   t(c2 && c2.ok && c2.cobroId === 'pi_z', 'crearImpulso: con permiso → ok');
 
   // ---------- 2. conversionARSFromEnv: la tasa es config, nunca inventada ----------
-  t(ds.conversionARSFromEnv({}) === null, 'tasa: sin env → null (gate conversion_pendiente)');
-  t(ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '' }) === null, 'tasa: vacía → null');
-  t(ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: 'abc' }) === null, 'tasa: no numérica → null');
-  t(ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '0' }) === null, 'tasa: 0 → null');
-  t(ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '-5' }) === null, 'tasa: negativa → null');
+  // (LOTE v888 · decisión Valentino 10/11 14:17) La tasa ES 1425: sin env
+  // o inválido, el default en código (1425); el env válido sigue
+  // mandando. Sin default el flujo USD fallaba cerrado con
+  // conversion_pendiente; con el default aprobado el gate se levanta.
+  t(ds.IMPULSO_TASA_ARS_DEFAULT === 1425, 'tasa default: IMPULSO_TASA_ARS_DEFAULT = 1425');
+  const convDef = ds.conversionARSFromEnv({});
+  t(typeof convDef === 'function' && convDef(20) === 2850000 && convDef(50) === 7125000 && convDef(100) === 14250000, 'tasa: sin env → default 1425 (20→$2.850.000c, 50→$7.125.000c, 100→$14.250.000c)');
+  const convVacia = ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '' });
+  t(typeof convVacia === 'function' && convVacia(50) === 7125000, 'tasa: vacía → default 1425');
+  const convAbc = ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: 'abc' });
+  t(typeof convAbc === 'function' && convAbc(50) === 7125000, 'tasa: no numérica → default 1425');
+  const convCero = ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '0' });
+  t(typeof convCero === 'function' && convCero(50) === 7125000, 'tasa: 0 → default 1425');
+  const convNeg = ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '-5' });
+  t(typeof convNeg === 'function' && convNeg(50) === 7125000, 'tasa: negativa → default 1425');
   const conv1200 = ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: '1200' });
   t(typeof conv1200 === 'function' && conv1200(20) === 2400000 && conv1200(50) === 6000000 && conv1200(100) === 12000000, 'tasa 1200: 20→$2.400.000c, 50→$6.000.000c, 100→$12.000.000c');
   const convDec = ds.conversionARSFromEnv({ IMPULSO_TASA_ARS: ' 1200.5 ' });
