@@ -22286,7 +22286,6 @@ function pzHoySpeechHTML(o) {
   const schedSolo = (o && typeof o.schedSolo === 'number') ? o.schedSolo : 0;
   let cuerpo = '';
   if (hoyPost) {
-    const hh = pzHoyHoraCorta(hoyPost.scheduled_at, tz, en);
     const st = String(hoyPost.status || '');
     const ap = String(hoyPost.approval || 'pending');
     // Programado: en autopilot sale solo (trust ≥1 publica el
@@ -22313,10 +22312,15 @@ function pzHoySpeechHTML(o) {
       // está de más y se saca entero; el mensaje queda solo con la tarjeta.)
       cuerpo = '';
     } else if (saleSolo) {
-      cuerpo = en
-      // (vFRASE · corrección Valentino 11/11 11:51: el anuncio del posteo de hoy está de más — el posteo ya está a la vista; se saca solo esa oración y queda el dato de salida + avisos.)
-        ? `<b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`
-        : `<b>El de hoy sale${hh ? ' a las ' + esc(hh) : ''} solo</b> — miralo si querés, te aviso 30 min antes por si querés frenarlo y te aviso cuando salga.`;
+      // (v901 · corrección Valentino 11/11 14:33: la tarjeta del aviso
+      // sale ENTERA de Inicio — no solo la frase (v895). El posteo ya
+      // está a la vista en el héroe; el aviso (dato de salida + aviso
+      // 30 min + aviso al salir) no se rinde más. Sin cuerpo no hay
+      // burbuja (igual que borrador y manual pendiente, v879); el
+      // insight (v843) tampoco se rinde en Hoy en este estado (sigue
+      // en la hoja del ritual). Los pushes de 30 min y al salir NO se
+      // tocan (son del servidor, no de esta tarjeta).
+      cuerpo = '';
     } else {
       // (v879 · corrección Valentino 10/11 10:04: igual que borrador — el
       // texto está de más y se saca entero; queda solo la tarjeta.)
