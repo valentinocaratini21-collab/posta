@@ -29528,7 +29528,7 @@ let pzHeadCollapseEcho = 0;
 // cambia COMO se llega. Sin animacion con reduced-motion.
 let pzHeadCollapseAnimToken = 0;
 function pzHeadCollapseAnimate(iv, collapsed) {
-  if (pzHeadCollapseIsMobile()) { try { if (iv) iv.classList.remove('hf-collapsed'); } catch (_) {} return; }
+  if (pzHeadCollapseOff()) { try { if (iv) iv.classList.remove('hf-collapsed'); } catch (_) {} return; }
   try {
     const head = iv ? iv.querySelector('.hf-head') : null;
     if (!head) { iv.classList.toggle('hf-collapsed', collapsed); return; }
@@ -29610,10 +29610,23 @@ let pzHeadCollapseTimer = null;
 // clase en móvil), más un listener de resize para el giro de pantalla
 // sin scroll. pzHeadCollapseNext NO se toca (tests de otros lotes la
 // exigen byte-idéntica) y el CSS .hf-collapsed sigue vivo para desktop.
-function pzHeadCollapseIsMobile() {
-  try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
+// LOTE PERFIL-SIN-ACHICAR (11/11 · Valentino: la parte de arriba del
+// perfil NO se achica nunca, en ningún ancho — siempre se ve entera, a
+// su tamaño completo, sin achicarse al deslizar). El gate pasa de móvil
+// a TODOS los anchos: pzHeadCollapseIsMobile() se renombra
+// pzHeadCollapseOff() y devuelve siempre true. El escritorio era el
+// único lugar donde el colapso seguía vivo (la captura de Valentino es
+// de 1300px); la app nativa es solo móvil (≤820px), así que su
+// comportamiento NO cambia — ahí el colapso ya estaba desactivado.
+// pzHeadCollapseNext SIGUE sin tocarse (byte-idéntica) y el CSS
+// .hf-collapsed sigue vivo (estado válido, solo que ya nunca se aplica).
+function pzHeadCollapseOff() {
+  // (LOTE PERFIL-SIN-ACHICAR · 11/11) El colapso está DESACTIVADO
+  // siempre, en cualquier ancho: el encabezado de Inicio conserva
+  // siempre su forma completa. Ver el comentario de arriba.
+  return true;
 }
-function pzHeadCollapseMobileReset(iv) {
+function pzHeadCollapseReset(iv) {
   try {
     if (pzHeadCollapseTimer) { clearTimeout(pzHeadCollapseTimer); pzHeadCollapseTimer = null; }
     if (iv) iv.classList.remove('hf-collapsed');
@@ -29624,7 +29637,7 @@ function pzHeadCollapseMobileReset(iv) {
 }
 function pzHeadCollapseApply() {
   pzHeadCollapseTimer = null;
-  if (pzHeadCollapseIsMobile()) { pzHeadCollapseMobileReset(document.getElementById('inicioView')); return; }
+  if (pzHeadCollapseOff()) { pzHeadCollapseReset(document.getElementById('inicioView')); return; }
   try {
     const iv = document.getElementById('inicioView');
     if (!iv) return;
@@ -29638,7 +29651,7 @@ function pzHeadCollapseSync() {
   try {
     const iv = document.getElementById('inicioView');
     if (!iv) return;
-    if (pzHeadCollapseIsMobile()) { pzHeadCollapseMobileReset(iv); return; }
+    if (pzHeadCollapseOff()) { pzHeadCollapseReset(iv); return; }
     const doc = document.documentElement;
     const maxScroll = (doc ? doc.scrollHeight : 0) - (window.innerHeight || 0);
     if (maxScroll <= 0) {
@@ -29681,7 +29694,7 @@ if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHead
 }
 if (typeof window !== 'undefined' && window.addEventListener && !window.__pzHeadCollapseResizeBound) {
   window.__pzHeadCollapseResizeBound = true;
-  window.addEventListener('resize', () => { try { if (pzHeadCollapseIsMobile()) pzHeadCollapseMobileReset(document.getElementById('inicioView')); } catch (e) {} }, { passive: true });
+  window.addEventListener('resize', () => { try { if (pzHeadCollapseOff()) pzHeadCollapseReset(document.getElementById('inicioView')); } catch (e) {} }, { passive: true });
 }
 // LOTE DIAGNOSTICO2 (TEMPORAL — quitar en el lote del fix real): reporter del
 // ensanchamiento del feed en el webView real. NO cambia ningún layout ni
