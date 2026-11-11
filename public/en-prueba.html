@@ -117,8 +117,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
     return s.slice(0, 300);
   }
-  function showErr(m) { errEl.textContent = m; errEl.hidden = false; }
-  function showErrHtml(h) { errEl.innerHTML = h; errEl.hidden = false; }
+  // (v908 · ONBOARDING-TRABADO-PRUEBA-USADA) An error NEVER leaves
+  // the working state on screen: before, «Building your first
+  // post…» stayed visible NEXT TO the pink trial-used notice and the
+  // page looked frozen forever. showErr/showErrHtml always turn off
+  // #fStatus; the need_star path uses showStatus and is untouched.
+  function showErr(m) { statusEl.hidden = true; errEl.textContent = m; errEl.hidden = false; }
+  function showErrHtml(h) { statusEl.hidden = true; errEl.innerHTML = h; errEl.hidden = false; }
   function showStatus(m) { statusEl.textContent = m; statusEl.hidden = false; }
   function hideNotes() { errEl.hidden = true; statusEl.hidden = true; }
   function deviceId() {
