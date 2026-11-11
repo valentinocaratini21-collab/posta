@@ -2376,7 +2376,8 @@ body.hf-sv-open{overflow:hidden}
 .lp-igform{display:flex;gap:10px;justify-content:center;align-items:stretch;max-width:520px;margin:26px auto 0;flex-wrap:wrap}
 .lp-igform input{flex:1;min-width:210px;font-size:17px;padding:15px 18px;border:2px solid #D7E5EE;border-radius:999px;font-family:inherit;color:#0A1E33;background:#fff;outline:none}
 .lp-igform input:focus{border-color:#2793C8}
-.lp-igform button{border-radius:999px;font-size:16px;padding:15px 26px;cursor:pointer}
+.lp-igform button{border-radius:999px;font-size:17px;padding:17px 34px;cursor:pointer;box-shadow:0 8px 22px rgba(39,147,200,.45),inset 0 1px 0 rgba(255,255,255,.55)}
+.lp-cta-big{font-size:17px;padding:17px 34px;box-shadow:0 8px 22px rgba(39,147,200,.45),inset 0 1px 0 rgba(255,255,255,.55)}
 .lp-igform-note{margin-top:10px;color:var(--mut,#5A7186);font-size:14.5px}
 /* (LOTE ENTRADA-LOGO-IG) Logo de Instagram a la izquierda del @ + web igual que IG: mismo alto, fuente, padding, radio y botón. */
 .lp-ig-wrap{position:relative;flex:1;min-width:210px;display:flex}

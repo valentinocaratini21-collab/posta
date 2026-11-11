@@ -5021,7 +5021,7 @@ function landingView(cfg) {
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con Posty <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
     <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></a>
+      <a class="btn btn-primary lp-cta-big" href="/prueba">Ver mi semana gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a>
     </div>
   </div></div>
   <div class="lp-final"><div class="wrap">

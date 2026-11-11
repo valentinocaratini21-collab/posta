@@ -740,7 +740,7 @@ html{scroll-behavior:smooth}
 #formCard{scroll-margin-top:90px}
 .sticky-form-bar{display:none}
 @media(max-width:640px){
-.sticky-form-bar{display:flex;align-items:center;justify-content:center;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;background:var(--yl);color:var(--navy);border:none;font-family:inherit;font-weight:800;font-size:16px;padding:15px 18px;border-radius:999px;box-shadow:0 12px 30px rgba(10,30,51,.28);cursor:pointer;transition:opacity .25s ease,transform .25s ease}
+.sticky-form-bar{display:flex;align-items:center;justify-content:center;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;background:var(--yl);color:var(--navy);border:none;font-family:inherit;font-weight:800;font-size:17px;padding:17px 18px;border-radius:999px;box-shadow:0 12px 30px rgba(10,30,51,.28);cursor:pointer;transition:opacity .25s ease,transform .25s ease}
 .sticky-form-bar.sfb-hide{opacity:0;pointer-events:none;transform:translateY(14px)}
 body.sfb-on{padding-bottom:88px}
 }
@@ -1256,7 +1256,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
       <div id="stepIg">
         <div class="field"><label>Tu Instagram</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty trae tu nombre, tu rubro y tu foto de perfil.</div></div>
         <div id="f_ig_sug" class="ig-sug" style="display:none"></div>
-        <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></button>
+        <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         <p class="form-micro">Gratis · Sin tarjeta · Sin tu contraseña de Instagram</p>
         <div class="form-or"><span>o</span></div>
         <div id="webOptBox">
@@ -1291,7 +1291,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
           <p class="tiny" id="pf_descTip" style="margin:6px 0 0;min-height:16px"></p>
           <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="pf_descCount">0</span>/600</p>
         </details>
-        <button class="btn btn-primary btn-block" id="btnPrefillGo">Armar mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></button>
+        <button class="btn btn-primary btn-block" id="btnPrefillGo">Armar mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="pfBack"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-back"/></svg> No es mi negocio / usar otro @</button></p>
       </div>
       <!-- Web OK: Posty leyó tu sitio (v212) -->
@@ -1313,7 +1313,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
           <p class="tiny" id="wf_extraTip" style="margin:6px 0 0;min-height:16px"></p>
           <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="wf_extraCount">0</span>/600</p>
         </details>
-        <button class="btn btn-primary btn-block" id="btnWebTrialGo">Armar mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></button>
+        <button class="btn btn-primary btn-block" id="btnWebTrialGo">Armar mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="wfBack"><svg class="wb-ic wb-ic-l" aria-hidden="true"><use href="#wb-back"/></svg> Volver</button></p>
       </div>
       <!-- (v235) La pregunta de rubro: SOLO aparece si Posty no está 100%
@@ -1337,7 +1337,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
           <p class="tiny" id="f_descTip" style="margin:6px 0 0;min-height:16px"></p>
           <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="f_descCount">0</span>/600</p>
         </details>
-        <button class="btn btn-primary btn-block" id="btnGo2">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></button>
+        <button class="btn btn-primary btn-block" id="btnGo2">Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         <p class="tiny" style="margin-top:10px">Hablamos en el chat: 2 o 3 preguntas con toques y ves tu semana.</p>
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
       </div>
@@ -1443,7 +1443,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
 
   </div>
   </div>
-<button type="button" class="sticky-form-bar" id="stickyFormBar">Armá tu semana gratis</button>
+<button type="button" class="sticky-form-bar" id="stickyFormBar">Armá tu semana gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
 <script>
 (function(){
   var bar=document.getElementById('stickyFormBar'), form=document.getElementById('formCard'), onb=document.getElementById('v-onboarding');
@@ -1497,7 +1497,7 @@ html.gj-armed .kt-cascade.kt-in .kt-l{opacity:1;transform:none;
         </div>
       </div>
       <div style="text-align:center;margin-top:22px">
-        <button class="btn btn-primary" id="exMine" style="font-size:18px;padding:16px 40px">Quiero la mía <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg></button>
+        <button class="btn btn-primary" id="exMine" style="font-size:18px;padding:16px 40px">Quiero la mía <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         <p class="tiny">Gratis · Sin registro · Sale de tu @ o tu web</p>
       </div>
     </div>
@@ -2238,7 +2238,7 @@ async function onIgSubmit() {
     // ok:true → tarjeta compacta. ok:false o cualquier error → formulario detallado.
     if (r.ok && j && j.ok) { showPrefillCard(j); return; }
   } catch (e) { /* cae al formulario detallado */ }
-  btn.disabled = false; btn.textContent = 'Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-eye"/></svg>';
+  btn.disabled = false; btn.textContent = 'Ver mi semana <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg>';
   showDetailForm();
 }
 function showPrefillCard(j) {
