@@ -2429,7 +2429,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v850'; // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
+const CHUNK_V = '20261105-v885'; // (v885) bump: chunk-analisis riel por suscripción (MP→ARS, Stripe→USD) // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -16639,6 +16639,36 @@ function pzBoostSaldoUSD() {
   return Math.floor(Number(b.balance_cents || 0) / 100);
 }
 
+// (LOTE RIEL-SUSCRIPCION v878) El riel de cobro es el de la suscripción
+// (billing_provider del GET /api/ads/billetera): 'mp' → pesos (Mercado
+// Pago), 'stripe' o null → dólares (el flujo de siempre). Sin datos, USD.
+function pzBoostEsMP() {
+  const s = pzBoostState || {};
+  const b = s.billetera || {};
+  return b.billing_provider === 'mp';
+}
+function pzBoostFmtMonto(n) {
+  return pzBoostEsMP() ? Math.round(Number(n) || 0).toLocaleString('es-AR') : String(Number(n) || 0);
+}
+function pzBoostMontos() {
+  const s = pzBoostState || {};
+  const b = s.billetera || {};
+  if (pzBoostEsMP() && Array.isArray(b.presupuestos_ars) && b.presupuestos_ars.length) return b.presupuestos_ars;
+  if (pzBoostEsMP()) return [5000, 10000, 20000];
+  return [20, 50, 100];
+}
+function pzBoostSaldo() {
+  const s = pzBoostState || {};
+  const b = s.billetera || {};
+  // En MP el saldo es en pesos (la billetera ARS es la viva); si no, el
+  // saldo en USD de siempre (0 si la billetera es ARS vieja).
+  if (pzBoostEsMP()) return Math.floor(Number(b.balance_cents || 0) / 100);
+  return pzBoostSaldoUSD();
+}
+function pzBoostMinTopup() {
+  return pzBoostEsMP() ? 10000 : 20;
+}
+
 // Textos de motivo: espejo de anaBoostRecMotivo/anaCargarMotivo del
 // chunk Análisis (estado real del servidor, nunca un genérico).
 function pzBoostMotivo(motivo, monto, cobroId) {
@@ -16664,11 +16694,17 @@ function pzBoostMotivo(motivo, monto, cobroId) {
     case 'posteo_no_encontrado':
       return gzT('Ese posteo ya no está en tu semana.', 'That post is no longer in your week.');
     case 'monto_invalido':
-      return gzT('Ese monto no es válido. Elegí $20, $50 o $100.', 'That amount isn’t valid. Choose $20, $50 or $100.');
+      return pzBoostEsMP()
+        ? gzT('Ese monto no es válido. Elegí $5.000, $10.000 o $20.000.', 'That amount isn’t valid. Choose $5,000, $10,000 or $20,000.')
+        : gzT('Ese monto no es válido. Elegí $20, $50 o $100.', 'That amount isn’t valid. Choose $20, $50 or $100.');
     case 'saldo_insuficiente':
       return gzT('No te alcanza el saldo de la billetera para ' + m + '. Cargá plata primero — un toque y listo.', 'Your wallet balance doesn’t cover ' + m + '. Top it up first — one tap and done.');
     case 'saldo_ars_pendiente':
       return gzT('Todavía tenés saldo viejo en pesos en la billetera. Gastalo o pedinos que lo revisemos antes de cargar en dólares.', 'You still have old pesos balance in the wallet. Spend it or ask us to review it before topping up in dollars.');
+    // (LOTE RIEL-SUSCRIPCION v878) Espejo del anterior: con saldo USD no
+    // se carga en pesos.
+    case 'saldo_usd_pendiente':
+      return gzT('Todavía tenés saldo en dólares en la billetera. Gastalo antes de cargar en pesos.', 'You still have dollars balance in the wallet. Spend it before topping up in pesos.');
     case 'boost_deshabilitado':
       return gzT('El impulso todavía no está habilitado en tu cuenta.', 'Boosting isn’t enabled on your account yet.');
     case 'ya_impulsado':
@@ -16699,6 +16735,11 @@ function pzBoostCargarMotivo(motivo, monto, cobroId) {
       return gzT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', 'The charge needs your confirmation and can’t run on its own. Nothing was charged.');
     case 'cobro_no_confirmado':
       return gzT('El cobro no se confirmó. Probá de nuevo. No se cobró nada.', 'The charge wasn’t confirmed. Try again. Nothing was charged.');
+    // (LOTE RIEL-SUSCRIPCION v878) Motivos de la carga por Mercado Pago.
+    case 'mp_no_configurado':
+      return gzT('La carga con Mercado Pago todavía no está disponible en tu cuenta. Probá de nuevo más tarde. No se cobró nada.', 'Mercado Pago top-up isn’t available on your account yet. Try again later. Nothing was charged.');
+    case 'preferencia_fallida':
+      return gzT('No se pudo armar el pago con Mercado Pago. Probá de nuevo en un momento. No se cobró nada.', 'The Mercado Pago payment couldn’t be set up. Try again in a moment. Nothing was charged.');
     case 'sin_proveedores':
       return gzT('La carga no está disponible ahora. Probá de nuevo en un momento. No se cobró nada.', 'Top-up isn’t available right now. Try again in a moment. Nothing was charged.');
     case '':
@@ -16813,13 +16854,19 @@ async function pzBoostLoad() {
   try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
   try { elig = await api.get('/api/ads/billetera/elegibles?incluir_impulsados=1'); } catch (e) { elig = null; }
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
-  s.billetera = (bil && bil.ok) ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] };
+  s.billetera = (bil && bil.ok) ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100], billing_provider: null };
   s.elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles.map((e) => pzBoostNormPost(e)).filter(Boolean) : [];
   s.adsReady = (elig && elig.ok) ? !!elig.ads_ready : null;
   s.motivoGate = (elig && elig.ok && !elig.ads_ready) ? String(elig.motivo || 'page_not_authorized') : '';
   s.boostHabilitado = (bil && bil.ok && bil.boostHabilitado !== undefined) ? bil.boostHabilitado : undefined;
   s.adsPermiso = (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : undefined;
   s.conversionPendiente = (bil && bil.ok) ? !!bil.conversion_pendiente : undefined;
+  // (LOTE RIEL-SUSCRIPCION v878) El monto elegido vive en la moneda del
+  // riel: si el riel es MP y el monto es de la lista USD, se pasa al
+  // presupuesto ARS del medio ($10.000); si no es MP y el monto es ARS,
+  // se vuelve al default USD ($50, el recomendado de la hoja).
+  if (s.billetera && s.billetera.billing_provider === 'mp' && [20, 50, 100].includes(Number(s.selMonto))) s.selMonto = 10000;
+  else if (s.billetera && s.billetera.billing_provider !== 'mp' && [5000, 10000, 20000].includes(Number(s.selMonto))) s.selMonto = 50;
   // Pre-selección: el recomendado; si está impulsado, el primer elegible
   // no impulsado; si el anterior sigue elegible, se conserva.
   // (v846) La selección es por clave (pzBoostKey): el reciente de IG
@@ -16923,21 +16970,36 @@ function pzBoostPintarBoost() {
     body.innerHTML = `<div class="pz-boost-3d3">${xBtn}<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Este posteo ya está impulsado', 'This post is already boosted'))}</b><p>${esc(gzT('Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.', 'It has an active 7-day boost. Pick another post to boost.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div></div>`;
     return;
   }
-  const monto = Number(s.selMonto) || 50;
-  const saldo = pzBoostSaldoUSD();
+  const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
+  const saldo = pzBoostSaldo();
   const monedaARS = ((s.billetera && s.billetera.currency) || 'USD') !== 'USD';
+  const railMP = pzBoostEsMP();
+  // (LOTE RIEL-SUSCRIPCION v878) En MP la billetera ARS es la VIVA: el
+  // «saldo viejo en pesos» solo frena cuando el riel NO es MP.
+  const saldoViejoARS = monedaARS && !railMP;
   const gate = pzBoostGate();
   const conv = !!s.conversionPendiente;
   const falta = saldo < monto;
-  const warn = monedaARS
+  const warn = saldoViejoARS
     ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('saldo_ars_pendiente', monto))}</p>`
     : gate.cerrado
       ? `<p class="pz-boost-warn">${esc(pzBoostMotivo(gate.motivo, monto))}</p>`
       : falta
-        ? `<p class="pz-boost-warn">${esc(gzT('Te faltan $' + (monto - saldo) + ' · cargalo acá mismo, sin ir a otra pantalla.', 'You’re $' + (monto - saldo) + ' short · top it up right here, without leaving this screen.'))}</p>`
+        ? `<p class="pz-boost-warn">${esc(gzT('Te faltan $' + pzBoostFmtMonto(monto - saldo) + ' · cargalo acá mismo, sin ir a otra pantalla.', 'You’re $' + pzBoostFmtMonto(monto - saldo) + ' short · top it up right here, without leaving this screen.'))}</p>`
         : '';
-  const notaConv = conv ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('conversion_pendiente', monto))}</p>` : '';
-  const cargar = falta ? `<button type="button" class="btn btn-block pz-boost-load" onclick="pzBoostCargar(this)">${esc(gzT('Cargar $' + monto + ' ahora', 'Top up $' + monto + ' now'))}</button>` : '';
+  // La nota de conversión es solo del flujo USD: en MP no hay conversión.
+  const notaConv = !railMP && conv ? `<p class="pz-boost-warn">${esc(pzBoostMotivo('conversion_pendiente', monto))}</p>` : '';
+  // La Cargar de la hoja carga lo que se va a impulsar, pero nunca menos
+  // que el mínimo de carga del riel ($10.000 en MP, $20 en USD).
+  const montoCarga = Math.max(monto, pzBoostMinTopup());
+  // (FUSIÓN v880+v885) La 3D-3H muestra los montos del riel: en USD
+  // $20/$50/$100 como v880; en MP $5.000/$10.000/$20.000 (el recomendado
+  // es el del medio en ambos rieles).
+  const montos3d3 = pzBoostMontos();
+  const m3Main = montos3d3.length > 1 ? montos3d3[1] : montos3d3[0];
+  const m3A = montos3d3[0];
+  const m3B = montos3d3.length > 2 ? montos3d3[2] : montos3d3[0];
+  const cargar = falta ? `<button type="button" class="btn btn-block pz-boost-load" onclick="pzBoostCargar(this)">${esc(gzT('Cargar $' + pzBoostFmtMonto(montoCarga) + ' ahora', 'Top up $' + pzBoostFmtMonto(montoCarga) + ' now'))}</button>` : '';
   const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
   const nums = pzBoostNumerosComa(p);
   const linea = (p.recomendado && nums)
@@ -16948,9 +17010,9 @@ function pzBoostPintarBoost() {
     <div class="pz-boost-3d3-row">
       <div class="pz-boost-3d3-thumb">${img}</div>
       <div class="pz-boost-3d3-montos" role="group" aria-label="${esc(gzT('Monto del impulso', 'Boost amount'))}">
-        <button type="button" class="pz-boost-3d3-main" onclick="pzBoostImpulsarMonto(50, this)">$50<small>${esc(gzT('RECOMENDADO · 7 DÍAS', 'RECOMMENDED · 7 DAYS'))}</small></button>
-        <button type="button" class="pz-boost-3d3-side" onclick="pzBoostImpulsarMonto(20, this)">$20</button>
-        <button type="button" class="pz-boost-3d3-side" onclick="pzBoostImpulsarMonto(100, this)">$100</button>
+        <button type="button" class="pz-boost-3d3-main" onclick="pzBoostImpulsarMonto(${m3Main}, this)">$${pzBoostFmtMonto(m3Main)}<small>${esc(gzT('RECOMENDADO · 7 DÍAS', 'RECOMMENDED · 7 DAYS'))}</small></button>
+        <button type="button" class="pz-boost-3d3-side" onclick="pzBoostImpulsarMonto(${m3A}, this)">$${pzBoostFmtMonto(m3A)}</button>
+        <button type="button" class="pz-boost-3d3-side" onclick="pzBoostImpulsarMonto(${m3B}, this)">$${pzBoostFmtMonto(m3B)}</button>
       </div>
     </div>
     <div class="pz-boost-3d3-bottom">
@@ -16965,7 +17027,7 @@ function pzBoostPintarBoost() {
 function pzBoostPintarExito(p, monto) {
   const body = document.getElementById('pzBoostBody');
   if (!body) return;
-  body.innerHTML = `<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Posteo impulsado', 'Post boosted'))}</b><p>${esc(pzBoostTitulo(p))} · $${monto} ${esc(gzT('por 7 días, desde hoy. Posty te avisa cómo viene.', 'for 7 days, starting today. Posty will let you know how it goes.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div>`;
+  body.innerHTML = `<div class="pz-boost-done"><div class="pz-boost-tick">✓</div><b>${esc(gzT('Posteo impulsado', 'Post boosted'))}</b><p>${esc(pzBoostTitulo(p))} · $${pzBoostFmtMonto(monto)} ${esc(gzT('por 7 días, desde hoy. Posty te avisa cómo viene.', 'for 7 days, starting today. Posty will let you know how it goes.'))}</p><button type="button" class="btn btn-primary btn-block" onclick="pzBoostCerrar()">${esc(gzT('Listo', 'Done'))}</button></div>`;
 }
 
 // Entrada principal: el botón «Impulsar posteo» arriba del Feed (RS-3).
@@ -17037,8 +17099,8 @@ function pzBoostPickConfirmar() {
 
 function pzBoostElegirMonto(monto) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
-  const m = Number(monto) || 50;
-  if (![20, 50, 100].includes(m)) return;
+  const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
+  if (!pzBoostMontos().includes(m)) return;
   s.selMonto = m;
   pzBoostPintarBoost();
 }
@@ -17056,11 +17118,15 @@ function pzBoostToggleMontos() {
 // tarjeta» si no hay tarjeta, camino v877). Nunca se rompe.
 function pzBoostPuede(monto) {
   const s = pzBoostState || {};
-  const m = Number(monto) || 50;
+  const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
   const gate = pzBoostGate();
   const monedaARS = ((s.billetera && s.billetera.currency) || 'USD') !== 'USD';
-  const saldo = pzBoostSaldoUSD();
-  return !gate.cerrado && !monedaARS && saldo >= m;
+  // (FUSIÓN v880+v885) El «puede» del lote: en MP la billetera ARS es la
+  // viva y el saldo viejo en pesos no frena; fuera de MP, sí frena.
+  const railMP = pzBoostEsMP();
+  const saldoViejoARS = monedaARS && !railMP;
+  const saldo = pzBoostSaldo();
+  return !gate.cerrado && !saldoViejoARS && saldo >= m;
 }
 
 // (v880) Un toque en un monto = se envía el ad con ese monto (mismo
@@ -17068,8 +17134,10 @@ function pzBoostPuede(monto) {
 // impulsa: repinta la hoja con el aviso y el camino de carga.
 async function pzBoostImpulsarMonto(monto, btn) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
-  const m = Number(monto) || 50;
-  if (![20, 50, 100].includes(m)) return;
+  // (FUSIÓN v880+v885) Espejo del hunk 6 del lote (pzBoostElegirMonto):
+  // el monto válido es el de la lista del riel.
+  const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
+  if (!pzBoostMontos().includes(m)) return;
   s.selMonto = m;
   if (!pzBoostPuede(m)) { pzBoostPintarBoost(); return; }
   await pzBoostConfirmar(btn);
@@ -17077,22 +17145,33 @@ async function pzBoostImpulsarMonto(monto, btn) {
 
 async function pzBoostCargar(btn) {
   const s = pzBoostState || {};
-  const monto = Number(s.selMonto) || 50;
+  const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
+  // (LOTE RIEL-SUSCRIPCION v878) La Cargar carga lo que se va a impulsar,
+  // pero nunca menos que el mínimo de carga del riel ($10.000 en MP).
+  const montoCarga = Math.max(monto, pzBoostMinTopup());
   const msgEl = document.getElementById('pzBoostMsg');
   const decir = (t) => { if (msgEl) msgEl.textContent = t; };
   if (btn) btn.disabled = true;
   let j = null;
-  try { j = await api.post('/api/ads/billetera/cargar', { montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+  // En MP la carga es por preferencia de checkout: el servidor devuelve
+  // init_point y el cliente va a Mercado Pago a aprobarla.
+  const railMP = pzBoostEsMP();
+  try { j = await api.post('/api/ads/billetera/cargar', railMP ? { montoARS: montoCarga } : { montoUSD: montoCarga }); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
+  if (j && j.ok && j.init_point) {
+    decir(gzT('Te llevamos a Mercado Pago para completar la carga de $' + pzBoostFmtMonto(montoCarga) + '.', 'Taking you to Mercado Pago to complete the $' + pzBoostFmtMonto(montoCarga) + ' top-up.'));
+    try { window.location.href = j.init_point; } catch (e) {}
+    return;
+  }
   if (j && j.ok) {
     const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
     try { await pzBoostLoad(); } catch (e) {}
     if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
     pzBoostPintarBoost();
-    decir(gzT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.'));
+    decir(gzT('Listo, cargaste $' + pzBoostFmtMonto(montoCarga) + '. Tu billetera tiene $' + pzBoostFmtMonto(nuevoSaldo) + '.', 'Done, you topped up $' + pzBoostFmtMonto(montoCarga) + '. Your wallet now has $' + pzBoostFmtMonto(nuevoSaldo) + '.'));
   } else {
     const motivo = (j && j.motivo) || '';
-    decir(pzBoostCargarMotivo(motivo, monto, j && j.cobroId));
+    decir(pzBoostCargarMotivo(motivo, montoCarga, j && j.cobroId));
     // (v877) Sin tarjeta, el mensaje lleva al flujo: el botón «Agregar
     // tarjeta» queda pegado al mensaje (mismo patrón que la Billetera,
     // chunk-analisis.js: anaAgregarTarjetaBtn). El chunk se carga bajo
@@ -17107,7 +17186,7 @@ async function pzBoostCargar(btn) {
 async function pzBoostConfirmar(btn) {
   const s = pzBoostState || {};
   const p = s.selPost || null;
-  const monto = Number(s.selMonto) || 50;
+  const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
   const msgEl = document.getElementById('pzBoostMsg');
   const decir = (t) => { if (msgEl) msgEl.textContent = t; };
   if (!p || (!p.post_id && !p.ig_media_id)) { decir(pzBoostMotivo('sin_posteo', monto)); return; }
@@ -17115,7 +17194,9 @@ async function pzBoostConfirmar(btn) {
   let j = null;
   // (v846) El reciente sin fila se impulsa por ig_media_id: el servidor
   // lo adopta y devuelve el posteoId nuevo.
-  const body = (p.solo_ig && p.ig_media_id) ? { igMediaId: String(p.ig_media_id), montoUSD: monto } : { posteoId: Number(p.post_id), montoUSD: monto };
+  // (LOTE RIEL-SUSCRIPCION v878) En MP el impulso se pide en pesos.
+  const railMP = pzBoostEsMP();
+  const body = (p.solo_ig && p.ig_media_id) ? { igMediaId: String(p.ig_media_id), ...(railMP ? { montoARS: monto } : { montoUSD: monto }) } : { posteoId: Number(p.post_id), ...(railMP ? { montoARS: monto } : { montoUSD: monto }) };
   try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
   if (j && j.ok) {

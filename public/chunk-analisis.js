@@ -1187,12 +1187,18 @@ function anaBoostRecMotivo(motivo, monto, cobroId) {
     case 'sin_publicar':
       return anaT('Este posteo todavía no está publicado en Instagram.', "This post isn't published on Instagram yet.");
     case 'monto_invalido':
-      return anaT('Ese monto no es válido. Elegí $20, $50 o $100.', "That amount isn't valid. Choose $20, $50 or $100.");
+      return anaEsMP()
+        ? anaT('Ese monto no es válido. Elegí $5.000, $10.000 o $20.000.', "That amount isn't valid. Choose $5,000, $10,000 or $20,000.")
+        : anaT('Ese monto no es válido. Elegí $20, $50 o $100.', "That amount isn't valid. Choose $20, $50 or $100.");
     // NUEVOS (ADS-BILLETERA)
     case 'saldo_insuficiente':
       return anaT('No te alcanza el saldo de la billetera para ' + m + '. Cargá plata primero — un toque y listo.', "Your wallet balance doesn't cover " + m + ". Top it up first — one tap and done.");
     case 'saldo_ars_pendiente':
       return anaT('Todavía tenés saldo viejo en pesos en la billetera. Gastalo o pedinos que lo revisemos antes de cargar en dólares.', "You still have old pesos balance in the wallet. Spend it or ask us to review it before topping up in dollars.");
+    // (LOTE RIEL-SUSCRIPCION v878) Espejo del anterior: con saldo USD
+    // no se carga en pesos.
+    case 'saldo_usd_pendiente':
+      return anaT('Todavía tenés saldo en dólares en la billetera. Gastalo antes de cargar en pesos.', "You still have dollars balance in the wallet. Spend it before topping up in pesos.");
     case 'cobro_sin_acreditar':
       return anaT('El cobro se hizo pero la plata no entró a tu billetera. Quedó registrado' + (cobroId ? ' (cobro ' + cobroId + ')' : '') + ' para revisión urgente. Escribinos y lo resolvemos.', "The charge went through but the money didn't reach your wallet. It was recorded" + (cobroId ? ' (charge ' + cobroId + ')' : '') + " for urgent review. Write to us and we'll sort it out.");
     case 'debito_fallido':
@@ -1206,6 +1212,32 @@ function anaBoostRecMotivo(motivo, monto, cobroId) {
     default:
       return anaT('No se pudo impulsar. No se gastó nada de tu billetera.', "It couldn't be boosted. Nothing was spent from your wallet.");
   }
+}
+
+// (LOTE RIEL-SUSCRIPCION v878) El riel de cobro de Impulsar es el de la
+// suscripción (billing_provider del GET /api/ads/billetera): 'mp' → pesos
+// (Mercado Pago), 'stripe' o null → dólares (el flujo de siempre). Sin
+// datos (respuesta vieja en caché), se asume USD: el comportamiento de
+// antes. Los montos ARS son los del servidor (montos_ars /
+// presupuestos_ars); si no vienen, los de config/ads.js.
+function anaEsMP() {
+  const b = (anaBilleteraDatos && anaBilleteraDatos.billetera) || {};
+  return b.billing_provider === 'mp';
+}
+function anaFmtMonto(n) {
+  return anaEsMP() ? Math.round(Number(n) || 0).toLocaleString('es-AR') : String(Number(n) || 0);
+}
+function anaMontosCarga() {
+  const b = (anaBilleteraDatos && anaBilleteraDatos.billetera) || {};
+  if (anaEsMP() && Array.isArray(b.montos_ars) && b.montos_ars.length) return b.montos_ars;
+  if (anaEsMP()) return [10000, 20000, 50000];
+  return [20, 50, 100];
+}
+function anaMontosImpulso() {
+  const b = (anaBilleteraDatos && anaBilleteraDatos.billetera) || {};
+  if (anaEsMP() && Array.isArray(b.presupuestos_ars) && b.presupuestos_ars.length) return b.presupuestos_ars;
+  if (anaEsMP()) return [5000, 10000, 20000];
+  return [20, 50, 100];
 }
 
 // Render del bloque de ads con billetera. Lee anaBilleteraDatos (mejor +
@@ -1222,7 +1254,8 @@ function anaBilleteraHTML() {
   const moneda = bil.currency || 'USD';
   const saldoUSD = moneda === 'USD' ? Math.floor(saldoCents / 100) : 0;
   const selId = d.selId || 0;
-  const selMonto = d.selMonto || 20;
+  const selMonto = d.selMonto || (anaEsMP() ? 10000 : 20);
+  const railMP = anaEsMP();
   // (LOTE ADS-PANTALLA) La compuerta bloquea GASTAR, no mostrar: la
   // pantalla se ve igual en todos los estados y solo cambian el botón y
   // la nota honesta. Habilitado = flag + permiso, los dos en true
@@ -1260,12 +1293,16 @@ function anaBilleteraHTML() {
     <div class="ana-boostrec-post">${img}<div>${cap}${chip}</div></div>
     <p class="ana-boostrec-nota">${anaT('En cuanto se publique, queda listo para impulsar.', "As soon as it's published, it's ready to boost.")}</p>`;
   }
-  const saldoTxt = moneda === 'USD'
-    ? anaT('Tu billetera de ads: $' + saldoUSD, 'Your ads wallet: $' + saldoUSD)
-    : anaT('Tu billetera vieja tiene $' + Math.floor(saldoCents / 100) + ' en pesos. La primera carga en dólares la pasa a USD.', 'Your old wallet has $' + Math.floor(saldoCents / 100) + ' in pesos. The first dollar top-up switches it to USD.');
+  // (LOTE RIEL-SUSCRIPCION v878) En MP la billetera ARS es la VIVA (no
+  // la «vieja»): el texto de vieja solo vale cuando el riel no es MP.
+  const saldoTxt = railMP
+    ? anaT('Tu billetera de ads: $' + Math.floor(saldoCents / 100).toLocaleString('es-AR') + ' en pesos', 'Your ads wallet: $' + Math.floor(saldoCents / 100).toLocaleString('es-AR') + ' in pesos')
+    : moneda === 'USD'
+      ? anaT('Tu billetera de ads: $' + saldoUSD, 'Your ads wallet: $' + saldoUSD)
+      : anaT('Tu billetera vieja tiene $' + Math.floor(saldoCents / 100) + ' en pesos. La primera carga en dólares la pasa a USD.', 'Your old wallet has $' + Math.floor(saldoCents / 100) + ' in pesos. The first dollar top-up switches it to USD.');
   const cargarHTML = `<div class="ana-boostrec-montos" style="margin-top:10px">
       <p class="ana-boostrec-monto-t">${anaT('Cargar plata:', 'Top up:')}</p>
-      ${[20, 50, 100].map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="anaBilleteraCargar(${x}, this)">$${x}</button>`).join(' ')}
+      ${anaMontosCarga().map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="anaBilleteraCargar(${x}, this)">$${anaFmtMonto(x)}</button>`).join(' ')}
     </div>`;
   // Picker: recomendado primero, 5 más recientes como máximo. Sin
   // elegibles, la nota honesta (el cliente igual puede cargar plata).
@@ -1294,13 +1331,17 @@ function anaBilleteraHTML() {
   </div>`;
   const montoHTML = `<div class="ana-boostrec-montos" style="margin-top:12px">
       <p class="ana-boostrec-monto-t">${anaT('¿Cuánto le metemos?', 'How much?')}</p>
-      ${[20, 50, 100].map((x) => `<button type="button" class="btn ${x === selMonto ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="anaBilleteraElegirMonto(${x}, this)">$${x}</button>`).join(' ')}
+      ${anaMontosImpulso().map((x) => `<button type="button" class="btn ${x === selMonto ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="anaBilleteraElegirMonto(${x}, this)">$${anaFmtMonto(x)}</button>`).join(' ')}
     </div>`;
-  const puede = selId > 0 && eleg.length > 0 && saldoUSD >= selMonto;
-  const faltaTxt = selId > 0 && eleg.length > 0 && saldoUSD < selMonto
-    ? `<p class="ana-boostrec-nota" style="margin-top:8px">${anaT('Te faltan $' + (selMonto - saldoUSD) + ' en la billetera. Cargá plata arriba.', "You're $" + (selMonto - saldoUSD) + " short in the wallet. Top up above.")}</p>`
+  // (LOTE RIEL-SUSCRIPCION v878) El saldo que alcanza es el de la moneda
+  // del riel: en MP, el saldo en pesos contra el presupuesto en pesos.
+  // La nota de conversión es solo del flujo USD: en MP no hay conversión.
+  const saldoMoneda = railMP ? Math.floor(saldoCents / 100) : saldoUSD;
+  const puede = selId > 0 && eleg.length > 0 && saldoMoneda >= selMonto;
+  const faltaTxt = selId > 0 && eleg.length > 0 && saldoMoneda < selMonto
+    ? `<p class="ana-boostrec-nota" style="margin-top:8px">${anaT('Te faltan $' + anaFmtMonto(selMonto - saldoMoneda) + ' en la billetera. Cargá plata arriba.', "You're $" + anaFmtMonto(selMonto - saldoMoneda) + " short in the wallet. Top up above.")}</p>`
     : '';
-  const notaConv = d.conversion_pendiente === true
+  const notaConv = !railMP && d.conversion_pendiente === true
     ? `<p class="ana-boostrec-nota" style="margin-top:8px">${anaT('Queda armado por 7 días. Todavía no se puede gastar porque falta definir la conversión USD→ARS. No se gasta nada todavía.', "Armed for 7 days. It can't be spent yet because the USD→ARS conversion isn't set. Nothing is spent yet.")}</p>`
     : '';
   // (LOTE ADS-PANTALLA) Botón de acción según el estado. Habilitado: el
@@ -1318,7 +1359,7 @@ function anaBilleteraHTML() {
   const tienePosteo = selId > 0 && (eleg.length > 0 || !!selPost);
   const accionHTML = habilitado
     ? (eleg.length
-      ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraImpulsar(this)" ${puede ? '' : 'disabled'}>${anaT('Meter ads por 7 días · $' + selMonto, 'Run ads for 7 days · $' + selMonto)}</button>${faltaTxt}${notaConv}`
+      ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraImpulsar(this)" ${puede ? '' : 'disabled'}>${anaT('Meter ads por 7 días · $' + anaFmtMonto(selMonto), 'Run ads for 7 days · $' + anaFmtMonto(selMonto))}</button>${faltaTxt}${notaConv}`
       : '')
     : `${tienePosteo ? `<button type="button" class="btn btn-primary" style="width:100%;margin-top:12px" onclick="anaBilleteraQuieroImpulsar(this)">💬 ${anaT('Quiero impulsar este posteo', 'I want to boost this post')}</button>` : ''}<p class="ana-boostrec-nota" style="margin-top:8px">${notaBloqueo}</p>`;
   return `<div class="ana-boostrec">
@@ -1414,8 +1455,8 @@ function anaBilleteraQuieroImpulsar(btn) {
   if (!d) return;
   const post = d.selPost || ((d.elegibles || []).find((e) => e.post_id === d.selId) || null);
   if (!post || !post.post_id) return;
-  const monto = d.selMonto || 20;
-  const texto = anaT('Quiero impulsar este posteo con $' + monto + ' por 7 días', 'I want to boost this post with $' + monto + ' for 7 days');
+  const monto = d.selMonto || (anaEsMP() ? 10000 : 20);
+  const texto = anaT('Quiero impulsar este posteo con $' + anaFmtMonto(monto) + ' por 7 días', 'I want to boost this post with $' + anaFmtMonto(monto) + ' for 7 days');
   const anchorPost = { id: post.post_id, image_path: post.image_path || '', caption: post.caption || '', status: (d.hoy && d.hoy.post_id && Number(d.hoy.post_id) === Number(post.post_id)) ? 'scheduled' : 'published', media_type: '' };
   try { HF_ASK_TEXT_PENDING = texto; } catch (e) {}
   try { if (typeof hfAskChange === 'function') hfAskChange(anchorPost); } catch (e) {}
@@ -1440,7 +1481,7 @@ function anaBilleteraElegirPosteo(id, btn) {
 }
 function anaBilleteraElegirMonto(monto, btn) {
   if (!anaBilleteraDatos) return;
-  anaBilleteraDatos.selMonto = Number(monto) || 20;
+  anaBilleteraDatos.selMonto = Number(monto) || (anaEsMP() ? 10000 : 20);
   anaBilleteraPintar();
 }
 
@@ -1467,6 +1508,13 @@ function anaCargarMotivo(motivo, monto, cobroId) {
       return anaT('El cobro necesita una confirmación tuya y no se puede hacer solo. No se cobró nada.', "The charge needs your confirmation and can't run on its own. Nothing was charged.");
     case 'cobro_no_confirmado':
       return anaT('El cobro no se confirmó. Probá de nuevo. No se cobró nada.', "The charge wasn't confirmed. Try again. Nothing was charged.");
+    // (LOTE RIEL-SUSCRIPCION v878) Motivos de la carga por Mercado Pago.
+    case 'mp_no_configurado':
+      return anaT('La carga con Mercado Pago todavía no está disponible en tu cuenta. Probá de nuevo más tarde. No se cobró nada.', "Mercado Pago top-up isn't available on your account yet. Try again later. Nothing was charged.");
+    case 'preferencia_fallida':
+      return anaT('No se pudo armar el pago con Mercado Pago. Probá de nuevo en un momento. No se cobró nada.', "The Mercado Pago payment couldn't be set up. Try again in a moment. Nothing was charged.");
+    case 'saldo_usd_pendiente':
+      return anaT('Todavía tenés saldo en dólares en la billetera. Gastalo antes de cargar en pesos.', "You still have dollars balance in the wallet. Spend it before topping up in pesos.");
     case 'sin_proveedores':
       return anaT('La carga no está disponible ahora. Probá de nuevo en un momento. No se cobró nada.', "Top-up isn't available right now. Try again in a moment. Nothing was charged.");
     case '':
@@ -1500,13 +1548,23 @@ function anaCargarDecir(t) {
 async function anaBilleteraCargar(monto, btn) {
   if (btn) btn.disabled = true;
   let j = null;
-  try { j = await api.post('/api/ads/billetera/cargar', { montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+  // (LOTE RIEL-SUSCRIPCION v878) En MP la carga es por preferencia de
+  // checkout: el servidor devuelve init_point y el cliente va a Mercado
+  // Pago a aprobarla (la plata entra por el webhook, no acá). El mensaje
+  // NO dice «cargaste» — todavía no se cobró nada.
+  const railMPc = anaEsMP();
+  try { j = await api.post('/api/ads/billetera/cargar', railMPc ? { montoARS: monto } : { montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
+  if (j && j.ok && j.init_point) {
+    anaCargarDecir(anaT('Te llevamos a Mercado Pago para completar la carga de $' + anaFmtMonto(monto) + '.', 'Taking you to Mercado Pago to complete the $' + anaFmtMonto(monto) + ' top-up.'));
+    try { window.location.href = j.init_point; } catch (e) {}
+    return;
+  }
   if (j && j.ok) {
     const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
     await anaBoostRecLoad(true);
     await anaBilleteraTabLoad();
-    anaCargarDecir(anaT('Listo, cargaste $' + monto + '. Tu billetera tiene $' + nuevoSaldo + '.', 'Done, you topped up $' + monto + '. Your wallet now has $' + nuevoSaldo + '.'));
+    anaCargarDecir(anaT('Listo, cargaste $' + anaFmtMonto(monto) + '. Tu billetera tiene $' + anaFmtMonto(nuevoSaldo) + '.', 'Done, you topped up $' + anaFmtMonto(monto) + '. Your wallet now has $' + anaFmtMonto(nuevoSaldo) + '.'));
   } else {
     anaCargarDecir(anaCargarMotivo((j && j.motivo) || '', monto, j && j.cobroId));
     // (LOTE AGREGAR-TARJETA) Sin tarjeta, el mensaje lleva al flujo:
@@ -1535,7 +1593,11 @@ function anaAdsRutaImpulsar(d) {
   const monto = Number(d.selMonto) || 20;
   const saldo = Math.floor(Number((d.billetera && d.billetera.balance_cents) || 0) / 100);
   if (saldo >= monto) return { ruta: 'impulsar' };
-  if (d.auto_topup) return { ruta: 'cargar_y_impulsar' };
+  // (LOTE RIEL-SUSCRIPCION v878) La carga automática es off-session
+  // (Stripe): en MP no existe el cobro automático — el cliente tiene que
+  // aprobar cada carga en el checkout. Con riel MP, saldo corto es
+  // manual (Cargar y después Impulsar), nunca automática.
+  if (d.auto_topup && !((d.billetera && d.billetera.billing_provider) === 'mp')) return { ruta: 'cargar_y_impulsar' };
   return { ruta: 'saldo_insuficiente' };
 }
 
@@ -1565,7 +1627,9 @@ async function anaBilleteraImpulsar(btn) {
       if (!c || !c.ok) { decir(anaBoostRecMotivo((c && c.motivo) || 'cobro_fallido', monto, c && c.cobroId)); return; }
     }
     let j = null;
-    try { j = await api.post('/api/ads/billetera/impulsar', { posteoId, montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+    // (LOTE RIEL-SUSCRIPCION v878) En MP el impulso se pide en pesos.
+    const railMPi = anaEsMP();
+    try { j = await api.post('/api/ads/billetera/impulsar', railMPi ? { posteoId, montoARS: monto } : { posteoId, montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
     if (j && j.ok) {
       const nuevoSaldo = Math.floor(Number(j.balance_cents || 0) / 100);
       // (LOTE ADS-PANTALLA) El posteo recién impulsado ya no se puede
@@ -1575,7 +1639,7 @@ async function anaBilleteraImpulsar(btn) {
       await anaBoostRecLoad(true);
       await anaBilleteraTabLoad();
       const msg2 = document.getElementById('anaBoostRecMsg');
-      if (msg2) msg2.textContent = anaT('Listo, ya tiene ads por 7 días. Tu billetera quedó en $' + nuevoSaldo + '. Posty te va a reportar números reales cuando lleguen.', 'Done, it has ads for 7 days. Your wallet is now at $' + nuevoSaldo + '. Posty will report real numbers when they arrive.');
+      if (msg2) msg2.textContent = anaT('Listo, ya tiene ads por 7 días. Tu billetera quedó en $' + anaFmtMonto(nuevoSaldo) + '. Posty te va a reportar números reales cuando lleguen.', 'Done, it has ads for 7 days. Your wallet is now at $' + anaFmtMonto(nuevoSaldo) + '. Posty will report real numbers when they arrive.');
     } else {
       decir(anaBoostRecMotivo((j && j.motivo) || '', monto, j && j.cobroId));
     }
@@ -1588,7 +1652,7 @@ async function anaBilleteraImpulsar(btn) {
 // «↓ Cargar $20» usa lo que está elegido, no un monto fijo).
 async function anaAdsCargar(btn) {
   const d = anaBilleteraDatos || {};
-  await anaBilleteraCargar(Number(d.selMonto) || 20, btn);
+  await anaBilleteraCargar(Number(d.selMonto) || (anaEsMP() ? 10000 : 20), btn);
 }
 
 // (LOTE AGREGAR-TARJETA) Guardar/cambiar la tarjeta para Ads sin cobrar
@@ -1689,7 +1753,7 @@ function anaBilleteraConstruirDatos(f, prevSel, preferReciente) {
     boostHabilitado: (d && d.boostHabilitado !== undefined) ? d.boostHabilitado : (bil && bil.ok ? bil.boostHabilitado : undefined),
     ads_permiso: (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : (d ? d.ads_permiso : undefined),
     conversion_pendiente: (d && d.conversion_pendiente !== undefined) ? d.conversion_pendiente : (bil && bil.ok ? bil.conversion_pendiente : undefined),
-    billetera: bil && bil.ok ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100] },
+    billetera: bil && bil.ok ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100], billing_provider: null },
     elegibles,
     feed: (f && f.feed && f.feed.ok && Array.isArray(f.feed.posts)) ? f.feed.posts : [],
     auto_topup: (bil && bil.ok && bil.auto_topup) ? 1 : 0,
@@ -1725,6 +1789,15 @@ function anaBilleteraConstruirDatos(f, prevSel, preferReciente) {
     datos.selPost = elegibles.find((e) => e.post_id === defecto) || null;
   }
   datos.selMonto = (prevSel && prevSel.selMonto) ? prevSel.selMonto : 20;
+  // (LOTE RIEL-SUSCRIPCION v878) El monto elegido vive en la moneda del
+  // riel: si el riel es MP y el monto guardado es de la lista USD (o el
+  // default 20), se pasa al presupuesto ARS del medio ($10.000); si el
+  // riel no es MP y el monto es ARS, se vuelve al default USD ($20). Sin
+  // esto, un usuario MP heredaría selMonto 20 y el impulso ARS lo
+  // rechazaría con monto_invalido.
+  const railMPc = (datos.billetera && datos.billetera.billing_provider) === 'mp';
+  if (railMPc && [20, 50, 100].includes(Number(datos.selMonto))) datos.selMonto = 10000;
+  else if (!railMPc && [5000, 10000, 20000].includes(Number(datos.selMonto))) datos.selMonto = 20;
   return datos;
 }
 
@@ -1824,17 +1897,19 @@ function anaSimEstimar(input) {
   return { ok: true, consultas: Math.round(alcance * tasa), alcance: Math.round(alcance), costoPorAlcanceUSD: costo, tasaRespuesta: tasa, nBoosts, nPosts };
 }
 
-// Snap del deslizante al monto válido más cercano ($20/$50/$100, los de
-// la billetera); en empate, al menor — nunca se gasta de más por redondeo.
+// Snap del deslizante al monto válido más cercano (los de la billetera
+// en la moneda del riel); en empate, al menor — nunca se gasta de más
+// por redondeo. (LOTE RIEL-SUSCRIPCION v878: la lista es la del riel.)
 function anaSimMontoValido(v) {
   const n = Number(v) || 0;
-  let mejor = 20, dist = Infinity;
-  for (const m of [20, 50, 100]) { const dd = Math.abs(n - m); if (dd < dist) { dist = dd; mejor = m; } }
+  const lista = anaEsMP() ? [5000, 10000, 20000] : [20, 50, 100];
+  let mejor = lista[0], dist = Infinity;
+  for (const m of lista) { const dd = Math.abs(n - m); if (dd < dist) { dist = dd; mejor = m; } }
   return mejor;
 }
 
 function anaSimCtaTxt(monto, dias) {
-  return '🚀 ' + anaT('Impulsar con $' + monto + ' · ' + dias + ' días', 'Boost with $' + monto + ' · ' + dias + ' days');
+  return '🚀 ' + anaT('Impulsar con $' + anaFmtMonto(monto) + ' · ' + dias + ' días', 'Boost with $' + anaFmtMonto(monto) + ' · ' + dias + ' days');
 }
 
 // Línea de proyección del simulador: número solo con datos reales;
@@ -1845,18 +1920,24 @@ function anaSimProjHTML(presupuestoUSD) {
   const est = anaSimEstimar({ presupuestoUSD: Number(presupuestoUSD) || 20, boosts: d.boosts || [], posts: d.elegibles || [] });
   if (!est.ok) {
     const txt = est.motivo === 'sin_datos_pauta'
-      ? anaT('Todavía no hay datos de pauta en tu cuenta: el primer impulso con $20 nos da el costo real por consulta, y a partir de ahí esta estimación es tuya.', 'No ad data on your account yet: the first $20 boost gives us the real cost per inquiry, and from then on this estimate is yours.')
+      ? (anaEsMP()
+        ? anaT('Todavía no hay datos de pauta en tu cuenta: el primer impulso con $5.000 nos da el costo real por consulta, y a partir de ahí esta estimación es tuya.', 'No ad data on your account yet: the first $5,000 boost gives us the real cost per inquiry, and from then on this estimate is yours.')
+        : anaT('Todavía no hay datos de pauta en tu cuenta: el primer impulso con $20 nos da el costo real por consulta, y a partir de ahí esta estimación es tuya.', 'No ad data on your account yet: the first $20 boost gives us the real cost per inquiry, and from then on this estimate is yours.'))
       : anaT('Todavía no hay datos suficientes en tu cuenta para estimar.', 'Not enough data on your account to estimate yet.');
     return `<div class="proj" id="impSimProj" style="font-size:13.5px;line-height:1.55;font-weight:600;color:#33506B">${esc(txt)}</div>`;
   }
-  const porDolar = Math.max(1, Math.round(1 / est.costoPorAlcanceUSD));
+  // (LOTE RIEL-SUSCRIPCION v878) La unidad del costo es la moneda del
+  // riel: en USD, alcance por $1; en ARS, alcance por $1.000 (un peso no
+  // compra alcance medible).
+  const porUnidad = anaEsMP() ? Math.max(1, Math.round(1000 / est.costoPorAlcanceUSD)) : Math.max(1, Math.round(1 / est.costoPorAlcanceUSD));
+  const unidadTxt = anaEsMP() ? '$1.000' : '$1';
   const tasaPct = (est.tasaRespuesta * 100).toLocaleString(loc, { maximumFractionDigits: 1 });
   const baseTxt = anaT(
-    'Sale de tus números de Instagram: tus anuncios anteriores llegaron a ≈ ' + porDolar.toLocaleString(loc) + ' personas por $1, y el ' + tasaPct + '% te escribió.',
-    'From your own Instagram numbers: your past ads reached ≈ ' + porDolar.toLocaleString(loc) + ' people per $1, and ' + tasaPct + '% wrote to you.');
+    'Sale de tus números de Instagram: tus anuncios anteriores llegaron a ≈ ' + porUnidad.toLocaleString(loc) + ' personas por ' + unidadTxt + ', y el ' + tasaPct + '% te escribió.',
+    'From your own Instagram numbers: your past ads reached ≈ ' + porUnidad.toLocaleString(loc) + ' people per ' + unidadTxt + ', and ' + tasaPct + '% wrote to you.');
   const lineaTxt = anaT(
-    'Con <b>$' + (Number(presupuestoUSD) || 20) + '</b> Posty estima <b>≈ ' + est.consultas.toLocaleString(loc) + ' consultas</b> en la semana, apuntando a gente cerca de tu local.',
-    'With <b>$' + (Number(presupuestoUSD) || 20) + '</b> Posty estimates <b>≈ ' + est.consultas.toLocaleString(loc) + ' inquiries</b> this week, targeting people near your business.');
+    'Con <b>$' + anaFmtMonto(Number(presupuestoUSD) || 20) + '</b> Posty estima <b>≈ ' + est.consultas.toLocaleString(loc) + ' consultas</b> en la semana, apuntando a gente cerca de tu local.',
+    'With <b>$' + anaFmtMonto(Number(presupuestoUSD) || 20) + '</b> Posty estimates <b>≈ ' + est.consultas.toLocaleString(loc) + ' inquiries</b> this week, targeting people near your business.');
   return `<div class="proj" id="impSimProj" style="font-size:14px;line-height:1.55;color:#0A1E33">${lineaTxt} <span style="display:inline-block;margin-top:6px;padding:2px 8px;background:#FEC14D;border-radius:999px;font-size:11.5px;font-weight:900;color:#0A1E33">${esc(anaT('ESTIMACIÓN', 'ESTIMATE'))}</span><span style="display:block;margin-top:6px;font-size:12.5px;font-weight:600;color:#33506B">${esc(baseTxt)} ${esc(anaT('No es una promesa: es lo que dicen tus datos.', 'Not a promise: it is what your data says.'))}</span></div>`;
 }
 
@@ -1870,16 +1951,20 @@ function anaSimProjHTML(presupuestoUSD) {
 function anaSimCardHTML() {
   const d = anaBilleteraDatos || {};
   const bil = d.billetera || {};
-  const selMonto = Number(d.selMonto) || 20;
+  const selMonto = Number(d.selMonto) || (anaEsMP() ? 10000 : 20);
   const dias = Number(bil.dias) || 7;
-  const notaConv = d.conversion_pendiente === true
+  // (LOTE RIEL-SUSCRIPCION v878) El deslizante se mueve en la moneda del
+  // riel; la nota de conversión es solo del flujo USD.
+  const railMPs = anaEsMP();
+  const simMin = railMPs ? 5000 : 20, simMax = railMPs ? 20000 : 100, simStep = railMPs ? 5000 : 10;
+  const notaConv = !railMPs && d.conversion_pendiente === true
     ? `<p style="margin:8px 0 0;text-align:center;font-size:12.5px;line-height:1.45;color:#5A4A6B">${esc(anaT('Queda armado por 7 días. Todavía no se puede gastar porque falta definir la conversión USD→ARS. No se gasta nada todavía.', 'Armed for 7 days. It can’t be spent yet because the USD→ARS conversion isn’t set. Nothing is spent yet.'))}</p>`
     : '';
   return `<div class="card" id="impSimCard">
     <h4 style="margin:0 0 4px">${esc(anaT('Probá el presupuesto antes de gastarlo', 'Try the budget before spending it'))}</h4>
     <p class="sub" style="margin:0 0 12px">${esc(anaT('Mové el control y Posty estima el resultado con los números de tu propia cuenta, no con promedios de internet.', 'Move the slider and Posty estimates the result with your own account’s numbers, not internet averages.'))}</p>
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><span style="font-size:13.5px;font-weight:800;color:#0A1E33">${esc(anaT('Presupuesto por 7 días', 'Budget for 7 days'))}</span><span id="impSimVal" style="font-size:15px;font-weight:900;color:#0A1E33">$${selMonto}</span></div>
-    <input type="range" id="impSimRange" min="20" max="100" step="10" value="${selMonto}" oninput="anaSimSliderInput(this)" onchange="anaSimSliderChange(this)" aria-label="${esc(anaT('Presupuesto por 7 días', 'Budget for 7 days'))}" style="width:100%;margin:8px 0 10px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><span style="font-size:13.5px;font-weight:800;color:#0A1E33">${esc(anaT('Presupuesto por 7 días', 'Budget for 7 days'))}</span><span id="impSimVal" style="font-size:15px;font-weight:900;color:#0A1E33">$${anaFmtMonto(selMonto)}</span></div>
+    <input type="range" id="impSimRange" min="${simMin}" max="${simMax}" step="${simStep}" value="${selMonto}" oninput="anaSimSliderInput(this)" onchange="anaSimSliderChange(this)" aria-label="${esc(anaT('Presupuesto por 7 días', 'Budget for 7 days'))}" style="width:100%;margin:8px 0 10px">
     ${anaSimProjHTML(selMonto)}
     <button type="button" id="impSimCta" onclick="anaBilleteraImpulsar(this)" style="width:100%;padding:14px;border:0;border-radius:14px;background:#FEC14D;color:#0A1E33;font-size:16px;font-weight:900;cursor:pointer;margin:12px 0 6px">${esc(anaSimCtaTxt(selMonto, dias))}</button>
     <p style="margin:0;text-align:center;font-size:12.5px;color:#5A4A6B">${esc(anaT('Posty elige el público y lo gestiona.', 'Posty picks the audience and runs it.'))}</p>
@@ -1890,9 +1975,9 @@ function anaSimCardHTML() {
 
 function anaSimSliderInput(el) {
   if (!el || !anaBilleteraDatos) return;
-  const v = Number(el.value) || 20;
+  const v = Number(el.value) || (anaEsMP() ? 10000 : 20);
   const val = document.getElementById('impSimVal');
-  if (val) val.textContent = '$' + v;
+  if (val) val.textContent = '$' + anaFmtMonto(v);
   const proj = document.getElementById('impSimProj');
   if (proj) proj.outerHTML = anaSimProjHTML(v);
   const cta = document.getElementById('impSimCta');
@@ -2034,8 +2119,9 @@ function anaAdsDirectoHTML() {
   const bil = d.billetera || {};
   const saldo = Math.floor(Number(bil.balance_cents || 0) / 100);
   const moneda = bil.currency || 'USD';
-  const selMonto = Number(d.selMonto) || 20;
+  const selMonto = Number(d.selMonto) || (anaEsMP() ? 10000 : 20);
   const dias = Number(bil.dias) || 7;
+  const railMPd = anaEsMP();
   const selPost = d.selPost || null;
   const mejor = d.mejor || null;
   const autoOn = !!d.auto_topup;
@@ -2046,26 +2132,30 @@ function anaAdsDirectoHTML() {
   const paso = (n, txt, listo) => `<span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#0A1E33"><span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${listo ? '#FEC14D' : '#E8F1F8'};color:#0A1E33;font-size:12px;font-weight:900">${listo ? '✓' : n}</span>${esc(txt)}</span>`;
   const pasos = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:1px solid #DCEFFF;border-radius:14px;padding:10px 14px;margin-bottom:14px">${paso(1, anaT('Posteo', 'Post'), !!selPost)}<span style="color:#B9CBD9">·</span>${paso(2, anaT('Monto', 'Amount'), true)}<span style="color:#B9CBD9">·</span>${paso(3, anaT('Impulsar', 'Boost'), false)}</div>`;
   // Billetera: saldo + UNA fila de montos + Cargar + automática.
-  const montos = `<div class="ana-ads-montos" style="display:flex;gap:8px;margin:10px 0">${[20, 50, 100].map((x) => `<button type="button" onclick="anaBilleteraElegirMonto(${x}, this)" style="flex:1;padding:10px 0;border:2px solid ${x === selMonto ? '#FEC14D' : '#DCEFFF'};border-radius:12px;background:${x === selMonto ? '#FFF8E1' : '#fff'};font-size:15px;font-weight:800;color:#0A1E33;cursor:pointer">$${x}</button>`).join('')}</div>`;
+  const montos = `<div class="ana-ads-montos" style="display:flex;gap:8px;margin:10px 0">${anaMontosImpulso().map((x) => `<button type="button" onclick="anaBilleteraElegirMonto(${x}, this)" style="flex:1;padding:10px 0;border:2px solid ${x === selMonto ? '#FEC14D' : '#DCEFFF'};border-radius:12px;background:${x === selMonto ? '#FFF8E1' : '#fff'};font-size:15px;font-weight:800;color:#0A1E33;cursor:pointer">$${anaFmtMonto(x)}</button>`).join('')}</div>`;
   const toggle = `<button type="button" data-auto="${autoOn ? 'on' : 'off'}" onclick="anaBilleteraAutoToggle(this)" aria-label="${esc(anaT('Carga automática', 'Auto top-up'))}" style="width:52px;height:30px;border-radius:999px;background:${autoOn ? '#1FA855' : '#CBD5E1'};border:0;position:relative;cursor:pointer;flex:0 0 auto;padding:0"><span style="position:absolute;top:3px;${autoOn ? 'right:3px' : 'left:3px'};width:24px;height:24px;border-radius:50%;background:#fff;display:block"></span></button>`;
-  const walletCard = `<div class="card">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
-      <span style="font-size:15px;font-weight:900;color:#0A1E33">${esc(anaT('Billetera', 'Wallet'))}</span>
-      <span style="font-size:22px;font-weight:900;color:#0A1E33">$${saldo} ${esc(moneda)}</span>
-    </div>
-    ${montos}
-    <button type="button" onclick="anaAdsCargar(this)" style="width:100%;padding:12px;border:0;border-radius:12px;background:#2793C8;color:#fff;font-size:15px;font-weight:900;cursor:pointer">↓ ${esc(anaT('Cargar $' + selMonto, 'Top up $' + selMonto))}</button>
-    <div class="ana-boostrec-msg" id="anaAdsCargarMsg"></div>
-    <p style="margin:8px 0 0;text-align:center;font-size:12px;color:#5A4A6B">${esc(anaT('La primera carga es en USD', 'Your first top-up is in USD'))}</p>
-    ${anaTarjetaBtnHTML(d)}
-    <div style="display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid #E8F1F8">
+  // (LOTE RIEL-SUSCRIPCION v878) La carga automática es off-session
+  // (Stripe): en MP no existe el cobro automático, así que la fila no
+  // se muestra. La primera carga en MP es en pesos, no en dólares.
+  const autoRow = railMPd ? '' : `<div style="display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid #E8F1F8">
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:800;color:#0A1E33">${esc(anaT('Carga automática', 'Auto top-up'))}</div>
         <div style="font-size:12.5px;color:#5A4A6B;line-height:1.4">${esc(anaT('cuando se acaba, carga $' + selMonto + ' desde tu banco', 'when it runs out, it tops up $' + selMonto + ' from your bank'))}</div>
         ${(!autoOn && !d.tiene_tarjeta) ? `<div style="font-size:12.5px;color:#5A4A6B;line-height:1.4;margin-top:2px">${esc(anaT('Necesitás una tarjeta guardada para prenderla.', 'You need a saved card to turn it on.'))}</div>` : ''}
       </div>
       ${toggle}
+    </div>`;
+  const walletCard = `<div class="card">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+      <span style="font-size:15px;font-weight:900;color:#0A1E33">${esc(anaT('Billetera', 'Wallet'))}</span>
+      <span style="font-size:22px;font-weight:900;color:#0A1E33">$${saldo.toLocaleString('es-AR')} ${esc(moneda)}</span>
     </div>
+    ${montos}
+    <button type="button" onclick="anaAdsCargar(this)" style="width:100%;padding:12px;border:0;border-radius:12px;background:#2793C8;color:#fff;font-size:15px;font-weight:900;cursor:pointer">↓ ${esc(anaT('Cargar $' + anaFmtMonto(selMonto), 'Top up $' + anaFmtMonto(selMonto)))}</button>
+    <div class="ana-boostrec-msg" id="anaAdsCargarMsg"></div>
+    <p style="margin:8px 0 0;text-align:center;font-size:12px;color:#5A4A6B">${esc(railMPd ? anaT('La carga es en pesos, con Mercado Pago', 'Top-ups are in pesos, with Mercado Pago') : anaT('La primera carga es en USD', 'Your first top-up is in USD'))}</p>
+    ${anaTarjetaBtnHTML(d)}
+    ${autoRow}
   </div>`;
   // Posteo destacado: el elegido (por defecto, el publicado más
   // reciente), con borde amarillo + tilde verde, y su chip (el que más

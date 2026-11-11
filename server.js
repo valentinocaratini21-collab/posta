@@ -10248,18 +10248,34 @@ app.get('/api/ads/config', requireAuth, (req, res) => {
   });
 });
 
-// ---------- ADS-BILLETERA (LOTE ADS-BILLETERA) ----------
-// El cliente CARGA PLATA ($20/$50/$100 USD, Stripe off-session con la
-// tarjeta guardada) y ELIGE el posteo; Posty hace TODO el resto (público,
-// presupuesto desde el saldo, creación del ad en Meta, gestión). Dos pasos
-// del cliente, nada más. La carta sigue recomendando qué posteo rindió
-// más, pero la elección es del cliente.
-// Moneda: la billetera nueva es USD. La vieja es ARS (MercadoPago): nunca
-// se mezclan — con saldo ARS > 0 la carga USD se rechaza con
-// 'saldo_ars_pendiente'; con saldo ARS = 0 la primera carga migra la
-// moneda a USD. Sin tasa USD→ARS → conversion_pendiente SIN gasto; sin
+// ---------- ADS-BILLETERA (LOTE ADS-BILLETERA + LOTE RIEL-SUSCRIPCION v878) ----------
+// El cliente CARGA PLATA y ELIGE el posteo; Posty hace TODO el resto
+// (público, presupuesto desde el saldo, creación del ad en Meta, gestión).
+// Dos pasos del cliente, nada más.
+// Moneda por riel de suscripción (v878): Stripe → USD ($20/$50/$100,
+// off-session con la tarjeta guardada); Mercado Pago → ARS (carga por
+// preferencia de checkout, presupuestos $5.000/$10.000/$20.000; el gasto
+// ya es pesos, sin conversión). La billetera tiene UNA moneda por usuario
+// y nunca se mezcla: con saldo > 0 en la otra moneda, la carga se rechaza
+// ('saldo_ars_pendiente' para la carga USD, 'saldo_usd_pendiente' para la
+// carga ARS); con saldo 0, la primera carga migra la moneda. Sin tasa
+// USD→ARS → conversion_pendiente SIN gasto (solo el flujo USD); sin
 // permiso ads_management → ads_sin_permiso SIN gasto; sin reembolso
 // automático (registro + revisión manual).
+
+// (LOTE RIEL-SUSCRIPCION v878) El riel de cobro de Impulsar es el de la
+// suscripción del usuario (server.js:4194, `billing_provider`): stripe si
+// hay `stripe_subscription_id`, mp si hay `mp_preapproval_id`, null si no
+// hay suscripción. El botón «Agregar tarjeta» (v877) queda como respaldo
+// para los que no tienen tarjeta en la suscripción o quieren cambiarla.
+function railCobro(uid) {
+  try {
+    const u = db.prepare('SELECT stripe_subscription_id, mp_preapproval_id FROM users WHERE id = ?').get(uid) || {};
+    if (u.stripe_subscription_id) return 'stripe';
+    if (u.mp_preapproval_id) return 'mp';
+  } catch (e) {}
+  return null;
+}
 
 // Estado de la billetera para el cliente: saldo, moneda, montos, el estado
 // del impulso ANTES del toque (ads_permiso / conversion_pendiente, igual
@@ -10300,6 +10316,15 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
     } catch (e) { tarjeta = null; }
     res.json({ ok: true, balance_cents: w.balance_cents, currency: w.currency,
       montos_usd: adsBilletera.MONTOS_CARGA_USD, dias: adsBilletera.DIAS_BILLETERA,
+      // (LOTE RIEL-SUSCRIPCION v878) El riel de cobro y los montos ARS
+      // (pesos enteros): la hoja y la billetera muestran la moneda del
+      // riel de la suscripción. Sin riel, el cliente ve el flujo USD
+      // de siempre (y la carga falla con sin_cliente_stripe → el botón
+      // «Agregar tarjeta» de v877).
+      billing_provider: railCobro(uid),
+      montos_ars: adsBilletera.MONTOS_CARGA_ARS,
+      presupuestos_ars: adsBilletera.MONTOS_IMPULSO_ARS,
+      min_topup_ars: adsBilletera.MONTOS_CARGA_ARS[0],
       boostHabilitado: destacadoSemana.boostHabilitado(process.env),
       ads_permiso: adsPermiso, conversion_pendiente: !destacadoSemana.conversionARSFromEnv(process.env),
       // (LOTE ADS-DIRECTO v758) Carga automática + si hay con qué cobrarla.
@@ -10310,13 +10335,64 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu billetera' }); }
 });
 
-// Cargar plata: $20/$50/$100 con la tarjeta guardada (Stripe off-session).
+// Cargar plata: $20/$50/$100 con la tarjeta guardada (Stripe off-session,
+// riel Stripe) o $10.000/$20.000/$50.000 por preferencia de Mercado Pago
+// (riel MP, LOTE RIEL-SUSCRIPCION v878: el cliente aprueba la carga en el
+// checkout de MP y el webhook acredita la billetera en ARS).
 // El cobro va primero; la acreditación es transaccional con el ledger.
 // Si el cobro sale pero la acreditación falla, vuelve 'cobro_sin_acreditar'
 // con el cobroId para revisión manual URGENTE (nunca silencio).
 app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
+    // (LOTE RIEL-SUSCRIPCION v878) La rama MP solo corre con riel MP y
+    // monto ARS: un cliente Stripe (o sin riel) que mande montoARS cae
+    // en la rama USD de siempre (400 monto_invalido / sin_cliente_stripe).
+    const montoARSReq = Number(req.body.montoARS);
+    if (railCobro(uid) === 'mp' && Number.isFinite(montoARSReq)) {
+      const montoARS = montoARSReq;
+      if (!adsBilletera.validarMontoARS(montoARS)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+      if (!mp.mpConfigured()) return res.status(503).json({ ok: false, motivo: 'mp_no_configurado' });
+      // El ref de la preferencia TIENE que ser adtopup_<uid>_...: el
+      // webhook solo acredita los pagos cuyo external_reference casa con
+      // ese formato. Un ref del cliente (p. ej. carga_auto_...) dejaría
+      // el pago sin acreditar.
+      const ref = `adtopup_${uid}_${Date.now().toString(36)}`;
+      const w0 = getAdWallet(uid);
+      const r = await adsBilletera.cargarBilleteraARS({
+        clienteId: uid, montoARS, monedaActual: w0.currency, saldoActual: w0.balance_cents, ref,
+        demo: !!((getSettings(uid) || {}).demo_mode),
+        buscarCarga: () => null, // la preferencia no se persiste: la
+        // idempotencia real es por payment id en el webhook.
+        crearPreferencia: async ({ montoARS: m }) => {
+          try {
+            // Migración de moneda USD→ARS solo con saldo 0 (nunca se
+            // mezcla ni se pierde plata: con saldo USD > 0 el módulo ya
+            // bloqueó). Espejo de la migración ARS→USD de la rama Stripe.
+            const w1 = getAdWallet(uid);
+            if (w1.currency === 'USD' && w1.balance_cents === 0) {
+              db.prepare(`UPDATE ad_wallets SET currency = 'ARS' WHERE user_id = ?`).run(uid);
+            }
+            const user = db.prepare('SELECT email, mp_payer_email FROM users WHERE id = ?').get(uid) || {};
+            const host = req.get('host') || '';
+            const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
+            const pref = await mp.createTopupPreference({
+              userId: uid, amountCents: m * 100, baseUrl,
+              payerEmail: user.mp_payer_email || user.email, ref, backPath: '#/app/ads',
+            });
+            return { ok: true, init_point: pref.init_point };
+          } catch (e) { return { ok: false, motivo: 'preferencia_fallida' }; }
+        },
+      });
+      if (!r.ok) {
+        const status = r.motivo === 'monto_invalido' ? 400 : r.motivo === 'mp_no_configurado' ? 503 : 409;
+        return res.status(status).json({ ok: false, motivo: r.motivo });
+      }
+      // La plata entra por el webhook cuando el cliente aprueba en MP:
+      // acá no hay saldo nuevo que devolver, solo el init_point.
+      const w = getAdWallet(uid);
+      return res.json({ ok: true, init_point: r.init_point, currency: 'ARS', montoARS: r.montoARS, balance_cents: w.balance_cents, ref: r.ref });
+    }
     const montoUSD = Number(req.body.montoUSD);
     if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
     const ref = String(req.body.ref || '').slice(0, 80) || `carga_${uid}_${Date.now().toString(36)}`;
@@ -10684,8 +10760,16 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
     if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
     const posteoIdReq = Number(req.body.posteoId) || 0;
     const igMediaIdReq = String(req.body.igMediaId || '').trim();
+    // (LOTE RIEL-SUSCRIPCION v878) La moneda del impulso la pide el
+    // cliente: montoARS → ARS (riel MP), montoUSD → USD (riel Stripe).
+    // Si trae montoARS, es ARS aunque la billetera sea USD (el saldo se
+    // mira en ARS y da saldo_insuficiente); si trae montoUSD, es USD
+    // aunque la billetera sea ARS (el gate saldo_ars_pendiente frena).
+    const montoARSReq = Number(req.body.montoARS);
+    const esARS = Number.isFinite(montoARSReq);
+    const montoARS = esARS ? montoARSReq : 0;
     const montoUSD = Number(req.body.montoUSD);
-    if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    if (esARS ? !adsBilletera.validarPresupuestoARS(montoARS) : !adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
     if (!posteoIdReq && !igMediaIdReq) return res.status(400).json({ ok: false, motivo: 'sin_posteo' });
     // (v846) Impulsar un reciente de IG sin fila local: se adopta (se
     // verifica que el medio sea del usuario y se crea la fila) y el
@@ -10721,19 +10805,25 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
       return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
     }
     const w = getAdWallet(uid);
-    if (w.currency === 'ARS' && w.balance_cents > 0) {
+    // (LOTE RIEL-SUSCRIPCION v878) El gate 'saldo_ars_pendiente' es del
+    // flujo USD: una billetera ARS con saldo no se puede gastar en
+    // dólares. En el flujo ARS esa misma billetera ES la que se gasta
+    // (el gasto ya es pesos, sin conversión), así que el gate no corre.
+    if (!esARS && w.currency === 'ARS' && w.balance_cents > 0) {
       return res.status(409).json({ ok: false, motivo: 'saldo_ars_pendiente' });
     }
     const saldoCentsUSD = w.currency === 'USD' ? w.balance_cents : 0;
+    const saldoCentsARS = w.currency === 'ARS' ? w.balance_cents : 0;
     const r = await adsBilletera.impulsarConSaldo({
-      clienteId: uid, posteoId, montoUSD, zona: adCountry(uid), env: process.env,
+      clienteId: uid, posteoId, ...(esARS ? { montoARS, moneda: 'ARS' } : { montoUSD }), zona: adCountry(uid), env: process.env,
       adsConfigurado: true, paginaAutorizada: true, permisoAds: true,
       conversionARS: destacadoSemana.conversionARSFromEnv(process.env),
-      saldoCentsUSD, fecha: new Date().toISOString().slice(0, 10),
+      saldoCentsUSD, saldoCentsARS, splitARS: adSplit,
+      fecha: new Date().toISOString().slice(0, 10),
       demo: !!((getSettings(uid) || {}).demo_mode),
       buscarDebito: (ref) => {
         try {
-          return db.prepare(`SELECT meta_campaign_id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND budget_cents = ? AND currency = 'USD' AND status IN ('active','pending') AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid, posteoId, montoUSD * 100) || null;
+          return db.prepare(`SELECT meta_campaign_id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND budget_cents = ? AND currency = ? AND status IN ('active','pending') AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid, posteoId, (esARS ? montoARS : montoUSD) * 100, esARS ? 'ARS' : 'USD') || null;
         } catch (e) { return null; }
       },
       crearAnuncio: async (a) => {
@@ -10746,24 +10836,28 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
       },
       debitar: async (d) => {
         try {
-          const after = adWalletMove(uid, -d.montoUSD * 100, 'boost_usd', d.ref, `Impulso posteo ${d.posteoId} $${d.montoUSD} x 7 días`);
+          const cents = esARS ? d.montoARS * 100 : d.montoUSD * 100;
+          const after = adWalletMove(uid, -cents, esARS ? 'boost_ars' : 'boost_usd', d.ref, esARS ? `Impulso posteo ${d.posteoId} ${fmtARS(d.montoARS * 100)} x 7 días` : `Impulso posteo ${d.posteoId} $${d.montoUSD} x 7 días`);
           return { ok: true, saldoNuevo: after };
         } catch (e) { return { ok: false, motivo: 'saldo_insuficiente' }; }
       },
       registrar: async (rec) => {
+        const monedaRec = esARS ? 'ARS' : 'USD';
+        const budgetRec = esARS ? rec.montoARS * 100 : rec.montoUSD * 100;
+        const feeRec = esARS ? (Number(rec.feeCents) || 0) : 0;
         if (rec.tipo === 'exito') {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
-            VALUES (?,?,?,?,?,?,'USD','active',?,?,?,'engagement',7)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, rec.montoUSD * 100, 0, rec.spendCents, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
-          try { track(uid, 'ad_boost_usd', String(rec.montoUSD * 100)); } catch (e) {}
+            VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
+          try { track(uid, esARS ? 'ad_boost_ars' : 'ad_boost_usd', String(budgetRec)); } catch (e) {}
         } else if (rec.tipo === 'debito_fallido') {
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error)
-            VALUES (?,?,?,?,?,?,'USD','error',?,?,?,'engagement',7,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, rec.montoUSD * 100, 0, rec.spendCents, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`);
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`);
         }
       },
     });
@@ -10772,7 +10866,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
       return res.status(status).json({ ok: false, motivo: r.motivo, ...(r.anuncioId ? { anuncioId: r.anuncioId } : {}) });
     }
     const w2 = getAdWallet(uid);
-    res.json({ ok: true, anuncioId: r.anuncioId, posteoId: r.posteoId, montoUSD: r.montoUSD, dias: r.dias, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w2.balance_cents, currency: 'USD', ...(r.ya_creado ? { ya_creado: true } : {}) });
+    res.json({ ok: true, anuncioId: r.anuncioId, posteoId: r.posteoId, ...(esARS ? { montoARS: r.montoARS } : { montoUSD: r.montoUSD }), dias: r.dias, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w2.balance_cents, currency: esARS ? 'ARS' : 'USD', ...(r.ya_creado ? { ya_creado: true } : {}) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo impulsar con saldo' }); }
 });
 
@@ -10782,6 +10876,17 @@ app.post('/api/ads/topup', requireAuth, async (req, res) => {
   if (!mp.mpConfigured()) return res.status(503).json({ error: 'Pagos no configurados todavía. Escribinos y lo habilitamos.' });
   if (!(cents >= AD_MIN_TOPUP_CENTS)) {
     return res.status(400).json({ error: `La carga mínima es de ${fmtARS(AD_MIN_TOPUP_CENTS)}` });
+  }
+  // (LOTE RIEL-SUSCRIPCION v878) Espejo del gate 'saldo_ars_pendiente'
+  // de la carga USD: con saldo USD > 0 no se crea una preferencia en
+  // pesos (nunca se mezclan); con saldo USD = 0 la billetera migra a
+  // ARS antes de crearla, igual que en /billetera/cargar (rama MP).
+  const wTop = getAdWallet(req.session.userId);
+  if (wTop.currency === 'USD' && wTop.balance_cents > 0) {
+    return res.status(400).json({ ok: false, motivo: 'saldo_usd_pendiente', error: 'Todavía tenés saldo en dólares en la billetera. Gastalo antes de cargar en pesos.' });
+  }
+  if (wTop.currency === 'USD' && wTop.balance_cents === 0) {
+    db.prepare(`UPDATE ad_wallets SET currency = 'ARS' WHERE user_id = ?`).run(req.session.userId);
   }
   const user = db.prepare('SELECT email, mp_payer_email FROM users WHERE id = ?').get(req.session.userId) || {};
   const host = req.get('host') || '';
@@ -10815,6 +10920,18 @@ app.post('/api/ads/webhook', async (req, res) => {
     if (dup) return res.status(200).json({ ok: true, deduped: true });
     const cents = Math.round(Number(pay.transaction_amount || 0) * 100);
     if (!(cents > 0)) return res.status(200).json({ ok: true, ignored: true });
+    // (LOTE RIEL-SUSCRIPCION v878) El pago es en ARS: si la billetera
+    // quedó en USD con saldo 0 (p. ej. preferencia creada por un camino
+    // viejo), migra a ARS antes de acreditar. Con saldo USD > 0 el
+    // crédito igual entra (el pago ya se hizo y no se pierde); el gate
+    // de las dos creaciones de preferencia impide llegar acá por el
+    // flujo normal — si pasa, queda el aviso en el log para revisarlo.
+    const wHook = getAdWallet(userId);
+    if (wHook.currency === 'USD' && wHook.balance_cents === 0) {
+      db.prepare(`UPDATE ad_wallets SET currency = 'ARS' WHERE user_id = ?`).run(userId);
+    } else if (wHook.currency === 'USD' && wHook.balance_cents > 0) {
+      console.log(`[posta] ⚠️ Crédito MP en billetera USD con saldo: usuario ${userId}, ${fmtARS(cents)} (MP ${pay.id}) — revisar mezcla de monedas`);
+    }
     const after = adWalletMove(userId, cents, 'topup', String(pay.id), 'Carga de crédito publicitario');
     // El 10% se reconoce como ganancia de Posta EN EL MOMENTO DE LA CARGA (no espera a que usen el crédito).
     // Es solo contabilidad interna: el cliente sigue viendo sus $10.000 completos en la billetera.
@@ -34756,7 +34873,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v884';
+const BUILD_ID = '20261105-v885';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

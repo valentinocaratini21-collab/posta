@@ -1,9 +1,12 @@
-// ads-billetera.js — Billetera de ads en USD (LOTE ADS-BILLETERA).
+// ads-billetera.js — Billetera de ads por moneda (LOTE ADS-BILLETERA +
+// LOTE RIEL-SUSCRIPCION v878).
 //
-// El cliente CARGA PLATA ($20/$50/$100, Stripe off-session con la tarjeta
-// guardada) y ELIGE el posteo; Posty hace TODO el resto (público,
-// presupuesto desde el saldo, creación del ad en Meta, gestión). Dos pasos
-// del cliente, nada más.
+// El cliente CARGA PLATA y ELIGE el posteo; Posty hace TODO el resto
+// (público, presupuesto desde el saldo, creación del ad en Meta,
+// gestión). Dos pasos del cliente, nada más. La moneda sigue al riel
+// de la suscripción (v878): Stripe → USD ($20/$50/$100, Stripe
+// off-session con la tarjeta guardada); Mercado Pago → ARS (carga por
+// preferencia de checkout, presupuestos $5.000/$10.000/$20.000).
 //
 // Este módulo es puro + inyectado: NO importa Stripe, Meta ni server.js.
 // El cobro, la acreditación, la creación del ad y el débito llegan como
@@ -11,11 +14,12 @@
 // real ni la API de Meta.
 //
 // REGLAS DURAS (no se negocian):
-// - La billetera es USD. La billetera vieja es ARS (MercadoPago): NUNCA se
-//   mezclan. Si la billetera tiene saldo ARS > 0, la carga USD se rechaza
-//   con 'saldo_ars_pendiente' (ese saldo se usa por el flujo viejo o se
-//   habla con el equipo); con saldo ARS = 0, la primera carga USD migra la
-//   moneda a USD (el endpoint lo hace; acá solo se verifica).
+// - La billetera tiene UNA moneda por usuario: USD (riel Stripe) o ARS
+//   (riel Mercado Pago). NUNCA se mezclan. Cargar en una moneda con
+//   saldo > 0 en la otra se rechaza ('saldo_ars_pendiente' para la carga
+//   USD, 'saldo_usd_pendiente' para la carga ARS); con saldo 0, la
+//   primera carga migra la moneda (el endpoint lo hace; acá solo se
+//   verifica).
 // - El DÉBITO ocurre SOLO cuando el ad se creó bien. Si la creación falla,
 //   NO se debita nada (fail-closed). El orden es: gates → crear ad →
 //   debitar → registrar. Si el débito falla DESPUÉS de crear el ad (carrera
@@ -24,16 +28,19 @@
 // - Permiso ads_management verificado ANTES de gastar (gate estricto, igual
 //   que impulsar-unclic): sin verificar = bloqueado, nunca se asume.
 // - Sin tasa USD→ARS (IMPULSO_TASA_ARS sin definir) → 'conversion_pendiente'
-//   SIN gasto: la tasa la define Valentino, acá nunca se inventa.
+//   SIN gasto: la tasa la define Valentino, acá nunca se inventa. El
+//   impulso ARS NO necesita conversión (el gasto ya es pesos) y por eso
+//   no pasa por ese gate.
 // - Sin reembolso automático: todo fallo con plata de por medio queda
 //   registrado para revisión manual.
 // - Un solo débito por impulso: el reintento (mismo cliente + posteo +
 //   monto + mismo día) devuelve el impulso ya hecho, sin segundo débito ni
 //   segundo ad. La comprobación va ANTES del chequeo de saldo: si no, el
 //   reintento fallaría con saldo_insuficiente porque el saldo ya bajó.
-// - Montos fijos $20/$50/$100 (los existentes), 7 días (la duración
-//   existente). Sin fee: el monto pasa tal cual a la pauta (spec aprobado
-//   del flujo USD; el fee del 10% es del flujo viejo ARS y no aplica acá).
+// - Montos fijos USD $20/$50/$100 (los existentes) y ARS $5.000/$10.000/
+//   $20.000 (los de config/ads.js, no inventados), 7 días (la duración
+//   existente). Sin fee en USD (spec aprobado del flujo USD); fee del 10%
+//   en ARS (adSplit, el fee del flujo viejo ARS).
 'use strict';
 
 // - Demo: si la cuenta está en modo demo (settings.demo_mode = 1, sin IG
@@ -41,6 +48,15 @@
 //   servidor pasa `demo` desde getSettings; el módulo lo respeta primero.
 const MONTOS_CARGA_USD = [20, 50, 100];
 const DIAS_BILLETERA = 7;
+
+// (LOTE RIEL-SUSCRIPCION v878) La moneda sigue al riel de la suscripción:
+// Stripe → USD ($20/$50/$100, off-session); Mercado Pago → ARS. Los
+// montos ARS son los del flujo viejo (config/ads.js, en centavos):
+// carga $10.000/$20.000/$50.000, presupuestos $5.000/$10.000/$20.000.
+// Acá van en pesos enteros (el cliente y el servidor hablan en pesos;
+// a centavos se pasa multiplicando por 100 en el borde).
+const MONTOS_CARGA_ARS = [10000, 20000, 50000];
+const MONTOS_IMPULSO_ARS = [5000, 10000, 20000];
 
 // (LOTE ADS-DIRECTO v759) Corte de caption por palabra, nunca a mitad:
 // si el corte cae justo en un límite de palabra se queda ahí; si no, se
@@ -61,12 +77,29 @@ function validarMontoUSD(monto) {
   return typeof monto === 'number' && Number.isInteger(monto) && MONTOS_CARGA_USD.includes(monto);
 }
 
+// (LOTE RIEL-SUSCRIPCION v878) Montos ARS en pesos enteros.
+function validarMontoARS(monto) {
+  return typeof monto === 'number' && Number.isInteger(monto) && MONTOS_CARGA_ARS.includes(monto);
+}
+function validarPresupuestoARS(monto) {
+  return typeof monto === 'number' && Number.isInteger(monto) && MONTOS_IMPULSO_ARS.includes(monto);
+}
+
 // Ref estable del débito de un impulso: mismo cliente + posteo + monto +
 // mismo día = mismo impulso (reintento seguro). La fecha viene en
 // 'YYYY-MM-DD'; si no se pasa, se usa el día actual (UTC).
 function refDebitoBoost({ clienteId, posteoId, montoUSD, fecha }) {
   const f = fecha || new Date().toISOString().slice(0, 10);
   return `boost_usd:u${clienteId}:p${posteoId}:${montoUSD}:${f}`;
+}
+
+// (LOTE RIEL-SUSCRIPCION v878) Ref del débito ARS: espacio de nombres
+// propio (boost_ars:), distinto de boost_usd: — un impulso ARS nunca
+// colisiona con uno USD del mismo día, y el reintento del mismo impulso
+// ARS lo encuentra.
+function refDebitoBoostARS({ clienteId, posteoId, montoARS, fecha }) {
+  const f = fecha || new Date().toISOString().slice(0, 10);
+  return `boost_ars:u${clienteId}:p${posteoId}:${montoARS}:${f}`;
 }
 
 // Cargar plata a la billetera.
@@ -108,36 +141,93 @@ async function cargarBilletera(input) {
   return { ok: true, cobroId: cobro.cobroId || null, montoUSD, saldoNuevo: (acr.saldoNuevo != null ? acr.saldoNuevo : null) };
 }
 
+// Cargar plata en ARS (riel Mercado Pago, LOTE RIEL-SUSCRIPCION v878).
+// NO cobra off-session: el preapproval de MP no permite un cargo extra
+// de una vez (la API de Suscripciones solo crea/lee/actualiza el
+// preapproval y sus cuotas; no hay endpoint de cobro único — ver
+// STATUS.md §«La incógnita de MP»). La carga se hace por preferencia de
+// checkout: `crearPreferencia` crea la preferencia y devuelve
+// { ok, init_point }; el cliente la aprueba en el checkout de MP y el
+// webhook acredita la billetera en ARS.
+//   cargarBilleteraARS({ clienteId, montoARS, monedaActual, saldoActual,
+//     ref, buscarCarga, crearPreferencia, demo })
+// → { ok: true, init_point, montoARS, ref [, ya_creado] }
+// → { ok: false, motivo }.
+// Motivos: demo (la cuenta está en modo demo: NADA se crea) ·
+// monto_invalido · saldo_usd_pendiente (la billetera tiene saldo USD > 0:
+// nunca se mezcla; con saldo USD = 0 la primera carga ARS migra la
+// moneda a ARS, espejo de la migración inversa) · preferencia_fallida ·
+// o el motivo que devuelva `crearPreferencia`.
+// `buscarCarga(ref)` devuelve la preferencia ya creada (o null): el
+// reintento con el mismo ref no crea una segunda preferencia.
+async function cargarBilleteraARS(input) {
+  const { clienteId, montoARS, monedaActual, saldoActual, ref, buscarCarga, crearPreferencia, demo } = input || {};
+  const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
+  if (demo) return no('demo');
+  if (!validarMontoARS(montoARS)) return no('monto_invalido');
+  if (!clienteId) return no('sin_cliente');
+  if (monedaActual === 'USD' && Number(saldoActual || 0) > 0) return no('saldo_usd_pendiente');
+  if (typeof buscarCarga === 'function') {
+    let existente = null;
+    try { existente = await buscarCarga(ref); } catch (e) { existente = null; }
+    if (existente) {
+      return { ok: true, ya_creado: true, init_point: existente.init_point || existente.initPoint || null, montoARS, ref };
+    }
+  }
+  if (typeof crearPreferencia !== 'function') return no('sin_proveedores');
+  let pref = null;
+  try { pref = await crearPreferencia({ clienteId, montoARS, ref }); } catch (e) { pref = { ok: false, motivo: 'preferencia_fallida' }; }
+  if (!pref || !pref.ok) return no((pref && pref.motivo) || 'preferencia_fallida');
+  if (!pref.init_point) return no('preferencia_fallida');
+  return { ok: true, init_point: pref.init_point, montoARS, ref };
+}
+
 // Impulsar con saldo: el cliente ya cargó, solo elige posteo + monto.
-//   impulsarConSaldo({ clienteId, posteoId, montoUSD, zona, env,
-//     adsConfigurado, paginaAutorizada, permisoAds, conversionARS,
-//     saldoCentsUSD, fecha, buscarDebito, crearAnuncio, debitar, registrar,
-//     demo })
-// → { ok: true, anuncioId, posteoId, montoUSD, dias, saldoNuevo [, ya_creado] }
+//   impulsarConSaldo({ clienteId, posteoId, montoUSD | montoARS, moneda,
+//     zona, env, adsConfigurado, paginaAutorizada, permisoAds,
+//     conversionARS, saldoCentsUSD | saldoCentsARS, splitARS,
+//     fecha, buscarDebito, crearAnuncio, debitar, registrar, demo })
+// → { ok: true, anuncioId, posteoId, montoUSD | montoARS, dias,
+//     saldoNuevo [, ya_creado] }
 // → { ok: false, motivo [, anuncioId] }.
+// `moneda`: 'USD' (riel Stripe, el de siempre) o 'ARS' (riel Mercado
+// Pago, v878). Sin `moneda` se asume USD: los llamados viejos no cambian.
+// En ARS: el monto es `montoARS` en pesos enteros ($5.000/$10.000/
+// $20.000), el gasto es `splitARS(montoARS * 100).spend_cents` (fee 10%,
+// sin conversión — el gasto ya es pesos) y el saldo se mira en
+// `saldoCentsARS`. En USD: como antes (`montoUSD`, `conversionARS`,
+// `saldoCentsUSD`, sin fee).
 // Motivos: demo (la cuenta está en modo demo: NADA se crea ni se debita) ·
 // boost_deshabilitado · monto_invalido · sin_posteo · sin_zona ·
 // ads_no_configurado · sin_autorizacion_publicitaria · ads_sin_permiso ·
-// conversion_pendiente · saldo_insuficiente · anuncio_fallido (SIN débito) ·
-// debito_fallido (el ad SÍ se creó: revisión manual con anuncioId).
+// conversion_pendiente (solo USD: sin tasa no hay gasto) ·
+// saldo_insuficiente · anuncio_fallido (SIN débito) ·
+// debito_fallido (el ad SÍ se creó: revisión manual con anuncioId) ·
+// sin_proveedores (falta el split ARS o el creador del anuncio).
 // `conversionARS` es la función de la tasa (o null): sin ella no hay gasto.
 // `buscarDebito(ref)` devuelve el impulso ya hecho (o null).
-// `crearAnuncio({ posteoId, montoUSD, spendCents, zona, objetivo })`
+// `crearAnuncio({ posteoId, montoUSD | montoARS, spendCents, zona, objetivo })`
 // devuelve { ok, anuncioId, campaignId, adsetId, adId }.
-// `debitar({ clienteId, montoUSD, ref, campaignId })` devuelve
+// `debitar({ clienteId, montoUSD | montoARS, ref, campaignId })` devuelve
 // { ok, saldoNuevo }. `registrar` recibe { tipo: 'exito' |
-// 'debito_fallido', ... }.
+// 'debito_fallido', ..., feeCents }.
 async function impulsarConSaldo(input) {
   const {
-    clienteId, posteoId, montoUSD, zona, env,
+    clienteId, posteoId, montoUSD, montoARS, moneda, zona, env,
     adsConfigurado, paginaAutorizada, permisoAds, conversionARS,
-    saldoCentsUSD, fecha, buscarDebito, crearAnuncio, debitar, registrar, demo,
+    saldoCentsUSD, saldoCentsARS, splitARS,
+    fecha, buscarDebito, crearAnuncio, debitar, registrar, demo,
   } = input || {};
+  // (LOTE RIEL-SUSCRIPCION v878) La moneda del impulso es la de la
+  // billetera: 'USD' (riel Stripe, como antes) o 'ARS' (riel Mercado
+  // Pago). Sin `moneda` se asume USD: los llamados viejos no cambian.
+  const esARS = moneda === 'ARS';
+  const monto = esARS ? montoARS : montoUSD;
   const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
   if (demo) return no('demo');
   const { boostHabilitado } = require('./destacado-semana');
   if (!boostHabilitado(env)) return no('boost_deshabilitado');
-  if (!validarMontoUSD(montoUSD)) return no('monto_invalido');
+  if (esARS ? !validarPresupuestoARS(montoARS) : !validarMontoUSD(montoUSD)) return no('monto_invalido');
   if (!posteoId) return no('sin_posteo');
   if (typeof zona !== 'string' || !zona.trim()) return no('sin_zona');
   if (!adsConfigurado) return no('ads_no_configurado');
@@ -145,15 +235,32 @@ async function impulsarConSaldo(input) {
   // Permiso ads_management: gate estricto. Sin verificar = bloqueado.
   if (permisoAds !== true) return no('ads_sin_permiso');
   if (!clienteId) return no('sin_cliente');
-  // Conversión USD→ARS sin definir: fail-closed ANTES de gastar.
+  // Gasto en Meta (centavos de la moneda de la pauta):
+  // - USD: la tasa USD→ARS la define Valentino; sin ella, fail-closed
+  //   ANTES de gastar ('conversion_pendiente').
+  // - ARS: el gasto ya es pesos — NO hay conversión que definir. El fee
+  //   de gestión del 10% es del flujo ARS (adSplit, inyectado como
+  //   `splitARS`); el flujo USD no lleva fee (spec aprobado del flujo USD).
   let spendCents = 0;
-  if (typeof conversionARS === 'function') {
-    try { spendCents = conversionARS(montoUSD); } catch (e) { spendCents = 0; }
+  let feeCents = 0;
+  if (esARS) {
+    if (typeof splitARS !== 'function') return no('sin_proveedores');
+    let sp = null;
+    try { sp = splitARS(montoARS * 100); } catch (e) { sp = null; }
+    spendCents = Number(sp && sp.spend_cents);
+    feeCents = Number(sp && sp.fee_cents) || 0;
+    if (!(Number.isFinite(spendCents) && spendCents > 0)) return no('sin_proveedores');
+  } else {
+    if (typeof conversionARS === 'function') {
+      try { spendCents = conversionARS(montoUSD); } catch (e) { spendCents = 0; }
+    }
+    if (!(typeof spendCents === 'number' && Number.isFinite(spendCents) && spendCents > 0)) {
+      return no('conversion_pendiente');
+    }
   }
-  if (!(typeof spendCents === 'number' && Number.isFinite(spendCents) && spendCents > 0)) {
-    return no('conversion_pendiente');
-  }
-  const ref = refDebitoBoost({ clienteId, posteoId, montoUSD, fecha });
+  const ref = esARS
+    ? refDebitoBoostARS({ clienteId, posteoId, montoARS, fecha })
+    : refDebitoBoost({ clienteId, posteoId, montoUSD, fecha });
   // Reintento: ANTES del chequeo de saldo (el saldo ya bajó con el primer
   // intento; si el saldo se mirara primero, el reintento diría
   // saldo_insuficiente y el cliente pagaría dos veces por el mismo ad).
@@ -161,10 +268,11 @@ async function impulsarConSaldo(input) {
     let existente = null;
     try { existente = await buscarDebito(ref); } catch (e) { existente = null; }
     if (existente) {
-      return { ok: true, ya_creado: true, anuncioId: existente.anuncioId || existente.meta_campaign_id || null, posteoId, montoUSD, dias: DIAS_BILLETERA, saldoNuevo: null, ref };
+      return { ok: true, ya_creado: true, anuncioId: existente.anuncioId || existente.meta_campaign_id || null, posteoId, ...(esARS ? { montoARS } : { montoUSD }), dias: DIAS_BILLETERA, saldoNuevo: null, ref };
     }
   }
-  if (!(typeof saldoCentsUSD === 'number' && saldoCentsUSD >= montoUSD * 100)) {
+  const saldoCents = esARS ? saldoCentsARS : saldoCentsUSD;
+  if (!(typeof saldoCents === 'number' && saldoCents >= monto * 100)) {
     return no('saldo_insuficiente');
   }
   if (typeof crearAnuncio !== 'function' || typeof debitar !== 'function') {
@@ -173,7 +281,7 @@ async function impulsarConSaldo(input) {
   let anuncio = null;
   try {
     anuncio = await crearAnuncio({
-      posteoId, montoUSD, spendCents,
+      posteoId, ...(esARS ? { montoARS } : { montoUSD }), spendCents,
       zona: zona.trim(), objetivo: 'visitas_perfil_y_mensajes',
     });
   } catch (e) {
@@ -186,13 +294,13 @@ async function impulsarConSaldo(input) {
   // El ad SÍ se creó: recién ahora se debita el saldo.
   let deb = null;
   try {
-    deb = await debitar({ clienteId, montoUSD, ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null });
+    deb = await debitar({ clienteId, ...(esARS ? { montoARS } : { montoUSD }), ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null });
   } catch (e) { deb = { ok: false, motivo: 'saldo_insuficiente' }; }
   if (!deb || !deb.ok) {
     if (typeof registrar === 'function') {
       try {
         await registrar({
-          tipo: 'debito_fallido', posteoId, montoUSD, ref,
+          tipo: 'debito_fallido', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
           anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
           adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
         });
@@ -203,14 +311,14 @@ async function impulsarConSaldo(input) {
   if (typeof registrar === 'function') {
     try {
       await registrar({
-        tipo: 'exito', posteoId, montoUSD, ref,
+        tipo: 'exito', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
         anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
         adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
       });
     } catch (e) { /* el registro nunca tapa un éxito real */ }
   }
   return {
-    ok: true, anuncioId: anuncio.anuncioId || null, posteoId, montoUSD,
+    ok: true, anuncioId: anuncio.anuncioId || null, posteoId, ...(esARS ? { montoARS } : { montoUSD }),
     dias: DIAS_BILLETERA, saldoNuevo: (deb.saldoNuevo != null ? deb.saldoNuevo : null), ref,
   };
 }
@@ -303,11 +411,17 @@ function setAutoTopup(db, userId, on) {
 
 module.exports = {
   MONTOS_CARGA_USD,
+  MONTOS_CARGA_ARS,
+  MONTOS_IMPULSO_ARS,
   DIAS_BILLETERA,
   validarMontoUSD,
+  validarMontoARS,
+  validarPresupuestoARS,
   cortarCaption,
   refDebitoBoost,
+  refDebitoBoostARS,
   cargarBilletera,
+  cargarBilleteraARS,
   impulsarConSaldo,
   elegiblesParaAds,
   feedParaAds,
