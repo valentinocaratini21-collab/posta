@@ -5614,6 +5614,10 @@ function resetView() {
 /* ---------- Shell ---------- */
 let IDEAS = [];
 let CHAT = [];       // [{role:'user'|'assistant', text}]
+// (LOTE CHAT-MEJORAS) Meta por mensaje del chat, por id: {reaction, pinned, edited}.
+// La carga el servidor en /api/ideas/chat; la leen chatMsgHtml (vía pzChatMsgFull)
+// y la tira de fijados. El borrado suave nunca llega acá (el servidor filtra).
+let CHAT_META = {};
 let CHAT_NEXT_WEEK = null; // (v436) {n, total} de borradores ya armados de la semana que viene: lo cargan Inicio/Agenda (schedWeekCounts) y el saludo del chat lo hereda como línea — antes vivía en la línea de cupo de la Agenda.
 let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo, caption?, photo_index?, colors?}
 let CUSTOM_PAL = null; // paleta pedida por el cliente en el chat ("en rojo") — manda sobre la marca
@@ -9349,9 +9353,13 @@ async function chatLoadHistory() {
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
         .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0, cap: (m.caption_post_id && String(m.caption_text || '').trim()) ? { post_id: Number(m.caption_post_id), text: String(m.caption_text), estado: String(m.caption_estado || ''), msg_id: Number(m.id) || 0 } : null }))
         .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
+      // (LOTE CHAT-MEJORAS) Meta por mensaje (reacción/fijado/editado).
+      CHAT_META = {};
+      (r.messages || []).forEach(m => { if (m && m.id) CHAT_META[Number(m.id)] = { reaction: m.reaction || '', pinned: Number(m.pinned) || 0, edited: Number(m.edited) || 0 }; });
       const box = $('#chatBox');
       if (box) {
-        box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap)).join('');
+        box.innerHTML = CHAT.map(m => pzChatMsgFull(m)).join('');
+        try { pzChatRenderPinned(); } catch (e) {}
         // (v846 · ÚLTIMO ABAJO) El re-render no se come la burbuja de voz
         // optimista en vuelo: si sigue enviando, vuelve en su lugar por ts.
         try {
@@ -9823,6 +9831,308 @@ function chatNextWeekHTML() {
   const more = w.n > w.total ? (en ? ` · and <b>${w.n - w.total} more</b> on hold` : ` · y <b>${w.n - w.total} más</b> en espera`) : '';
   return `<div class="chat-msg ai">${en ? `✨ <b>${shown} of ${w.total}</b> posts for next week are already lined up` : `✨ ya están armados <b>${shown} de ${w.total}</b> de la semana que viene`}${more}</div>`;
 }
+// ---------- LOTE CHAT-MEJORAS · reacciones / buscar / fijar / editar-borrar / galería ----------
+// Gestos: SOLO mantener pulsado (long-press) y clic derecho abren el menú del
+// mensaje. NO hay swipe ni doble toque acá: el deslizar-para-responder es del
+// otro lote (video) y vive en horizontal; el mantener no pelea con el scroll
+// (el temporizador se cancela con touchmove) ni con el swipe (el swipe mueve
+// el dedo al instante y cancela el temporizador).
+function pzChatMetaHtml(id) {
+  const meta = (id && CHAT_META[id]) || null;
+  if (!meta) return '';
+  let out = '';
+  if (meta.reaction) out += `<span class="pz-chat-react" data-react="${esc(String(id))}" title="${gzT('Tocá para sacarla', 'Tap to remove')}">${esc(meta.reaction)}</span>`;
+  if (meta.edited) out += `<span class="pz-chat-edited">${gzT('editado', 'edited')}</span>`;
+  return out ? `<div class="pz-chat-meta">${out}</div>` : '';
+}
+// chatMsgHtml + la meta del mensaje (reacción + «editado») antes del </div> final.
+function pzChatMsgFull(m) {
+  const h = chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap); // (re-base v905: reenvía reply+cap del lote v891)
+  const deco = pzChatMetaHtml(m.id);
+  if (!deco || !h) return h;
+  return h.replace(/<\/div>\s*$/, deco + '</div>');
+}
+function pzChatFechaCorta(ts) {
+  try {
+    const d = new Date(Number(ts) || 0);
+    if (!d.getTime()) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  } catch (e) { return ''; }
+}
+function pzChatBubbleById(id) {
+  const box = document.getElementById('chatBox');
+  return box ? box.querySelector('[data-msg-id="' + String(id) + '"]') : null;
+}
+function pzChatRerenderBubble(id) {
+  const m = CHAT.find(x => x && Number(x.id) === Number(id));
+  const el = pzChatBubbleById(id);
+  if (!m || !el) return;
+  try { el.outerHTML = pzChatMsgFull(m); } catch (e) {}
+}
+// Tira de fijados arriba del chat: filas compactas (texto + fecha); un toque
+// salta al mensaje. Se construye desde CHAT + CHAT_META (los fijados viejos
+// vienen en la carga aunque pasen los 7 días).
+function pzChatRenderPinned() {
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  const old = box.querySelector('.pz-chat-pinned');
+  const pinned = CHAT.filter(m => m && m.id && CHAT_META[m.id] && CHAT_META[m.id].pinned);
+  if (!pinned.length) { if (old) old.remove(); return; }
+  const html = `<div class="pz-chat-pinned"><div class="pz-chat-pinned-tit">📌 ${gzT('Fijados', 'Pinned')}</div>`
+    + pinned.map(m => `<button type="button" class="pz-chat-pin-row" data-jump="${Number(m.id)}"><span class="pz-chat-pin-txt">${esc(String(m.text).replace(/\[foto:[^\]]+\]/g, '📷').slice(0, 80))}</span><span class="pz-chat-pin-fecha">${esc(pzChatFechaCorta(m.ts))}</span></button>`).join('')
+    + `</div>`;
+  if (old) old.outerHTML = html; else box.insertAdjacentHTML('afterbegin', html);
+}
+// Salto a un mensaje: si está en el DOM, scroll + destello; si no, se carga
+// la ventana alrededor (GET /api/chat/around) y se vuelve a intentar.
+function pzChatJumpTo(id) {
+  const el = pzChatBubbleById(id);
+  if (el) {
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { try { el.scrollIntoView(); } catch (_) {} }
+    el.classList.add('pz-chat-flash');
+    setTimeout(() => { try { el.classList.remove('pz-chat-flash'); } catch (e) {} }, 2000);
+    return;
+  }
+  pzChatLoadAround(id);
+}
+async function pzChatLoadAround(id) {
+  try {
+    const r = await api.get('/api/chat/around?id=' + encodeURIComponent(String(id)));
+    if (!r || !r.ok || !Array.isArray(r.messages) || !r.messages.length) return;
+    CHAT = r.messages
+      .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
+      .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0 }))
+      .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
+    CHAT_META = {};
+    r.messages.forEach(m => { if (m && m.id) CHAT_META[Number(m.id)] = { reaction: m.reaction || '', pinned: Number(m.pinned) || 0, edited: Number(m.edited) || 0 }; });
+    const box = document.getElementById('chatBox');
+    if (box) { box.innerHTML = CHAT.map(m => pzChatMsgFull(m)).join(''); pzChatRenderPinned(); }
+    setTimeout(() => pzChatJumpTo(id), 60);
+  } catch (e) {}
+}
+async function pzChatReact(id, reaction) {
+  try {
+    const r = await api.post('/api/chat/react', { id: Number(id), reaction });
+    if (!r || !r.ok) return;
+    if (!CHAT_META[id]) CHAT_META[id] = { reaction: '', pinned: 0, edited: 0 };
+    CHAT_META[id].reaction = r.reaction || '';
+    pzChatRerenderBubble(id);
+  } catch (e) {}
+}
+async function pzChatPinToggle(id) {
+  try {
+    const cur = (CHAT_META[id] && CHAT_META[id].pinned) ? 1 : 0;
+    const r = await api.post('/api/chat/pin', { id: Number(id), pinned: cur ? 0 : 1 });
+    if (!r || !r.ok) return;
+    if (!CHAT_META[id]) CHAT_META[id] = { reaction: '', pinned: 0, edited: 0 };
+    CHAT_META[id].pinned = r.pinned ? 1 : 0;
+    pzChatRenderPinned();
+  } catch (e) {}
+}
+function pzChatEditStart(id) {
+  const m = CHAT.find(x => x && Number(x.id) === Number(id));
+  const el = pzChatBubbleById(id);
+  if (!m || !el) return;
+  const orig = String(m.text || '');
+  el.outerHTML = `<div class="chat-msg u pz-chat-editing" data-msg-id="${esc(String(id))}" data-ts="${Number(m.ts) || ''}"><textarea class="pz-chat-edit-input" rows="3">${esc(orig)}</textarea><div class="pz-chat-edit-btns"><button type="button" class="pz-chat-edit-save" data-edit-save="${esc(String(id))}">${gzT('Guardar', 'Save')}</button><button type="button" class="pz-chat-edit-cancel" data-edit-cancel="${esc(String(id))}">${gzT('Cancelar', 'Cancel')}</button></div></div>`;
+  const ta = pzChatBubbleById(id) && pzChatBubbleById(id).querySelector('textarea');
+  if (ta) { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+}
+async function pzChatEditSave(id) {
+  const el = pzChatBubbleById(id);
+  const ta = el && el.querySelector('textarea');
+  const text = ta ? String(ta.value || '').trim() : '';
+  if (!text) return;
+  try {
+    const r = await api.post('/api/chat/edit', { id: Number(id), text });
+    if (!r || !r.ok) return;
+    const m = CHAT.find(x => x && Number(x.id) === Number(id));
+    if (m) m.text = r.text || text;
+    if (!CHAT_META[id]) CHAT_META[id] = { reaction: '', pinned: 0, edited: 0 };
+    CHAT_META[id].edited = 1;
+    pzChatRerenderBubble(id);
+    pzChatRenderPinned();
+  } catch (e) {}
+}
+function pzChatEditCancel(id) { pzChatRerenderBubble(id); }
+async function pzChatDelete(id) {
+  if (!window.confirm(gzT('¿Borrar este mensaje?', 'Delete this message?'))) return;
+  try {
+    const r = await api.post('/api/chat/delete', { id: Number(id) });
+    if (!r || !r.ok) return;
+    CHAT = CHAT.filter(x => !(x && Number(x.id) === Number(id)));
+    delete CHAT_META[id];
+    const el = pzChatBubbleById(id);
+    if (el) el.remove();
+    pzChatRenderPinned();
+  } catch (e) {}
+}
+// Menú del mensaje (mantener pulsado o clic derecho): reaccionar, fijar,
+// editar y borrar (editar/borrar solo mensajes propios). Idempotente: si ya
+// está abierto para el mismo mensaje, solo se re-renderiza.
+let pzChatSheetId = null, pzChatSheetRole = null;
+function pzChatOpenSheet(id, role) {
+  let wrap = document.getElementById('pzChatSheetWrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'pzChatSheetWrap';
+    wrap.className = 'pz-chat-sheet-wrap';
+    wrap.innerHTML = `<div class="pz-chat-sheet-backdrop" data-sheet-close></div><div class="pz-chat-sheet" role="menu"></div>`;
+    document.body.appendChild(wrap);
+  }
+  pzChatSheetId = String(id);
+  pzChatSheetRole = role === 'user' ? 'user' : 'assistant';
+  const meta = CHAT_META[id] || { reaction: '', pinned: 0, edited: 0 };
+  const own = pzChatSheetRole === 'user';
+  const sheet = wrap.querySelector('.pz-chat-sheet');
+  sheet.innerHTML = `<button type="button" data-sheet-act="react-heart">❤️ ${gzT('Me gusta', 'Like')}</button>`
+    + `<button type="button" data-sheet-act="react-like">👍</button>`
+    + `<button type="button" data-sheet-act="pin">📌 ${meta.pinned ? gzT('Quitar fijado', 'Unpin') : gzT('Fijar mensaje', 'Pin message')}</button>`
+    + (own ? `<button type="button" data-sheet-act="edit">✏️ ${gzT('Editar', 'Edit')}</button><button type="button" class="pz-chat-sheet-danger" data-sheet-act="delete">🗑 ${gzT('Borrar', 'Delete')}</button>` : '')
+    + `<button type="button" data-sheet-act="close">${gzT('Cancelar', 'Cancel')}</button>`;
+  wrap.hidden = false;
+}
+function pzChatCloseSheet() {
+  const wrap = document.getElementById('pzChatSheetWrap');
+  if (wrap) wrap.hidden = true;
+  pzChatSheetId = null; pzChatSheetRole = null;
+}
+// Buscar en el chat (GET /api/chat/search): mínimo 2 caracteres; los
+// resultados muestran el texto y la fecha; un toque salta al mensaje.
+let pzChatSearchTimer = null;
+async function pzChatSearchRun(inputEl) {
+  const box = inputEl.closest('.pz-chat-search');
+  const resEl = box ? box.querySelector('.pz-chat-search-res') : null;
+  if (!resEl) return;
+  const q = String(inputEl.value || '').trim();
+  if (q.length < 2) { resEl.innerHTML = ''; return; }
+  try {
+    const r = await api.get('/api/chat/search?q=' + encodeURIComponent(q));
+    const rows = (r && r.results) || [];
+    if (!rows.length) { resEl.innerHTML = `<div class="pz-chat-search-empty">${esc(gzT('Sin resultados', 'No results'))}</div>`; return; }
+    resEl.innerHTML = rows.map(m => `<button type="button" class="pz-chat-search-row" data-jump="${Number(m.id)}"><span class="pz-chat-search-txt">${esc(String(m.text).replace(/\[foto:[^\]]+\]/g, '📷').slice(0, 120))}</span><span class="pz-chat-search-fecha">${esc(pzChatFechaCorta(pzTsUTC(m.created_at)))}</span></button>`).join('');
+  } catch (e) { resEl.innerHTML = ''; }
+}
+// Galería de lo compartido: las fotos y videos del cliente (assets kind
+// photo/video, solo de este usuario) en una grilla; un toque abre la pieza.
+let pzChatGalleryOpen = false;
+async function pzChatOpenGallery() {
+  if (pzChatGalleryOpen) return;
+  pzChatGalleryOpen = true;
+  let ov = document.getElementById('pzChatGallery');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'pzChatGallery';
+    ov.className = 'pz-chat-gallery';
+    ov.innerHTML = `<div class="pz-chat-gallery-head"><b>${esc(gzT('Fotos y videos', 'Photos & videos'))}</b><button type="button" class="pz-chat-gallery-x" data-gallery-close>✕</button></div><div class="pz-chat-gallery-grid" id="pzChatGalleryGrid"><div class="pz-chat-gallery-cargando">⏳</div></div><div class="pz-chat-gallery-view" id="pzChatGalleryView" hidden></div>`;
+    document.body.appendChild(ov);
+  }
+  ov.hidden = false;
+  const grid = document.getElementById('pzChatGalleryGrid');
+  try {
+    const rows = await api.get('/api/assets');
+    const items = (Array.isArray(rows) ? rows : []).filter(a => a && (a.kind === 'photo' || a.kind === 'video') && a.file_path)
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    if (!items.length) { grid.innerHTML = `<div class="pz-chat-gallery-vacio">${esc(gzT('Todavía no hay fotos ni videos en el chat.', 'No photos or videos in the chat yet.'))}</div>`; return; }
+    grid.innerHTML = items.map(a => a.kind === 'video'
+      ? `<button type="button" class="pz-chat-gallery-item" data-media="${esc(a.file_path)}" data-kind="video"><video src="${esc(a.file_path)}" muted playsinline preload="metadata"></video><span class="pz-chat-gallery-play">▶</span></button>`
+      : `<button type="button" class="pz-chat-gallery-item" data-media="${esc(a.file_path)}" data-kind="photo"><img src="${esc(a.file_path)}" alt="" loading="lazy"></button>`).join('');
+  } catch (e) { grid.innerHTML = `<div class="pz-chat-gallery-vacio">${esc(gzT('No se pudo cargar.', 'Could not load.'))}</div>`; }
+}
+function pzChatCloseGallery() {
+  const ov = document.getElementById('pzChatGallery');
+  if (ov) ov.hidden = true;
+  pzChatGalleryOpen = false;
+}
+// ---- Delegación de eventos del chat (un solo lugar; vale en todas las
+// superficies donde se renderiza chatCardHTML: Inicio, sheets, revisión).
+(function pzChatMejorasBind() {
+  // Toolbar: Buscar / Fotos y videos (por clases: puede haber más de una
+  // tarjeta de chat en la página; se opera sobre la tarjeta del botón).
+  document.addEventListener('click', (e) => {
+    const tool = e.target && e.target.closest ? e.target.closest('[data-tool]') : null;
+    if (tool) {
+      const card = tool.closest('#chatCard') || document;
+      if (tool.dataset.tool === 'search') {
+        const sb = card.querySelector('.pz-chat-search');
+        if (sb) { sb.hidden = !sb.hidden; if (!sb.hidden) { const inp = sb.querySelector('.pz-chat-search-input'); if (inp) inp.focus(); } }
+      } else if (tool.dataset.tool === 'gallery') { pzChatOpenGallery(); }
+      return;
+    }
+    const jump = e.target && e.target.closest ? e.target.closest('[data-jump]') : null;
+    if (jump) { pzChatJumpTo(jump.dataset.jump); const sb = jump.closest('.pz-chat-search'); if (sb) sb.hidden = true; return; }
+    const react = e.target && e.target.closest ? e.target.closest('[data-react]') : null;
+    if (react) { pzChatReact(react.dataset.react, ''); return; }
+    const save = e.target && e.target.closest ? e.target.closest('[data-edit-save]') : null;
+    if (save) { pzChatEditSave(save.dataset.editSave); return; }
+    const cancel = e.target && e.target.closest ? e.target.closest('[data-edit-cancel]') : null;
+    if (cancel) { pzChatEditCancel(cancel.dataset.editCancel); return; }
+    const act = e.target && e.target.closest ? e.target.closest('[data-sheet-act]') : null;
+    if (act) {
+      const a = act.dataset.sheetAct;
+      const id = pzChatSheetId;
+      if (a === 'close' || !id) { pzChatCloseSheet(); return; }
+      pzChatCloseSheet();
+      if (a === 'react-heart') pzChatReact(id, '❤️');
+      else if (a === 'react-like') pzChatReact(id, '👍');
+      else if (a === 'pin') pzChatPinToggle(id);
+      else if (a === 'edit') pzChatEditStart(id);
+      else if (a === 'delete') pzChatDelete(id);
+      return;
+    }
+    if (e.target && e.target.closest && e.target.closest('[data-sheet-close]')) { pzChatCloseSheet(); return; }
+    if (e.target && e.target.closest && e.target.closest('[data-gallery-close]')) { pzChatCloseGallery(); return; }
+    const gItem = e.target && e.target.closest ? e.target.closest('[data-media]') : null;
+    if (gItem) {
+      const view = document.getElementById('pzChatGalleryView');
+      if (view) {
+        const src = gItem.dataset.media, kind = gItem.dataset.kind;
+        view.innerHTML = kind === 'video'
+          ? `<video src="${esc(src)}" controls autoplay playsinline></video><button type="button" class="pz-chat-gallery-view-x" data-gallery-view-close>✕</button>`
+          : `<img src="${esc(src)}" alt=""><button type="button" class="pz-chat-gallery-view-x" data-gallery-view-close>✕</button>`;
+        view.hidden = false;
+      }
+      return;
+    }
+    if (e.target && e.target.closest && e.target.closest('[data-gallery-view-close]')) {
+      const view = document.getElementById('pzChatGalleryView');
+      if (view) { view.hidden = true; view.innerHTML = ''; }
+      return;
+    }
+  });
+  // Búsqueda: debounce 300 ms por input.
+  document.addEventListener('input', (e) => {
+    const inp = e.target && e.target.closest ? e.target.closest('.pz-chat-search-input') : null;
+    if (!inp) return;
+    clearTimeout(pzChatSearchTimer);
+    pzChatSearchTimer = setTimeout(() => pzChatSearchRun(inp), 300);
+  });
+  // Menú del mensaje: mantener pulsado (móvil) o clic derecho (escritorio).
+  // El temporizador se cancela con cualquier movimiento: no pelea con el
+  // scroll ni con el swipe del otro lote.
+  let holdTimer = null, holdId = null, holdRole = null;
+  const holdCancel = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } holdId = null; holdRole = null; };
+  document.addEventListener('touchstart', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('.chat-msg[data-msg-id]') : null;
+    if (!b) return;
+    if (e.target.closest('button, a, input, textarea, .pz-chat-react')) return;
+    holdId = b.dataset.msgId; holdRole = b.classList.contains('u') ? 'user' : 'assistant';
+    holdCancel();
+    holdTimer = setTimeout(() => { if (holdId) pzChatOpenSheet(holdId, holdRole); holdTimer = null; }, 500);
+  }, { passive: true });
+  document.addEventListener('touchmove', holdCancel, { passive: true });
+  document.addEventListener('touchend', holdCancel, { passive: true });
+  document.addEventListener('touchcancel', holdCancel, { passive: true });
+  document.addEventListener('contextmenu', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('.chat-msg[data-msg-id]') : null;
+    if (!b) return;
+    if (e.target.closest('button, a, input, textarea, .pz-chat-react')) return;
+    e.preventDefault();
+    pzChatOpenSheet(b.dataset.msgId, b.classList.contains('u') ? 'user' : 'assistant');
+  });
+})();
+
 function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetChips, noUpRow, noVoiceTxt) {
   // (v442 · Corrección de Valentino 02:20, actualizada LOTE C · CHAT-NUEVO)
   // En la pantalla principal (mainScr: Inicio y Semana) el chat va SIN
@@ -9832,7 +10142,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   // explica qué se le puede pedir al chat («hola! soy Posty. decime qué
   // necesitás...»). Sin historial abre con ese saludo; con historial, directo
   // en el chat: historial + input.
-  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap)).join('');
+  const msgs = CHAT.map(m => pzChatMsgFull(m)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
@@ -9868,6 +10178,14 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
   return `
   ${wrap}
     ${title}${desc}
+    <div class="pz-chat-tools">
+      <button type="button" class="pz-chat-tool" data-tool="search">🔍 ${gzT('Buscar', 'Search')}</button>
+      <button type="button" class="pz-chat-tool" data-tool="gallery">📷 ${gzT('Fotos y videos', 'Photos & videos')}</button>
+    </div>
+    <div class="pz-chat-search" hidden>
+      <input type="search" class="pz-chat-search-input" placeholder="${gzT('Buscar en el chat…', 'Search the chat…')}" autocomplete="off">
+      <div class="pz-chat-search-res"></div>
+    </div>
     <div class="chat-box" id="chatBox">
       ${msgs ? (mainScr ? msgs : chatNextWeekHTML() + msgs) : `<div class="chat-msg ai">hola! soy Posty. decime qué necesitás y lo armo con tus fotos reales — yo pongo las palabras, nunca la foto.</div>` + (mainScr ? '' : chatNextWeekHTML())}
     </div><div id="chatAnchor"></div>${chips}

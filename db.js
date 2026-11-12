@@ -1065,6 +1065,21 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chatmsg_user ON chat_messages(user_id, id);
+-- (LOTE CHAT-MEJORAS · reacciones/fijados/editado/borrado) Meta por mensaje
+-- del chat: reacción ('' | '❤️' | '👍'), fijado, editado y borrado suave.
+-- La fila del mensaje NUNCA se borra físicamente (auditoría): el borrado
+-- solo la oculta en el chat, la búsqueda y la carga.
+CREATE TABLE IF NOT EXISTS chat_message_meta (
+  message_id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  reaction TEXT NOT NULL DEFAULT '',
+  pinned INTEGER NOT NULL DEFAULT 0,
+  edited INTEGER NOT NULL DEFAULT 0,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  edited_at TEXT,
+  deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_chatmsgmeta_user_pinned ON chat_message_meta(user_id, pinned);
 -- (LOTE v873 · MEMORIA POR CLIENTE) Lo que Posty aprendió de cada
 -- conversación del chat con un cliente (decisiones, preferencias,
 -- correcciones, qué le gustó y qué no). La lee el generador ANTES de

@@ -11570,12 +11570,15 @@ app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
 app.get('/api/ideas/chat', (req, res) => {
   if (!req.session.userId) return res.json({ messages: [], welcome: req.query.lang === 'en' ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works." : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   const uid = req.session.userId;
+  // (LOTE CHAT-MEJORAS) La carga trae la meta del mensaje (reacción,
+  // fijado, editado) y NUNCA trae un mensaje borrado (suave). Los
+  // fijados entran aunque sean más viejos que la ventana de 7 días.
   // (LOTE CAPTION-BOTONES) La propuesta de caption viaja con el mensaje
   // (caption_post_id + caption_text + caption_estado). Si la DB todavía no
   // tiene las columnas, cae al SELECT plano (sin botones, sin romper).
   let msgs = [];
-  try { msgs = db.prepare(`SELECT id, role, text, caption_post_id, caption_text, caption_estado, created_at FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse(); }
-  catch (e) { msgs = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-7 days') ORDER BY id DESC LIMIT 60`).all(uid).reverse(); }
+  try { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.caption_post_id, c.caption_text, c.caption_estado, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
+  catch (e) { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
@@ -11653,6 +11656,93 @@ app.get('/api/ideas/chat', (req, res) => {
     }
   } catch (e) { console.error('[chat] welcome:', e.message); }
   res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+});
+
+// ---------- 💬 CHAT-MEJORAS · reacciones / fijar / editar / borrar / buscar ----------
+// Reacciones ('❤️' | '👍'), fijados, edición y borrado suave de mensajes
+// propios, búsqueda por texto y ventana alrededor de un mensaje (para el
+// salto desde la búsqueda). Todo con ownership: el mensaje tiene que ser
+// del usuario de la sesión. El borrado es suave (meta.deleted = 1): la
+// fila queda para auditar y nunca se muestra en carga, búsqueda ni salto.
+function chatMsgOwned(uid, id) {
+  return db.prepare(`SELECT id, role, text FROM chat_messages WHERE id = ? AND user_id = ?`).get(id, uid) || null;
+}
+function chatMetaRow(uid, id) {
+  return db.prepare(`SELECT * FROM chat_message_meta WHERE message_id = ? AND user_id = ?`).get(id, uid) || null;
+}
+function chatMetaUpsert(uid, id, patch) {
+  const cur = chatMetaRow(uid, id) || { reaction: '', pinned: 0, edited: 0, deleted: 0 };
+  const next = {
+    reaction: patch.reaction !== undefined ? patch.reaction : cur.reaction,
+    pinned: patch.pinned !== undefined ? patch.pinned : cur.pinned,
+    edited: patch.edited !== undefined ? patch.edited : cur.edited,
+    deleted: patch.deleted !== undefined ? patch.deleted : cur.deleted,
+    edited_at: patch.edited_at !== undefined ? patch.edited_at : (cur.edited_at || null),
+    deleted_at: patch.deleted_at !== undefined ? patch.deleted_at : (cur.deleted_at || null),
+  };
+  db.prepare(`INSERT INTO chat_message_meta (message_id, user_id, reaction, pinned, edited, deleted, edited_at, deleted_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(message_id) DO UPDATE SET reaction = excluded.reaction, pinned = excluded.pinned, edited = excluded.edited, deleted = excluded.deleted, edited_at = excluded.edited_at, deleted_at = excluded.deleted_at`).run(id, uid, next.reaction, next.pinned, next.edited, next.deleted, next.edited_at, next.deleted_at);
+  return next;
+}
+app.post('/api/chat/react', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const id = Number((req.body && req.body.id) || 0) || 0;
+  const reaction = String((req.body && req.body.reaction) || '');
+  if (!id) return res.json({ ok: false, error: 'sin_mensaje' });
+  if (reaction !== '' && reaction !== '❤️' && reaction !== '👍') return res.json({ ok: false, error: 'reaccion_invalida' });
+  if (!chatMsgOwned(uid, id)) return res.json({ ok: false, error: 'no_encontrado' });
+  const next = chatMetaUpsert(uid, id, { reaction });
+  res.json({ ok: true, id, reaction: next.reaction });
+});
+app.post('/api/chat/pin', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const id = Number((req.body && req.body.id) || 0) || 0;
+  const pinned = (req.body && req.body.pinned) ? 1 : 0;
+  if (!id) return res.json({ ok: false, error: 'sin_mensaje' });
+  if (!chatMsgOwned(uid, id)) return res.json({ ok: false, error: 'no_encontrado' });
+  const next = chatMetaUpsert(uid, id, { pinned });
+  res.json({ ok: true, id, pinned: next.pinned });
+});
+app.post('/api/chat/edit', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const id = Number((req.body && req.body.id) || 0) || 0;
+  const text = String((req.body && req.body.text) || '').trim().slice(0, 2000);
+  if (!id) return res.json({ ok: false, error: 'sin_mensaje' });
+  if (!text) return res.json({ ok: false, error: 'texto_vacio' });
+  const msg = chatMsgOwned(uid, id);
+  if (!msg) return res.json({ ok: false, error: 'no_encontrado' });
+  if (msg.role !== 'user') return res.json({ ok: false, error: 'no_propio' });
+  db.prepare(`UPDATE chat_messages SET text = ? WHERE id = ? AND user_id = ?`).run(text, id, uid);
+  chatMetaUpsert(uid, id, { edited: 1, edited_at: new Date().toISOString() });
+  res.json({ ok: true, id, text });
+});
+app.post('/api/chat/delete', requireAuth, express.json(), (req, res) => {
+  const uid = req.session.userId;
+  const id = Number((req.body && req.body.id) || 0) || 0;
+  if (!id) return res.json({ ok: false, error: 'sin_mensaje' });
+  const msg = chatMsgOwned(uid, id);
+  if (!msg) return res.json({ ok: false, error: 'no_encontrado' });
+  if (msg.role !== 'user') return res.json({ ok: false, error: 'no_propio' });
+  chatMetaUpsert(uid, id, { deleted: 1, deleted_at: new Date().toISOString() });
+  res.json({ ok: true, id });
+});
+app.get('/api/chat/search', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const q = String(req.query.q || '').trim().slice(0, 100);
+  if (q.length < 2) return res.json({ ok: true, results: [] });
+  const like = '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%';
+  const rows = db.prepare(`SELECT c.id, c.role, c.text, c.created_at FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id = ? AND c.text LIKE ? ESCAPE '\\' AND (m.deleted IS NULL OR m.deleted = 0) ORDER BY c.id DESC LIMIT 30`).all(uid, like);
+  res.json({ ok: true, results: rows });
+});
+app.get('/api/chat/around', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.query.id || 0) || 0;
+  if (!id) return res.json({ ok: false, error: 'sin_mensaje' });
+  const sel = `SELECT c.id, c.role, c.text, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id = ? AND (m.deleted IS NULL OR m.deleted = 0)`;
+  const before = db.prepare(sel + ` AND c.id < ? ORDER BY c.id DESC LIMIT 30`).all(uid, id).reverse();
+  const center = db.prepare(sel + ` AND c.id = ?`).all(uid, id);
+  const after = db.prepare(sel + ` AND c.id > ? ORDER BY c.id ASC LIMIT 30`).all(uid, id);
+  if (!center.length) return res.json({ ok: false, error: 'no_encontrado' });
+  res.json({ ok: true, messages: before.concat(center, after) });
 });
 
 // ---------- 🧠 MEMORIA DE GUSTOS (v392) ----------
@@ -35300,7 +35390,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v916';
+const BUILD_ID = '20261105-v917';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
