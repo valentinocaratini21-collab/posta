@@ -1343,11 +1343,15 @@ function dropTemplateVarTopics(list) {
 // texto de la web después. Una fuente solo decide con ≥3 aciertos y
 // ventaja ≥2: captions cortos, emojis o marcas bilingües caen al
 // siguiente nivel en vez de adivinar.
+// (LOTE INGESTA) Dos niveles más, sin bajar el umbral v922: el pool
+// combinado IG+web (dos fuentes débiles que apuntan al mismo idioma
+// deciden juntas) y el idioma declarado del sitio (siteLang, <html
+// lang>) como última señal antes del fallback.
 const BRAND_LANG_STOPWORDS = {
   en: ['the', 'and', 'for', 'with', 'you', 'your', 'our', 'new', 'shop', 'now', 'from', 'this', 'that', 'are', 'was', 'will', 'can', 'get', 'discover', 'collection', 'available', 'free', 'shipping', 'love', 'thank', 'welcome', 'here', 'today', 'week', 'look', 'feel', 'made', 'wear', 'step', 'into', 'every', 'day', 'all', 'more', 'only', 'just', 'like', 'when', 'their', 'they', 'them', 'his', 'her', 'its', 'out', 'off', 'sale', 'drop', 'limited', 'back', 'stock', 'my', 'we', 'us', 'is', 'it', 'of', 'to', 'be', 'have', 'has', 'by', 'at', 'on', 'or', 'not', 'but', 'what', 'which', 'there', 'any', 'one', 'two', 'first', 'best', 'meet', 'join', 'stay', 'tuned', 'coming', 'soon', 'ready', 'crafted', 'designed'],
   es: ['el', 'la', 'los', 'las', 'de', 'en', 'y', 'con', 'para', 'por', 'un', 'una', 'unos', 'unas', 'tu', 'tus', 'su', 'sus', 'es', 'son', 'está', 'están', 'nuevo', 'nueva', 'nuevos', 'nuevas', 'ahora', 'hoy', 'esta', 'este', 'estas', 'estos', 'también', 'más', 'muy', 'sin', 'cada', 'cuando', 'compra', 'comprar', 'envío', 'gratis', 'descubre', 'mira', 'ven', 'te', 'se', 'que', 'del', 'al', 'lo', 'le', 'nos', 'mi', 'mis', 'nuestro', 'nuestra', 'nuestros', 'nuestras', 'viene', 'llega', 'llegó', 'gracias', 'bienvenidos', 'bienvenidas', 'semana', 'día', 'todos', 'todas', 'siempre', 'nunca', 'donde', 'cómo', 'puedes', 'puede'],
 };
-function detectBrandLang({ captions, webText } = {}) {
+function detectBrandLang({ captions, webText, siteLang } = {}) {
   const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const score = (text) => {
     const words = norm(text).replace(/https?:\/\/\S+/g, ' ').split(/[^a-z]+/).filter(Boolean);
@@ -1358,16 +1362,37 @@ function detectBrandLang({ captions, webText } = {}) {
     }
     return { en, es };
   };
+  // Umbral v922 (NO se baja: la suite lo fija — «New drop» 2 hits →
+  // null; bilingüe 5v4 → null): una fuente solo decide con ≥3 aciertos
+  // y ventaja ≥2. El refuerzo de este lote NO es bajar el umbral: es
+  // que las fuentes débiles SUMEN (pool) y que el sitio declare su
+  // idioma (siteLang) antes del fallback.
   const decide = ({ en, es }) => {
     if (en >= 3 && en - es >= 2) return 'en';
     if (es >= 3 && es - en >= 2) return 'es';
     return null;
   };
   const capText = (Array.isArray(captions) ? captions : []).map((c) => String(c || '')).join('\n');
-  const fromCaps = decide(score(capText));
+  const capScore = score(capText);
+  const fromCaps = decide(capScore);
   if (fromCaps) return fromCaps;
-  const fromWeb = decide(score(webText));
+  const webScore = score(webText);
+  const fromWeb = decide(webScore);
   if (fromWeb) return fromWeb;
+  // (LOTE INGESTA) Señal combinada: cada fuente sola puede quedar
+  // corta (captions poéticos de una línea; web de nombres propios
+  // —«Mojave Ghost», «Esplar»— con casi ningún stopword), pero si
+  // AMBAS apuntan al mismo idioma, la suma decide. Sin ponderar: el
+  // pool es la suma cruda, con el mismo umbral v922.
+  const fromPool = decide({ en: capScore.en + webScore.en, es: capScore.es + webScore.es });
+  if (fromPool) return fromPool;
+  // (LOTE INGESTA) Idioma declarado del sitio (<html lang>, que
+  // fetchBusinessSite trae como webData.siteLang): el contenido
+  // principal de un sitio declara su idioma. Última señal antes del
+  // fallback — después de las textuales, porque el tema puede mentir
+  // declarándolo por defecto.
+  const sl = String(siteLang || '').toLowerCase().slice(0, 2);
+  if (sl === 'en' || sl === 'es') return sl;
   return null;
 }
 

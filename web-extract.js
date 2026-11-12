@@ -247,7 +247,14 @@ const DIFF_MARKERS = [
 ];
 function extractBusinessFacts(html, ld) {
   const raw = String(html || '');
-  const text = cleanText(raw.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ''));
+  // (LOTE INGESTA) El texto de señales (tono, audiencia, diferencial,
+  // reservas, venta online, precios, promos) es el CONTENIDO PRINCIPAL:
+  // el pie/navegación no lo alimenta (sus rótulos —«Customer Services»,
+  // «Legal»— no son hechos del negocio). El <address> del pie se sigue
+  // leyendo del HTML crudo (abajo): la dirección sí es un hecho real
+  // aunque viva en el pie.
+  const mainHtml = stripSiteChrome(raw);
+  const text = cleanText(mainHtml.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ''));
   const t = norm(text);
   const facts = {
     has_local: false, address: '', takes_reservations: false,
@@ -378,6 +385,114 @@ function productNamesFromHtml(html) {
   return out;
 }
 
+// (LOTE INGESTA) Cromo del sitio: navegación, header, footer, formularios
+// y contenedores de sección de tienda (cuenta, legal, ayuda, newsletter).
+// El texto que vive ahí (rótulos de menú como «PROJET», secciones del pie
+// como «Customer Services»/«Legal») NO es contenido del negocio: sin este
+// corte llegaba como servicio/tema/estrella (Veja, Byredo, 11/11).
+// Mismo patrón que website-study.extractCleanText (que ya pela
+// nav/header/footer/aside/form): acá además se pelan los contenedores
+// con clase/id de cromo (los temas de tienda no usan elementos
+// semánticos). La clase «menu» a secas NO se pela: en un restaurante es
+// la carta real (sus platos son contenido).
+// LÍMITE HONESTO: el regex no es un parser — un contenedor con <div>s
+// anidados se corta en el primer </div> (se pela el encabezado, puede
+// quedar la cola). La defensa en profundidad (puerta de cromo en
+// client-digest) cubre lo que sobreviva al strip.
+const CHROME_TAG_RE = /<(nav|header|footer|aside|form)[\s>][\s\S]*?<\/\1\s*>/gi;
+const CHROME_ROLE_RE = /<([a-z][a-z0-9]*)[^>]*\brole\s*=\s*["'](navigation|contentinfo|banner)["'][^>]*>[\s\S]*?<\/\1\s*>/gi;
+// Tokens de clase/id de cromo (se comparan por palabra, con -/_ como
+// separador: 'site-footer' casa con class="site-footer" y con
+// id="shopify-section-footer"). Sin «menu» a secas (carta real) y sin
+// «legal»/«support»/«help» sueltos (una firma de abogados tiene
+// servicios con esas palabras); solo sus formas compuestas de sección.
+const CHROME_CLASS_TOKENS = [
+  'site-nav', 'main-nav', 'navbar', 'nav-menu', 'nav-drawer', 'nav-bar',
+  'nav', 'navigation', 'site-footer', 'page-footer', 'footer-nav',
+  'footer-menu', 'footer-links', 'footer', 'site-header', 'header-nav',
+  'legal-links', 'privacy-policy', 'terms-of-service', 'cookie-banner',
+  'cookie-consent', 'cookie-notice', 'cookie', 'breadcrumb', 'breadcrumbs',
+  'customer-service', 'customer-support', 'help-center', 'help-centre',
+  'support-links', 'newsletter-form', 'newsletter-signup', 'newsletter',
+  'account-menu', 'shopify-section-footer', 'shopify-section-header',
+];
+function stripSiteChrome(html) {
+  let s = String(html || '');
+  if (!s) return s;
+  s = s.replace(CHROME_TAG_RE, ' ');
+  s = s.replace(CHROME_ROLE_RE, ' ');
+  // Contenedores con clase/id de cromo: se pela desde la apertura hasta
+  // el primer cierre del mismo tag (best-effort, ver límite arriba).
+  const hasChromeToken = (attrVal) => {
+    const v = ' ' + String(attrVal || '').toLowerCase().replace(/[-_]+/g, ' ') + ' ';
+    return CHROME_CLASS_TOKENS.some((tok) => v.includes(' ' + tok.replace(/-/g, ' ') + ' '));
+  };
+  s = s.replace(/<([a-z][a-z0-9]*)[^>]*\b(?:class|id)\s*=\s*["']([^"']*)["'][^>]*>[\s\S]*?<\/\1\s*>/gi,
+    (m, _tag, attrVal) => (hasChromeToken(attrVal) ? ' ' : m));
+  return s;
+}
+// (LOTE INGESTA) Idioma declarado del sitio (<html lang="en">): el
+// contenido principal de un sitio declara su idioma. Es la última señal
+// de detectBrandLang, después de las textuales (el tema puede mentir
+// declarándolo por defecto). Solo 'en'/'es'; cualquier otro o ausente → ''.
+function siteLangFromHtml(html) {
+  const m = String(html || '').match(/<html[^>]*\blang\s*=\s*["']([a-zA-Z]{2})(?:[-_][a-zA-Z]{2})?["']/i);
+  if (!m) return '';
+  const l = m[1].toLowerCase();
+  return (l === 'en' || l === 'es') ? l : '';
+}
+// (LOTE INGESTA) Servicios desde el HTML, con el cromo ya pelado:
+// JSON-LD (dato estructurado, no es cromo) + nombres de producto de
+// links /products/ + encabezados h1–h3 del CONTENIDO PRINCIPAL.
+// Antes el scan de encabezados corría sobre el HTML completo y los
+// rótulos de menú/pie («PROJET», «Customer Services», «Legal») entraban
+// como servicios. Extraído para testearlo con fixtures (antes vivía
+// inline en fetchBusinessSite).
+function servicesFromHtml(html, ld) {
+  const mainHtml = stripSiteChrome(html);
+  const services = [];
+  const pushService = (s) => {
+    const v = cleanText(s).slice(0, 60);
+    if (v.length >= 3 && v.length <= 60 && v.split(' ').length <= 8 && !services.some((x) => x.toLowerCase() === v.toLowerCase())) {
+      services.push(v);
+    }
+  };
+  if (ld) {
+    try {
+      const cat = ld.hasOfferCatalog || ld.makesOffer || ld.offers;
+      const items = [];
+      const walk = (o) => {
+        if (!o) return;
+        if (Array.isArray(o)) return o.forEach(walk);
+        if (o.itemOffered) walk(o.itemOffered);
+        if (o.itemListElement) walk(o.itemListElement);
+        if (o.name) items.push(o.name);
+      };
+      walk(cat);
+      items.slice(0, 10).forEach(pushService);
+    } catch (e) { /* se sigue con encabezados */ }
+  }
+  // (LOTE PRUEBA-CHAT-GATE-FIX2) Productos reales primero (ver
+  // productNamesFromHtml): los encabezados son secciones («Best
+  // Sellers», «Join the Club»), no productos. Sin esto el espejo
+  // mostraba secciones como si fueran la oferta del negocio.
+  for (const p of productNamesFromHtml(mainHtml)) pushService(p);
+  // (LOTE PRUEBA-CHAT-GATE-FIX) El filtro de encabezados basura vive en
+  // isJunkServiceHeading (módulo, testeable).
+  // (LOTE INGESTA) El scan era GREEDY (pre-existente v928): con dos
+  // encabezados seguidos capturaba del primero al último cierre y
+  // cleanText los fundía en un solo «servicio» («Margherita Tomate,
+  // mozzarella Marinara» — el caso del menú de restaurante). Non-greedy:
+  // cada encabezado es un candidato propio.
+  for (const m of mainHtml.matchAll(/<h[123][^>]*>([\s\S]{1,140}?)<\/h[123]>/gi)) {
+    if (services.length >= 8) break;
+    const v = cleanText(m[1]);
+    if (isJunkServiceHeading(v)) continue;
+    pushService(v);
+  }
+  return services;
+}
+
 async function fetchBusinessSite(rawUrl) {
   const url = normalizeSiteUrl(rawUrl);
   if (!url) return null;
@@ -419,41 +534,8 @@ async function fetchBusinessSite(rawUrl) {
   description = description.slice(0, 400);
 
   // 4) Servicios: JSON-LD (hasOfferCatalog/makesOffer) + encabezados
-  const services = [];
-  const pushService = (s) => {
-    const v = cleanText(s).slice(0, 60);
-    if (v.length >= 3 && v.length <= 60 && v.split(' ').length <= 8 && !services.some((x) => x.toLowerCase() === v.toLowerCase())) {
-      services.push(v);
-    }
-  };
-  if (ld) {
-    try {
-      const cat = ld.hasOfferCatalog || ld.makesOffer || ld.offers;
-      const items = [];
-      const walk = (o) => {
-        if (!o) return;
-        if (Array.isArray(o)) return o.forEach(walk);
-        if (o.itemOffered) walk(o.itemOffered);
-        if (o.itemListElement) walk(o.itemListElement);
-        if (o.name) items.push(o.name);
-      };
-      walk(cat);
-      items.slice(0, 10).forEach(pushService);
-    } catch (e) { /* se sigue con encabezados */ }
-  }
-  // (LOTE PRUEBA-CHAT-GATE-FIX2) Productos reales primero (ver
-  // productNamesFromHtml): los encabezados son secciones («Best
-  // Sellers», «Join the Club»), no productos. Sin esto el espejo
-  // mostraba secciones como si fueran la oferta del negocio.
-  for (const p of productNamesFromHtml(html)) pushService(p);
-  // (LOTE PRUEBA-CHAT-GATE-FIX) El filtro de encabezados basura vive en
-  // isJunkServiceHeading (módulo, testeable).
-  for (const m of html.matchAll(/<h[123][^>]*>([\s\S]{1,140})<\/h[123]>/gi)) {
-    if (services.length >= 8) break;
-    const v = cleanText(m[1]);
-    if (isJunkServiceHeading(v)) continue;
-    pushService(v);
-  }
+  // del CONTENIDO PRINCIPAL (servicesFromHtml pela el cromo: nav/pie).
+  const services = servicesFromHtml(html, ld);
 
   // 5) Ciudad: JSON-LD address > <address>
   let city = '';
@@ -504,7 +586,11 @@ async function fetchBusinessSite(rawUrl) {
     const altM = tag.match(/\balt\s*=\s*["']([^"']{0,200})["']/i);
     // Tema por contexto: el encabezado más cercano ANTES de la imagen
     const before = bodyNoScripts.slice(Math.max(0, m.index - 1200), m.index);
-    const hBefore = before.match(/<h[123][^>]*>([\s\S]{1,120})<\/h[123]>[^<h]*$/i);
+    // (LOTE INGESTA) El scan era GREEDY (pre-existente v928): con dos
+    // encabezados antes de la imagen capturaba del primero al último
+    // cierre y el contexto de la foto se fundía («A x B»). Non-greedy:
+    // el encabezado MÁS CERCANO, como dice el comentario de arriba.
+    const hBefore = before.match(/<h[123][^>]*>([\s\S]{1,120}?)<\/h[123]>[^<h]*$/i);
     const ctxText = (altM ? altM[1] + ' ' : '') + srcM[1].split('/').pop() + (hBefore ? ' ' + cleanText(hBefore[1]) : '');
     pushPhoto(srcM[1], ctxText);
   }
@@ -539,6 +625,9 @@ async function fetchBusinessSite(rawUrl) {
     // result nunca lo devolvía. Lo consume rubro-id.js (familia jsonld,
     // la señal más declarativa: el negocio se auto-clasificó).
     categoryHint: ld ? (Array.isArray(ld['@type']) ? ld['@type'].join(' ') : String(ld['@type'] || '')) : '',
+    // (LOTE INGESTA) Idioma declarado del sitio (<html lang>): última
+    // señal de detectBrandLang antes del fallback (ver demo.js).
+    siteLang: siteLangFromHtml(html),
   };
   result.address = (result.facts && result.facts.address) || '';
   // Temas por foto: gate-compatible (sin temas → el gate la deja afuera,
@@ -616,4 +705,8 @@ module.exports = {
   isStoreChromeText,
   productNamesFromHtml,
   extractBusinessFacts,
+  // (LOTE INGESTA) Cromo fuera en la ingesta (testeable con fixtures).
+  stripSiteChrome,
+  siteLangFromHtml,
+  servicesFromHtml,
 };

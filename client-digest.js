@@ -309,13 +309,13 @@ function effectiveStarOf(digest) {
       evidence: [`vendió ${u} unidades en los últimos 30 días (ventas reales de su Tiendanube)`],
     };
   }
-  // (LOTE ESTRELLA-MODELO-REAL · v924) Defensa en profundidad para
-  // digests sembrados ANTES del fix (la inferida ya guardada puede ser
-  // una categoría, como el «HOMME» de Veja): la inferida genérica no
-  // es estrella. La confirmada por el dueño (fuente 'dueno', arriba) y
-  // la medida por ventas reales (Tiendanube) no se tocan: son palabra
-  // del dueño y medición, no inferencia del picker.
-  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item)) {
+  // (LOTE INGESTA) Defensa en profundidad para digests sembrados ANTES
+  // del fix: la inferida que es un rótulo de cromo («Customer Services»,
+  // «Dirty Soda Value Menu») tampoco es estrella. La confirmada por el
+  // dueño (fuente 'dueno', arriba) y la medida por ventas reales
+  // (Tiendanube) no se tocan: son palabra del dueño y medición, no
+  // inferencia del picker.
+  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item) && !isChromeDerivedName(inf.item)) {
     return { item: String(inf.item), source: 'inferred', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
   }
   return null;
@@ -415,6 +415,53 @@ function isGenderOnlyName(raw) {
   const words = norm(s).split(' ').filter(Boolean).filter((w) => !STAR_GENERIC_STOPWORDS.has(w));
   if (!words.length) return false;
   return words.every((w) => OFFER_GENDER_NOUNS.has(w));
+}
+/* (LOTE INGESTA — caso Veja/Byredo/Crumbl, 11/11) Nombre de SECCIÓN
+ * del sitio (menú, pie, legal, ayuda), no un producto: un tema que
+ * viene únicamente del cromo del sitio nunca puede ser estrella — y en
+ * la compilación tampoco ancla temas. Extiende la guarda v924 (que
+ * solo conocía género/categoría) a los rótulos de cromo.
+ * · Frases exactas de sección (normalizadas, sin acentos): un producto
+ *   real nunca se llama exactamente «Customer Services», «Legal» o
+ *   «Privacy Policy». Las multi-palabra casan contenidas («Customer
+ *   Service Center»); las de una palabra, solo exactas («Legal advice»
+ *   NO es cromo: es un servicio real de una firma de abogados).
+ * · Cierre en «menu»: «Dirty Soda Value Menu» es una sección de la
+ *   carta, no un sabor. «Menu Keto» y «Menú del día» NO cierran en
+ *   menu y no se tocan (son oferta real).
+ * LÍMITE: un nombre de sección propio de la marca («PROJET», el menú
+ * de Veja) no se puede listar — solo lo frena el strip en la ingesta
+ * (web-extract/deep-read), no esta guarda por nombre. */
+const CHROME_SECTION_PHRASES = [
+  'customer service', 'customer services', 'customer support', 'customer care',
+  'legal', 'legal notice', 'privacy', 'privacy policy',
+  'terms', 'terms of service', 'terms and conditions',
+  'help', 'help center', 'help centre', 'faq', 'faqs',
+  'contact', 'contact us', 'about', 'about us',
+  'shipping', 'shipping and returns', 'returns', 'returns and exchanges',
+  'newsletter', 'my account', 'shopping cart', 'shopping bag', 'my cart',
+  'new arrivals', 'shop all', 'shop now', 'sign in', 'log in', 'sign up',
+  'checkout', 'track order', 'track your order', 'join our tribe',
+  'join the club', 'store locator', 'find a store', 'careers', 'press',
+  'investors', 'sitemap', 'cookies', 'cookie policy', 'accessibility',
+  'gift card', 'gift cards', 'wishlist', 'my wishlist', 'view all',
+  'view options', 'quick view',
+  'ayuda', 'aviso legal', 'terminos', 'terminos y condiciones',
+  'politica de privacidad', 'politica', 'contacto', 'nosotros',
+  'envios', 'devoluciones', 'mi cuenta', 'carrito', 'preguntas frecuentes',
+];
+function isChromeDerivedName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return true; // vacío: nada que coronar
+  const n = norm(s);
+  if (!n) return true;
+  for (const p of CHROME_SECTION_PHRASES) {
+    if (n === p) return true;
+    if (p.includes(' ') && n.includes(p)) return true;
+  }
+  const words = n.split(' ').filter(Boolean);
+  if (words.length >= 2 && (words[words.length - 1] === 'menu' || words[words.length - 1] === 'menus')) return true;
+  return false;
 }
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
@@ -1163,7 +1210,10 @@ function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
   // (LOTE ESTRELLA-MODELO-REAL · v924) Una categoría no puede ser la
   // estrella inferida: se saca del puntaje antes de puntuar. Si no
   // queda ningún modelo real, no hay inferencia (no se adivina).
-  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)));
+  // (LOTE INGESTA) Igual para un nombre de sección del sitio: un tema
+  // que viene del cromo («Customer Services», «Dirty Soda Value Menu»)
+  // nunca es estrella, aunque encabece el catálogo.
+  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)) && !isChromeDerivedName(String(x.nombre || x)));
   if (!list.length) return null;
   const caps = (captions || []).slice(0, 20);
   const scored = list.map((it) => {
@@ -1544,7 +1594,12 @@ function deriveTopics(digest, opts) {
   // style. Effortless you.») como ítems, y sin este filtro anclan
   // temas aunque la ingesta nueva ya los rechace. Para un digest sano
   // es un no-op (la ingesta y el scrub al guardar ya los filtran).
-  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)));
+  // (LOTE INGESTA) Un nombre de sección del sitio tampoco ancla temas:
+  // la compilación es la última puerta para un digest sembrado antes
+  // del fix (el cromo ya no entra en la ingesta nueva, pero un digest
+  // viejo lo trae). El tipo genérico sigue valiendo como TEMA (v924);
+  // el cromo ni siquiera eso: no es contenido del negocio.
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)));
   // (Posty conectado) Lo que su Tiendanube marca SIN STOCK no entra a la
   // rotación de temas: ninguna pieza nace sobre un producto agotado.
   const oosNames = tnOutOfStockNames(digest);
@@ -1591,7 +1646,9 @@ function deriveTopics(digest, opts) {
   // (LOTE ESTRELLA-MODELO-REAL · v924) La inferida genérica no
   // reordena: un digest sembrado antes del fix trae «HOMME» como
   // inferred_star y sin esta guarda subiría igual a ítem N.º 1.
-  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item)) {
+  // (LOTE INGESTA) Igual para la inferida que es cromo: «Customer
+  // Services» como inferred_star no reordena nada.
+  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item) && !isChromeDerivedName(digest.inferred_star.item)) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);
@@ -2081,7 +2138,9 @@ function deriveFirstPostWow(digest, opts) {
   if (etapaNow === 'pre-lanzamiento') return null;
   const name = (x) => String((x && (x.nombre || x)) || '').trim();
   let items = [...(digest.productos || []), ...(digest.servicios || [])].filter((x) => x && (x.nombre || x));
-  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)));
+  // (LOTE INGESTA) Igual que en deriveTopics: un nombre de sección del
+  // sitio no ancla el primer posteo (el más visible de la semana).
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)));
   const oosNames = tnOutOfStockNames(digest);
   if (oosNames.length) items = items.filter((x) => !tnNameMatch(name(x), oosNames));
   if (!items.length) return null;
@@ -2204,10 +2263,13 @@ function scrubDigestItems(digest) {
     // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Al guardar, un digest ya
     // envenenado se limpia: la etiqueta o el término vetado no quedan
     // como producto/servicio/promo para la próxima semana.
-    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x) && !isVetoText(x && (x.nombre || x), d.onboarding));
-    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x) && !isVetoText(x && (x.nombre || x), d.onboarding));
-    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)) && !isVetoText(x && (x.titulo || x.nombre || x), d.onboarding));
-    if (d.inferred_star && d.inferred_star.item && !isPlausibleOfferItem(d.inferred_star.item)) d.inferred_star = null;
+    // (LOTE INGESTA) Al guardar, un digest ya envenenado se limpia de
+    // cromo: un rótulo de menú/pie no queda como producto/servicio/
+    // promo ni como estrella inferida para la próxima semana.
+    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
+    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
+    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)) && !isChromeDerivedName(x && (x.titulo || x.nombre || x)) && !isVetoText(x && (x.titulo || x.nombre || x), d.onboarding));
+    if (d.inferred_star && d.inferred_star.item && (!isPlausibleOfferItem(d.inferred_star.item) || isChromeDerivedName(d.inferred_star.item))) d.inferred_star = null;
   } catch (e) { /* el scrub jamás rompe un guardado */ }
   return d;
 }
@@ -2309,6 +2371,8 @@ module.exports = {
   parsePriceNum, sameItemName, detectContradictions, inferStar,
   // (LOTE ESTRELLA-MODELO-REAL · v924) Guarda de categoría (testeable)
   isGenericCategoryName, isGenderOnlyName,
+  // (LOTE INGESTA) Guarda de cromo: nombre de sección, no producto.
+  isChromeDerivedName,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
   questionCandidatesOf, applyDeepBlocks,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)

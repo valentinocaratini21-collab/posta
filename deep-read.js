@@ -163,7 +163,11 @@ function pushItem(out, seen, nombre, precio, fuente) {
  * zados con precio cercano y líneas de texto con precio en línea. */
 function itemsFromHtml(html, fuente) {
   const out = []; const seen = new Set();
-  const s = String(html || '');
+  // (LOTE INGESTA) El cromo se pela ANTES de extraer: un heading de pie
+  // con precio cerca («Customer Services» + $85) entraba como ítem.
+  // El camino de líneas ya estaba cubierto (extractCleanText pela
+  // nav/header/footer); el de encabezados corría sobre el HTML crudo.
+  const s = webExtract.stripSiteChrome(String(html || ''));
   // 1) JSON-LD: productos con precio (la tienda bien hecha los declara).
   for (const m of s.matchAll(/<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]{1,60000})<\/script>/gi)) {
     try {

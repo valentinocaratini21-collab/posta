@@ -32211,6 +32211,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const contentLang = demo.detectBrandLang({
       captions: brandCaptions,
       webText: [webData && webData.description, ...((webData && webData.services) || []), ...(((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre))].filter(Boolean).join('\n'),
+      // (LOTE INGESTA) Idioma declarado del sitio (<html lang>): última
+      // señal antes del fallback (ver detectBrandLang en demo.js).
+      siteLang: webData && webData.siteLang,
     }) || lang;
     if (trialDigest) trialDigest.post_lang = contentLang;
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
@@ -33331,6 +33334,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const contentLangS = demo.detectBrandLang({
       captions: (trialProfile && trialProfile.captions) || [],
       webText: [bioText, webData && webData.description, ...((webData && webData.services) || []), ...(((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre))].filter(Boolean).join('\n'),
+      // (LOTE INGESTA) Idioma declarado del sitio (<html lang>): última
+      // señal antes del fallback (ver detectBrandLang en demo.js).
+      siteLang: webData && webData.siteLang,
     }) || lang;
     if (trialDigest) trialDigest.post_lang = contentLangS;
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
@@ -35745,7 +35751,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v930';
+const BUILD_ID = '20261105-v932';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
