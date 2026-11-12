@@ -2800,6 +2800,23 @@ function pzGuestDeviceId() {
 // rubro tampoco es específico (último recurso, en el chat, nunca en un
 // formulario).
 let PZ_GUEST_STAR_FOR = null;
+// (LOTE L2 · FALLBACK HONESTO DE IDIOMA) Posty esperando el idioma de
+// la marca en el chat: { ig, star } — la estrella se guarda para que
+// el reintento con brand_lang no pierda el camino por el que venía
+// (mix 'todo' sin estrella, o mix 'libre' con estrella).
+let PZ_GUEST_LANG_FOR = null;
+// (LOTE L2) La respuesta a «¿en qué idioma posteás?» en el chat:
+// 'english'/'inglés'/'en' → 'en'; 'español'/'spanish'/'es' → 'es'.
+// Cualquier otra cosa → null (se vuelve a preguntar, sin avanzar).
+function pzParseBrandLangAnswer(text) {
+  const t = String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  if (/\benglish\b/.test(t) || /\bingles\b/.test(t) || t === 'en') return 'en';
+  if (/\bespanol\b/.test(t) || /\bspanish\b/.test(t) || t === 'es') return 'es';
+  if (/\ben\b/.test(t)) return 'en';
+  if (/\bes\b/.test(t)) return 'es';
+  return null;
+}
 function pzGuestIg() {
   try {
     if (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) return String(PROFILE.ig_username).trim();
@@ -2838,7 +2855,7 @@ function pzGuestChatSay(text) {
     }
   } catch (e) {}
 }
-async function pzGuestSetIg(ig) {
+async function pzGuestSetIg(ig, brandLang) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   pzGuestChatSay(en ? `got it — @${ig}. let me look at what you post…` : `dale — @${ig}. ya miro lo que publicás…`);
   try {
@@ -2864,11 +2881,23 @@ async function pzGuestSetIg(ig) {
     fd.append('country', en ? 'US' : 'AR');
     fd.append('tone', 'vos');
     fd.append('lang', en ? 'en' : 'es');
+    // (LOTE L2) La elección del idioma de la marca, si ya se hizo en
+    // el chat: manda sobre la detección.
+    if (brandLang === 'en' || brandLang === 'es') fd.append('brand_lang', brandLang);
     fd.append('producto_mix', 'todo');
     if (det.length) fd.append('productos_detectados', JSON.stringify(det));
     if (!det.length && rubroOk) fd.append('rubro_detectado', category);
     const gr = await fetch('/api/trial/generate', { method: 'POST', body: fd });
     const gj = await gr.json().catch(() => ({}));
+    // (LOTE L2 · FALLBACK HONESTO DE IDIOMA) Sin señal y sitio en un
+    // tercer idioma, el servidor NO adivina: se pregunta el idioma en
+    // el chat (un toque) y el reintento lleva brand_lang. Sin este
+    // branch, la pregunta de la estrella se repetiría en loop.
+    if (gj && gj.falta_idioma_marca) {
+      PZ_GUEST_LANG_FOR = { ig, star: '' };
+      pzGuestChatSay(en ? `what language do you post in? tell me English or Spanish 👇` : `¿en qué idioma posteás? decime English o Español 👇`);
+      return;
+    }
     if (!gr.ok || !gj || gj.falta_producto) {
       PZ_GUEST_STAR_FOR = ig;
       pzGuestChatSay(en ? `i still don't know what you sell — tell me in your own words and i'll build your week around it 👇` : `todavía no sé qué vendés — decímelo con tus palabras y armo tu semana a medida 👇`);
@@ -2892,7 +2921,7 @@ async function pzGuestSetIg(ig) {
     pzGuestChatSay(en ? `something failed building your week — send me your @ again and i'll try once more 👇` : `algo falló armando tu semana — mandame tu @ de nuevo y lo intento otra vez 👇`);
   }
 }
-async function pzGuestSetIgStar(ig, estrella) {
+async function pzGuestSetIgStar(ig, estrella, brandLang) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   try {
     const device = (typeof pzGuestDeviceId === 'function') ? pzGuestDeviceId() : '';
@@ -2903,8 +2932,19 @@ async function pzGuestSetIgStar(ig, estrella) {
     fd.append('producto_mix', 'libre');
     fd.append('producto_estrella', String(estrella || '').trim().slice(0, 60));
     fd.append('lang', en ? 'en' : 'es');
+    // (LOTE L2) La elección del idioma de la marca, si ya se hizo en
+    // el chat: manda sobre la detección.
+    if (brandLang === 'en' || brandLang === 'es') fd.append('brand_lang', brandLang);
     const gr = await fetch('/api/trial/generate', { method: 'POST', body: fd });
     const gj = await gr.json().catch(() => ({}));
+    // (LOTE L2 · FALLBACK HONESTO DE IDIOMA) Igual que en pzGuestSetIg:
+    // sin señal y sitio en un tercer idioma, se pregunta el idioma y el
+    // reintento conserva la estrella ya respondida.
+    if (gj && gj.falta_idioma_marca) {
+      PZ_GUEST_LANG_FOR = { ig, star: String(estrella || '').trim().slice(0, 60) };
+      pzGuestChatSay(en ? `what language do you post in? tell me English or Spanish 👇` : `¿en qué idioma posteás? decime English o Español 👇`);
+      return;
+    }
     if (!gr.ok || !gj || gj.falta_producto) {
       PZ_GUEST_STAR_FOR = ig;
       pzGuestChatSay(en ? `i still can't see what you sell — tell me the one thing you sell the most, in your own words 👇` : `todavía no veo qué vendés — decime lo que más vendés, con tus palabras 👇`);
@@ -11223,7 +11263,7 @@ async function chatSend(textArg) {
   // del usuario se pinta acá (el chatSend normal no corre).
   if (pzIsGuest() && !pzGuestIg() && text && !unsent.length) {
     const igHere = pzExtractIg(text);
-    if (igHere || PZ_GUEST_STAR_FOR) {
+    if (igHere || PZ_GUEST_STAR_FOR || PZ_GUEST_LANG_FOR) {
       try {
         const sts = Date.now();
         CHAT.push({ role: 'user', text, ts: sts });
@@ -11231,7 +11271,23 @@ async function chatSend(textArg) {
         if (boxHere) chatAppendMsg(boxHere, chatMsgHtml('user', text, sts), sts);
         chatScroll(true);
       } catch (e) {}
-      if (igHere) { PZ_GUEST_STAR_FOR = null; pzGuestSetIg(igHere); return; }
+      if (igHere) { PZ_GUEST_STAR_FOR = null; PZ_GUEST_LANG_FOR = null; pzGuestSetIg(igHere); return; }
+      // (LOTE L2) Posty estaba esperando el idioma de la marca: la
+      // respuesta ES el idioma. Si no se entiende, se vuelve a preguntar
+      // (el pendiente queda) en vez de avanzar con un idioma inventado.
+      if (PZ_GUEST_LANG_FOR) {
+        const pend = PZ_GUEST_LANG_FOR; PZ_GUEST_LANG_FOR = null;
+        const bl = pzParseBrandLangAnswer(text);
+        if (!bl) {
+          PZ_GUEST_LANG_FOR = pend;
+          const enLang = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+          pzGuestChatSay(enLang ? `didn't catch that — English or Spanish? 👇` : `no te entendí — ¿English o Español? 👇`);
+          return;
+        }
+        if (pend.star) pzGuestSetIgStar(pend.ig, pend.star, bl);
+        else pzGuestSetIg(pend.ig, bl);
+        return;
+      }
       const igStar = PZ_GUEST_STAR_FOR; PZ_GUEST_STAR_FOR = null;
       pzGuestSetIgStar(igStar, text);
       return;

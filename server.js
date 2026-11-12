@@ -32213,14 +32213,33 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // `lang` sigue mandando en la UI (errores, semana, trialPostPrompt,
     // ideas) y en out.lang (idioma de la cuenta al registrarse). Sin
     // señal clara, contentLang cae a `lang` (fallback documentado).
-    const contentLang = demo.detectBrandLang({
+    // (LOTE L2 · FALLBACK HONESTO DE IDIOMA) EXCEPCIÓN a ese fallback:
+    // si NO hay señal Y el sitio declara un tercer idioma (ej. 'fr'),
+    // NO se cae en silencio a `lang`: se vuelve a pedir el dato con
+    // falta_idioma_marca (mismo patrón que falta_producto: el front
+    // pregunta con un toque y reenvía con brand_lang) y la generación
+    // NO arranca. La elección del usuario (brand_lang) manda sobre la
+    // detección. El siteLang crudo queda registrado como evidencia
+    // (post_lang_source / site_lang_declared en el digest + log
+    // [brand-lang]) — nunca se descarta en silencio.
+    const brandLangChoice = String(fields.brand_lang || '').trim().toLowerCase();
+    const langDecision = demo.resolveBrandLangDecision({
       captions: brandCaptions,
       webText: [webData && webData.description, ...((webData && webData.services) || []), ...(((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre))].filter(Boolean).join('\n'),
       // (LOTE INGESTA) Idioma declarado del sitio (<html lang>): última
       // señal antes del fallback (ver detectBrandLang en demo.js).
       siteLang: webData && webData.siteLang,
-    }) || lang;
-    if (trialDigest) trialDigest.post_lang = contentLang;
+      siteLangRaw: webData && webData.siteLangRaw,
+      lang,
+      brandLang: brandLangChoice,
+    });
+    try { console.log('[brand-lang]', JSON.stringify({ ig, siteLangDeclared: langDecision.siteLangDeclared, detected: langDecision.detected, source: langDecision.source, needsChoice: langDecision.needsChoice })); } catch (e) {}
+    if (langDecision.needsChoice) {
+      if (trialDigest) { trialDigest.post_lang = null; trialDigest.post_lang_source = 'unconfirmed'; trialDigest.site_lang_declared = langDecision.siteLangDeclared; }
+      return res.status(400).json({ error: lang === 'en' ? 'What language does your brand post in? Pick one below and I\'ll build your week in that language.' : '¿En qué idioma postea tu marca? Elegí uno abajo y armo tu semana en ese idioma.', falta_idioma_marca: true, site_lang: langDecision.siteLangDeclared });
+    }
+    const contentLang = langDecision.contentLang;
+    if (trialDigest) { trialDigest.post_lang = contentLang; trialDigest.post_lang_source = langDecision.source; trialDigest.site_lang_declared = langDecision.siteLangDeclared; }
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
@@ -33336,14 +33355,31 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // el idioma del CONTENIDO es el idioma en que postea LA MARCA
     // (captions del feed primero, web después). `lang` sigue mandando
     // en la UI (semana, trialPostPrompt, textos de estado).
-    const contentLangS = demo.detectBrandLang({
+    // (LOTE L2 · FALLBACK HONESTO DE IDIOMA) Igual que en generate: si
+    // NO hay señal Y el sitio declara un tercer idioma, NO se cae en
+    // silencio a `lang` — el stream falla con falta_idioma_marca (mismo
+    // patrón que falta_producto) y la generación NO arranca. Sin cliente
+    // en el árbol que consuma hoy el stream, el flag viaja igual en el
+    // evento 'error' para el cliente que lo use.
+    const brandLangChoiceS = String(fields.brand_lang || '').trim().toLowerCase();
+    const langDecisionS = demo.resolveBrandLangDecision({
       captions: (trialProfile && trialProfile.captions) || [],
       webText: [bioText, webData && webData.description, ...((webData && webData.services) || []), ...(((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre))].filter(Boolean).join('\n'),
       // (LOTE INGESTA) Idioma declarado del sitio (<html lang>): última
       // señal antes del fallback (ver detectBrandLang en demo.js).
       siteLang: webData && webData.siteLang,
-    }) || lang;
-    if (trialDigest) trialDigest.post_lang = contentLangS;
+      siteLangRaw: webData && webData.siteLangRaw,
+      lang,
+      brandLang: brandLangChoiceS,
+    });
+    try { console.log('[brand-lang]', JSON.stringify({ ig, route: 'stream', siteLangDeclared: langDecisionS.siteLangDeclared, detected: langDecisionS.detected, source: langDecisionS.source, needsChoice: langDecisionS.needsChoice })); } catch (e) {}
+    if (langDecisionS.needsChoice) {
+      if (trialDigest) { trialDigest.post_lang = null; trialDigest.post_lang_source = 'unconfirmed'; trialDigest.site_lang_declared = langDecisionS.siteLangDeclared; }
+      fail(lang === 'en' ? 'What language does your brand post in? Pick one and I\'ll build your week in that language.' : '¿En qué idioma postea tu marca? Elegí uno y armo tu semana en ese idioma.', { falta_idioma_marca: true, site_lang: langDecisionS.siteLangDeclared });
+      return;
+    }
+    const contentLangS = langDecisionS.contentLang;
+    if (trialDigest) { trialDigest.post_lang = contentLangS; trialDigest.post_lang_source = langDecisionS.source; trialDigest.site_lang_declared = langDecisionS.siteLangDeclared; }
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
     // sin producto evidenciado no hay semana ni stream de piezas.
     if (!trialTestMode(req) && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
@@ -35756,7 +35792,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v933';
+const BUILD_ID = '20261105-v934';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

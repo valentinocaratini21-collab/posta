@@ -1396,6 +1396,51 @@ function detectBrandLang({ captions, webText, siteLang } = {}) {
   return null;
 }
 
+// (LOTE L2 · FALLBACK HONESTO DE IDIOMA) Decisión del idioma del
+// CONTENIDO de la prueba, con la evidencia a la vista. NO cambia
+// detectBrandLang ni sus umbrales v922: solo decide QUÉ HACER cuando
+// la detección da null. Devuelve { contentLang, needsChoice, source,
+// siteLangDeclared, detected, evidence }:
+//  - brandLang 'en'/'es' (el usuario lo eligió en el formulario, un
+//    toque, solo cuando hizo falta): manda, source 'user'.
+//  - detectado ('en'/'es' por captions/web/siteLang): manda, 'detected'.
+//  - null Y el sitio declara un tercer idioma (siteLangRaw 'fr', 'de',
+//    ...): needsChoice true, contentLang null — NO se cae en silencio
+//    al idioma del visitante. El llamador vuelve a pedir el dato
+//    (falta_idioma_marca) y la generación NO arranca.
+//  - null sin tercer idioma: fallback al visitante, source
+//    'visitor-fallback' — el comportamiento v922 documentado, intacto.
+// Opción elegida (ver STATUS): preguntar, no adivinar. La (b) —
+// bio/otros textos como señal — no resuelve nada cuando TODO el texto
+// legible está en el tercer idioma (el caso Veja: ni la bio ni la web
+// dicen en qué idioma postea la marca). La (c) — marcar post_lang como
+// no-confiable y que el gate lo sepa — se hace ADEMÁS (post_lang_source
+// en el digest), pero el gate tampoco sabe el idioma correcto: solo
+// reintentaría en el mismo idioma equivocado. Preguntar cuesta un toque
+// y SOLO dispara en el caso ambiguo; el onboarding de un clic del caso
+// normal queda intacto. Límite honesto: el picker ofrece solo English /
+// Español porque son los dos idiomas de contenido que el generador
+// soporta (detectBrandLang solo devuelve en/es); una marca que postea
+// en francés no tiene opción correcta hoy — pero al menos ya no se le
+// genera en silencio en español.
+function resolveBrandLangDecision({ captions, webText, siteLang, siteLangRaw, lang, brandLang } = {}) {
+  const clean2 = (v) => String(v || '').trim().toLowerCase().slice(0, 2);
+  const userLang = clean2(brandLang);
+  const raw = clean2(siteLangRaw);
+  if (userLang === 'en' || userLang === 'es') {
+    return { contentLang: userLang, needsChoice: false, source: 'user', siteLangDeclared: raw, detected: null, evidence: 'brand_lang=' + userLang + ' (elegido por el usuario en el formulario)' };
+  }
+  const detected = detectBrandLang({ captions, webText, siteLang });
+  if (detected) {
+    return { contentLang: detected, needsChoice: false, source: 'detected', siteLangDeclared: raw, detected, evidence: 'detectBrandLang=' + detected };
+  }
+  if (raw && raw !== 'en' && raw !== 'es') {
+    return { contentLang: null, needsChoice: true, source: 'unconfirmed', siteLangDeclared: raw, detected: null, evidence: 'site declares ' + raw + ', no captions/text signal — asking the user, no silent visitor fallback' };
+  }
+  const fb = (String(lang || '').trim().toLowerCase() === 'en') ? 'en' : 'es';
+  return { contentLang: fb, needsChoice: false, source: 'visitor-fallback', siteLangDeclared: raw, detected: null, evidence: 'no signal and no third language declared — visitor fallback ' + fb + ' (v922, documentado)' };
+}
+
 // (LOTE VOZ-PROPIA-EN-LA-PRUEBA · 7/11) La voz del cliente en la semana
 // de la prueba: sus frases reales que se repiten (digest.voz_marcadores,
 // extraídas de SUS captions + sus respuestas por
@@ -1910,6 +1955,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       image_prompt: t.image_prompt || undefined,
     };
   });
+  // (LOTE L4) Estrella null: el primer posteo es un wow degradado
+  // honesto — la marca viaja en specPosts[0] para que el gate, el
+  // reintento correctivo y el servidor lo sepan ANTES de mostrar.
+  // (Contrato del reintento: star_retry_hint 'confirm-from-photo' =
+  // confirmar el ancla desde la foto real del producto;
+  // 'rederive-from-photo' = derivar la estrella de la foto real. Si
+  // el reintento no confirma ninguna estrella real, el degradado se
+  // queda como está — nunca se rearma un wow sobre un tema genérico.)
+  if (wowFirst && wowFirst.star_missing && specPosts[0]) {
+    specPosts[0].star_missing = true;
+    specPosts[0].star_retry_hint = wowFirst.star_retry_hint || 'rederive-from-photo';
+  }
   // (v209) DOSIFICACIÓN DE TEXTO: exactamente 2 piezas de la semana
   // llevan titular+CTA quemados sobre la imagen; las demás salen con la
   // foto limpia y su idea+CTA viven en el caption (que cierra con el
@@ -2377,6 +2434,13 @@ const CATEGORY_COLORS = {
 // y extrae hasta 2 colores dominantes. Timeouts acotados: si Instagram no
 // colabora, devuelve null y se usa la paleta del rubro.
 const IG_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+// (LOTE L1 · CAPTIONS-IG) UA de crawler: Instagram sirve el embed como shell
+// JS sin datos para un UA de navegador, pero con un UA de crawler sirve la
+// variante SSR con los posteos embebidos en el formato clásico que ya parsea
+// parseEmbedPosts. Es la única fuente sin sesión que trae captions: la API
+// web_profile_info devuelve 429 desde acá y la API oficial no lee marcas
+// ajenas. Verificado en vivo 12/11 con @veja, @officialbyredo y @crumbl.
+const IG_CRAWLER_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 const EXTRACT_COLORS_SCRIPT = path.join(__dirname, 'extract_colors.py');
 
 // Extrae hasta 2 colores dominantes (hex) de un buffer de imagen.
@@ -2761,23 +2825,46 @@ async function fetchIgProfile(ig) {
   }
 }
 // ---------- Prueba en 1 campo: prefill por @ de Instagram ----------
+// (LOTE L1 · CAPTIONS-IG) ¿El HTML del embed trae posteos que parseEmbedPosts
+// pueda leer? El marcador es el mismo que ancla el parser: un nodo
+// __typename GraphImage/GraphVideo/GraphSidecar, con comillas planas o
+// escapadas (el SSR las trae escapadas: \"__typename\":\"GraphImage\"). El
+// shell JS que sirve Instagram a un UA de navegador no trae ninguno.
+function embedHtmlHasPosts(html) {
+  return typeof html === 'string' && /__typename\\?":\\?"Graph(?:Image|Video|Sidecar)/.test(html);
+}
+
 // Devuelve el HTML crudo de la página embed del perfil, o null si el perfil
 // no existe, es privado o Instagram devuelve otra cosa (mismo chequeo de
 // identidad que fetchIgProfile). No descarga la foto: solo el HTML.
+// (LOTE L1 · CAPTIONS-IG) Dos intentos, en orden: primero con UA de crawler,
+// que sirve la variante SSR con los posteos embebidos (se acepta solo si
+// trae posteos legibles —si Instagram deja de servir SSR a crawlers, ese
+// intento se descarta—); si no, con el UA actual (IG_UA), comportamiento de
+// hoy, que se acepta con el chequeo de identidad de siempre. Nunca se
+// devuelve peor que hoy: el fallback es exactamente el fetch anterior.
 async function fetchIgEmbedHtml(ig) {
   const user = String(ig || '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40);
   if (!user) return null;
-  let page;
-  try {
-    page = await httpsGet('https://www.instagram.com/' + user + '/embed/', 8000);
-  } catch (e) {
-    return null;
-  }
-  const html = page.body.toString('utf8');
   // Verificamos que la página sea realmente del usuario pedido (no un challenge)
   const who = '\\"username\\":\\"' + user.toLowerCase() + '\\"';
-  if (!html.toLowerCase().includes(who)) return null;
-  return html;
+  const attempts = [
+    { headers: { 'User-Agent': IG_CRAWLER_UA, 'Accept': 'text/html,application/xhtml+xml' }, needPosts: true },
+    { headers: null, needPosts: false },
+  ];
+  for (const a of attempts) {
+    let page;
+    try {
+      page = await httpsGet('https://www.instagram.com/' + user + '/embed/', 8000, a.headers);
+    } catch (e) {
+      continue;
+    }
+    const html = page.body.toString('utf8');
+    if (!html.toLowerCase().includes(who)) continue;
+    if (a.needPosts && !embedHtmlHasPosts(html)) continue;
+    return html;
+  }
+  return null;
 }
 
 // (LOTE TIC-FUENTE) HTML crudo de la PÁGINA del perfil, o null.
@@ -3000,6 +3087,8 @@ module.exports = {
   demoHashtags: captions.demoHashtags,
   // Prueba en 1 campo (prefill + streaming)
   fetchIgEmbedHtml,
+  // (LOTE L1 · CAPTIONS-IG) ¿El HTML del embed trae posteos legibles?
+  embedHtmlHasPosts,
   fetchIgProfilePageHtml,
   fetchIgProfile,
   decodeIgName,
@@ -3015,6 +3104,9 @@ module.exports = {
   trialVoiceEcho,
   // (LOTE IDIOMA-POSTEO-MARCA · v922) Idioma en que postea la marca (IG, respaldo web).
   detectBrandLang,
+  // (LOTE L2) Decisión honesta del idioma del contenido (nunca cae en
+  // silencio al visitante cuando el sitio declara un tercer idioma).
+  resolveBrandLangDecision,
   applyVoiceToTopics,
   // (ONBOARDING-SIMPLE · ACT.5) Rotación de la semana de la prueba.
   enforceTopicRotation,

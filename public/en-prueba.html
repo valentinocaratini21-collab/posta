@@ -49,6 +49,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .hint{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.5}
 .btn{display:inline-block;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:16px;border-radius:999px;padding:15px 28px;text-decoration:none}
 .btn-primary{background:var(--cel);color:#fff;width:100%}
+.btn-ghost{background:#fff;border:1.5px solid var(--cel);color:var(--cel);flex:1}
+.langrow{display:flex;gap:10px}
 .btn-primary:disabled{opacity:.6;cursor:wait}
 .err{background:#FDECEA;color:var(--err);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;margin-bottom:16px}
 .err a{color:var(--err);font-weight:700}
@@ -84,6 +86,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <input id="fStar" type="text" autocomplete="off" placeholder="E.g.: specialty coffee" aria-label="What do you sell the most">
       <p class="hint">I couldn't see it on your Instagram or your website — tell me in your own words and I'll build your first post around it.</p>
     </div>
+    <div class="field" id="fLangWrap" hidden>
+      <label>What language do you post in? *</label>
+      <p class="hint">Your website is in another language and I can't tell what language you post in — pick one and I'll build your week in that language.</p>
+      <div class="langrow">
+        <button type="button" class="btn btn-ghost" id="fLangEn">English</button>
+        <button type="button" class="btn btn-ghost" id="fLangEs">Español</button>
+      </div>
+    </div>
     <div id="fErr" class="err" hidden></div>
     <div id="fStatus" class="status" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">Build my first post</button>
@@ -105,6 +115,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   var TEST_KEY_QS = qs.get('test_key') ? ('?test_key=' + encodeURIComponent(qs.get('test_key'))) : '';
   var $ = function (id) { return document.getElementById(id); };
   var igEl = $('fIg'), webEl = $('fWeb'), starEl = $('fStar'), starWrap = $('fStarWrap');
+  var langWrap = $('fLangWrap');
+  // (LOTE L2 · HONEST LANGUAGE FALLBACK) The brand-language choice,
+  // when the server asks for it (falta_idioma_marca): it sticks for
+  // resubmits on this visit, like the star.
+  var brandLangChoice = '';
   var errEl = $('fErr'), statusEl = $('fStatus'), btn = $('btnGo'), form = $('fEntry');
   var qIg = (qs.get('ig') || '').trim().replace(/^@/, '');
   var qWeb = (qs.get('web') || '').trim();
@@ -141,8 +156,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   function usedHtml(msg) {
     return msg + '<br><br><a href="/#/login">Log in to your account</a> · <a href="/#/app/ajustes?plan=1">Pick your plan</a>';
   }
-  // Builds the first post (and the week). Returns true | false | 'need_star'.
-  async function buildFirstPost(ig, web, estrella) {
+  // Builds the first post (and the week). Returns true | false | 'need_star' | 'need_lang'.
+  async function buildFirstPost(ig, web, estrella, brandLang) {
     showStatus('Looking up your Instagram…');
     var pf = await postJSON('/api/trial/prefill' + TEST_KEY_QS, { ig: ig, lang: LANG });
     if (!pf.ok || !pf.j || !pf.j.ok) {
@@ -170,6 +185,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     fd.append('country', 'US');
     fd.append('tone', 'vos');
     fd.append('lang', LANG);
+    // (LOTE L2) The brand-language choice, if already made (one tap in
+    // the picker below): it wins over detection.
+    if (brandLang) fd.append('brand_lang', brandLang);
     fd.append('producto_mix', mix);
     if (mix === 'todo' && det.length) fd.append('productos_detectados', JSON.stringify(det));
     if (mix === 'todo' && !det.length && rubroOk) fd.append('rubro_detectado', category);
@@ -182,6 +200,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         starWrap.hidden = false; starEl.focus();
         showStatus('I still don’t know what you sell — tell me above and I’ll build your week around it.');
         return 'need_star';
+      }
+      // (LOTE L2 · HONEST LANGUAGE FALLBACK) The server would not guess
+      // the brand's language (no signal, site in a third language):
+      // ask here, with one tap, and the resubmit carries brand_lang.
+      if (gj && gj.falta_idioma_marca) {
+        langWrap.hidden = false;
+        showStatus('Your website is in another language and I can’t tell what language you post in — pick one below and I’ll build your week in that language.');
+        return 'need_lang';
       }
       if (gr.status === 409 || (gj && (gj.trial_used || gj.trial_locked))) {
         showErrHtml(usedHtml((gj && gj.error) || 'This business already used its one free trial 💛'));
@@ -202,8 +228,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (!starWrap.hidden && !star) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
     btn.disabled = true; btn.textContent = 'Building…';
     try {
-      var built = await buildFirstPost(ig, web, star || '');
-      if (built === 'need_star' || !built) { btn.disabled = false; btn.textContent = 'Build my first post'; return; }
+      var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
+      if (built === 'need_star' || built === 'need_lang' || !built) { btn.disabled = false; btn.textContent = 'Build my first post'; return; }
       showStatus('Entering your product…');
       var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG });
       if (!gs.ok) {
@@ -223,6 +249,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       btn.disabled = false; btn.textContent = 'Build my first post';
     }
   });
+  // (LOTE L2) One tap per language, and the form resubmits itself
+  // with brand_lang: the rest of the data is already in the form.
+  $('fLangEn').addEventListener('click', function () { brandLangChoice = 'en'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
+  $('fLangEs').addEventListener('click', function () { brandLangChoice = 'es'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
   // Auto-start from the hero (?ig=): if the @ already came in, go.
   if (qIg) {
     if (form.requestSubmit) form.requestSubmit();

@@ -292,11 +292,17 @@ function tnQuietNames(digest) {
  * dueño confirmó en persona > las VENTAS reales de su tienda (Posty
  * conectado) > la inferida del feed por likes. Devuelve
  * {item, source:'dueno'|'sales'|'inferred', evidence[]} o null.
- * star_source='sales' marca que la estrella es medición, no lectura. */
+ * star_source='sales' marca que la estrella es medición, no lectura.
+ * (LOTE L3) La confirmada por el dueño solo manda si CALZA con lo
+ * evidenciado (duenoStarEvidenceMatch, abajo): una respuesta genérica
+ * sin calce («proyecto», Veja 12/11) se trata como NO declarada. */
 function effectiveStarOf(digest) {
   if (!digest || typeof digest !== 'object') return null;
   const duenoStar = digest.dueno && digest.dueno.estrella;
-  if (duenoStar) return { item: String(duenoStar), source: 'dueno', evidence: [] };
+  if (duenoStar) {
+    const matched = duenoStarEvidenceMatch(digest, duenoStar);
+    if (matched) return { item: matched, source: 'dueno', evidence: [] };
+  }
   const inf = digest.inferred_star;
   if (inf && inf.item && inf.fuente === 'dueno') {
     return { item: String(inf.item), source: 'dueno', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
@@ -311,14 +317,64 @@ function effectiveStarOf(digest) {
   }
   // (LOTE INGESTA) Defensa en profundidad para digests sembrados ANTES
   // del fix: la inferida que es un rótulo de cromo («Customer Services»,
-  // «Dirty Soda Value Menu») tampoco es estrella. La confirmada por el
-  // dueño (fuente 'dueno', arriba) y la medida por ventas reales
-  // (Tiendanube) no se tocan: son palabra del dueño y medición, no
-  // inferencia del picker.
+  // «Dirty Soda Value Menu») tampoco es estrella. La medida por ventas
+  // reales (Tiendanube) no se toca: es medición, no inferencia del
+  // picker. (LOTE L3) La confirmada por el dueño YA no es ciega: se
+  // validó arriba contra lo evidenciado; sin calce cae acá (inferida
+  // o null) y nunca manda un genérico sin evidencia.
   if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item) && !isChromeDerivedName(inf.item)) {
     return { item: String(inf.item), source: 'inferred', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
   }
   return null;
+}
+
+/* (LOTE L3 — la estrella del dueño se VALIDA) La declaración del dueño
+ * en el formulario solo manda si CALZA con lo evidenciado del negocio:
+ * algún producto o servicio del digest, o de sus ventas reales
+ * (Tiendanube), cuyo nombre coincida (a) por nombre — sameItemName —,
+ * (b) por frase contenida (la respuesta nombra el ítem dentro de una
+ * frase más larga, o el ítem contiene la respuesta), o (c) porque
+ * todas las palabras distintivas del ítem aparecen en la respuesta.
+ * Devuelve el nombre EVIDENCIADO (canónico, el del digest) o ''.
+ * · Los rótulos de cromo no son evidencia de producto: un «Customer
+ *   Services» sembrado en un digest viejo no valida nada.
+ * · Lo SIN STOCK tampoco valida: promocionarlo es vender lo que no hay.
+ * Sin calce, la declaración se trata como NO declarada: manda la
+ * inferida (o las ventas) y, si no hay, null. La estrella del dueño
+ * que SÍ calza se respeta como antes (primera señal).
+ * LÍMITE HONESTO: si el digest mismo trae un rótulo de sección como
+ * producto (el menú-cuerpo de Veja, L5), un calce exacto con él
+ * valida; la puerta que lo saca del digest es el strip (L5), no esta. */
+function duenoStarEvidenceMatch(digest, starName) {
+  const s = String(starName || '').trim();
+  if (!s) return '';
+  const cands = [];
+  for (const list of [digest && digest.productos, digest && digest.servicios]) {
+    for (const it of (list || [])) {
+      const n = cleanOfferName(it);
+      if (n) cands.push(n);
+    }
+  }
+  const tn = tnBlockOf(digest);
+  if (tn) {
+    if (tn.star && tn.star.name) cands.push(String(tn.star.name));
+    for (const t of (tn.top_sellers || [])) if (t && t.name) cands.push(String(t.name));
+  }
+  const oos = tnOutOfStockNames(digest);
+  const starWords = textWordSet(s);
+  const ns = ' ' + norm(s) + ' ';
+  for (const cand of cands) {
+    const c = cleanOfferName(cand);
+    if (!c) continue;
+    if (isChromeDerivedName(c)) continue;
+    if (oos.length && tnNameMatch(c, oos)) continue;
+    if (sameItemName(c, s)) return c;
+    const nc = norm(c);
+    if (nc.length >= 2 && (ns.includes(' ' + nc + ' ') || (' ' + nc + ' ').includes(ns))) return c;
+    const dw = distinctiveWords(c);
+    if (dw.length && dw.every((w) => { for (const f of wordForms(w)) if (starWords.has(f)) return true; return false; })) return c;
+  }
+  return '';
 }
 
 // ---------- minería determinística de textos reales ----------
@@ -1611,7 +1667,11 @@ function deriveTopics(digest, opts) {
   // (v238) POSTY PREGUNTA: lo que el dueño confirmó en persona abre la
   // rotación — su estrella primero; si no hay estrella de ninguna
   // fuente, lo que MÁS VENDE (también dicho por él) lidera igual.
-  const duenoStar = (digest.dueno && (digest.dueno.estrella || (!digest.inferred_star && digest.dueno.mas_vendido))) || '';
+  // (LOTE L3) Solo si calza con lo evidenciado (duenoStarEvidenceMatch):
+  // una respuesta genérica sin calce («proyecto») no reordena nada; el
+  // primer topic lo decide la inferida o el orden del digest.
+  const duenoStarRaw = (digest.dueno && (digest.dueno.estrella || (!digest.inferred_star && digest.dueno.mas_vendido))) || '';
+  const duenoStar = duenoStarRaw ? duenoStarEvidenceMatch(digest, duenoStarRaw) : '';
   if (duenoStar) {
     const si = items.findIndex((x) => sameItemName(name(x), duenoStar));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
@@ -2126,6 +2186,67 @@ function brandNegatives(digest) {
   if ((hasLatte || hasEspresso || hasMilk) && !seen.has('latte art')) { out.push('latte art'); seen.add('latte art'); }
   return out.slice(0, 4);
 }
+/* (LOTE L4 — ESTRELLA NULL ⇒ WOW DEGRADADO HONESTO) ¿El ancla es un
+ * nombre genérico de categoría, no un producto con nombre? Dos
+ * señales, sin listas de nombres propios:
+ * · la guarda v924 de tipo genérico (zapatillas, perfume, café…);
+ * · la FORMA de rótulo de menú: un solo token TODO EN MAYÚSCULAS, sin
+ * dígitos, de 4+ letras (los tiles de categoría del sitio — RUNNING,
+ * SANDALES, PROJET — se escriben así; los modelos reales van en Title
+ * Case o llevan dígitos/guiones: Esplar, Campo, V-10, Air Force 1).
+ * Límite honesto: un rótulo en minúsculas/mixto (accessoires,
+ * NOUVEAUTés) no lo caza la forma — eso lo pela L5 por estructura,
+ * no por nombre. */
+function isGenericAnchorName(n) {
+  const s = String(n || '').trim();
+  if (!s) return true;
+  if (isGenericCategoryName(s)) return true;
+  const toks = s.split(/\s+/).filter(Boolean);
+  if (toks.length === 1 && toks[0].length >= 4 && /^[A-ZÁÉÍÓÚÑ]+$/.test(toks[0])) return true;
+  return false;
+}
+/* (LOTE L4) Wow degradado honesto para estrella null con ancla
+ * genérica: el primer posteo NO nombra ningún producto — es una
+ * invitación de marca sobre la foto real del negocio. Sin claim de
+ * estrella (sin «que todos piden», sin «favorito de la casa»), sin
+ * digest_anchor y sin _star. La marca star_missing + star_retry_hint
+ * es el contrato con el reintento correctivo: re-derivar la estrella
+ * de la foto real del producto y, si la confirma, rearmar el wow. */
+function degradedBrandWow(digest, opts) {
+  const o = opts || {};
+  const en = o.lang === 'en';
+  const category = o.category || (digest && digest.category) || 'otro';
+  const business = String((digest && digest.business) || '').trim();
+  const biz = business || (en ? 'the house' : 'la casa');
+  const difRaw = String(digest.diferencial || (digest.onboarding && digest.onboarding.diferencial) || '').trim();
+  const ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  const ritualTxt = ritual || (en ? 'made our way' : 'hecho a nuestra manera');
+  const detail = ritual || (en ? 'Made our way.' : 'Hecho a nuestra manera.');
+  const ctaLine = en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`;
+  const caption = `${biz} ✨\n\n${detail}\n\n${ctaLine}`;
+  let negativos = brandNegatives(digest);
+  if (negativos.some((t) => /espresso/.test(t))) negativos.push(en ? 'espresso-based drinks' : 'bebidas con espresso');
+  negativos = [...new Set(negativos)].slice(0, 4);
+  let imagePrompt = en
+    ? `Hero photo from ${biz}: ${ritualTxt} Real photo from the client, close-up of the product with the brand inside the scene (their cup with their logo, their bags, their store or packaging), natural light, no text over the product. Never as a designed band or applied logo.`
+    : `Foto hero de ${biz}: ${ritualTxt} Foto real del cliente, primer plano del producto con la marca dentro de la escena (su vaso con su logo, sus bolsas, su local o su packaging), luz natural, sin texto sobre el producto. Nunca como banda diseñada ni logo aplicado.`;
+  if (negativos.length) imagePrompt += en ? ` DO NOT show: ${negativos.join(', ')}.` : ` NO mostrar: ${negativos.join(', ')}.`;
+  return {
+    kind: 'novedad',
+    tag: en ? 'NEW' : 'NUEVO',
+    tema: temaForText(business, category, (digest && digest.subcat) || ''),
+    headline: capWords(en ? `Meet ${biz}` : `Conocé ${biz}`, 6),
+    subline: '',
+    cta: en ? 'Tell me more' : 'Quiero saber más',
+    caption,
+    image_prompt: imagePrompt,
+    negativos,
+    _digest: 1, digest_anchor: null,
+    intent: 'autoridad', angle: 'directo', proof: '',
+    star_missing: true, star_retry_hint: 'rederive-from-photo',
+    _wow: 1,
+  };
+}
 function deriveFirstPostWow(digest, opts) {
   const o = opts || {};
   const en = o.lang === 'en';
@@ -2150,6 +2271,14 @@ function deriveFirstPostWow(digest, opts) {
   // ítem real N.º 1 de la lista. La estrella tiene que estar en la
   // lista (ancla con foto): si el nombre no calza con ningún ítem, el
   // N.º 1 — nunca un nombre sin evidencia detrás.
+  // (LOTE L4) Sin estrella confirmada, el N.º 1 NO se vende como
+  // estrella: si es un nombre genérico de categoría, el wow degrada a
+  // invitación de marca (degradedBrandWow); si es un producto real, se
+  // ancla en él como producto más visible, sin claims de estrella, y
+  // queda marcado star_missing para el reintento correctivo. La
+  // estrella declarada por el dueño (mas_vendido que calza) se sigue
+  // tratando como estrella — su validación contra lo evidenciado es L3,
+  // no este lote.
   let starItem = null;
   try {
     const eff = effectiveStarOf(digest);
@@ -2162,7 +2291,13 @@ function deriveFirstPostWow(digest, opts) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.dueno.mas_vendido));
     if (si >= 0) starItem = items[si];
   }
-  if (!starItem) starItem = items[0];
+  let starMissing = false;
+  if (!starItem) {
+    const firstName = name(items[0]);
+    if (isGenericAnchorName(firstName)) return degradedBrandWow(digest, o);
+    starItem = items[0];
+    starMissing = true;
+  }
   const A = name(starItem);
   if (A.length < 3) return null;
   const precio = String(starItem.precio || '').trim();
@@ -2178,14 +2313,18 @@ function deriveFirstPostWow(digest, opts) {
   const words = (s) => String(s || '').split(/\s+/).filter(Boolean).length;
   // Gancho (≤6 palabras, nombre de la estrella INTACTO). Sin artículo:
   // el género del producto no se conoce y «El Limpieza…» rompería.
+  // (LOTE L4) Sin estrella confirmada, nunca el claim de popularidad
+  // («que todos piden» / «everyone's asking for»): el ancla es el
+  // producto más visible, no la estrella — el gancho es una invitación
+  // neutra a probarlo.
   let headline;
   const nA = words(A);
   if (en) {
-    if (nA <= 2) headline = `${A} everyone's asking for`;
+    if (nA <= 2 && !starMissing) headline = `${A} everyone's asking for`;
     else if (nA <= 4) headline = serviceFamily ? `Book ${A} today` : `Try ${A} today`;
     else headline = capWords(A, 6);
   } else {
-    if (nA <= 2) headline = `${A} que todos piden`;
+    if (nA <= 2 && !starMissing) headline = `${A} que todos piden`;
     else if (nA <= 4) headline = serviceFamily ? `${A}, reservá hoy` : `${A}, probalo hoy`;
     else headline = capWords(A, 6);
   }
@@ -2196,7 +2335,10 @@ function deriveFirstPostWow(digest, opts) {
   // definición: la más vendida o la inferida).
   const priceLine = precio ? (en ? `Yours for ${precio}, just like you see it.` : `Lo tenés a ${precio}, como lo ves.`) : '';
   let detail = [ritual, priceLine].filter(Boolean).join(' ');
-  if (!detail) detail = en ? 'The house favorite, ready for you.' : 'El favorito de la casa, listo para vos.';
+  // (LOTE L4) «El favorito de la casa» es un claim de estrella: sin
+  // estrella confirmada, la línea honesta es la manera de la casa —
+  // nunca un favorito que no se verificó.
+  if (!detail) detail = starMissing ? (en ? 'Made our way.' : 'Hecho a nuestra manera.') : (en ? 'The house favorite, ready for you.' : 'El favorito de la casa, listo para vos.');
   const ctaLine = serviceFamily
     ? (en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`)
     : (en ? `Order yours today by DM 📩` : `Pedilo hoy por DM 📩`);
@@ -2228,7 +2370,15 @@ function deriveFirstPostWow(digest, opts) {
     negativos,
     _digest: 1, digest_anchor: A,
     intent: sales.intent || '', angle: sales.angle || '', proof: sales.proof || '',
-    _star: 1, _wow: 1,
+    // (LOTE L4) Sin estrella confirmada, el ancla es el producto más
+    // visible, no la estrella: no lleva _star y queda marcado para el
+    // reintento correctivo (star_retry_hint: el reintento confirma el
+    // ancla desde la foto real del producto y, si la confirma, rearma
+    // el wow con el claim de estrella).
+    ...(starMissing
+      ? { star_missing: true, star_retry_hint: 'confirm-from-photo' }
+      : { _star: 1 }),
+    _wow: 1,
   };
 }
 
@@ -2365,12 +2515,16 @@ module.exports = {
   dnaFragmentFromDigest,
   // (2026-10-20) Posty conectado (Tiendanube)
   tnBlockOf, tnNameMatch, tnOutOfStockNames, tnQuietNames, effectiveStarOf,
+  // (LOTE L3) Validación de la estrella del dueño contra lo evidenciado.
+  duenoStarEvidenceMatch,
   // (v231) Adopción de patrones: candado de números de promo
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
   parsePriceNum, sameItemName, detectContradictions, inferStar,
   // (LOTE ESTRELLA-MODELO-REAL · v924) Guarda de categoría (testeable)
   isGenericCategoryName, isGenderOnlyName,
+  // (LOTE L4) Ancla genérica de categoría vs producto con nombre (testeable)
+  isGenericAnchorName,
   // (LOTE INGESTA) Guarda de cromo: nombre de sección, no producto.
   isChromeDerivedName,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,

@@ -431,14 +431,19 @@ function stripSiteChrome(html) {
     (m, _tag, attrVal) => (hasChromeToken(attrVal) ? ' ' : m));
   return s;
 }
-// (LOTE INGESTA) Idioma declarado del sitio (<html lang="en">): el
-// contenido principal de un sitio declara su idioma. Es la última señal
-// de detectBrandLang, después de las textuales (el tema puede mentir
-// declarándolo por defecto). Solo 'en'/'es'; cualquier otro o ausente → ''.
-function siteLangFromHtml(html) {
+// (LOTE L2 · FALLBACK HONESTO DE IDIOMA) Idioma declarado CRUDO del sitio
+// (<html lang="fr">): siteLangFromHtml solo acepta en/es y devuelve ''
+// para un tercer idioma — la evidencia de «el sitio es francés» se
+// perdía en silencio y la decisión caía al idioma del visitante sin
+// que nadie lo supiera. El crudo viaja en webData.siteLangRaw para que
+// la decisión de idioma (demo.resolveBrandLangDecision) sepa que NO hay
+// señal textual Y el sitio declara un tercer idioma.
+function siteLangRawFromHtml(html) {
   const m = String(html || '').match(/<html[^>]*\blang\s*=\s*["']([a-zA-Z]{2})(?:[-_][a-zA-Z]{2})?["']/i);
-  if (!m) return '';
-  const l = m[1].toLowerCase();
+  return m ? m[1].toLowerCase() : '';
+}
+function siteLangFromHtml(html) {
+  const l = siteLangRawFromHtml(html);
   return (l === 'en' || l === 'es') ? l : '';
 }
 // (LOTE INGESTA) Servicios desde el HTML, con el cromo ya pelado:
@@ -628,6 +633,10 @@ async function fetchBusinessSite(rawUrl) {
     // (LOTE INGESTA) Idioma declarado del sitio (<html lang>): última
     // señal de detectBrandLang antes del fallback (ver demo.js).
     siteLang: siteLangFromHtml(html),
+    // (LOTE L2) Idioma declarado CRUDO (ej. 'fr'): siteLang es '' para
+    // un tercer idioma; el crudo es la evidencia que la decisión de
+    // idioma necesita para NO caer en silencio al visitante.
+    siteLangRaw: siteLangRawFromHtml(html),
   };
   result.address = (result.facts && result.facts.address) || '';
   // Temas por foto: gate-compatible (sin temas → el gate la deja afuera,
@@ -708,5 +717,7 @@ module.exports = {
   // (LOTE INGESTA) Cromo fuera en la ingesta (testeable con fixtures).
   stripSiteChrome,
   siteLangFromHtml,
+  // (LOTE L2) Idioma declarado crudo del sitio (testeable con fixtures).
+  siteLangRawFromHtml,
   servicesFromHtml,
 };
