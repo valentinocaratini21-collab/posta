@@ -1561,14 +1561,20 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   }
   const kind = (list[idx] && list[idx].kind) || 'novedad';
   const fbTable = en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS;
-  // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) El fallback también es su posteo: la
-  // frase del cliente va igual. El eco son solo sus palabras limpias
-  // (letras y espacios, del extractor) + un prefijo fijo: no trae frase
-  // quemada, no agrega bloque (un solo \n) ni emoji — no puede romper
-  // lo que el fallback ya garantiza. Sin voiceLine, queda como hoy.
+  // (Juli, 2026-11-12 — LOTE META-LÍNEA v958, REVERSIÓN del LOTE
+  // VOZ-PROPIA-EN-LA-PRUEBA en este camino): el fallback ya NO lleva la
+  // línea de voz. El comentario anterior afirmaba que el eco "no puede
+  // romper lo que el fallback ya garantiza" — la evidencia lo desmiente:
+  // los ids reales 622/623/633/635 (BYREDO/VEJA, 11-12/11) salieron con
+  // el fallback genérico + "In your words: «ones» / «constancetenvik» /
+  // «VEJA» / «Salar»", y el fallback NO pasa por captionPasses, así que
+  // la regla anti-meta-línea de la puerta no lo alcanza acá. El eco es
+  // metatexto interno: no va dentro del caption en ningún camino. La voz
+  // del cliente sigue viviendo donde corresponde — en el titular
+  // (applyVoiceToTopics) y en el cuerpo — no como rótulo al final.
   let caption = buildFinalCaption(
     { caption: fbTable[kind] || fbTable.novedad },
-    { business, tone, goalLine: '', voiceLine }
+    { business, tone, goalLine: '', voiceLine: '' }
   );
   // (v348 · D1) El fallback tampoco se duplica en la semana: si el
   // cuerpo genérico de SU kind ya salió en otra pieza, rota al primer
@@ -1576,7 +1582,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   if (usedBodies.has(bodyKey(caption))) {
     for (const k of [kind, 'social', 'novedad', 'tip', 'reserva', 'promo', 'sorteo']) {
       if (!fbTable[k]) continue;
-      const alt = buildFinalCaption({ caption: fbTable[k] }, { business, tone, goalLine: '', voiceLine });
+      const alt = buildFinalCaption({ caption: fbTable[k] }, { business, tone, goalLine: '', voiceLine: '' });
       if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
     }
   }

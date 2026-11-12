@@ -802,6 +802,21 @@ function captionPasses(caption, input) {
   for (const m of ['producto literal', 'objetivo del posteo']) {
     if (low.includes(m)) return { ok: false, reason: `filtración del fundamento: el caption trae texto interno del brief ("${m}") — el fundamento se usa para escribir, nunca se publica` };
   }
+  // META-LÍNEA (Juli, 2026-11-12 — ids REALES 595/596/597/601/603/617/618/
+  // 619/621/622/623/633/634/635, trials 11-12/11): el caption cierra con una
+  // línea de metatexto interno — "En tus palabras: «X»" (trialVoiceEcho,
+  // demo.js) o "Tal como pediste: ..." (goalLine, demo.js). Son notas del
+  // motor para el dueño, no texto publicable: el lector las lee como el
+  // pie de un formulario, y los marcadores encima son palabras sueltas
+  // basura ("locations", "ones", "constancetenvik", "week") que no dicen
+  // nada del cliente. La voz del cliente vive en el titular y en el
+  // cuerpo, nunca como rótulo al final. Match sobre `low` con `:` (el
+  // rótulo siempre lleva dos puntos; "tal como pediste," con coma es
+  // frase natural y NO se toca).
+  {
+    const meta = low.match(/(^|\n)\s*(en tus palabras|tal como pediste)\s*:/);
+    if (meta) return { ok: false, reason: `meta-línea: "${meta[2]}:" es una nota interna del motor, no texto del caption — la voz del cliente va en el cuerpo, nunca como rótulo al final` };
+  }
   if (c.trim().length < 40) return { ok: false, reason: 'es demasiado corto (menos de 40 caracteres)' };
   // LIMPIEZA (2026-10-18, Valentino: "posteos más limpios, sin tantas
   // palabras, como los del website"): topes DUROS de largo, bloques y
@@ -1549,6 +1564,18 @@ function captionPassesEn(caption, input) {
     if (low.includes(p)) return { ok: false, reason: `stock phrase "${p}"` };
   }
   if (SPANISH_LEAK_RE.test(c)) return { ok: false, reason: 'spanish leak: an English caption cannot carry Spanish wording or voseo' };
+  // META-LINE (Juli, 2026-11-12 — real ids 617/618/619/621/622/623/633/634/
+  // 635, trials 11-12/11): the caption closes with an internal meta line —
+  // "In your words: «X»" (trialVoiceEcho, demo.js) or "As you asked: ..."
+  // (goalLine, demo.js). They are engine notes for the owner, not copy:
+  // the reader reads them as a form footnote, and the markers are junk
+  // single words ("Cookie", "ones", "constancetenvik", "week"). The
+  // customer's voice lives in the headline and the body, never as a label
+  // at the end. The colon is required (the label always carries one).
+  {
+    const meta = low.match(/(^|\n)\s*(in your words|as you asked)\s*:/);
+    if (meta) return { ok: false, reason: `meta-line: "${meta[2]}:" is an internal engine note, not caption copy — the customer's voice goes in the body, never as a label at the end` };
+  }
   const trimmedLen = c.trim().length;
   if (trimmedLen < 40) return { ok: false, reason: 'too short (under 40 characters)' };
   if (trimmedLen > 320) return { ok: false, reason: `too long: ${trimmedLen} characters (max 320; target 100-280 in 3 short blocks: hook / body / CTA)` };
