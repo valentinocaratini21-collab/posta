@@ -19734,6 +19734,15 @@ function homeSnapshotGet(uid) {
     // lectura real nunca trae destacadas; el cliente no adivina).
     if (!Array.isArray(payload.highlights)) payload.highlights = [];
     if (!Array.isArray(payload.recents)) payload.recents = [];
+    // (LOTE LOCALIZAR-RECENTS · v975) Los snapshots guardados en la era
+    // v971 pueden traer recents con img = URL cruda de la CDN (el
+    // fallback img=src de esa versión): esa URL no carga en el
+    // teléfono y el tile sale roto. Se descartan SOLO en memoria, al
+    // leer — la fila guardada no se toca — y la próxima lectura los
+    // re-localiza con la URL completa. Los recents con img null se
+    // conservan (observabilidad del endpoint admin) y los de /media
+    // quedan intactos.
+    payload.recents = payload.recents.filter((r) => !(r && typeof r.img === 'string' && /^https?:\/\/[a-z0-9.-]*cdninstagram\.com\//i.test(r.img)));
     return { payload, fetched_at: Number(r.fetched_at) || 0 };
   } catch (e) { return null; }
 }
@@ -19837,12 +19846,17 @@ async function homeProfileFromRead(handle, data) {
       likes: num(x.likes),
       comments: num(x.comments),
       pinned: x.pinned === true ? true : null,
-    // (FIX-GRILLA-PERFIL) Fallback img=src: si localizeTrialPhotos no pudo
-    // bajar la miniatura (img null), el recent se conserva con la URL de la
-    // CDN en vez de filtrarse en silencio — el tile rinde con la URL remota
-    // y la localización se reintenta en la próxima lectura. Sin src tampoco
-    // hay nada que rendir: se filtra como antes.
-    })).map((r) => { if (!r.img && r.src) r.img = r.src; return r; }).filter((r) => r.img),
+    // (LOTE LOCALIZAR-RECENTS · v975) Se retira el fallback img=src de
+    // FIX-GRILLA-PERFIL: la URL cruda de la CDN no carga en el teléfono
+    // (la misma CDN que responde 403 al servidor) y el tile salía roto
+    // (verificado por Valentino en su iPhone, 12/11). La causa raíz era
+    // el parser: el display_url llegaba TRUNCADO (feed-audit.js cortaba
+    // la firma) y la localización fallaba siempre; con la URL completa
+    // la localización anda y el recent entra con su /media. Si aun así
+    // una miniatura no se localiza en esta lectura, el recent NO entra
+    // (como antes de v971): una tarjeta ausente es honesta, una rota
+    // no — y la localización se reintenta en la próxima lectura.
+    })).filter((r) => r.img),
     captured_at: Date.now(),
   };
 }
@@ -36393,7 +36407,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v972';
+const BUILD_ID = '20261105-v975';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

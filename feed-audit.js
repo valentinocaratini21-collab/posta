@@ -183,7 +183,16 @@ function parseEmbedPosts(html) {
       const fRawId = (rx) => { const mm = rx.exec(segRawId); return mm ? mm[1] : null; };
       const qe = '\\\\"'; // en regex: casa con \" del archivo
       const capRaw = fRawId(new RegExp(qe + 'text' + qe + ':' + qe + '((?:[^"\\\\]|\\\\.){0,500})'));
-      const thumbRaw = f(/"display_url":"((?:[^"\\]|\\.){0,600})/);
+      // (LOTE LOCALIZAR-RECENTS · v975) La captura del display_url ya NO
+      // se corta a 600: las URLs firmadas de la CDN miden 610–670
+      // caracteres limpias (más en crudo, con los escapes) y el corte
+      // amputaba la firma `oh` — la CDN respondía 403 a TODAS las
+      // descargas y ninguna miniatura del embed se localizaba jamás
+      // (verificado en vivo 12/11: thumb parseada de 585 chars con la
+      // firma cortada; la URL completa descarga OK en <1 s con el
+      // fetcher de producción). Tope amplio de captura; el resto del
+      // parser no se toca.
+      const thumbRaw = f(/"display_url":"((?:[^"\\]|\\.){0,2048})/);
       const takenAt = fId(/"taken_at_timestamp":(\d+)/) ? parseInt(fId(/"taken_at_timestamp":(\d+)/), 10) : null;
       const caption = cleanCaptionResidue(decodeCaption(capRaw || ''));
       // (2026-10-24) Nodo duplicado del MISMO posteo (misma fecha + mismo
