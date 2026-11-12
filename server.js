@@ -1465,7 +1465,7 @@ async function classifyWithVision(signals, photoUrls, lang, photoShortcodes) {
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap, starSignals }) {
   try {
     const _trialDigestBuilt = clientDigest.buildFromParts({
       business,
@@ -1487,6 +1487,11 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // (LOTE PERSONALIZACIÓN · ítem 3) Las palabras del dueño (respuestas
       // de la prueba) también alimentan los marcadores de voz.
       ownerWords: onboarding ? [onboarding.producto_estrella, onboarding.diferencial, onboarding.audiencia].filter((x) => x) : [],
+      // (LOTE PRIMER-POSTEO-MEJOR · idea 4) Señales de cariño del IG de
+      // la marca (top por likes+comentarios): las rutas de la prueba las
+      // calculan de los datos ya leídos (embed / trialData.posts) y las
+      // pasan acá; buildFromParts ya las lee (p.starSignals.metrics).
+      starSignals: starSignals || null,
       // (M3 FICHA-OFERTA) La ficha del estudio viaja en su espacio de
       // nombres propio dentro del fundamento (digest.offerSheet).
       offerSheet: offerSheet || null,
@@ -32185,7 +32190,27 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet });
+    // (LOTE PRIMER-POSTEO-MEJOR · idea 4) El embed del @ se lee UNA vez
+    // ANTES del fundamento: los posteos (caption + likes + comentarios)
+    // alimentan la señal de cariño de la estrella (el más querido) y,
+    // más abajo, los marcadores de voz. Misma carrera 2,5 s de siempre.
+    let _embedPostsVoz = null;
+    let _trialStarSignals = null;
+    if (ig) {
+      try {
+        const _htmlVoz0 = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
+        if (_htmlVoz0) {
+          _embedPostsVoz = feedAudit.parseEmbedPosts(_htmlVoz0) || [];
+          const _love = _embedPostsVoz
+            .map((p) => ({ text: String((p && p.caption) || '').slice(0, 160), reach: 0, likes: Number((p && p.likes) || 0), comments: Number((p && p.comments) || 0) }))
+            .filter((m) => m.text)
+            .sort((a, b) => ((b.likes + b.comments) - (a.likes + a.comments)))
+            .slice(0, 3);
+          if (_love.length) _trialStarSignals = { metrics: _love };
+        }
+      } catch (e) { /* sin embed: la estrella se infiere como hoy */ }
+    }
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet, starSignals: _trialStarSignals });
     // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Esta ruta no pasa el feed al digest
     // (feed: null): sin captions, la voz quedaba vacía aunque el @ las
     // tenga. Se reponen SOLO los marcadores de voz (best-effort, carrera
@@ -32196,13 +32221,18 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     let brandCaptions = [];
     if (ig && trialDigest) {
       try {
-        const _htmlVoz = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
-        if (_htmlVoz) {
-          const _capsVoz = (feedAudit.parseEmbedPosts(_htmlVoz) || []).map((p) => p.caption).filter(Boolean).slice(0, 12);
-          brandCaptions = _capsVoz;
-          if (_capsVoz.length) {
-            trialDigest.voz_marcadores = personalizacion.extraerMarcadoresVoz(_capsVoz, [ocAns.producto_estrella, ocAns.diferencial, ocAns.audiencia].filter((x) => x));
-          }
+        // (LOTE PRIMER-POSTEO-MEJOR) El embed ya se leyó arriba para la
+        // señal de cariño; se reutilizan los mismos posteos (sin segundo
+        // fetch). Si no se leyó, se lee acá como antes.
+        let _postsVoz = _embedPostsVoz;
+        if (!_postsVoz) {
+          const _htmlVoz = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
+          _postsVoz = _htmlVoz ? (feedAudit.parseEmbedPosts(_htmlVoz) || []) : [];
+        }
+        const _capsVoz = (_postsVoz || []).map((p) => p.caption).filter(Boolean).slice(0, 12);
+        brandCaptions = _capsVoz;
+        if (_capsVoz.length) {
+          trialDigest.voz_marcadores = personalizacion.extraerMarcadoresVoz(_capsVoz, [ocAns.producto_estrella, ocAns.diferencial, ocAns.audiencia].filter((x) => x));
         }
       } catch (e) { /* sin voz del feed: la de sus respuestas ya está en el digest */ }
     }
@@ -32249,7 +32279,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
+    const { posts, spec, timedOut: genTimedOut } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -32263,7 +32293,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // nacimiento sobre una cuenta que no se pudo leer.
     let trialAnalysisJson = null;
     let trialCompetition = null;
-    try {
+    // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Si el render expiró, la
+    // semana ya salió con el fallback de foto real: el análisis (que
+    // relee el @) no retrasa la respuesta — queda ausente, como cuando
+    // no hay datos del @.
+    if (!genTimedOut) try {
       let dataJson = null;
       if (ig) {
         dataJson = await Promise.race([feedAudit.fetchAuditData(ig), new Promise((r) => setTimeout(() => r(null), 3000))]).catch(() => null);
@@ -32348,6 +32382,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       const ext = photoPath.split('.').pop().toLowerCase();
       screenshot = `data:${TRIAL_IMG_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64');
     }
+    // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Si el render expiró, las
+    // ideas no esperan al LLM: se sirve lo que haya a los 5 s.
+    const ideasForOut = genTimedOut ? ((await raceMs(ideasPromise, 5000)) || []) : (await ideasPromise);
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
@@ -32366,13 +32403,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       ig_pic: igPic, ig_name: igName,
       analysis: trialAnalysisJson,
       competition_line: trialCompetition,
-      ideas: (await ideasPromise).slice(0, 6),
+      ideas: ideasForOut.slice(0, 6),
       posts,
       design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
       week: buildTrialWeek(posts.length, lang),
       screenshot,
       spots_left: spotsLeft(),
       video_ok: videoOk,
+      render_fallback: !!genTimedOut, // (LOTE PRIMER-POSTEO-MEJOR) true = el render expiró y la semana salió con fotos reales
     };
     // Guardamos la semana por @ (72h): si vuelve, la ve al instante.
     if (!testMode && igKey) {
@@ -32392,6 +32430,33 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     track(null, 'prueba_done', igKey);
     ok = true;
     res.json(out);
+    // (LOTE PRIMER-POSTEO-MEJOR · idea 3 + LOTE L4 §5) Reintento
+    // correctivo en segundo plano: corre DESPUÉS de mostrar el mejor
+    // disponible (sin await, nunca retrasa la respuesta). Dispara si el
+    // render expiró (la semana salió con el fallback de foto real) O si
+    // el primer posteo quedó sin estrella confirmada (star_missing):
+    // re-renderiza el composite del primer posteo y lo cambia en la
+    // caché solo si sigue en borrador (la semana todavía no se importó
+    // a posteos). El spec que se re-renderiza es el YA CORREGIDO por L4
+    // (specPosts[0] tal como lo dejó buildDemoSpec: wow degradado a
+    // invitación de marca si el ancla era genérica, gancho neutro sin
+    // claim de estrella si el ancla es real sin confirmar) — nunca se
+    // re-deriva el spec desde el digest, que rearmaría el claim.
+    // LÍMITE HONESTO: el reintento re-renderiza el spec corregido; no
+    // re-deriva la estrella desde la foto (eso pediría visión por
+    // modelo). Si no confirma estrella real, el degradado queda como
+    // está — nunca se rearma un wow sobre un tema genérico.
+    const _starMissing0 = !!(spec && spec.specPosts && spec.specPosts[0] && spec.specPosts[0].star_missing);
+    if ((genTimedOut || _starMissing0) && !testMode && igKey) {
+      try {
+        const _sp0 = spec && spec.specPosts && spec.specPosts[0];
+        if (_sp0) {
+          setImmediate(() => {
+            demo.scheduleFirstPostRetry({ cacheKey: igKey, digestHash: (trialDigest && trialDigest.hash) || '', specPost0: _sp0, colors: { accent, btn }, db }).catch(() => {});
+          });
+        }
+      } catch (e) {}
+    }
   } catch (e) {
     console.error('[posta] Error en prueba completa:', e.message);
     res.status(500).json({ error: 'No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.' });
@@ -33346,10 +33411,23 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         }
       } catch (e) { /* sin mapa: la prueba sale como hoy */ }
     }
+    // (LOTE PRIMER-POSTEO-MEJOR · idea 4) Señal de cariño de los datos
+    // ya leídos del @ (trialData.posts: caption + likes + comentarios).
+    let _trialStarSignalsS = null;
+    try {
+      if (trialData && trialData.ok && Array.isArray(trialData.posts)) {
+        const _loveS = trialData.posts
+          .map((p) => ({ text: String((p && p.caption) || '').slice(0, 160), reach: 0, likes: Number((p && p.likes) || 0), comments: Number((p && p.comments) || 0) }))
+          .filter((m) => m.text)
+          .sort((a, b) => ((b.likes + b.comments) - (a.likes + a.comments)))
+          .slice(0, 3);
+        if (_loveS.length) _trialStarSignalsS = { metrics: _loveS };
+      }
+    } catch (e) {}
     const trialDigest = buildTrialDigest({
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig, pic: trialProfile.pic || igPic || '' } : null,
-      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap,
+      formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap, starSignals: _trialStarSignalsS,
     });
     // (LOTE IDIOMA-POSTEO-MARCA · v922) Igual que en /api/trial/generate:
     // el idioma del CONTENIDO es el idioma en que postea LA MARCA
@@ -35792,7 +35870,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v934';
+const BUILD_ID = '20261105-v935';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -36318,10 +36396,10 @@ async function refreshDigestsSweep() {
         // (los captions de sus posteos con más alcance, 90 días).
         if (feedStale || webStale || catalogDue) {
           try {
-            const mrows = db.prepare(`SELECT p.caption AS caption, m.reach AS reach FROM post_metrics m JOIN posts p ON p.id = m.post_id
+            const mrows = db.prepare(`SELECT p.caption AS caption, m.reach AS reach, m.likes AS likes, m.comments AS comments FROM post_metrics m JOIN posts p ON p.id = m.post_id
               WHERE p.user_id = ? AND p.status = 'published' AND p.published_at >= datetime('now', '-90 days') AND m.reach > 0
               ORDER BY m.reach DESC LIMIT 12`).all(uid);
-            if (mrows.length) parts.starSignals = { metrics: mrows.map((r) => ({ text: String(r.caption || '').slice(0, 160), reach: r.reach })) };
+            if (mrows.length) parts.starSignals = { metrics: mrows.map((r) => ({ text: String(r.caption || '').slice(0, 160), reach: r.reach, likes: r.likes || 0, comments: r.comments || 0 })) };
           } catch (e) {}
         }
         if (!stored && !webFresh && !feedFresh && !parts.catalog && !parts.bioLink) {

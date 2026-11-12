@@ -469,7 +469,7 @@ function pickPhotoGated(topic, poolFams, used, ctx) {
 // (su ancla), gana sobre cualquier match de tema: ya no es "una foto de
 // café para un posteo de café", es LA foto de ESE blend para el posteo
 // de ESE blend. El gate de mundo/temas prohibidos sigue mandando.
-function pickWebPhoto(topic, webPool, used, ctx) {
+function pickWebPhoto(topic, webPool, used, ctx, opts) {
   if (!webPool || !webPool.length) return null;
   const productHit = (w) => !!(topic && topic.digest_anchor && w.producto && clientDigest.sameItemName(w.producto, topic.digest_anchor));
   // (LOTE PRUEBA-PRODUCTO-REAL) En la prueba no hay «cualquier foto que
@@ -492,7 +492,11 @@ function pickWebPhoto(topic, webPool, used, ctx) {
       ? (w) => (w.temas || []).includes('marca')
       : () => true,
   ];
-  for (let ti = 0; ti < tiers.length; ti++) {
+  // (LOTE PRIMER-POSTEO-MEJOR · idea 1) maxTier: el primer posteo
+  // NUNCA usa foto de tema (rango 2) — solo producto real (0/1) o
+  // póster de marca. Con maxTier: 1 el loop se corta tras el rango 1.
+  const maxTier = (opts && Number.isInteger(opts.maxTier)) ? opts.maxTier : 3;
+  for (let ti = 0; ti < tiers.length && ti <= maxTier; ti++) {
     const hit = webPool.find((w) => {
       if (used.has(w.path)) return false;
       // El rescate es del PRODUCTO (la visión lo identificó como EL
@@ -1441,6 +1445,180 @@ function resolveBrandLangDecision({ captions, webText, siteLang, siteLangRaw, la
   return { contentLang: fb, needsChoice: false, source: 'visitor-fallback', siteLangDeclared: raw, detected: null, evidence: 'no signal and no third language declared — visitor fallback ' + fb + ' (v922, documentado)' };
 }
 
+// ---------- LOTE PRIMER-POSTEO-MEJOR (5 mejoras + regla <30 s) ----------
+// Presupuesto duro de generación (regla Valentino 12/11 01:24): desde
+// que se envía el formulario hasta que el primer posteo se ve, menos de
+// 30 segundos. El render de la semana (python) y el video tienen este
+// tope; si expira, el primer posteo sale con la foto real (fallback),
+// nunca un spinner de minutos sin error.
+const FIRST_POST_RENDER_BUDGET_MS = 20000;
+const FIRST_POST_VIDEO_BUDGET_MS = 8000;
+const FIRST_POST_RETRY_BUDGET_MS = 60000;
+
+// raceMs local (server.js tiene el suyo; demo.js no): una promesa que
+// expira devuelve null en vez de colgar. Nunca tira.
+function raceMsLocal(p, ms) {
+  return Promise.race([Promise.resolve(p), new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
+}
+
+// textLangOf: idioma de UN texto corto (titular/caption) con las MISMAS
+// listas y umbrales de detectBrandLang (v922: ≥3 aciertos y ventaja ≥2;
+// sin señal clara → null). Es el chequeo de idioma del gate.
+function textLangOf(text) {
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const words = norm(text).replace(/https?:\/\/\S+/g, ' ').split(/[^a-z]+/).filter(Boolean);
+  let en = 0, es = 0;
+  for (const w of words) {
+    if (BRAND_LANG_STOPWORDS.en.includes(w)) en++;
+    if (BRAND_LANG_STOPWORDS.es.includes(w)) es++;
+  }
+  if (en >= 3 && en - es >= 2) return 'en';
+  if (es >= 3 && es - en >= 2) return 'es';
+  return null;
+}
+
+// firstPostGate: el gate ANTES de mostrar el primer posteo.
+// DECISIÓN EXPLÍCITA (queda como regla): el gate chequea lo que el
+// pipeline SABE — composición aplicada con el logo pegado, estrella
+// nombrada, idioma seteado — NO finge ver píxeles. No hay llamada a
+// ningún modelo en el camino crítico: es puro y síncrono (instantáneo).
+//   - idioma: el texto (titular + caption del topic, mismo lang de
+//     construcción) tiene que estar en el idioma de la marca; falla solo
+//     si es CLARAMENTE el otro idioma (umbrales v922). El caption final
+//     se construye con el mismo lang que el titular, así que el titular
+//     es el proxy.
+//   - estrella: modelo real, nunca categoría (v924) ni cromo (ingesta).
+//   - foto: producto real o póster de marca; nunca foto de tema.
+//   - logo: la marca VISIBLE en la foto (tier 0) o el póster (que ES la
+//     marca). La instrucción del prompt NO cuenta como logo: el render
+//     de la prueba compone la foto real, no regenera la escena — un
+//     prompt no pone un logo en una foto real.
+//   - voz: puntos extra, NUNCA fail duro.
+// El gate NUNCA bloquea: devuelve el puntaje y el mejor disponible se
+// muestra igual. `correction` dice qué arreglo aplica el reintento
+// (solo 'use-poster': cambiar al póster de marca); null = sin arreglo
+// por cambio de candidato (el fallo es del digest, no del candidato).
+function firstPostGate(c) {
+  const failures = [];
+  let score = 100;
+  const lang = (c && c.lang) || null;
+  const text = [(c && c.headline) || '', (c && c.caption) || ''].filter(Boolean).join(' ');
+  if (lang) {
+    const got = textLangOf(text);
+    if (got && got !== lang) { failures.push('idioma'); score -= 40; }
+  }
+  const star = String((c && c.star) || '').trim();
+  if (!star) { failures.push('sin-estrella'); score -= 40; }
+  else if (clientDigest.isGenericCategoryName(star) || clientDigest.isChromeDerivedName(star)) { failures.push('estrella-generica'); score -= 40; }
+  const ps = (c && c.photo_source) || '';
+  if (ps !== 'real-product-brand' && ps !== 'real-product' && ps !== 'brand-poster') { failures.push('foto-tema'); score -= 40; }
+  const logoOk = !!((c && c.brand_visible)) || ps === 'brand-poster';
+  if (!logoOk) { failures.push('sin-logo'); score -= 40; }
+  if (c && c.voice_used) score += 10;
+  const pass = failures.length === 0;
+  // Corrección: solo el logo/foto se arregla cambiando al póster. Un
+  // fallo de idioma o de estrella vive en el topic (digest), no en el
+  // candidato: cambiar de foto no lo cura.
+  let correction = null;
+  if (!pass && (failures.includes('sin-logo') || failures.includes('foto-tema'))) correction = 'use-poster';
+  return { pass, score: Math.max(0, score), failures, correction };
+}
+
+// pickFirstPostCandidates: los DOS candidatos del primer posteo, a nivel
+// SPEC (foto + fuente) — la selección corre ANTES del render, así que NO
+// hay costo de render extra: el render corre una sola vez sobre el
+// ganador. Por eso dos candidatos NO duplican el tiempo (regla <30 s:
+// los dos se producen en el mismo pase síncrono, en paralelo).
+//   - A = mejor foto real del producto (tier 0: producto + marca
+//     visible; tier 1: producto). NUNCA foto de tema (maxTier: 1).
+//   - B = póster de marca (foto de perfil). null si no hay foto de perfil.
+// «Usable» (idea 1, pineado): foto del propio negocio que muestra el
+// producto (producto = estrella, vía photo_map) — tier 0 o tier 1. Sin
+// foto usable, el primer posteo es el póster de marca; nunca una foto
+// de tema ni stock de otra cosa.
+// Devuelve { a, b, winner, gateA, gateB }: winner es 'a' o 'b' (mayor
+// puntaje del gate; empate → A; si uno es null, el otro).
+function pickFirstPostCandidates(o) {
+  const topic = (o && o.topic) || {};
+  const webPool = Array.isArray(o && o.webPool) ? o.webPool : [];
+  const used = (o && o.used) || new Set();
+  const ctx = (o && o.ctx) || {};
+  const lang = (o && o.lang) || null;
+  const headline = String((o && o.headline) || topic.headline || '');
+  const caption = String((o && o.caption) || topic.caption || '');
+  const star = String(topic.digest_anchor || '');
+  const voiceUsed = topic.voice_used || null;
+  let a = null;
+  const hit = pickWebPhoto(topic, webPool, used, ctx, { maxTier: 1 });
+  if (hit) {
+    const isBrand = !!(topic && topic._wow && hit.producto && clientDigest.sameItemName(hit.producto, topic.digest_anchor) && hit.marca_visible);
+    a = { photo: hit.path, photo_source: isBrand ? 'real-product-brand' : 'real-product', brand_visible: !!hit.marca_visible, producto: hit.producto || null };
+  }
+  let b = null;
+  if (o && o.profilePicPath) b = { photo: o.profilePicPath, photo_source: 'brand-poster', brand_visible: true, producto: null };
+  const gateA = a ? firstPostGate({ headline, caption, star, lang, photo_source: a.photo_source, brand_visible: a.brand_visible, voice_used: voiceUsed }) : null;
+  const gateB = b ? firstPostGate({ headline, caption, star, lang, photo_source: b.photo_source, brand_visible: b.brand_visible, voice_used: voiceUsed }) : null;
+  let winner = null;
+  if (a && b) winner = (gateB.score > gateA.score) ? 'b' : 'a';
+  else if (a) winner = 'a';
+  else if (b) winner = 'b';
+  return { a, b, winner, gateA, gateB };
+}
+
+// scheduleFirstPostRetry: el reintento correctivo EN SEGUNDO PLANO,
+// DESPUÉS de mostrar el mejor disponible — nunca retrasa la primera
+// vista (la ruta lo llama sin await, vía setImmediate).
+// Dispara SOLO cuando el primer posteo salió como fallback de foto real
+// (el render expiró): re-renderiza el composite del slot 0 y lo cambia
+// en la semana guardada (trial_cache) SOLO si el posteo sigue en
+// borrador — la semana todavía no se importó a posteos (sin fila con
+// este digest_hash) y la caché todavía tiene la versión entregada.
+// Si ya se importó, si no hay caché, si el render expira o si algo
+// falla, no pasa nada: el mejor disponible ya está mostrado. Nunca tira.
+// o = { cacheKey, digestHash, specPost0, colors, db, renderFn? }.
+// renderFn por defecto: renderSpecPngs de UN posteo → primer buffer.
+async function scheduleFirstPostRetry(o) {
+  try {
+    if (!o || !o.specPost0 || !o.cacheKey || !o.db || typeof o.db.prepare !== 'function') return { applied: false, reason: 'sin-datos' };
+    const row = o.db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(o.cacheKey);
+    if (!row || !row.payload) return { applied: false, reason: 'no-cache' };
+    const payload = JSON.parse(row.payload);
+    if (!payload || !Array.isArray(payload.posts) || !payload.posts.length) return { applied: false, reason: 'no-posts' };
+    if (payload.posts[0] && payload.posts[0]._first_post_retried) return { applied: false, reason: 'already-retried' };
+    // Borrador = sin importar: ningún posteo con este digest_hash.
+    if (o.digestHash) {
+      const imported = o.db.prepare('SELECT 1 FROM posts WHERE digest_hash LIKE ? LIMIT 1').get(String(o.digestHash) + '%');
+      if (imported) return { applied: false, reason: 'imported' };
+    } else {
+      return { applied: false, reason: 'sin-digest' };
+    }
+    const renderFn = o.renderFn || (async (sp, colors) => {
+      const r = await renderSpecPngs([sp], colors || {});
+      return r && Array.isArray(r.bufs) ? r.bufs[0] : null;
+    });
+    const buf = await raceMsLocal(Promise.resolve().then(() => renderFn(Object.assign({}, o.specPost0), o.colors || {})), FIRST_POST_RETRY_BUDGET_MS);
+    if (!buf || !buf.length) return { applied: false, reason: 'render-fallo' };
+    // Re-chequear borrador ANTES de escribir: la importación pudo
+    // llegar mientras renderizábamos.
+    const row2 = o.db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(o.cacheKey);
+    if (!row2 || !row2.payload) return { applied: false, reason: 'no-cache' };
+    const payload2 = JSON.parse(row2.payload);
+    if (!payload2 || !Array.isArray(payload2.posts) || !payload2.posts.length) return { applied: false, reason: 'no-posts' };
+    if (payload2.posts[0] && payload2.posts[0]._first_post_retried) return { applied: false, reason: 'already-retried' };
+    if (o.digestHash) {
+      const imported2 = o.db.prepare('SELECT 1 FROM posts WHERE digest_hash LIKE ? LIMIT 1').get(String(o.digestHash) + '%');
+      if (imported2) return { applied: false, reason: 'imported' };
+    }
+    payload2.posts[0].image = 'data:image/jpeg;base64,' + Buffer.from(buf).toString('base64');
+    payload2.posts[0].type = 'image';
+    payload2.posts[0]._first_post_retried = true;
+    o.db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(payload2), Date.now());
+    return { applied: true, reason: 'ok' };
+  } catch (e) {
+    return { applied: false, reason: 'error' };
+  }
+}
+
 // (LOTE VOZ-PROPIA-EN-LA-PRUEBA · 7/11) La voz del cliente en la semana
 // de la prueba: sus frases reales que se repiten (digest.voz_marcadores,
 // extraídas de SUS captions + sus respuestas por
@@ -1674,6 +1852,12 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   let styleObjs, photos;
   let wowFirst = null; // (v907) El tema wow del primer posteo de la prueba; lo pone la rama sin foto (trial) y lo lee la dosificación de texto.
   const photoProductOf = new Map(); // (v230) idx → producto, cuando la foto elegida vino del mapa foto→producto
+  // (LOTE PRIMER-POSTEO-MEJOR) Origen de la foto por slot + gate del
+  // primer posteo: se fijan en la rama wow del loop (rama trial) y se
+  // vuelcan en specPosts. Alcance de función: el loop vive en la rama
+  // `else` y el mapa de specPosts está afuera del if/else.
+  const photoSourceOf = new Map();
+  let wowGateInfo = null;
   const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
     && base.styles.every((c) => { const IS = imageStyles(); return IS && IS.getStyle(c); });
   if (baseStylesOk && Array.isArray(base.photos) && base.photos.length >= n) {
@@ -1789,6 +1973,31 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     const usedWeb = new Set();
     for (const i of order) {
       const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault, trialNoStock });
+      // (LOTE PRIMER-POSTEO-MEJOR · ideas 1-3) El primer posteo (wow)
+      // elige entre DOS candidatos a nivel spec (foto real del producto
+      // vs póster de marca) y el gate decide; nunca foto de tema. El
+      // ganador fija la foto, el póster y el origen; el resto de la
+      // semana no cambia.
+      if (i === 0 && topics[0] && topics[0]._wow) {
+        let headline0 = topics[0].headline || '';
+        if (tone === 'tu') headline0 = captions.TU_HEADLINES[headline0] || headline0;
+        headline0 = captions.capHeadlineWords(headline0, 6, lang);
+        const cands = pickFirstPostCandidates({ topic: topics[0], headline: headline0, webPool, used: usedWeb, ctx, lang, profilePicPath });
+        wowGateInfo = cands;
+        const win = cands.winner === 'b' ? cands.b : cands.a;
+        if (win) {
+          if (cands.winner === 'b') { posterAt.add(0); photos[0] = win.photo; photoSourceOf.set(0, 'brand-poster'); }
+          else {
+            usedWeb.add(win.photo); photos[0] = win.photo; photoSourceOf.set(0, win.photo_source);
+            if (win.producto && topics[0].digest_anchor && clientDigest.sameItemName(win.producto, topics[0].digest_anchor)) photoProductOf.set(0, win.producto);
+          }
+        } else {
+          // Sin foto real ni foto de perfil: póster sin foto (el render
+          // dibuja el póster igual); el gate lo registra como sin-logo.
+          posterAt.add(0); photos[0] = profilePicPath || null; photoSourceOf.set(0, 'brand-poster');
+        }
+        continue;
+      }
       // (v212) Primero las fotos de SU web (son suyas y venden más): match
       // exacto de tema, después cualquier pase del gate; sin uso repetido
       // salvo que no quede otra que pase.
@@ -1822,7 +2031,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
       photos[i] = p;
     }
-    for (const i of posterAt) photos[i] = profilePicPath || null;
+    for (const i of posterAt) { photos[i] = profilePicPath || null; if (!photoSourceOf.has(i)) photoSourceOf.set(i, 'brand-poster'); }
   }
   // (v197) VARIEDAD ESTRUCTURAL: ningún esqueleto de render se repite
   // en la semana (garantía, no puntaje — ver enforceSkeletonVariety).
@@ -1920,6 +2129,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     } catch (e) { subjectScale = undefined; }
     return {
       photo: photos[i],
+      // (LOTE PRIMER-POSTEO-MEJOR · idea 1) De dónde salió la foto:
+      // 'real-product-brand' (producto + marca visible) | 'real-product'
+      // (producto) | 'brand-poster' (póster de marca). Solo el slot 0 lo
+      // tiene garantizado; el resto, cuando el loop lo registró.
+      photo_source: photoSourceOf.get(i) || undefined,
       // (v230) Trazabilidad del gate foto↔PRODUCTO: el producto exacto
       // que el mapa identificó en la foto elegida (si vino del mapa).
       photo_product: photoProductOf.get(i) || undefined,
@@ -1966,6 +2180,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   if (wowFirst && wowFirst.star_missing && specPosts[0]) {
     specPosts[0].star_missing = true;
     specPosts[0].star_retry_hint = wowFirst.star_retry_hint || 'rederive-from-photo';
+  }
+  // (LOTE PRIMER-POSTEO-MEJOR · ideas 1-3) El gate del primer posteo
+  // viaja en el spec (design.posts[0]._gate) para observabilidad; `fast`
+  // marca el camino rápido (<30 s): foto real usable, sin modelo.
+  if (wowGateInfo && specPosts[0]) {
+    const g = wowGateInfo.winner === 'b' ? wowGateInfo.gateB : wowGateInfo.gateA;
+    if (g) {
+      // El gate del ganador + el del perdedor (para ver por qué perdió).
+      const loserGate = wowGateInfo.winner === 'b' ? wowGateInfo.gateA : wowGateInfo.gateB;
+      specPosts[0]._gate = { pass: g.pass, score: g.score, failures: g.failures, correction: g.correction, winner: wowGateInfo.winner, loser: loserGate || null };
+    }
+    specPosts[0].fast = (photoSourceOf.get(0) === 'real-product-brand' || photoSourceOf.get(0) === 'real-product');
   }
   // (v209) DOSIFICACIÓN DE TEXTO: exactamente 2 piezas de la semana
   // llevan titular+CTA quemados sobre la imagen; las demás salen con la
@@ -2230,7 +2456,11 @@ function appendOfferTerms(caption, topic, lang) {
   } catch (e) { return caption; }
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null, renderTimeoutMs = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+  // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Presupuesto duro del
+  // render+video: si expira, el primer posteo sale con la foto real.
+  const t0 = Date.now();
+  const renderBudget = renderTimeoutMs || FIRST_POST_RENDER_BUDGET_MS;
   const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang, trialNoStock, draft, firmaStyle, firmaSinVideo, estiloVisual });
   const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
@@ -2249,7 +2479,23 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   const withPhotos = specPosts.map((p) => (
     (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
   ));
-  const { bufs, runDir } = await renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, () => {});
+  const { bufs, runDir, timedOut } = await renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, () => {}, renderBudget);
+  // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Si el render expiró, cada
+  // pieza sin JPG sale con su FOTO REAL (sin componer): el primer
+  // posteo se ve igual, con su foto y su caption, en vez de un spinner.
+  // Último recurso (póster sin foto ni perfil): la primera foto real
+  // disponible del negocio, antes que romper la semana.
+  const filledBufs = (bufs || []).map((b, i) => {
+    if (b && b.length) return b;
+    try {
+      const raw = withPhotos[i] && withPhotos[i].photo;
+      if (typeof raw === 'string' && raw && fs.existsSync(raw)) return fs.readFileSync(raw);
+    } catch (e) {}
+    return null;
+  });
+  const firstReal = filledBufs.find((b) => b && b.length) || null;
+  const finalBufs = filledBufs.map((b) => (b && b.length ? b : firstReal));
+  if (finalBufs.some((b) => !b)) throw new Error('Render expiró sin foto real para el fallback');
   try {
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
     // no pasa el gate, se reintenta con otro tema del rubro. Nunca sale un
@@ -2276,7 +2522,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
         : baseCaption;
       prevCaps.push(finalCaption);
       return {
-        image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
+        image: 'data:image/jpeg;base64,' + finalBufs[i].toString('base64'),
         caption: finalCaption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline, // titular del diseño (en piezas limpias vive solo en el caption)
@@ -2288,15 +2534,19 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
 
     // El video recorre TODOS los diseños con cortes (tour): ya no es una
     // sola tarjeta estática animada. Los JPG ya están en runDir.
+    // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) El video comparte el
+    // presupuesto del render: si no entra, la celda sale como imagen
+    // (el video es un extra; el primer posteo nunca lo espera).
     const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
-    const videoB64 = await renderVideoB64(designPaths, runDir, videoIdx);
+    const videoBudget = Math.max(2000, renderBudget - (Date.now() - t0));
+    const videoB64 = await raceMsLocal(renderVideoB64(designPaths, runDir, videoIdx), videoBudget);
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
         ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
         : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null }
     ));
-    return { posts, spec: savedSpec };
+    return { posts, spec: savedSpec, timedOut: !!timedOut };
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
   }
@@ -3017,7 +3267,7 @@ function categoryFromText(text) {
 // su tamaño queda estable ≥400ms (ya no lo está escribiendo el render), se
 // llama a onPng(i, buf) en orden de índice. Resuelve { bufs, runDir } como
 // renderSpecPngs. Si el render falla a mitad de camino, rechaza.
-async function renderSpecPngsStream(specPosts, colors, onPng) {
+async function renderSpecPngsStream(specPosts, colors, onPng, deadlineMs) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   const specPath = path.join(runDir, 'spec.json');
@@ -3027,6 +3277,11 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
   // NOTA (2026-10-17): se probó partir el render en dos procesos Python
   // en paralelo y en la instancia actual NO ayudó (la CPU es compartida:
   // el trabajo total manda). Queda el proceso único de siempre.
+  // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) deadlineMs: si expira
+  // antes de que salgan todos los PNGs, resuelve con los que hay (null
+  // para los que faltan) + timedOut: true, en vez de esperar al render
+  // completo. El proceso python sigue hasta su timeout (90 s) y el
+  // llamador limpia runDir; el render parcial nunca se pierde.
   const renderPromise = runDemoRender([DEMO_SCRIPT, specPath, runDir])
     .then(() => { renderDone = true; }, (e) => { renderErr = e; renderDone = true; });
   try {
@@ -3034,8 +3289,15 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
     const emitted = new Array(n).fill(false);
     const lastSize = new Array(n).fill(-1);
     let emittedCount = 0;
+    const deadlineAt = deadlineMs ? Date.now() + deadlineMs : null;
+    let timedOut = false;
+    const readBufs = () => specPosts.map((_, i) => {
+      if (!emitted[i]) return null;
+      try { return fs.readFileSync(path.join(runDir, `post-${i}.jpg`)); } catch (_) { return null; }
+    });
     while (emittedCount < n) {
       if (renderErr) throw renderErr; // el render murió: no van a aparecer más PNGs
+      if (deadlineAt && Date.now() > deadlineAt) { timedOut = true; break; }
       await new Promise((r) => setTimeout(r, 150));
       for (let i = 0; i < n; i++) {
         if (emitted[i]) continue;
@@ -3055,10 +3317,11 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
         }
       }
     }
+    if (timedOut) return { bufs: readBufs(), runDir, timedOut: true };
     await renderPromise;
     if (renderErr) throw renderErr;
     const bufs = specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.jpg`)));
-    return { bufs, runDir };
+    return { bufs, runDir, timedOut: false };
   } catch (e) {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
     throw e;
@@ -3107,6 +3370,11 @@ module.exports = {
   // (LOTE L2) Decisión honesta del idioma del contenido (nunca cae en
   // silencio al visitante cuando el sitio declara un tercer idioma).
   resolveBrandLangDecision,
+  // (LOTE PRIMER-POSTEO-MEJOR · 5 mejoras + regla <30 s) Gate, candidatos,
+  // reintento en segundo plano y presupuesto duro de generación.
+  textLangOf, firstPostGate, pickFirstPostCandidates, scheduleFirstPostRetry,
+  FIRST_POST_RENDER_BUDGET_MS, FIRST_POST_VIDEO_BUDGET_MS, FIRST_POST_RETRY_BUDGET_MS,
+  raceMsLocal,
   applyVoiceToTopics,
   // (ONBOARDING-SIMPLE · ACT.5) Rotación de la semana de la prueba.
   enforceTopicRotation,

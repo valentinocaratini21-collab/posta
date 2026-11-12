@@ -1293,6 +1293,23 @@ function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
       score += bestReach >= 1000 ? 4 : bestReach >= 300 ? 3 : 2;
       evidence.push('su posteo con más alcance lo menciona');
     }
+    // (LOTE PRIMER-POSTEO-MEJOR · idea 4) EL MÁS QUERIDO: el cariño
+    // (likes + comentarios) de los posteos de la marca es una señal de
+    // estrella. Escala-libre: el bonus va al ítem mencionado en el
+    // posteo con MÁS cariño del set (relativo a la propia cuenta, no a
+    // un umbral absoluto). Sin likes/comments en las métricas no hay
+    // bonus (retrocompatible: las métricas viejas solo traen reach).
+    // Nunca pisa dueño ni ventas: vive DENTRO de inferStar, la rama
+    // inferida — effectiveStarOf ya ordena dueño → ventas → inferida.
+    let bestLove = 0; let bestLoveText = '';
+    for (const m of (metrics || [])) {
+      const love = (Number(m && m.likes) || 0) + (Number(m && m.comments) || 0);
+      if (love > bestLove) { bestLove = love; bestLoveText = String((m && m.text) || ''); }
+    }
+    if (bestLove > 0 && bestLoveText && hit(bestLoveText)) {
+      score += 3;
+      evidence.push(`es el más querido de su feed (${bestLove} interacciones en su posteo con más cariño)`);
+    }
     if (dnaStar && sameItemName(dnaStar, nombre)) { score += 2; evidence.push('figura como estrella en la ficha del negocio'); }
     return { item: nombre, score, evidence };
   });
@@ -1487,7 +1504,10 @@ function questionCandidatesOf(d) {
   const star = d.inferred_star;
   // (v238) Si el dueño ya confirmó su estrella (Posty pregunta), no hay
   // nada que confirmar: el candidato no nace.
-  const starDelDueno = (d.dueno && d.dueno.estrella) || (star && star.fuente === 'dueno');
+  // (LOTE L3 §7) La estrella del dueño solo suprime la pregunta si
+  // VALIDA contra lo evidenciado (duenoStarEvidenceMatch): una
+  // respuesta genérica descartada por L3 («proyecto») no la suprime.
+  const starDelDueno = (d.dueno && d.dueno.estrella && duenoStarEvidenceMatch(d, d.dueno.estrella)) || (star && star.fuente === 'dueno');
   if (star && star.item && (star.confidence || 0) >= 0.5 && !starDelDueno) {
     out.push({ tipo: 'estrella', item: star.item, texto: `tu producto estrella es ${star.item}?` });
   }
@@ -2247,6 +2267,38 @@ function degradedBrandWow(digest, opts) {
     _wow: 1,
   };
 }
+/* (LOTE PRIMER-POSTEO-MEJOR · idea 5) VOZ DE LA MARCA: cómo nombra
+ * LA MARCA a su estrella (forma `dice` del léxico) y qué frase suya
+ * usar cuando no hay ritual ni precio. Sin léxico ni marcadores, null
+ * y el primer posteo queda idéntico a hoy (regresión cero). */
+function lexDiceFor(digest, nombre) {
+  try {
+    const entries = (digest && digest.lexicon && Array.isArray(digest.lexicon.entries)) ? digest.lexicon.entries : [];
+    for (const e of entries) {
+      if (!e || !e.item) continue;
+      if (sameItemName(e.item, nombre) && typeof e.dice === 'string' && e.dice.trim().length >= 2) return e.dice.trim();
+    }
+  } catch (e) {}
+  return null;
+}
+function voicePhraseFor(digest, nombre) {
+  // Primer marcador que comparta una palabra de contenido (≥4 letras)
+  // con la estrella; si no, el primer marcador; si no, la primera
+  // frase del léxico. Tope 90 caracteres: es un detalle, no un párrafo.
+  const contentWords = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4);
+  const markers = (digest && Array.isArray(digest.voz_marcadores)) ? digest.voz_marcadores.map((m) => String(m || '').trim()).filter(Boolean) : [];
+  const hit = (s) => {
+    const n = String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return contentWords.some((w) => n.includes(w));
+  };
+  let pick = markers.find(hit) || markers[0] || null;
+  if (!pick) {
+    const frases = (digest && digest.lexicon && Array.isArray(digest.lexicon.frases)) ? digest.lexicon.frases.map((f) => String(f || '').trim()).filter(Boolean) : [];
+    pick = frases.find(hit) || frases[0] || null;
+  }
+  if (!pick) return null;
+  return pick.length > 90 ? pick.slice(0, 87).trim() + '…' : pick;
+}
 function deriveFirstPostWow(digest, opts) {
   const o = opts || {};
   const en = o.lang === 'en';
@@ -2300,6 +2352,16 @@ function deriveFirstPostWow(digest, opts) {
   }
   const A = name(starItem);
   if (A.length < 3) return null;
+  // (LOTE PRIMER-POSTEO-MEJOR · idea 5) El nombre MOSTRADO usa la
+  // forma con la que LA MARCA nombra a su estrella (léxico `dice`)
+  // cuando existe; el ancla formal (digest_anchor) sigue siendo el
+  // nombre formal, para el match de foto. Sin léxico, idéntico a hoy.
+  let displayA = A;
+  let voiceUsed = null;
+  try {
+    const dice = lexDiceFor(digest, A);
+    if (dice && dice !== A) { displayA = dice; voiceUsed = 'dice'; }
+  } catch (e) {}
   const precio = String(starItem.precio || '').trim();
   // Familia de servicios (espejo del set de deriveTopics): cambia el
   // verbo del gancho y el CTA, no la estrella.
@@ -2318,31 +2380,38 @@ function deriveFirstPostWow(digest, opts) {
   // producto más visible, no la estrella — el gancho es una invitación
   // neutra a probarlo.
   let headline;
-  const nA = words(A);
+  const nA = words(displayA);
   if (en) {
-    if (nA <= 2 && !starMissing) headline = `${A} everyone's asking for`;
-    else if (nA <= 4) headline = serviceFamily ? `Book ${A} today` : `Try ${A} today`;
-    else headline = capWords(A, 6);
+    if (nA <= 2 && !starMissing) headline = `${displayA} everyone's asking for`;
+    else if (nA <= 4) headline = serviceFamily ? `Book ${displayA} today` : `Try ${displayA} today`;
+    else headline = capWords(displayA, 6);
   } else {
-    if (nA <= 2 && !starMissing) headline = `${A} que todos piden`;
-    else if (nA <= 4) headline = serviceFamily ? `${A}, reservá hoy` : `${A}, probalo hoy`;
-    else headline = capWords(A, 6);
+    if (nA <= 2 && !starMissing) headline = `${displayA} que todos piden`;
+    else if (nA <= 4) headline = serviceFamily ? `${displayA}, reservá hoy` : `${displayA}, probalo hoy`;
+    else headline = capWords(displayA, 6);
   }
   headline = capWords(headline, 6);
   // Caption en voz humana, 3 bloques: estrella / detalle concreto /
-  // CTA. El detalle es ritual + precio (lo que haya); sin ninguno, la
-  // línea honesta del favorito de la casa (la estrella lo es por
-  // definición: la más vendida o la inferida).
+  // CTA. El detalle es ritual + precio (lo que haya); sin ninguno, una
+  // frase REAL de la marca (idea 5) en vez del genérico «favorito de la
+  // casa» — la estrella lo es por definición, pero suena como Posty.
+  // (LOTE L4) Sin estrella confirmada, la línea honesta es la manera
+  // de la casa — nunca un favorito que no se verificó (eso manda sobre
+  // la frase de voz: el degradado honesto no se rearma).
   const priceLine = precio ? (en ? `Yours for ${precio}, just like you see it.` : `Lo tenés a ${precio}, como lo ves.`) : '';
   let detail = [ritual, priceLine].filter(Boolean).join(' ');
-  // (LOTE L4) «El favorito de la casa» es un claim de estrella: sin
-  // estrella confirmada, la línea honesta es la manera de la casa —
-  // nunca un favorito que no se verificó.
-  if (!detail) detail = starMissing ? (en ? 'Made our way.' : 'Hecho a nuestra manera.') : (en ? 'The house favorite, ready for you.' : 'El favorito de la casa, listo para vos.');
+  if (!detail) {
+    if (starMissing) detail = en ? 'Made our way.' : 'Hecho a nuestra manera.';
+    else {
+      const voiceLine = voicePhraseFor(digest, A);
+      if (voiceLine) { detail = voiceLine; if (!voiceUsed) voiceUsed = 'frase'; }
+      else detail = en ? 'The house favorite, ready for you.' : 'El favorito de la casa, listo para vos.';
+    }
+  }
   const ctaLine = serviceFamily
     ? (en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`)
     : (en ? `Order yours today by DM 📩` : `Pedilo hoy por DM 📩`);
-  const caption = `${A} ✨\n\n${detail}\n\n${ctaLine}`;
+  const caption = `${displayA} ✨\n\n${detail}\n\n${ctaLine}`;
   const subline = precio ? (en ? `${precio}, just like you see it` : `A ${precio}, como lo ves`) : '';
   const cta = serviceFamily ? (en ? 'Tell me more' : 'Quiero saber más') : (en ? 'I want mine' : 'Quiero el mío');
   // Negativos por marca + prompt de imagen: el nombre de la estrella,
@@ -2353,8 +2422,8 @@ function deriveFirstPostWow(digest, opts) {
   const biz = business || (en ? 'the house' : 'la casa');
   const ritualTxt = ritual || (en ? 'made our way' : 'hecho a nuestra manera');
   let imagePrompt = en
-    ? `Hero photo of ${A} from ${biz}: ${ritualTxt} Real photo from the client, close-up of the product with the brand inside the scene (their cup with their logo, their bags, their store or packaging), natural light, no text over the product. Never as a designed band or applied logo.`
-    : `Foto hero de ${A} de ${biz}: ${ritualTxt} Foto real del cliente, primer plano del producto con la marca dentro de la escena (su vaso con su logo, sus bolsas, su local o su packaging), luz natural, sin texto sobre el producto. Nunca como banda diseñada ni logo aplicado.`;
+    ? `Hero photo of ${displayA} from ${biz}: ${ritualTxt} Real photo from the client, close-up of the product with the brand inside the scene (their cup with their logo, their bags, their store or packaging), natural light, no text over the product. Never as a designed band or applied logo.`
+    : `Foto hero de ${displayA} de ${biz}: ${ritualTxt} Foto real del cliente, primer plano del producto con la marca dentro de la escena (su vaso con su logo, sus bolsas, su local o su packaging), luz natural, sin texto sobre el producto. Nunca como banda diseñada ni logo aplicado.`;
   if (negativos.length) imagePrompt += en ? ` DO NOT show: ${negativos.join(', ')}.` : ` NO mostrar: ${negativos.join(', ')}.`;
   let sales = {};
   try {
@@ -2379,6 +2448,10 @@ function deriveFirstPostWow(digest, opts) {
       ? { star_missing: true, star_retry_hint: 'confirm-from-photo' }
       : { _star: 1 }),
     _wow: 1,
+    // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Qué voz se usó, si alguna:
+    // 'dice' (forma propia de la marca para la estrella) o 'frase'
+    // (frase real de la marca como detalle). null = sin voz (como hoy).
+    voice_used: voiceUsed,
   };
 }
 
@@ -2527,6 +2600,8 @@ module.exports = {
   isGenericAnchorName,
   // (LOTE INGESTA) Guarda de cromo: nombre de sección, no producto.
   isChromeDerivedName,
+  // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
+  lexDiceFor, voicePhraseFor,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
   questionCandidatesOf, applyDeepBlocks,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
