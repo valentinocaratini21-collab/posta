@@ -32143,6 +32143,39 @@ function trialCacheMatches(out, business, category, lang) {
   } catch (e) { return false; }
 }
 
+// (LOTE L6) Generaciones en vuelo: una recarga a mitad de generación no
+// re-dispara otra desde cero — el front pregunta primero por
+// /api/trial/gen-status y polea el trial_cache hasta que la generación en
+// curso escriba. Mapa solo en memoria (sin tabla nueva): se marca al
+// arrancar la generación de verdad (tras caché y anti-spam) y se borra
+// en el finally de cada ruta; una entrada de >10 min se considera rancia
+// (seguro ante un handler que muriera sin pasar por el finally).
+const trialGenInflight = new Map(); // igKey -> { startedAt }
+const TRIAL_GEN_INFLIGHT_MAX_MS = 10 * 60 * 1000;
+function trialGenMarkStart(igKey) { if (igKey) trialGenInflight.set(igKey, { startedAt: Date.now() }); }
+function trialGenMarkDone(igKey) { if (igKey) trialGenInflight.delete(igKey); }
+function trialGenIsInflight(igKey) {
+  const e = igKey && trialGenInflight.get(igKey);
+  if (!e) return false;
+  if (Date.now() - e.startedAt > TRIAL_GEN_INFLIGHT_MAX_MS) { trialGenInflight.delete(igKey); return false; }
+  return true;
+}
+// (LOTE L6) Estado de la prueba por @: solo LEE. `cached` dice si hay una
+// semana guardada (<72 h) — NO verifica que sea de este negocio y rubro
+// (eso lo hace generate/generate-stream con trialCacheMatches al servir);
+// `generating` dice si hay una generación en curso para ese @. El front
+// lo usa para no duplicar trabajo tras una recarga; nunca decide por sí
+// solo si se genera o no.
+app.get('/api/trial/gen-status', (req, res) => {
+  const ig = String(req.query.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40).toLowerCase();
+  if (!ig) return res.status(400).json({ ok: false, error: 'falta ig' });
+  let cached = false;
+  try {
+    const hit = db.prepare('SELECT created_at FROM trial_cache WHERE ig = ?').get(ig);
+    cached = !!(hit && Date.now() - hit.created_at < 72 * 3600 * 1000);
+  } catch (e) { /* sin caché: se genera igual */ }
+  res.json({ ok: true, ig, cached, generating: trialGenIsInflight(ig) });
+});
 app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
   let fields, file;
   try {
@@ -32169,6 +32202,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   }
   const webDescEdited = String(fields.web_desc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const webCtxPromise = webRaw ? trialWebContext(webRaw) : Promise.resolve(null);
+  // (LOTE L6) El embed del @ arranca YA, en paralelo con la web y el perfil:
+  // su fetch SSR tarda ~2 s en vivo (5,1 s en la corrida de verificación de
+  // L1) y la carrera de 2,5 s que empezaba TARDE (tras web+catálogo+fotos)
+  // la perdía siempre — la señal de captions quedaba vacía aunque la
+  // fuente funcione. La promesa corre desde t≈0 y en el consumo solo se le
+  // da una gracia corta: para entonces ya tuvo todo el pre-render para llegar.
+  const embedPromise = ig ? demo.fetchIgEmbedHtml(ig).catch(() => null) : Promise.resolve(null);
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
@@ -32284,6 +32324,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       }
     } catch (e) { /* fallback silencioso */ }
   }
+  // (LOTE L6) El análisis del @ (auditoría + pares) corría DESPUÉS del
+  // render, en serie (auditoría hasta 3 s + pares + estudio 6 s): arranca
+  // YA en paralelo con el pre-render y el render; abajo solo se recoge
+  // con una gracia corta. Si no llegó, el análisis queda ausente como hoy
+  // cuando no hay datos del @ — nunca frena la prueba.
+  const auditPromise = ig ? feedAudit.fetchAuditData(ig).catch(() => null) : Promise.resolve(null);
+  const peersPromise = fetchPeersForAnalysis(peerHandlesFromText(competitors)).catch(() => []);
   // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: la descarga de la foto de
   // perfil corre en paralelo con el render; se espera con carrera
   // corta antes del payload (abajo). Sin foto, no hay sello.
@@ -32327,17 +32374,21 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // (v196) Medallón de los pósters de marca: la foto de perfil localizada
   // en MEDIA_DIR (mismo archivo que usa el stream). Sin @ o sin foto, los
   // pósters salen tipográficos.
+  // (LOTE L6) La descarga corría en serie antes del chequeo de caché (un
+  // caché tibio igual esperaba a la CDN): ahora arranca en segundo plano
+  // y se recoge con gracia corta justo antes del render.
   let profilePicPath = null;
-  if (ig && igPic) {
+  const profilePicPathP = (ig && igPic) ? (async () => {
     try {
       const profObj = { handle: ig, pic: igPic };
       await feedAudit.localizeTrialPic(profObj, MEDIA_DIR);
       if (profObj.pic_media) {
         const abs = path.join(MEDIA_DIR, path.basename(profObj.pic_media));
-        if (fs.statSync(abs).isFile()) profilePicPath = abs;
+        if (fs.statSync(abs).isFile()) return abs;
       }
     } catch (e) { /* póster tipográfico */ }
-  }
+    return null;
+  })() : Promise.resolve(null);
 
   const ip = demo.clientIp(req);
   const testMode = trialTestMode(req);
@@ -32386,6 +32437,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     }
     charged = true;
   }
+  // (LOTE L6) La generación arranca acá (tras caché y anti-spam): el front
+  // puede polear /api/trial/gen-status mientras corre.
+  trialGenMarkStart(igKey);
 
   let photoPath = null;
   let ok = false;
@@ -32423,21 +32477,30 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (v212) Web del negocio (2/2): su paleta manda si no hay otra fuente de
     // color (con @, manda el feed) y sus fotos entran como material gateado.
     let webExtraPhotos = [];
+    // (LOTE L6) Las fotos de la web arrancan YA (en paralelo con el
+    // catálogo profundo de abajo): se recogen en el bloque deep.
+    let webPhotosP = null;
     if (webData) {
       if (colorSource === 'rubro' && webData.palette && webData.palette[0]) {
         accent = webData.palette[0];
         if (webData.palette[1]) btn = webData.palette[1];
         colorSource = 'web';
       }
-      webExtraPhotos = await trialWebPhotos(webData);
-      marcaWebBrand(webData, webExtraPhotos);
+      webPhotosP = trialWebPhotos(webData);
     }
     // (v230) LECTURA PROFUNDA: catálogo completo de su web (páginas de
     // catálogo + PDFs enlazados) y mapa foto→producto de las fotos del
     // sitio, cada uno con su carrera: la prueba nunca espera de más.
+    // (LOTE L6) Fotos de la web y catálogo profundo son independientes y
+    // corrían en serie (fotos → catálogo 7 s → entradas 7 s): ahora las
+    // dos primeras corren en paralelo; las entradas siguen después porque
+    // necesitan los ítems del catálogo.
     let deep = null;
     if (webData) {
-      const catalog = await raceMs(trialDeepCatalog(webData), 7000);
+      const deepCatalogP = raceMs(trialDeepCatalog(webData), 7000);
+      webExtraPhotos = await webPhotosP;
+      marcaWebBrand(webData, webExtraPhotos);
+      const catalog = await deepCatalogP;
       const itemNames = [...(webData.services || []), ...((catalog && catalog.items) || []).map((x) => x.nombre)];
       const photoEntries = await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000);
       deep = { catalog, photoEntries };
@@ -32462,7 +32525,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     let _trialStarSignals = null;
     if (ig) {
       try {
-        const _htmlVoz0 = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
+        const _htmlVoz0 = await raceMs(embedPromise, 2000);
         if (_htmlVoz0) {
           _embedPostsVoz = feedAudit.parseEmbedPosts(_htmlVoz0) || [];
           const _love = _embedPostsVoz
@@ -32490,7 +32553,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         // fetch). Si no se leyó, se lee acá como antes.
         let _postsVoz = _embedPostsVoz;
         if (!_postsVoz) {
-          const _htmlVoz = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
+          const _htmlVoz = await raceMs(embedPromise, 2000);
           _postsVoz = _htmlVoz ? (feedAudit.parseEmbedPosts(_htmlVoz) || []) : [];
         }
         const _capsVoz = (_postsVoz || []).map((p) => p.caption).filter(Boolean).slice(0, 12);
@@ -32543,6 +32606,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
+    // (LOTE L6) Medallón del perfil: la descarga arrancó en segundo plano
+    // arriba; a esta altura ya está (o no llega: póster tipográfico).
+    profilePicPath = await raceMs(profilePicPathP, 2000);
     const { posts, spec, timedOut: genTimedOut } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
@@ -32564,10 +32630,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!genTimedOut) try {
       let dataJson = null;
       if (ig) {
-        dataJson = await Promise.race([feedAudit.fetchAuditData(ig), new Promise((r) => setTimeout(() => r(null), 3000))]).catch(() => null);
+        dataJson = await raceMs(auditPromise, 1500);
       }
       if (dataJson && dataJson.ok) {
-        const peersJ = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
+        const peersJ = (await raceMs(peersPromise, 1500)) || [];
         const coldJ = analysisEngine.isColdStart({ hasIg: true, profile: dataJson.profile, posts: dataJson.posts || [] });
         const rawAJ = coldJ
           ? analysisEngine.analyzeColdStart({ business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: ig }, digest: trialDigest, peers: peersJ, reviews: null, ctx: { postsPerWeek: 7, plan: 'trial', lang } })
@@ -32725,6 +32791,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     console.error('[posta] Error en prueba completa:', e.message);
     res.status(500).json({ error: 'No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.' });
   } finally {
+    trialGenMarkDone(igKey);
     if (charged && !ok) demo.refundTrialAttempt(ip); // falló: no se consume
     if (photoPath) {
       try { fs.unlinkSync(photoPath); } catch (_) {}
@@ -33307,6 +33374,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
     } catch (e) { /* fallback silencioso */ }
   }
+  // (LOTE L6) Los pares del análisis arrancan YA, en paralelo con la
+  // generación: antes se esperaban DESPUÉS del video (fetchPeers con
+  // carrera por par). Abajo solo se recogen con una gracia corta.
+  const peersPromiseS = fetchPeersForAnalysis(peerHandlesFromText(competitors)).catch(() => []);
   // ---------- Proyección de perfil (v184): su perfil HOY vs CON Posty ------
   // Fetch completo del perfil real (bio, conteos, grilla) EN PARALELO con la
   // generación: nunca la espera ni la frena. Carrera de ~3s: si el perfil
@@ -33452,6 +33523,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     }
     charged = true;
   }
+  // (LOTE L6) La generación arranca acá (tras caché y anti-spam): el front
+  // puede polear /api/trial/gen-status mientras corre.
+  trialGenMarkStart(igKey);
 
   let photoPath = null;
   let runDir = null;
@@ -33477,7 +33551,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // (RUBRO-GARANTÍAS ×6 · pieza 1) Igual que en el endpoint clásico:
     // la puerta corre con los productos del espejo aprobado.
     const espTrialS = (() => { try { return fundamentoLiteral.espejoFromFields(fields); } catch (e) { return null; } })();
-    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial, productos: (espTrialS && espTrialS.productos) || [] }, null);
+    // (LOTE L6) Las ideas solo viajan en el payload final: no alimentan
+    // ni el spec ni los diseños ni los captions. Corrían como primer
+    // await (LLM, segundos) antes que todo; ahora arrancan en segundo
+    // plano y se recogen antes del 'done' (gracia de 5 s: a esa altura la
+    // tanda ya terminó casi siempre).
+    const ideasPromiseS = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial, productos: (espTrialS && espTrialS.productos) || [] }, null)).catch(() => []);
 
     // (v192) HERENCIA VISUAL DEL PERFIL: la semana sale de SU línea, no de
     // una plantilla genérica del rubro. Con el perfil ya en vuelo (la misma
@@ -33576,6 +33655,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // el perfil aportaron la suya (con @ manda lo visual del feed) y sus
     // fotos como material gateado (pasan el gate foto↔tema como todo).
     let webExtraPhotos = [];
+    // (LOTE L6) Las fotos de la web arrancan YA, en paralelo con el resto:
+    // se recogen en el bloque deep de abajo, junto con el catálogo y el
+    // bio-link. Antes se esperaban acá, en serie.
+    let webPhotosP = null;
     let trialOfferSheetS = null; // (M3 FICHA-OFERTA)
     if (webRaw) {
       if (!webData) webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 9000))]).catch(() => null);
@@ -33592,8 +33675,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           if (webData.palette[1]) btn = webData.palette[1];
           colorSource = 'web';
         }
-        webExtraPhotos = await trialWebPhotos(webData);
-        marcaWebBrand(webData, webExtraPhotos);
+        webPhotosP = trialWebPhotos(webData);
       }
     }
     // (FUNDAMENTO-LITERAL · pieza 1) Espejo aprobado: líneas literales al
@@ -33621,8 +33703,18 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // se derivan de él, no del catálogo por rubro.
     let deep = null;
     {
-      const catalog = webData ? await raceMs(trialDeepCatalog(webData), 6000) : null;
-      const bioLink = await raceMs(bioLinkPromise, 4000);
+      // (LOTE L6) Catálogo, bio-link y fotos de la web son independientes:
+      // antes iban en serie (catálogo 6 s → bio-link 4 s → entradas 6 s,
+      // con las fotos ya esperadas arriba). Ahora las tres corren en
+      // paralelo y las entradas siguen después (necesitan los ítems de
+      // catálogo y bio-link). Ninguna rechaza: raceMs y los try/catch
+      // internos resuelven null/[].
+      const catalogP = webData ? raceMs(trialDeepCatalog(webData), 6000) : Promise.resolve(null);
+      const bioLinkP = raceMs(bioLinkPromise, 4000);
+      const photosP = webPhotosP || Promise.resolve([]);
+      const [catalog, bioLink, photos] = await Promise.all([catalogP, bioLinkP, photosP]);
+      webExtraPhotos = photos;
+      if (webData) marcaWebBrand(webData, webExtraPhotos);
       const itemNames = [...((webData && webData.services) || []),
         ...((catalog && catalog.items) || []).map((x) => x.nombre),
         ...((bioLink && bioLink.items) || []).map((x) => x.nombre)];
@@ -34232,7 +34324,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let trialAnalysis = null;
     let competitionLine = null;
     try {
-      const peers = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
+      const peers = (await raceMs(peersPromiseS, 1500)) || [];
       const ctxA = { postsPerWeek: 7, plan: 'trial', peers, source: 'instagram', lang };
       const cold = !ig || !trialData || !trialData.ok || analysisEngine.isColdStart({ hasIg: !!ig, profile: trialData && trialData.profile, posts: (trialData && trialData.posts) || [] });
       if (cold) {
@@ -34262,6 +34354,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         });
       }
     } catch (e) { /* el análisis nunca frena la prueba */ }
+    // (LOTE L6) Ideas: se recogen acá, con gracia de 5 s — a esta altura
+    // la tanda ya terminó casi siempre; si no, `out.ideas` queda vacío
+    // como cuando la llamada al LLM falla hoy.
+    const ideas = (await raceMs(ideasPromiseS, 5000)) || [];
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
     const out = {
       ok: true,
@@ -34326,6 +34422,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     console.error('[posta] Error en prueba streaming:', e.message);
     fail('No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.');
   } finally {
+    trialGenMarkDone(igKey);
     if (keepalive) clearInterval(keepalive);
     // Falló la generación o el stream se cortó a mitad (el cliente nunca
     // recibió 'done'): el intento se reembolsa, no se consume.
@@ -36134,7 +36231,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v958';
+const BUILD_ID = '20261105-v961';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -55,6 +55,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .err{background:#FDECEA;color:var(--err);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;margin-bottom:16px}
 .err a{color:var(--err);font-weight:700}
 .status{background:var(--bg2);color:var(--navy);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;margin-bottom:16px}
+.preview{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;font-size:14px;line-height:1.5;margin-bottom:16px;text-align:left}
+.preview img{width:100%;border-radius:12px;display:block;margin:10px 0}
+.preview .pv-kicker{font-weight:800;color:var(--cel)}
+.preview .pv-head{font-weight:800;margin-top:6px}
+.preview .pv-cap{color:var(--mut);margin-top:4px}
+.preview .pv-note{color:var(--mut);font-size:13px;margin-top:8px}
 .tiny{text-align:center;font-size:13px;color:var(--mut);margin-top:14px;line-height:1.6}
 .tiny a{color:var(--cel);font-weight:700}
 .hero-note{text-align:center;font-size:14px;color:var(--mut);margin:20px 0 40px}
@@ -96,6 +102,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     </div>
     <div id="fErr" class="err" hidden></div>
     <div id="fStatus" class="status" hidden></div>
+    <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">Build my first post</button>
     <p class="tiny">Already have an account? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
   </form>
@@ -103,10 +110,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 </div>
 <script>
 /* (ONBOARDING-SIMPLE · 11/11 · ACT.4) Entry: @ + website -> prefill
-   (does the @ exist? what do they sell?) -> generate (the FIRST POST +
-   the week, from what they publish, with the prefill evidence) ->
-   guest/start (the trial account) -> the product (Home, with THEIR first
-   post already built). Zero questions, zero passwords, zero email upfront.
+   (does the @ exist? what do they sell?) -> generate-stream (the FIRST
+   POST + the week, live, with real progress and a timeout, from what they
+   publish, with the prefill evidence) -> guest/start (the trial account)
+   -> the product (Home, with THEIR first post already built). Zero
+   questions, zero passwords, zero email upfront.
    If the prefill detects no products and no specific category, ONE thing
    is asked, right here: the star product (what they sell the most). */
 (function () {
@@ -120,7 +128,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // when the server asks for it (falta_idioma_marca): it sticks for
   // resubmits on this visit, like the star.
   var brandLangChoice = '';
-  var errEl = $('fErr'), statusEl = $('fStatus'), btn = $('btnGo'), form = $('fEntry');
+  var errEl = $('fErr'), statusEl = $('fStatus'), previewEl = $('fPreview'), btn = $('btnGo'), form = $('fEntry');
   var qIg = (qs.get('ig') || '').trim().replace(/^@/, '');
   var qWeb = (qs.get('web') || '').trim();
   if (qIg) igEl.value = '@' + qIg;
@@ -137,10 +145,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // post…» stayed visible NEXT TO the pink trial-used notice and the
   // page looked frozen forever. showErr/showErrHtml always turn off
   // #fStatus; the need_star path uses showStatus and is untouched.
-  function showErr(m) { statusEl.hidden = true; errEl.textContent = m; errEl.hidden = false; }
-  function showErrHtml(h) { statusEl.hidden = true; errEl.innerHTML = h; errEl.hidden = false; }
+  // (LOTE L6) An error also turns off the first-post preview: a stale
+  // preview next to an error lies just like the spinner did.
+  function showErr(m) { statusEl.hidden = true; previewEl.hidden = true; errEl.textContent = m; errEl.hidden = false; }
+  function showErrHtml(h) { statusEl.hidden = true; previewEl.hidden = true; errEl.innerHTML = h; errEl.hidden = false; }
   function showStatus(m) { statusEl.textContent = m; statusEl.hidden = false; }
-  function hideNotes() { errEl.hidden = true; statusEl.hidden = true; }
+  function hideNotes() { errEl.hidden = true; statusEl.hidden = true; previewEl.hidden = true; }
   function deviceId() {
     try {
       var d = localStorage.getItem('pz_device_id');
@@ -155,6 +165,164 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   }
   function usedHtml(msg) {
     return msg + '<br><br><a href="/#/login">Log in to your account</a> · <a href="/#/app/ajustes?plan=1">Pick your plan</a>';
+  }
+  // (LOTE L6 · REAL PROGRESS) Before, the form made ONE fetch with await
+  // to /api/trial/generate: no progress, no timeout, no polling — in the
+  // Veja re-test the screen sat ~12 min on «Posty is building your post
+  // for today» with no post and no error, and a reload re-triggered the
+  // generation from scratch. Now the front consumes
+  // /api/trial/generate-stream (SSE over fetch): REAL progress per event,
+  // the first post shows as soon as it exists (without waiting for the
+  // whole week) and an honest watchdog if the stream goes quiet. If
+  // another tab or a reload already has a generation running for this @,
+  // /api/trial/gen-status is polled instead of duplicating the work.
+  var L6_SLOW_NOTE_MS = 25000; // no event: honest note, keep waiting
+  var L6_FIRST_POST_TIMEOUT_MS = 60000; // no first post: something got stuck
+  var L6_IDLE_NOTE_MS = 60000; // with a first post: note if the stream goes quiet
+  var L6_STATUS_POLL_MS = 3000; // poll the trial_cache if someone else is generating
+  var L6_STATUS_MAX_MS = 180000; // poll cap: after that, go to the stream anyway
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function showFirstPostPreview(post) {
+    if (!previewEl || !post) return;
+    var img = post.image || post.cover || '';
+    var cap = String(post.caption || '').slice(0, 200);
+    var head = String(post.headline || '');
+    previewEl.innerHTML = '<p class="pv-kicker">Your first post is ready</p>' +
+      (img ? '<img class="pv-img" src="' + esc(img) + '" alt="">' : '') +
+      (head ? '<p class="pv-head">' + esc(head) + '</p>' : '') +
+      (cap ? '<p class="pv-cap">' + esc(cap) + '</p>' : '') +
+      '<p class="pv-note">Finishing your week — don’t close this window…</p>';
+    previewEl.hidden = false;
+  }
+  async function trialStatus(ig) {
+    try {
+      var r = await fetch('/api/trial/gen-status?ig=' + encodeURIComponent(ig) + TEST_KEY_QS.replace('?', '&'));
+      var j = await r.json().catch(function () { return {}; });
+      return (r.ok && j && j.ok) ? j : null;
+    } catch (e) { return null; }
+  }
+  // 'cached' = the week is already saved; 'gone' = nobody is generating
+  // and there is no cache (something failed on the other side);
+  // 'timeout' = go to the stream as recovery; 'unknown' = the endpoint
+  // did not answer (go to the stream anyway).
+  async function waitTrialReady(ig) {
+    var t0 = Date.now();
+    for (;;) {
+      var st = await trialStatus(ig);
+      if (!st) return 'unknown';
+      if (st.cached) return 'cached';
+      if (!st.generating) return 'gone';
+      if (Date.now() - t0 > L6_STATUS_MAX_MS) return 'timeout';
+      showStatus('I’m already building your first post — let me find it…');
+      await new Promise(function (res) { setTimeout(res, L6_STATUS_POLL_MS); });
+    }
+  }
+  // Same contract as the classic generate before:
+  // true | false | 'need_star' | 'need_lang'. Progress and errors are
+  // shown in here; buildFirstPost just returns what comes out.
+  async function runTrialStream(fd) {
+    var res;
+    try {
+      res = await fetch('/api/trial/generate-stream' + TEST_KEY_QS, { method: 'POST', body: fd });
+    } catch (e) {
+      showErr("We couldn't build your first post. Try again.");
+      return false;
+    }
+    if (!res || !res.ok || !res.body || typeof res.body.getReader !== 'function') {
+      showErr("We couldn't build your first post. Try again.");
+      return false;
+    }
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = '';
+    var startedAt = Date.now();
+    var lastEventAt = startedAt;
+    var firstPostAt = 0;
+    var firstPostShown = false; // booleano explícito: firstPostAt puede ser 0 con reloj en 0
+    var postsSeen = 0;
+    var slowShown = false;
+    var outcome = null; // true | false | 'need_star' | 'need_lang'
+    var outcomeErr = '';
+    var outcomeUsed = false;
+    var watch = setInterval(function () {
+      if (outcome !== null) return;
+      var now = Date.now();
+      if (!firstPostShown && !slowShown && now - lastEventAt > L6_SLOW_NOTE_MS) {
+        slowShown = true;
+        showStatus('Taking longer than usual — I’m still working on your first post, don’t close this window…');
+      }
+      if (!firstPostShown && now - startedAt > L6_FIRST_POST_TIMEOUT_MS) {
+        outcome = false;
+        outcomeErr = 'The generation got stuck — try again.';
+        try { reader.cancel(); } catch (e) {}
+      } else if (firstPostShown && now - lastEventAt > L6_IDLE_NOTE_MS) {
+        lastEventAt = now;
+        showStatus('Still working on your week — your first post is already up there…');
+      }
+    }, 1000);
+    try {
+      for (;;) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        lastEventAt = Date.now();
+        buf += decoder.decode(chunk.value, { stream: true });
+        var cut;
+        while ((cut = buf.indexOf('\n\n')) >= 0) {
+          var raw = buf.slice(0, cut);
+          buf = buf.slice(cut + 2);
+          var ev = null, data = null;
+          raw.split('\n').forEach(function (line) {
+            if (line.indexOf('event:') === 0) ev = line.slice(6).trim();
+            else if (line.indexOf('data:') === 0) data = line.slice(5).trim();
+          });
+          if (!ev || !data) continue;
+          var d = null;
+          try { d = JSON.parse(data); } catch (e) { continue; }
+          if (ev === 'status') {
+            if (d && d.text) showStatus(d.text);
+          } else if (ev === 'post') {
+            postsSeen++;
+            if (d && d.post && !firstPostShown) {
+              firstPostShown = true;
+              firstPostAt = Date.now();
+              showFirstPostPreview(d.post);
+              showStatus('Your first post is ready — finishing your week…');
+            } else if (d && d.post) {
+              showStatus('Post ' + postsSeen + ' of 5 ready — still working on your week…');
+            }
+          } else if (ev === 'done') {
+            outcome = true;
+            break;
+          } else if (ev === 'used' || ev === 'locked') {
+            outcome = false;
+            outcomeUsed = true;
+            outcomeErr = (d && d.message) || '';
+            break;
+          } else if (ev === 'error') {
+            if (d && d.falta_producto) { outcome = 'need_star'; break; }
+            if (d && d.falta_idioma_marca) { outcome = 'need_lang'; break; }
+            if (d && (d.trial_used || d.trial_locked)) { outcome = false; outcomeUsed = true; outcomeErr = (d && d.message) || ''; break; }
+            outcome = false;
+            outcomeErr = (d && d.error) || '';
+            break;
+          }
+          // 'profile' / 'audit' / 'diagnosis': the profile preview lives
+          // in the app, not in the form — ignored here.
+        }
+        if (outcome !== null) break;
+      }
+    } catch (e) {
+      if (outcome === null) { outcome = false; outcomeErr = ''; }
+    } finally {
+      clearInterval(watch);
+      try { reader.releaseLock(); } catch (e) {}
+    }
+    if (outcome === true) return true;
+    if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('I still don’t know what you sell — tell me above and I’ll build your week around it.'); return 'need_star'; }
+    if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Your website is in another language and I can’t tell what language you post in — pick one below and I’ll build your week in that language.'); return 'need_lang'; }
+    if (outcomeUsed) { showErrHtml(usedHtml(outcomeErr || 'This business already used its one free trial 💛')); return false; }
+    showErr(outcomeErr || "We couldn't build your first post. Try again.");
+    return false;
   }
   // Builds the first post (and the week). Returns true | false | 'need_star' | 'need_lang'.
   async function buildFirstPost(ig, web, estrella, brandLang) {
@@ -193,30 +361,20 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (mix === 'todo' && !det.length && rubroOk) fd.append('rubro_detectado', category);
     if (mix === 'libre') fd.append('producto_estrella', star);
     if (web) fd.append('web', web);
-    var gr = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
-    var gj = await gr.json().catch(function () { return {}; });
-    if (!gr.ok) {
-      if (gj && gj.falta_producto) {
-        starWrap.hidden = false; starEl.focus();
-        showStatus('I still don’t know what you sell — tell me above and I’ll build your week around it.');
-        return 'need_star';
-      }
-      // (LOTE L2 · HONEST LANGUAGE FALLBACK) The server would not guess
-      // the brand's language (no signal, site in a third language):
-      // ask here, with one tap, and the resubmit carries brand_lang.
-      if (gj && gj.falta_idioma_marca) {
-        langWrap.hidden = false;
-        showStatus('Your website is in another language and I can’t tell what language you post in — pick one below and I’ll build your week in that language.');
-        return 'need_lang';
-      }
-      if (gr.status === 409 || (gj && (gj.trial_used || gj.trial_locked))) {
-        showErrHtml(usedHtml((gj && gj.error) || 'This business already used its one free trial 💛'));
-        return false;
-      }
-      showErr((gj && gj.error) || "We couldn't build your first post. Try again.");
-      return false;
+    // (LOTE L6) If another tab or a reload already has a generation
+    // running for this @, the trial_cache is polled instead of duplicating
+    // the work: the server keeps generating even if the earlier fetch was
+    // aborted by the reload.
+    var st0 = await trialStatus(ig);
+    if (st0 && st0.generating && !st0.cached) {
+      showStatus('I’m already building your first post — let me find it…');
+      var rd = await waitTrialReady(ig);
+      if (rd === 'gone') { showErr("We couldn't build your first post. Try again."); return false; }
+      // 'cached' or 'timeout'/'unknown': go to the stream, which returns
+      // 'done' straight away if the week is already there, or regenerates
+      // if it has to.
     }
-    return true;
+    return runTrialStream(fd);
   }
   form.addEventListener('submit', async function (ev) {
     ev.preventDefault();
