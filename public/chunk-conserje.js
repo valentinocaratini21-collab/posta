@@ -92,9 +92,10 @@ function conserjeFotoHTML(it, grande) {
   return '<div style="border-radius:14px;background:#2793C8;display:flex;align-items:center;justify-content:center;height:' + h + 'px;color:#fff;font-size:44px;font-weight:800">' + esc(ini) + '</div>';
 }
 
-// Mini de la revisión (solo el detalle, v887): la foto COMPLETA en
+// Mini de la revisión (v887 detalle, v906 lista): la foto COMPLETA en
 // chiquito (96×96, contain — sin recortar), con el fondo oscuro actual
-// detrás. conserjeFotoHTML NO se toca: la lista sigue con 180px cover.
+// detrás. La lista también la usa desde v906; conserjeFotoHTML queda sin
+// uso (se conserva: la suite v887 A7 afirma que existe intacta).
 function conserjeMiniFotoHTML(it) {
   const url = it && it.post && it.post.image_url ? it.post.image_url : '';
   if (url) {
@@ -108,10 +109,16 @@ function conserjeMiniFotoHTML(it) {
 // Fail-soft en vm (document.querySelector puede no existir): try/catch.
 function conserjeCapAjustar() {
   try {
-    const txt = document.querySelector('.cj-cap-txt');
-    const mas = document.querySelector('[data-cj="cap-mas"]');
-    if (!txt || !mas) return;
-    if (txt.scrollHeight <= txt.clientHeight + 1) mas.style.display = 'none';
+    // (v906) La lista tiene UN caption por tarjeta: se ajusta cada par
+    // caption/botón dentro de su propia tarjeta. En el detalle el caption
+    // no vive dentro de una .card y el fallback document-wide lo cubre.
+    const todos = document.querySelectorAll('.cj-cap-txt');
+    todos.forEach((txt) => {
+      const cardEl = txt.closest ? txt.closest('.card') : null;
+      const mas = (cardEl && cardEl.querySelector('[data-cj="cap-mas"]')) || document.querySelector('[data-cj="cap-mas"]');
+      if (!txt || !mas) return;
+      if (txt.scrollHeight <= txt.clientHeight + 1) mas.style.display = 'none';
+    });
   } catch (e) {}
 }
 
@@ -152,22 +159,44 @@ function conserjeFichaHTML(f) {
     + '</div>';
 }
 
-function conserjeCardHTML(it) {
+// (v906) Tarjeta de la LISTA con el diseño aprobado de la variante 1
+// (v887), igual que el detalle: foto completa en chiquito a la izquierda,
+// caption a la derecha, botones para decidir abajo. La píldora ya NO va
+// encima de la foto (tapaba la imagen): vive en línea en el encabezado,
+// sin tapar nada. El titular va ARRIBA de la fila, nunca encima de la
+// foto. Un toque en la tarjeta abre el detalle; los botones deciden sin
+// salir de la lista (mismo data-cj, mismo flujo que el detalle).
+function conserjeCardHTML(it, fecha) {
   const p = it.post;
   const dec = it.decision;
-  // La píldora vive ENCIMA de la foto (arriba a la derecha): el estado se
-  // lee de un vistazo sin bajar la vista. Colores Posty exactos.
   const pillTxt = dec ? conserjeEtiquetaCorta(dec)
     : (it.necesita_atencion ? '⚠ Necesita atención' : '✓ Listo');
   const pillBg = dec ? 'background:#2793C8;color:#fff'
     : (it.necesita_atencion ? 'background:#FEC14D;color:#0A1E33' : 'background:#e7f6ee;color:#14743f');
+  const botones = p
+    ? '<div style="display:flex;gap:8px;margin-top:12px">'
+      + '<button class="btn" style="flex:1;min-height:48px;font-size:15px;background:#14743F;color:#fff" data-cj="decidir" data-decision="sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(String(fecha || '')) + '">✓ Sale así</button>'
+      + '<button class="btn btn-secondary" style="flex:1;min-height:48px;font-size:15px" data-cj="arreglar" data-user="' + esc(String(it.user_id)) + '">✎ Editar</button>'
+      + '</div>'
+      + '<div style="text-align:center;margin-top:8px"><button type="button" data-cj="decidir" data-decision="no_sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(String(fecha || '')) + '" style="background:none;border:0;color:#B3261E;font-size:13.5px;font-weight:700;padding:6px 0;cursor:pointer">✕ No sale</button></div>'
+      + '<div class="cj-arreglo" style="display:none;margin-top:12px"><label style="font-size:13px;font-weight:700">Qué hay que arreglar</label>'
+      + '<textarea class="cj-arreglo-nota" rows="2" placeholder="Ej.: que no hable del precio, que el producto se vea entero" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;margin-top:6px"></textarea>'
+      + '<button class="btn btn-primary" style="margin-top:8px;min-height:48px;font-size:15px" data-cj="decidir" data-decision="arreglar" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(String(fecha || '')) + '" data-nota="1">Enviar arreglo</button></div>'
+    : '';
   return '<div class="card" style="padding:14px;cursor:pointer" data-cj="ver" data-user="' + esc(String(it.user_id)) + '">'
-    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:15px">' + esc(it.business_name || '') + '</div>' + conserjeEtapaDot(it.ficha && it.ficha.etapa) + '</div>'
-    + '<div class="cj-foto" style="position:relative;margin-top:10px">' + conserjeFotoHTML(it, false)
-    + '<span class="pill" style="position:absolute;top:10px;right:10px;margin:0;box-shadow:0 2px 10px rgba(10,30,51,.28);' + pillBg + '">' + esc(pillTxt) + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap"><div style="font-weight:800;font-size:15px;flex:1;min-width:0">' + esc(it.business_name || '') + '</div>' + conserjeEtapaDot(it.ficha && it.ficha.etapa) + '<span class="pill" style="margin:0;flex:none;' + pillBg + '">' + esc(pillTxt) + '</span></div>'
     + '<div style="font-size:14px;font-weight:700;margin-top:10px;line-height:1.35">' + esc(p ? p.titulo : 'Sin posteo para mañana') + '</div>'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px"><span style="font-size:12.5px;color:var(--mut)">' + esc(p && p.cuando ? p.cuando : 'Mañana · hora por confirmar') + '</span>' + (dec && dec.nota ? '<span style="font-size:12.5px;color:var(--mut);text-align:right">' + esc(String(dec.nota).slice(0, 90)) + '</span>' : '') + '</div>'
+    + (p ? '<div style="display:flex;gap:12px;margin-top:10px;align-items:flex-start">' + conserjeMiniFotoHTML(it)
+      + '<div style="flex:1;min-width:0">'
+      + (p.caption
+        ? '<div class="cj-cap-txt" style="font-size:14px;line-height:1.6;white-space:pre-wrap">' + esc(p.caption) + '</div>'
+          + '<button type="button" data-cj="cap-mas" style="background:none;border:0;color:#2793C8;font-size:13px;font-weight:700;padding:4px 0;cursor:pointer">Ver más</button>'
+        : '<div style="font-size:13.5px;color:var(--mut)">Sin texto todavía.</div>')
+      + '<div style="font-size:13px;color:var(--mut);margin-top:4px">' + esc(p.cuando || 'Mañana · hora por confirmar') + (p.tipo ? ' · ' + esc(p.tipo) : '') + '</div>'
+      + '</div></div>' : '')
+    + (dec && dec.nota ? '<div style="font-size:12.5px;color:var(--mut);margin-top:8px">' + esc(String(dec.nota).slice(0, 90)) + '</div>' : '')
     + (it.necesita_atencion && it.motivo_atencion ? '<div style="font-size:12.5px;color:#8a6d00;margin-top:6px">' + esc(it.motivo_atencion) + '</div>' : '')
+    + botones
     + '</div>';
 }
 
@@ -191,8 +220,8 @@ function conserjeDetalleHTML(it, d) {
       + '<button class="btn btn-secondary" style="flex:1;min-height:52px;font-size:16px" data-cj="arreglar" data-user="' + esc(String(it.user_id)) + '">✎ Editar</button>'
       + '</div>'
       + '<div style="text-align:center;margin-top:10px"><button type="button" data-cj="decidir" data-decision="no_sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '" style="background:none;border:0;color:#B3261E;font-size:13.5px;font-weight:700;padding:6px 0;cursor:pointer">✕ No sale</button></div>'
-      + '<div id="cjArreglo" style="display:none;margin-top:12px"><label style="font-size:13px;font-weight:700" for="cjArregloNota">Qué hay que arreglar</label>'
-      + '<textarea id="cjArregloNota" rows="2" placeholder="Ej.: que no hable del precio, que el producto se vea entero" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;margin-top:6px"></textarea>'
+      + '<div id="cjArreglo" class="cj-arreglo" style="display:none;margin-top:12px"><label style="font-size:13px;font-weight:700" for="cjArregloNota">Qué hay que arreglar</label>'
+      + '<textarea id="cjArregloNota" class="cj-arreglo-nota" rows="2" placeholder="Ej.: que no hable del precio, que el producto se vea entero" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;margin-top:6px"></textarea>'
       + '<button class="btn btn-primary" style="margin-top:8px;min-height:48px;font-size:15px" data-cj="decidir" data-decision="arreglar" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(d.fecha) + '" data-nota="1">Enviar arreglo</button></div>';
   } else {
     botones = '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'
@@ -262,11 +291,17 @@ function conserjeRender() {
   if (!d.items.length && !sinPosteo.length) {
     html += '<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Nada para revisar esta noche: no hay clientes con posteo para mañana.</p></div>';
   }
+  // (v906) El clamp del caption vive acá, una sola vez para toda la lista
+  // (mismo patrón que el <style> del detalle): sin esto, las tarjetas de
+  // la lista no recortarían el caption a 3 líneas.
+  if (atencion.length || resto.length) {
+    html += '<style>.cj-cap-txt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.cj-cap-txt.cj-cap-full{display:block;-webkit-line-clamp:unset;overflow:visible}</style>';
+  }
   if (atencion.length) {
-    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">⚠ Necesitan atención primero</div><div class="cj-lista">' + atencion.map(conserjeCardHTML).join('') + '</div>';
+    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">⚠ Necesitan atención primero</div><div class="cj-lista">' + atencion.map((it) => conserjeCardHTML(it, d.fecha)).join('') + '</div>';
   }
   if (resto.length) {
-    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Listos</div><div class="cj-lista">' + resto.map(conserjeCardHTML).join('') + '</div>';
+    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Listos</div><div class="cj-lista">' + resto.map((it) => conserjeCardHTML(it, d.fecha)).join('') + '</div>';
   }
   if (sinPosteo.length) {
     html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Sin posteo para mañana</div><div class="cj-lista">'
@@ -285,6 +320,7 @@ function conserjeRender() {
   }
   html += '<style>@media (min-width:720px){.cj-lista{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cj-lista .card{margin:0}}</style>';
   card.innerHTML = html;
+  conserjeCapAjustar();
 }
 
 async function conserjeCargar() {
@@ -343,15 +379,29 @@ async function bindConserje() {
     const acc = t.getAttribute('data-cj');
     const uid = t.getAttribute('data-user');
     const d = conserjeEstado.datos || {};
-    if (acc === 'ver') { conserjeEstado.notaGuardada = null; conserjeEstado.vistaId = uid; conserjeRender(); window.scrollTo(0, 0); return; }
+    if (acc === 'ver') {
+      // (v906) Un clic dentro de la caja de arreglo de una tarjeta de la
+      // lista (el textarea) no debe abrir el detalle: la caja no tiene
+      // data-cj y el closest caería en la tarjeta (data-cj="ver").
+      if (ev.target.closest && ev.target.closest('.cj-arreglo')) return;
+      conserjeEstado.notaGuardada = null; conserjeEstado.vistaId = uid; conserjeRender(); window.scrollTo(0, 0); return;
+    }
     if (acc === 'volver') { conserjeEstado.notaGuardada = null; conserjeEstado.vistaId = null; conserjeRender(); window.scrollTo(0, 0); return; }
     if (acc === 'arreglar') {
-      const box = $('#cjArreglo');
+      // (v906) En la lista, cada tarjeta lleva su propia caja (.cj-arreglo):
+      // se busca dentro de la tarjeta del botón. En el detalle la caja no
+      // vive dentro de una .card y el fallback por id la cubre.
+      const cardEl = t.closest ? t.closest('.card') : null;
+      const box = (cardEl && cardEl.querySelector && cardEl.querySelector('.cj-arreglo')) || $('#cjArreglo');
       if (box) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
       return;
     }
     if (acc === 'cap-mas') {
-      const txt = document.querySelector('.cj-cap-txt');
+      // (v906) En la lista hay UN caption por tarjeta: se expande el de la
+      // propia tarjeta. En el detalle el caption no vive dentro de una
+      // .card y el fallback document-wide lo cubre.
+      const cardEl = t.closest ? t.closest('.card') : null;
+      const txt = (cardEl && cardEl.querySelector && cardEl.querySelector('.cj-cap-txt')) || document.querySelector('.cj-cap-txt');
       if (txt) {
         const full = txt.classList.toggle('cj-cap-full');
         t.textContent = full ? 'Ver menos' : 'Ver más';
@@ -415,7 +465,12 @@ async function bindConserje() {
       const decision = acc === 'armar' ? 'pedir' : t.getAttribute('data-decision');
       let nota = '';
       if (t.getAttribute('data-nota') === '1') {
-        const ta = $('#cjArregloNota');
+        // (v906) En la lista, cada tarjeta lleva su propio textarea
+        // (.cj-arreglo-nota): se busca dentro de la tarjeta del botón. En
+        // el detalle el textarea no vive dentro de una .card y el fallback
+        // por id lo cubre.
+        const cardEl = t.closest ? t.closest('.card') : null;
+        const ta = (cardEl && cardEl.querySelector && cardEl.querySelector('.cj-arreglo-nota')) || $('#cjArregloNota');
         nota = ta ? ta.value : '';
       }
       t.disabled = true;
