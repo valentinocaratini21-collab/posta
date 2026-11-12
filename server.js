@@ -12011,6 +12011,41 @@ app.post('/api/chat/nota', requireAuth, express.json(), async (req, res) => {
   res.json({ ok: true, guardada: guardadas > 0, messageId: ins.lastInsertRowid });
 });
 
+// (LOTE VOZ-TRANSCRIPCION) Feedback útil/no útil de la transcripción de una
+// nota de voz (estilo WhatsApp, captura de Valentino 10/11): el cliente ve
+// la transcripción bajo la onda y dice si Posty escuchó bien. Se guarda por
+// mensaje en chat_messages.transcript_feedback ('' | 'util' | 'no_util').
+// La transcripción que se muestra es la MISMA que Posty usa para actuar
+// (la que /api/ideas/transcribe devolvió y el chat guardó como texto del
+// mensaje del usuario), así que el feedback se busca por ese texto exacto:
+// el último mensaje del usuario con ese texto. Si no fue útil, Posty
+// pregunta en el chat que lo repita o lo escriba. No corre el cerebro ni
+// la supervisión: es un registro + un mensaje enlatado. Idempotente: si el
+// mensaje ya tiene feedback, no se pisa ni se duplica el mensaje de Posty.
+// Vive acá (junto al historial del chat), no junto a /api/ideas/transcribe:
+// así el test de transcribe no lo ve en su ventana.
+app.post('/api/ideas/chat/transcript-feedback', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    const transcript = String(body.transcript || '').slice(0, 2000);
+    const useful = body.useful === true;
+    if (!transcript.trim()) return res.json({ ok: false, error: 'sin_transcript' });
+    const row = db.prepare(`SELECT id, transcript_feedback FROM chat_messages WHERE user_id = ? AND role = 'user' AND text = ? ORDER BY id DESC LIMIT 1`).get(uid, transcript);
+    if (!row) return res.json({ ok: false, error: 'no_encontrado' });
+    if (row.transcript_feedback) return res.json({ ok: false, error: 'ya_respondido' });
+    const fb = useful ? 'util' : 'no_util';
+    db.prepare(`UPDATE chat_messages SET transcript_feedback = ? WHERE id = ?`).run(fb, row.id);
+    let reply = '';
+    if (!useful) {
+      const en = langOfUser(uid) === 'en';
+      reply = en ? "i didn't quite catch that — can you say it again or write it for me?" : 'no te entendí bien, ¿me lo repetís o me lo escribís?';
+      try { pzChatSaveReply(db, uid, reply); } catch (e) {}
+    }
+    return res.json({ ok: true, feedback: fb, reply: reply || undefined });
+  } catch (e) { console.error('[transcript-feedback]:', e.message); return res.json({ ok: false, error: 'error' }); }
+});
+
 // ---------- 🧠 MEMORIA DE GUSTOS (v392) ----------
 // El registro vive en el fundamento (taste-memory.js). Acá: la lectura
 // para la pantalla «Lo que aprendí de vos» (Ajustes), el borrado por
@@ -35940,7 +35975,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v936';
+const BUILD_ID = '20261105-v937';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

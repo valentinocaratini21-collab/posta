@@ -1373,6 +1373,15 @@ try { db.exec(`ALTER TABLE chat_messages ADD COLUMN photos_json TEXT NOT NULL DE
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_post_id INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_estado TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE VOZ-TRANSCRIPCION) Feedback útil/no útil de la transcripción de una
+// nota de voz, por mensaje: '' = sin responder, 'util' = estuvo bien,
+// 'no_util' = no se entendió. Lo escribe el endpoint
+// POST /api/ideas/chat/transcript-feedback. Sirve para medir cuántas
+// transcripciones salen mal, sin un sistema de métricas aparte. El ALTER
+// vive ACÁ (después del CREATE TABLE de chat_messages), no arriba con los
+// otros: en una DB nueva la tabla todavía no existe arriba y el ALTER
+// fallaba en silencio.
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN transcript_feedback TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CHAT-MUSE) Limpieza única: filas de assistant con texto «…»
 // (artefacto del tipeo viejo). Idempotente: tras la primera pasada no
 // queda ninguna; la guarda pzChatSaveReply impide que vuelvan a nacer.

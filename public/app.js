@@ -12222,6 +12222,74 @@ function pzVoiceBubbleInit(el, audioUrl, durMs) {
   fmtTotal();
   try { el._pzAu = au; } catch (e) {}
 }
+// (LOTE VOZ-TRANSCRIPCION · captura de Valentino 10/11) La transcripción de
+// la nota de voz se muestra DEBAJO de la onda, entre comillas, en la misma
+// burbuja — y debajo, la pregunta de feedback con dos opciones tocables.
+// La transcripción que se muestra es la MISMA que Posty usa para actuar
+// (la que devolvió /api/ideas/transcribe y el chat guardó como texto del
+// mensaje del usuario). El feedback se guarda por mensaje con
+// POST /api/ideas/chat/transcript-feedback; una vez respondido, no se
+// vuelve a preguntar por ese mensaje. Si no fue útil, Posty pregunta en el
+// chat que lo repita o lo escriba.
+function pzVoiceTxHTML(transcript) {
+  var en = vozEn();
+  var q = en ? 'Was this transcript <b>useful</b> or <b>not useful</b>?' : '¿La transcripción estuvo bien?';
+  var yesTx = en ? 'useful' : 'sí';
+  var noTx = en ? 'not useful' : 'no';
+  return '<div class="vb-tx"><div class="vb-tx-text">&ldquo;' + esc(transcript) + '&rdquo;</div>'
+    + '<div class="vb-tx-fb"><div class="vb-tx-q">' + q + '</div>'
+    + '<div class="vb-tx-opts"><button type="button" class="vb-tx-opt" data-txfb="util">' + esc(yesTx) + '</button>'
+    + '<button type="button" class="vb-tx-opt" data-txfb="no_util">' + esc(noTx) + '</button></div></div></div>';
+}
+function pzVoiceTxAttach(el, transcript) {
+  if (!el || !transcript) return false;
+  try {
+    if (el.querySelector('.vb-tx')) return false;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = pzVoiceTxHTML(transcript);
+    var tx = wrap.firstChild;
+    if (!tx) return false;
+    var hora = el.querySelector('.chat-msg-hora');
+    if (hora) el.insertBefore(tx, hora); else el.appendChild(tx);
+    var btns = tx.querySelectorAll('[data-txfb]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function (ev) {
+        var b = ev.currentTarget;
+        var useful = b.getAttribute('data-txfb') === 'util';
+        pzVoiceTxFeedback(el, transcript, useful);
+      });
+    }
+    return true;
+  } catch (e) { return false; }
+}
+function pzVoiceTxFeedback(el, transcript, useful) {
+  if (!el || !transcript) return;
+  var fb = el.querySelector('.vb-tx-fb');
+  if (!fb || fb.dataset.done) return;
+  fb.dataset.done = '1';
+  var btns = fb.querySelectorAll('[data-txfb]');
+  for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
+  api.post('/api/ideas/chat/transcript-feedback', { transcript: transcript, useful: !!useful }, { timeout: 15000 })
+    .then(function (r) {
+      if (r && r.ok) {
+        var q = fb.querySelector('.vb-tx-q'); if (q) q.style.display = 'none';
+        var opts = fb.querySelector('.vb-tx-opts'); if (opts) opts.style.display = 'none';
+        var thanks = document.createElement('div');
+        thanks.className = 'vb-tx-thanks';
+        thanks.textContent = vozEn() ? 'thanks!' : 'gracias 🙏';
+        fb.appendChild(thanks);
+        if (r.reply) {
+          var rts = Date.now();
+          try { CHAT.push({ role: 'assistant', text: r.reply, ts: rts }); } catch (e) {}
+          var box = document.getElementById('chatBox');
+          if (box) { chatAppendMsg(box, chatMsgHtml('assistant', r.reply, rts), rts); try { chatScroll(true); } catch (e) {} }
+        }
+      } else {
+        fb.style.display = 'none';
+      }
+    })
+    .catch(function () { fb.style.display = 'none'; });
+}
 // (LOTE VOZ-LINDA) Estado «grabando»: la chatbar se retira (la píldora
 // queda sola abajo) y el header muestra «● grabando». Al parar/descartar
 // vuelve todo a la normal («en línea»).
@@ -12484,10 +12552,11 @@ async function voiceSend() {
     location.hash = '#/app/chat';
     return;
   }
-  // (LOTE VOZ-LINDA · mock v1) La burbuja atenuada pasa a enviada: solo el
-  // reproductor (sin transcripto en la burbuja). El texto exacto sigue
-  // yendo al pipeline (CHAT + chatExchange) como siempre.
+  // (LOTE VOZ-TRANSCRIPCION) La burbuja pasa a enviada con la transcripción
+  // debajo de la onda (entre comillas) + la pregunta de feedback. El texto
+  // exacto sigue yendo al pipeline (CHAT + chatExchange) como siempre.
   vozBubbleEnviada(VOICE_DUR);
+  try { if (typeof VOICE_BUBBLE_EL !== 'undefined' && VOICE_BUBBLE_EL) pzVoiceTxAttach(VOICE_BUBBLE_EL, transcript); } catch (e) {}
   // (v861) Si la burbuja de audio no quedó (re-render en medio del envío),
   // el mensaje igual se ve como texto: nunca una nota sin rastro visible.
   try {
@@ -25167,7 +25236,7 @@ function pzVoicePendingDeliver() {
       const pts = Date.now();
       if (!lastUser || lastUser.role !== 'user' || lastUser.text !== p.text) {
         CHAT.push({ role: 'user', text: p.text, ts: pts });
-        if (box) { const nb = chatAppendMsg(box, p.audio ? pzVoiceBubbleHTML(p.audio, 0, 'sent', pts) : chatMsgHtml('user', p.text, pts), pts); if (nb && p.audio) pzVoiceBubbleInit(nb, p.audio, 0); }
+        if (box) { const nb = chatAppendMsg(box, p.audio ? pzVoiceBubbleHTML(p.audio, 0, 'sent', pts) : chatMsgHtml('user', p.text, pts), pts); if (nb && p.audio) { pzVoiceBubbleInit(nb, p.audio, 0); pzVoiceTxAttach(nb, p.text); } }
       } else if (box && p.audio) {
         const bubbles = box.querySelectorAll('.chat-msg.u, .msg-in');
         const lb = bubbles && bubbles.length ? bubbles[bubbles.length - 1] : null;
