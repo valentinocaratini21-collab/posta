@@ -335,7 +335,7 @@ function extractBusinessFacts(html, ld) {
 // and currency», «Your bag», «New arrivals»). Tampoco un titular con
 // pinta de frase (dos oraciones: «Timeless style. Effortless you.»):
 // es un slogan, no una oferta. El filtro viejo (JUNK_H local) se eliminó; este es el único.
-const NAV_JUNK_H = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios?|productos?|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|destacados|lo nuevo|qu[eé] hay de nuevo|ofertas?|filter)$/i;
+const NAV_JUNK_H = /^(men[uú]|inicio|home|contacto|nosotros|bienvenidos?|servicios?|productos?|galer[ií]a|testimonios|blog|noticias|preguntas frecuentes|faq|novedades|nouveaut[eé]s|destacados|lo nuevo|qu[eé] hay de nuevo|ofertas?|filter)$/i;
 const UI_CHROME_H = /country|region|currency|your bag|shopping bag|shopping cart|\bcart\b|checkout|\bsearch\b|log ?in|sign ?in|sign ?up|newsletter|subscribe|shipping|returns|new arrivals|shop all|shop now|my account|wishlist|filter by|sort by|track (your )?order|join (our|the) (tribe|club)/i;
 // (LOTE PLACEHOLDER-COPY) SOLO el vocabulario de chrome de tienda
 // (sin la regla de slogan de dos oraciones): lo usa la lectura
@@ -416,9 +416,71 @@ const CHROME_CLASS_TOKENS = [
   'support-links', 'newsletter-form', 'newsletter-signup', 'newsletter',
   'account-menu', 'shopify-section-footer', 'shopify-section-header',
 ];
+// (LOTE L5 · MENÚS-CUERPO) Tiles de categoría en el cuerpo: un link
+// cuya única sustancia es una imagen + un rótulo corto en encabezado
+// («HOMME», «PROJET» en veja-store.com) es NAVEGACIÓN, no contenido:
+// sin este corte el rótulo entra como servicio (los rótulos son h1–h3
+// y servicesFromHtml los lee) y de ahí como producto/estrella — en
+// Veja, 8 rótulos de menú llegaban como «productos» y la estrella del
+// dueño podía «validarse» contra uno (límite asentado de L3; este lote
+// es el remedio estructural).
+// Regla estructural (sin clases del sitio, sin vocabulario de marca):
+// el <a> se pela entero si (a) tiene href y NO es un link de producto
+// (/products/ o /product/ — esos links SON contenido y los lee
+// productNamesFromHtml), (b) contiene una imagen, (c) contiene un
+// encabezado h1–h3 (el rótulo — esto es lo que fuga a servicios),
+// (d) su texto visible es solo el rótulo (≤4 palabras, ≤40 chars) y
+// (e) no tiene precio: ni dentro del <a> ni en los 150 chars
+// siguientes (el precio de una tarjeta de producto suele vivir en un
+// hermano — sin ese chequeo una tarjeta sin precio dentro del <a> se
+// pelaría igual); el precio de después solo cuenta si antes no hay un
+// encabezado — un <h1–h3> en medio marca que empezó otro ítem y el
+// precio es de ese ítem, no del tile.
+// NO se pela: la carta de un restaurante (platos con descripción y
+// precio — el precio los salva — y la clase «menu» a secas sigue sin
+// pelarse: la carta ES contenido), tarjetas de producto con precio,
+// links de texto sin imagen, rótulos sin encabezado (un rótulo en
+// <span> no fuga a servicios; solo ensucia el texto de hechos).
+// LÍMITE HONESTO: una tarjeta de producto/dish sin precio en ningún
+// lado, con nombre en encabezado e imagen, se pela igual (su nombre
+// no llegaría a servicios); en la práctica las tarjetas de producto
+// llevan precio o su nombre no es un encabezado.
+const NAV_TILE_PRICE_RE = /[€$£¥₹]|\d+[.,]\d{2}/;
+function isNavTileAnchor(innerHtml, href, afterHtml) {
+  if (!href || /\/products?\//i.test(href)) return false;
+  const inner = String(innerHtml || '');
+  if (!/<img[\s>]/i.test(inner)) return false;
+  if (!/<h[123][\s>]/i.test(inner)) return false;
+  if (NAV_TILE_PRICE_RE.test(inner)) return false;
+  // El precio de después solo cuenta si antes no aparece un
+  // encabezado: un <h1–h3> entre el </a> y el precio marca que empezó
+  // otra sección o ítem (p. ej. un tile de categoría justo encima de
+  // una carta con precios — el precio es de un plato, no del tile).
+  // Sin ese corte, el tile se salvaría por un precio ajeno.
+  if (afterHtml) {
+    let after = String(afterHtml).slice(0, 150);
+    const headAt = after.search(/<h[123][\s>]/i);
+    if (headAt >= 0) after = after.slice(0, headAt);
+    if (NAV_TILE_PRICE_RE.test(after)) return false;
+  }
+  const text = cleanText(inner);
+  if (!text || text.length > 40) return false;
+  if (text.split(/\s+/).length > 4) return false;
+  return true;
+}
 function stripSiteChrome(html) {
   let s = String(html || '');
   if (!s) return s;
+  // (LOTE L5) Tiles de categoría en el cuerpo (ver isNavTileAnchor):
+  // se pelan ANTES que el resto del cromo — su rótulo es un encabezado
+  // y sin este corte entra como servicio. Se pela el <a> entero (con
+  // su <picture> y sus srcsets: ahí vive la mayoría de las
+  // ocurrencias del rótulo en el HTML).
+  s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi, (m, attrs, inner, offset, whole) => {
+    const hrefM = String(attrs || '').match(/\bhref\s*=\s*["']([^"']*)["']/i);
+    const after = String(whole || '').slice(offset + m.length, offset + m.length + 150);
+    return isNavTileAnchor(inner, hrefM ? hrefM[1] : '', after) ? ' ' : m;
+  });
   s = s.replace(CHROME_TAG_RE, ' ');
   s = s.replace(CHROME_ROLE_RE, ' ');
   // Contenedores con clase/id de cromo: se pela desde la apertura hasta
@@ -716,6 +778,8 @@ module.exports = {
   extractBusinessFacts,
   // (LOTE INGESTA) Cromo fuera en la ingesta (testeable con fixtures).
   stripSiteChrome,
+  // (LOTE L5) Tile de navegación en el cuerpo (testeable con fixtures).
+  isNavTileAnchor,
   siteLangFromHtml,
   // (LOTE L2) Idioma declarado crudo del sitio (testeable con fixtures).
   siteLangRawFromHtml,
