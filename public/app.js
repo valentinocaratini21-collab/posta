@@ -9421,6 +9421,7 @@ async function chatLogoBannersVerify() {
   } catch (_) {}
 }
 let CHAT_FIRST_PICK = null; // sugerencia "¿Arrancamos por este? 👀" (GET /api/ideas/chat, solo primera apertura)
+let PZ_HOY_ANCLA_SET = false; // (LOTE v911) el ancla del posteo de hoy se fija una sola vez por carga de página
 
 // Fix auditoría #2: 1 tap para rearmar la semana de /prueba cuando la
 // importación trajo 0 (cache vencido). Genera en segundo plano; responde al toque.
@@ -9547,6 +9548,17 @@ async function chatLoadHistory() {
     // Sugerencia de primera apertura: se cachea acá y se pinta en bindChatView
     // (este fetch también corre desde otras vistas, donde el slot no existe).
     try { CHAT_FIRST_PICK = (r && r.first_pick) || null; } catch (e) { CHAT_FIRST_PICK = null; }
+    // (LOTE v911 · POSTEO-HOY-EN-CHAT) El posteo de hoy vive en el chat: si
+    // el servidor trae today_post y su mensaje está en el historial, se
+    // ancla (una sola vez por carga de página): las respuestas del cliente
+    // van directo a ESE posteo, sin explicar de cero. Si el cliente lo
+    // desancla para hablar de otro posteo, no se vuelve a fijar.
+    try {
+      if (r && r.today_post && r.today_post.id && !PZ_HOY_ANCLA_SET && (typeof HF_CHAT_ANCHOR === 'undefined' || !HF_CHAT_ANCHOR)) {
+        const hayHoy = CHAT.some(m => m && m.role === 'assistant' && (String(m.text || '').includes('decime si querés cambiar algo') || String(m.text || '').includes('tell me if you want to change anything')));
+        if (hayHoy && typeof hfSetAnchor === 'function') { PZ_HOY_ANCLA_SET = true; hfSetAnchor(r.today_post); }
+      }
+    } catch (e) {}
     // 🧠 Propuesta de gusto abierta: su barra con botones va al final del chat.
     try { paintTasteProposal(r && r.taste_proposal); } catch (e) {}
     if (r && r.idea && r.idea.titulo) {

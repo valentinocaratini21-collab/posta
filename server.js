@@ -7001,6 +7001,24 @@ app.post('/api/ideas/chat', async (req, res) => {
         }
       }
     } catch (e) { console.error('[chat] quoted ctx:', e.message); }
+    // (LOTE v911 · POSTEO-HOY-EN-CHAT) Sin ancla explícita ni posteo citado,
+    // si la conversación es sobre el posteo de hoy (el último mensaje de
+    // Posty es el de hoy), el posteo de hoy va primero en el contexto: la
+    // respuesta del cliente se aplica directo a ESE posteo.
+    try {
+      if (!anchorId && cleanDrafts.length) {
+        const lastAsstHoy = [...clean].reverse().find(m => m && m.role === 'assistant');
+        if (lastAsstHoy && pzHoyEsMensaje(lastAsstHoy.text)) {
+          const lastUserHoy = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+          let citadoHoy = null;
+          try { citadoHoy = chatQuotedPostMatch(db, uidChat, lastUserHoy); } catch (e) {}
+          if (!citadoHoy) {
+            const hoyPost = pzHoyPost(db, uidChat, userTz(uidChat), new Date());
+            if (hoyPost) cleanDrafts = pzChatHoyPrimero(cleanDrafts, hoyPost.id);
+          }
+        }
+      }
+    } catch (e) { console.error('[chat] hoy-primero:', e.message); }
   } catch (e) { console.error('[chat] drafts ctx:', e.message); }
   try {
     const settings = getSettings(req.session.userId);
@@ -11856,6 +11874,45 @@ app.post('/api/voz-dueno/reel', requireAuth, async (req, res) => {
   } catch (e) { console.error('[voz-dueno] reel-insert:', e.message); return res.status(502).json({ error: 'reel_fallo' }); }
 });
 
+
+// ---------- (LOTE v911 · POSTEO-HOY-EN-CHAT) El posteo de hoy vive en el chat ----------
+// Con el revelado de las 9:00, el posteo de hoy aparece como mensaje en el
+// chat (foto incluida) y Posty pregunta «decime si querés cambiar algo».
+// Cualquier respuesta del cliente ahí se aplica directo a ESE posteo (cambiar
+// foto, otra imagen, cambiar titular/caption, reportar algo mal) sin explicar
+// de cero. No es un chat nuevo ni una pantalla nueva. No se tocan: el aviso
+// de 30 min ni la salida igual sin respuesta.
+const PZ_HOY_PREGUNTA_ES = 'decime si querés cambiar algo';
+const PZ_HOY_PREGUNTA_EN = 'tell me if you want to change anything';
+function pzHoyPregunta(en) { return en ? PZ_HOY_PREGUNTA_EN : PZ_HOY_PREGUNTA_ES; }
+function pzHoyEsMensaje(text) {
+  const t = String(text || '');
+  return t.includes(PZ_HOY_PREGUNTA_ES) || t.includes(PZ_HOY_PREGUNTA_EN);
+}
+// El posteo de hoy, con la misma definición canónica que el ritual y la push
+// matutina (morningPostPush.pickTodayPost): programado para hoy en la zona de
+// la cuenta, el más temprano; nunca uno rechazado ni uno ya publicado. Sin
+// posteo hoy → null. No genera nada (el ritual es el que garantiza el posteo;
+// acá solo se lee). Con publishing_stopped tampoco se ofrece.
+function pzHoyPost(db, uid, tz, now) {
+  try {
+    const stopped = (db.prepare('SELECT COALESCE(publishing_stopped,0) AS s FROM users WHERE id = ?').get(uid) || {}).s || 0;
+    if (stopped) return null;
+    const sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    return morningPostPush.pickTodayPost(sched, tz, now || new Date()) || null;
+  } catch (e) { return null; }
+}
+// Pone el posteo de hoy primero en el contexto de borradores (mismo patrón
+// que el ancla 6A): los edits del modelo caen sobre ESE posteo.
+function pzChatHoyPrimero(drafts, todayPostId) {
+  const list = Array.isArray(drafts) ? drafts.slice() : [];
+  const id = Number(todayPostId || 0);
+  if (!id) return list;
+  const ai = list.findIndex(d => Number(d && d.id) === id);
+  if (ai > 0) { const [anch] = list.splice(ai, 1); list.unshift(anch); }
+  return list;
+}
+
 app.get('/api/ideas/chat', (req, res) => {
   if (!req.session.userId) return res.json({ messages: [], welcome: req.query.lang === 'en' ? "hi! i'm posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works." : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   const uid = req.session.userId;
@@ -11965,7 +12022,33 @@ app.get('/api/ideas/chat', (req, res) => {
       db.prepare('UPDATE users SET posty_welcomed = 1 WHERE id = ?').run(uid);
     }
   } catch (e) { console.error('[chat] welcome:', e.message); }
-  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+  // (LOTE v911 · POSTEO-HOY-EN-CHAT) Con el revelado de las 9:00, el posteo
+  // de hoy aparece como mensaje en el chat (foto + pregunta). Se siembra UNA
+  // vez por día: si el historial de hoy ya trae la pregunta, no se duplica.
+  // El campo today_post le dice al cliente qué posteo anclar.
+  let todayPost = null;
+  try {
+    const tz = userTz(uid);
+    const hoy = tzToday(tz);
+    const abreA = zonedWallToUtc(hoy + ' ' + String(morningPostPush.MORNING_START_HOUR).padStart(2, '0') + ':00', tz);
+    const post = pzHoyPost(db, uid, tz, new Date());
+    if (post && post.image_path && abreA && Date.now() >= new Date(abreA).getTime()) {
+      todayPost = { id: post.id, image_path: post.image_path, caption: post.caption || '', status: post.status || '', media_type: post.media_type || 'image', redo_left: (post.redo_left === null || post.redo_left === undefined) ? null : Number(post.redo_left) };
+      const en = langOfUser(uid) === 'en';
+      let yaHoy = false;
+      try {
+        const cand = db.prepare(`SELECT text, created_at FROM chat_messages WHERE user_id = ? AND role = 'assistant' AND created_at >= datetime('now', '-2 days') ORDER BY id DESC LIMIT 100`).all(uid);
+        yaHoy = cand.some(m => pzHoyEsMensaje(m.text) && ymdInTz(m.created_at, tz) === hoy);
+      } catch (e) {}
+      if (!yaHoy) {
+        const textoHoy = pzHoyPregunta(en) + ` [foto:${String(post.image_path)}]`;
+        let midHoy = 0;
+        try { const rr = db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(uid, textoHoy.slice(0, 3000)); midHoy = rr.lastInsertRowid || 0; } catch (e) {}
+        try { msgs.push({ id: midHoy, role: 'assistant', text: textoHoy, created_at: new Date().toISOString() }); } catch (e) {}
+      }
+    }
+  } catch (e) { console.error('[chat] posteo-hoy:', e.message); }
+  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen, today_post: todayPost, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
 });
 
 // ---------- 💬 CHAT-MEJORAS · reacciones / fijar / editar / borrar / buscar ----------
@@ -36274,7 +36357,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v969';
+const BUILD_ID = '20261105-v970';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
