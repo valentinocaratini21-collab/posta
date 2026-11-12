@@ -15095,6 +15095,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     return res.json(isLike5 ? { ok: true, owner_liked: on5 ? 1 : 0 } : { ok: true, owner_saved: on5 ? 1 : 0 });
   }
   let scheduledInfo = null; // la rama de programar lo completa: el cliente confirma la fecha al aceptar
+  let lintRes = null; // (v931) resultado del lint al programar: si falla, el posteo queda en revisión
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
@@ -15237,7 +15238,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     // (CARRIL EXPRÉS) Al programarse en la semana deja de ser exprés.
     if (post.source === 'express') { try { db.prepare(`UPDATE posts SET source='' WHERE id=?`).run(post.id); } catch (e) {} }
     clearPublishingStopped(req.session.userId); // (v275) programar a mano es reanudar la cuenta
-    scheduleLintForPost(req.session.userId, post.id); // (v198-A) lint al programar
+    lintRes = scheduleLintForPost(req.session.userId, post.id); // (v198-A) lint al programar
     // 🎓 Autopiloto graduado (2026-10-02): si programó SIN editar, es un voto
     // de confianza. A los 10, Posty ofrece el autopiloto.
     if (!edited && post.status === 'draft') {
@@ -15281,7 +15282,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       notifyOwnerPostChange({ uid: req.session.userId, post: fechaPost, pedido: String(caption ?? '').split('\n')[0] }).catch(() => {});
     } catch (e) { console.error('[owner-notify] patch:', e.message); }
   }
-  res.json(scheduledInfo ? { ok: true, scheduled_at: scheduledInfo.scheduled_at, week_key: scheduledInfo.week_key } : { ok: true });
+  res.json(scheduledInfo ? { ok: true, scheduled_at: scheduledInfo.scheduled_at, week_key: scheduledInfo.week_key, ...(lintRes && !lintRes.ok ? { in_review: true, lint_reason: lintRes.reason } : {}) } : { ok: true });
 });
 
 // POST /api/posts/:id/reject-reason  body {reason}
@@ -15581,7 +15582,7 @@ app.post('/api/trial/rebuild-import', requireAuth, requireTrialValid, (req, res)
 // Estado de un posteo (para el seguimiento en vivo de "Publicar ahora")
 app.get('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare(
-    "SELECT * FROM posts WHERE id = ? AND user_id = ? AND COALESCE(needs_review,0)=0"
+    "SELECT * FROM posts WHERE id = ? AND user_id = ?"
   ).get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   try { if (post.image_path && String(post.image_path).startsWith('/media/') && post.media_type !== 'video') post.caption_on = photoCliente.captionState(MEDIA_DIR, post.image_path) === 'on' ? 1 : 0; } catch (e) {}
@@ -36133,7 +36134,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v942';
+const BUILD_ID = '20261105-v957';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

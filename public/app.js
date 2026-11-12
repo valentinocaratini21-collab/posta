@@ -2464,6 +2464,20 @@ let ME = null;
 let PROFILE = null;
 let SETTINGS = null;
 let ASSETS = [];
+// (v931 · QA NOCTURNA 11/11) IG_VERIFIED_AT / igSince / IG_MODE_WARN los
+// leía chunk-ajustes.js (checklist IG + fila de cuenta + aviso modo Real)
+// pero la limpieza ONBOARDING-SIMPLE (v898) borró sus declaraciones y
+// Ajustes moría con ReferenceError (primero IG_VERIFIED_AT, después
+// igSince). Se restauran con sus valores/definiciones exactos de v879.
+// freshOB y OB del mismo bloque NO se restauran: nada los referencia.
+let IG_VERIFIED_AT = null; // última verificación manual de la conexión IG (HH:MM)
+const igSince = (s) => {
+  try {
+    const d = String(s.ig_token_issued_at || '').slice(0, 10).split('-');
+    return d.length === 3 ? `${d[2]}/${d[1]}` : '';
+  } catch (e) { return ''; }
+};
+let IG_MODE_WARN = false;  // aviso: modo Real elegido sin cuenta conectada
 let PLANS_CACHE = null;
 let LANDING_ON = false;
 
@@ -8170,7 +8184,8 @@ function pickRejectReason() {
         if (cg) cg.onclick = () => { closeStreakModal(); render(); };
         else render();
       } else {
-        if (whenTxt) toast(whenNextWeek
+        if (pr && pr.in_review) toast(`✨ <b>Quedó en revisión.</b><br>${esc(pr.lint_reason || 'Le falta un llamado a la acción claro.')}`);
+        else if (whenTxt) toast(whenNextWeek
           ? `${pzIc('checkCircle', 16)} <b>¡Listo!</b> Queda programado para la semana que viene: sale el ${esc(whenTxt)}`
           : `${pzIc('checkCircle', 16)} <b>¡Listo!</b> Sale el ${esc(whenTxt)}`);
         render();
@@ -30046,7 +30061,11 @@ async function approvalPostView(id) {
   // píldora «Aprobado — sale a las…» y NADA que aceptar: el botón no
   // se renderiza. El menú ••• y el diálogo de Rechazar siguen para
   // programados (pendiente o aprobado) y borradores.
-  const canAccept = st === 'scheduled' && ap === 'pending';
+  const canAccept = st === 'scheduled' && ap === 'pending' && !p.needs_review;
+  // (v931) Un posteo en revisión no se puede aceptar (el PATCH lo frena
+  // con 403 in_review): se muestra el aviso y no el botón Aceptar.
+  const apvInReview = !!p.needs_review;
+  const apvReviewNotice = apvInReview ? `<div class="apv-review" style="margin:10px 0;padding:10px 12px;border-radius:12px;background:#FFF7E6;color:#7A5A00;font-size:13.5px;line-height:1.5">✨ ${en ? 'This post is under review — it stays on hold until the team clears it.' : 'Este posteo está en revisión ✨ Te aviso cuando esté listo.'}</div>` : '';
   // (v326) Los borradores también se deciden ACÁ: el detalle era un callejón
   // sin salida (ni Aceptar, ni Editar, ni Rechazar) y es a donde llevan
   // "Ver posteo" y las filas de la semana de Inicio.
@@ -30091,7 +30110,7 @@ async function approvalPostView(id) {
   // (v326) Acciones del borrador: Aceptar lo programa en su horario propuesto
   // (el mismo flujo PATCH que usa la Agenda), Editar va al chat con el
   // prefill de siempre y Rechazar lo cancela con confirmación.
-  const draftActions = isDraft ? `
+  const draftActions = (isDraft && !apvInReview) ? `
     <div class="apv-actions apv-primary" id="apvActions">
       <button class="btn btn-primary apv-accept" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">${pzIc('checkCircle', 18)} Aceptar</button>
     </div>
@@ -30122,7 +30141,7 @@ async function approvalPostView(id) {
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
-    ${actions}${draftActions}
+    ${apvReviewNotice}${actions}${draftActions}
     ${apvMoreHTML(p, st, canMenu, isDraft)}
     ${hfAskChangeBtnHTML(p)}
   </div>`;
@@ -30309,7 +30328,8 @@ function bindApprovalPost() {
           if (dt) wt = pcFmtDayLong(dt, apvTz()) + ' a las ' + apvHM(dt, apvTz());
         }
       } catch (e) {}
-      toast(wt ? `✅ <b>¡Listo!</b> Sale el ${esc(wt)}` : '✅ <b>¡Listo!</b> Quedó programado 🙌');
+      if (pr && pr.in_review) toast(`✨ <b>Quedó en revisión.</b><br>${esc(pr.lint_reason || 'Le falta un llamado a la acción claro.')}`);
+      else toast(wt ? `✅ <b>¡Listo!</b> Sale el ${esc(wt)}` : '✅ <b>¡Listo!</b> Quedó programado 🙌');
     } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); }
     render();
   };
@@ -30458,10 +30478,11 @@ async function f3GestureApprove(media) {
     try {
       const proposed = rev.dataset.proposed;
       const when = proposed ? new Date(proposed).toISOString() : null;
-      await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when });
+      const prF3 = await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when });
       try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
       try { track('f3_dbltap_approve', { id, draft: true }); } catch (e) {}
-      toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
+      if (prF3 && prF3.in_review) toast(`✨ <b>Quedó en revisión.</b><br>${esc(prF3.lint_reason || 'Le falta un llamado a la acción claro.')}`);
+      else toast('✅ <b>¡Listo!</b> Quedó programado 🙌');
     } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); if (rev) rev.disabled = false; return; }
     try { render(); } catch (e) {}
     return;
