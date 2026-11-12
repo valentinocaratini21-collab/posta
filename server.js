@@ -19517,6 +19517,14 @@ async function homeProfileReadAndStore(uid, handle) {
           data.posts = merged.posts;
           console.log(`[ig-media] user ${uid} @${handle}: embed=${data.posts.length - merged.added} official=${official.length} merged=+${merged.added}`);
         }
+      } else {
+        // (LOTE PERFIL-GRILLA-PARTE-2 · v927) El merge es el único
+        // completador de la lectura y fallaba en silencio: sin señal,
+        // una lectura parcial crónica (embed 6 < total 10) parecía
+        // «normal» y la reconciliación nunca llegaba a completa. Se
+        // deja constancia para el diagnóstico; la home sigue solo con
+        // el embed, como hoy.
+        console.log(`[ig-media] user ${uid} @${handle}: official sin datos (token, identidad o red) — la home sigue solo con el embed`);
       }
     }
   } catch (e) { /* sin media oficial: queda el embed, como hoy */ }
@@ -19584,14 +19592,19 @@ async function homeProfileReadAndStore(uid, handle) {
       }
     } catch (e) { /* sin unión: queda la lectura nueva, como hoy */ }
     homeSnapshotPut(uid, handle, payload);
-    // (2026-10-24) Reconciliación del espejo: con la lectura completa
-    // recién hecha, los publicados propios que ya NO están en la grilla
-    // de Instagram (archivados/borrados allá) dejan de rendirse en el
-    // feed. Lectura parcial o fallida no toca nada (feed-reconcile.js).
+    // (2026-10-24; v927) Reconciliación del espejo: los publicados
+    // propios que ya NO están en la grilla de Instagram (archivados/
+    // borrados allá) dejan de rendirse en el feed — ESO solo en
+    // lectura completa. La restauración por presencia corre siempre,
+    // también en lectura parcial (feed-reconcile.js): es lo que cura
+    // una marca archived_ext errónea. El total es el del payload, ya
+    // con el conteo autoritativo de la API oficial cuando la hay (el
+    // del embed puede venir rancio y hacer pasar por completa una
+    // lectura parcial).
     try {
-      const rec = feedReconcile.reconcilePublishedMirror(db, uid, data);
+      const rec = feedReconcile.reconcilePublishedMirror(db, uid, data, { totalOverride: (payload && typeof payload.posts_count === 'number') ? payload.posts_count : null });
       if (rec && (rec.archived || rec.restored)) {
-        console.log(`[feed-reconcile] user ${uid} @${handle}: archivados_ext=${rec.archived} restaurados=${rec.restored} (grilla leída ${rec.seen}/${rec.total})`);
+        console.log(`[feed-reconcile] user ${uid} @${handle}: archivados_ext=${rec.archived || 0} restaurados=${rec.restored || 0} (grilla leída ${rec.seen}/${rec.total}${rec.skipped ? ' · ' + rec.skipped : ''})`);
       }
     } catch (e) { /* la reconciliación nunca frena la home */ }
   }
@@ -35552,7 +35565,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v926';
+const BUILD_ID = '20261105-v927';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

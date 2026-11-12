@@ -75,15 +75,24 @@ ok('desarchivar en IG lo restaura a live', r.restored === 1 && state(pLive) === 
 fr.reconcilePublishedMirror(db, Number(uid), readComplete);
 ok('re-archivado vuelve a archived_ext', state(pGone) === 'archived_ext');
 
-// SEGURIDAD: lectura PARCIAL (posts_count=30 > leídos) no toca NADA:
-// ni restaura al archivado ni archiva al vivo.
+// SEGURIDAD (v927 — asimetría presencia/ausencia): lectura PARCIAL
+// (posts_count=30 > leídos) NO ARCHIVA nada: el vivo ausente de la
+// ventana truncada se queda live. Pero la PRESENCIA sí restaura: el
+// archivado BBB222 APARECE en la lectura parcial, y eso es prueba
+// positiva de que está vivo en Instagram — la marca errónea se cura
+// aunque la lectura no cubra la grilla entera (caso real
+// @posty.communitymanager 11/11: 5 publicados vivos con archived_ext
+// no volvían nunca porque las lecturas eran parciales crónicas y la
+// restauración estaba frenada por la misma guarda). Antes de v927 este
+// assert era «el archivado NO se restaura»; la regla vieja («parcial
+// no toca nada») confundía ausencia con presencia.
 const readPartial = { ok: true, profile: { posts_count: 30 }, posts: [
   { shortcode: 'BBB222', taken_at: 1789000000, caption: 'volvió' },
   { shortcode: 'ZZZ999', taken_at: 1792000000, caption: 'otro' },
 ] };
 r = fr.reconcilePublishedMirror(db, Number(uid), readPartial);
-ok('lectura parcial: skipped', r.skipped === 'partial-read', JSON.stringify(r));
-ok('lectura parcial: el archivado NO se restaura', state(pGone) === 'archived_ext');
+ok('lectura parcial: skipped (no archiva)', r.skipped === 'partial-read', JSON.stringify(r));
+ok('lectura parcial: la presencia SÍ restaura al archivado', r.restored === 1 && state(pGone) === 'live', JSON.stringify(r));
 ok('lectura parcial: el vivo NO se archiva', state(pLive) === 'live');
 
 // SEGURIDAD: lectura fallida / sin contador -> cero cambios.
@@ -93,7 +102,7 @@ r = fr.reconcilePublishedMirror(db, Number(uid), null);
 ok('lectura nula: skipped', r.skipped === 'read-not-ok');
 r = fr.reconcilePublishedMirror(db, Number(uid), { ok: true, profile: {}, posts: [] });
 ok('sin posts_count: skipped', r.skipped === 'no-count');
-ok('tras las guardas, nada cambió', state(pGone) === 'archived_ext' && state(pLive) === 'live');
+ok('tras las guardas, nada cambió', state(pGone) === 'live' && state(pLive) === 'live');
 
 // Grilla vaciada (posts_count=0, lectura completa): todo lo publicado
 // con permalink pasa a archived_ext (archivado masivo, caso 19/10).
@@ -183,7 +192,7 @@ const SERVER = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 const DBJS = fs.readFileSync(path.join(__dirname, 'db.js'), 'utf8');
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
 ok('server.js exige feed-reconcile y reconcilia tras leer el perfil',
-  SERVER.includes("require('./feed-reconcile')") && SERVER.includes('feedReconcile.reconcilePublishedMirror(db, uid, data)'));
+  SERVER.includes("require('./feed-reconcile')") && SERVER.includes('feedReconcile.reconcilePublishedMirror(db, uid, data, { totalOverride'));
 ok('homeProfileFromRead filtra hijos de carrusel de los recents',
   SERVER.includes('feedReconcile.isTopLevelReadPost(x)'));
 ok('db.js crea ig_state / ig_state_at', DBJS.includes('ADD COLUMN ig_state') && DBJS.includes('ADD COLUMN ig_state_at'));
