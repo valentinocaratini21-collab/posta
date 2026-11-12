@@ -73,7 +73,10 @@ function clearTrialPosts(db, userId) {
 function applyGuestIg(db, userId, igK) {
   try { db.prepare('UPDATE users SET guest_ig = ? WHERE id = ?').run(igK || '', userId); } catch (e) {}
   try {
-    db.prepare(`UPDATE profiles SET ig_username = COALESCE(NULLIF(ig_username, ''), ?) WHERE user_id = ?`)
+    // (v928) El @ del invitado se escribe siempre (antes el COALESCE
+    // conservaba el @ anterior cuando cambiaba: el perfil seguía leyendo
+    // el negocio viejo mientras la semana era la del nuevo).
+    db.prepare('UPDATE profiles SET ig_username = ? WHERE user_id = ?')
       .run(igK || '', userId);
   } catch (e) {}
 }

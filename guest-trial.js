@@ -82,7 +82,7 @@ function deviceUsed(db, device, ip) {
       if (byDevice) return { by: 'device', user_id: byDevice.user_id };
     }
     if (ip) {
-      const byIp = db.prepare('SELECT user_id FROM trial_devices WHERE ip = ? LIMIT 1').get(ip);
+      const byIp = db.prepare('SELECT user_id FROM trial_devices WHERE ip = ? ORDER BY created_at DESC LIMIT 1').get(ip);
       if (byIp) return { by: 'ip', user_id: byIp.user_id };
     }
   } catch (e) {}
@@ -106,7 +106,7 @@ function findGuestByIdentity(db, igKey, domainKey) {
   try {
     if (!db || (!igKey && !domainKey)) return null;
     const row = db.prepare(
-      `SELECT id, is_guest FROM users WHERE (? <> '' AND guest_ig = ?) OR (? <> '' AND guest_domain = ?) LIMIT 1`
+      `SELECT id, is_guest FROM users WHERE (? <> '' AND guest_ig = ?) OR (? <> '' AND guest_domain = ?) ORDER BY id DESC LIMIT 1`
     ).get(igKey || '', igKey || '', domainKey || '', domainKey || '');
     return row || null;
   } catch (e) { return null; }

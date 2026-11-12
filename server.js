@@ -30906,8 +30906,18 @@ app.post('/api/guest/start', (req, res) => {
         if (du0) {
           const duRow = db.prepare('SELECT id, is_guest, trial_ends_at FROM users WHERE id = ?').get(du0.user_id);
           if (duRow && duRow.is_guest) {
-            // Mismo dispositivo, mismo invitado: se retoma la prueba
-            // (el reloj sigue corriendo, no hay prueba nueva).
+            // (v928) Retomar SOLO si la sesión actual YA es ese invitado
+            // (re-entrada del mismo visitante: el reloj sigue corriendo,
+            // no hay prueba nueva). Una entrada SIN identidad no puede
+            // adivinar a qué prueba pertenece un dispositivo compartido:
+            // retomar al invitado del dispositivo cambiaba la sesión a
+            // OTRA cuenta (Byredo → Olive & June, 11/11). Sin continuidad
+            // de sesión, 409: el visitante entra con su @/web (el camino
+            // con identidad decide por negocio, v912) o con su cuenta.
+            const curUid = (req.session && req.session.userId) || null;
+            if (!curUid || String(curUid) !== String(duRow.id)) {
+              return res.status(409).json({ error: lang === 'en' ? 'This device already used its free trial 💛 Log in to your account or pick your plan.' : 'Este dispositivo ya usó su prueba gratis 💛 Entrá a tu cuenta o elegí tu plan.', device_used: true });
+            }
             return req.session.regenerate((err) => {
               if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
               req.session.userId = duRow.id;
@@ -30989,6 +30999,14 @@ app.post('/api/guest/start', (req, res) => {
       referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
       lang, ig: igK, domain: domK, device,
     });
+    // (v928) Reuso con identidad nueva: la fila invitada adopta el @ y el
+    // dominio de ESTA entrada (antes conservaba los viejos y el perfil
+    // seguía leyendo el @ anterior mientras la semana era la del nuevo).
+    // Solo invitados: una fila registrada nunca cambia su identidad por
+    // una prueba.
+    if (reuseGuest) {
+      try { db.prepare('UPDATE users SET guest_ig = ?, guest_domain = ? WHERE id = ? AND is_guest = 1').run(igK || '', domK || '', g.userId); } catch (e) {}
+    }
     // Importar exactamente 3 posteos (misma maquinaria que el alta por
     // magic link, con límite 3 y sin los extras de stories/reels).
     const nImp = importTrialWeek(g.userId, igK, null, { limit: 3, cacheKey });
@@ -31009,8 +31027,12 @@ app.post('/api/guest/start', (req, res) => {
     try {
       const biz = String(payload.business || '').trim();
       const cat = String(payload.category || '').trim();
-      db.prepare(`UPDATE profiles SET ig_username = COALESCE(NULLIF(ig_username, ''), ?), business_name = COALESCE(NULLIF(business_name, ''), ?), category = COALESCE(NULLIF(category, ''), ?) WHERE user_id = ?`)
-        .run(igK || '', biz, cat, g.userId);
+      // (v928) El perfil del invitado ES la identidad de esta entrada: se
+      // escribe sin COALESCE (el @ viejo quedaba pegado y el snapshot leía
+      // el negocio anterior mientras la semana era la del nuevo). Solo
+      // invitados: la fila registrada no se toca.
+      db.prepare(`UPDATE profiles SET ig_username = ?, business_name = ?, category = ? WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND is_guest = 1)`)
+        .run(igK || '', biz, cat, g.userId, g.userId);
     } catch (e) {}
     // Programar los 3 (la grilla muestra solo scheduled): si el gate de
     // calidad retiene alguno, queda como borrador en Bandeja, igual que
@@ -31093,8 +31115,10 @@ app.post('/api/guest/set-ig', requireAuth, async (req, res) => {
     try {
       const biz = String((payload && payload.business) || '').trim();
       const cat = String((payload && payload.category) || '').trim();
-      db.prepare(`UPDATE profiles SET ig_username = COALESCE(NULLIF(ig_username, ''), ?), business_name = COALESCE(NULLIF(business_name, ''), ?), category = COALESCE(NULLIF(category, ''), ?) WHERE user_id = ?`)
-        .run(v.ig, biz, cat, userId);
+      // (v928) Igual que en guest/start: el perfil del invitado sigue al @
+      // que se acaba de dar, sin COALESCE (el @ viejo quedaba pegado).
+      db.prepare(`UPDATE profiles SET ig_username = ?, business_name = ?, category = ? WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND is_guest = 1)`)
+        .run(v.ig, biz, cat, userId, userId);
     } catch (e) {}
     let sched = null;
     try { sched = scheduleAllDrafts(userId); } catch (e) { console.error('[guest] set-ig schedule falló:', e.message); }
@@ -35565,7 +35589,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v927';
+const BUILD_ID = '20261105-v928';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

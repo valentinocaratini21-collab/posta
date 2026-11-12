@@ -332,10 +332,18 @@ function pzCacheGet(url) {
   const e = PZ_GET_CACHE[k];
   if (!e) return null;
   if (Date.now() - e.at > PZ_GET_TTL) { delete PZ_GET_CACHE[k]; return null; }
+  // (v928) La entrada pertenece a la cuenta que la pidió: con otra
+  // identidad vigente no se sirve (el cambio de cuenta la vacía en
+  // refreshSession, pero una lectura en la misma carga no debe confiar
+  // en que eso ya corrió).
+  if (e.user !== PZ_CACHE_USER) { delete PZ_GET_CACHE[k]; return null; }
   return e.data;
 }
 function pzCachePut(url, data) {
-  try { PZ_GET_CACHE[pzCacheKey(url)] = { at: Date.now(), data }; } catch (e) {}
+  // (v928) Cada entrada lleva su dueño (la identidad vigente al pedirla):
+  // sin dueño, una lectura tras un cambio de cuenta serviría los datos
+  // de la cuenta anterior.
+  try { PZ_GET_CACHE[pzCacheKey(url)] = { at: Date.now(), data, user: PZ_CACHE_USER }; } catch (e) {}
 }
 function pzCacheClone(data) {
   // La vista recibe una copia: si muta el payload, la caché queda limpia.
@@ -2637,7 +2645,10 @@ async function refreshSession(force) {
       }
       // Cambio de cuenta en la misma carga: la caché GET del anterior no sirve.
       const ident = (ME && (ME.id || ME.email || ME.username)) || null;
-      if (ident !== PZ_CACHE_USER) { pzCacheClear(); PZ_CACHE_USER = ident; }
+      // (v928) Tampoco sirve el perfil cacheado (HOME_PROF / HF_CUR_PROF):
+      // sin esto, la próxima Inicio rendía el perfil de la cuenta anterior
+      // como respaldo aunque la sesión ya fuera otra.
+      if (ident !== PZ_CACHE_USER) { pzCacheClear(); PZ_CACHE_USER = ident; try { HOME_PROF = null; HOME_PROF_UID = null; HF_CUR_PROF = null; HF_CUR_PROF_UID = null; } catch (e) {} }
       PZ_SESS_AT = Date.now();
       return;
     } catch (e) {
@@ -2649,6 +2660,32 @@ async function refreshSession(force) {
   }
   if (lastErr && lastErr.networkError) { NET_OFFLINE = true; return; } // mantenemos ME anterior
   ME = null; NET_OFFLINE = false; PZ_SESS_AT = 0;
+}
+// (v928) Revalidación ligera de identidad: la sesión puede cambiar bajo
+// el SPA vivo (otra pestaña, volver atrás con bfcache, login) y ME + la
+// caché GET + HOME_PROF seguirían de la cuenta anterior. Un solo viaje a
+// /api/auth/me (nunca cacheado); si la identidad cambió, se vacía todo lo
+// de la cuenta anterior y se refresca + se re-renderiza. Con tope de 1
+// chequeo cada 5 s: en navegación normal casi siempre devuelve al instante
+// sin viajar. Sin rebote al login acá: un 401 lo resuelve el flujo normal.
+let PZ_IDENT_CHECK_AT = 0;
+async function pzRevalidateIdentity() {
+  try {
+    if (typeof ME === 'undefined') return;
+    const now = Date.now();
+    if (now - PZ_IDENT_CHECK_AT < 5000) return;
+    PZ_IDENT_CHECK_AT = now;
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(8000) });
+    if (!r || !r.ok) return;
+    const d = await r.json().catch(() => null);
+    const ident = (d && d.user && (d.user.id || d.user.email || d.user.username)) || null;
+    const cur = (ME && (ME.id || ME.email || ME.username)) || null;
+    if (String(ident || '') === String(cur || '') && !!ident === !!cur) return;
+    try { pzCacheClear(); } catch (e) {}
+    try { HOME_PROF = null; HOME_PROF_UID = null; HF_CUR_PROF = null; HF_CUR_PROF_UID = null; } catch (e) {}
+    try { if (typeof refreshSession === 'function') await refreshSession(true); } catch (e) {}
+    try { if ((location.hash || '').startsWith('#/app') && typeof render === 'function') render(); } catch (e) {}
+  } catch (e) {}
 }
 // ================= LOTE PRUEBA-ENTRADA-DIRECTA (4/11) =================
 // Cuenta al primer toque: el invitado (ME.is_guest) navega y mira todo,
@@ -21952,6 +21989,19 @@ function hfArchiveHTML(data, en) {
 /* ===== /HOME_FEED ===== */
 
 let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica del perfil)
+let HOME_PROF_UID = null; // (v928) dueño del perfil cacheado (identidad de ME al guardarlo)
+let HF_CUR_PROF_UID = null; // (v928) dueño de HF_CUR_PROF
+// (v928) Un perfil cacheado pertenece a UNA cuenta: sin dueño verificado
+// no se rinde. El cambio de sesión bajo el SPA vivo (otra pestaña,
+// volver atrás, login) dejaba ME viejo y la grilla pintaba LA CUENTA
+// ANTERIOR (Byredo → Olive & June; Veja → Posty, 11/11). Fail-closed:
+// sin dueño, sin perfil (la vista cae al kit / a la lectura fresca).
+function pzProfUid() { try { return (typeof ME !== 'undefined' && ME && (ME.id || ME.email || ME.username)) || null; } catch (e) { return null; } }
+function pzProfUsable(storedUid) { try { const me = pzProfUid(); return !!me && storedUid !== null && storedUid !== undefined && String(storedUid) === String(me); } catch (e) { return false; } }
+function pzHomeProfSet(payload) { try { HOME_PROF = payload || null; HOME_PROF_UID = pzProfUid(); } catch (e) { HOME_PROF = payload || null; } }
+function pzHomeProfGet() { try { return pzProfUsable(HOME_PROF_UID) ? HOME_PROF : null; } catch (e) { return null; } }
+function pzCurProfSet(payload) { try { HF_CUR_PROF = payload || null; HF_CUR_PROF_UID = pzProfUid(); } catch (e) { HF_CUR_PROF = payload || null; } }
+function pzCurProfGet() { try { return pzProfUsable(HF_CUR_PROF_UID) ? HF_CUR_PROF : null; } catch (e) { return null; } }
 // (Tanda feed 5) Estado de la home: pestaña activa del perfil
 // (Publicaciones · Reels · Etiquetados), espejo «Ver como visitante»,
 // la composición vigente y las propuestas por posteo (para el detalle).
@@ -22922,6 +22972,7 @@ function pzConserjeHoyHTML() {
   } catch (e) { return ''; }
 }
 async function inicioView() {
+  try { await pzRevalidateIdentity(); } catch (e) {}
   const tz = pcTz();
   // LOTE VELOCIDAD: posts y ensure son independientes: un solo viaje en
   // paralelo en vez de dos en serie (los flags se calculan abajo igual).
@@ -23000,8 +23051,8 @@ async function inicioView() {
   // 🏠 (v331) El perfil literal: réplica desde la lectura guardada de su
   // Instagram (o el kit de nacimiento si la cuenta es nueva/vacía). El
   // servidor nunca inventa: lo que no leyó, el encabezado lo omite.
-  let prof = HOME_PROF;
-  try { if (hpRes && hpRes.ok) { prof = hpRes; HOME_PROF = hpRes; } } catch (e) {}
+  let prof = pzHomeProfGet();
+  try { if (hpRes && hpRes.ok) { prof = hpRes; pzHomeProfSet(hpRes); } } catch (e) {}
   // (v457 · TIRA DE NIVEL) El tallo vivo de Posty: mismo endpoint y mismo
   // modulo que el tallo del website (niveles.js via /api/oficina/nivel).
   // Si falla o es visitante, no hay tira: la pantalla sigue igual, y la
@@ -23398,6 +23449,7 @@ function pzFeedBoostPick() {
   } catch (e) {}
 }
 async function feedView() {
+  try { await pzRevalidateIdentity(); } catch (e) {}
   const tz = pcTz();
   const en = hfIsEn();
   let allPosts = [];
@@ -23428,8 +23480,8 @@ async function feedView() {
     api.get('/api/stats/ig').catch(() => null),
   ]);
   let quota = quotaRes;
-  let prof = HOME_PROF;
-  try { if (hpRes && hpRes.ok) { prof = hpRes; HOME_PROF = hpRes; } } catch (e) {}
+  let prof = pzHomeProfGet();
+  try { if (hpRes && hpRes.ok) { prof = hpRes; pzHomeProfSet(hpRes); } } catch (e) {}
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   // Composición del feed literal: EXACTAMENTE la de inicioView (mismos
   // inputs, mismo homeGridCompose, mismo orden). Nada se reordena acá.
@@ -26112,7 +26164,7 @@ function hfCoverDownloadAt(prof, idx, msgEl, en) {
 }
 function hfCoversOpen() {
   const en = hfIsEn();
-  const prof = (typeof HF_CUR_PROF !== 'undefined' && HF_CUR_PROF) || (typeof HOME_PROF !== 'undefined' && HOME_PROF) || {};
+  const prof = pzCurProfGet() || pzHomeProfGet() || {};
   const ov = hfSheetShow(hfCoversSheetHTML(prof, en));
   const msg = ov.querySelector('[data-hf-cov-msg]');
   ov.querySelectorAll('[data-hf-cov-dl]').forEach((b) => b.addEventListener('click', () => hfCoverDownloadAt(prof, Number(b.dataset.hfCovDl) || 0, msg, en)));
@@ -26789,7 +26841,7 @@ function hfLiveApply(job) {
       }
     } catch (e) {}
   }
-  if (prof) { HF_CUR_PROF = prof; HOME_PROF = prof; }
+  if (prof) { pzCurProfSet(prof); pzHomeProfSet(prof); }
   HF_PROPS = props;
   // Tiles removidas (salieron de la composición, p. ej. archivadas).
   for (const id of diff.removed) {
@@ -29749,7 +29801,7 @@ function f3HomeTilesFrom(all, tz) {
   const pl = schedPlacements(all, tz);
   const upcoming = hfFeedUpcoming(all, tz);
   const published = all.filter(p => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (typeof HOME_PROF !== 'undefined' && HOME_PROF && HOME_PROF.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all });
+  const tiles = homeGridCompose({ upcoming, published, recents: ((pzHomeProfGet() || {}).recents || []), ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all });
   for (const t of tiles) {
     if (t.kind === 'post' && !t.day) {
       const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
@@ -29908,7 +29960,9 @@ function maybeAskPushPostIg() {
   }, 2500);
 }
 
-window.addEventListener('hashchange', () => { try { const _r = render(); if (_r && typeof _r.then === 'function') _r.then(() => { try { pzRestoreScroll(); } catch (e) {} }); } catch (e) {} });
+window.addEventListener('hashchange', () => { try { pzRevalidateIdentity(); } catch (e) {} try { const _r = render(); if (_r && typeof _r.then === 'function') _r.then(() => { try { pzRestoreScroll(); } catch (e) {} }); } catch (e) {} });
+try { window.addEventListener('pageshow', () => { try { pzRevalidateIdentity(); } catch (e) {} }); } catch (e) {}
+try { document.addEventListener('visibilitychange', () => { try { if (!document.hidden) pzRevalidateIdentity(); } catch (e) {} }); } catch (e) {}
 render();
 try { pzPullInit(); } catch (e) {}
 setTimeout(trackScreen, 800);
