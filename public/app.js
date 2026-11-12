@@ -23017,6 +23017,42 @@ function pzHoyPendientes(todos, hoyKey, mananaKey, lunesKey, tz) {
   return out;
 }
 
+// (BANNER-REVISION · 12/11) Una sola fuente de verdad del conteo del
+// banner «Tenés N posteos para revisar»: EXACTAMENTE los posteos que la
+// lista a la que lleva el botón muestra con acción visible.
+// · drafts: TODOS los borradores de /api/posts (cualquier semana) — la
+//   tarjeta «Revisá tu semana» de #/app/schedule los lista a todos con
+//   Aceptar / Editar / No me gusta / Publicar ahora.
+// · schedPend: programados pendientes con día desde hoy en adelante (la
+//   cartita de mañana incluida) — en el calendario de schedule se ven en
+//   su día y su detalle (#/app/post/:id) tiene Aceptar mientras estén
+//   pendientes. En manual cuentan (sin tu OK no salen); en autopilot
+//   salen solos (schedSolo, no cuentan).
+// · Un posteo en revisión (needs_review=1) NUNCA llega acá: GET
+//   /api/posts lo filtra («en revisión no se muestra») — no se cuenta
+//   ni se lista. Un borrador que al aceptar falla el lint queda en
+//   revisión con su aviso y sale del conteo en el próximo render.
+function pzHoyRevisionContar(allPosts, hoyKey, tz, manual) {
+  const out = { needOK: 0, schedSolo: 0, drafts: [], schedPend: [] };
+  try {
+    const lista = Array.isArray(allPosts) ? allPosts : [];
+    for (const p of lista) {
+      if (!p || String((p && p.media_type) || '') === 'story') continue;
+      const st = String(p.status || '');
+      if (st === 'draft') out.drafts.push(p);
+      else if (st === 'scheduled' && String(p.approval || 'pending') === 'pending') {
+        const k = pzHoyPostDiaKey(p, tz);
+        if (!k) continue;
+        if (hoyKey && k < hoyKey) continue;
+        out.schedPend.push(p);
+      }
+    }
+    out.schedSolo = manual ? 0 : out.schedPend.length;
+    out.needOK = out.drafts.length + (manual ? out.schedPend.length : 0);
+  } catch (e) {}
+  return out;
+}
+
 // Hora corta HH:MM de un ISO en la zona (ES 24 h; EN 12 h con AM/PM).
 function pzHoyHoraCorta(iso, tz, en) {
   try {
@@ -23304,8 +23340,8 @@ function pzHoySpeechHTML(o) {
     if (yaSalio) {
       const hhPub = pzHoyHoraCorta(hoyPost.published_at || hoyPost.scheduled_at, tz, en);
       const pendTxt = needOK > 0
-        ? (en ? (needOK === 1 ? ` You've got 1 post to review in your feed.` : ` You've got ${needOK} posts to review in your feed.`)
-              : (needOK === 1 ? ` Tenés 1 posteo para revisar en tu feed.` : ` Tenés ${needOK} posteos para revisar en tu feed.`))
+        ? (en ? (needOK === 1 ? ` You've got 1 post to review in your review list.` : ` You've got ${needOK} posts to review in your review list.`)
+              : (needOK === 1 ? ` Tenés 1 posteo para revisar en tu revisión.` : ` Tenés ${needOK} posteos para revisar en tu revisión.`))
         : '';
       cuerpo = en
         ? `Today's post is already out${hhPub ? ' — it went out at ' + esc(hhPub) : ''}. Take a look at your feed.${pendTxt}`
@@ -23339,11 +23375,11 @@ function pzHoySpeechHTML(o) {
       const manualTxt = manual ? (en ? ' You approve each one.' : ' Vos aprobás cada uno.') : '';
       cuerpo = en
         ? (needOK === 1
-          ? `You've got 1 post to review — check it in your feed and give it a «Publish it» if you like it.${manualTxt}${extraSolo}`
-          : `You've got ${needOK} posts to review — check them in your feed and give a «Publish it» to the ones you like.${manualTxt}${extraSolo}`)
+          ? `You've got 1 post to review — check it in your review list and accept it if you like it.${manualTxt}${extraSolo}`
+          : `You've got ${needOK} posts to review — check them in your review list and accept the ones you like.${manualTxt}${extraSolo}`)
         : (needOK === 1
-          ? `Tenés 1 posteo para revisar — miralo en tu feed y dale «Dale» si te gusta.${manualTxt}${extraSolo}`
-          : `Tenés ${needOK} posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten.${manualTxt}${extraSolo}`);
+          ? `Tenés 1 posteo para revisar — miralo en tu revisión y aceptalo si te gusta.${manualTxt}${extraSolo}`
+          : `Tenés ${needOK} posteos para revisar — miralos en tu revisión y aceptá los que te gusten.${manualTxt}${extraSolo}`);
     } else {
       cuerpo = en
         ? `Your week is all set — the posts go out on their own, on time, and you can see them in your feed. I'll let you know 30 min before each one in case you want to stop it.`
@@ -23356,7 +23392,11 @@ function pzHoySpeechHTML(o) {
   }
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
-  // el encabezado). El botón conserva data-pz-hoy-chat (abre el chat).
+  // el encabezado). (BANNER-REVISION · 12/11) Si el banner habla de
+  // posteos para revisar (needOK > 0), el botón lleva a LA LISTA
+  // (#/app/schedule, «Revisá tu semana»), no al chat: el número tiene
+  // que abrir lo que cuenta. Sin nada para revisar, el botón sigue
+  // abriendo el chat.
   // (v846 · decisión Valentino 12:01: el saludo por hora («¡Buen día!»)
   // salió — era innecesario. La burbuja arranca directo con el cuerpo.)
   // (v879 · corrección Valentino 10/11 10:04) Sin cuerpo no hay burbuja:
@@ -23365,7 +23405,8 @@ function pzHoySpeechHTML(o) {
   // burbuja: en esos dos estados tampoco se rinde en Hoy (sigue en la
   // hoja del ritual).
   if (!cuerpo) return '';
-  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" data-pz-hoy-chat="1"><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
+  const destAttr = needOK > 0 ? 'data-pz-hoy-revision="1"' : 'data-pz-hoy-chat="1"';
+  return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" ${destAttr}><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }
 
 // Entrada al conserje (nace oculta; pzHoyConserjeFill la llena con el
@@ -23498,6 +23539,9 @@ function pzHoyBind(root) {
   if (!root) return;
   root.querySelectorAll('[data-pz-hoy-view]').forEach((b) => { b.onclick = () => pzHoySetView(b.getAttribute('data-pz-hoy-view')); });
   root.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
+  // (BANNER-REVISION · 12/11) El banner de revisión lleva a LA LISTA
+  // (#/app/schedule, «Revisá tu semana»), no al chat.
+  root.querySelectorAll('[data-pz-hoy-revision]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/schedule'); else location.hash = '#/app/schedule'; } catch (e) {} }; });
   root.querySelectorAll('[data-pz-hoy-aprobar]').forEach((b) => { b.onclick = () => pzHoyAprobarUno(b); });
   root.querySelectorAll('[data-pz-hoy-cambiar]').forEach((b) => { b.onclick = () => pzHoyCambiar(b.getAttribute('data-pz-hoy-cambiar')); });
   // (LOTE BOTONES-INICIO v914) Frenar y Eliminar del héroe de Inicio.
@@ -23786,11 +23830,17 @@ async function inicioView() {
   // que el resto programado pendiente.)
   let modoR1 = { manual: false, known: false };
   try { modoR1 = await f3ApprovalMode(); } catch (e) { modoR1 = { manual: false, known: false }; }
-  const draftsR1 = (!HF_VISITOR) ? pendR1.resto.filter((p) => p && String(p.status || '') === 'draft').length : 0;
-  const schedPendR1 = (!HF_VISITOR) ? pendR1.resto.filter((p) => p && String(p.status || '') === 'scheduled' && String(p.approval || 'pending') === 'pending').length : 0;
-  const cartitaPendR1 = (pendR1.cartita && String(pendR1.cartita.status || '') === 'scheduled' && String(pendR1.cartita.approval || 'pending') === 'pending') ? 1 : 0;
-  const needOKR1 = draftsR1 + (modoR1.manual ? (schedPendR1 + cartitaPendR1) : 0);
-  const schedSoloR1 = modoR1.manual ? 0 : (schedPendR1 + cartitaPendR1);
+  // (BANNER-REVISION · 12/11) El conteo del banner es EXACTAMENTE lo
+  // que la lista de revisión muestra con acción: todos los borradores
+  // (cualquier semana — la tarjeta «Revisá tu semana» los lista a
+  // todos) + programados pendientes en manual. Antes contaba solo los
+  // borradores de esta semana y el botón llevaba al chat, así que el
+  // número no correspondía a nada visible ni accionable (los 2 del
+  // 11/11: 591 y 584). pzHoyPendientes sigue (el saludo y la tira la
+  // usan); el conteo del banner es pzHoyRevisionContar.
+  const revR1 = (!HF_VISITOR) ? pzHoyRevisionContar(allPosts, hoyKeyR1, tz, modoR1.manual) : { needOK: 0, schedSolo: 0, drafts: [], schedPend: [] };
+  const needOKR1 = revR1.needOK;
+  const schedSoloR1 = revR1.schedSolo;
   // (LOTE SIMPLIFICAR-APP · PARTE 2 · REDISEÑO SIMPLE · 9/11: la semana
   // queda en Hoy como fila mini. semR1 = publicados reales de la semana
   // (pzHoySemana); la línea de insight murió en v846 (la reemplaza la
@@ -23841,7 +23891,7 @@ async function inicioView() {
     // de Hoy — vive solo en el tab Ads.)
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
       + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
-      + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
+      + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: needOKR1, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
       + pzPostWowEmailHTML({ hoyPost: hoyPostR1, en: enHome })
