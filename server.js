@@ -8455,6 +8455,35 @@ app.get('/api/admin/user-posts', requireAdminToken, (req, res) => {
     res.json({ ok: true, user, posts, detail });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// (FIX-GRILLA-PERFIL) Snapshot guardado de la home, solo lectura: expone el
+// payload de ig_home_snapshot (recents con shortcode/taken_at/img/src,
+// posts_count, fetched_at) para diagnosticar la grilla sin sesión de usuario.
+// Sin snapshot guardado -> snapshot:null. No escribe nada.
+app.get('/api/admin/home-snapshot', requireAdminToken, (req, res) => {
+  const uid = Number(req.query.user_id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  try {
+    const snap = homeSnapshotGet(uid);
+    if (!snap) return res.json({ ok: true, user_id: uid, snapshot: null });
+    const p = snap.payload || {};
+    res.json({
+      ok: true,
+      user_id: uid,
+      username: p.username || '',
+      fetched_at: snap.fetched_at || 0,
+      posts_count: (typeof p.posts_count === 'number' ? p.posts_count : null),
+      recents_count: Array.isArray(p.recents) ? p.recents.length : 0,
+      recents: Array.isArray(p.recents) ? p.recents.map((r) => ({
+        shortcode: (r && r.shortcode) || null,
+        taken_at: (r && typeof r.taken_at === 'number' ? r.taken_at : null),
+        img: (r && r.img) || null,
+        src: (r && r.src) || null,
+        type: (r && r.type) || null,
+      })) : [],
+      highlights_count: Array.isArray(p.highlights) ? p.highlights.length : 0,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, res) => {
   const uid = Number((req.body || {}).user_id) || 0;
   if (!uid) return res.status(400).json({ error: 'falta user_id' });
@@ -19808,7 +19837,12 @@ async function homeProfileFromRead(handle, data) {
       likes: num(x.likes),
       comments: num(x.comments),
       pinned: x.pinned === true ? true : null,
-    })).filter((r) => r.img),
+    // (FIX-GRILLA-PERFIL) Fallback img=src: si localizeTrialPhotos no pudo
+    // bajar la miniatura (img null), el recent se conserva con la URL de la
+    // CDN en vez de filtrarse en silencio — el tile rinde con la URL remota
+    // y la localización se reintenta en la próxima lectura. Sin src tampoco
+    // hay nada que rendir: se filtra como antes.
+    })).map((r) => { if (!r.img && r.src) r.img = r.src; return r; }).filter((r) => r.img),
     captured_at: Date.now(),
   };
 }
@@ -19984,7 +20018,9 @@ async function homeProfileReadAndStore(uid, handle) {
     // lectura parcial).
     try {
       const rec = feedReconcile.reconcilePublishedMirror(db, uid, data, { totalOverride: (payload && typeof payload.posts_count === 'number') ? payload.posts_count : null });
-      if (rec && (rec.archived || rec.restored)) {
+      // (FIX-GRILLA-PERFIL) El log sale SIEMPRE, también con 0/0: un
+      // reconcile sin cambios era invisible hasta con acceso a los logs.
+      if (rec) {
         console.log(`[feed-reconcile] user ${uid} @${handle}: archivados_ext=${rec.archived || 0} restaurados=${rec.restored || 0} (grilla leída ${rec.seen}/${rec.total}${rec.skipped ? ' · ' + rec.skipped : ''})`);
       }
     } catch (e) { /* la reconciliación nunca frena la home */ }
@@ -36357,7 +36393,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v970';
+const BUILD_ID = '20261105-v971';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
