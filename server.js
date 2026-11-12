@@ -9344,7 +9344,7 @@ app.get('/api/admin/client/:id', requireAdminToken, (req, res) => {
     }
     const pl = getPlan(user.plan);
     const postsRaw = db.prepare(`SELECT p.id, p.media_type, p.status, p.image_path, p.caption,
-        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_likes, p.ig_comments, p.tipo, p.week_key, p.ig_state,
+        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_media_id, p.ig_likes, p.ig_comments, p.tipo, p.week_key, p.ig_state,
         m.reach, m.likes AS m_likes, m.comments AS m_comments
       FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
       WHERE p.user_id = ? ORDER BY p.id DESC LIMIT 60`).all(uid);
@@ -21498,7 +21498,9 @@ app.get('/api/publish-celebration', requireAuth, (req, res) => {
   if (me && me.pc) return res.json({ ok: true, show: false });
   const first = db.prepare(
     `SELECT id, caption, hashtags, media_type, image_path, ig_permalink, published_at
-     FROM posts WHERE user_id = ? AND status = 'published' ORDER BY published_at ASC, id ASC LIMIT 1`
+     FROM posts WHERE user_id = ? AND status = 'published'
+       AND COALESCE(ig_media_id, '') NOT LIKE 'demo_%' AND COALESCE(ig_permalink, '') NOT LIKE '%/demo_%'
+     ORDER BY published_at ASC, id ASC LIMIT 1`
   ).get(req.session.userId);
   if (!first) return res.json({ ok: true, show: false });
   res.json({ ok: true, show: true, post: first });
@@ -34904,8 +34906,19 @@ function semanaMediaUrl(p) {
   if (/^https?:\/\//i.test(raw)) return raw;
   return '/media/' + raw.split('/').filter(Boolean).pop();
 }
+// (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) Publicación real verificable: el
+// publicador en modo demo escribe ig_media_id 'demo_*' y permalink con
+// '/demo_*' (instagram.js: publishDemo). Sin marca de demo, se publicó.
+// La marca vive en la fila (SELECT *), así que no hace falta tocar la query.
+function isDemoPub(p) {
+  if (!p) return false;
+  if (String(p.ig_media_id || '').indexOf('demo_') === 0) return true;
+  if (String(p.ig_permalink || p.permalink || '').indexOf('/demo_') !== -1) return true;
+  return false;
+}
 function semanaWhenLabel(p, tz, en) {
-  const raw = p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at;
+  const pubReal = p.status === 'published' && !isDemoPub(p);
+  const raw = pubReal ? (p.published_at || p.scheduled_at) : p.scheduled_at;
   if (!raw) return '';
   try {
     const ymd = ymdInTz(raw, tz);
@@ -34915,7 +34928,7 @@ function semanaWhenLabel(p, tz, en) {
     const s = String(raw);
     const dt = new Date(s.length === 16 ? s : s.replace(' ', 'T'));
     const hm = isNaN(dt) ? '' : new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(dt);
-    const verb = p.status === 'published' ? (en ? 'Posted' : 'Publicado') : (en ? 'Goes out' : 'Sale');
+    const verb = pubReal ? (en ? 'Posted' : 'Publicado') : (en ? 'Goes out' : 'Sale');
     return `${verb} · ${day} ${d}/${m}${hm ? ' · ' + hm : ''}`;
   } catch (e) { return ''; }
 }
@@ -35539,7 +35552,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v924';
+const BUILD_ID = '20261105-v925';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

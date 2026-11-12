@@ -12511,6 +12511,23 @@ function igRelTime(iso, en) {
    menú ••• de la vista de aprobación — este menú es el del POP, superficie
    distinta, no se duplica nada; detalle-3 conserva su primario y su
    porqué. ===== */
+// (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) «Publicado» solo si se publicó de
+// verdad. La publicación REAL es la que el publicador escribe con
+// ig_media_id e ig_permalink reales (scheduler.js:189). En modo demo el
+// publicador SIMULA: instagram.js:publishDemo escribe ig_media_id
+// 'demo_*' y permalink 'https://www.instagram.com/p/demo_*/' (el reel
+// '/reel/demo_*/'; la historia deja el permalink vacío pero el mediaId
+// demo_* igual). Sin marca de demo, el posteo se publicó de verdad: las
+// filas viejas sin marcadores NO se tocan (fail-safe hacia «publicado»).
+// Se usa en TODOS los sitios que rinden el badge «Publicado» o el enlace
+// «Ver en Instagram»: si el posteo no trae marcadores, el helper igual
+// funciona (permalink '/demo_*' solo; mediaId cuando el payload lo trae).
+function pzIsPubReal(p) {
+  if (!p || String(p.status || '') !== 'published') return false;
+  if (String(p.ig_media_id || '').indexOf('demo_') === 0) return false;
+  if (String(p.ig_permalink || p.permalink || '').indexOf('/demo_') !== -1) return false;
+  return true;
+}
 function detSimpleMenuHTML(d, o) {
   o = o || {};
   const en = !!o.en;
@@ -12524,7 +12541,7 @@ function detSimpleMenuHTML(d, o) {
     else items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-del">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>`);
     items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-dislike">${pzIc('thumbDown', 16)} ${en ? 'Dislike' : 'No me gusta'}</button>`);
   }
-  if (d.status === 'published' && d.ig_permalink) items.push(`<a class="igmock-menu-btn" href="${esc(d.ig_permalink)}" target="_blank" rel="noopener">${pzIc('instagram', 16)} ${en ? 'View on Instagram' : 'Ver en Instagram'}</a>`);
+  if (pzIsPubReal(d) && d.ig_permalink) items.push(`<a class="igmock-menu-btn" href="${esc(d.ig_permalink)}" target="_blank" rel="noopener">${pzIc('instagram', 16)} ${en ? 'View on Instagram' : 'Ver en Instagram'}</a>`);
   return `<div class="igmock-menu" hidden>${items.join('')}</div>`;
 }
 function pzDetMenuToggle(card, btn) {
@@ -12686,7 +12703,7 @@ function weekCardHTML(d, o) {
     ? `<div class="igmock-comments">${enW ? (ccN === 1 ? 'View 1 comment' : `View all ${ccN.toLocaleString('en-US')} comments`) : (ccN === 1 ? 'Ver el comentario' : `Ver los ${ccN.toLocaleString('es-AR')} comentarios`)}</div>`
     : '';
   const igChrome = (!simple && !isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div>${likesLine}` : '';
-  const statusHTML = d.status === 'scheduled'
+  const statusHTML = (d.status === 'scheduled' || (isPub && !pzIsPubReal(d)))
     ? `<span class="pcard-scheduled">${pzIc('clock', 15)} Programado</span>`
     : isPub
       ? `<span class="pcard-published">${pzIc('checkCircle', 15)} Publicado</span>`
@@ -12696,7 +12713,7 @@ function weekCardHTML(d, o) {
   const capHTML = capFull ? (simple ? `<div class="igmock-cap" data-capfull="${esc(capFull)}">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : '' }${esc(capFull)}</div>` : `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}"${igUser ? ` data-capuser="${esc(igUser)}"` : ''} title="Tocá para editar">${igUser ? `<b class="igmock-cap-user">${esc(igUser)}</b> ` : ''}${esc(capFull)}</div>`) : '';
   // (Frente 3b) Tiempo relativo estilo IG bajo el pie, solo en posteos ya
   // publicados y fuera del esqueleto fijo de Día: «hace 2 h».
-  const timeHTML = (isPub && !o.dia) ? (() => { const rt = igRelTime(d.published_at || d.scheduled_at, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return rt ? `<div class="igmock-time">${esc(rt)}</div>` : ''; })() : '';
+  const timeHTML = (pzIsPubReal(d) && !o.dia) ? (() => { const rt = igRelTime(d.published_at || d.scheduled_at, (typeof ME !== 'undefined' && ME && ME.lang === 'en')); return rt ? `<div class="igmock-time">${esc(rt)}</div>` : ''; })() : '';
   // (v251) El porqué TAMBIÉN en Día/Semana: mismo tratamiento que la tarjeta
   // de revisión (reviewCardHTML) — ya venía en el payload de /api/posts.
   const whyHTML = d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : '';
@@ -12742,7 +12759,7 @@ function weekCardHTML(d, o) {
   // (LOTE DETALLE-SIMPLE) Piezas de la forma simple, calculadas acá para
   // que el return no cambie ni un byte cuando o.simple es falso.
   const simpleAccept = simple && d.status === 'draft' && !isPending;
-  const statusWord = isPub ? (enW ? 'Published' : 'Publicado') : d.status === 'scheduled' ? (enW ? 'Scheduled' : 'Programado') : isPending ? (enW ? 'Creating…' : 'Creando…') : (enW ? 'Draft' : 'Borrador');
+  const statusWord = (isPub && pzIsPubReal(d)) ? (enW ? 'Published' : 'Publicado') : (d.status === 'scheduled' || isPub) ? (enW ? 'Scheduled' : 'Programado') : isPending ? (enW ? 'Creating…' : 'Creando…') : (enW ? 'Draft' : 'Borrador');
   let simpleWhen = isPending ? statusWord : (labelText || '');
   if (!isPending && simpleWhen && statusWord && !simpleWhen.includes(statusWord)) simpleWhen += ' · ' + statusWord;
   if (!simpleWhen) simpleWhen = statusWord;
@@ -12933,7 +12950,9 @@ function schedDayKeyOf(dt, tz) { try { return dt.toLocaleDateString('en-CA', { t
 // Estado visual de un posteo en las vistas de calendario.
 function schedPostState(p) {
   if (!p) return 'draft';
-  if (p.status === 'published') return 'published';
+  // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) La chapita dice «Publicado» solo
+  // si se publicó de verdad: una simulación de demo no es publicación.
+  if (p.status === 'published') return pzIsPubReal(p) ? 'published' : 'scheduled';
   if (p.status === 'scheduled') return 'scheduled';
   if (!p.image_path) return 'creating';
   return 'draft';
@@ -14455,7 +14474,7 @@ function pcFmtDay(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday:
 function pcFmtDayLong(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
 function pcFmtHour(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
 function pcBadge(p) {
-  if (String(p.status) === 'published') return '<span class="pcard-badge pcard-badge-done">' + pzIc('checkCircle', 12) + ' Salió</span>';
+  if (pzIsPubReal(p)) return '<span class="pcard-badge pcard-badge-done">' + pzIc('checkCircle', 12) + ' Salió</span>';
   const mt = String(p.media_type || '');
   if (mt === 'video') return '<span class="pcard-badge">' + pzIc('reel', 15) + ' Reel</span>';
   if (mt === 'story') return '<span class="pcard-badge">' + pzIc('story', 12) + ' Story</span>';
@@ -14467,7 +14486,7 @@ function postCardHTML(p, opts) {
   opts = opts || {};
   const layout = opts.layout === 'col' ? 'col' : 'row';
   const tz = pcTz();
-  const isPub = String(p.status) === 'published';
+  const isPub = pzIsPubReal(p);
   const d = pcParseDate(isPub ? (p.published_at || p.scheduled_at) : p.scheduled_at);
   const when = d ? pcFmtDay(d, tz) + ' · ' + pcFmtHour(d, tz) : '';
   const dayLabel = d ? pcFmtDayLong(d, tz) + ' a las ' + pcFmtHour(d, tz) : '';
@@ -16041,7 +16060,10 @@ async function logoFileToImage(file) {
 }
 
 /* ---------- CALENDARIO / HISTORIAL ---------- */
-function badge(s) {
+function badge(s, p) {
+  // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) La chapita del historial dice
+  // «Publicado» solo si se publicó de verdad (ver pzIsPubReal).
+  if (s === 'published' && p && !pzIsPubReal(p)) s = 'scheduled';
   const map = { scheduled: 'b-scheduled', published: 'b-published', failed: 'b-failed', draft: 'b-draft', cancelled: 'b-cancelled', publishing: 'b-scheduled' };
   const label = { scheduled: 'Programado', published: 'Publicado', failed: 'Falló', draft: 'Borrador', cancelled: 'Cancelado', publishing: 'Publicando…' };
   return `<span class="badge ${map[s] || 'b-draft'}">${label[s] || s}</span>`;
@@ -16154,9 +16176,9 @@ function postItem(p, actions) {
     <div class="info">
       <div class="cap" ${hasMore ? 'data-cap' : ''}>${capFirst}${hasMore ? ' <span class="more-hint">ver más ' + pzIc('chevDown', 12) + '</span>' : ''}</div>
       ${hasMore ? `<div class="full-cap" style="display:none">${esc(capFull)}${p.hashtags ? `<div class="full-tags">${esc(p.hashtags)}</div>` : ''}</div>` : ''}
-      <div class="meta">${vtag}${badge(p.status)}
+      <div class="meta">${vtag}${badge(p.status, p)}
         ${p.scheduled_at && p.status === 'scheduled' ? `<span>${pzIc('calendar', 12)} ${fmtDate(p.scheduled_at)}</span>` : ''}
-        ${p.published_at ? `<span>${pzIc('checkCircle', 12)} ${fmtDate(p.published_at)}</span>` : ''}
+        ${(p.published_at && pzIsPubReal(p)) ? `<span>${pzIc('checkCircle', 12)} ${fmtDate(p.published_at)}</span>` : ''}
         ${p.ig_permalink && !p.ig_permalink.includes('/demo_') ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}
         ${p.error ? `<span style="color:#D64545" title="${esc(p.error)}">${esc(humanError(p.error))}</span>` : ''}
       </div>
@@ -16254,8 +16276,12 @@ async function publishNowFlow(postId, mount) {
     catch (e) { continue; }
     if (st.status === 'published') {
       track('post_publish', { id: postId });
-      mount.innerHTML = `<div class="okmsg">${pzIc('checkCircle', 14)} publicado en instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}</div>`;
-      return { ok: true, permalink: st.ig_permalink };
+      // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) En modo demo la publicación se
+      // simula: no salió a Instagram y no hay link. El ok es de la
+      // simulación (demo: true) para que quien llama no festeje de más.
+      const pubReal = pzIsPubReal(st);
+      mount.innerHTML = `<div class="okmsg">${pzIc('checkCircle', 14)} ${pubReal ? 'publicado en instagram!' : 'simulado (modo demo): no salió a Instagram'} ${pubReal && st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}</div>`;
+      return { ok: true, permalink: pubReal ? st.ig_permalink : '', demo: !pubReal };
     }
     if (st.status === 'failed' || st.status === 'cancelled') {
       paint(1, false, st.error || 'Se canceló la publicación.');
@@ -16406,10 +16432,16 @@ function bindFastTrack() {
     if (res && res.ok) {
       // Magia lograda: refrescamos la pantalla y festejamos.
       try { render(); } catch (e) { /* sigue el modal igual */ }
+      // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) En modo demo la publicación se
+      // simula: el festejo no dice que salió a Instagram.
+      const ftDemo = !!(res && res.demo);
+      const ftTxt = ftDemo
+        ? `En modo demo la publicación se simula: todavía no salió a Instagram. Conectá tu Instagram para que salga de verdad.<br>Mientras, <b>contame de tu negocio ${pzIc('mic', 13)}</b> — así los próximos posteos salen todavía mejor.`
+        : `Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio ${pzIc('mic', 13)}</b> — así los próximos posteos salen todavía mejor.`;
       streakModalShell(`
         <div class="big-emoji">${pzIc('gift', 64)}</div>
-        <h3 style="margin:12px 0 4px">¡Tu primer posteo está saliendo!</h3>
-        <p class="d" style="font-size:14px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio ${pzIc('mic', 13)}</b> — así los próximos posteos salen todavía mejor.</p>
+        <h3 style="margin:12px 0 4px">${ftDemo ? '¡Tu primer posteo está listo!' : '¡Tu primer posteo está saliendo!'}</h3>
+        <p class="d" style="font-size:14px">${ftTxt}</p>
         <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:14px">${pzIc('mic', 18)} Contame de tu negocio</button>
         <button class="btn btn-ghost btn-block" id="ftCelebClose" style="margin-top:8px">Ahora no</button>`);
       const vb = document.getElementById('ftCelebVoice');
@@ -16768,7 +16800,7 @@ async function maybeFirstPublishCelebration() {
     <div class="big-emoji">${pzIc('gift', 64)}</div>
     <h3 style="margin:12px 0 4px">¿Viste? Salió solo</h3>
     <p style="font-size:14px;margin:0 0 6px">Tu primer ${isVideo ? 'reel' : 'posteo'} ya está en Instagram — <b>vos no hiciste nada</b>.</p>
-    ${p.ig_permalink ? `<a class="btn btn-primary btn-block" href="${esc(p.ig_permalink)}" target="_blank" rel="noopener" style="margin:8px 0">Ver en Instagram ${pzIc('arrowRight', 16)}</a>` : ''}
+    ${(p.ig_permalink && !String(p.ig_permalink).includes('/demo_')) ? `<a class="btn btn-primary btn-block" href="${esc(p.ig_permalink)}" target="_blank" rel="noopener" style="margin:8px 0">Ver en Instagram ${pzIc('arrowRight', 16)}</a>` : ''}
     ${celebRefHTML()}
     <button class="btn btn-ghost btn-block" id="pubCelebClose" style="margin-top:6px">Seguir ${pzIc("arrowRight", 14)}</button>`);
   const ov = document.getElementById('streakModal');
@@ -20480,7 +20512,7 @@ function hfRedoLineHTML(p, en) {
 // rápidos (foto · texto · día y hora · rehacer) + la línea del contador.
 function hfAnchorBarHTML(p, en) {
   if (!p || p.id === null || p.id === undefined) return '';
-  const isPub = String(p.status || '') === 'published';
+  const isPub = pzIsPubReal(p);
   const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" data-full="${esc(p.image_path)}" alt="" onerror="__imgFbAnchor(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">' + pzIc('sparkle', 18) + '</span>';
   const redo = isPub ? '' : hfRedoLineHTML(p, en);
   // (LOTE HABLAR-DE-ESTE-POSTEO) La tarjeta de contexto lleva foto +
@@ -20616,7 +20648,7 @@ function hfPeekHTML(p, en, opts) {
       ? `<video src="${esc(p.image_path)}"${covP.has ? ` poster="${esc(covP.path)}"` : ''} autoplay muted loop playsinline></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" alt="" onerror="__imgFb(this)">`;
   let stateLine = '';
-  if (p.status === 'published') {
+  if (pzIsPubReal(p)) {
     const rel = hfRelShort(p.published_at || p.scheduled_at, en);
     const lk = (p.likes === null || p.likes === undefined || !Number.isFinite(Number(p.likes))) ? null : Number(p.likes);
     const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
@@ -20624,7 +20656,7 @@ function hfPeekHTML(p, en, opts) {
     if (lk !== null) mets.push(`${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}`);
     if (cc !== null && cc > 0) mets.push(`${cc.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (cc === 1 ? 'comment' : 'comments') : (cc === 1 ? 'comentario' : 'comentarios')}`);
     stateLine = `<div class="hf-peek-state">${pzIc('checkCircle', 13)} ${en ? 'Published' : 'Publicado'}${rel ? ' · ' + esc(rel) : ''}${mets.length ? ' · ' + esc(mets.join(' · ')) : ''}</div>`;
-  } else if (p.status === 'scheduled') {
+  } else if (p.status === 'scheduled' || p.status === 'published') {
     const chip = hfWhenChip(p) || hfChipText(p.scheduled_at);
     stateLine = `<div class="hf-peek-state">${pzIc('clock', 13)} ${chip ? esc((en ? 'Goes out ' : 'Sale el ') + chip) : (en ? 'Scheduled' : 'Programado')}</div>`;
   } else {
@@ -21651,10 +21683,10 @@ function hfDetailHTML(p, opts) {
   const tags = String(p.hashtags || '').trim();
   const capHTML = (capFull || tags) ? `<div class="hf-d-cap">${user ? `<b>${esc(user)}</b> ` : ''}${esc(capFull)}${tags ? `${capFull ? '\n' : ''}<span class="hf-d-tags">${esc(tags)}</span>` : ''}</div>` : '';
   let whenLine = '';
-  if (p.status === 'published') {
+  if (pzIsPubReal(p)) {
     const rel = hfRelShort(p.published_at || p.scheduled_at, en);
     whenLine = rel ? `<div class="hf-d-when">${esc(rel)}</div>` : '';
-  } else if (p.status === 'scheduled') {
+  } else if (p.status === 'scheduled' || p.status === 'published') {
     const chip = hfChipText(p.scheduled_at);
     whenLine = chip ? `<div class="hf-d-when">${pzIc('clock', 13)} ${en ? 'Goes out' : 'Sale el'} ${esc(chip)}</div>` : '';
   } else if (p.status === 'draft') {
@@ -22241,7 +22273,7 @@ function pzHoyTiraDetalleHTML(d, o) {
     const cap1 = String((p && p.caption) || '').split('\n')[0].trim().slice(0, 90);
     const cuando = pzHoyCuandoCorto(p, tz, en);
     const st = String(p.status || '');
-    const pill = (st === 'published') ? (en ? 'Published' : 'Publicado')
+    const pill = (st === 'published' && pzIsPubReal(p)) ? (en ? 'Published' : 'Publicado')
       : (st === 'scheduled' && String(p.approval || 'pending') === 'pending') ? pzHoyPillSalida(p, tz, en)
       : (st === 'draft') ? (en ? 'Draft · to review' : 'Borrador · para revisar')
       : cuando;
@@ -22642,7 +22674,7 @@ function pzHoySpeechHTML(o) {
     // scheduler lo marca failed 'sin aprobación'). Borrador: en los
     // dos estados necesita tu OK (al aprobarlo queda programado).
     // Publicado: ya salió (la hora es la real, published_at).
-    const yaSalio = st === 'published';
+    const yaSalio = pzIsPubReal(hoyPost);
     const esBorrador = st === 'draft';
     const saleSolo = st === 'scheduled' && (!manual || ap === 'approved' || ap === 'auto');
     if (yaSalio) {
@@ -26676,7 +26708,9 @@ function pzPubCelebMaybe(job) {
   if (!fresh.length) return;
   try { sessionStorage.setItem('pzPubCeleb', JSON.stringify(seen.concat(ids))); } catch (e) {}
   const hit = (job.tiles || []).find((t) => t && t.kind === 'post' && t.post && fresh.indexOf(String(t.post.id)) !== -1);
-  if (hit && hit.post) pzPubCelebShow(hit.post);
+  // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) La celebración «¡Tu posteo salió!»
+  // solo si se publicó de verdad: una simulación de demo no se festeja.
+  if (hit && hit.post && pzIsPubReal(hit.post)) pzPubCelebShow(hit.post);
 }
 function pzPubCelebShow(post) {
   if (!post || typeof document === 'undefined') return;
@@ -26772,7 +26806,7 @@ function hfLiveApply(job) {
     const el = root.querySelector(`.hf-tile[data-post-id="${CSS.escape ? CSS.escape(String(id)) : String(id)}"]`);
     if (!el) continue;
     const t2 = Object.assign({}, rec.t);
-    if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
+    if (diff.justPublished.includes(String(id)) && pzIsPubReal(t2.post)) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
     if (HF_VISITOR) t2.visitor = true;
     const cell0 = el.closest('.hf-cell');
     if (cell0) cell0.outerHTML = homeTileHTML(t2, rec.i);
@@ -26800,7 +26834,7 @@ function hfLiveApply(job) {
       // grilla del dueño ni por el vivo (publicar + archivar entre
       // dos ticks).
       if (t2.archivedExt) continue;
-      if (diff.justPublished.includes(String(id))) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
+      if (diff.justPublished.includes(String(id)) && pzIsPubReal(t2.post)) { t2.justPub = true; HF_LIVE.justPub.add(String(id)); }
       if (HF_VISITOR) t2.visitor = true;
       const firstPub = grid.querySelector('.hf-tile.pub');
       if (firstPub) { const fc = firstPub.closest('.hf-cell'); if (fc) fc.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i)); else firstPub.insertAdjacentHTML('beforebegin', homeTileHTML(t2, rec.i)); }
@@ -27187,7 +27221,7 @@ function hfDetailMenu(post) {
 async function hfDetailShare(post) {
   const en = hfIsEn();
   const cap = String(post.caption || '').trim();
-  const url = (post.status === 'published' && post.ig_permalink) ? String(post.ig_permalink) : '';
+  const url = (pzIsPubReal(post) && post.ig_permalink) ? String(post.ig_permalink) : '';
   try {
     if (navigator.share) {
       if (url) { await navigator.share({ url, text: cap || undefined }); return; }
@@ -28078,7 +28112,7 @@ function pzPcStatusChip(p, en) {
     var st = String((p && p.status) || '');
     if (st === 'scheduled') return en ? 'Pending' : 'Pendiente';
     if (st === 'draft') return en ? 'Draft' : 'Borrador';
-    if (st === 'published') return en ? 'Published' : 'Publicado';
+    if (st === 'published') return pzIsPubReal(p) ? (en ? 'Published' : 'Publicado') : (en ? 'Scheduled' : 'Programado');
   } catch (e) {}
   return '';
 }
@@ -29054,10 +29088,16 @@ function apvCountdown(d) {
 function apvPill(p, d, dOk) {
   const ap = String(p.approval || ''), st = String(p.status || '');
   const tz = apvTz();
-  if (st === 'published') {
-    const link = p.permalink || p.ig_permalink || p.url || '';
+  // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) «Publicado» y «Ver en Instagram»
+  // solo si se publicó de verdad. Una simulación de demo (status published
+  // con ig_media_id 'demo_*' o permalink '/demo_*') muestra Pendiente:
+  // nunca salió, y su approval 'auto' tampoco lo festeja más abajo.
+  if (st === 'published' && pzIsPubReal(p)) {
+    const rawLink = p.permalink || p.ig_permalink || p.url || '';
+    const link = (rawLink && String(rawLink).indexOf('/demo_') === -1) ? rawLink : '';
     return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ${pzIc('arrowUpRight', 14)}</a>` : ''}`;
   }
+  if (st === 'published') return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
   if (st === 'failed') return '<span class="apv-pill apv-pill-warn">' + pzIc('alert', 12) + ' No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
   if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">' + pzIc('reject', 15) + ' Rechazado — no se publica</span>';
   if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + ' Salió solo (no lo viste a tiempo)</span>';
