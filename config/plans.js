@@ -485,6 +485,10 @@ function getPlan(id, country) {
     const t = getPlans(country).total;
     return { ...t, id: 'free', name: 'Founder', price: 0, tagline: 'Cuenta del fundador' };
   }
+  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty', USD 199) es un plan
+  // real del sistema: los límites de una cuenta que lo contrató son los
+  // suyos (los del Total), no los del tier de prueba por default.
+  if (id === PLAN_UNICO.id) return { ...PLAN_UNICO };
   const plans = getPlans(country);
   return plans[id] || plans[TRIAL_PLAN];
 }

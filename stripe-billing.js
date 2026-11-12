@@ -17,7 +17,7 @@
 // Idempotencia: cada evento se registra en stripe_events (id = event id de
 // Stripe); un evento repetido no se vuelve a aplicar.
 
-const { PLANS_US, getPlans } = require('./config/plans');
+const { PLANS_US, getPlans, PLAN_UNICO } = require('./config/plans');
 
 function getSecretKey() { return (process.env.STRIPE_SECRET_KEY || '').trim(); }
 function getWebhookSecret() { return (process.env.STRIPE_WEBHOOK_SECRET || '').trim(); }
@@ -44,7 +44,7 @@ function constructEvent(client, rawBody, signature) {
 const priceIdCache = new Map(); // planId -> priceId (por proceso)
 function lookupKeyFor(planId) { return `posty_us_${planId}_monthly`; }
 function planIdFromLookupKey(lk) {
-  const m = /^posty_us_(esencial|pro|total)_(monthly|founder_\d+)$/.exec(String(lk || ''));
+  const m = /^posty_us_(esencial|pro|total|posty)_(monthly|founder_\d+)$/.exec(String(lk || ''));
   return m ? m[1] : null;
 }
 function founderLookupKeyFor(planId, amountUsd) { return `posty_us_${planId}_founder_${Math.round(Number(amountUsd) * 100)}`; }
@@ -55,7 +55,9 @@ async function ensureCatalog(client) {
   client = client || stripeClient();
   if (!client) throw new Error('Stripe no configurado');
   const out = {};
-  for (const plan of Object.values(getPlans('US'))) {
+  // (LOTE PLAN-ÚNICO-PAYWALL) El catálogo incluye el plan único (id 'posty',
+  // USD 199): su precio vive bajo el mismo lookup_key posty_us_posty_monthly.
+  for (const plan of [...Object.values(getPlans('US')), PLAN_UNICO]) {
     if (priceIdCache.has(plan.id)) { out[plan.id] = priceIdCache.get(plan.id); continue; }
     const found = await client.prices.list({ lookup_keys: [lookupKeyFor(plan.id)], active: true, limit: 1 });
     let price = found && found.data && found.data[0];
@@ -310,7 +312,7 @@ function userIdBySubscription(db, subId) {
   return r ? r.id : null;
 }
 function planIdFromSubscription(sub) {
-  if (sub && sub.metadata && PLANS_US[sub.metadata.plan_id]) return sub.metadata.plan_id;
+  if (sub && sub.metadata && (PLANS_US[sub.metadata.plan_id] || sub.metadata.plan_id === PLAN_UNICO.id)) return sub.metadata.plan_id;
   const item = sub && sub.items && sub.items.data && sub.items.data[0];
   return planIdFromLookupKey(item && item.price && item.price.lookup_key);
 }
@@ -323,7 +325,7 @@ function applySubscription(db, sub, hooks, hints = {}) {
   const planId = planIdFromSubscription(sub) || hints.planHint || null;
   try { db.prepare('UPDATE users SET stripe_subscription_id=? WHERE id=?').run(String(sub.id), userId); } catch (e) {}
   if (sub.status === 'active' || sub.status === 'trialing') {
-    if (planId && PLANS_US[planId]) {
+    if (planId && (PLANS_US[planId] || planId === PLAN_UNICO.id)) {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', stripe_subscription_id=? WHERE id=?`)
         .run(planId, String(sub.id), userId);
       if (hooks && hooks.onActivated) hooks.onActivated(userId, planId);

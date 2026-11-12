@@ -4291,7 +4291,11 @@ app.get('/api/auth/me', (req, res) => {
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const nowMs = Date.now();
   const tEnds = trialEffectiveEnd(user);
-  const trialExpired = user.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs;
+  // (LOTE PLAN-ÚNICO-PAYWALL) Sin el «tEnds > 0»: trialEffectiveEnd devuelve
+  // 0 cuando la cuenta no tiene trial_ends_at, y el gate (requireTrialValid)
+  // ya la trata como vencida (0 <= ahora). /me debe decir lo mismo, si no la
+  // cuenta queda bloqueada en acciones sin que el cliente muestre la pantalla.
+  const trialExpired = user.plan_status === 'trial' && tEnds <= nowMs;
   const trialDaysLeft = (!trialExpired && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0;
   res.json({
     user: {
@@ -10369,7 +10373,7 @@ async function monedaCuentaAds() {
 // con la tasa (default 1425, v888); moneda indeterminada = fail-closed
 // ANTES de cobrar (cobrar un impulso que no puede pautarse sería
 // cobrar por nada).
-app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res) => {
+app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
@@ -10674,7 +10678,7 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
 // El cobro va primero; la acreditación es transaccional con el ledger.
 // Si el cobro sale pero la acreditación falla, vuelve 'cobro_sin_acreditar'
 // con el cobroId para revisión manual URGENTE (nunca silencio).
-app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, res) => {
+app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     // (LOTE RIEL-SUSCRIPCION v878) La rama MP solo corre con riel MP y
@@ -11193,7 +11197,7 @@ app.get('/api/ads/billetera/hoy', requireAuth, async (req, res) => {
 // saldo + impulso USD: el saldo en pesos NO bloquea — queda como crédito
 // en pesos y el cobro va DIRECTO con la tarjeta guardada de Stripe, sin
 // tocar la billetera (después de crear el anuncio, mismo orden).
-app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req, res) => {
+app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
@@ -11497,7 +11501,7 @@ app.get('/api/ads/recommendations', requireAuth, async (req, res) => {
 });
 
 // Crear una pauta: debita la billetera y la lanza en Meta (o queda pendiente)
-app.post('/api/ads/boost', requireAuth, async (req, res) => {
+app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
   try {
   const postId = Number(req.body.post_id) || 0;
   const budgetCents = Math.round(Number(req.body.budget_cents) || 0);
@@ -21446,9 +21450,11 @@ app.get('/api/billing/plans', (req, res) => {
   const anchor = PLAN_ANCHOR[country];
   const meta = COUNTRY_META[country] || COUNTRY_META.AR;
   // (PLAN ÚNICO, Valentino 2026-11-06) La vidriera sirve UN SOLO plan
-  // (Posty, USD 199/mes) vía ?unico=1. La app (Mi plan, checkout, paywall,
-  // modal y banner de trial) sigue usando el catálogo de 3 tiers sin el
-  // parámetro: la facturación interna queda intacta.
+  // (Posty, USD 199/mes) vía ?unico=1. (LOTE PLAN-ÚNICO-PAYWALL) La app
+  // también: Mi plan, el paywall y el modal/banner de trial piden el plan
+  // único con el mismo parámetro. El catálogo de 3 tiers sin el parámetro
+  // queda SOLO como facturación interna (usuarios existentes, founder) y
+  // para los deep links con agente/nivel de los otros poderes.
   if (req.query.unico === '1') {
     const p = { ...PLAN_UNICO, price_label: formatPrice(PLAN_UNICO) };
     const anchorU = PLAN_ANCHOR[country] ? { cm: PLAN_ANCHOR[country].cm, desde: 'USD 199' } : null;
@@ -21535,6 +21541,13 @@ app.all('/api/admin/grant-free', (req, res) => {
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   if (guestBackstop(req, res)) return;
   const { plan: planIdRaw, country, payer_email, agente: agenteRaw } = req.body || {};
+  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty') se cobra SOLO por
+  // Stripe en USD 199 para todos los países: no tiene precio en pesos (la
+  // tasa USD→ARS no está decidida y no se inventa). Sin esta guarda,
+  // contratoTier lo degradaba a 'esencial' y MP cobraba el tier en ARS.
+  if (String(planIdRaw || '').trim().toLowerCase() === PLAN_UNICO.id) {
+    return res.status(400).json({ error: 'El plan Posty se paga con tarjeta en USD 199: volvé a Mi plan y tocá Suscribirse.' });
+  }
   // (Pagos lado app, 2026-10-25) Riel MP: SOLO AR + UY. BR/MX/CL/CO/PE
   // pasaron a Stripe (tarjeta en USD); si llegan acá, caen a AR como
   // antes, pero el cliente ya no los manda a MP.
@@ -21802,9 +21815,16 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
   // (estos últimos con planes USD). Sin país válido, US. CA no entra acá
   // (solo API): un country CA cae a US como antes.
   const stripeCountry = ['US', 'GB', 'EU', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
-  const planId = contratoTier(planIdRaw);
+  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty') es global: USD 199
+  // para TODOS los países, incluida Argentina (que por este endpoint antes
+  // caía a US solo para los tiers). No pasa por contratoTier ni por el
+  // catálogo por país: el plan que viaja es PLAN_UNICO, su precio en Stripe
+  // lo resuelve el catálogo del módulo (posty_us_posty_monthly) y el
+  // webhook lo reconoce por metadata plan_id='posty'.
+  const unicoStripe = String(planIdRaw || '').trim().toLowerCase() === PLAN_UNICO.id;
+  const planId = unicoStripe ? PLAN_UNICO.id : contratoTier(planIdRaw);
   const agenteStripe = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String((req.body && req.body.agente) || '').toLowerCase()) ? String(req.body.agente).toLowerCase() : 'posty';
-  const plan = getPlans(stripeCountry)[planId];
+  const plan = unicoStripe ? { ...PLAN_UNICO } : getPlans(stripeCountry)[planId];
   if (!plan) return res.status(400).json({ error: 'Invalid plan' });
   if (!stripeBilling.stripeConfigured()) {
     return res.status(400).json({ error: 'Payments are not configured yet.' });
@@ -36446,7 +36466,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v976';
+const BUILD_ID = '20261105-v977';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

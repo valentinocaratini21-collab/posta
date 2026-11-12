@@ -1169,10 +1169,13 @@ function bindSettings() {
       try { localStorage.setItem('posta-pais', pzDl.pais); } catch (e) {}
     }
     // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
-    const loadPlans = async () => {
+    // (LOTE PLAN-ÚNICO-PAYWALL) Modo plan único: sin deep link de agente,
+    // Mi plan pide el plan único (?unico=1) como la vidriera. Con agente
+    // (otros poderes / completo) o en nativo, el catálogo de siempre.
+    const loadPlans = async (unico) => {
       let lastErr = null;
       for (let i = 0; i < 2; i++) {
-        try { return await api.get('/api/billing/plans?country=' + pzPayCountry); }
+        try { return await api.get('/api/billing/plans?country=' + pzPayCountry + (unico ? '&unico=1' : '')); }
         catch (e) { lastErr = e; console.error('[planes] intento ' + (i + 1) + ':', e.message); }
       }
       throw lastErr;
@@ -1189,7 +1192,7 @@ function bindSettings() {
       if (IS_NATIVE) {
         let planName = (ME && ME.plan) || 'esencial';
         try {
-          const d = await loadPlans();
+          const d = await loadPlans(false);
           const p = (d.plans || []).find(x => x.id === planName) || (d.plans || [])[0];
           if (p && p.name) planName = p.name;
         } catch (e) {}
@@ -1210,10 +1213,14 @@ function bindSettings() {
         </div>`;
         return;
       }
-      const billingData = await loadPlans();
+      const billingData = await loadPlans(!pzDl.agente);
       const { plans, mp_configured, stripe_configured } = billingData;
       const isUS = !!(ME && ME.lang === 'en');
-      const isStripe = PZ_PAY_STRIPE.includes(pzPayCountry);
+      // (LOTE PLAN-ÚNICO-PAYWALL) El plan único se cobra por Stripe en USD
+      // para TODOS los países (incluidos AR/UY, cuyo riel por país es MP
+      // para los tiers): no hay precio en moneda local del plan único.
+      const pzUnico = !pzDl.agente;
+      const isStripe = pzUnico ? true : PZ_PAY_STRIPE.includes(pzPayCountry);
       // (2026-10-25 · pulido ítem 5) Los 5 países que pagan en USD sin
       // precio local todavía (BR/MX/CL/CO/PE) llevan «USD » en AMBOS
       // idiomas: en EN, «$199» se podía leer como moneda local.

@@ -81,13 +81,13 @@ async function partA() {
   const fake = makeFakeStripe();
   const cat1 = await sb.ensureCatalog(fake);
   ok(cat1.esencial && cat1.pro && cat1.total, 'ensureCatalog devuelve los 3 price ids');
-  ok(fake._calls.productsCreate === 3 && fake._calls.pricesCreate === 3, 'primer bootstrap: crea 3 productos y 3 precios');
+  ok(fake._calls.productsCreate === 4 && fake._calls.pricesCreate === 4, 'primer bootstrap: crea 4 productos y 4 precios');
   const amounts = ['esencial', 'pro', 'total'].map((p) => fake._prices.get(sb.lookupKeyFor(p)).unit_amount);
   ok(JSON.stringify(amounts) === JSON.stringify([19999, 29999, 39999]), `montos USD correctos (19999/29999/39999): ${amounts}`);
   ok(['esencial', 'pro', 'total'].every((p) => fake._prices.get(sb.lookupKeyFor(p)).currency === 'usd'
     && fake._prices.get(sb.lookupKeyFor(p)).recurring.interval === 'month'), 'los 3 precios son USD mensuales');
   const cat2 = await sb.ensureCatalog(fake);
-  ok(fake._calls.productsCreate === 3 && fake._calls.pricesCreate === 3, 'segundo bootstrap (redeploy): NO crea duplicados');
+  ok(fake._calls.productsCreate === 4 && fake._calls.pricesCreate === 4, 'segundo bootstrap (redeploy): NO crea duplicados');
   ok(cat2.pro === cat1.pro, 'los price ids son estables entre bootstraps');
 
   section('A3 · payload de Checkout: precio por plan + trial_end alineado');

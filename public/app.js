@@ -2439,7 +2439,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v967'; // (v967) bump: chunk-conserje lista variante 1 (mini 96 + caption + botones en la tarjeta) // (LOTE AJUSTES-CONTACTO) bump: chunk-ajustes suma la sección Contactanos // (v887) bump: chunk-conserje revisión variante 1 (mini 96 contain + fila + botones verde/Editar) // (v885) bump: chunk-analisis riel por suscripción (MP→ARS, Stripe→USD) // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
+const CHUNK_V = '20261105-v977'; // (v977 · LOTE PLAN-ÚNICO-PAYWALL) bump: chunk-ajustes Mi plan con plan único // (v967) bump: chunk-conserje lista variante 1 (mini 96 + caption + botones en la tarjeta) // (LOTE AJUSTES-CONTACTO) bump: chunk-ajustes suma la sección Contactanos // (v887) bump: chunk-conserje revisión variante 1 (mini 96 contain + fila + botones verde/Editar) // (v885) bump: chunk-analisis riel por suscripción (MP→ARS, Stripe→USD) // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -20057,21 +20057,29 @@ async function pzPostpayTray() {
 async function showExpiredModal() {
   if (document.getElementById('pzExpOverlay')) return;
   trackOnce('expmodal', 'trial_expired_view');
+  // (LOTE PLAN-ÚNICO-PAYWALL) El paywall ofrece EL plan único (USD 199) con
+  // el país guardado de la cuenta, no el catálogo de 3 tiers. Textos ES/EN
+  // según el idioma de la cuenta (antes todo hardcodeado en español y el
+  // fetch pedía el catálogo AR por default).
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   let plans = [];
-  try { const d = await api.get('/api/billing/plans'); plans = d.plans || []; } catch (e) {}
-  const perDay = (p) => '\u2248 $' + Math.round(p.price / 30).toLocaleString('es-AR') + ' por d\u00eda';
+  try { const d = await api.get('/api/billing/plans?country=' + pzPaisGuardado() + '&unico=1'); plans = d.plans || []; } catch (e) {}
+  const sym = (p) => (p.currency === 'USD' ? (en ? '$' : 'USD ') : '$');
+  const perDay = (p) => '≈ ' + sym(p) + Math.round(p.price / 30).toLocaleString(en ? 'en-US' : 'es-AR') + (en ? ' per day' : ' por día');
   const expMix = (p) => {
     const parts = [];
-    if (p.postsPerWeek > 0) parts.push(`${p.postsPerWeek} posteo${p.postsPerWeek > 1 ? 's' : ''}`);
+    if (p.postsPerWeek > 0) parts.push(`${p.postsPerWeek} ${en ? (p.postsPerWeek > 1 ? 'posts' : 'post') : (p.postsPerWeek > 1 ? 'posteos' : 'posteo')}`);
     if (p.reelsPerWeek > 0) parts.push(`${p.reelsPerWeek} reel${p.reelsPerWeek > 1 ? 's' : ''}`);
-    if (p.storiesPerWeek > 0) parts.push(`${p.storiesPerWeek} historia${p.storiesPerWeek > 1 ? 's' : ''}`);
-    return parts.length ? `<small class="pz-exp-mix">${parts.join(' + ')} por semana</small>` : '';
+    if (p.storiesPerWeek > 0) parts.push(`${p.storiesPerWeek} ${en ? (p.storiesPerWeek > 1 ? 'stories' : 'story') : (p.storiesPerWeek > 1 ? 'historias' : 'historia')}`);
+    return parts.length ? `<small class="pz-exp-mix">${parts.join(' + ')} ${en ? 'per week' : 'por semana'}</small>` : '';
   };
+  // Una sola tarjeta (el plan único): sin etiqueta «EL MÁS ELEGIDO», que era
+  // del catálogo con competencia entre tiers.
   const rows = plans.map(p => `
     <div class="pz-exp-row">
       <button class="pz-exp-plan" data-exp-plan="${p.id}">
-        <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
-        <span class="pz-exp-go">Elegir \u2192</span>
+        <span><b>${esc(p.name)}</b><small>${esc(p.price_label)}${en ? '/mo' : '/mes'} · ${perDay(p)}</small>${expMix(p)}</span>
+        <span class="pz-exp-go">${en ? 'Choose' : 'Elegir'} →</span>
       </button>
     </div>`).join('');
   const ov = document.createElement('div');
@@ -20079,13 +20087,13 @@ async function showExpiredModal() {
   ov.className = 'pz-exp-overlay';
   ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
-      <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
+      <button class="pz-exp-x" id="pzExpClose" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button>
       <img src="ai-avatar.png" alt="Posty" style="width:74px;height:74px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
-      <h2>Se termin\u00f3 tu prueba</h2>
-      <p class="pz-exp-sub">Tus posteos no tienen por qu\u00e9 frenar: eleg\u00ed tu plan y el lunes tu semana est\u00e1 lista como siempre.</p>
+      <h2>${en ? 'Your trial ended' : 'Se terminó tu prueba'}</h2>
+      <p class="pz-exp-sub">${en ? "Your posts don't have to stop: pick your plan and your week will be ready as always." : 'Tus posteos no tienen por qué frenar: elegí tu plan y el lunes tu semana está lista como siempre.'}</p>
       <div class="pz-exp-plans">${rows}</div>
-      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes ' + pzIc('rocket', 14) + '</button>'}
-      <button class="pz-exp-later" id="pzExpLater">Pausar mis posteos</button>
+      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">' + (en ? 'See plans ' : 'Ver planes ') + pzIc('rocket', 14) + '</button>'}
+      <button class="pz-exp-later" id="pzExpLater">${en ? 'Pause my posts' : 'Pausar mis posteos'}</button>
     </div>`;
   document.body.appendChild(ov);
   const close = () => { try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} ov.remove(); };
@@ -20103,17 +20111,41 @@ async function trialExpiredBannerHTML() {
   try { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return ''; } catch (e) {}
   if (!(typeof ME !== 'undefined' && ME && ME.trial_expired && ME.plan_status === 'trial')) return '';
   if (typeof document !== 'undefined' && document.getElementById('pzExpOverlay')) return ''; // modal abierto: no competir
+  // (LOTE PLAN-ÚNICO-PAYWALL) El banner ofrece el plan único (USD 199) con
+  // el país guardado, y el texto sigue el idioma de la cuenta (antes pedía
+  // el catálogo de tiers y el texto era solo en español).
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   try {
     if (!PZ_TRIAL_PLANS_CACHE) {
-      const d = await api.get('/api/billing/plans');
+      const d = await api.get('/api/billing/plans?country=' + pzPaisGuardado() + '&unico=1');
       const arr = (d && d.plans) || [];
       PZ_TRIAL_PLANS_CACHE = arr.slice().sort((a, b) => (a.price || 0) - (b.price || 0))[0] || null;
     }
   } catch (e) {}
   if (!PZ_TRIAL_PLANS_CACHE || !(PZ_TRIAL_PLANS_CACHE.price > 0)) return '';
-  const perDay = '\u2248 $' + Math.round(PZ_TRIAL_PLANS_CACHE.price / 30).toLocaleString('es-AR') + '/d\u00eda';
-  return `<a id="pzTrialBanner" class="pz-trial-banner" href="#/app/ajustes">\uD83D\uDD12 Tu prueba termin\u00f3 \u2014 reactiv\u00e1 tu semana por ${perDay} \u2192</a>`;
+  const sym = PZ_TRIAL_PLANS_CACHE.currency === 'USD' ? (en ? '$' : 'USD ') : '$';
+  const perDay = '≈ ' + sym + Math.round(PZ_TRIAL_PLANS_CACHE.price / 30).toLocaleString(en ? 'en-US' : 'es-AR') + (en ? '/day' : '/día');
+  return `<a id="pzTrialBanner" class="pz-trial-banner" href="#/app/ajustes">🔒 ${en ? 'Your trial ended' : 'Tu prueba terminó'} — ${en ? 'reactivate your week for' : 'reactivá tu semana por'} ${perDay} →</a>`;
 }
+
+/* ---------- (LOTE PLAN-ÚNICO-PAYWALL) Corte en sesión abierta ----------
+   Si la prueba vence con la app abierta, ME quedaba viejo hasta la próxima
+   acción con gate o una recarga. Al volver a primer plano se re-consulta
+   la sesión (/api/auth/me vía refreshSession) y, si venció, salta la misma
+   pantalla de siempre: una vez por sesión, nunca en Mi plan (tab ajustes),
+   y en nativo el aviso neutro sin CTA de pago. */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (typeof ME === 'undefined' || !ME) return;
+  refreshSession(true).then(() => {
+    try {
+      if (ME && ME.trial_expired && ME.plan_status === 'trial' && !sessionStorage.getItem('pz_exp_modal')
+        && String(location.hash || '').indexOf('ajustes') === -1) {
+        if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) showExpiredNoticeNative(); else showExpiredModal();
+      }
+    } catch (e) {}
+  }).catch(() => {});
+});
 
 /* ---------- SCHEDULE: calendario de posteos programados ---------- */
 let SCHED_DAY_OFFSET = 0; // 0 = hoy; navegacion dia por dia
