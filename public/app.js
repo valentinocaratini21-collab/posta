@@ -12862,7 +12862,13 @@ function proposedLabelFor(d, proposedIsos, tz) {
 // (Frente 3b) Tiempo relativo estilo Instagram desde una fecha ISO:
 // «hace 25 min», «hace 2 h», «hace 3 días», «hace 2 sem» (EN: 25m/2h/3d/2w).
 function igRelTime(iso, en) {
-  const t = Date.parse(iso || '');
+  // (TARJETA-FECHA-REAL) Los datetimes de SQLite vienen en UTC sin zona
+  // («2026-11-12 00:01:11»): Date.parse pelado los lee como hora local y
+  // el relativo sale corrido por la zona del dispositivo (en EST, 5 h en
+  // el futuro → «hace 1 min» en vez de «hace 13 min»). pcParseDate marca
+  // Z, igual que el resto del archivo (apvParse/fmtDate).
+  const d0 = (typeof pcParseDate === 'function') ? pcParseDate(iso) : null;
+  const t = d0 ? d0.getTime() : Date.parse(iso || '');
   if (!Number.isFinite(t)) return '';
   const s = Math.max(0, (Date.now() - t) / 1000);
   const m = Math.floor(s / 60), h = Math.floor(s / 3600), dd = Math.floor(s / 86400), w = Math.floor(dd / 7);
@@ -22876,9 +22882,24 @@ function pzHoyTiraDetalleHTML(d, o) {
     // la sección no muestra botón y el detalle conserva el suyo: el
     // posteo nunca pierde su única entrada.
     const esRecomendado = (typeof PZ_HOY_MEJOR !== 'undefined' && PZ_HOY_MEJOR && PZ_HOY_MEJOR.post_id != null && String(PZ_HOY_MEJOR.post_id) === String(p.id) && (Number(PZ_HOY_MEJOR.likes || 0) + Number(PZ_HOY_MEJOR.comments || 0) + Number(PZ_HOY_MEJOR.saved || 0)) > 0);
-    const imp = (st === 'published' && !esRecomendado)
-      ? `<button type="button" class="btn btn-primary btn-sm" data-pz-boost-post="${esc(String(p.id))}">${en ? 'Boost' : 'Impulsar'}</button>` : '';
-    return `<div class="pz-hoy-tira-detalle">${img}<div class="t"><b>${esc(cap1 || nombre)}</b><small>${esc(cuando || '')}</small></div><div class="side">${pill ? `<span class="pz-hoy-hoy-pill">${esc(pill)}</span>` : ''}${cuenta ? `<span class="pz-hoy-cuenta">${esc(cuenta)}</span>` : ''}${imp}</div></div>`;
+    // (TARJETA-FECHA-REAL) Impulsar solo cuando el posteo realmente se
+    // puede impulsar: el endpoint de elegibles excluye lo que ya no está
+    // vivo en el feed (v867 · filtrarPosteosVivos), así que un archivado
+    // en IG (ig_state='archived_ext') no llega nunca a elegibles y su
+    // botón solo puede terminar en «ya no está disponible». Sin la marca
+    // explícita no se esconde nada (fail-open, igual que pzIgLinkVivo):
+    // lo no-vivo por otro motivo lo sigue atajando el toast de
+    // pzBoostOpenById. El archivado muestra su estado honesto con el
+    // mismo copy del archivo (links-guardados).
+    const archivadoIg = String(p.ig_state || '') === 'archived_ext';
+    const imp = (st === 'published' && !esRecomendado && !archivadoIg)
+      ? `<button type="button" class="btn btn-primary btn-sm" data-pz-boost-post="${esc(String(p.id))}">${en ? 'Boost' : 'Impulsar'}</button>`
+      : (st === 'published' && archivadoIg)
+        ? `<span class="pz-hoy-arch">${en ? 'Not available on Instagram while archived' : 'No disponible en Instagram mientras esté archivado'}</span>` : '';
+    // (TARJETA-FECHA-REAL) La tarjeta abre su detalle al tocarla, igual
+    // que el héroe y la compacta (data-pz-hoy-detalle → #/app/post/<id>,
+    // cableado en pzHoyTiraBindDetalle). Sin id no se inventa apertura.
+    return `<div class="pz-hoy-tira-detalle"${p.id ? ` data-pz-hoy-detalle="${esc(String(p.id))}" data-post-id="${esc(String(p.id))}"` : ''}>${img}<div class="t"><b>${esc(cap1 || nombre)}</b><small>${esc(cuando || '')}</small></div><div class="side">${pill ? `<span class="pz-hoy-hoy-pill">${esc(pill)}</span>` : ''}${cuenta ? `<span class="pz-hoy-cuenta">${esc(cuenta)}</span>` : ''}${imp}</div></div>`;
   } catch (e) { return ''; }
 }
 
@@ -22915,6 +22936,26 @@ function pzHoyTiraHTML(dias, o) {
 // chat. Lo llama pzHoyBind.
 function pzHoyTiraBindDetalle(cont) {
   if (!cont) return;
+  // (TARJETA-FECHA-REAL) La tarjeta del día abre su detalle al tocarla
+  // (igual que el héroe y la compacta: data-pz-hoy-detalle → #/app/post).
+  // El tap que nace dentro de un botón o link (chat, Impulsar) NO navega:
+  // sigue su propio camino. Corre en cada re-render del detalle (lo llama
+  // pzHoyTiraBind tras cada tap de día), así que el cableado sobrevive al
+  // cambio de día. La media de la tarjeta es un <img> sin data-lightbox:
+  // no hay doble disparo.
+  try {
+    const card = cont.querySelector ? cont.querySelector('.pz-hoy-tira-detalle[data-pz-hoy-detalle]') : null;
+    if (card) {
+      const go = (ev) => {
+        try { const t = ev && ev.target; if (t && t.closest && t.closest('button, a, [data-pz-hoy-chat], [data-pz-boost-post]')) return; } catch (e) {}
+        const id = card.getAttribute('data-pz-hoy-detalle');
+        if (!id) return;
+        try { if (typeof bbGo === 'function') bbGo('#/app/post/' + encodeURIComponent(id)); else location.hash = '#/app/post/' + encodeURIComponent(id); } catch (e) {}
+      };
+      card.onclick = go;
+      card.onkeydown = (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) { try { ev.preventDefault(); } catch (e) {} go(ev); } };
+    }
+  } catch (e) {}
   cont.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
   cont.querySelectorAll('[data-pz-boost-post]').forEach((b) => { b.onclick = () => { try { if (typeof pzBoostOpenById === 'function') pzBoostOpenById(b.getAttribute('data-pz-boost-post')); } catch (e) {} }; });
 }
@@ -23089,8 +23130,51 @@ function pzHoyHoraCorta(iso, tz, en) {
 
 // Día relativo corto («Hoy HH:MM» / «Mañana HH:MM» / «vie 31 · 19:00»).
 // Sin fecha real → '' (nunca una fecha inventada).
+// (TARJETA-FECHA-REAL · 12/11) Fecha REAL de publicación de un posteo ya
+// publicado: «Salió hoy 19:01» / «Salió ayer 19:01» / «Salió mar 11 · 19:01»
+// (EN: «Posted today 7:01 PM» / «Posted yesterday 7:01 PM» / «Posted Tue 11 ·
+// 7:01 PM»). Sin published_at real o inválido devuelve '' (el llamador cae al
+// camino de siempre, jamás una fecha inventada). Se parsea con pcParseDate:
+// los datetimes de SQLite vienen en UTC sin zona y Date.parse pelado los
+// leería como hora local (el relativo saldría corrido por la zona del
+// dispositivo, mismo bug que igRelTime).
+function pzHoyCuandoPub(p, tz, en) {
+  try {
+    const iso = (p && typeof p === 'object') ? (p.published_at || '') : '';
+    if (!iso) return '';
+    const d = (typeof pcParseDate === 'function') ? pcParseDate(iso) : new Date(String(iso).replace(' ', 'T') + 'Z');
+    if (!d || isNaN(d)) return '';
+    const zo = tz ? { timeZone: tz } : {};
+    const keyOf = (x) => { try { return x.toLocaleDateString('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo)); } catch (e) { return ''; } };
+    const day = keyOf(d), today = keyOf(new Date());
+    if (!day || !today) return '';
+    const diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
+    let hh = '';
+    try { hh = d.toLocaleTimeString(en ? 'en-US' : 'es-AR', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: !!en }, zo)); } catch (e) {}
+    if (!en) hh = String(hh || '').replace(/^0(\d:)/, '$1');
+    if (!hh) return '';
+    const verb = en ? 'Posted ' : 'Salió ';
+    if (diff === 0) return verb + (en ? 'today ' : 'hoy ') + hh;
+    if (diff === -1) return verb + (en ? 'yesterday ' : 'ayer ') + hh;
+    let wd = '';
+    try { wd = d.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ weekday: 'short' }, zo)).replace(/\./g, ''); } catch (e) {}
+    let dm = '';
+    try { dm = d.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ day: 'numeric' }, zo)); } catch (e) {}
+    if (!wd || !dm) return '';
+    if (!en) wd = wd.toLowerCase();
+    return verb + wd + ' ' + dm + ' · ' + hh;
+  } catch (e) { return ''; }
+}
 function pzHoyCuandoCorto(p, tz, en) {
   try {
+    // (TARJETA-FECHA-REAL) Un publicado muestra su fecha REAL de
+    // publicación, en pasado («Salió hoy 19:01»), nunca la hora
+    // programada como si todavía fuera a salir («Hoy 19:00»). Sin
+    // published_at no se inventa nada: cae al camino de siempre.
+    if (p && typeof p === 'object' && typeof pzIsPubReal === 'function' && pzIsPubReal(p)) {
+      const pub = pzHoyCuandoPub(p, tz, en);
+      if (pub) return pub;
+    }
     if (!p || !p.scheduled_at) return '';
     let d = null;
     if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
@@ -29820,6 +29904,20 @@ function apvWhenText(d, tz) {
   try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }); } catch (e) {}
   return dl ? `Sale el ${dl} a las ${hm}` : 'Sale pronto';
 }
+// (TARJETA-FECHA-REAL) «Salió hoy 19:01» / «Salió ayer 19:01» / «Salió el
+// martes 11 de noviembre a las 19:01»: la fecha REAL de publicación, en
+// pasado. ES-only igual que apvWhenText (hueco preexistente, no de este
+// lote). Sin fecha válida devuelve '' (el llamador cae a apvWhenText).
+function apvWhenTextPub(d, tz) {
+  if (!d || isNaN(d)) return '';
+  const hm = apvHM(d, tz), k = apvDayKey(d, tz);
+  if (!hm || !k) return '';
+  if (k === apvDayKey(new Date(), tz)) return `Salió hoy ${hm}`;
+  if (k === pcDayKeyShift(new Date(), tz, -1)) return `Salió ayer ${hm}`;
+  let dl = '';
+  try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }); } catch (e) {}
+  return dl ? `Salió el ${dl} a las ${hm}` : '';
+}
 // Cuenta regresiva corta para el pill de pendiente: "en 2 h 15 min".
 function apvCountdown(d) {
   const ms = d.getTime() - Date.now();
@@ -30001,7 +30099,12 @@ async function approvalPostView(id) {
         <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
       </div>
     </div>` : '';
-  const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : apvWhenText(d, tz)) : '';
+  // (TARJETA-FECHA-REAL) Un publicado muestra su fecha REAL de publicación
+  // en pasado («Salió hoy 19:01»), nunca «Sale hoy 19:00» de la hora
+  // programada. Sin published_at no se inventa nada: apvWhenText de siempre.
+  const dPub = (typeof pzIsPubReal === 'function' && pzIsPubReal(p)) ? apvParse(p.published_at) : null;
+  const whenPub = (dPub && !isNaN(dPub)) ? apvWhenTextPub(dPub, tz) : '';
+  const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : (whenPub || apvWhenText(d, tz))) : '';
   const apvBack = pzApvBackHTML(en);
   // (LOTE DETALLE-3) apv: misma regla que el detalle — foto limpia
   // solo con hermana real verificada (caption_on=1), porqué solo con
