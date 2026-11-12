@@ -662,6 +662,10 @@ try { db.exec(`ALTER TABLE trial_cache ADD COLUMN abandon_sent INTEGER DEFAULT 0
 // le mandemos SUS posteos por email. gift_state: '' sin pedido · 'queued'
 // capturado y en cola (el envío sale cuando haya RESEND_API_KEY) · 'sent'.
 try { db.exec(`ALTER TABLE trial_cache ADD COLUMN gift_state TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Aviso «tu posteo de mañana está listo» (LOTE POST-WOW v929): un envío por
+// posteo de prueba revelado. La marca vive acá (ig, post_id), no en
+// trial_cache: el dedup es por posteo, no por lead.
+try { db.exec(`CREATE TABLE IF NOT EXISTS trial_post_ready_sent (ig TEXT NOT NULL, post_id INTEGER NOT NULL, sent_at INTEGER NOT NULL, PRIMARY KEY (ig, post_id))`); } catch (e) { /* ya existe */ }
 
 // Candado de prueba (pieza 8, 2026-10-22 · módulo trial-lock.js): un mismo
 // negocio (@ o dominio normalizados) no regenera una prueba por 90 días.

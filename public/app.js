@@ -18555,15 +18555,44 @@ function maybeShowIgPopup(tab) {
     let dismissed = null;
     try { dismissed = localStorage.getItem(igDismissKey()); } catch (e) {}
     if (dismissed) return;
+    // (LOTE POST-WOW v929 · veredicto Valentino: empujar la conexión FUERTE
+    // como próximo paso después del wow, nunca como puerta antes. El primer
+    // posteo en su perfil real es el momento de conversión: el CTA lleva
+    // la fecha límite REAL del posteo de hoy (de su scheduled_at, nunca
+    // inventada). Sin posteo programado hoy, copia genérica de siempre.
+    let wowSub = null, wowEn = false;
+    try {
+      const enPop = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+      if (tab === 'inicio' && typeof pzIsGuest === 'function' && pzIsGuest()) {
+        const hp = (typeof PZ_HOY_POSTS !== 'undefined' && typeof PZ_HOY_POST_ID !== 'undefined' && PZ_HOY_POST_ID) ? PZ_HOY_POSTS[String(PZ_HOY_POST_ID)] : null;
+        if (hp && hp.scheduled_at && String(hp.status || '') === 'scheduled') {
+          const tzPop = (typeof pcTz === 'function') ? pcTz() : undefined;
+          let dPop = null;
+          if (typeof pcParseDate === 'function') dPop = pcParseDate(hp.scheduled_at);
+          if (!dPop || isNaN(dPop)) dPop = new Date(String(hp.scheduled_at).replace(' ', 'T'));
+          if (dPop && !isNaN(dPop)) {
+            const relPop = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(dPop, tzPop, enPop) : '';
+            const hhPop = (typeof pzHoyHoraCorta === 'function') ? pzHoyHoraCorta(hp.scheduled_at, tzPop, enPop) : '';
+            if (hhPop) {
+              let cuandoPop = '';
+              if (relPop === 'hoy' || relPop === 'today') cuandoPop = (enPop ? 'today at ' : 'hoy a las ') + hhPop;
+              else if (relPop === 'mañana' || relPop === 'tomorrow') cuandoPop = (enPop ? 'tomorrow at ' : 'mañana a las ') + hhPop;
+              else if (typeof pzHoyCuandoCorto === 'function') { const cPop = pzHoyCuandoCorto(hp, tzPop, enPop); if (cPop) cuandoPop = cPop; }
+              if (cuandoPop) { wowSub = enPop ? `This post goes out ${cuandoPop} on your profile` : `Este posteo sale ${cuandoPop} en tu perfil`; wowEn = enPop; }
+            }
+          }
+        }
+      }
+    } catch (e) { wowSub = null; wowEn = false; }
     const ov = document.createElement('div');
     ov.id = 'igFirstOverlay';
     ov.className = 'pz-exp-overlay';
     ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <div style="font-size:46px;line-height:1">${pzIc('camera', 46)}</div>
-      <h2>Conectá tu Instagram</h2>
-      <p class="pz-exp-sub">Así Posty deja tu semana lista para publicar.</p>
-      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">Conectar Instagram</button>
+      <h2>${wowSub ? (wowEn ? 'Connect your Instagram' : 'Conectá tu Instagram') : 'Conectá tu Instagram'}</h2>
+      <p class="pz-exp-sub">${wowSub || 'Así Posty deja tu semana lista para publicar.'}</p>
+      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">${wowSub ? (wowEn ? 'Connect Instagram' : 'Conectar Instagram') : 'Conectar Instagram'}</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
       <div class="hint" style="margin-top:10px">${pzIc('lock', 13)} Nunca vemos ni guardamos tu contraseña.</div>
       <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">${pzIc('idea', 14)} Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.</div>
@@ -18577,7 +18606,7 @@ function maybeShowIgPopup(tab) {
         </ol>
         <div class="hint" style="margin-top:6px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
       </details>
-      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">Lo hago después ${pzIc('arrowRight', 13)}</a></div>
+      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">${wowSub ? (wowEn ? "I'll do it later" : 'Lo hago después') : 'Lo hago después'} ${pzIc('arrowRight', 13)}</a></div>
     </div>`;
     document.body.appendChild(ov);
     try {
@@ -22669,6 +22698,66 @@ function pzHoyCardHTML(p, o) {
 // (LOTE A · ítem 2) El posteo de hoy, justo debajo del saludo y antes
 // que todo: cabecera «EL POSTEO DE HOY» + pill «hoy · HH:MM» + la
 // tarjeta de siempre (reutilizada, con sus botones Aprobar/Cambiar).
+// (LOTE POST-WOW v929 · veredicto Valentino 11/11) Tarjeta de email
+// post-wow en Inicio, justo debajo del primer posteo: «¿a dónde te aviso
+// cuando el posteo de mañana esté listo?». Solo invitados con primer
+// posteo (sin wow no se pide nada), solo si todavía no dejaron su email
+// (PROFILE.trial_notify_email), solo hasta que la descarten. Opcional:
+// «Ahora no» la quita sin pedir nada. Sin cuenta, sin contraseña.
+function pzPostWowEmailDismissKey() {
+  try { const id = (typeof ME !== 'undefined' && ME && (ME.id || ME.email)) || 'anon'; return 'pz_postwow_email_dismissed_' + id; } catch (e) { return 'pz_postwow_email_dismissed_anon'; }
+}
+function pzPostWowEmailHTML(o) {
+  try {
+    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return '';
+    if (typeof pzIsGuest !== 'function' || !pzIsGuest()) return '';
+    const hoyPost = (o && o.hoyPost) || null;
+    if (!hoyPost) return '';
+    if (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.trial_notify_email) return '';
+    let dismissed = null;
+    try { dismissed = localStorage.getItem(pzPostWowEmailDismissKey()); } catch (e) {}
+    if (dismissed) return '';
+    const en = !!(o && o.en);
+    return `<div class="card pz-postwow-email" id="pzPostWowEmail">`
+      + `<p class="pz-postwow-q">${en ? 'Where should I tell you when tomorrow’s post is ready?' : '¿A dónde te aviso cuando el posteo de mañana esté listo?'}</p>`
+      + `<div class="field" style="margin-bottom:10px"><input type="email" inputmode="email" autocomplete="email" placeholder="tu@email.com" aria-label="Email"></div>`
+      + `<button type="button" class="btn btn-primary btn-block" data-pz-postwow-send>${en ? 'Let me know' : 'Avisame'}</button>`
+      + `<div class="pz-postwow-err" hidden></div>`
+      + `<button type="button" class="pz-postwow-skip" data-pz-postwow-skip>${en ? 'Not now' : 'Ahora no'}</button>`
+      + `</div>`;
+  } catch (e) { return ''; }
+}
+function pzPostWowEmailBind(root) {
+  if (!root) return;
+  const card = root.querySelector('#pzPostWowEmail');
+  if (!card) return;
+  const send = card.querySelector('[data-pz-postwow-send]');
+  const skip = card.querySelector('[data-pz-postwow-skip]');
+  const input = card.querySelector('input[type="email"]');
+  const err = card.querySelector('.pz-postwow-err');
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (skip) skip.onclick = () => { try { localStorage.setItem(pzPostWowEmailDismissKey(), '1'); } catch (e) {} card.remove(); };
+  if (send) send.onclick = async () => {
+    const email = String((input && input.value) || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
+      if (err) { err.hidden = false; err.textContent = en ? 'Check your email and try again 🙂' : 'Revisá tu email y probá de nuevo 🙂'; }
+      return;
+    }
+    send.disabled = true;
+    try {
+      const r = await api.post('/api/trial/notify-email', { email });
+      if (r && r.ok) {
+        try { if (typeof PROFILE !== 'undefined' && PROFILE) PROFILE.trial_notify_email = email; } catch (e) {}
+        card.innerHTML = `<p class="pz-postwow-ok">✔ ${en ? 'Done — I’ll let you know when it’s ready.' : 'Listo — te aviso cuando esté listo.'}</p>`;
+        return;
+      }
+      throw new Error((r && r.error) || 'fail');
+    } catch (e2) {
+      send.disabled = false;
+      if (err) { err.hidden = false; err.textContent = en ? 'We couldn’t save it — try again 🙂' : 'No se pudo guardar — probá de nuevo 🙂'; }
+    }
+  };
+}
 function pzHoyHoyHTML(p, o) {
   try {
     const en = !!(o && o.en);
@@ -22946,6 +23035,7 @@ function pzHoyBind(root) {
   root.querySelectorAll('[data-pz-hoy-conserje]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/conserje'); else location.hash = '#/app/conserje'; } catch (e) {} }; });
   try { pzHoyTiraBind(root); } catch (e) {}
   try { pzHoyConserjeFill(); } catch (e) {}
+  try { pzPostWowEmailBind(root); } catch (e) {}
 }
 
 // (LOTE REDISENO-R6) Entrada al conserje desde Hoy, solo en ventana
@@ -23278,6 +23368,7 @@ async function inicioView() {
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: pendR1.total, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
+      + pzPostWowEmailHTML({ hoyPost: hoyPostR1, en: enHome })
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;
   })() : '';

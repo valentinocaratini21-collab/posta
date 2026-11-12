@@ -5631,7 +5631,19 @@ app.get('/api/profile', requireAuth, (req, res) => {
   try {
     firstWeekLive = !!db.prepare(`SELECT 1 FROM posts WHERE user_id = ? AND status IN ('scheduled', 'published') LIMIT 1`).get(req.session.userId);
   } catch (e) { /* si la lectura falla, el paso queda pendiente: nunca rompe el perfil */ }
-  res.json({ ...p, ig_pending: pending, best_hour: bestHour, first_week_live: firstWeekLive });
+  // (LOTE POST-WOW v929) Email de aviso de la prueba: solo invitados; el
+  // front lo lee para no volver a pedirlo. La fuente es trial_cache.email
+  // (la misma columna del regalo de /prueba); el placeholder de users.email
+  // del invitado NUNCA se usa (no es un email real).
+  let trialNotifyEmail = '';
+  try {
+    const gu = db.prepare('SELECT guest_ig FROM users WHERE id = ? AND is_guest = 1').get(req.session.userId);
+    if (gu && gu.guest_ig) {
+      const tc = db.prepare('SELECT email FROM trial_cache WHERE ig = ?').get(String(gu.guest_ig).trim().toLowerCase());
+      if (tc && tc.email) trialNotifyEmail = String(tc.email).trim().toLowerCase();
+    }
+  } catch (e) { /* sin email: la tarjeta se muestra; nunca rompe el perfil */ }
+  res.json({ ...p, ig_pending: pending, best_hour: bestHour, first_week_live: firstWeekLive, trial_notify_email: trialNotifyEmail });
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
@@ -31061,6 +31073,38 @@ app.post('/api/guest/start', (req, res) => {
   }
 });
 
+// (LOTE POST-WOW v929) Retorno del email «tu posteo de mañana está listo»:
+// el link trae de vuelta al invitado a VER su posteo. Sin contraseña, sin
+// regenerar: solo retoma la sesión invitada que ya existe (con posteos y
+// trial vigente). Si no hay invitado con posteos o el trial venció, va a
+// /prueba?ig=, que muestra el estado correcto (aviso de prueba usada con
+// entrar/elegir plan). Nunca retoma una cuenta registrada (is_guest=1).
+app.get('/api/guest/resume', (req, res) => {
+  try {
+    const igRaw = String((req.query && req.query.ig) || '').trim().replace(/^@/, '').toLowerCase();
+    const igK = trialLock ? trialLock.normalizeIg(igRaw) : igRaw;
+    const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
+    const fallback = `${base}/prueba` + (igK ? `?ig=${encodeURIComponent(igK)}` : '');
+    if (!igK || !guestTrial || !guestTrial.findGuestByIdentity) return res.redirect(302, fallback);
+    const g = guestTrial.findGuestByIdentity(db, igK, '');
+    if (!g) return res.redirect(302, fallback);
+    const u = db.prepare('SELECT is_guest, trial_ends_at FROM users WHERE id = ?').get(g.id);
+    if (!u || u.is_guest !== 1) return res.redirect(302, fallback);
+    if (u.trial_ends_at && Number(u.trial_ends_at) <= Date.now()) return res.redirect(302, fallback);
+    let nPosts = 0;
+    try { const r0 = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(g.id); nPosts = (r0 && r0.n) || 0; } catch (e) {}
+    if (!nPosts) return res.redirect(302, fallback);
+    req.session.regenerate((err) => {
+      if (err) return res.redirect(302, fallback);
+      req.session.userId = g.id;
+      res.redirect(302, '/#/app/inicio');
+    });
+  } catch (e) {
+    console.error('[guest] resume falló:', e.message);
+    res.redirect(302, '/prueba');
+  }
+});
+
 // (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
 // POST /api/guest/set-ig { ig } — requireAuth, solo invitados.
 // Resuelve el cambio de identidad (guest-set-ig.js: fix del @ pegado),
@@ -34511,6 +34555,31 @@ app.post('/api/trial/gift-email', express.json({ limit: '16kb' }), async (req, r
   res.json({ ok: true, sent, queued: !sent, carta_url });
 });
 
+// ---------- (LOTE POST-WOW v929 · veredicto Valentino 11/11) ----------
+// Email de aviso de la prueba: el invitado deja su email DESPUÉS del wow
+// («¿a dónde te aviso cuando el posteo de mañana esté listo?»). Solo
+// invitados, solo su propio email, solo en trial_cache.email (la columna
+// del regalo de /prueba). Sin cuenta, sin contraseña, sin fricción.
+app.post('/api/trial/notify-email', requireAuth, express.json({ limit: '16kb' }), (req, res) => {
+  const uid = req.session.userId;
+  let g = null;
+  try { g = db.prepare('SELECT guest_ig FROM users WHERE id = ? AND is_guest = 1').get(uid); } catch (e) {}
+  if (!g || !g.guest_ig) return res.status(403).json({ error: 'Solo para la prueba gratuita' });
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  if (!LEAD_EMAIL_RE.test(email) || email.length > 120) {
+    return res.status(400).json({ error: 'Revisá tu email y probá de nuevo 🙂' });
+  }
+  const igK = trialLock ? trialLock.normalizeIg(g.guest_ig) : String(g.guest_ig).trim().toLowerCase();
+  let row = null;
+  try { row = db.prepare('SELECT ig FROM trial_cache WHERE ig = ?').get(igK); } catch (e) {}
+  if (!row) return res.status(404).json({ error: 'No encontramos tu semana 😅 Generala de nuevo en /prueba', no_week: true });
+  try { db.prepare('UPDATE trial_cache SET email = ? WHERE ig = ?').run(email, igK); } catch (e) {
+    return res.status(500).json({ error: 'No se pudo guardar — probá de nuevo 🙂' });
+  }
+  console.log(`[post-wow] email de aviso guardado para @${igK}`);
+  res.json({ ok: true, saved: true, email });
+});
+
 // ---------- (v384 · ítem 8) LA CARTA CON AUDIO: página /carta/:token ----------
 // El audio se genera AL ABRIR la página (ni al enviar la carta — se
 // quemaría en cartas en cola por Resend — ni con loop): una sola vez por
@@ -35589,7 +35658,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v928';
+const BUILD_ID = '20261105-v929';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -688,6 +688,20 @@ function startScheduler(db) {
     });
     console.log('[posta] Push matutina del posteo del dia: barrido cada 15 min');
   } catch (e) { console.error('[morning-post-push] no se pudo programar:', e.message); }
+  // Email «tu posteo de mañana está listo» (LOTE POST-WOW v929 · veredicto
+  // Valentino 11/11): barrido cada 15 min; la ventana es la hora 9:00 en la
+  // zona de la cuenta (la misma que la push matutina). Sin email en la
+  // prueba, silencio. El require es perezoso DENTRO del callback, igual
+  // que el de la push matutina.
+  try {
+    cron.schedule('*/15 * * * *', () => {
+      try {
+        const tpr = require('./trial-post-ready');
+        if (tpr && typeof tpr.sendTrialPostReadyEmails === 'function') tpr.sendTrialPostReadyEmails(db).catch((e) => console.error('[post-ready]', e.message));
+      } catch (e) { console.error('[post-ready]', e.message); }
+    });
+    console.log('[posta] Email posteo-listo de prueba: barrido cada 15 min');
+  } catch (e) { console.error('[post-ready] no se pudo programar:', e.message); }
   // Recordatorio semanal por email: lunes 10:00 (Buenos Aires).
   // Solo a quienes tienen cuenta y NO instalaron la app en el teléfono.
   try {

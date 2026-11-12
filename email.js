@@ -468,6 +468,63 @@ function trialAbandonEmail(lead, baseUrl, bizName, link, lang) {
 }
 
 // ---------------------------------------------------------------------------
+// Email «tu posteo de mañana está listo» (LOTE POST-WOW v929 · veredicto
+// Valentino 11/11): al invitado que dejó su email en la prueba, cuando el
+// posteo del día siguiente se revela (9:00). Lo trae de vuelta a VERLO.
+// NUNCA «a punto de postear»: en la prueba nada se postea de verdad.
+// ---------------------------------------------------------------------------
+function trialPostReadyEmailEn(lead, baseUrl, bizName, link) {
+  const biz = String(bizName || 'your business').replace(/</g, '&lt;').slice(0, 80);
+  const subject = 'Your post for tomorrow is ready';
+  const html = `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+  ${emailFaceHeader('en')}
+  <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+    <p style="font-size:16px;margin:0 0 12px">Hey 👋</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Your post for tomorrow is ready 👀 I built it for <b>${biz}</b> and it's waiting for you.
+      Take a look:<br>
+      <span style="font-size:13px">Brought to you by <b>Posty</b>, your community manager 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 20px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">See my post 👀</a>
+    </p>
+    <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
+      You left your email in Posty's free trial.<br>
+      Don't want it? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+    </p>
+  </div>
+</div>`;
+  return sendEmail({ to: lead.email, subject, html });
+}
+
+function trialPostReadyEmail(lead, baseUrl, bizName, link, lang) {
+  if (lang === 'en') return trialPostReadyEmailEn(lead, baseUrl, bizName, link);
+  const biz = String(bizName || 'tu negocio').replace(/</g, '&lt;').slice(0, 80);
+  const subject = 'Tu posteo de mañana está listo';
+  const html = `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+  ${emailFaceHeader()}
+  <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+    <p style="font-size:16px;margin:0 0 12px">Che 👋</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tu posteo de mañana está listo 👀 Lo armé para <b>${biz}</b> y te está esperando.
+      Miralo acá:<br>
+      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 20px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi posteo 👀</a>
+    </p>
+    <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
+      Dejaste tu email en la prueba gratuita de Posty.<br>
+      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+    </p>
+  </div>
+</div>`;
+  return sendEmail({ to: lead.email, subject, html });
+}
+
+// ---------------------------------------------------------------------------
 // TOQUE DEL FUNDADOR a las 72 h de la Carta (rescate "founder-rescue").
 // Copy ES APROBADO por Valentino el 2026-10-22: asunto «Soy Valentino — te
 // escribo yo», cuerpo natural en primera persona, firma con nombre y
@@ -951,4 +1008,4 @@ function trialClosedEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html: emailShell(inner) });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
