@@ -21423,9 +21423,14 @@ function homeHeadHTML(prof, bizName, opts) {
   const letter = esc((name || user || 'P').charAt(0).toUpperCase());
   let picSrc = P.pic || '';
   if (!picSrc) { try { const lg = (typeof assetLogo === 'function') ? assetLogo() : null; if (lg && lg.file_path) picSrc = lg.file_path; } catch (e) {} }
-  // (REDISEÑO RS-3) Sin foto real ni logo, la cara canónica de Posty
-  // (public/ai-avatar.png, jamás regenerada): nunca la letra sola.
-  if (!picSrc) picSrc = '/ai-avatar.png';
+  // (LOGO-CABECERA-CLIENTE · Valentino 12/11) Sin foto real ni logo
+  // subido, el avatar del negocio es su inicial neutra (la letra ya se
+  // rinde debajo en .hf-ava-letter; si la foto falla al cargar, el
+  // onerror quita la <img> y queda la letra): nunca la cara de Posty
+  // como identidad del cliente. Excepción: la cuenta de la casa
+  // (@posty.communitymanager) ES Posty, así que ahí la cara canónica
+  // sí es su logo y el fallback no cambia.
+  if (!picSrc && String(P.username || '').replace(/^@/, '').toLowerCase() === 'posty.communitymanager') picSrc = '/ai-avatar.png';
   const pic = picSrc ? `<img src="${esc(picSrc)}" alt="" onerror="this.remove()">` : '';
   // (Frente 3b) Conteos como los muestra Instagram: completos con
   // separador local hasta 9.999 (ES 1.234 · EN 1,234) y abreviados
@@ -23775,9 +23780,21 @@ async function feedView() {
   const alDia = pzFeedAlDia(allPosts, tz);
   const user = String((prof && prof.username) || '').replace(/^@/, '');
   const headName = user ? '@' + user : bizName;
-  // (REDISEÑO RS-3) Sin foto real, la cara canónica de Posty: nunca la letra sola.
-  const picSrc = (prof && prof.pic) || '/ai-avatar.png';
-  const picHTML = picSrc ? `<img class="pz-feed-ava" src="${esc(picSrc)}" alt="" onerror="this.remove()">` : '';
+  // (LOGO-CABECERA-CLIENTE · Valentino 12/11) El avatar de la cabecera
+  // del Feed es el logo del negocio: su foto de perfil (prof.pic) o el
+  // logo subido (assetLogo). Sin foto real, la inicial neutra del
+  // negocio — nunca la cara de Posty como identidad del cliente (la
+  // letra va debajo de la foto: si la foto falla al cargar, el onerror
+  // quita la <img> y queda la letra). Excepción: la cuenta de la casa
+  // (@posty.communitymanager) ES Posty y ahí la cara canónica sí es su logo.
+  let feedPic = (prof && prof.pic) || '';
+  if (!feedPic) { try { const lg = (typeof assetLogo === 'function') ? assetLogo() : null; if (lg && lg.file_path) feedPic = lg.file_path; } catch (e) {} }
+  const feedIsHouse = String((prof && prof.username) || '').replace(/^@/, '').toLowerCase() === 'posty.communitymanager';
+  if (!feedPic && feedIsHouse) feedPic = '/ai-avatar.png';
+  const feedLetter = esc(String((prof && prof.name) || user || bizName || 'P').replace(/^@/, '').charAt(0).toUpperCase());
+  const picHTML = feedPic
+    ? `<span class="pz-feed-ava-wrap"><span class="pz-feed-ava pz-feed-ava-l" aria-hidden="true">${feedLetter}</span><img class="pz-feed-ava" src="${esc(feedPic)}" alt="" onerror="this.remove()"></span>`
+    : `<span class="pz-feed-ava pz-feed-ava-l" aria-hidden="true">${feedLetter}</span>`;
   const sealHTML = alDia ? `<span class="pz-feed-aldia"><i></i> ${en ? 'UP TO DATE' : 'AL DÍA'}</span>` : '';
   const statsHTML = `<div class="pz-feed-stats">
     <div><b>${pzFeedFmtN(postsCount, en)}</b><small>${en ? (postsCount === 1 ? 'post' : 'posts') : (postsCount === 1 ? 'posteo' : 'posteos')}</small></div>

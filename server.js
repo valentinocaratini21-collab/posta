@@ -19737,7 +19737,12 @@ function homeProfileKit(uid, prof) {
     location: (digest && digest.ciudad) || null,
     username: (prof && prof.ig_username || '').replace(/^@/, ''),
     name: (kit && kit.display_name) || (prof && prof.business_name) || '',
-    pic: null,
+    // (LOGO-CABECERA-CLIENTE · Valentino 12/11) El kit es la primera
+    // impresión (antes de que la lectura de IG complete): lleva el logo
+    // real del fundamento (digest.logo_url = foto de perfil de IG, la
+    // misma fuente de v869) en vez de null — sin logo, null y el
+    // cliente muestra la inicial neutra, nunca la cara de Posty.
+    pic: (digest && digest.logo_url) || null,
     bio: kit ? (kit.bio_lines || []).join('\n') : '',
     bio_unread: false,
     link: '',
@@ -35751,7 +35756,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v932';
+const BUILD_ID = '20261105-v933';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

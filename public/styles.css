@@ -5673,6 +5673,9 @@ body.pz-postchat-open{overflow:hidden}
 #feedView .hf-grid{background:transparent}
 .pz-feed-head{display:flex;align-items:center;gap:11px;margin:6px 14px 12px}
 .pz-feed-ava{width:42px;height:42px;border-radius:50%;background:#EAF6FD;object-fit:cover;object-position:top;border:3px solid #FEC14D;flex:none}
+.pz-feed-ava-l{display:flex;align-items:center;justify-content:center;background:#2793C8;color:#fff;font-weight:700;font-size:18px}
+.pz-feed-ava-wrap{position:relative;width:42px;height:42px;flex:none}
+.pz-feed-ava-wrap .pz-feed-ava{position:absolute;inset:0}
 .pz-feed-who{flex:1;min-width:0}
 .pz-feed-who b{display:block;font-size:15.5px;color:#0A1E33;line-height:1.2;overflow-wrap:break-word}
 .pz-feed-who small{font-size:12px;color:var(--mut);font-weight:700}
