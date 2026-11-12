@@ -136,6 +136,23 @@ function langOfUser(uid) {
     return u && u.lang === 'en' ? 'en' : 'es';
   } catch (e) { return 'es'; }
 }
+
+// (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) Idioma del CONTENIDO
+// de la marca (no de la UI): el digest sembrado por la prueba trae
+// post_lang ('en'/'es'); sin él, el idioma de la cuenta (users.lang)
+// — el comportamiento histórico. Nunca se inventa: sin señal, 'es'.
+// Lo lee TODO el pipeline in-account (ensure/sweep/backfill/rebuild)
+// vía contentInputFor → generateContent.
+function contentLangOf(uid) {
+  try {
+    const dg = digestForUser(uid);
+    if (dg && (dg.post_lang === 'en' || dg.post_lang === 'es')) return dg.post_lang;
+  } catch (e) {}
+  try {
+    const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid);
+    return u && u.lang === 'en' ? 'en' : 'es';
+  } catch (e) { return 'es'; }
+}
 // Objeto detailed de generator.suggestReplyDetailed con el fundamento de
 // la cuenta (digest + horarios del ADN): si el cliente pregunta un dato
 // que NO está en el fundamento, devuelve needsHuman y la fila de la cola
@@ -1593,6 +1610,15 @@ function seedFromTrialDigest(userId, igRaw, opts) {
     // puerta ANTES de sembrar descripción/ADN: la siembra derivada
     // («Ofrece: …») se construye de estos ítems tal cual.
     digest = clientDigest.scrubDigestItems(digest);
+    // (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) El contentLang
+    // del payload viaja al digest aunque el digest cacheado no lo
+    // traiga (payloads de antes de v922) o se haya compilado desde
+    // partes: sin post_lang, el pipeline in-account nunca sabría en
+    // qué idioma postea la marca. El post_lang del digest manda si
+    // ya existe; jamás se usa el idioma de la UI (out.lang) acá.
+    try {
+      if ((!digest.post_lang || (digest.post_lang !== 'en' && digest.post_lang !== 'es')) && out && (out.content_lang === 'en' || out.content_lang === 'es')) digest.post_lang = out.content_lang;
+    } catch (e) {}
     // (LOTE PERSONALIZACIÓN · ítem 2) La onda elegida en la prueba viaja a
     // la cuenta: la semana del cliente se arma con ese ángulo. Sin
     // elección guardada, nada cambia.
@@ -2401,6 +2427,25 @@ function applyTrialLang(userId, igRaw) {
     if (!hit) return;
     const out = JSON.parse(hit.payload);
     if (out && out.lang === 'en') db.prepare("UPDATE users SET lang = 'en' WHERE id = ?").run(userId);
+    // (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) El idioma del
+    // CONTENIDO es el de la marca, no el de la UI con que se hizo la
+    // prueba (señal equivocada: una prueba en ES de una marca EN
+    // dejaba la cuenta sin contentLang y el pipeline in-account
+    // generaba todo en español). Se persiste en el digest de la
+    // cuenta (post_lang) para que ensure/sweep/backfill/rebuild lo
+    // lean después. Solo si ya hay digest guardado: nunca se fabrica
+    // uno mínimo acá (la siembra la hace seedFromTrialDigest, que
+    // corre después en los flujos de alta/login/magic).
+    try {
+      const cl = out && (out.content_lang || (out.digest && out.digest.post_lang));
+      if (cl === 'en' || cl === 'es') {
+        const stored = clientDigest.getStoredDigest(db, userId);
+        if (stored) {
+          stored.post_lang = cl;
+          clientDigest.saveDigest(db, userId, stored);
+        }
+      }
+    } catch (e) { /* el idioma nunca frena el alta */ }
   } catch (e) { /* el idioma nunca frena el alta */ }
 }
 
@@ -2993,7 +3038,7 @@ async function makeIdeaDraft(uid, idea) {
   // DEDUP-EXACTA (Juli, 2026-10-24): el borrador de la idea cae en la
   // semana corriente — genera contra los captions que esa semana ya
   // tiene, como toda ruta que crea posteos de semana.
-  const ideaInput = contentInputFor(uid, topic, tipo, 0);
+  const ideaInput = contentInputFor(uid, topic, tipo, 0, idea._sales || null); // (v959) la intención de venta del tema (deriveTopics/sales-brain) viaja al caption
   try { ideaInput.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
   const content = await generateContent(ideaInput, key);
   let caption = String((content && content.caption) || '').trim();
@@ -12718,12 +12763,13 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
   try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
   // (LOTE PERSONALIZACIÓN · ítem 3) Sus palabras reales también van en
   // el caption: los marcadores del fundamento se suman a los ejemplos.
-  try { const dgV = clientDigest.getDigest(db, uid); const lv = personalizacion.lineaVoz(dgV && dgV.voz_marcadores, langOfUser(uid)); if (lv) voice = (voice ? voice + '\\n' : '') + lv; } catch (e) {}
+  try { const dgV = clientDigest.getDigest(db, uid); const lv = personalizacion.lineaVoz(dgV && dgV.voz_marcadores, contentLangOf(uid)); if (lv) voice = (voice ? voice + '\\n' : '') + lv; } catch (e) {} // (v959) la línea de voz es de LA MARCA: va en su idioma, no en el de la UI
   // Niveles que se sienten: el nivel cambia REALMENTE el payload de captions.
   // LOTE POSTY APRENDE: igual que en ideasInputFor — la línea viaja
   // después del levelBoosted, solo para la casa.
   const captionInput = levelBoosted(uid, 'caption', {
     userId: uid, // hook engine: rotación de hooks por cliente
+    lang: contentLangOf(uid), // (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) el idioma del CONTENIDO de la marca, no de la UI: lo lee generateContent (puerta + prompt + hooks en inglés cuando es 'en')
     usedHookIds: recentHookIds(uid), // hooks usados en las últimas 8 semanas
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
@@ -15990,17 +16036,43 @@ function programarHoy(uid, postId, tz, hoy) {
 function ideaDiariaSintetica(uid, hoy) {
   try {
     const dg = clientDigest.getDigest(db, uid);
-    const prods = rubroGarantias.productosDesdeDigest(dg && dg.productos, readDna(uid));
-    if (!prods.length) return null;
+    const lang = contentLangOf(uid);
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(hoy || ''));
     if (!m) return null;
     const dayIdx = Math.floor(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) / 86400000);
     const tipos = ['social', 'detras', 'novedad', 'promo'];
     const tipo = tipos[dayIdx % tipos.length];
-    const prod = prods[dayIdx % prods.length];
-    if (!prod || !prod.nombre) return null;
     const srcFor = { social: 'winner', detras: '', novedad: 'reel', promo: 'calendar' };
-    return { title: prod.nombre, brief: '', why: '', source: srcFor[tipo], format: 'image', angle_key: 'diaria-' + tipo };
+    // (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) El tema ya no es
+    // rotación ciega sobre los productos del digest (así entró PROJET,
+    // un rótulo de menú, vendido como «plato» en el 636): manda la
+    // estrella VALIDADA (L3 — dueño validado → ventas reales →
+    // inferida ≥0,5, nunca un genérico) y, sin ella, la rotación sobre
+    // los temas de deriveTopics (L3/L4 — filtrados de cromo/veto/
+    // implausibles, estrella primera). Sin estrella validada el
+    // posteo NUNCA vende una: el wow es neutro (L4 — invitación de
+    // marca con el nombre real del negocio, sin claim de popularidad).
+    // (v959) El día 'novedad' antes caía a 'detras' en makeIdeaDraft:
+    // el formato 'reel' es lo que lo distingue (source 'reel' solo no
+    // alcanza); acá se corrige.
+    const format = tipo === 'novedad' ? 'reel' : 'image';
+    const star = clientDigest.effectiveStarOf(dg);
+    if (star && star.item) {
+      return { title: String(star.item), brief: '', why: '', source: srcFor[tipo], format, angle_key: 'diaria-' + tipo };
+    }
+    let topics = [];
+    try { topics = clientDigest.deriveTopics(dg, { lang, count: 5 }) || []; } catch (e) { topics = []; }
+    const pick = topics.length ? topics[dayIdx % topics.length] : null;
+    if (pick && pick.digest_anchor) {
+      const t = { title: String(pick.digest_anchor), brief: '', why: '', source: srcFor[tipo], format, angle_key: 'diaria-' + tipo };
+      if (pick.intent || pick.angle || pick.proof) t._sales = { intent: pick.intent || '', angle: pick.angle || '', proof: pick.proof || '' };
+      return t;
+    }
+    // Sin estrella ni temas: wow neutro (L4). El nombre del negocio es
+    // dato real (del digest); sin ni siquiera eso, no hay idea.
+    const biz = String((dg && dg.business) || '').trim();
+    if (!biz) return null;
+    return { title: biz, brief: '', why: '', source: 'winner', format: 'image', angle_key: 'diaria-neutra' };
   } catch (e) { return null; }
 }
 async function ensureTodayPost(uid, tz, now) {
@@ -36478,7 +36550,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v978';
+const BUILD_ID = '20261105-v979';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -114,6 +114,92 @@ const HOOKS = [
   { id: 'h50', intents: ['frase'], formula: 'La regla de oro de {negocio}: "{tema}", siempre', ejemplo: 'La regla de oro de Pelu ADN: "salís mejor de lo que entraste", siempre', nota: 'Regla de oro: promesa corta que se puede verificar.' },
 ];
 
+// (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) HOOKS_EN — espejo en
+// inglés estadounidense del banco ES: mismos ids (h01–h50) e
+// intenciones, fórmulas traducidas con los mismos slots {tema} /
+// {negocio}. Mismo id en los dos idiomas = la rotación de 8 semanas y
+// los usedHookIds siguen funcionando igual: un hook usado en español
+// no se repite en inglés con otro texto. Sin este banco, el caption
+// en inglés abría con un hook español (el caso del 636: h40 verbatim).
+const HOOKS_EN = [
+  // ---- promo ----
+  { id: 'h01', intents: ['promo'], formula: 'This week {tema} costs less at {negocio}: here is why', nota: 'Honest urgency: the price drops for a real reason, no tricks.' },
+  { id: 'h02', intents: ['promo'], formula: 'If {tema} has been on your mind, now is the time: {negocio} just lowered the price', nota: 'Conspiratorial invite: speaks to something the reader already wanted.' },
+  { id: 'h03', intents: ['promo'], formula: 'Do the math: {tema} at {negocio} costs less than making it at home', nota: 'Concrete number: invites checking, not believing.' },
+  { id: 'h04', intents: ['promo'], formula: 'No clearance, no Black Friday: {negocio} lowered {tema} because we have extra stock', nota: 'Honest confession: the reason for the discount is real and stated.' },
+  { id: 'h05', intents: ['promo'], formula: 'The {tema} from {negocio} at cost, only until Sunday', nota: 'Behind the scenes: shows how the business thinks.' },
+
+  // ---- tips ----
+  { id: 'h06', intents: ['tips'], formula: 'How to pick {tema} without getting sold just anything: the short guide from {negocio}', nota: 'Tips with authority: teaches how to buy well, not just to buy here.' },
+  { id: 'h07', intents: ['tips'], formula: 'The mistake almost everyone makes with {tema} (and how we avoid it at {negocio})', nota: '"Most people do X wrong": corrects without humiliating.' },
+  { id: 'h08', intents: ['tips'], formula: '3 signs your {tema} is asking for a change, according to {negocio}', nota: 'Concrete number: a short, checkable list.' },
+  { id: 'h09', intents: ['tips'], formula: 'What we learned after years of making {tema} at {negocio}', nota: 'Craft confession: experience as credential.' },
+  { id: 'h10', intents: ['tips'], formula: 'Before you buy {tema}, check this: {negocio} recommends it', nota: 'Friendly invite: advice from a friend, not a salesperson.' },
+
+  // ---- testimonio ----
+  { id: 'h11', intents: ['testimonio'], formula: 'What a customer told us after trying {tema} at {negocio}', nota: 'Real testimonial: the customer voice opens the caption.' },
+  { id: 'h12', intents: ['testimonio'], formula: 'She came for {tema} and stayed for the service: the review that made our day at {negocio}', nota: 'Minimal story: before/after in two lines.' },
+  { id: 'h13', intents: ['testimonio'], formula: 'The message they sent us after {tema} — we kept it at {negocio}', nota: 'Behind the scenes: shows the real message they treasure.' },
+  { id: 'h14', intents: ['testimonio'], formula: 'From skeptic to fan: what happened with {tema} at {negocio}', nota: 'Before/after contrast told through a change of mind.' },
+  { id: 'h15', intents: ['testimonio'], formula: 'The {tema} one customer recommended to her 3 friends (and why), at {negocio}', nota: 'Concrete social proof: a small believable number, not "thousands".' },
+
+  // ---- lanzamiento ----
+  { id: 'h16', intents: ['lanzamiento'], formula: '{tema} just landed at {negocio}: we have been building it quietly', nota: 'Behind the scenes: the launch as a well-kept secret (said, not shouted).' },
+  { id: 'h17', intents: ['lanzamiento'], formula: 'New at {negocio}: {tema}, and we were the first to try it', nota: 'Confession: the business as the first fan of what it sells.' },
+  { id: 'h18', intents: ['lanzamiento'], formula: 'We tried {tema} before bringing it to {negocio}: this is what won us over', nota: 'Honest curation: they don\'t sell what they wouldn\'t try.' },
+  { id: 'h19', intents: ['lanzamiento'], formula: 'The first batch of {tema} is already at {negocio}: when it is gone, it is gone', nota: 'Honest urgency: real limited stock, no invented scarcity.' },
+  { id: 'h20', intents: ['lanzamiento'], formula: 'If you liked the old one, {tema} at {negocio} will win you over even more: here is why', nota: 'Before/after contrast: the launch improves something known.' },
+
+  // ---- viral ----
+  { id: 'h21', intents: ['viral'], formula: 'Most people do {tema} wrong: at {negocio} we do it the other way around', nota: '"Most people do X wrong": breaks the common habit with a twist of its own.' },
+  { id: 'h22', intents: ['viral'], formula: 'Myth busted: {tema} does not work the way they told you (we tested it at {negocio})', nota: 'Myth busted: takes apart a belief with its own proof.' },
+  { id: 'h23', intents: ['viral'], formula: 'What almost nobody tells you about {tema}: the {negocio} version', nota: 'Curiosity with data: promises uncomfortable but real information.' },
+  { id: 'h24', intents: ['viral'], formula: 'The {tema} fact that got us thinking at {negocio}', nota: 'Curiosity with data: opens with intrigue and closes with evidence.' },
+  { id: 'h25', intents: ['viral'], formula: 'We used to believe this about {tema} too: we were wrong ({negocio})', nota: 'Confession: the business admits its own mistake. Disarming.' },
+
+  // ---- social ----
+  { id: 'h26', intents: ['social'], formula: 'The {tema} from {negocio}, made by local hands', nota: 'Community: local pride without solemnity.' },
+  { id: 'h27', intents: ['social'], formula: 'Every {tema} that leaves {negocio} supports a local maker: meet them', nota: 'Behind the scenes: the value chain has a face and a name.' },
+  { id: 'h28', intents: ['social'], formula: 'The neighborhood asked for {tema} and {negocio} brought it: how it started', nota: 'Origin story: the business listens to its people.' },
+  { id: 'h29', intents: ['social'], formula: 'At {negocio}, {tema} is meant to be shared: the big Sunday table', nota: 'Friendly invite: the shared ritual as identity.' },
+  { id: 'h30', intents: ['social'], formula: 'What happens at {negocio} when someone orders {tema} for the first time', nota: 'Curiosity: the new customer moment, told with care.' },
+
+  // ---- educativo ----
+  { id: 'h31', intents: ['educativo'], formula: '{tema}, explained plainly: what you need to know, from {negocio}', nota: 'Straight teaching: promises clarity, not smoke.' },
+  { id: 'h32', intents: ['educativo'], formula: 'The difference between good {tema} and cheap {tema}, according to {negocio}', nota: 'Contrast that teaches: shows how to tell quality apart.' },
+  { id: 'h33', intents: ['educativo'], formula: 'Why {tema} costs what it costs at {negocio}: the numbers, in plain words', nota: 'Concrete number: cost transparency as trust.' },
+  { id: 'h34', intents: ['educativo'], formula: 'What almost nobody explains about {tema} before you buy it: {negocio} explains it', nota: 'Honest teaching: tells the uncomfortable part others skip.' },
+  { id: 'h35', intents: ['educativo'], formula: 'The question we always get about {tema}: answered at {negocio}', nota: 'Direct question: starts from a real customer doubt.' },
+
+  // ---- comida ----
+  { id: 'h36', intents: ['comida'], formula: 'The {tema} we make differently at {negocio} (and why you can tell)', nota: 'Concrete differentiation: names the dish and the reason.' },
+  { id: 'h37', intents: ['comida'], formula: 'We tried 12 versions of {tema} until we got this one: {negocio}', nota: 'Concrete number: the invisible work behind the dish.' },
+  { id: 'h38', intents: ['comida'], formula: 'The {tema} ingredient almost nobody uses (and we do, at {negocio})', nota: 'Curiosity with data: the detail that changes everything.' },
+  { id: 'h39', intents: ['comida'], formula: 'We used to make {tema} this way; now, this way: what changed at {negocio}', nota: 'Before/after contrast: evolution told without shame.' },
+  { id: 'h40', intents: ['comida'], formula: 'If you like {tema}, this dish at {negocio} is for you: here is why', nota: 'Friendly invite: segments by taste, not by demographics.' },
+
+  // ---- evento ----
+  { id: 'h41', intents: ['evento'], formula: 'This Saturday: {tema} at {negocio} — bring whoever you like', nota: 'Direct invite: date, place and permission to come with company.' },
+  { id: 'h42', intents: ['evento'], formula: 'What happens at {negocio} when we mix {tema} with good music', nota: 'Curiosity: the event as experience, not as notice.' },
+  { id: 'h43', intents: ['evento'], formula: 'Few spots left for {tema} at {negocio}: here is what is included', nota: 'Honest urgency: real seats + detail of what you get.' },
+  { id: 'h44', intents: ['evento'], formula: 'The {tema} we put together at {negocio} is not like the others: see why', nota: 'Contrast: sets this event apart from the generic ones.' },
+  { id: 'h45', intents: ['evento'], formula: 'Behind the scenes: how {tema} comes together at {negocio}', nota: 'Behind the scenes: the setup as content before the event.' },
+
+  // ---- frase ----
+  { id: 'h46', intents: ['frase'], formula: 'The line we put on the wall at {negocio}: "{tema}"', nota: 'Manifesto: the line as a house rule.' },
+  { id: 'h47', intents: ['frase'], formula: 'If {negocio} had a motto, it would be this: "{tema}"', nota: 'Brand line: sums up the philosophy in one line.' },
+  { id: 'h48', intents: ['frase'], formula: 'What a customer told us and it stuck: "{tema}" ({negocio})', nota: 'Testimonial line: the best line came from a customer.' },
+  { id: 'h49', intents: ['frase'], formula: 'We started {negocio} with a simple idea: "{tema}"', nota: 'Founding confession: the why of the business in one line.' },
+  { id: 'h50', intents: ['frase'], formula: 'The golden rule at {negocio}: "{tema}", always', nota: 'Golden rule: a short promise you can check.' },
+];
+
+// Banco por idioma (v959): 'en' → HOOKS_EN, cualquier otro → HOOKS.
+// Mismos ids en los dos bancos: la rotación por usedHookIds no depende
+// del idioma en que se usó el hook.
+function hookBankFor(lang) {
+  return lang === 'en' ? HOOKS_EN : HOOKS;
+}
+
 // Anti-patrones clickbait: regex case-insensitive. Ningún hook del banco los usa.
 const BANNED_PATTERNS = [
   /¿sabías que/i,
@@ -139,10 +225,11 @@ function isBanned(text) {
 // - Si no queda ninguno fresco, devuelve uno cualquiera con { reused: true }.
 // - La rotación de 8 semanas la maneja el caller: guardar hook_id por fecha y
 //   pasar como usedHookIds los ids publicados en las últimas 8 semanas.
-function pickHook({ intent, usedHookIds = [] } = {}) {
-  const pool = (intent && HOOKS.some((h) => h.intents.includes(intent)))
-    ? HOOKS.filter((h) => h.intents.includes(intent))
-    : HOOKS.slice();
+function pickHook({ intent, usedHookIds = [], lang } = {}) {
+  const bank = hookBankFor(lang);
+  const pool = (intent && bank.some((h) => h.intents.includes(intent)))
+    ? bank.filter((h) => h.intents.includes(intent))
+    : bank.slice();
   const used = new Set(usedHookIds);
   const fresh = pool.filter((h) => !used.has(h.id));
   if (fresh.length > 0) {
@@ -170,29 +257,45 @@ function pickHook({ intent, usedHookIds = [] } = {}) {
 const IMP_WORDS = 'regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire';
 const IMPERATIVE_START = new RegExp('^(?:' + IMP_WORDS + ')(?=$|[^a-záéíóúüñ])', 'i');
 const PRICE_FORMULA = /más barato|bajamos de precio|bajó|sin margen|te sale menos|descuento|liquidación/i;
+// (v959) Espejos EN de las guardas de hookFits: el tema en inglés no
+// puede arrancar con imperativo inglés ni ser un título ("The...",
+// "How to..."), y los hooks de PRECIO en inglés exigen precio real.
+const IMP_WORDS_EN = 'get|grab|try|book|discover|shop|order|save|win|join|come|see|check|find|make|bake|taste|visit|call|ask|learn|start|stop|buy|choose|pick|take|bring|skip|avoid|fix|build|meet|watch|read|listen';
+const IMPERATIVE_START_EN = new RegExp('^(?:' + IMP_WORDS_EN + ')\\b', 'i');
+const PRICE_FORMULA_EN = /costs less|lowered the price|price drop|dropped the price|discount|sale|at cost|cheaper/i;
 
-function hookFits(hook, { tema, negocio, hasPrice } = {}) {
+function hookFits(hook, { tema, negocio, hasPrice, lang } = {}) {
   const t = String(tema || '').trim();
   if (!hook || !hook.formula) return false;
-  if (PRICE_FORMULA.test(hook.formula) && !hasPrice) return false;
+  const en = lang === 'en';
+  if ((en ? PRICE_FORMULA_EN : PRICE_FORMULA).test(hook.formula) && !hasPrice) return false;
   if (hook.formula.includes('{tema}')) {
     if (!t) return false;
     const words = t.split(/\s+/);
     if (words.length > 7) return false;
     if (t.length > 60) return false;
-    if (IMPERATIVE_START.test(t)) return false;
+    if ((en ? IMPERATIVE_START_EN : IMPERATIVE_START).test(t)) return false;
     // Tema-TÍTULO (Juli, 2026-10-18 — ids 406 y 110): si el tema ARRANCA
     // con una palabra común capitalizada ("Lo que nuestros usuarios
     // dicen…", "Consejos para optimizar…", "Día a día en la vida de…") es
     // el TÍTULO de otro posteo, no un sustantivo del negocio: no encaja
     // en ninguna fórmula. Un tema sano arranca en minúscula ("la
     // merienda") o es un nombre propio real del negocio.
-    if (/^(?:Lo|La|El|Los|Las|Un|Una|Día|Cómo|Consejos)\s/.test(t)) return false;
+    // (v959) EN: igual, pero un nombre propio corto con artículo ("The
+    // Atlas", 2 palabras) es un producto real, no un título: el
+    // artículo solo delata título con 3+ palabras ("The best running
+    // shoes"); las palabras de pregunta/guía ("How", "Tips", "What"…)
+    // delatan título siempre.
+    if (en
+      ? (/^(?:How|Tips|Ways|What|Why|When|Where|Which)\s/i.test(t) || (/^(?:The|A|An)\s/i.test(t) && t.split(/\s+/).length >= 3))
+      : /^(?:Lo|La|El|Los|Las|Un|Una|Día|Cómo|Consejos)\s/.test(t)) return false;
     if (/[¡!¿?:]/.test(t) || t.includes('—')) return false;
     // Artículo duplicado: si la fórmula ya pone "El {tema}", un tema que
     // arranca con artículo sale "El la línea…" — no encaja.
     const pre = hook.formula.split('{tema}')[0] || '';
-    if (/\b(el|la|los|las|El|La|Los|Las)\s+$/.test(pre) && /^(el|la|los|las|un|una)\s/i.test(t)) return false;
+    if (en
+      ? (/\b(the|a|an)\s+$/i.test(pre) && /^(the|a|an)\s/i.test(t))
+      : (/\b(el|la|los|las|El|La|Los|Las)\s+$/.test(pre) && /^(el|la|los|las|un|una)\s/i.test(t))) return false;
     const biz = String(negocio || '').trim().toLowerCase();
     if (biz && t.toLowerCase().includes(biz)) return false;
   }
@@ -503,6 +606,8 @@ function hookIntentMap() {
 module.exports = {
   INTENTS,
   HOOKS,
+  HOOKS_EN,
+  hookBankFor,
   BANNED_PATTERNS,
   isBanned,
   pickHook,

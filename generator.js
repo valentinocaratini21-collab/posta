@@ -9,7 +9,7 @@ const personalizacion = require('./personalizacion'); // LOTE PERSONALIZACIÓN D
 const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto + genéricos fuera con fundamento
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
-const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK } = require('./hooks');
+const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK, HOOKS_EN: HOOK_BANK_EN, hookBankFor } = require('./hooks');
 
 // Tope duro de caracteres para bloques OPCIONALES del contexto (anti-quemado de
 // tokens). Lo esencial (productos, servicios, promos activas, diferencial, tono)
@@ -352,6 +352,31 @@ function nicheTags(category) {
 
 const GENERIC_TAGS = ['#argentina', '#emprendedor', '#marketingdigital'];
 
+// (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) Hashtags genéricos
+// en inglés para la vía de plantillas EN (los de nicho por rubro son
+// en español y no viajan a un caption en inglés).
+const GENERIC_TAGS_EN = ['#smallbusiness', '#shoplocal', '#supportsmall'];
+const GOAL_CTAS_EN = {
+  vender: 'DM us and get yours today 📩',
+  seguidores: 'Follow us so you never miss a drop ➕',
+  lanzamiento: 'Be first: DM us now 🚀',
+  fidelizar: 'Come back soon — we will have something for you 💛',
+  referente: 'Save this pro tip 🔖',
+};
+const TEMPLATE_EN_CTAS = [
+  'DM us to order yours today 📩',
+  'Comment below and tell us what you think 👇',
+  'Save this for later — you will want it 🔖',
+  'Stop by the shop and see it in person 👋',
+  'Tap the link in bio for all the details 🔗',
+];
+const TEMPLATE_EN_BENEFITS = [
+  'Made with care, from start to finish.',
+  'Fresh in and ready for you.',
+  'Simple, honest, and made to last.',
+  'The kind of thing worth coming back for.',
+];
+
 // ---------- Energía extra (Creador v2): hooks, CTAs y beneficios con punch ----------
 const ENERGY_HOOKS = {
   canchero: [
@@ -413,6 +438,17 @@ const GOAL_CTAS = {
 };
 const goalLine = g => (GOAL_LINES[g] ? '\n' + GOAL_LINES[g] : '');
 
+// (v959) Espejos en inglés de GOAL_LINES/TIPO_LINES: las mismas
+// líneas de objetivo y tipo para el prompt EN de openaiGenerate.
+const GOAL_LINES_EN = {
+  vender: 'Main goal: SELL. Every idea has to bring customers and sales: promos, urgency, social proof and direct calls to buy.',
+  seguidores: 'Main goal: GROW FOLLOWERS. Every idea has to maximize reach and engagement: saveable, shareable content that invites people to follow.',
+  lanzamiento: 'Main goal: LAUNCHES. Every idea has to announce news and promos with force: anticipation, reveal and urgency.',
+  fidelizar: 'Main goal: KEEP CUSTOMERS. Every idea has to bring customers back: community, perks for regulars, content that builds belonging.',
+  referente: 'Main goal: BE THE AUTHORITY. Every idea has to position you as the expert in your niche: educational content, tips, authority and trust.',
+};
+const goalLineEn = g => (GOAL_LINES_EN[g] ? '\n' + GOAL_LINES_EN[g] : '');
+
 // Mix de contenidos de la semana: cada idea lleva un tipo para que la semana
 // no sea toda promo (o toda tips). Se inyecta al prompt del caption como GOAL_LINES.
 const TIPO_LINES = {
@@ -423,6 +459,14 @@ const TIPO_LINES = {
   novedad: 'NOVEDAD: anuncia algo nuevo con expectativa, como un lanzamiento.',
 };
 const tipoLine = t => (TIPO_LINES[t] ? '\n' + TIPO_LINES[t] : '');
+const TIPO_LINES_EN = {
+  promo: 'PROMO: a concrete offer with a clear price/benefit and real urgency.',
+  tip: 'EDUCATIONAL content: teach something useful about the niche, generous expert tone.',
+  social: 'SOCIAL PROOF: show happy customers, results, testimonials.',
+  detras: 'BEHIND THE SCENES: show the human side of the business, the process, the team.',
+  novedad: 'NEW ARRIVAL: announce something new with anticipation, like a launch.',
+};
+const tipoLineEn = t => (TIPO_LINES_EN[t] ? '\n' + TIPO_LINES_EN[t] : '');
 
 const TIPOS = ['promo', 'tip', 'social', 'detras', 'novedad'];
 // Familias de concepto visual por tipo de contenido: las usa el motor de
@@ -478,7 +522,9 @@ const LEGACY_HOOKS = new Set(
 );
 // Fórmulas del hook engine como regex (slots → wildcard): detecta si el caption
 // ya abre con un hook del motor, aunque se haya elegido con otro tema/negocio.
-const KNOWN_HOOK_RES = (HOOK_BANK || []).map(h => {
+// (v959) Las dos bancas: ES + EN — un caption en inglés que ya abre con un
+// hook inglés no debe ganar otro hook encima.
+const KNOWN_HOOK_RES = [...(HOOK_BANK || []), ...(HOOK_BANK_EN || [])].map(h => {
   try {
     const pat = String(h.formula || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       .replace(/\\\{tema\\\}|\\\{negocio\\\}/g, '.+?');
@@ -493,13 +539,17 @@ const KNOWN_HOOK_RES = (HOOK_BANK || []).map(h => {
 function applyPostyHook(out, input) {
   if (!out || typeof out !== 'object') return out;
   try {
+    // (v959) El idioma del contenido manda en el hook: con lang 'en',
+    // el banco EN y el lint de empalmes EN; si no, el histórico ES.
+    const lang = (input && input.lang === 'en') ? 'en' : 'es';
+    const garbled = lang === 'en' ? captionOpenIsGarbledEn : captionOpenIsGarbled;
     // LINT ANTES DE LOS ATAJOS (Juli, 2026-10-18 — id 406): un caption que
     // ya abre con FORMA de hook pasa los dos retornos tempranos de abajo y
     // el lint final nunca corría: así entró "Lo que nos dijo una clienta
     // después de probar Lo que nuestros usuarios dicen de Posty en Posty".
     // Si la apertura está empalmada, cae esa línea ANTES de decidir atajos
     // y el flujo sigue con el cuerpo limpio (puede ganar un hook sano).
-    if (captionOpenIsGarbled(out.caption, (input && input.business) || '')) {
+    if (garbled(out.caption, (input && input.business) || '')) {
       const glines = String(out.caption || '').split('\n');
       const grest = glines.slice(1).join('\n').replace(/^\n+/, '');
       if (grest.trim().length >= 20) { out.caption = grest; out.hookId = null; }
@@ -516,21 +566,21 @@ function applyPostyHook(out, input) {
     // el propio caption. Sin eso, los hooks de precio quedan fuera (2026-10-16).
     const priceHay = /\$\s?\d|\b2x1\b|\b\d{1,2}\s?%\s?(off|de descuento)/i;
     const hasPrice = priceHay.test(String(tema)) || priceHay.test(String(out.caption || ''));
-    const fit = { tema, negocio, hasPrice };
+    const fit = { tema, negocio, hasPrice, lang };
     // Se prueban los hooks de la intención EN ORDEN DE ROTACIÓN y gana el
     // primero que ENCAJA con el tema; si ninguno encaja, el caption queda
     // con su propia apertura — jamás un empalme roto (falla 2026-10-16).
     const used = new Set((input && input.usedHookIds) || []);
-    const pool = (HOOK_BANK || []).filter(h => (h.intents || []).includes(intent));
+    const pool = (hookBankFor(lang) || []).filter(h => (h.intents || []).includes(intent));
     const ordered = [...pool.filter(h => !used.has(h.id)), ...pool.filter(h => used.has(h.id))];
     let hook = null, hookText = '';
     for (const cand of ordered) {
       if (!hookFits(cand, fit)) continue;
       const txt = renderHook(cand, { tema, negocio });
-      if (!txt || captionOpenIsGarbled(txt, negocio)) continue;
+      if (!txt || garbled(txt, negocio)) continue;
       hook = cand; hookText = txt; break;
     }
-    const firstTry = pickHook({ intent, usedHookIds: (input && input.usedHookIds) || [] });
+    const firstTry = pickHook({ intent, usedHookIds: (input && input.usedHookIds) || [], lang });
     if (!hook && firstTry && hookFits(firstTry, fit)) { hook = firstTry; hookText = renderHook(firstTry, { tema, negocio }); }
     if (hook && hookText) {
       out.caption = ensureCaptionOpensWithHook(String(out.caption || ''), hookText);
@@ -539,7 +589,7 @@ function applyPostyHook(out, input) {
     }
     // Lint final anti-empalmes: si la apertura quedó rota igual (venía así
     // del generador), se cae SOLO la primera línea y queda el cuerpo.
-    if (captionOpenIsGarbled(out.caption, negocio)) {
+    if (garbled(out.caption, negocio)) {
       const lines = String(out.caption || '').split('\n');
       const rest = lines.slice(1).join('\n').replace(/^\n+/, '');
       if (rest.trim().length >= 20) { out.caption = rest; out.hookId = null; }
@@ -585,6 +635,50 @@ EJEMPLOS del nivel esperado:
 1. "El vacío del domingo no se discute. 🔥 Vuelta y vuelta, chimichurri de la casa y la mesa llena. Reservá por DM que los domingos vuelan."
 2. "3 cosas que nadie te dice antes de teñirte de rubio 👇 1. El retoque es cada 3 semanas. 2. Sin matizador se pone naranja. 3. Con nosotras no te pasa ninguna. Turnos por DM."
 3. "Llegaron las camperas de cuero. Nada más que decir. Bueno sí: quedan 6. Te esperamos en el local o pedila por DM."
+`.trim();
+
+// (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) CAPTION_CRAFT_EN —
+// espejo en inglés estadounidense de CAPTION_CRAFT: misma estructura
+// (técnicas de hook, reglas de oro, prohibidos, ejemplos del nivel),
+// sin voseo y sin muletillas en español. Lo usa openaiGenerate cuando
+// input.lang === 'en' (la marca postea en inglés); la puerta EN
+// (captionPassesEn) es la que lo hace cumplir, con SPANISH_LEAK_RE
+// como red contra filtraciones de español.
+const CAPTION_CRAFT_EN = `
+You write Instagram captions in American English for real businesses.
+Tone: warm and down-to-earth, like the owner talking to a regular customer. Never corporate, never generic.
+
+HOOK TECHNIQUES (pick ONE per caption, whichever fits the topic best):
+- A question that stings or sparks curiosity: "How many times has this happened to you...?"
+- A concrete number: "3 mistakes that...", "Only 5 left"
+- Behind the scenes: the fact, straight, without announcing honesty ("The secret is in a well-built quote", "This is how we make every cup")
+- Contrast: "We used to do it this way. Now..."
+- Direct, no fluff: the product + the benefit in one line.
+
+GOLDEN RULES:
+- Be SPECIFIC: name the product, the price if there's a promo, the day, the place. Generic doesn't sell.
+- PROMO WITH A NUMBER (v231): if the piece is a promo and the business data has the price or discount, the offer with its number OPENS the caption ("All-you-can-eat sushi for $9.90 on Tuesdays"). If the data has NO number for that promo, sell it without one: NEVER invent a price, a percentage or a 2-for-1 the business didn't declare.
+- CLOSE BY SALES INTENT (v232): every piece is born with ONE intent and the whole caption works for it, closing accordingly — sale: order it today; booking: book your slot or your table; inquiry: message us your case; trial: invite them to try it or share the experience; authority: ask them to save it or follow for more. If the brief declares the intent and the angle, OBEY them, and back the sale with the concrete proof the brief brings. With no real proof, don't sell: teach or show, never fake urgency or invent scarcity.
+- Vary the STRUCTURE: some captions tell a mini story, others are a short list, others go straight in 2-3 lines. Never repeat the same structure in back-to-back captions.
+- 1 or 2 emojis, well placed, never more. Every emoji has to earn its place, not decorate.
+- The CTA is ONE concrete action: message us, comment X, save it, stop by the shop.
+- CLEAN LENGTH: the whole caption is 100 to 280 characters, in 3 short blocks separated by a blank line: hook / body / CTA. Less is more: if a sentence doesn't sell, it goes.
+- Adapt the vocabulary to the niche: a steakhouse talks fire and gatherings; a boutique, style and occasions; a gym, consistency and results.
+
+FORBIDDEN (sounds like AI, played out):
+- "In today's world" / "In the world of today"
+- "Are you ready to take your X to the next level?"
+- "Don't miss out!" / "You don't want to miss this!"
+- "Dive in", "Discover the power of", "Unlock"
+- "We present" / "Introducing" / "Attention:"
+- Empty rhetorical questions ("Who doesn't love...?")
+- "Check out what we have for you"
+- "To be honest with you:" as a preamble (go straight to the fact, don't announce you're about to be honest)
+
+EXAMPLES of the expected level:
+1. "Sunday roast is not up for debate. 🔥 Flip it twice, house chimichurri, and a full table. Book by DM — Sundays go fast."
+2. "3 things nobody tells you before going blonde 👇 1. Touch-ups are every 3 weeks. 2. Without toner it turns orange. 3. That never happens with us. Book by DM."
+3. "The leather jackets are in. Nothing else to say. Well, one thing: 6 left. Come by the shop or order by DM."
 `.trim();
 
 const ENERGY_SYSTEM = (n) =>
@@ -1612,7 +1706,19 @@ function captionPassesEn(caption, input) {
   }
   if (/\*[^*\n]+\*/.test(c)) return { ok: false, reason: 'asterisk emphasis shows literally on Instagram' };
   const bodyRaw = c.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
-  const capsWords = bodyRaw.split(/\s+/).map((w) => w.replace(/[^A-Za-z]/g, '')).filter((w) => /^[A-Z]{4,}$/.test(w) && !['INFO', 'PARTICIPO'].includes(w));
+  // (v959) El nombre propio del negocio en mayúsculas (VEJA) no es un
+  // grito: se enmascara antes del chequeo. Sin esto, toda marca con
+  // nombre en mayúsculas fallaría la puerta EN en cada intento y el
+  // reintento empujaría al modelo a BORRAR el nombre de la marca del
+  // caption para pasar. (La puerta ES tiene el mismo latente y queda
+  // como está: comportamiento histórico, fuera de este lote.)
+  let bodyForCaps = bodyRaw;
+  const ownName = String((input && input.business) || '').trim();
+  if (ownName.length >= 3) {
+    const esc = ownName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    bodyForCaps = bodyForCaps.replace(new RegExp(esc, 'gi'), 'biz');
+  }
+  const capsWords = bodyForCaps.split(/\s+/).map((w) => w.replace(/[^A-Za-z]/g, '')).filter((w) => /^[A-Z]{4,}$/.test(w) && !['INFO', 'PARTICIPO'].includes(w));
   if (capsWords.length) return { ok: false, reason: 'shouting: ALL-CAPS emphasis in the body' };
   // Menciones: solo la cuenta del propio negocio.
   const ownHandle = String((input && input.ig_username) || '').replace(/^@/, '').toLowerCase();
@@ -2052,6 +2158,8 @@ function bestHoursLine(db, userId) {
 }
 
 function templateGenerate(input) {
+  // (v959) Sin API key y marca en inglés: plantillas EN (abajo).
+  if (input && input.lang === 'en') return templateGenerateEn(input);
   const { business, category, tone, topic, goal } = input || {};
   const t = HOOKS[tone] ? tone : 'canchero';
   const baseSeed = Math.floor(Math.random() * 1000);
@@ -2079,6 +2187,52 @@ function templateGenerate(input) {
   return first;
 }
 
+// (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) Vía de plantillas EN
+// (respaldo sin API key para marcas en inglés): misma forma que la ES
+// — apertura con hook del banco EN, tema con el negocio, beneficio y
+// CTA en inglés — en 3 bloques (hook / cuerpo / CTA) para pasar
+// captionPassesEn. Si ningún hook encaja con el tema (tema largo o
+// imperativo), el caption abre con el tema mismo y applyPostyHook lo
+// deja así: jamás un empalme roto. Devuelve { caption, hookId } para
+// que la rotación de hooks (recordHookUse) también cubra esta vía.
+function templateCaptionEn({ business, topic, tipo, seed, goal }) {
+  const biz = business || 'your business';
+  const t = String(topic || '').trim() || 'something new';
+  const topicLine = `${t.charAt(0).toUpperCase()}${t.slice(1)} at ${biz}.`;
+  const benefit = TEMPLATE_EN_BENEFITS[seed % TEMPLATE_EN_BENEFITS.length];
+  const cta = GOAL_CTAS_EN[goal] || TEMPLATE_EN_CTAS[(seed * 3 + 1) % TEMPLATE_EN_CTAS.length];
+  let hookText = '', hookId = null;
+  try {
+    const { resolveExplicitIntent } = require('./image-styles');
+    const r = resolveExplicitIntent({ tipo: String(tipo || ''), theme: t, angle: '' }) || {};
+    const hook = pickHook({ intent: r.intent || 'social', usedHookIds: [], lang: 'en' });
+    if (hook && hookFits(hook, { tema: t, negocio: biz, lang: 'en' })) { hookText = renderHook(hook, { tema: t, negocio: biz }); hookId = hook.id; }
+  } catch (e) {}
+  if (hookText) return { caption: `${hookText}\n\n${topicLine} ${benefit}\n\n${cta}`, hookId };
+  return { caption: `${topicLine}\n\n${benefit}\n\n${cta}`, hookId: null };
+}
+
+function templateGenerateEn(input) {
+  const { business, category, topic, tipo, goal } = input || {};
+  const baseSeed = Math.floor(Math.random() * 1000);
+  const mk = (extra) => {
+    const made = templateCaptionEn({ business, topic, tipo, seed: baseSeed + extra, goal });
+    const overlay = makeHeadline(topic, 5, 70, category || null).toUpperCase() || 'NEW';
+    const tags = [...GENERIC_TAGS_EN].sort(() => Math.random() - 0.5).slice(0, 3);
+    return { caption: made.caption, overlay, hashtags: tags.join(' '), hookId: made.hookId };
+  };
+  let first = null, firstReason = '';
+  for (const extra of [0, 7, 13]) {
+    const cand = mk(extra);
+    if (!first) first = cand;
+    const chk = captionPassesEn(cand.caption, input);
+    if (chk.ok) return cand;
+    if (!firstReason) firstReason = chk.reason;
+  }
+  console.error('[plantilla-en] ningún seed pasó captionPassesEn, va el primero:', firstReason);
+  return first;
+}
+
 // "Primera semana con rueditas": posteos APROBADOS en revisión como few-shot
 // ("así o parecido"). goldens: [{caption, visual_brief}]. Máx 3.
 function goldenLine(golden) {
@@ -2090,12 +2244,19 @@ function goldenLine(golden) {
   return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, photoVision, photoVisionLang, casaLinea, propiaLinea, memoriaCliente }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof, photoVision, photoVisionLang, casaLinea, propiaLinea, memoriaCliente, lang }, apiKey) {
+  // (v959) El idioma del contenido manda en el prompt: con lang 'en'
+  // el sistema es CAPTION_CRAFT_EN y las etiquetas fijas van en inglés
+  // (los bloques de datos —businessContext, voz, memoria— siguen en el
+  // idioma en que están guardados; la puerta EN hace cumplir la salida).
+  const en = lang === 'en';
   // 🧠 (v232) CEREBRO COMERCIAL: si la pieza declara su intención de
   // venta, el brief la nombra con su ángulo y su prueba concreta: el
   // caption entero trabaja para esa intención y cierra acorde.
   const salesLine = salesIntent
-    ? `\nIntención de venta de esta pieza: ${salesIntent}${salesAngle ? ` (ángulo: ${salesAngle})` : ''}.${salesProof ? ` Prueba/propuesta concreta a usar — dato real del negocio, no inventes otros: ${salesProof}.` : ''} El caption cierra acorde a la intención.`
+    ? (en
+      ? `\nSales intent of this piece: ${salesIntent}${salesAngle ? ` (angle: ${salesAngle})` : ''}.${salesProof ? ` Concrete proof/proposal to use — real business data, don't invent others: ${salesProof}.` : ''} The caption closes in line with the intent.`
+      : `\nIntención de venta de esta pieza: ${salesIntent}${salesAngle ? ` (ángulo: ${salesAngle})` : ''}.${salesProof ? ` Prueba/propuesta concreta a usar — dato real del negocio, no inventes otros: ${salesProof}.` : ''} El caption cierra acorde a la intención.`)
     : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000),
@@ -2111,22 +2272,34 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
         {
           role: 'system',
           content:
-            'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
-            CAPTION_CRAFT +
-            (captionExtras ? '\n' + captionExtras : '') +
-            '\nREGLA ANTI-INVENCIÓN: si el tema del post es una pregunta abierta genérica ("¿qué preferís?", "elegí", "te leemos"), la pregunta TIENE que ser sobre el negocio real del contexto: sus productos, servicios o promos de verdad, con opciones concretas que existen. PROHIBIDO inventar opciones, productos, precios o temas que no estén en la descripción del negocio. Un posteo genérico con cosas inventadas es peor que no postear. ' +
-            '\nREGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta" (prohibido "Con Posta", "Posta te ayuda", "probá Posta"). Si el negocio es Posta, escribí sobre "Posty" en primera persona del singular ("yo te lo armo", "escribime"), nunca en plural ("nosotros", "escribinos", "te ayudamos"). ' +
-            '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
-            '"caption" mide de 100 a 280 caracteres, en 3 bloques cortos separados por una línea en blanco: gancho / desarrollo / CTA. Sin bajada ni textos extra: el caption es UN solo texto limpio. ' +
-            '"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis. ' +
-            'Hashtags: máximo 8, mezclá grandes, de nicho y locales.',
+            en
+              ? 'You are an expert Instagram copywriter who sells for real.\n' +
+              CAPTION_CRAFT_EN +
+              (captionExtras ? '\n' + captionExtras : '') +
+              '\nANTI-INVENTION RULE: if the post topic is a generic open question ("what do you prefer?", "pick one", "we read you"), the question HAS to be about the real business in the context: its real products, services or promos, with concrete options that exist. NEVER invent options, products, prices or topics that are not in the business description. A generic post with invented things is worse than not posting. ' +
+              '\nIDENTITY RULE: the service is called "Posty", never "Posta" (never "With Posta", "Posta helps you", "try Posta"). If the business is Posta, write about "Posty" in the first person singular ("I put it together for you", "message me"), never in the plural ("we", "message us", "we help you"). ' +
+              '\nReply ONLY with a JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
+              '"caption" is 100 to 280 characters, in 3 short blocks separated by a blank line: hook / body / CTA. No extra text: the caption is ONE clean text. ' +
+              '"overlay" is the headline of AT MOST 5 words that goes ON the image: short, punchy, no emojis. ' +
+              'Hashtags: at most 8, mixing big, niche and local ones.'
+              : 'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
+              CAPTION_CRAFT +
+              (captionExtras ? '\n' + captionExtras : '') +
+              '\nREGLA ANTI-INVENCIÓN: si el tema del post es una pregunta abierta genérica ("¿qué preferís?", "elegí", "te leemos"), la pregunta TIENE que ser sobre el negocio real del contexto: sus productos, servicios o promos de verdad, con opciones concretas que existen. PROHIBIDO inventar opciones, productos, precios o temas que no estén en la descripción del negocio. Un posteo genérico con cosas inventadas es peor que no postear. ' +
+              '\nREGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta" (prohibido "Con Posta", "Posta te ayuda", "probá Posta"). Si el negocio es Posta, escribí sobre "Posty" en primera persona del singular ("yo te lo armo", "escribime"), nunca en plural ("nosotros", "escribinos", "te ayudamos"). ' +
+              '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
+              '"caption" mide de 100 a 280 caracteres, en 3 bloques cortos separados por una línea en blanco: gancho / desarrollo / CTA. Sin bajada ni textos extra: el caption es UN solo texto limpio. ' +
+              '"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis. ' +
+              'Hashtags: máximo 8, mezclá grandes, de nicho y locales.',
         },
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone }) +
-            `\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${tipoLine(tipo)}${taste || ''}` +
-            (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
-            (feedback ? `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}` : '') +
+            (en
+              ? `\nPost topic: ${topic}\nCompetitors: ${competitors || 'none given'}${goalLineEn(goal)}${tipoLineEn(tipo)}${taste || ''}`
+              : `\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${tipoLine(tipo)}${taste || ''}`) +
+            (performance ? (en ? `\nYour account's real performance:\n${performance}` : `\nRendimiento real de tu cuenta:\n${performance}`) : '') +
+            (feedback ? (en ? `\nQuality fix (OBEY it when regenerating): ${feedback}` : `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}`) : '') +
             (photoVision ? `
 Foto real que acompaña este posteo — lo que SE VE en la foto: ${String(photoVision).slice(0, 300)}. ${photoVisionLang === 'en' ? 'Caption and headline must talk about what is actually visible in the photo or something directly related to it. If the photo shows neither the product, the place nor the team, do NOT write a promotional caption for the product: write about what the photo does show.' : 'El caption y el titular deben hablar de lo que SE VE en la foto o de algo directamente relacionado con ella. Si la foto no muestra el producto, el local ni el equipo del negocio, NO escribas un caption promocional del producto: escribí sobre lo que la foto sí muestra.'}` : '') +
             (voice ? `\n${voice}` : '') +
@@ -2136,7 +2309,7 @@ Foto real que acompaña este posteo — lo que SE VE en la foto: ${String(photoV
             (casaLinea ? `\n${casaLinea}` : '') +
             (propiaLinea ? `\n${propiaLinea}` : '') +
             salesLine +
-            `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
+            (en ? `\nWrite the caption and hashtags, setting the content apart from the competition.` : `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`),
         },
       ],
       max_tokens: 500,
@@ -2216,8 +2389,22 @@ function mergeHookBlock(caption) {
   return [blocks[0] + '\n' + blocks[1], blocks[2], blocks[3]].join('\n\n');
 }
 
+// (v959) La puerta de calidad sigue al idioma del contenido: con
+// lang 'en', captionPassesEn (que rechaza filtraciones de español);
+// si no, la histórica en español. La usan generateContent y
+// generateCaptions; los demás llamadores de captionPasses no tocan
+// captions de cliente y quedan como están.
+function captionGateFor(input) {
+  return input && input.lang === 'en' ? captionPassesEn : captionPasses;
+}
+
 async function generateContent(input, apiKey) {
   let out = null;
+  // (v959) El idioma del CONTENIDO (input.lang, que pone
+  // contentInputFor desde el digest de la cuenta) manda en la puerta,
+  // el prompt y los hooks. Sin lang o 'es' → histórico.
+  const en = input && input.lang === 'en';
+  const gate = captionGateFor(input);
   // (v229) FUNDAMENTO — chequeo de pertenencia (determinístico): la
   // pieza pasa si titular+caption contiene ≥1 ancla del digest del
   // cliente (producto/servicio real, protagonista, ciudad, diferencial,
@@ -2256,11 +2443,11 @@ async function generateContent(input, apiKey) {
         break;
       }
       if (!cand) break;
-      let check = captionPasses(cand.caption, input);
-      if (!check.ok && /^es demasiado largo/.test(check.reason)) {
+      let check = gate(cand.caption, input);
+      if (!check.ok && (en ? /^too long/.test(check.reason) : /^es demasiado largo/.test(check.reason))) {
         const fixed = repairCaptionLength(cand.caption);
         if (fixed && fixed !== cand.caption) {
-          const fc = captionPasses(fixed, input);
+          const fc = gate(fixed, input);
           if (fc.ok || fixed.trim().length <= 320) { cand = { ...cand, caption: fixed }; check = fc; }
         }
       }
@@ -2295,21 +2482,21 @@ async function generateContent(input, apiKey) {
   // reparación de largo con la primera línea intacta — y cada corrección
   // solo se acepta si el resultado pasa la puerta COMPLETA.
   try {
-    let hc = captionPasses(hooked.caption, input);
-    if (!hc.ok && /bloques de texto/.test(hc.reason)) {
+    let hc = gate(hooked.caption, input);
+    if (!hc.ok && (en ? /text blocks/.test(hc.reason) : /bloques de texto/.test(hc.reason))) {
       const merged = mergeHookBlock(hooked.caption);
       if (merged) {
-        if (captionPasses(merged, input).ok) hooked.caption = merged;
+        if (gate(merged, input).ok) hooked.caption = merged;
         else {
           const fixedMerged = repairCaptionLength(merged);
-          if (fixedMerged !== merged && captionPasses(fixedMerged, input).ok) hooked.caption = fixedMerged;
+          if (fixedMerged !== merged && gate(fixedMerged, input).ok) hooked.caption = fixedMerged;
         }
       }
     }
-    hc = captionPasses(hooked.caption, input);
-    if (!hc.ok && /^es demasiado largo/.test(hc.reason)) {
+    hc = gate(hooked.caption, input);
+    if (!hc.ok && (en ? /^too long/.test(hc.reason) : /^es demasiado largo/.test(hc.reason))) {
       const fixed = repairCaptionLength(hooked.caption);
-      if (fixed && fixed !== hooked.caption && captionPasses(fixed, input).ok) hooked.caption = fixed;
+      if (fixed && fixed !== hooked.caption && gate(fixed, input).ok) hooked.caption = fixed;
     }
   } catch (e) {}
   // DEDUP-EXACTA (Juli, 2026-10-24): garantía de SALIDA — si el llamador
@@ -2325,7 +2512,7 @@ async function generateContent(input, apiKey) {
     let recovered = null;
     if (apiKey && !(input && input._dedupRetry)) {
       try {
-        recovered = await generateContent({ ...input, _dedupRetry: 1, feedback: 'Ese caption ya salió en esta misma semana: generá uno DISTINTO, con otra apertura, otro ángulo y otro cierre, sin cambiar el tema.' }, apiKey);
+        recovered = await generateContent({ ...input, _dedupRetry: 1, feedback: en ? 'That caption already went out this same week: write a DIFFERENT one, with a different opening, angle and close, without changing the topic.' : 'Ese caption ya salió en esta misma semana: generá uno DISTINTO, con otra apertura, otro ángulo y otro cierre, sin cambiar el tema.' }, apiKey);
       } catch (e) { recovered = null; }
     }
     if (!recovered && !(input && input.strict)) {
@@ -2389,6 +2576,10 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
 }
 
 async function generateCaptions(input, n, apiKey) {
+  // (v959) La puerta sigue al idioma del contenido, igual que en
+  // generateContent. (El prompt de openaiCaptions sigue en español:
+  // superficie aparte, no este lote.)
+  const gate = captionGateFor(input);
   // DEDUP-EXACTA (Juli, 2026-10-24): los previos EXTERNOS que traiga el
   // llamador (input.prevCaptions — p. ej. los captions de la semana) se
   // FUSIONAN con los acumulados de esta tanda en cada chequeo: antes el
@@ -2407,7 +2598,7 @@ async function generateCaptions(input, n, apiKey) {
       const fixedHooked = [];
       for (let i = 0; i < out.captions.length; i++) {
         const cap = out.captions[i];
-        const check = captionPasses(cap, { ...input, prevCaptions: [...extPrevs, ...fixedCaps] });
+        const check = gate(cap, { ...input, prevCaptions: [...extPrevs, ...fixedCaps] });
         if (check.ok) {
           fixedCaps.push(cap);
           try { fixedHooked.push(applyPostyHook({ caption: cap }, input).caption); } catch (e2) { fixedHooked.push(cap); }
@@ -2450,9 +2641,9 @@ async function generateCaptions(input, n, apiKey) {
       const hooked = fixedCaps.map((cap) => {
         const h = applyPostyHook({ caption: cap }, input);
         try {
-          if (!captionPasses(h.caption, input).ok) {
+          if (!gate(h.caption, input).ok) {
             const merged = mergeHookBlock(h.caption);
-            if (merged && captionPasses(merged, input).ok) h.caption = merged;
+            if (merged && gate(merged, input).ok) h.caption = merged;
           }
         } catch (e) {}
         return h;
@@ -2495,7 +2686,7 @@ async function generateCaptions(input, n, apiKey) {
     let chosen = null, okAny = false, reason = '';
     for (const extra of [0, 7, 13]) {
       const cand = templateCaption({ ...input, seed: seedBase + i * 20 + extra });
-      const chk = captionPasses(cand, { ...input, prevCaptions: [...extPrevs, ...captions] });
+      const chk = gate(cand, { ...input, prevCaptions: [...extPrevs, ...captions] });
       if (!chosen) { chosen = cand; reason = chk.reason; }
       if (chk.ok) { chosen = cand; okAny = true; break; }
     }
@@ -2516,7 +2707,7 @@ async function generateCaptions(input, n, apiKey) {
         for (let k = 0; k < 6 && !fixed; k++) {
           const cand = templateCaption({ ...input, seed: seedBase + 5000 + i * 97 + k * 31 });
           const ck = captionBodyKey(cand);
-          if (ck && !seen.has(ck) && captionPasses(cand, { ...input, prevCaptions: [...extPrevs, ...captions.slice(0, i)] }).ok) fixed = cand;
+          if (ck && !seen.has(ck) && gate(cand, { ...input, prevCaptions: [...extPrevs, ...captions.slice(0, i)] }).ok) fixed = cand;
         }
         if (fixed) captions[i] = fixed;
         else if (input.strict || extPrevs.length) throw new Error('caption duplicado exacto en la misma semana (DEDUP): la plantilla no produjo un texto distinto');
