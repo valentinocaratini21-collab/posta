@@ -908,7 +908,7 @@ function replyAsPosty(db, userId, texto, opts) {
 // Un flag durable por cliente (users.concierge). Cuando está prendido el
 // cerebro automático NO responde solo: el mensaje del cliente se guarda,
 // abre/actualiza su caso conserje (UN caso vivo por cliente, dedup
-// 'concierge:<uid>') y el cliente recibe un acuse honesto de Posty. El
+// 'concierge:<uid>') y el cliente recibe lo que pasó de verdad (caso #N).
 // operador responde después desde la consola como Posty (replyAsPosty).
 // FAIL-SAFE: divertToConcierge NUNCA lanza (todo en try/catch, devuelve
 // {ok:false}); el llamador (el chat) sigue con la IA si el desvío falla —
@@ -921,7 +921,6 @@ function replyAsPosty(db, userId, texto, opts) {
 // son los casos abiertos cuyo dueño es Valentino: ahí sí decide él (las
 // acciones de caso existentes: nota, paso, cerrar con confirmación).
 
-const CONCIERGE_ACK = 'dale, ya lo vi 😄 te lo reviso y te escribo en un rato.';
 const OWNER_NAMES = ['valentino', 'dueño', 'dueno', 'owner'];
 
 const ACTION_LABELS = {
@@ -983,7 +982,10 @@ function divertToConcierge(db, uid, text) {
       db.prepare(`UPDATE support_cases SET detalle = ?, siguiente_paso = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(msg, 'Responder en el chat como Posty.', caso.id);
     } catch (e) {}
-    return { ok: true, caso_id: caso.id, ack: CONCIERGE_ACK };
+    // (SACAR-ACUSE-FIJO · v916) Sin acuse fijo: la respuesta es lo que pasó
+    // de verdad, con contenido real (el caso #N). El operador responde
+    // después desde la consola como Posty (replyAsPosty).
+    return { ok: true, caso_id: caso.id, reply: 'recibido — tu mensaje quedó en el caso #' + caso.id + ' y te respondemos en este chat.' };
   } catch (e) {
     return { ok: false, error: 'desvio_fallo' };
   }
@@ -1353,6 +1355,6 @@ module.exports = {
   reschedulePost, redoPost, replyAsPosty,
   isConcierge, setConcierge, divertToConcierge, conciergeClients, pendingConcierge,
   morningFor, confirmMorning, logOperatorAction, buildOwnerPanel,
-  CONCIERGE_ACK, ACTION_LABELS,
+  ACTION_LABELS,
   CASE_TYPES, FUNNEL_STEPS,
 };
