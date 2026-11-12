@@ -6110,6 +6110,17 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-tarjeta-msg--error{color:#B3261E}
 .pz-tarjeta-acciones{display:flex;gap:8px;margin-top:10px}
 .pz-tarjeta-seguro{font-size:12px;line-height:1.45;color:#8AA0B5;margin:10px 0 0}
+/* (LOTE BILLETERA-APPLE-PAY) Apple Pay en la billetera: sección oculta
+   hasta que el montaje confirma que el dispositivo lo soporta. Las
+   píldoras eligen el monto del pago con Apple Pay (siempre USD). */
+.pz-applepay{margin-top:12px;border-top:1px solid #F0E9DA;padding-top:12px}
+.pz-applepay-titulo{font-size:13px;font-weight:800;color:#47617A;margin-bottom:8px}
+.pz-applepay-montos{display:flex;gap:8px;margin-bottom:10px}
+.pz-applepay-pill{flex:1;padding:9px 0;border:1.5px solid #DCEFFF;border-radius:999px;background:#fff;font-size:14px;font-weight:800;color:#2793C8;cursor:pointer;font-family:inherit}
+.pz-applepay-pill-sel{border-color:#2793C8;background:#EAF6FD;color:#0D4E73}
+.pz-applepay-msg{font-size:13px;line-height:1.45;color:#47617A;margin:8px 0 0}
+.pz-applepay-msg:empty{display:none}
+.pz-applepay-msg-err{color:#B3261E}
 .pz-ads-rec{margin-bottom:12px}
 .pz-ads-rec .pz-boost-3d3{margin:0}
 .pz-ads-hecho{flex:1;text-align:center;padding:8px 4px}

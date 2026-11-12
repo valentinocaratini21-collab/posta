@@ -430,6 +430,71 @@ async function processEvent(db, client, event, hooks = {}) {
   return { ok: true };
 }
 
+// ---------- Carga de billetera con Apple Pay (LOTE BILLETERA-APPLE-PAY) ----------
+// El cliente confirma el pago en el sheet de Apple Pay (Express Checkout
+// Element); el servidor solo CREA el PaymentIntent (sin cobrar) y luego lo
+// VERIFICA en /confirmar antes de acreditar. El Payment Request Button
+// está DEPRECADO en Stripe.js: no se usa.
+//   setup_future_usage 'off_session': la tarjeta que el cliente usó en
+//   Apple Pay queda guardada como default del cliente para las próximas
+//   cargas de un toque (sin tipear nada). La metadata (flujo + user_id +
+//   ref) es lo que /confirmar valida: sin ella, ningún PaymentIntent
+//   acredita la billetera.
+// Parámetros puros (testeables sin red). Monto en dólares, uno de 20/50/100.
+function buildTopupIntentParams({ customerId, montoUSD, ref, userId }) {
+  if (!customerId) throw new Error('Falta el cliente de Stripe');
+  if (![20, 50, 100].includes(Number(montoUSD))) throw new Error('Monto inválido');
+  if (!ref) throw new Error('Falta el ref de la carga');
+  return {
+    amount: Number(montoUSD) * 100,
+    currency: 'usd',
+    customer: customerId,
+    payment_method_types: ['card'],
+    setup_future_usage: 'off_session',
+    description: `Posty · Carga billetera ads $${montoUSD} (Apple Pay)`,
+    metadata: { app: 'posty', flujo: 'carga_apple_pay', user_id: String(userId), monto_usd: String(montoUSD), ref: String(ref) },
+  };
+}
+async function crearTopupIntent(client, input) {
+  client = client || stripeClient();
+  if (!client) throw new Error('Stripe no configurado');
+  const params = buildTopupIntentParams(input || {});
+  const pi = await client.paymentIntents.create(params);
+  if (!pi || !pi.id || !pi.client_secret) throw new Error('No se pudo crear el intento de pago');
+  return { paymentIntentId: pi.id, clientSecret: pi.client_secret, ref: params.metadata.ref };
+}
+// Valida un PaymentIntent ya cobrado antes de acreditar la carga: tiene
+// que estar succeeded, en USD, con el monto de una carga y la metadata de
+// ESTE usuario y este flujo. Cualquier otra cosa es un motivo, nunca un
+// crédito. Pura.
+function validarTopupIntent(pi, userId) {
+  if (!pi || !pi.id) return { ok: false, motivo: 'pago_no_encontrado' };
+  if (pi.status !== 'succeeded') {
+    const pendiente = pi.status === 'requires_action' || pi.status === 'requires_payment_method' || pi.status === 'requires_confirmation';
+    return { ok: false, motivo: pendiente ? 'pago_pendiente' : 'pago_no_confirmado', piStatus: pi.status };
+  }
+  if (String(pi.currency || '').toLowerCase() !== 'usd') return { ok: false, motivo: 'pago_moneda_invalida' };
+  const montoUSD = Math.round(Number(pi.amount || 0) / 100);
+  if (![20, 50, 100].includes(montoUSD) || Number(pi.amount) !== montoUSD * 100) return { ok: false, motivo: 'pago_monto_invalido' };
+  const md = pi.metadata || {};
+  if (String(md.flujo || '') !== 'carga_apple_pay') return { ok: false, motivo: 'pago_flujo_invalido' };
+  if (String(md.user_id || '') !== String(userId)) return { ok: false, motivo: 'pago_usuario_invalido' };
+  if (!md.ref) return { ok: false, motivo: 'pago_sin_ref' };
+  const pm = pi.payment_method;
+  return { ok: true, montoUSD, ref: String(md.ref), cobroId: pi.id, paymentMethodId: (typeof pm === 'string' ? pm : (pm && pm.id)) || '' };
+}
+// Recupera el PaymentIntent en Stripe y lo valida para acreditar.
+// El id tiene que tener formato pi_*: cualquier otra cosa es
+// 'pago_no_encontrado' sin llamar a Stripe.
+async function recuperarTopupIntent(client, paymentIntentId, userId) {
+  client = client || stripeClient();
+  if (!client) throw new Error('Stripe no configurado');
+  const id = String(paymentIntentId || '').trim();
+  if (!/^pi_[A-Za-z0-9]+$/.test(id)) return { ok: false, motivo: 'pago_no_encontrado' };
+  const pi = await client.paymentIntents.retrieve(id);
+  return validarTopupIntent(pi, userId);
+}
+
 module.exports = {
   stripeConfigured, webhookConfigured, stripeClient, _setClient,
   constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, _clearPriceCache, getOrCreateCustomer,
@@ -437,4 +502,5 @@ module.exports = {
   buildSetupParams, createSetupSession, fijarTarjetaPorDefecto, adjuntarTarjeta,
   processEvent, applySubscription,
   lookupKeyFor, planIdFromLookupKey, planIdFromSubscription,
+  buildTopupIntentParams, crearTopupIntent, validarTopupIntent, recuperarTopupIntent,
 };

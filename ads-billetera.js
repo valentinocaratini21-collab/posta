@@ -470,6 +470,55 @@ function setAutoTopup(db, userId, on) {
   return v;
 }
 
+// (LOTE BILLETERA-APPLE-PAY) Ref de la carga con Apple Pay: espacio
+// propio (carga_applepay_), distinto del de la carga con tarjeta guardada
+// (carga_) y del de MP (adtopup_). El `unico` es el sello de tiempo en
+// base36: un ref por intent, así cada intento de Apple Pay acredita una
+// sola vez aunque se reintente /confirmar.
+function refCargaApplePay({ clienteId, unico }) {
+  return `carga_applepay_u${clienteId}_${String(unico || Date.now().toString(36))}`;
+}
+// Confirmar una carga pagada con Apple Pay: el pago YA se hizo en el
+// cliente (Express Checkout Element + confirmPayment); acá solo se
+// VERIFICA en Stripe y se acredita, idempotente por ref. Espejo de
+// cargarBilletera pero SIN cobrar: el cobro es el PaymentIntent que trae
+// verificarPago(). El webhook NO acredita estas cargas (processEvent no
+// maneja payment_intent.*): el único camino de acreditación es este.
+//   confirmarCargaApplePay({ clienteId, demo, monedaActual, saldoActual,
+//     buscarCarga, verificarPago, acreditar, guardarTarjeta })
+// → { ok: true, montoUSD, saldoNuevo, cobroId [, ya_cargado] }
+// → { ok: false, motivo [, cobroId] }.
+// `verificarPago()` → { ok, montoUSD, ref, cobroId, paymentMethodId } o
+// { ok: false, motivo }. `guardarTarjeta(pmId)` es best-effort: deja la
+// tarjeta del Apple Pay como default del cliente para la próxima carga de
+// un toque; si falla, la carga igual se acredita.
+async function confirmarCargaApplePay(input) {
+  const { clienteId, demo, monedaActual, saldoActual, buscarCarga, verificarPago, acreditar, guardarTarjeta } = input || {};
+  const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
+  if (demo) return no('demo');
+  if (!clienteId) return no('sin_cliente');
+  if (monedaActual === 'ARS' && Number(saldoActual || 0) > 0) return no('saldo_ars_pendiente');
+  if (typeof verificarPago !== 'function') return no('sin_proveedores');
+  let pago = null;
+  try { pago = await verificarPago(); } catch (e) { pago = { ok: false, motivo: 'pago_no_verificado' }; }
+  if (!pago || !pago.ok) return no((pago && pago.motivo) || 'pago_no_verificado');
+  if (!validarMontoUSD(pago.montoUSD)) return no('monto_invalido', { cobroId: pago.cobroId || null });
+  if (!pago.ref) return no('pago_sin_ref', { cobroId: pago.cobroId || null });
+  if (typeof buscarCarga === 'function') {
+    let existente = null;
+    try { existente = await buscarCarga(pago.ref); } catch (e) { existente = null; }
+    if (existente) return { ok: true, ya_cargado: true, cobroId: pago.cobroId || null, montoUSD: pago.montoUSD, saldoNuevo: null };
+  }
+  if (typeof acreditar !== 'function') return no('cobro_sin_acreditar', { cobroId: pago.cobroId || null });
+  let acr = null;
+  try { acr = await acreditar({ montoUSD: pago.montoUSD, cobroId: pago.cobroId || null, ref: pago.ref }); } catch (e) { acr = { ok: false, motivo: 'acreditar_fallido' }; }
+  if (!acr || !acr.ok) return no('cobro_sin_acreditar', { cobroId: pago.cobroId || null });
+  if (pago.paymentMethodId && typeof guardarTarjeta === 'function') {
+    try { await guardarTarjeta(pago.paymentMethodId); } catch (e) { /* best-effort: la carga ya está acreditada */ }
+  }
+  return { ok: true, cobroId: pago.cobroId || null, montoUSD: pago.montoUSD, saldoNuevo: (acr.saldoNuevo != null ? acr.saldoNuevo : null) };
+}
+
 module.exports = {
   MONTOS_CARGA_USD,
   MONTOS_CARGA_ARS,
@@ -481,6 +530,8 @@ module.exports = {
   cortarCaption,
   refDebitoBoost,
   refDebitoBoostARS,
+  refCargaApplePay,
+  confirmarCargaApplePay,
   cargarBilletera,
   cargarBilleteraARS,
   impulsarConSaldo,

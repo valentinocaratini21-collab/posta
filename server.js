@@ -10612,6 +10612,93 @@ app.post('/api/ads/billetera/cargar', requireAuth, express.json(), async (req, r
   } catch (e) { res.status(500).json({ ok: false, motivo: 'cobro_fallido', error: 'No se pudo cargar la billetera' }); }
 });
 
+// (LOTE BILLETERA-APPLE-PAY) Carga con Apple Pay (Express Checkout
+// Element de Stripe): dos pasos. 1) /intent crea el PaymentIntent y
+// devuelve el clientSecret — la app lo confirma en el sheet de Apple Pay;
+// el servidor NO cobra en este paso. 2) /confirmar recupera el
+// PaymentIntent en Stripe, valida que esté succeeded, en USD, con el
+// monto de una carga y la metadata de ESTE usuario y este flujo, y recién
+// ahí acredita la billetera, idempotente por ref (el ref de la carga queda
+// guardado en el ledger, así que un reintento con el mismo PaymentIntent
+// devuelve ya_cargado sin segundo crédito). El webhook NO acredita estas
+// cargas: processEvent no maneja payment_intent.* — el único camino de
+// acreditación es /confirmar. La tarjeta que el cliente usó en Apple Pay
+// queda guardada como default (setup_future_usage off_session en el
+// intent) para las próximas cargas de un toque. Sin Stripe → 409/500
+// fail-closed; sin auth → 401/redirect (nunca 404).
+app.post('/api/ads/billetera/apple-pay/intent', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const montoUSD = Number((req.body && req.body.montoUSD) || 0);
+    if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    if (railCobro(uid) === 'mp') return res.status(409).json({ ok: false, motivo: 'applepay_no_disponible' });
+    if (!stripeBilling.stripeConfigured()) return res.status(409).json({ ok: false, motivo: 'stripe_no_configurado' });
+    const w0 = getAdWallet(uid);
+    if (w0.currency === 'ARS' && Number(w0.balance_cents || 0) > 0) {
+      return res.status(409).json({ ok: false, motivo: 'saldo_ars_pendiente' });
+    }
+    if (!!((getSettings(uid) || {}).demo_mode)) return res.status(409).json({ ok: false, motivo: 'demo' });
+    const user = db.prepare('SELECT id, email, stripe_customer_id FROM users WHERE id = ?').get(uid);
+    if (!user) return res.status(400).json({ ok: false, motivo: 'sin_cuenta' });
+    const customerId = await stripeBilling.getOrCreateCustomer(db, stripeBilling.stripeClient(), user);
+    if (!customerId) return res.status(409).json({ ok: false, motivo: 'sin_cliente_stripe' });
+    const ref = adsBilletera.refCargaApplePay({ clienteId: uid });
+    let out = null;
+    try {
+      out = await stripeBilling.crearTopupIntent(null, { customerId, montoUSD, ref, userId: uid });
+    } catch (e) {
+      console.error('[ads] Error creando intent de Apple Pay:', e.message);
+      return res.status(500).json({ ok: false, motivo: 'intent_fallido' });
+    }
+    res.json({ ok: true, clientSecret: out.clientSecret, paymentIntentId: out.paymentIntentId, ref, montoUSD });
+  } catch (e) { res.status(500).json({ ok: false, motivo: 'intent_fallido' }); }
+});
+
+app.post('/api/ads/billetera/apple-pay/confirmar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const paymentIntentId = String((req.body && req.body.paymentIntentId) || '').trim();
+    if (!/^pi_[A-Za-z0-9]+$/.test(paymentIntentId)) return res.status(400).json({ ok: false, motivo: 'payment_intent_invalido' });
+    if (!stripeBilling.stripeConfigured()) return res.status(409).json({ ok: false, motivo: 'stripe_no_configurado' });
+    const user = db.prepare('SELECT id, email, stripe_customer_id FROM users WHERE id = ?').get(uid);
+    if (!user) return res.status(400).json({ ok: false, motivo: 'sin_cuenta' });
+    const w0 = getAdWallet(uid);
+    const customerId = user.stripe_customer_id || '';
+    const r = await adsBilletera.confirmarCargaApplePay({
+      clienteId: uid, demo: !!((getSettings(uid) || {}).demo_mode),
+      monedaActual: w0.currency, saldoActual: w0.balance_cents,
+      buscarCarga: (rf) => { try { return db.prepare(`SELECT ref FROM ad_transactions WHERE user_id = ? AND kind = 'topup_usd' AND ref = ?`).get(uid, rf) || null; } catch (e) { return null; } },
+      verificarPago: () => stripeBilling.recuperarTopupIntent(null, paymentIntentId, uid),
+      acreditar: async ({ montoUSD: m, cobroId, ref }) => {
+        try {
+          // Migración de moneda ARS→USD solo con saldo 0 (nunca se mezcla
+          // ni se pierde plata: con saldo ARS > 0 el módulo ya bloqueó).
+          const w1 = getAdWallet(uid);
+          if (w1.currency === 'ARS' && w1.balance_cents === 0) {
+            db.prepare(`UPDATE ad_wallets SET currency = 'USD' WHERE user_id = ?`).run(uid);
+          }
+          // El ref guardado es el de la carga (carga_applepay_...), NO el
+          // cobroId: así buscarCarga lo encuentra y el reintento devuelve
+          // ya_cargado en vez de acreditar dos veces.
+          const after = adWalletMove(uid, m * 100, 'topup_usd', ref || '', `Carga billetera ads $${m} (Apple Pay)`);
+          try { track(uid, 'ad_topup_usd', String(m * 100)); } catch (e) {}
+          return { ok: true, saldoNuevo: after };
+        } catch (e) { return { ok: false, motivo: 'acreditar_fallido' }; }
+      },
+      guardarTarjeta: async (pmId) => {
+        if (!customerId) return;
+        await stripeBilling.fijarTarjetaPorDefecto(stripeBilling.stripeClient(), customerId, pmId);
+      },
+    });
+    if (!r.ok) {
+      const status = r.motivo === 'monto_invalido' ? 400 : 409;
+      return res.status(status).json({ ok: false, motivo: r.motivo, ...(r.cobroId ? { cobroId: r.cobroId } : {}) });
+    }
+    const w = getAdWallet(uid);
+    res.json({ ok: true, cobroId: r.cobroId, montoUSD: r.montoUSD, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w.balance_cents, currency: w.currency, ...(r.ya_cargado ? { ya_cargado: true } : {}) });
+  } catch (e) { res.status(500).json({ ok: false, motivo: 'pago_no_verificado' }); }
+});
+
 // (LOTE ADS-DIRECTO v758) Carga automática: prenderla exige permiso
 // explícito + tarjeta guardada REAL (se verifica contra Stripe antes de
 // persistir; sin cliente, sin Stripe o sin tarjeta → 409 y queda
@@ -35658,7 +35745,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v929';
+const BUILD_ID = '20261105-v930';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

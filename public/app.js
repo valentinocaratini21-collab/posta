@@ -17303,7 +17303,13 @@ function pzAdsHTML() {
   const tarjetaLabel = (tarjetaBil && tarjetaBil.tiene)
     ? (en ? 'Change card' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : '') : 'Cambiar tarjeta' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : ''))
     : (en ? 'Add a card' : 'Agregar tarjeta');
-  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><div class="pz-ads-tarjeta"><button type="button" class="pz-ads-tarjeta-btn" onclick="pzTarjetaInlineAbrir(document.getElementById('pzAdsTarjeta'))">${esc(tarjetaLabel)}</button></div><div id="pzAdsTarjeta"></div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+  // (LOTE BILLETERA-APPLE-PAY) Sección Apple Pay: empieza oculta; el
+  // montaje (pzAdsApplePayMontar) la muestra solo si el dispositivo tiene
+  // Apple Pay / Google Pay disponible. Las píldoras eligen el monto del
+  // pago con Apple Pay (siempre USD: Apple Pay es solo riel Stripe).
+  const apPills = [20, 50, 100].map((m) => `<button type="button" class="pz-applepay-pill${pzApplePayMonto === m ? ' pz-applepay-pill-sel' : ''}" data-monto="${m}" onclick="pzAdsApplePayElegir(${m}, this)">$${m}</button>`).join('');
+  const apHTML = `<div class="pz-applepay" id="pzAdsApplePay" hidden><div class="pz-applepay-titulo">${esc(en ? 'Or pay with Apple Pay' : 'O pagá con Apple Pay')}</div><div class="pz-applepay-montos">${apPills}</div><div id="pzAdsApplePayBtn"></div><p class="pz-applepay-msg" id="pzAdsApplePayMsg"></p></div>`;
+  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><div class="pz-ads-tarjeta"><button type="button" class="pz-ads-tarjeta-btn" onclick="pzTarjetaInlineAbrir(document.getElementById('pzAdsTarjeta'))">${esc(tarjetaLabel)}</button></div>${apHTML}<div id="pzAdsTarjeta"></div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
   const kickHTML = `<div class="pz-ads-kick">${esc(en ? 'POSTY RECOMMENDS · BOOST' : 'POSTY RECOMIENDA · IMPULSAR')}</div>`;
   const otroHTML = `<button type="button" class="pz-ads-other" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
   let recHTML = '';
@@ -17340,6 +17346,9 @@ function pzAdsPintar() {
   const box = document.getElementById('pzAdsRoot');
   if (!box) return;
   box.innerHTML = pzAdsHTML();
+  // (LOTE BILLETERA-APPLE-PAY) Cada re-pintado destruye el botón de Apple
+  // Pay: se re-monta acá (reusa el intent del mismo monto si sigue fresco).
+  try { pzAdsApplePayMontar(); } catch (e) {}
 }
 
 async function pzAdsRefrescar() {
@@ -17526,6 +17535,96 @@ async function pzTarjetaGuardar(btn) {
   decir(pzTarjetaMotivo((j && j.motivo) || 'adjuntar_fallido'), true);
 }
 
+// (LOTE BILLETERA-APPLE-PAY) Apple Pay en la billetera con el Express
+// Checkout Element de Stripe: el botón de Apple Pay (y Google Pay, que
+// viene gratis en el mismo elemento) aparece solo si el dispositivo lo
+// soporta y hay una tarjeta en Wallet; si no, la sección queda oculta y
+// el form manual sigue igual. Las píldoras solo eligen el monto del pago
+// (NO cobran al elegir): cada montaje pide un PaymentIntent nuevo al
+// servidor, que el cliente confirma en el sheet de Apple Pay. Los intents
+// sin confirmar no cobran nada. El Payment Request Button está DEPRECADO
+// en Stripe.js: no se usa. Riel MP (pesos): Apple Pay es solo Stripe/USD,
+// la sección ni se muestra.
+//   Tras un pago exitoso, la tarjeta del Apple Pay queda guardada como
+// default del cliente (setup_future_usage off_session en el intent): la
+// próxima carga sale con un toque, sin tipear nada.
+let pzApplePayMonto = 20;
+let pzApplePaySeq = 0;
+let pzApplePayCache = null; // { monto, clientSecret, paymentIntentId, ts }
+let pzApplePayEce = null;
+function pzAdsApplePayElegir(monto, btn) {
+  const m = Number(monto);
+  if (![20, 50, 100].includes(m)) return;
+  pzApplePayMonto = m;
+  const host = document.getElementById('pzAdsApplePay');
+  if (host) {
+    host.querySelectorAll('.pz-applepay-pill').forEach((b) => b.classList.toggle('pz-applepay-pill-sel', Number(b.dataset.monto) === m));
+  }
+  const msgEl = document.getElementById('pzAdsApplePayMsg');
+  if (msgEl) msgEl.textContent = '';
+  pzAdsApplePayMontar();
+}
+async function pzAdsApplePayMontar() {
+  const host = document.getElementById('pzAdsApplePay');
+  const slot = document.getElementById('pzAdsApplePayBtn');
+  const msgEl = document.getElementById('pzAdsApplePayMsg');
+  if (!host || !slot) return false;
+  const seq = ++pzApplePaySeq;
+  const decir = (t, err) => { if (msgEl) { msgEl.textContent = t || ''; msgEl.classList.toggle('pz-applepay-msg-err', !!err); } };
+  try { if (pzApplePayEce) { try { pzApplePayEce.destroy(); } catch (e) {} pzApplePayEce = null; } } catch (e) {}
+  slot.innerHTML = '';
+  if (pzBoostEsMP()) { host.hidden = true; return false; }
+  const monto = pzApplePayMonto;
+  let st = null;
+  try { st = await pzStripeJsCargar(); } catch (e) { st = null; }
+  if (!st || !st.stripe) { host.hidden = true; return false; }
+  if (seq !== pzApplePaySeq) return false;
+  // Reusar el intent del mismo monto si sigue fresco: un re-pintado de la
+  // billetera no crea otro PaymentIntent (los intents sin confirmar no
+  // cobran nada, pero no hace falta ensuciar Stripe).
+  let cache = (pzApplePayCache && pzApplePayCache.monto === monto && (Date.now() - pzApplePayCache.ts) < 10 * 60 * 1000) ? pzApplePayCache : null;
+  if (!cache) {
+    let j = null;
+    try { j = await api.post('/api/ads/billetera/apple-pay/intent', { montoUSD: monto }); } catch (e) { j = (e && e.data) || null; }
+    if (!j || !j.ok || !j.clientSecret) { host.hidden = true; return false; }
+    cache = { monto, clientSecret: j.clientSecret, paymentIntentId: j.paymentIntentId, ts: Date.now() };
+    pzApplePayCache = cache;
+  }
+  if (seq !== pzApplePaySeq) return false;
+  let elements = null;
+  try { elements = st.stripe.elements({ clientSecret: cache.clientSecret }); } catch (e) { host.hidden = true; return false; }
+  const ece = elements.create('expressCheckout', { paymentMethods: { applePay: 'auto', googlePay: 'auto' } });
+  pzApplePayEce = ece;
+  ece.on('ready', ({ availablePaymentMethods }) => {
+    if (seq !== pzApplePaySeq) return;
+    if (!availablePaymentMethods || (!availablePaymentMethods.applePay && !availablePaymentMethods.googlePay)) { host.hidden = true; return; }
+    host.hidden = false;
+  });
+  ece.on('confirm', async () => {
+    if (seq !== pzApplePaySeq) return;
+    decir('');
+    let r = null;
+    try { r = await st.stripe.confirmPayment({ elements, clientSecret: cache.clientSecret, redirect: 'if_required' }); } catch (e) { r = { error: { message: String((e && e.message) || e) } }; }
+    if (r && r.error) { decir((r.error && r.error.message) || gzT('El pago no se completó. No se cobró nada.', 'The payment didn’t go through. Nothing was charged.'), true); return; }
+    const pi = r && r.paymentIntent;
+    if (!pi || pi.status !== 'succeeded') { decir(gzT('El pago no se completó. No se cobró nada.', 'The payment didn’t go through. Nothing was charged.'), true); return; }
+    let j = null;
+    try { j = await api.post('/api/ads/billetera/apple-pay/confirmar', { paymentIntentId: pi.id }); } catch (e) { j = (e && e.data) || null; }
+    if (j && j.ok) {
+      pzApplePayCache = null;
+      try { await pzBoostLoad(); } catch (e) {}
+      pzAdsPintar();
+      const m2 = document.getElementById('pzAdsMsg');
+      if (m2) m2.textContent = gzT('Listo: se cargaron US$ ' + (j.montoUSD || monto) + ' a tu billetera.', 'Done: US$ ' + (j.montoUSD || monto) + ' was added to your wallet.');
+    } else {
+      decir(pzBoostCargarMotivo((j && j.motivo) || 'pago_no_verificado', monto, pi.id), true);
+    }
+  });
+  ece.on('cancel', () => { if (seq === pzApplePaySeq) decir(''); });
+  try { ece.mount(slot); } catch (e) { host.hidden = true; return false; }
+  return true;
+}
+
 async function pzAdsCargar(monto, btn) {
   const m = Number(monto) || pzBoostMinTopup();
   const decir = (t) => { const el = document.getElementById('pzAdsMsg'); if (el) el.textContent = t; };
@@ -17680,6 +17779,22 @@ function pzBoostMotivo(motivo, monto, cobroId) {
       return gzT('Elegí primero el posteo al que le querés meter ads.', 'First pick the post you want to boost.');
     case 'cobro_sin_acreditar':
       return gzT('El cobro se hizo pero la plata no entró a tu billetera. Quedó registrado' + (cobroId ? ' (cobro ' + cobroId + ')' : '') + ' para revisión urgente. Escribinos y lo resolvemos.', 'The charge went through but the money didn’t reach your wallet. It was recorded' + (cobroId ? ' (charge ' + cobroId + ')' : '') + ' for urgent review. Write to us and we’ll sort it out.');
+    // (LOTE BILLETERA-APPLE-PAY) Motivos de la carga con Apple Pay.
+    case 'applepay_no_disponible':
+      return gzT('Apple Pay no está disponible para tu cuenta: es solo para cargas en dólares con Stripe. Podés cargar con una tarjeta guardada.', 'Apple Pay isn’t available for your account: it’s only for dollar top-ups with Stripe. You can top up with a saved card.');
+    case 'intent_fallido':
+      return gzT('No se pudo preparar el pago con Apple Pay. Probá de nuevo en un momento. No se cobró nada.', 'The Apple Pay payment couldn’t be set up. Try again in a moment. Nothing was charged.');
+    case 'pago_no_verificado':
+    case 'pago_no_confirmado':
+    case 'pago_pendiente':
+      return gzT('El pago no se pudo verificar. Si se cobró algo, escribinos con el comprobante y lo revisamos.', 'The payment couldn’t be verified. If anything was charged, write to us with the receipt and we’ll check it.');
+    case 'pago_monto_invalido':
+    case 'pago_moneda_invalida':
+    case 'pago_flujo_invalido':
+    case 'pago_usuario_invalido':
+    case 'pago_sin_ref':
+    case 'payment_intent_invalido':
+      return gzT('El pago no se pudo verificar porque no coincide con una carga válida. No se acreditó nada.', 'The payment couldn’t be verified because it doesn’t match a valid top-up. Nothing was credited.');
     case 'debito_fallido':
       return gzT('El anuncio se creó en Meta pero no se pudo debitar de tu billetera. Quedó registrado para revisión manual — no se te cobró dos veces.', 'The ad was created on Meta but couldn’t be debited from your wallet. It was recorded for manual review — you weren’t charged twice.');
     case 'demo':
@@ -19084,6 +19199,10 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // (LOTE BILLETERA-APPLE-PAY) El botón de Apple Pay se monta tras pintar
+  // el tab Ads (y tras cada re-pintado de la billetera en pzAdsPintar):
+  // si el dispositivo no lo soporta, la sección queda oculta.
+  if (tab === 'ads') { try { pzAdsApplePayMontar(); } catch (e) {} }
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
   // pasada no encontraba los slots. Son idempotentes (dataset.done).
