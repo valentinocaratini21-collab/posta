@@ -217,12 +217,14 @@ function ensureTrialUsedSchema(db) {
   } catch (e) {}
 }
 
-// (FIX-ENTRADA-PRUEBA · 5/11) ¿Esta identidad ya CONSUMIÓ su prueba con
-// una cuenta real? La generación registra el uso con user_id NULL (ver
-// trialLockRecordFor en server.js) y el backfill copia los candados con
-// NULL: ese registro dice «se generó», no «se usó». Solo un user_id
-// presente (alta real, server.js ~2114/2189/3199/3286) es consumo. La
-// entrada de un trial fresco se decide con esto + la fila invitada (ver
+// (FIX-ENTRADA-PRUEBA · 5/11, ACT. v921) ¿Esta identidad ya CONSUMIÓ su
+// prueba con una cuenta? user_id presente = la semana se ENTREGÓ a ese
+// usuario (invitado o real): la entrega registra el uso (ver
+// recordDelivered y trialLockRecordDeliveredFor en server.js). Las filas
+// con user_id NULL son de la generación bajo la regla vieja (pre-v921):
+// dicen «se generó», no «se usó», y NO cuentan como consumo — quedan
+// como están (migración v921: no se des-gasta nada). La entrada de un
+// trial fresco se decide con esto + la fila invitada (ver
 // guest-trial.findGuestByIdentity), nunca con findUsed/findLock solos.
 function findConsumedUsed(db, igKey, domainKey) {
   try {
@@ -270,6 +272,23 @@ function recordUsed(db, { ig, domain, email, userId }) {
   } catch (e) {}
 }
 
+// (LOTE PRUEBA-CUENTA-AL-ENTREGAR · v921) Registra el uso permanente EN
+// LA ENTREGA: la prueba solo cuenta como usada cuando el primer posteo
+// se entrega y se ve (entrada exitosa a la app con la semana importada).
+// La generación ya NO registra uso (ver trialLockRecordFor en server.js):
+// un intento bloqueado antes de la entrada (caso Crumbl) no gasta la
+// prueba. El user_id es el del usuario que recibió la semana (invitado
+// o real): por eso findConsumedUsed (user_id NOT NULL) lo ve como
+// consumo. Idempotente (INSERT OR IGNORE); sin identidad no registra nada.
+function recordDelivered(db, { ig, domain, userId }) {
+  try {
+    if (!db || (!ig && !domain)) return;
+    if (isAllowlisted(db, ig || '', domain || '')) return;
+    ensureTrialUsedSchema(db);
+    recordUsed(db, { ig, domain, userId });
+  } catch (e) {}
+}
+
 module.exports = {
   LOCK_MS,
   normalizeIg,
@@ -285,4 +304,5 @@ module.exports = {
   findUsed,
   findConsumedUsed,
   recordUsed,
+  recordDelivered,
 };

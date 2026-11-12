@@ -2466,6 +2466,7 @@ app.post('/api/auth/register', (req, res) => {
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${newUserId}`);
       seedFromTrialDigest(newUserId, trial_ig); // (v229) FUNDAMENTO: la cuenta nace con el digest de la prueba sembrado
       recordTrialImport(newUserId, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
+      if (nImp) { try { trialLockRecordDeliveredFor(trial_ig, '', newUserId); } catch (e) {} } // (v921) ENTREGA
       streakFromTrialImport(newUserId, nImp);
       // 🚀 Abrir y listo: la semana se arma SOLA (historias + programación + aviso).
       // Fire-and-forget: la respuesta ya casi sale, esto no la bloquea.
@@ -2593,6 +2594,7 @@ app.post('/api/auth/login', (req, res) => {
       if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${user.id}`);
       seedFromTrialDigest(uidL, trial_ig); // (v229) FUNDAMENTO: siembra del digest también en la puerta de login
       recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
+      if (nImp) { try { trialLockRecordDeliveredFor(trial_ig, '', uidL); } catch (e) {} } // (v921) ENTREGA
       streakFromTrialImport(uidL, nImp);
       // 🚀 Abrir y listo (login con semana importada): también se arma sola.
       if (nImp && !hadPosts && autoWeekEnabled(uidL)) {
@@ -3606,6 +3608,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
           applyTrialLang(userId, trial_ig); // (v274) cuenta EN si la prueba fue EN
           if (nImp) console.log(`[posta] semana de prueba importada (sesión inmediata): ${nImp} borradores → usuario ${userId}`);
           recordTrialImport(userId, trial_ig, nImp, false);
+          if (nImp) { try { trialLockRecordDeliveredFor(trial_ig, '', userId); } catch (e) {} } // (v921) ENTREGA
           streakFromTrialImport(userId, nImp);
         } catch (e) { console.error('[posta] importTrialWeek (inmediata):', e.message); }
         applyTrialProfile(userId, trial_profile);
@@ -3713,6 +3716,7 @@ app.get('/api/auth/magic', (req, res) => {
         const nImp = importTrialWeek(userId, payload.trial_ig, expBiz);
         if (nImp) console.log(`[posta] semana de prueba importada (magic): ${nImp} borradores → usuario ${userId}`);
         recordTrialImport(userId, payload.trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
+        if (nImp) { try { trialLockRecordDeliveredFor(payload.trial_ig, '', userId); } catch (e) {} } // (v921) ENTREGA
         streakFromTrialImport(userId, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
       applyTrialLang(userId, payload.trial_ig); // tokens viejos sin payload.lang: la prueba EN también siembra
@@ -3729,6 +3733,7 @@ app.get('/api/auth/magic', (req, res) => {
         const nImp = importTrialWeek(user.id, payload.trial_ig, expBiz);
         if (nImp) console.log(`[posta] semana de prueba importada (magic, login): ${nImp} borradores → usuario ${user.id}`);
         recordTrialImport(user.id, payload.trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
+        if (nImp) { try { trialLockRecordDeliveredFor(payload.trial_ig, '', user.id); } catch (e) {} } // (v921) ENTREGA
         streakFromTrialImport(user.id, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     }
@@ -30751,7 +30756,6 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
     const allowlisted = trialLock.isAllowlisted(db, igK, domK);
     // Candados espejo de guest/start.
     if (!testMode && !allowlisted) {
-      try { guestTrial.backfillUsedFromLocks(db); } catch (e) {}
       const consumed = trialLock.findConsumedUsed ? trialLock.findConsumedUsed(db, igK, domK) : null;
       if (consumed) return res.status(409).json({ ok: false, error: 'trial_used', trial_used: true });
       const entered = guestTrial.findGuestByIdentity ? guestTrial.findGuestByIdentity(db, igK, domK) : null;
@@ -30912,14 +30916,14 @@ app.post('/api/guest/start', (req, res) => {
     }
     const testMode = trialTestMode(req);
     const allowlisted = trialLock.isAllowlisted(db, igK, domK);
-    // Candado permanente + respaldo de 90 días (backfill de locks viejos):
-    // un negocio que ya probó no abre otra sesión invitada, aunque su
-    // generación haya sido anterior a este lote.
+    // Candado permanente (v921): un negocio que ya recibió su semana no
+    // abre otra sesión invitada. El backfill de locks viejos se retiró:
+    // copiaba generaciones no entregadas a trial_used y reintroducía el
+    // agujero del caso Crumbl. Las filas viejas quedan (migración).
     // (LOTE PRUEBA-CHAT) El invitado reusado vive en el alcance del
     // handler: lo leen el candado, el control de dispositivo y la creación.
     let reuseGuest = null;
     if (!testMode && !allowlisted) {
-      try { guestTrial.backfillUsedFromLocks(db); } catch (e) {}
       // (FIX-ENTRADA-PRUEBA · 5/11) La generación registra el candado de
       // 90 días + el uso permanente con user_id NULL: ESO ES LA GENERACIÓN
       // MISMA, no un uso. Bloquear por findUsed/findLock solos cerraba la
@@ -30982,6 +30986,9 @@ app.post('/api/guest/start', (req, res) => {
     try { applyTrialLang(g.userId, igK); } catch (e) {}
     try { seedFromTrialDigest(g.userId, igK, { cacheKey }); } catch (e) {}
     try { recordTrialImport(g.userId, igK, nImp, false); } catch (e) {}
+    // (v921) ENTREGA: la semana ya está en su cuenta — la prueba cuenta
+    // como usada a partir de acá (y no antes).
+    try { trialLockRecordDeliveredFor(igK, domK, g.userId); } catch (e) {}
     try { streakFromTrialImport(g.userId); } catch (e) {}
     // Perfil: su @, su nombre y su rubro (la home muestra SU feed).
     try {
@@ -31055,6 +31062,12 @@ app.post('/api/guest/set-ig', requireAuth, async (req, res) => {
     try { applyTrialLang(userId, v.ig); } catch (e) {}
     try { seedFromTrialDigest(userId, v.ig, { cacheKey }); } catch (e) {}
     try { recordTrialImport(userId, v.ig, nImp, false); } catch (e) {}
+    // (v921) ENTREGA: la semana ya está en su cuenta — la prueba cuenta
+    // como usada a partir de acá (dominio de la fila invitada, si lo tiene).
+    try {
+      const domRow = db.prepare('SELECT guest_domain FROM users WHERE id = ?').get(userId);
+      trialLockRecordDeliveredFor(v.ig, (domRow && domRow.guest_domain) || '', userId);
+    } catch (e) {}
     try { streakFromTrialImport(userId, nImp); } catch (e) {}
     try {
       const biz = String((payload && payload.business) || '').trim();
@@ -31485,6 +31498,9 @@ function trialLockGate(fields, webData, testMode) {
     // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado PERMANENTE primero: si este
     // negocio ya usó su prueba (para siempre), no hay otra — ni snapshot
     // ni generación. La allowlist (casa) salta este chequeo en findUsed.
+    // (v921) Desde este lote, una fila en trial_used solo existe si la
+    // prueba se ENTREGÓ (o es vieja, pre-v921, que queda bloqueando por
+    // migración): generar sin entregar ya no deja fila.
     try {
       if (trialLock.findUsed) {
         const used = trialLock.findUsed(db, igK, domK);
@@ -31525,6 +31541,8 @@ function trialLockServePayload(lock) {
 }
 
 // Nace el candado de una generación recién producida (junto al trial_cache).
+// (v921) Solo el candado de 90 días: el uso permanente se registra en la
+// ENTREGA, no en la generación (ver trialLockRecordDeliveredFor, abajo).
 function trialLockRecordFor(fields, webData, business, lang, out) {
   try {
     if (!trialLock) return;
@@ -31533,20 +31551,31 @@ function trialLockRecordFor(fields, webData, business, lang, out) {
       domain: trialLock.normalizeDomain((fields && fields.web) || '') || (webData ? trialLock.normalizeDomain(webData.url || '') : ''),
       business, lang, payloadStr: JSON.stringify(out),
     });
-    // (LOTE PRUEBA-ENTRADA-DIRECTA) El mismo nacimiento registra el uso
-    // PERMANENTE: a partir de acá, esa @ y ese dominio ya usaron su única
-    // prueba (el candado de 90 días sigue para su snapshot, pero no para
-    // una prueba nueva).
-    try {
-      if (trialLock.recordUsed) {
-        trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
-        trialLock.recordUsed(db, {
-          ig: trialLock.normalizeIg((fields && fields.ig) || ''),
-          domain: trialLock.normalizeDomain((fields && fields.web) || '') || (webData ? trialLock.normalizeDomain(webData.url || '') : ''),
-        });
-      }
-    } catch (e) {}
+    // (LOTE PRUEBA-CUENTA-AL-ENTREGAR · v921) La generación ya NO registra
+    // el uso PERMANENTE: un intento bloqueado antes de la entrada (caso
+    // Crumbl: generate OK y guest/start 409) no gasta la prueba. El uso
+    // se registra en la ENTREGA (trialLockRecordDeliveredFor): la primera
+    // vez que la semana se importa en la cuenta y el usuario entra a la
+    // app. El candado de 90 días sigue naciendo acá (snapshot).
   } catch (e) { /* el candado nunca rompe la generación */ }
+}
+
+// (LOTE PRUEBA-CUENTA-AL-ENTREGAR · v921) Marca la prueba como USADA en
+// la entrega: la semana se importó en la cuenta del usuario y la sesión
+// está creada — el primer posteo ya se le muestra en Inicio. Es el único
+// sitio que escribe el uso permanente por @/dominio (la generación ya no
+// lo hace, y el backfill de locks se retiró). Idempotente; sin identidad
+// no registra nada. Llamadores: guest/start, set-ig, alta, login,
+// magic-link (inmediata y canje) — todos DESPUÉS de un import con nImp > 0.
+function trialLockRecordDeliveredFor(igRaw, domRaw, userId) {
+  try {
+    if (!trialLock || !trialLock.recordDelivered) return;
+    trialLock.recordDelivered(db, {
+      ig: trialLock.normalizeIg(igRaw || ''),
+      domain: trialLock.normalizeDomain(domRaw || ''),
+      userId,
+    });
+  } catch (e) {}
 }
 
 // (LOTE PRUEBA-ENTRADA-DIRECTA) La semana también se cachea por dominio
@@ -35477,7 +35506,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v918';
+const BUILD_ID = '20261105-v921';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

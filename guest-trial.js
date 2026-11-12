@@ -37,31 +37,18 @@ function ensureSchema(db) {
       user_id INTEGER NOT NULL, kind TEXT NOT NULL, sent_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, kind))`);
   } catch (e) {}
-  // Backfill del candado permanente desde los locks de 90 días que
-  // sobreviven (la higiene borra los de >180 días: esos son los únicos
-  // que no se pueden recuperar — ver STATUS). Idempotente.
-  try { backfillUsedFromLocks(db); } catch (e) {}
+  // (LOTE PRUEBA-CUENTA-AL-ENTREGAR · v921) Sin backfill de locks:
+  // copiaba cada candado de generación a trial_used y reintroducía el
+  // agujero del caso Crumbl (ver nota sobre backfillUsedFromLocks abajo).
 }
 
-// Copia todo trial_locks presente a trial_used (sin tocar los de la
-// allowlist: la casa nunca queda "usada"). Se corre en el arranque y en
-// cada /api/guest/start, para que una generación anterior a este lote
-// también cierre la puerta a una segunda prueba.
-function backfillUsedFromLocks(db) {
-  try {
-    if (!db) return;
-    try { db.exec(`CREATE TABLE IF NOT EXISTS trial_used (
-      kind TEXT NOT NULL, value TEXT NOT NULL, user_id INTEGER,
-      created_at INTEGER NOT NULL, PRIMARY KEY (kind, value))`); } catch (e) {}
-    let rows = [];
-    try { rows = db.prepare('SELECT ig, domain, generated_at FROM trial_locks').all(); } catch (e) { return; }
-    const ins = db.prepare('INSERT OR IGNORE INTO trial_used (kind, value, user_id, created_at) VALUES (?, ?, NULL, ?)');
-    for (const r of rows || []) {
-      if (r.ig) { try { ins.run('ig', r.ig, r.generated_at || Date.now()); } catch (e) {} }
-      if (r.domain) { try { ins.run('domain', r.domain, r.generated_at || Date.now()); } catch (e) {} }
-    }
-  } catch (e) {}
-}
+// (LOTE PRUEBA-CUENTA-AL-ENTREGAR · v921) backfillUsedFromLocks RETIRADO:
+// copiaba TODOS los trial_locks a trial_used con user_id NULL — también
+// los de generaciones que nunca se entregaron — y findUsed volvía a
+// bloquear la re-generación: el mismo agujero del caso Crumbl. Las filas
+// trial_used viejas ya copiadas quedan como están (migración v921: no se
+// des-gasta nada); los locks nuevos ya no se copian. La única vía para
+// que un negocio vuelva a probar es el reseteo admin (v918).
 
 function isGuestEmail(email) {
   return String(email || '').toLowerCase().endsWith('@' + GUEST_EMAIL_DOMAIN);
@@ -280,7 +267,6 @@ module.exports = {
   TRIAL_DAYS_GUEST,
   GUEST_EMAIL_DOMAIN,
   ensureSchema,
-  backfillUsedFromLocks,
   findGuestByIdentity,
   isGuestEmail,
   guestPlaceholderEmail,
