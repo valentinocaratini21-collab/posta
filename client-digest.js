@@ -309,7 +309,13 @@ function effectiveStarOf(digest) {
       evidence: [`vendió ${u} unidades en los últimos 30 días (ventas reales de su Tiendanube)`],
     };
   }
-  if (inf && inf.item && (inf.confidence || 0) >= 0.5) {
+  // (LOTE ESTRELLA-MODELO-REAL · v924) Defensa en profundidad para
+  // digests sembrados ANTES del fix (la inferida ya guardada puede ser
+  // una categoría, como el «HOMME» de Veja): la inferida genérica no
+  // es estrella. La confirmada por el dueño (fuente 'dueno', arriba) y
+  // la medida por ventas reales (Tiendanube) no se tocan: son palabra
+  // del dueño y medición, no inferencia del picker.
+  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item)) {
     return { item: String(inf.item), source: 'inferred', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
   }
   return null;
@@ -373,6 +379,43 @@ const OFFER_STORE_CHROME = ['country/region', 'country region', 'your bag', 'sho
  * no están en la lista y siguen pasando. */
 const OFFER_ENGLISH_LABELS = ['best sellers', 'best seller', 'single origin', 'origin coffees'];
 const OFFER_2P_VERBS = new Set(['aprende', 'aprendes', 'aprobas', 'aproba', 'descubre', 'descubri', 'empeza', 'empezas', 'mira', 'miras', 'suma', 'sumas', 'sumate', 'uni', 'unis', 'unite', 'gana', 'ganas', 'ahorra', 'ahorras', 'crece', 'creces', 'ordena', 'ordenas', 'organiza', 'organizas', 'delega', 'delegas', 'vende', 'vendes', 'elegi', 'elegis', 'elegilo', 'hace', 'haces', 'hacelo', 'tene', 'tenes', 'pode', 'podes', 'quere', 'queres', 'senti', 'sentis', 'pensa', 'pensas', 'cree', 'crees', 'segui', 'seguis', 'veni', 'venis', 'abri', 'abris', 'cerra', 'cerras', 'entra', 'entras', 'sali', 'salis', 'dormi', 'dormis', 'rei', 'reis']);
+/* (LOTE ESTRELLA-MODELO-REAL · v924 — caso Veja, 11/11) Categoría, no
+ * modelo: el posteo de Veja dijo «HOMME». «Homme» es francés para
+ * «hombre»: la categoría de la tienda (su nav: HOMME / FEMME), no un
+ * modelo. Los modelos reales de Veja son Esplar, Campo, V-10. Ninguna
+ * puerta lo frenó: NAV_JUNK_H rechaza «menú» pero no «homme», y la
+ * puerta de admisión no conocía palabras de género. Dos niveles:
+ * · GÉNERO (puerta): una palabra de género —o una etiqueta hecha solo
+ * de palabras de género— nombra A QUIÉN, no QUÉ se vende: jamás es un
+ * ítem de oferta. «Corte hombre» pasa (corte no es género); «Homme»,
+ * «Para hombre», «Men» no pasan.
+ * · TIPO GENÉRICO (solo estrella): «zapatillas», «perfume», «café»
+ * son cosas que el negocio vende, pero no un modelo con nombre: pueden
+ * ser tema, nunca estrella. «Campo» NO está en la lista: es un modelo
+ * real de Veja y la regla lo protege por nombre. */
+const OFFER_GENDER_NOUNS = new Set(['hombre', 'hombres', 'mujer', 'mujeres', 'homme', 'hommes', 'femme', 'femmes', 'man', 'men', 'woman', 'women', 'male', 'female', 'nino', 'ninos', 'nina', 'ninas', 'enfant', 'enfants', 'kid', 'kids', 'baby', 'babies', 'bebe', 'bebes', 'unisex', 'adulto', 'adultos', 'adult', 'adults']);
+const STAR_GENERIC_TYPE_NOUNS = new Set(['zapatilla', 'zapatillas', 'zapato', 'zapatos', 'calzado', 'sneaker', 'sneakers', 'tenis', 'bota', 'botas', 'sandalia', 'sandalias', 'shoe', 'shoes', 'boot', 'boots', 'sandal', 'sandals', 'perfume', 'perfumes', 'colonia', 'colonias', 'cologne', 'fragancia', 'fragancias', 'fragrance', 'fragrances', 'cafe', 'cafes', 'coffee', 'coffees', 'te', 'tea', 'ropa', 'indumentaria', 'clothing', 'apparel', 'vestido', 'vestidos', 'dress', 'dresses', 'camisa', 'camisas', 'shirt', 'shirts', 'remera', 'remeras', 'pantalon', 'pantalones', 'pants', 'jeans', 'bolso', 'bolsos', 'bolsa', 'bolsas', 'bag', 'bags', 'cartera', 'carteras', 'purse', 'mochila', 'mochilas', 'backpack', 'joya', 'joyas', 'jewelry', 'jewel', 'anillo', 'anillos', 'ring', 'rings', 'collar', 'collares', 'necklace', 'reloj', 'relojes', 'watch', 'watches', 'crema', 'cremas', 'cream', 'serum', 'maquillaje', 'makeup', 'labial', 'lipstick', 'esmalte', 'polish', 'shampoo', 'jabon', 'soap', 'vela', 'velas', 'candle', 'candles', 'flor', 'flores', 'flower', 'flowers', 'pan', 'bread', 'torta', 'pastel', 'cake', 'helado', 'pizza', 'cerveza', 'beer', 'vino', 'wine', 'chocolate', 'galleta', 'galletas', 'cookie', 'cookies']);
+const STAR_GENERIC_STOPWORDS = new Set(['de', 'la', 'el', 'los', 'las', 'para', 'por', 'a', 'the', 'for', 'pour', 'le', 'les', 'des', 'di', 'da', 'en', 'y', 'and', 'et', 'con', 'with', 'avec']);
+/* ¿El nombre es solo categoría (género y/o tipo genérico), sin ningún
+ * nombre propio de modelo? La regla es TODAS las palabras de contenido:
+ * «Mint Mojito» pasa (mojito no es genérico); «Té Verde» pasa (verde no
+ * es genérico); «Zapatillas Hombre» no pasa; «Café» no pasa. Un nombre
+ * de UNA palabra que es un modelo real («Esplar», «Campo», «Tesora»,
+ * «V-10») nunca está en estas listas y pasa siempre. */
+function isGenericCategoryName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return true;
+  const words = norm(s).split(' ').filter(Boolean).filter((w) => !STAR_GENERIC_STOPWORDS.has(w));
+  if (!words.length) return true;
+  return words.every((w) => OFFER_GENDER_NOUNS.has(w) || STAR_GENERIC_TYPE_NOUNS.has(w));
+}
+function isGenderOnlyName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return false;
+  const words = norm(s).split(' ').filter(Boolean).filter((w) => !STAR_GENERIC_STOPWORDS.has(w));
+  if (!words.length) return false;
+  return words.every((w) => OFFER_GENDER_NOUNS.has(w));
+}
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
   return String(v || '').replace(/\s+/g, ' ')
@@ -402,6 +445,11 @@ function isPlausibleOfferItem(raw) {
   // (v348 · D4) Audiencia suelta: "Comercios" nombra a QUIÉN vende el
   // negocio, no QUÉ vende — como ítem standalone es basura del fundamento.
   if (nw.length === 1 && OFFER_AUDIENCE_NOUNS.has(nw[0])) return false;
+  // (LOTE ESTRELLA-MODELO-REAL · v924) Género, no producto: «HOMME»
+  // (la categoría de la tienda de Veja) entraba como ítem y el picker
+  // lo coronaba estrella. Misma clase que la audiencia suelta (D4):
+  // nombra A QUIÉN, no QUÉ se vende.
+  if (isGenderOnlyName(s)) return false;
   // (v348 · D4) Segunda persona: un ítem que le habla AL dueño ("tu
   // negocio", "vos aprobás") es copy de venta del propio Posty o un
   // fragmento de pitch — nunca la oferta del negocio.
@@ -1112,7 +1160,10 @@ function detectContradictions(priced) {
  * · rendimiento: si su posteo con más alcance lo menciona.
  * La confianza sale del puntaje y de la distancia al segundo. */
 function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
-  const list = (items || []).filter((x) => x && (x.nombre || x));
+  // (LOTE ESTRELLA-MODELO-REAL · v924) Una categoría no puede ser la
+  // estrella inferida: se saca del puntaje antes de puntuar. Si no
+  // queda ningún modelo real, no hay inferencia (no se adivina).
+  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)));
   if (!list.length) return null;
   const caps = (captions || []).slice(0, 20);
   const scored = list.map((it) => {
@@ -1537,7 +1588,10 @@ function deriveTopics(digest, opts) {
       items = [...head, ...quietItems, ...others];
     }
   }
-  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5) {
+  // (LOTE ESTRELLA-MODELO-REAL · v924) La inferida genérica no
+  // reordena: un digest sembrado antes del fix trae «HOMME» como
+  // inferred_star y sin esta guarda subiría igual a ítem N.º 1.
+  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item)) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);
@@ -2253,6 +2307,8 @@ module.exports = {
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
   parsePriceNum, sameItemName, detectContradictions, inferStar,
+  // (LOTE ESTRELLA-MODELO-REAL · v924) Guarda de categoría (testeable)
+  isGenericCategoryName, isGenderOnlyName,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
   questionCandidatesOf, applyDeepBlocks,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
