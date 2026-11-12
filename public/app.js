@@ -6404,10 +6404,12 @@ function mzIsMobile() {
 }
 function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Jardín).
 // (RS-5 · REDISEÑO SIMPLE · mock v10) Barra de 3 pestañas y nada más:
-// Hoy · Chat. Sin Análisis (vive como una línea en Hoy, RS-2),
-// sin Impulsar (vive en Hoy como sección, v846: la pestaña Feed
-// salió y el feed ya vive en Hoy; el botón «Impulsar posteo» arriba
-// del Feed murió con la pestaña),
+// Inicio · Ads · Chat. (ADS-TAB-PRINCIPAL 11/11: Ads entra como tab
+// principal en el shell clásico — la vista #/app/ads ya existía, pero
+// acá no tenía pestaña.) Sin Análisis (vive como una línea en Hoy, RS-2),
+// sin Impulsar (vive en el tab Ads, v894; la pestaña Feed salió y el
+// feed ya vive en Hoy; el botón «Impulsar posteo» arriba del Feed murió
+// con la pestaña),
 // sin Nivel (el jardín no tiene lugar en el rediseño; dónde vive Nivel
 // es decisión pendiente de Valentino — el motor queda, sin pestaña).
 // El chat YA NO es pantalla completa sin pestañas: el dock también está
@@ -6416,9 +6418,10 @@ function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum
 // abridor hasta R1; la función se conserva).
 function mzTabsHTML(tab) {
   const on = tab === 'inicio' ? 'inicio'
+    : tab === 'ads' ? 'ads'
     : tab === 'chat' ? 'chat' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6501,6 +6504,7 @@ function appShell(tab, content) {
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
+    <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>Ads</button>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
