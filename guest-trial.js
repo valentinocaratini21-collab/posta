@@ -168,12 +168,44 @@ function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
 
 // Mensaje de bienvenida de Posty en el chat del invitado: qué armó, por
 // qué, y qué puede tocar (tocar = crear cuenta, sin sorpresas).
+// (v923 · CHAT-CANTIDAD-REAL · REGLA DE VERDAD) nPosts = posteos
+// REALMENTE PROGRAMADOS, verificados contra scheduleAllDrafts — NUNCA
+// los importados. La prueba entrega 1 posteo por día (la semana dice
+// «salen uno por uno, día por día»): el día 1 solo el primero está
+// listo; los otros llegan uno por día. Por eso el mensaje NUNCA afirma
+// una cantidad que no se verificó: con 3 programados dice «tu primer
+// posteo está listo; los otros dos llegan uno por día»; con menos,
+// solo lo que hay; con 0, no afirma ningún posteo. (La importación
+// trae como máximo 3, así que n >= 3 es siempre exactamente 3.)
 function welcomeGuestMessage(db, userId, { lang, business, nPosts }) {
   const en = lang === 'en';
   const biz = String(business || '').trim();
-  const text = en
-    ? `hi! i'm posty 💙 i just made your first ${nPosts} posts${biz ? ` for ${biz}` : ''} from your real product — they're already in your feed, take a look 👇\n\nif you want to change anything or approve them, tap anything and i'll ask you to create your account first (your feed stays exactly the same).`
-    : `hola! soy posty 💙 ya armé tus primeros ${nPosts} posteos${biz ? ` para ${biz}` : ''} con tu producto real — ya están en tu feed, miralos 👇\n\nsi querés cambiar algo o aprobarlos, tocá lo que sea y te pido que crees tu cuenta primero (tu feed queda exactamente igual).`;
+  const paraBiz = biz ? (en ? ` for ${biz}` : ` para ${biz}`) : '';
+  const n = Number(nPosts) || 0;
+  const cola = en
+    ? `\n\nif you want to change anything or approve it, tap anything and i'll ask you to create your account first (your feed stays exactly the same).`
+    : `\n\nsi querés cambiar algo o aprobarlo, tocá lo que sea y te pido que crees tu cuenta primero (tu feed queda exactamente igual).`;
+  let text;
+  if (n >= 3) {
+    text = en
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ the other two arrive one per day 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ los otros dos llegan uno por día 👇`;
+    text += cola;
+  } else if (n === 2) {
+    text = en
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ the other one arrives tomorrow 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ el otro llega mañana 👇`;
+    text += cola;
+  } else if (n === 1) {
+    text = en
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ take a look 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ miralo 👇`;
+    text += cola;
+  } else {
+    text = en
+      ? `hi! i'm posty 💙 i'm finishing your week${paraBiz} ✨ i'll let you know when your first post is ready`
+      : `hola! soy posty 💙 estoy terminando de armar tu semana${paraBiz} ✨ te aviso cuando tu primer posteo esté listo`;
+  }
   try {
     db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(userId, text);
     return true;

@@ -31000,9 +31000,15 @@ app.post('/api/guest/start', (req, res) => {
     // Programar los 3 (la grilla muestra solo scheduled): si el gate de
     // calidad retiene alguno, queda como borrador en Bandeja, igual que
     // una prueba por magic link de hoy.
+    // (v923 · CHAT-CANTIDAD-REAL · REGLA DE VERDAD) El mensaje de
+    // bienvenida cuenta los posteos REALMENTE PROGRAMADOS
+    // (sched.scheduled.length), NUNCA los importados (nImp): la prueba
+    // entrega 1 por día y el chat solo afirma lo que ya existe. Si el
+    // gate retuvo alguno, el mensaje dice solo lo que hay.
     let sched = null;
     try { sched = scheduleAllDrafts(g.userId); } catch (e) { console.error('[guest] schedule falló:', e.message); }
-    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang, business: String(payload.business || '').trim(), nPosts: nImp }); } catch (e) {}
+    const nSched = (sched && sched.scheduled) ? sched.scheduled.length : 0;
+    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang, business: String(payload.business || '').trim(), nPosts: nSched }); } catch (e) {}
     if (!testMode && !allowlisted) {
       try { guestTrial.recordDevice(db, device, ip, g.userId); } catch (e) {}
     }
@@ -35533,7 +35539,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v922';
+const BUILD_ID = '20261105-v923';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
