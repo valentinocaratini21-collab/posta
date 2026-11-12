@@ -1331,6 +1331,46 @@ function dropTemplateVarTopics(list) {
   return out;
 }
 
+// (LOTE IDIOMA-POSTEO-MARCA · v922) Idioma en que postea LA MARCA.
+// REGLA (Valentino, caso Veja 11/11): titular, caption y texto dentro
+// de la imagen van en el idioma en que postea la marca, detectado de su
+// Instagram (y su web como respaldo), NUNCA en el idioma de la prueba
+// o la interfaz. El idioma de la prueba solo manda en el cromo de la UI.
+// Detección determinística, sin LLM ni red: conteo de stopwords sobre
+// las palabras de la marca. Devuelve 'en' | 'es' o null cuando no hay
+// señal clara (el llamador cae al idioma de la prueba como fallback
+// documentado, no como regla). Señales en orden: captions de IG primero,
+// texto de la web después. Una fuente solo decide con ≥3 aciertos y
+// ventaja ≥2: captions cortos, emojis o marcas bilingües caen al
+// siguiente nivel en vez de adivinar.
+const BRAND_LANG_STOPWORDS = {
+  en: ['the', 'and', 'for', 'with', 'you', 'your', 'our', 'new', 'shop', 'now', 'from', 'this', 'that', 'are', 'was', 'will', 'can', 'get', 'discover', 'collection', 'available', 'free', 'shipping', 'love', 'thank', 'welcome', 'here', 'today', 'week', 'look', 'feel', 'made', 'wear', 'step', 'into', 'every', 'day', 'all', 'more', 'only', 'just', 'like', 'when', 'their', 'they', 'them', 'his', 'her', 'its', 'out', 'off', 'sale', 'drop', 'limited', 'back', 'stock', 'my', 'we', 'us', 'is', 'it', 'of', 'to', 'be', 'have', 'has', 'by', 'at', 'on', 'or', 'not', 'but', 'what', 'which', 'there', 'any', 'one', 'two', 'first', 'best', 'meet', 'join', 'stay', 'tuned', 'coming', 'soon', 'ready', 'crafted', 'designed'],
+  es: ['el', 'la', 'los', 'las', 'de', 'en', 'y', 'con', 'para', 'por', 'un', 'una', 'unos', 'unas', 'tu', 'tus', 'su', 'sus', 'es', 'son', 'está', 'están', 'nuevo', 'nueva', 'nuevos', 'nuevas', 'ahora', 'hoy', 'esta', 'este', 'estas', 'estos', 'también', 'más', 'muy', 'sin', 'cada', 'cuando', 'compra', 'comprar', 'envío', 'gratis', 'descubre', 'mira', 'ven', 'te', 'se', 'que', 'del', 'al', 'lo', 'le', 'nos', 'mi', 'mis', 'nuestro', 'nuestra', 'nuestros', 'nuestras', 'viene', 'llega', 'llegó', 'gracias', 'bienvenidos', 'bienvenidas', 'semana', 'día', 'todos', 'todas', 'siempre', 'nunca', 'donde', 'cómo', 'puedes', 'puede'],
+};
+function detectBrandLang({ captions, webText } = {}) {
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const score = (text) => {
+    const words = norm(text).replace(/https?:\/\/\S+/g, ' ').split(/[^a-z]+/).filter(Boolean);
+    let en = 0, es = 0;
+    for (const w of words) {
+      if (BRAND_LANG_STOPWORDS.en.includes(w)) en++;
+      if (BRAND_LANG_STOPWORDS.es.includes(w)) es++;
+    }
+    return { en, es };
+  };
+  const decide = ({ en, es }) => {
+    if (en >= 3 && en - es >= 2) return 'en';
+    if (es >= 3 && es - en >= 2) return 'es';
+    return null;
+  };
+  const capText = (Array.isArray(captions) ? captions : []).map((c) => String(c || '')).join('\n');
+  const fromCaps = decide(score(capText));
+  if (fromCaps) return fromCaps;
+  const fromWeb = decide(score(webText));
+  if (fromWeb) return fromWeb;
+  return null;
+}
+
 // (LOTE VOZ-PROPIA-EN-LA-PRUEBA · 7/11) La voz del cliente en la semana
 // de la prueba: sus frases reales que se repiten (digest.voz_marcadores,
 // extraídas de SUS captions + sus respuestas por
@@ -2948,6 +2988,8 @@ module.exports = {
   resolveTrialCaption: captions.resolveTrialCaption,
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.
   trialVoiceEcho,
+  // (LOTE IDIOMA-POSTEO-MARCA · v922) Idioma en que postea la marca (IG, respaldo web).
+  detectBrandLang,
   applyVoiceToTopics,
   // (ONBOARDING-SIMPLE · ACT.5) Rotación de la semana de la prueba.
   enforceTopicRotation,

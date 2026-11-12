@@ -32010,17 +32010,33 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // tenga. Se reponen SOLO los marcadores de voz (best-effort, carrera
     // 2,5s, mismo patrón que el perfil): el resto del digest queda como
     // hoy. Sin @ o sin embed, la voz sigue siendo la de sus respuestas.
+    // (LOTE IDIOMA-POSTEO-MARCA · v922) Los mismos captions alimentan la
+    // detección del idioma de la marca (el array sale del bloque).
+    let brandCaptions = [];
     if (ig && trialDigest) {
       try {
         const _htmlVoz = await Promise.race([demo.fetchIgEmbedHtml(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
         if (_htmlVoz) {
           const _capsVoz = (feedAudit.parseEmbedPosts(_htmlVoz) || []).map((p) => p.caption).filter(Boolean).slice(0, 12);
+          brandCaptions = _capsVoz;
           if (_capsVoz.length) {
             trialDigest.voz_marcadores = personalizacion.extraerMarcadoresVoz(_capsVoz, [ocAns.producto_estrella, ocAns.diferencial, ocAns.audiencia].filter((x) => x));
           }
         }
       } catch (e) { /* sin voz del feed: la de sus respuestas ya está en el digest */ }
     }
+    // (LOTE IDIOMA-POSTEO-MARCA · v922) REGLA (caso Veja): el idioma del
+    // CONTENIDO (titular, caption, texto dentro de la imagen) es el
+    // idioma en que postea LA MARCA — detectado de sus captions de IG
+    // (primario) y de su web (respaldo). NUNCA el idioma de la prueba.
+    // `lang` sigue mandando en la UI (errores, semana, trialPostPrompt,
+    // ideas) y en out.lang (idioma de la cuenta al registrarse). Sin
+    // señal clara, contentLang cae a `lang` (fallback documentado).
+    const contentLang = demo.detectBrandLang({
+      captions: brandCaptions,
+      webText: [webData && webData.description, ...((webData && webData.services) || []), ...(((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre))].filter(Boolean).join('\n'),
+    }) || lang;
+    if (trialDigest) trialDigest.post_lang = contentLang;
     // (rubro-literal) PUERTA FAIL-CLOSED: sin producto evidenciado no hay
     // semana. 'todo' sin servicios, sin catálogo y sin detectados = el
     // caso del primo (Q1 vacía): 400 con falta_producto para que el front
@@ -32030,7 +32046,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -32133,6 +32149,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       ok: true,
       engine: demo.DEMO_ENGINE_V,
       lang, // (v274) el idioma de la semana viaja en el payload (caché, chat, registro)
+      content_lang: contentLang, // (LOTE IDIOMA-POSTEO-MARCA · v922) idioma del CONTENIDO (marca), distinto del idioma de la prueba cuando la marca postea en otro idioma
       business, ig, category: effCategory,
       subcat: rubroRes.subcat || '', // (v235) subrubro confirmado/detectado (viaja al registro)
       rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada en el payload
@@ -33131,6 +33148,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig, pic: trialProfile.pic || igPic || '' } : null,
       formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap,
     });
+    // (LOTE IDIOMA-POSTEO-MARCA · v922) Igual que en /api/trial/generate:
+    // el idioma del CONTENIDO es el idioma en que postea LA MARCA
+    // (captions del feed primero, web después). `lang` sigue mandando
+    // en la UI (semana, trialPostPrompt, textos de estado).
+    const contentLangS = demo.detectBrandLang({
+      captions: (trialProfile && trialProfile.captions) || [],
+      webText: [bioText, webData && webData.description, ...((webData && webData.services) || []), ...(((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre))].filter(Boolean).join('\n'),
+    }) || lang;
+    if (trialDigest) trialDigest.post_lang = contentLangS;
     // (rubro-literal) PUERTA FAIL-CLOSED, igual que en /api/trial/generate:
     // sin producto evidenciado no hay semana ni stream de piezas.
     if (!trialTestMode(req) && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
@@ -33170,7 +33196,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let uploadProduct = { classified: false };
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLangS, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
@@ -33182,19 +33208,19 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const prevCaps = [];
     const made = topics.map((t, i) => {
       const r = demo.resolveTrialCaption(topics, cat, {
-        business, tone, country: effCountry, idx: i, goalLine, lang, prevCaptions: prevCaps,
+        business, tone, country: effCountry, idx: i, goalLine, lang: contentLangS, prevCaptions: prevCaps,
         // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Igual que en demo.generateDemo:
         // cada caption cierra con una frase real del cliente.
-        voiceLine: demo.trialVoiceEcho(voiceMarkers, i, lang),
+        voiceLine: demo.trialVoiceEcho(voiceMarkers, i, contentLangS),
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
       // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
       // (M3 FICHA-OFERTA) Los términos van ANTES del cierre, igual que en
       // generateDemo: el caption gateado ya pasó y la fecha no se pierde.
       const cleanPiece = specPosts[i].text_mode === 'clean';
-      const baseCaptionS = demo.appendOfferTerms(r.caption, topics[r.topicIndex] || t, lang);
+      const baseCaptionS = demo.appendOfferTerms(r.caption, topics[r.topicIndex] || t, contentLangS);
       const finalCaption = cleanPiece
-        ? demo.closeTrialCaption(baseCaptionS, topics[r.topicIndex] || t, tone, lang)
+        ? demo.closeTrialCaption(baseCaptionS, topics[r.topicIndex] || t, tone, contentLangS)
         : baseCaptionS;
       prevCaps.push(finalCaption);
       return {
@@ -33554,7 +33580,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       };
       const probe = (off) => {
         try {
-          return demo.buildDemoSpec({ business, category, country: effCountry, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText, lang, trialNoStock: true });
+          return demo.buildDemoSpec({ business, category, country: effCountry, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText, lang: contentLangS, trialNoStock: true });
         } catch (e) { return null; }
       };
       for (let off = n; off < n + 3 && posts.length < 3; off++) {
@@ -33676,6 +33702,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       ok: true,
       engine: demo.DEMO_ENGINE_V,
       lang, // (v274) idioma de la semana (caché, chat, registro)
+      content_lang: contentLangS, // (LOTE IDIOMA-POSTEO-MARCA · v922) idioma del CONTENIDO (marca)
       business, ig, category: effCategory,
       subcat: rubroRes.subcat || '', // (v235) subrubro confirmado/detectado
       rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada
@@ -35506,7 +35533,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v921';
+const BUILD_ID = '20261105-v922';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
