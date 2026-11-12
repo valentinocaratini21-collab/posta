@@ -18211,6 +18211,10 @@ function pzBoostMotivo(motivo, monto, cobroId) {
       return gzT('El anuncio se creó en Meta pero no se pudo debitar de tu billetera. Quedó registrado para revisión manual — no se te cobró dos veces.', 'The ad was created on Meta but couldn’t be debited from your wallet. It was recorded for manual review — you weren’t charged twice.');
     case 'demo':
       return gzT('Todavía estás en modo demo: conectá tu Instagram para cargar plata y meterle ads.', 'You’re still in demo mode: connect your Instagram to top up and run ads.');
+    case 'moneda_cuenta_indeterminada':
+      return gzT('No pudimos confirmar la moneda de la cuenta publicitaria. No se creó ningún anuncio y no se gastó nada. Probá de nuevo en un momento.', 'We couldn’t confirm the ad account’s currency. No ad was created and nothing was spent. Try again in a moment.');
+    case 'moneda_cuenta_incompatible':
+      return gzT('Tu billetera y la cuenta publicitaria están en monedas distintas: este impulso no puede correr sin mezclar monedas. No se gastó nada.', 'Your wallet and the ad account are in different currencies: this boost can’t run without mixing currencies. Nothing was spent.');
     default:
       return gzT('No se pudo impulsar. No se gastó nada de tu billetera.', 'It couldn’t be boosted. Nothing was spent from your wallet.');
   }

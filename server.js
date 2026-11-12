@@ -10349,12 +10349,26 @@ app.post('/api/destacado/mover', requireAuth, express.json(), (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo mover el destacado' }); }
 });
 
+// (LOTE MONEDA-CUENTA v976) La moneda de la cuenta publicitaria manda:
+// se lee de Meta (la cuenta es la fuente autoritativa) y solo USD o ARS
+// habilitan el gasto. null = no se pudo determinar (sin configurar,
+// Meta no responde, campo ausente u otra moneda): los endpoints que
+// gastan frenan ANTES de cobrar o crear (fail-closed), porque gastar
+// con la moneda equivocada multiplica el gasto por la tasa.
+async function monedaCuentaAds() {
+  try {
+    const c = await metaAds.getAccountCurrency();
+    return (c === 'USD' || c === 'ARS') ? c : null;
+  } catch (e) { return null; }
+}
+
 // Cobro del destacado (Lote 5): Stripe off-session con la tarjeta
-// guardada + publicación Meta. La conversión USD (cobro) -> ARS (cuenta
-// Meta) SIGUE SIN DEFINIR por Valentino: conversionARS es null y el
-// flujo falla cerrado ANTES de cobrar (cobrar un impulso que no puede
-// pautarse sería cobrar por nada). Cuando se defina, solo cambia ese
-// punto: el cobro y la publicación ya están cableados y testeados.
+// guardada + publicación Meta. La conversión del cobro (USD) al gasto
+// depende de la moneda real de la cuenta (v976): cuenta USD gasta el
+// monto tal cual en centavos de dólar, sin tasa; cuenta ARS convierte
+// con la tasa (default 1425, v888); moneda indeterminada = fail-closed
+// ANTES de cobrar (cobrar un impulso que no puede pautarse sería
+// cobrar por nada).
 app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -10390,6 +10404,10 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
     } catch (e) {
       return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
     }
+    // (LOTE MONEDA-CUENTA v976) Moneda de la cuenta verificada DESPUÉS
+    // del permiso y ANTES de cobrar: indeterminada = sin cobro, sin ad.
+    const monedaCuenta = await monedaCuentaAds();
+    if (!monedaCuenta) return res.status(503).json({ ok: false, motivo: 'moneda_cuenta_indeterminada' });
     const post = db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(targetId, uid) || {};
     if (!post.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
     const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
@@ -10398,7 +10416,7 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
       zona: adCountry(uid), env: process.env, adsConfigurado: true,
       paginaAutorizada: true, posteoPublicado: true,
       permisoAds: true,
-      conversionARS: destacadoSemana.conversionARSFromEnv(process.env),
+      conversionARS: destacadoSemana.conversionParaCuenta(destacadoSemana.conversionARSFromEnv(process.env), monedaCuenta),
       cobrar: (a) => destacadoCobro.cobrarImpulso({
         client: stripeBilling.stripeClient(), customerId: stripeCustomer,
         montoUSD: a.montoUSD, posteoId: a.posteoId, weekKey: st.week_key, dias: 7,
@@ -10415,13 +10433,13 @@ app.post('/api/destacado/impulsar', requireAuth, express.json(), async (req, res
         if (rec.tipo === 'exito') {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
-            VALUES (?,?,?,?,?,?,'ARS','active',?,?,?,'engagement',7)`)
-            .run(uid, rec.posteoId, post.ig_media_id, rec.spendCents, 0, rec.spendCents, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
+            VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7)`)
+            .run(uid, rec.posteoId, post.ig_media_id, rec.spendCents, 0, rec.spendCents, monedaCuenta, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
         } else {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
-            VALUES (?,?,?,0,0,0,'ARS','error','engagement',7,?)`)
-            .run(uid, rec.posteoId, post.ig_media_id, `cobro ${rec.cobroId || ''} sin anuncio: ${rec.error || ''}`);
+            VALUES (?,?,?,0,0,0,?,'error','engagement',7,?)`)
+            .run(uid, rec.posteoId, post.ig_media_id, monedaCuenta, `cobro ${rec.cobroId || ''} sin anuncio: ${rec.error || ''}`);
           // (LOTE v888 · decisión Valentino 10/11 14:17) El cobro quedó en
           // Stripe pero el anuncio no se creó: SIN reembolso — el monto
           // queda como CRÉDITO en la billetera del cliente (USD) para usar
@@ -11226,6 +11244,14 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
     } catch (e) {
       return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
     }
+    // (LOTE MONEDA-CUENTA v976) Moneda de la cuenta verificada DESPUÉS
+    // del permiso y ANTES de gastar: indeterminada = sin anuncio, sin
+    // débito y sin cobro directo. El riel ARS gasta pesos y solo puede
+    // correr sobre una cuenta ARS: sobre otra moneda no hay conversión
+    // definida (nunca se inventa una tasa) y se frena igual.
+    const monedaCuenta = await monedaCuentaAds();
+    if (!monedaCuenta) return res.status(503).json({ ok: false, motivo: 'moneda_cuenta_indeterminada' });
+    if (esARS && monedaCuenta !== 'ARS') return res.status(409).json({ ok: false, motivo: 'moneda_cuenta_incompatible' });
     const w = getAdWallet(uid);
     // (LOTE v888 · decisión Valentino 10/11 14:17) El saldo en pesos NO
     // bloquea el cobro en dólares: queda como crédito en pesos y el
@@ -11242,7 +11268,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, express.json(), async (req,
     const r = await adsBilletera.impulsarConSaldo({
       clienteId: uid, posteoId, ...(esARS ? { montoARS, moneda: 'ARS' } : { montoUSD }), zona: adCountry(uid), env: process.env,
       adsConfigurado: true, paginaAutorizada: true, permisoAds: true,
-      conversionARS: destacadoSemana.conversionARSFromEnv(process.env),
+      conversionARS: destacadoSemana.conversionParaCuenta(destacadoSemana.conversionARSFromEnv(process.env), monedaCuenta),
       saldoCentsUSD, saldoCentsARS, splitARS: adSplit,
       fecha: new Date().toISOString().slice(0, 10),
       demo: !!((getSettings(uid) || {}).demo_mode),
@@ -11509,6 +11535,19 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
       return res.status(503).json({ error: 'No pudimos verificar el permiso de publicidad con Meta. Probá de nuevo en unos minutos.' });
     }
   }
+  // (LOTE MONEDA-CUENTA v976) El presupuesto de este flujo está
+  // denominado en la moneda de la billetera del cliente y la pauta
+  // corre en la moneda de la cuenta de Meta: si la moneda de la cuenta
+  // no se puede confirmar, o no es la de la billetera, gastar sería
+  // gastar en otra moneda. Fail-closed, sin débito. (Sin Meta
+  // configurado no hay gasto: la rama 'pending' queda intacta.)
+  let monedaCuentaBoost = null;
+  if (metaAds.adsConfigured()) {
+    monedaCuentaBoost = await monedaCuentaAds();
+    if (!monedaCuentaBoost) return res.status(503).json({ error: 'No pudimos confirmar la moneda de la cuenta publicitaria en Meta. No se debitó nada. Probá de nuevo en unos minutos.' });
+    const wMon = getAdWallet(req.session.userId);
+    if (wMon.currency !== monedaCuentaBoost) return res.status(409).json({ error: 'Tu billetera está en ' + (wMon.currency === 'ARS' ? 'pesos' : 'dólares') + ' y la cuenta publicitaria opera en ' + (monedaCuentaBoost === 'ARS' ? 'pesos' : 'dólares') + ': pautar así mezclaría monedas. Escribinos y lo resolvemos. No se debitó nada.' });
+  }
   const { fee_cents, spend_cents } = adSplit(budgetCents);
   const w = getAdWallet(req.session.userId);
   if (w.balance_cents < budgetCents) {
@@ -11540,14 +11579,14 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
       // asentado como error con el campaign id para revisión manual.
       const be = db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error)
-        VALUES (?,?,?,?,?,?,'ARS','error',?,?,?,'engagement',?,'ad creado sin débito')`)
-        .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, r.campaignId, r.adsetId, r.adId, AD_DEFAULT_DAYS);
+        VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',?,'ad creado sin débito')`)
+        .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, monedaCuentaBoost, r.campaignId, r.adsetId, r.adId, AD_DEFAULT_DAYS);
       return res.status(409).json({ error: 'La pauta se creó en Meta pero no se pudo debitar el saldo. Quedó registrada para revisión.', boost_id: be.lastInsertRowid, launched: true });
     }
     const br = db.prepare(`INSERT INTO ad_boosts
       (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days)
-      VALUES (?,?,?,?,?,?,'ARS','active','engagement',?)`)
-      .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, AD_DEFAULT_DAYS);
+      VALUES (?,?,?,?,?,?,?,'active','engagement',?)`)
+      .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, monedaCuentaBoost, AD_DEFAULT_DAYS);
     boostId = br.lastInsertRowid;
     try { track(req.session.userId, 'ad_boost', String(budgetCents)); } catch (e) {}
     db.prepare(`UPDATE ad_boosts SET meta_campaign_id=?, meta_adset_id=?, meta_ad_id=?, started_at=datetime('now'), error='' WHERE id=?`)
@@ -36407,7 +36446,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v975';
+const BUILD_ID = '20261105-v976';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

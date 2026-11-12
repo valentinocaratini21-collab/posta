@@ -191,6 +191,25 @@ function conversionARSFromEnv(env) {
   return (montoUSD) => Math.round(Number(montoUSD) * tasa * 100);
 }
 
+// (LOTE MONEDA-CUENTA v976) La conversión que GASTA en Meta depende de la
+// moneda REAL de la cuenta publicitaria (la lee el servidor de Meta con
+// meta_ads.getAccountCurrency y la pasa como `monedaCuenta`):
+// - cuenta USD: el presupuesto es el monto en centavos de dólar, SIN
+//   tasa (20 USD -> 2000). El cobro al cliente (Stripe, USD) no cambia.
+// - cuenta ARS: la conversión base de siempre, intacta (tasa 1425 con
+//   default en código, env IMPULSO_TASA_ARS mandando si es válido).
+// - cualquier otra cosa (sin dato, error de lectura, moneda desconocida
+//   distinta de USD/ARS): SIN conversión — el llamador frena el impulso
+//   ANTES de cobrar o crear. Fail-closed: nunca se asume una moneda
+//   para gastar.
+const SIN_CONVERSION_CUENTA = null;
+function conversionParaCuenta(conversionBaseARS, monedaCuenta) {
+  if (monedaCuenta === 'USD') return (montoUSD) => Math.round(Number(montoUSD) * 100);
+  if (monedaCuenta === 'ARS' && typeof conversionBaseARS === 'function') return conversionBaseARS;
+  if (monedaCuenta === 'ARS') return conversionARSFromEnv(null);
+  return SIN_CONVERSION_CUENTA;
+}
+
 // Solo los 3 fijos, como número entero. Strings, decimales, negativos y
 // cualquier otro valor se rechazan (sin campo libre, sin "casi").
 function validarMonto(monto) {
@@ -395,6 +414,7 @@ module.exports = {
   montosFijos,
   validarMonto,
   conversionARSFromEnv,
+  conversionParaCuenta,
   IMPULSO_TASA_ARS_DEFAULT,
   boostHabilitado,
   crearImpulso,

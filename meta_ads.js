@@ -10,7 +10,9 @@
 // Env vars:
 //   META_ADS_TOKEN      — system user token con ads_management + ads_read
 //   META_AD_ACCOUNT_ID  — cuenta publicitaria de Posta, SIN el prefijo "act_"
-// La cuenta publicitaria opera en ARS: los presupuestos en centavos van directo.
+// La moneda de la cuenta la dice Meta (getAccountCurrency): los
+// presupuestos llegan a createBoost ya denominados en esa moneda
+// (LOTE MONEDA-CUENTA v976) — este módulo nunca convierte.
 //
 // Si no está configurado, adsConfigured() = false y NUNCA rompe: los boosts
 // quedan en 'pending' para activación manual del equipo.
@@ -64,6 +66,37 @@ function act() {
   return `/act_${cfg().adAccountId}`;
 }
 
+// (LOTE MONEDA-CUENTA v976) Moneda REAL de la cuenta publicitaria, leída
+// de Meta (GET /act_<id>?fields=currency): la cuenta es la fuente
+// autoritativa — el gasto se denomina en ESTA moneda, no en la que el
+// código suponía. Caché en memoria de 5 minutos claveada por cuenta (si
+// cambia META_AD_ACCOUNT_ID, la caché no aplica): no es una llamada por
+// pantalla, pero al impulsar la lectura es fresca o de hace minutos.
+// Los fallos NO se cachean: cada impulso reintenta y frena mientras la
+// moneda no se pueda confirmar. Devuelve la moneda tal cual la dice
+// Meta ('USD', 'ARS', otra) o null si no se pudo leer (sin configurar,
+// error de Meta, campo ausente). Qué monedas habilitan el gasto lo
+// decide el llamador; acá nunca se asume una.
+const CURRENCY_CACHE_TTL_MS = 5 * 60 * 1000;
+let _currencyCache = { accountId: '', currency: '', at: 0 };
+async function getAccountCurrency() {
+  if (!adsConfigured()) return null;
+  const { adAccountId } = cfg();
+  const now = Date.now();
+  if (_currencyCache.accountId === adAccountId && _currencyCache.currency && (now - _currencyCache.at) < CURRENCY_CACHE_TTL_MS) {
+    return _currencyCache.currency;
+  }
+  try {
+    const d = await g(act(), { params: { fields: 'currency' } });
+    const cur = d && typeof d.currency === 'string' ? d.currency.trim().toUpperCase() : '';
+    if (!cur) return null;
+    _currencyCache = { accountId: adAccountId, currency: cur, at: now };
+    return cur;
+  } catch (e) {
+    return null;
+  }
+}
+
 // ¿Este posteo se puede pautar? (música con copyright, filtros, etc. lo bloquean)
 async function checkEligibility(igMediaId) {
   try {
@@ -90,6 +123,8 @@ async function resolvePageId(igUserId) {
 }
 
 // Crea campaña + conjunto + creativo + anuncio. Devuelve los ids de Meta.
+// `spendCents` = presupuesto TOTAL en centavos de la moneda de la cuenta
+// (el llamador convierte según getAccountCurrency; acá va directo).
 async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days = 7, country = 'AR' }) {
   if (!adsConfigured()) throw new Error('Meta Ads no configurado');
   if (!pageId || !igUserId || !igMediaId) throw new Error('Faltan datos del negocio para pautar');
@@ -177,4 +212,4 @@ async function checkAdsPermission() {
   }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, getAccountCurrency };
