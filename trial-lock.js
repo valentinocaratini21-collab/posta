@@ -180,6 +180,26 @@ function purgeLock(db, igKey, domainKey) {
   }
 }
 
+// (LOTE RESET-PRUEBA-NEGOCIO · v918) purgeUsed — remediación admin:
+// borra las filas de trial_used de UN negocio (kind 'ig' y/o 'domain'),
+// sin tocar las filas 'email' (la cuenta registrada no se resetea) ni
+// las de otros negocios. Solo lo invoca /api/admin/trial-reset (token).
+// Devuelve cuántas filas se borraron.
+function purgeUsed(db, igKey, domainKey) {
+  if (!db || (!igKey && !domainKey)) return 0;
+  try {
+    const r = db.prepare(
+      `DELETE FROM trial_used
+        WHERE (kind = 'ig' AND ? <> '' AND value = ?)
+           OR (kind = 'domain' AND ? <> '' AND value = ?)`
+    ).run(igKey || '', igKey || '', domainKey || '', domainKey || '');
+    return (r && r.changes) || 0;
+  } catch (e) {
+    console.error('[posta] trial-lock: purgeUsed falló:', e.message);
+    return 0;
+  }
+}
+
 // (LOTE PRUEBA-ENTRADA-DIRECTA · 4/11) CANDADO PERMANENTE POR @ / DOMINIO /
 // EMAIL: la prueba se usa UNA sola vez por @ y UNA sola vez por email,
 // PARA SIEMPRE (no solo 90 días). El candado de 90 días (trial_locks)
@@ -258,6 +278,7 @@ module.exports = {
   findLock,
   recordLock,
   purgeLock,
+  purgeUsed,
   decorateSnapshot,
   lockMessage,
   ensureTrialUsedSchema,

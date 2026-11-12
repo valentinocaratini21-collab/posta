@@ -8591,6 +8591,93 @@ app.post('/api/admin/extend-trial', requireAdminToken, express.json(), (req, res
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// (LOTE RESET-PRUEBA-NEGOCIO · v918) Resetea el registro de prueba de UN
+// negocio para que pueda repetir su prueba de cero (caso Crumbl 11/11: el
+// primer intento generó antes de frenarse por el aviso de dispositivo y su
+// prueba quedó gastada). Limpia TODOS los marcadores de ese negocio, o el
+// siguiente intento vuelve a frenar: (1) trial_used permanente (kind ig /
+// domain) vía trialLock.purgeUsed — las filas 'email' NO se tocan (la
+// cuenta registrada no se resetea); (2) candado de 90 días vía
+// trialLock.purgeLock (si quedara, backfillUsedFromLocks lo resucitaría en
+// trial_used al próximo /api/guest/start); (3) posteos de prueba del
+// invitado (solo si la fila sigue is_guest=1; si ya se registró, sus
+// posteos NO se tocan) + reloj de 3 días fresco; (4) trial_cache por @ y
+// por 'web:<dominio>'. NO toca trial_devices (otro candado), users,
+// trial_ends_at de cuentas registradas ni suscripción/pago. Sin confirm →
+// dry-run (conteos, sin borrar). Con confirm:true → borra y devuelve lo
+// borrado por tabla + reset_hecho. Sin registro → sin_registro (200).
+app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res) => {
+  const body = req.body || {};
+  if (!trialLock) return res.status(500).json({ ok: false, error: 'trial-lock no disponible' });
+  const igKey = trialLock.normalizeIg(body.ig || '');
+  const domainKey = trialLock.normalizeDomain(body.domain || '');
+  if (!igKey && !domainKey) return res.status(400).json({ ok: false, error: 'falta ig o domain' });
+  const confirm = body.confirm === true || body.confirm === 1 || body.confirm === '1';
+  try {
+    if (trialLock.ensureTrialUsedSchema) trialLock.ensureTrialUsedSchema(db);
+    const cnt = (sql, ...args) => {
+      try { const r = db.prepare(sql).get(...args); return (r && r.n) || 0; }
+      catch (e) { return 0; }
+    };
+    const nUsed = cnt(
+      `SELECT COUNT(*) AS n FROM trial_used WHERE (kind = 'ig' AND ? <> '' AND value = ?) OR (kind = 'domain' AND ? <> '' AND value = ?)`,
+      igKey, igKey, domainKey, domainKey);
+    const nLocks = cnt(
+      `SELECT COUNT(*) AS n FROM trial_locks WHERE (? <> '' AND ig = ?) OR (? <> '' AND domain = ?)`,
+      igKey, igKey, domainKey, domainKey);
+    let guestId = null, guestIsGuest = false, nPosts = 0;
+    try {
+      const g = guestTrial && guestTrial.findGuestByIdentity
+        ? guestTrial.findGuestByIdentity(db, igKey, domainKey) : null;
+      if (g) {
+        guestId = g.id;
+        guestIsGuest = !!g.is_guest;
+        if (guestIsGuest) nPosts = cnt('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?', guestId);
+      }
+    } catch (e) {}
+    const cacheKeys = [];
+    if (igKey) cacheKeys.push(igKey);
+    if (domainKey) cacheKeys.push('web:' + domainKey);
+    let nCache = 0;
+    for (const k of cacheKeys) nCache += cnt('SELECT COUNT(*) AS n FROM trial_cache WHERE ig = ?', k);
+    const total = nUsed + nLocks + nPosts + nCache;
+    const base = {
+      ok: true, ig: igKey, domain: domainKey,
+      trial_used: nUsed, trial_locks: nLocks, posts: nPosts, trial_cache: nCache,
+      guest_id: guestId, guest_is_guest: guestIsGuest, total,
+    };
+    if (total === 0) return res.json({ ...base, sin_registro: true });
+    if (!confirm) return res.json({ ...base, dry_run: true });
+    const usedDeleted = trialLock.purgeUsed ? trialLock.purgeUsed(db, igKey, domainKey) : 0;
+    const locksDeleted = trialLock.purgeLock ? trialLock.purgeLock(db, igKey, domainKey) : 0;
+    let postsDeleted = 0, clockRefreshed = false;
+    if (guestId && guestIsGuest) {
+      try {
+        const r = db.prepare('DELETE FROM posts WHERE user_id = ?').run(guestId);
+        postsDeleted = (r && r.changes) || 0;
+      } catch (e) {}
+      try {
+        const days = (guestTrial && guestTrial.TRIAL_DAYS_GUEST) || 3;
+        db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ? AND is_guest = 1')
+          .run(Date.now() + days * 24 * 3600 * 1000, guestId);
+        clockRefreshed = true;
+      } catch (e) {}
+    }
+    let cacheDeleted = 0;
+    for (const k of cacheKeys) {
+      try {
+        const r = db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(k);
+        cacheDeleted += (r && r.changes) || 0;
+      } catch (e) {}
+    }
+    console.log(`[admin] trial-reset @${igKey || '—'} (${domainKey || '—'}): used=${usedDeleted} locks=${locksDeleted} posts=${postsDeleted} cache=${cacheDeleted} guest=${guestId || '—'}`);
+    return res.json({
+      ...base,
+      trial_used: usedDeleted, trial_locks: locksDeleted, posts: postsDeleted,
+      trial_cache: cacheDeleted, reset_hecho: true, trial_ends_refrescado: clockRefreshed,
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
 // Hold a nivel usuario (v864, M185-hold): congela la cuenta para el sweep
 // semanal y los avisos de semana lista, aunque el trial siga vigente.
 // POST /api/admin/hold { user_id, hold: true|false, reason? } — requireAdminToken.
@@ -35390,7 +35477,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v917';
+const BUILD_ID = '20261105-v918';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
