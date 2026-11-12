@@ -12916,6 +12916,27 @@ function pzIsPubReal(p) {
   if (String(p.ig_permalink || p.permalink || '').indexOf('/demo_') !== -1) return false;
   return true;
 }
+// (links-guardados · hilo DfikYn2DxGm) Un permalink guardado solo se
+// muestra como «Ver en Instagram» si el posteo sigue vivo en Instagram.
+// Un posteo archivado allá (ig_state='archived_ext', marca que pone
+// feed-reconcile cuando el shortcode ya no está en ninguna lectura
+// fresca) conserva su permalink guardado, pero la URL ya no abre nada:
+// Instagram responde «esta página no está disponible». Caso real: el
+// 583 (DfikYn2DxGm), archivado por Valentino el 10/11; el 610
+// (DfnuFrnjxae) tampoco resuelve en ninguna fuente fresca y lleva la
+// misma marca. El badge «Publicado» NO se toca (regla v925): el posteo
+// sí se publicó; lo que muere es el link vivo. Si se desarchiva en IG,
+// la reconciliación lo vuelve a 'live' y el link reaparece solo.
+// Sin ig_state (objetos viejos, recents) no se esconde nada: solo la
+// marca explícita 'archived_ext' apaga el link.
+function pzIgLinkVivo(p) {
+  if (!p) return '';
+  if (String(p.ig_state || '') === 'archived_ext') return '';
+  const raw = String(p.ig_permalink || p.permalink || '');
+  if (!raw || raw.indexOf('/demo_') !== -1) return '';
+  if (!/^https:\/\//.test(raw)) return '';
+  return raw;
+}
 function detSimpleMenuHTML(d, o) {
   o = o || {};
   const en = !!o.en;
@@ -12929,7 +12950,8 @@ function detSimpleMenuHTML(d, o) {
     else items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-del">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>`);
     items.push(`<button type="button" class="igmock-menu-btn" data-pc-act="det-dislike">${pzIc('thumbDown', 16)} ${en ? 'Dislike' : 'No me gusta'}</button>`);
   }
-  if (pzIsPubReal(d) && d.ig_permalink) items.push(`<a class="igmock-menu-btn" href="${esc(d.ig_permalink)}" target="_blank" rel="noopener">${pzIc('instagram', 16)} ${en ? 'View on Instagram' : 'Ver en Instagram'}</a>`);
+  const _lgLink = pzIgLinkVivo(d); // (links-guardados) archivado en IG: sin link vivo.
+  if (pzIsPubReal(d) && _lgLink) items.push(`<a class="igmock-menu-btn" href="${esc(_lgLink)}" target="_blank" rel="noopener">${pzIc('instagram', 16)} ${en ? 'View on Instagram' : 'Ver en Instagram'}</a>`);
   return `<div class="igmock-menu" hidden>${items.join('')}</div>`;
 }
 function pzDetMenuToggle(card, btn) {
@@ -13050,7 +13072,7 @@ function weekCardHTML(d, o) {
   // ya se abre en grande tocándola: igmock-media lleva data-lightbox).
   // Si el estado no admite una acción, no se renderiza (no se grisacea).
   const L = (es, en) => ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? en : es);
-  const igLink = (d.ig_permalink && /^https:\/\//.test(String(d.ig_permalink)) && !String(d.ig_permalink).includes('/demo_')) ? String(d.ig_permalink) : '';
+  const igLink = pzIgLinkVivo(d); // (links-guardados) archivado en IG: sin link vivo.
   const askBtn = `<button type="button" class="pcard-ask" data-pc-act="ask-change">${pzIc('chat', 15)} ${L('Pedir un cambio', 'Request a change')}</button>`;
   let actsInner = '';
   if (isPub) {
@@ -16569,6 +16591,7 @@ function postItem(p, actions) {
   const capFull = (p.caption || '').trim();
   const capFirst = esc(capFull.split('\n')[0] || '(sin texto)');
   const hasMore = capFull.includes('\n') || (p.hashtags || '').trim();
+  const igL = pzIgLinkVivo(p); // (links-guardados) archivado en IG: sin link vivo.
   return `<div class="post-item">
     ${thumb}
     <div class="info">
@@ -16577,7 +16600,7 @@ function postItem(p, actions) {
       <div class="meta">${vtag}${badge(p.status, p)}
         ${p.scheduled_at && p.status === 'scheduled' ? `<span>${pzIc('calendar', 12)} ${fmtDate(p.scheduled_at)}</span>` : ''}
         ${(p.published_at && pzIsPubReal(p)) ? `<span>${pzIc('checkCircle', 12)} ${fmtDate(p.published_at)}</span>` : ''}
-        ${p.ig_permalink && !p.ig_permalink.includes('/demo_') ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}
+        ${igL ? `<a href="${esc(igL)}" target="_blank" style="color:var(--cel)">Ver en IG ${pzIc('arrowUpRight', 13)}</a>` : ''}
         ${p.error ? `<span style="color:#D64545" title="${esc(p.error)}">${esc(humanError(p.error))}</span>` : ''}
       </div>
     </div>
@@ -22478,7 +22501,7 @@ function hfArchiveHTML(data, en) {
     aBody = '<p class="hf-ps-note">' + (en ? 'You archived these in Instagram, so they left your grid there too. To bring one back, unarchive it in Instagram.' : 'Los archivaste en Instagram, por eso también salieron de tu grilla allá. Para que vuelva a tu perfil, desarchivarlo en Instagram.') + '</p>'
       + arch.map((p) => '<div class="hf-ar-item">' + hfArchThumb(p.image_path) + '<div class="hf-ar-tx"><div class="hf-ar-cap">' + cap(p.caption) + '</div>'
         + '<div class="hf-ar-meta">' + (en ? 'Archived in Instagram' : 'Archivado en Instagram') + (p.published_at ? ' · ' + esc(hfArchDate(p.published_at, en)) : '') + '</div>'
-        + (p.ig_permalink ? '<a class="hf-ar-link" href="' + esc(p.ig_permalink) + '" target="_blank" rel="noopener">' + (en ? 'See it in Instagram' : 'Verlo en Instagram') + '</a>' : '')
+        + '<div class="hf-ar-meta">' + (en ? 'Not available on Instagram while archived' : 'No disponible en Instagram mientras esté archivado') + '</div>'
         + '</div></div>').join('');
   } else aBody = empty(en ? 'Nothing archived in Instagram: when you archive a post there, it shows up here.' : 'Nada archivado en Instagram: cuando archivás un posteo allá, aparece acá.');
   const allEmpty = !vers.length && !recs.length && !canc.length && !arch.length;
@@ -27915,7 +27938,7 @@ function hfDetailMenu(post) {
 async function hfDetailShare(post) {
   const en = hfIsEn();
   const cap = String(post.caption || '').trim();
-  const url = (pzIsPubReal(post) && post.ig_permalink) ? String(post.ig_permalink) : '';
+  const url = pzIsPubReal(post) ? pzIgLinkVivo(post) : ''; // (links-guardados) archivado: se comparte la imagen, no un link muerto.
   try {
     if (navigator.share) {
       if (url) { await navigator.share({ url, text: cap || undefined }); return; }
@@ -29817,7 +29840,9 @@ function apvPill(p, d, dOk) {
   // nunca salió, y su approval 'auto' tampoco lo festeja más abajo.
   if (st === 'published' && pzIsPubReal(p)) {
     const rawLink = p.permalink || p.ig_permalink || p.url || '';
-    const link = (rawLink && String(rawLink).indexOf('/demo_') === -1) ? rawLink : '';
+    // (links-guardados) archivado en IG: el badge «Publicado» queda (v925),
+    // el link vivo no.
+    const link = (rawLink && String(rawLink).indexOf('/demo_') === -1 && String(p.ig_state || '') !== 'archived_ext') ? rawLink : '';
     return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ${pzIc('arrowUpRight', 14)}</a>` : ''}`;
   }
   if (st === 'published') return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
