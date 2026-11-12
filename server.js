@@ -6249,7 +6249,7 @@ const PZ_CHAT_PUBLIC_SYS = [
   '',
   'HECHOS REALES (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana, escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
-  '- Precio: USD 200 por mes. Prueba gratis completa de 3 días, sin tarjeta. Lanzamiento: 1 de febrero de 2027.',
+  '- Precio: USD 199 por mes. Prueba gratis completa de 3 días, sin tarjeta. Lanzamiento: 1 de diciembre de 2026.',
   '- Entrar a una cuenta existente: desde el botón Entrar. Probar gratis: desde el botón de prueba de 3 días.',
   '',
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba. Nunca digas que conocés la cuenta, el negocio o los datos del visitante: no los tenés y no los inventás.',
@@ -6266,7 +6266,7 @@ const PZ_CHAT_PUBLIC_SYS_EN = [
   '',
   'REAL FACTS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week, writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
-  '- Price: USD 200 per month. Full free 3-day trial, no card required. Launch: February 1, 2027.',
+  '- Price: USD 199 per month. Full free 3-day trial, no card required. Launch: December 1, 2026.',
   '- Logging into an existing account: from the Log in button. Trying free: from the 3-day trial button.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Never invent features, integrations, prices or discounts that are not listed above. Never say you know the visitor\'s account, business or data: you do not have them and you never invent them.',
@@ -36274,7 +36274,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v968';
+const BUILD_ID = '20261105-v969';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
