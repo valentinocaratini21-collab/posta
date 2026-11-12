@@ -13514,7 +13514,16 @@ function bindScfMinis(root) {
       // (LOTE DETALLE-SIMPLE-DIRECTO A) Home ajustable: click directo a la aprobación,
       // sin scfOpenPop intermedio. En táctil este listener no corre: hfDetailBind
       // (captura, antes) ya se quedó con el toque y aplica la misma regla.
-      if (pzDetDirectoEsAjustable(w)) { location.hash = '#/app/post/' + encodeURIComponent(w.dataset.postId); return; }
+      if (pzDetDirectoEsAjustable(w)) {
+        // (v926 · VER-PROXIMO-NO-MATA-SESION) El invitado ve el próximo
+        // posteo EN LA MISMA PANTALLA (capa fijada del cofre), sin
+        // navegar a #/app/post: esa navegación pasa por el router
+        // (refreshSession + guarda de sesión) y con la sesión invitada
+        // ya caída rebota a #/login y la prueba se corta (caso Olive &
+        // June). El registrado sigue directo a la aprobación.
+        if (typeof pzIsGuest === 'function' && pzIsGuest()) { scfOpenPop(w, true); return; }
+        location.hash = '#/app/post/' + encodeURIComponent(w.dataset.postId); return;
+      }
       const touchLike = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
       if (touchLike) {
         if (SCF_POP && SCF_POP.wrap === w) scfClosePop();
@@ -23030,7 +23039,11 @@ async function inicioView() {
   const seenIds = new Set();
   HF_PROPS = {};
   for (const t of tiles) {
-    if (t.kind !== 'post' || !t.post || seenIds.has(t.post.id)) continue;
+    // (v926 · VER-PROXIMO-NO-MATA-SESION) La carta del próximo también
+    // deja su tarjeta en el cofre: hoy solo entran los kind 'post' y el
+    // próximo (kind 'oculta') no tenía .igmock en #scfVault, así que la
+    // capa del invitado (scfOpenPop) no encontraba nada y no abría.
+    if ((t.kind !== 'post' && t.kind !== 'oculta') || !t.post || seenIds.has(t.post.id)) continue;
     seenIds.add(t.post.id);
     const p = t.post;
     const prop = p.status === 'published'
