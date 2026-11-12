@@ -9519,6 +9519,49 @@ app.post('/api/admin/review/:id/edit', requireAdminToken, (req, res) => {
   res.json({ ok: true, id: post.id, approved_count: approved, graduated: approved >= GOLDEN_TARGET });
 });
 
+// POST /api/admin/posts/:id/edit-caption?token=ADMIN_TOKEN  body {caption, dryRun?, confirm?}
+// (LOTE EDICION-POSTEOS-PROGRAMADOS · v965) Edita el caption de un posteo YA
+// PROGRAMADO (status='scheduled'). El endpoint viejo de review/edit solo
+// cubre borradores en revisión (status='draft' AND needs_review=1); este
+// cubre lo programado, que antes no tenía vía por API (el duplicado 589=571
+// y el 566 de hoy quedaron trabados por eso). Solo cambia el caption: nunca
+// toca status, scheduled_at, hashtags, image_path ni nada más. Sin
+// confirm=true devuelve el plan (dry-run) sin escribir. Idempotente: si el
+// caption ya es el nuevo, no lo toca y lo reporta como ya_correcto.
+// NO escribe versiones (post_versions es del chat del cliente) ni toca la
+// cola de revisión: un programado con needs_review=1 sigue en revisión,
+// solo cambia su texto.
+app.post('/api/admin/posts/:id/edit-caption', requireAdminToken, (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const nuevo = body.caption === undefined ? '' : String(body.caption);
+  if (!nuevo) return res.status(400).json({ ok: false, error: 'falta caption' });
+  const post = db.prepare(`SELECT id, user_id, status, scheduled_at, caption FROM posts WHERE id = ?`).get(id);
+  if (!post) return res.status(404).json({ ok: false, error: 'no_existe' });
+  if (post.status !== 'scheduled') {
+    const motivo = post.status === 'draft' ? 'es_borrador'
+      : post.status === 'published' ? 'ya_publicado'
+      : post.status === 'publishing' ? 'publicando'
+      : (post.status === 'cancelled' || post.status === 'dismissed') ? 'cancelado'
+      : 'no_programado';
+    const detalle = post.status === 'draft'
+      ? 'este posteo es un borrador, no está programado — editá por /api/admin/review/:id/edit si está en revisión'
+      : 'este posteo no está programado (status: ' + post.status + ')';
+    return res.status(400).json({ ok: false, motivo, error: detalle });
+  }
+  const actual = post.caption || '';
+  const cambiaria = actual !== nuevo;
+  if (body.confirm !== true) {
+    return res.json({ ok: true, dry_run: true, id: post.id, user_id: post.user_id, status: post.status, scheduled_at: post.scheduled_at, caption_actual: actual, caption_nuevo: nuevo, cambiaria });
+  }
+  if (cambiaria) {
+    db.prepare(`UPDATE posts SET caption = ? WHERE id = ?`).run(nuevo, post.id);
+    console.log(`[admin] edit-caption: post ${post.id} (usuario ${post.user_id}, sale ${post.scheduled_at || 'sin fecha'}) caption ${actual.length}→${nuevo.length} chars`);
+  }
+  res.json({ ok: true, id: post.id, user_id: post.user_id, status: post.status, scheduled_at: post.scheduled_at, caption: nuevo, cambiado: cambiaria, ya_correcto: !cambiaria });
+});
+
 // POST /api/admin/review/:id/reject?token=ADMIN_TOKEN  body {note}
 // Rechaza con nota: alimenta el aprendizaje (señal + style_rule), borra el
 // borrador y regenera uno con otro enfoque en segundo plano.
@@ -36231,7 +36274,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v961';
+const BUILD_ID = '20261105-v965';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
