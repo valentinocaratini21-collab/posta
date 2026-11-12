@@ -6300,3 +6300,16 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-postwow-err{color:#b3261e;font-size:13px;margin-top:8px}
 .pz-postwow-skip{background:none;border:0;color:var(--dim);font-size:13px;margin-top:10px;cursor:pointer;padding:0}
 .pz-postwow-ok{margin:0;font-size:15px;font-weight:700}
+/* LOTE CHAT-678 · 6 y 7 · tarjeta del posteo compartido y grilla de fotos en la burbuja del chat */
+.pz-chat-postcard{display:flex;gap:8px;align-items:center;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer}
+.pz-chat-postcard img{width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0}
+.pz-chat-postcard-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pz-chat-postcard-txt b{font-size:12.5px;font-weight:700;color:var(--txt);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pz-chat-postcard-txt span{font-size:11px;color:var(--mut);font-weight:600}
+.pz-chat-photogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px}
+.pz-chat-photogrid img,.pz-chat-photogrid video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
+/* LOTE CHAT-678 · 8 · fila de nota a Posty */
+.pz-nota-row{margin:10px 0 4px}
+.pz-nota-row #pzNotaForm{display:flex;gap:6px;margin-top:6px}
+.pz-nota-row #pzNotaForm[hidden]{display:none}
+.pz-nota-row #pzNotaInput{flex:1;min-width:0;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-family:inherit}

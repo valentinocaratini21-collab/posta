@@ -9225,14 +9225,41 @@ function chatAppendMsg(box, html, ts) {
 
 // HTML de un mensaje del chat: si trae el marcador de logo candidato,
 // renderiza el banner confirmable; si no, la burbuja normal.
-function chatMsgHtml(role, text, ts, id, reply, cap) {
+function chatMsgHtml(role, text, ts, id, reply, cap, photos, post) {
   // reply: cita al responder deslizando (5º, lote video — en v879 sin usar).
   // cap: propuesta de caption (6º, LOTE CAPTION-BOTONES):
   // {post_id, text, estado, msg_id} o null.
+  // photos: grupo de fotos del mensaje (7º, LOTE CHAT-678): ["/media/..."].
+  // post: posteo compartido (8º, LOTE CHAT-678): {id, image_path, caption,
+  // scheduled_at, status, media_type} o null.
   text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
   // (LOTE CHAT-MUSE · «…») Una fila guardada con texto «…» es el artefacto
   // del tipeo viejo: nunca se rinde.
   if (String(text || '').trim() === '…') return '';
+  // (LOTE CHAT-678 · 6 y 7) Posteo compartido y grupo de fotos: se rinden
+  // en la burbuja (tarjeta del posteo / grilla de fotos) y el texto va
+  // debajo. La tarjeta lleva al detalle del posteo; la grilla muestra el
+  // grupo entero, no un mensaje por foto. Solo se activa cuando el mensaje
+  // trae post o fotos; el resto de las ramas queda intacto.
+  const _hasPost = post && post.id;
+  const _hasPhotos = Array.isArray(photos) && photos.length > 0;
+  if (_hasPost || _hasPhotos) {
+    const mid2 = (id !== undefined && id !== null && String(id) !== '') ? ` data-msg-id="${esc(String(id))}"` : '';
+    let att = '';
+    if (_hasPost) {
+      const cap1 = String(post.caption || '').split('\n')[0].slice(0, 80);
+      const fecha = String(post.scheduled_at || '').slice(0, 10);
+      att += `<div class="pz-chat-postcard" data-post-id="${esc(String(post.id))}" style="cursor:pointer"><img src="${esc(String(post.image_path || ''))}" alt="" loading="lazy" onerror="this.style.display='none'"><div class="pz-chat-postcard-txt"><b>${esc(cap1 || 'Posteo')}</b><span>${esc(fecha)}${post.status ? ' · ' + esc(String(post.status)) : ''}</span></div></div>`;
+    }
+    if (_hasPhotos) {
+      att += `<div class="pz-chat-photogrid">` + photos.slice(0, 10).map(p => {
+        const pp = String(p || '');
+        if (/\.(mp4|mov|webm)$/i.test(pp)) return `<video src="${esc(pp)}" muted preload="metadata" playsinline></video>`;
+        return `<img src="${esc(pp)}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+      }).join('') + `</div>`;
+    }
+    return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}"${mid2} data-ts="${Number(ts) || ''}">${att}<div>${linkifyEsc(text)}</div>${chatHoraHtml(ts)}</div>`;
+  }
   // (LOTE v847 · imagen pedida) Marcadores de trabajo: el estado
   // «Creando tu imagen…» y el fallo con reintentar. Los crea el SERVIDOR.
   // Viven ACÁ DENTRO (no afuera con los otros marcadores): subir-foto-cambio
@@ -9428,7 +9455,7 @@ async function chatLoadHistory() {
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
-        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0, cap: (m.caption_post_id && String(m.caption_text || '').trim()) ? { post_id: Number(m.caption_post_id), text: String(m.caption_text), estado: String(m.caption_estado || ''), msg_id: Number(m.id) || 0 } : null }))
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0, cap: (m.caption_post_id && String(m.caption_text || '').trim()) ? { post_id: Number(m.caption_post_id), text: String(m.caption_text), estado: String(m.caption_estado || ''), msg_id: Number(m.id) || 0 } : null, photos: Array.isArray(m.photos) ? m.photos : [], post: (m.post && m.post.id) ? m.post : null }))
         .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
       // (LOTE CHAT-MEJORAS) Meta por mensaje (reacción/fijado/editado).
       CHAT_META = {};
@@ -9924,7 +9951,7 @@ function pzChatMetaHtml(id) {
 }
 // chatMsgHtml + la meta del mensaje (reacción + «editado») antes del </div> final.
 function pzChatMsgFull(m) {
-  const h = chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap); // (re-base v905: reenvía reply+cap del lote v891)
+  const h = chatMsgHtml(m.role, m.text, m.ts, m.id, m.reply, m.cap, m.photos, m.post); // (re-base v936: reenvía reply+cap del lote v891 + photos+post del lote chat-678)
   const deco = pzChatMetaHtml(m.id);
   if (!deco || !h) return h;
   return h.replace(/<\/div>\s*$/, deco + '</div>');
@@ -10277,6 +10304,13 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
       ${noVoiceTxt ? '' : `<p class="pz-voice-hint">${gzT('Todo se responde tocando o hablando.', 'Everything is answered by tapping or talking.')}</p>`}
     </div>
+    <div class="pz-nota-row" id="pzNotaRow">
+      <button type="button" class="btn btn-soft btn-sm" id="pzNotaBtn">📝 ${gzT('Dejar una nota a Posty', 'Leave a note for Posty')}</button>
+      <div id="pzNotaForm" hidden>
+        <input id="pzNotaInput" maxlength="500" autocomplete="off" placeholder="${gzT('ej: esta semana no postees de eso, el lunes cierro', 'e.g. no posts about that this week, closed on Monday')}">
+        <button type="button" class="btn btn-primary btn-sm" id="pzNotaSave">${gzT('Guardar nota', 'Save note')}</button>
+      </div>
+    </div>
     <div id="chatMsg"></div>
     <div id="mcFaltan"></div>
   </div>`;
@@ -10317,6 +10351,48 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     } catch (err) {}
   });
 })();
+// (LOTE CHAT-678 · 8) Nota a Posty: delegado global, una sola vez (el chat
+// se re-renderiza; el botón y el formulario viven en chatCardHTML). Se
+// busca dentro de la misma tarjeta del botón, como la camarita.
+(function pzNotaDelegar() {
+  if (window.__pzNotaDelegado) return;
+  window.__pzNotaDelegado = true;
+  document.addEventListener('click', (e) => {
+    const t = e.target && e.target.closest ? e.target.closest('#pzNotaBtn') : null;
+    if (t) {
+      try {
+        const card = (t.closest && t.closest('#chatCard')) || document;
+        const f = (card.querySelector ? card.querySelector('#pzNotaForm') : null) || document.getElementById('pzNotaForm');
+        if (!f) return;
+        const show = f.hasAttribute('hidden');
+        if (show) f.removeAttribute('hidden'); else f.setAttribute('hidden', '');
+        if (show) { const inp = (card.querySelector ? card.querySelector('#pzNotaInput') : null) || document.getElementById('pzNotaInput'); if (inp) inp.focus(); }
+      } catch (err) {}
+      return;
+    }
+    const s = e.target && e.target.closest ? e.target.closest('#pzNotaSave') : null;
+    if (s) pzNotaGuardar(s);
+  });
+})();
+async function pzNotaGuardar(btnEl) {
+  const card = (btnEl && btnEl.closest && btnEl.closest('#chatCard')) || document;
+  const inp = (card.querySelector ? card.querySelector('#pzNotaInput') : null) || document.getElementById('pzNotaInput');
+  const texto = (inp && inp.value || '').trim();
+  if (texto.length < 4) { try { toast('✏️ Escribí la nota en una línea para guardarla'); } catch (e) {} return; }
+  const btn = (card.querySelector ? card.querySelector('#pzNotaSave') : null) || document.getElementById('pzNotaSave');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api.post('/api/chat/nota', { texto });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    if (inp) inp.value = '';
+    const f = (card.querySelector ? card.querySelector('#pzNotaForm') : null) || document.getElementById('pzNotaForm');
+    if (f) f.setAttribute('hidden', '');
+    try { if (typeof chatLoadHistory === 'function') await chatLoadHistory(); } catch (e) {}
+    try { chatScroll(true); } catch (e) {}
+  } catch (e) {
+    try { toast('😅 No pude guardar la nota, probá de nuevo'); } catch (e2) {}
+  } finally { if (btn) btn.disabled = false; }
+}
 
 function renderVozPostCard(vo) {
   if (!vo || !vo.id) return;
@@ -11298,6 +11374,10 @@ async function chatSend(textArg) {
   // el texto nuevo, la foto nueva): el resto sigue al chat normal.
   try { if (typeof pzTemaOnSend === 'function' && pzTemaOnSend(text, unsent)) return; } catch (e) {}
   const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
+  // (LOTE CHAT-678 · 7) El grupo de fotos viaja con el mensaje (una burbuja,
+  // no una por foto): la burbuja optimista ya muestra la grilla y el servidor
+  // la persiste en photos_json para que sobreviva a la recarga.
+  const unsentPaths = unsent.map(p => p.file_path).filter(Boolean);
   // (LOTE FOTOS-VIDEOS v860 · auditoría #20) UNA foto/video suelta YA NO
   // abre el interrogatorio de subir-foto (4–5 preguntas con «Programalo
   // así» escondido al pie): la propuesta llega sola como tarjeta con todo
@@ -11311,9 +11391,9 @@ async function chatSend(textArg) {
   const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
   const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
   const sts = Date.now();
-  CHAT.push({ role: 'user', text: sendText, ts: sts });
+  CHAT.push({ role: 'user', text: sendText, ts: sts, photos: unsentPaths });
   track('chat_message', { len: sendText.length });
-  if (box) chatAppendMsg(box, chatMsgHtml('user', sendText, sts), sts);
+  if (box) chatAppendMsg(box, chatMsgHtml('user', sendText, sts, 0, null, null, unsentPaths), sts); // (CHAT-678 · 7, re-base v936: las fotos van en el 7º param, no en reply)
   chatUpdateSendBtn();
   // (LOTE CHAT-SCROLL) Enviar te deja abajo.
   chatScroll(true);
@@ -28205,6 +28285,24 @@ async function pzHablarClick(id) {
   }
   pzHablarDePosteo(post);
 }
+// (LOTE CHAT-678 · 6) Compartir un posteo al chat: el servidor inserta el
+// posteo como mensaje (post_id) + la confirmación de Posty; el chat se abre
+// con el posteo anclado (HF_CHAT_ANCHOR) para que el próximo turno sepa
+// de cuál posteo se habla. No programa ni publica nada.
+async function pzCompartirPosteoChat(id) {
+  const pid = Number(id) || 0;
+  if (!pid) return;
+  const en = (typeof hfIsEn === 'function') ? hfIsEn() : false;
+  try {
+    const r = await api.post('/api/chat/compartir-posteo', { postId: pid });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    try { track('chat_share_post', { id: pid }); } catch (e) {}
+    const post = (r && r.post) || { id: pid };
+    try { pzHablarDePosteo(post); } catch (e) { location.hash = '#/app/chat'; }
+  } catch (e) {
+    try { toast(en ? "I couldn't share it, try again" : 'No pude compartirlo, probá de nuevo'); } catch (e2) {}
+  }
+}
 // Binder del 💬 de la tile: delegado global, una sola vez (las tiles
 // se reemplazan con el parcheo en vivo; el id se resuelve en el
 // click, nunca queda viejo). El click NO abre el detalle: los guards
@@ -28219,6 +28317,17 @@ async function pzHablarClick(id) {
     e.stopPropagation();
     e.preventDefault();
     pzHablarClick(b.dataset.hfChat);
+  });
+})();
+// (LOTE CHAT-678 · 6) Toque en la tarjeta del posteo compartido en el chat:
+// abre el detalle de ESE posteo.
+(function pzChatPostcardBind() {
+  if (window.__pzChatPostcardBound) return;
+  window.__pzChatPostcardBound = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('.pz-chat-postcard[data-post-id]') : null;
+    if (!b) return;
+    location.hash = '#/app/post/' + encodeURIComponent(b.dataset.postId);
   });
 })();
 // (LOTE DETALLE-SIMPLE-DIRECTO A) Toque en la tarjeta de contexto del chat -> aprobación
@@ -29646,7 +29755,7 @@ function apvMoreHTML(p, st, canMenu, isDraft, editPrompt) {
   // Publicados: solo Ver en Instagram (ya vive en la píldora apvPill cuando hay link)
   // + Pedir un cambio (abre el chat único anclado a este posteo, vía pzHablarClick).
   if (st === 'published') {
-    return `<div class="apv-actions apv-more apv-pub" id="apvMore"><button class="btn btn-soft apv-change-pub" id="apvChangePub" data-apvid="${id}">${pzIc('chat', 18)} ${en ? 'Request a change' : 'Pedir un cambio'}</button></div>`;
+    return `<div class="apv-actions apv-more apv-pub" id="apvMore"><button class="btn btn-soft apv-change-pub" id="apvChangePub" data-apvid="${id}">${pzIc('chat', 18)} ${en ? 'Request a change' : 'Pedir un cambio'}</button><button class="btn btn-soft apv-share-chat" id="apvShareChat" data-apvid="${id}">${pzIc('share', 18)} ${en ? 'Share to chat' : 'Compartir en el chat'}</button></div>`;
   }
   // (LOTE ACEPTAR-APROBADO) El menú sigue para programados (pendiente o
   // aprobado) y borradores; canMenu ya incluye ambos casos.
@@ -29656,6 +29765,9 @@ function apvMoreHTML(p, st, canMenu, isDraft, editPrompt) {
   // (duplica el mini-chat al pie) y No me gusta (se pisa con Rechazar). Quedan:
   // Editar, Rechazar, Frenar (solo programados), Eliminar, Rehacer, en ese orden.
   b += `<button class="apv-sec-btn" id="apvEdit" data-apvid="${id}">${pzIc('pencil', 20)}<span>${en ? 'Edit' : 'Editar'}</span></button>`;
+  // (LOTE CHAT-678 · 6) Compartir en el chat: trae el posteo al chat para
+  // hablar de él, con el posteo adjunto (post_id) para que Posty sepa cuál es.
+  b += `<button class="apv-sec-btn" id="apvShareChat" data-apvid="${id}">${pzIc('share', 20)}<span>${en ? 'Share to chat' : 'Compartir en el chat'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvReject">${pzIc('reject', 20)}<span>${en ? 'Reject' : 'Rechazar'}</span></button>`;
   if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
@@ -29738,6 +29850,10 @@ function bindApprovalPost() {
   if (apvMenuBtn) apvMenuBtn.onclick = () => pzApvMenuToggle();
   const apvChangePub = document.getElementById('apvChangePub');
   if (apvChangePub) apvChangePub.onclick = () => pzHablarClick(apvChangePub.dataset.apvid);
+  // (LOTE CHAT-678 · 6) Compartir en el chat: el posteo viaja al chat como
+  // mensaje (post_id) y el chat se abre con el posteo anclado.
+  const apvShareChat = document.getElementById('apvShareChat');
+  if (apvShareChat) apvShareChat.onclick = () => pzCompartirPosteoChat(apvShareChat.dataset.apvid);
   // (FUNDAMENTO-LITERAL · pieza 5) Veto desde el posteo en revisión.
   const apvEn = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const vb = document.getElementById('apvVetoBtn');

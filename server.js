@@ -6693,6 +6693,12 @@ app.post('/api/ideas/chat', async (req, res) => {
   if (guestBackstop(req, res)) return;
   const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths, libraryPaths } = req.body || {};
   const uidChat = req.session.userId;
+  // (LOTE CHAT-678 · 7) Las fotos que llegaron con este turno se guardan
+  // con el mensaje del usuario (photos_json) en TODOS los caminos que lo
+  // insertan (saludo, conserje, gustos, cerebro): si no, un «hola» con
+  // fotos perdería el grupo al recargar el historial. Solo rutas /media/
+  // reales, tope 10 (máximo de un carrusel).
+  const userPhotos = (Array.isArray(photoPaths) ? photoPaths : []).filter(p => typeof p === 'string' && p.startsWith('/media/')).slice(0, 10);
   // (MODO CONSERJE) Flag por cliente: con el cerebro pausado, el mensaje
   // no gasta IA — no se le aplica el tope ni el rate de chat.
   let conciergeMode = false;
@@ -6746,7 +6752,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
       const dv = supportCases.divertToConcierge(db, uidChat, lastUserText);
       if (dv && dv.ok) {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
         pzChatSaveReply(db, uidChat, dv.reply);
         return res.json({ reply: dv.reply, idea: null, concierge: true });
       }
@@ -6759,7 +6765,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     if (greetRe.test(lastUserText.trim()) || pzIsPureGreeting(lastUserText)) {
       const reply = 'hola! 😄 con qué te ayudo hoy?';
       try {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
         pzChatSaveReply(db, uidChat, reply);
       } catch (e) {}
       return res.json({ reply, idea: null });
@@ -6779,7 +6785,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     const tmLang = langOfUser(uidChat);
     const tmPersist = (reply) => {
       try {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
         pzChatSaveReply(db, uidChat, reply);
       } catch (e) {}
     };
@@ -6831,7 +6837,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         db.prepare('UPDATE users SET client_name = ? WHERE id = ?').run(cname, uidChat);
         const reply = `dale, ${cname}! \uD83D\uDE04 ya me lo anoto.`;
         try {
-          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000));
+          db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
           pzChatSaveReply(db, uidChat, reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
@@ -6853,7 +6859,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           ? `listo, pauso ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} por un tiempo 👍`
           : `dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
         try {
-          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', lastUserText.slice(0, 3000));
+          db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uid, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
           pzChatSaveReply(db, uid, reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
@@ -7091,7 +7097,10 @@ app.post('/api/ideas/chat', async (req, res) => {
       }
     } catch (e) { console.error('[chat-coherencia] guard error:', e.message); }
     const uid = req.session.userId;
-    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
+    // (LOTE CHAT-678 · 7) Las fotos que llegaron con este mensaje se guardan
+    // con él (photos_json): el grupo se ve en la burbuja y persiste entre
+    // sesiones. Solo rutas /media/ reales, tope 10 (máximo de un carrusel).
+    db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uid, 'user', clean[clean.length - 1].text, JSON.stringify(userPhotos));
     pzChatSaveReply(db, uid, out.reply);
     if (out.idea) {
       db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
@@ -11773,8 +11782,27 @@ app.get('/api/ideas/chat', (req, res) => {
   // (caption_post_id + caption_text + caption_estado). Si la DB todavía no
   // tiene las columnas, cae al SELECT plano (sin botones, sin romper).
   let msgs = [];
-  try { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.caption_post_id, c.caption_text, c.caption_estado, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
+  try { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.post_id, c.photos_json, c.caption_post_id, c.caption_text, c.caption_estado, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
   catch (e) { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
+  // (LOTE CHAT-678 · 6 y 7) El posteo compartido y las fotos del grupo
+  // viajan con el mensaje: el cliente los ve en la burbuja y Posty sabe
+  // de qué posteo se habla (post_id) sin que el cliente lo describa.
+  // (RE-BASE v936: el SELECT principal ya trae c.post_id y c.photos_json;
+  // el fallback plano no los trae — el bloque tolera su ausencia.)
+  try {
+    const postIds = [...new Set(msgs.map(m => Number(m.post_id) || 0).filter(id => id > 0))];
+    const postById = {};
+    if (postIds.length) {
+      const ph = postIds.map(() => '?').join(',');
+      for (const p of db.prepare(`SELECT id, image_path, caption, scheduled_at, status, media_type FROM posts WHERE user_id = ? AND id IN (${ph})`).all(uid, ...postIds)) postById[p.id] = p;
+    }
+    for (const m of msgs) {
+      try { m.photos = JSON.parse(m.photos_json || '[]'); if (!Array.isArray(m.photos)) m.photos = []; } catch (e) { m.photos = []; }
+      m.photos = m.photos.filter(p => typeof p === 'string' && p.startsWith('/media/')).slice(0, 10);
+      if (Number(m.post_id) > 0 && postById[Number(m.post_id)]) m.post = postById[Number(m.post_id)];
+      delete m.photos_json;
+    }
+  } catch (e) { console.error('[chat] post/photos:', e.message); }
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
@@ -11939,6 +11967,48 @@ app.get('/api/chat/around', requireAuth, (req, res) => {
   const after = db.prepare(sel + ` AND c.id > ? ORDER BY c.id ASC LIMIT 30`).all(uid, id);
   if (!center.length) return res.json({ ok: false, error: 'no_encontrado' });
   res.json({ ok: true, messages: before.concat(center, after) });
+});
+
+// (LOTE CHAT-678 · 6) Compartir un posteo al chat: el posteo viaja como
+// mensaje (post_id) para hablar de ESE posteo. No programa ni publica
+// nada; solo lo trae al chat. Posty lo reconoce por el post_id y el
+// próximo turno del chat lo ancla (anchor_post_id, mecanismo vigente).
+app.post('/api/chat/compartir-posteo', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const lang = langOfUser(uid);
+  const en = lang === 'en';
+  const postId = Number((req.body || {}).postId || 0);
+  if (!postId) return res.status(400).json({ ok: false, error: 'post_falta' });
+  const post = db.prepare('SELECT id, image_path, caption, scheduled_at, status, media_type FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+  if (!post) return res.status(404).json({ ok: false, error: 'post_no_encontrado', message: en ? 'I could not find that post' : 'no encontré ese posteo' });
+  const when = wallInTz(post.scheduled_at, userTz(uid)) || '';
+  const fecha = when ? when.slice(0, 10) : '';
+  const userText = en ? 'I share this post to talk about it' : 'Te comparto este posteo para hablar de él';
+  const ackText = en
+    ? `Got it — the post for ${fecha || 'this week'}. Tell me what you want to change.`
+    : `Ya lo veo — el posteo del ${fecha || 'esta semana'}. Decime qué querés cambiar.`;
+  const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id) VALUES (?,?,?,?)').run(uid, 'user', userText, postId);
+  db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id) VALUES (?,?,?,?)').run(uid, 'assistant', ackText, postId);
+  res.json({ ok: true, postId, messageId: ins.lastInsertRowid, post });
+});
+
+// (LOTE CHAT-678 · 8) Dejarle una nota a Posty: se guarda en memoria_cliente
+// (tipo 'nota') — la planificación ya la lee vía memoriaParaBrief (v873),
+// así que la nota alimenta los próximos posteos sin reescribir el
+// planificador. En el chat se ve la nota + la confirmación de Posty.
+app.post('/api/chat/nota', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const lang = langOfUser(uid);
+  const en = lang === 'en';
+  const texto = String((req.body || {}).texto || '').trim().slice(0, 500);
+  if (texto.length < 4) return res.status(400).json({ ok: false, error: 'nota_corta', message: en ? 'Write the note in a line so I can save it' : 'escribí la nota en una línea para guardarla' });
+  let guardadas = 0;
+  try { guardadas = memoriaCliente.guardarMemoria(db, uid, [{ tipo: 'nota', texto }], texto); } catch (e) { console.error('[chat-nota] memoria:', e.message); }
+  const userText = (en ? '📝 Note for Posty: ' : '📝 Nota a Posty: ') + texto;
+  const ackText = en ? 'Noted ✅ I will keep it in mind for your posts.' : 'Anotado ✅ Lo tengo en cuenta para tus posteos.';
+  const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', userText);
+  db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', ackText);
+  res.json({ ok: true, guardada: guardadas > 0, messageId: ins.lastInsertRowid });
 });
 
 // ---------- 🧠 MEMORIA DE GUSTOS (v392) ----------
@@ -35870,7 +35940,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v935';
+const BUILD_ID = '20261105-v936';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

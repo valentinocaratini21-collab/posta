@@ -1358,6 +1358,11 @@ CREATE TABLE IF NOT EXISTS chat_seen_photos (
   PRIMARY KEY (user_id, photo_hash)
 );
 `);
+// (LOTE CHAT-678 · 6 y 7) Posteo compartido al chat (post_id) y grupo de
+// fotos del mensaje (photos_json: ["/media/..."]): viajan con el mensaje
+// para que el chat los muestre y Posty sepa de qué posteo se habla.
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN post_id INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN photos_json TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CAPTION-BOTONES) Propuesta de caption nuevo en el chat: el mensaje
 // de Posty que propone un caption lleva el posteo y el texto propuesto, para
 // que «Me gusta así» lo aplique aunque el cliente recargue. caption_estado:
