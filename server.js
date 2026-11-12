@@ -2301,10 +2301,10 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
     try {
       const isVideo = p.type === 'video' && p.video;
       const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
-      if (!m) continue;
+      if (!m) { console.error(`[posta] importTrialWeek: posteo idx=${idx} sin imagen válida (base64) — se salta`); continue; }
       const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
       const buf = Buffer.from(m[3], 'base64');
-      if (!buf.length || buf.length > 15 * 1024 * 1024) continue;
+      if (!buf.length || buf.length > 15 * 1024 * 1024) { console.error(`[posta] importTrialWeek: posteo idx=${idx} imagen vacía o >15MB (${buf.length}b) — se salta`); continue; }
       const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
       fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
       const clientPhoto = trialPostUsesClientPhoto(out, idx) ? 1 : 0;
@@ -2345,7 +2345,7 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
         }
       } catch (e) {}
       n++;
-    } catch (e) { /* un posteo fallido no frena los demás */ }
+    } catch (e) { console.error(`[posta] importTrialWeek: posteo idx=${idx} falló y se salta (${(e && e.message) || e})`); }
   }
   // (FUNDAMENTO-LITERAL · pieza 1) El espejo aprobado de la prueba siembra
   // la cuenta: productos literales + vetos al fundamento, y productos al
@@ -19134,7 +19134,8 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
   } catch (e) { /* respaldo 19:00 */ }
   const { STORY_HOUR } = require('./story-reel');
   const curMonday = mondayKeyOf(tzToday(tz));
-  const tomorrow = shiftDays(tzToday(tz), 1);
+  const today = tzToday(tz);
+  const tomorrow = shiftDays(today, 1);
   const taken = new Set();
   const takenStory = new Set();
   try {
@@ -19198,7 +19199,18 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
     // 🚪 Los días de cierre se saltan siempre: si los abiertos no alcanzan,
     // la semana sale con menos posteos — jamás se viola un cierre.
     let iso = null;
-    const firstDay = monday < tomorrow ? tomorrow : monday;
+    let firstDay = monday < tomorrow ? tomorrow : monday;
+    // (LOTE PRUEBA-CUBRE-HOY · v978) La semana importada de la prueba
+    // (source='trial') cubre HOY: el primer posteo que ve el usuario es
+    // el wow de la prueba, en su idioma y con su estrella — y /api/week/
+    // ensure lo encuentra y no genera otro posteo en español. Solo si la
+    // mejor hora de hoy sigue en el futuro: si la prueba corre después
+    // de esa hora, hoy ya pasó y va mañana, como siempre. El resto de
+    // la regla no cambia (días cerrados, día ya ocupado, cupo).
+    if (d.source === 'trial' && monday < tomorrow) {
+      const candToday = zonedWallToUtc(`${today} ${String(hour).padStart(2, '0')}:00`, tz);
+      if (candToday && Date.parse(candToday) > Date.now()) firstDay = today;
+    }
     for (let i = 0; i < 7; i++) {
       const ymd = shiftDays(monday, i);
       if (ymd < firstDay || tset.has(ymd)) continue;
@@ -36466,7 +36478,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v977';
+const BUILD_ID = '20261105-v978';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
