@@ -98,6 +98,13 @@ try { db.exec(`ALTER TABLE profiles ADD COLUMN page_slug TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE profiles ADD COLUMN page_enabled INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
 // Días de cierre del negocio (v283): JSON de días ISO 1=Lun..7=Dom en que NO se programa nada automático.
 try { db.exec(`ALTER TABLE profiles ADD COLUMN closed_days TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE VIDEO-EDICION-AVISOS) Feedback del video editado. Las columnas de la
+// cita (reply_to/reply_text) viven ABAJO, tras el CREATE TABLE de
+// chat_messages: arriba la tabla aún no existe en una DB nueva y el ALTER
+// fallaba en silencio (sin ellas, el SELECT de GET /api/ideas/chat caía al
+// fallback plano hasta el reinicio siguiente).
+try { db.exec(`ALTER TABLE posts ADD COLUMN video_feedback TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN video_listo_aviso INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // (Tanda feed 6D · ítem 13) Nombre/bio/link DEL PERFIL que muestra el
 // espejo de la home cuando el dueño los edita en Posty: viven en la
 // MISMA tabla profiles y se guardan por el PUT /api/profile de siempre.
@@ -1382,6 +1389,13 @@ try { db.exec(`ALTER TABLE chat_messages ADD COLUMN caption_estado TEXT DEFAULT 
 // otros: en una DB nueva la tabla todavía no existe arriba y el ALTER
 // fallaba en silencio.
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN transcript_feedback TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE VIDEO-EDICION-AVISOS) Cita al responder deslizando: el mensaje que
+// responde a otro guarda a quién (reply_to) y el texto citado (reply_text,
+// snapshot máx 300). El ALTER vive ACÁ (después del CREATE TABLE de
+// chat_messages), no arriba con los otros: en una DB nueva la tabla todavía
+// no existe arriba y el ALTER fallaba en silencio.
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN reply_to INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN reply_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CHAT-MUSE) Limpieza única: filas de assistant con texto «…»
 // (artefacto del tipeo viejo). Idempotente: tras la primera pasada no
 // queda ninguna; la guarda pzChatSaveReply impide que vuelvan a nacer.

@@ -16,6 +16,7 @@ costs.initCosts(db, {
 }); // medición de gasto de IA (api_costs) + techo mensual por usuario
 const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
+const videoEdicion = require('./video-edicion'); // (LOTE VIDEO-EDICION-AVISOS) edición automática del video del cliente (ffmpeg local, USD 0, sin IA)
 // 🌅 RITUAL DE LA MAÑANA (LOTE 5/8): día, racha, álbum y elección (módulo
 // puro + SQL); la generación de alternas frescas vive en los endpoints de
 // abajo porque usa makeIdeaDraft del ámbito del servidor.
@@ -4387,7 +4388,7 @@ app.post('/api/oficina/chat', requireAuth, async (req, res) => {
     const r = await oficina.responderChat(db, req.session.userId, texto);
     // El hilo vive en el mismo almacén que el chat clásico (persiste).
     try {
-      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(req.session.userId, 'user', texto);
+      chatInsertUser(db, req.session.userId, texto, chatReplyFromBody(db, req.session.userId, req.body));
       db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(req.session.userId, 'assistant', r.reply);
     } catch (e) { /* el registro del río ya guardó el turno */ }
     res.json({ ok: true, reply: r.reply, poder: r.poder });
@@ -6394,6 +6395,45 @@ function pzChatShowDraftsTopic(drafts, lastUserText) {
 // guarda: el «…» era el artefacto del tipeo viejo y el acuse («acá va 👇»)
 // no se guarda como fila separada — la respuesta real del intercambio es
 // la única fila que queda. Devuelve true si guardó.
+// (LOTE VIDEO-EDICION-AVISOS · responder deslizando) Referencia a la
+// respuesta de un mensaje: el cliente desliza sobre un mensaje de Posty
+// y su respuesta cita ese mensaje. reply_to = id del mensaje citado
+// (tiene que ser del mismo usuario), reply_text = cita (snapshot, máx 300).
+function chatReplyFromBody(db, uid, body) {
+  try {
+    const b = body || {};
+    const to = Number(b.reply_to || b.replyTo || 0);
+    if (!to || to <= 0) return null;
+    const row = db.prepare('SELECT id, text FROM chat_messages WHERE id = ? AND user_id = ?').get(to, uid);
+    if (!row) return null;
+    const txt = String(b.reply_text || b.replyText || row.text || '').slice(0, 300);
+    return { to, text: txt };
+  } catch (e) { return null; }
+}
+// Inserta el mensaje del usuario con su cita (si la hay). Si la DB no
+// tiene las columnas todavía, cae al INSERT sin ellas: el mensaje nunca
+// se pierde por la cita.
+// (RE-BASE v938 · fusión con CHAT-678) El grupo de fotos también viaja
+// con el mensaje (photos_json, 5º param opcional): si no, un «hola» con
+// fotos citado perdería el grupo al recargar. Sin fotos ni cita, el INSERT
+// plano de siempre; sin las columnas nuevas, el fallback plano.
+function chatInsertUser(db, uid, text, reply, photosJson) {
+  const t = String(text || '').slice(0, 3000);
+  const to = reply && Number(reply.to) > 0 ? Number(reply.to) : null;
+  const rt = reply && reply.text ? String(reply.text).slice(0, 300) : '';
+  const ph = (photosJson !== undefined && photosJson !== null) ? String(photosJson) : null;
+  try {
+    if (ph && to) db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json, reply_to, reply_text) VALUES (?,?,?,?,?,?)').run(uid, 'user', t, ph, to, rt);
+    else if (ph) db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uid, 'user', t, ph);
+    else db.prepare('INSERT INTO chat_messages (user_id, role, text, reply_to, reply_text) VALUES (?,?,?,?,?)').run(uid, 'user', t, to, rt);
+  } catch (e) {
+    try {
+      if (ph) db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uid, 'user', t, ph);
+      else db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', t);
+    } catch (e2) { db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', t); }
+  }
+}
+
 function pzChatSaveReply(db, uid, reply) {
   const t = String(reply || '').trim();
   if (!t || t === '…') return false;
@@ -6693,6 +6733,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   if (guestBackstop(req, res)) return;
   const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths, libraryPaths } = req.body || {};
   const uidChat = req.session.userId;
+  const chatReply = chatReplyFromBody(db, uidChat, req.body); // (LOTE VIDEO-EDICION-AVISOS · responder deslizando)
   // (LOTE CHAT-678 · 7) Las fotos que llegaron con este turno se guardan
   // con el mensaje del usuario (photos_json) en TODOS los caminos que lo
   // insertan (saludo, conserje, gustos, cerebro): si no, un «hola» con
@@ -6752,7 +6793,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
       const dv = supportCases.divertToConcierge(db, uidChat, lastUserText);
       if (dv && dv.ok) {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
+        chatInsertUser(db, uidChat, lastUserText, chatReply, JSON.stringify(userPhotos));
         pzChatSaveReply(db, uidChat, dv.reply);
         return res.json({ reply: dv.reply, idea: null, concierge: true });
       }
@@ -6765,7 +6806,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     if (greetRe.test(lastUserText.trim()) || pzIsPureGreeting(lastUserText)) {
       const reply = 'hola! 😄 con qué te ayudo hoy?';
       try {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
+        chatInsertUser(db, uidChat, lastUserText, chatReply, JSON.stringify(userPhotos));
         pzChatSaveReply(db, uidChat, reply);
       } catch (e) {}
       return res.json({ reply, idea: null });
@@ -6785,7 +6826,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     const tmLang = langOfUser(uidChat);
     const tmPersist = (reply) => {
       try {
-        db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
+        chatInsertUser(db, uidChat, lastUserText, chatReply, JSON.stringify(userPhotos));
         pzChatSaveReply(db, uidChat, reply);
       } catch (e) {}
     };
@@ -6837,7 +6878,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         db.prepare('UPDATE users SET client_name = ? WHERE id = ?').run(cname, uidChat);
         const reply = `dale, ${cname}! \uD83D\uDE04 ya me lo anoto.`;
         try {
-          db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
+          chatInsertUser(db, uidChat, lastUserText, chatReply, JSON.stringify(userPhotos));
           pzChatSaveReply(db, uidChat, reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
@@ -6859,7 +6900,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           ? `listo, pauso ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} por un tiempo 👍`
           : `dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
         try {
-          db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uid, 'user', lastUserText.slice(0, 3000), JSON.stringify(userPhotos));
+          chatInsertUser(db, uid, lastUserText, chatReply, JSON.stringify(userPhotos));
           pzChatSaveReply(db, uid, reply);
         } catch (e) {}
         return res.json({ reply, idea: null });
@@ -7100,7 +7141,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     // (LOTE CHAT-678 · 7) Las fotos que llegaron con este mensaje se guardan
     // con él (photos_json): el grupo se ve en la burbuja y persiste entre
     // sesiones. Solo rutas /media/ reales, tope 10 (máximo de un carrusel).
-    db.prepare('INSERT INTO chat_messages (user_id, role, text, photos_json) VALUES (?,?,?,?)').run(uid, 'user', clean[clean.length - 1].text, JSON.stringify(userPhotos));
+    chatInsertUser(db, uid, clean[clean.length - 1].text, chatReply, JSON.stringify(userPhotos));
     pzChatSaveReply(db, uid, out.reply);
     if (out.idea) {
       db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
@@ -11782,13 +11823,15 @@ app.get('/api/ideas/chat', (req, res) => {
   // (caption_post_id + caption_text + caption_estado). Si la DB todavía no
   // tiene las columnas, cae al SELECT plano (sin botones, sin romper).
   let msgs = [];
-  try { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.post_id, c.photos_json, c.caption_post_id, c.caption_text, c.caption_estado, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
+  try { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.post_id, c.photos_json, c.reply_to, c.reply_text, c.caption_post_id, c.caption_text, c.caption_estado, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
   catch (e) { msgs = db.prepare(`SELECT c.id, c.role, c.text, c.created_at, COALESCE(m.reaction,'') AS reaction, COALESCE(m.pinned,0) AS pinned, COALESCE(m.edited,0) AS edited FROM chat_messages c LEFT JOIN chat_message_meta m ON m.message_id = c.id WHERE c.user_id=? AND (m.deleted IS NULL OR m.deleted = 0) AND (c.created_at > datetime('now', '-7 days') OR COALESCE(m.pinned,0) = 1) ORDER BY c.id DESC LIMIT 80`).all(uid).reverse(); }
   // (LOTE CHAT-678 · 6 y 7) El posteo compartido y las fotos del grupo
   // viajan con el mensaje: el cliente los ve en la burbuja y Posty sabe
   // de qué posteo se habla (post_id) sin que el cliente lo describa.
   // (RE-BASE v936: el SELECT principal ya trae c.post_id y c.photos_json;
   // el fallback plano no los trae — el bloque tolera su ausencia.)
+  // (RE-BASE v938: el SELECT principal trae además c.reply_to y c.reply_text
+  // del lote video; el fallback plano tampoco los trae.)
   try {
     const postIds = [...new Set(msgs.map(m => Number(m.post_id) || 0).filter(id => id > 0))];
     const postById = {};
@@ -12136,8 +12179,10 @@ app.post('/api/ideas/chat/log', requireAuth, (req, res) => {
     if (Array.isArray(messages)) {
       const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)');
       for (const m of messages.slice(0, 10)) {
-        if ((m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string' && m.text.trim())
-          ins.run(uid, m.role, m.text.slice(0, 2000));
+        if ((m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string' && m.text.trim()) {
+          if (m.role === 'user' && (m.reply_to || m.replyTo)) chatInsertUser(db, uid, m.text.slice(0, 2000), chatReplyFromBody(db, uid, m));
+          else ins.run(uid, m.role, m.text.slice(0, 2000));
+        }
       }
     }
     res.json({ ok: true });
@@ -25306,6 +25351,52 @@ app.get('/api/subir-foto/propuesta', requireAuth, (req, res) => {
 // propuesta del álbum (PZ_SFT, 7/11): leer el pedido → aplicar el
 // cambio → mostrar el posteo nuevo en el chat → el cliente confirma
 // → recién ahí se programa.
+// (LOTE VIDEO-EDICION-AVISOS) Tiempo estimado del edit, por duración del
+// video (MEDIDO en el lote 5/11, no inventado): 10 s → 11–15 s; 50 s → 46 s;
+// 120 s (recortado a 90 s) → 102 s. El edit tarda ~lo que dura el video.
+function videoEditTiempoBucket(durSec) {
+  const d = Number(durSec) || 0;
+  if (d <= 30) return { es: 'menos de un minuto', en: 'less than a minute' };
+  if (d <= 60) return { es: 'alrededor de un minuto', en: 'about a minute' };
+  return { es: 'unos 2 minutos', en: 'about 2 minutes' };
+}
+// Aviso «estoy editando» (chat, sin push): se manda ANTES de que corra el
+// edit (el edit es síncrono dentro del request; el cliente ve el aviso
+// mientras espera). Devuelve el bucket usado.
+function videoEditAvisoEditando(uid, en, durSec) {
+  const b = videoEditTiempoBucket(durSec);
+  const msg = en
+    ? `i'm editing your video, it'll be ready in ${b.en}`
+    : `estoy editando tu video, lo tenés listo en ${b.es}`;
+  try { db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg); } catch (e) {}
+  return b;
+}
+// Aviso «video listo» (push + chat): se manda UNA sola vez por video
+// (posts.video_listo_aviso). El mensaje lleva el marcador
+// [video-listo:POSTID:RUTA] que el cliente renderiza como la vista previa
+// del video + los botones «Me gusta» / «Cambiar algo».
+function videoEditAvisoListo(uid, en, postId, videoRel) {
+  try {
+    const row = db.prepare('SELECT video_listo_aviso FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!row) return false;
+    if (row.video_listo_aviso) return false;
+    db.prepare('UPDATE posts SET video_listo_aviso = 1 WHERE id = ?').run(postId);
+  } catch (e) { /* sin columna: seguir igual, el aviso sale una vez por construcción */ }
+  const marker = `[video-listo:${postId}:${videoRel}]`;
+  const msg = en ? `your video is ready ${marker}` : `tu video ya está listo ${marker}`;
+  try { db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg); } catch (e) {}
+  try {
+    const { sendPush } = require('./push');
+    sendPush(uid, {
+      title: en ? '🎬 Your video is ready' : '🎬 Tu video ya está listo',
+      body: en ? 'Posty edited it. Take a look and tell me if you like it 👌' : 'Posty lo editó. Miralo y decime si te gusta 👌',
+      url: '/#/app/chat',
+      data: { postId, url: '/#/app/chat' },
+    }).catch(() => {});
+  } catch (e) {}
+  return true;
+}
+
 // subirFotoGenerar: pasos 1-6 del viejo programar (validar, caption,
 // INSERT borrador, mejora, cambio, titular + guarda cambio_fallo).
 // Devuelve el borrador para la vista previa; NUNCA programa.
@@ -25438,6 +25529,37 @@ async function subirFotoGenerar(uid, body, lang) {
         } catch (e) { console.error('[subir-foto] titular:', e.message); notes.push('titular'); }
       }
     }
+    if (media === 'video') {
+      // (LOTE VIDEO-EDICION-AVISOS) Edición automática del video del
+      // cliente: el video que manda ES el video (se edita, nunca se
+      // reemplaza). Aviso «estoy editando» ANTES del edit (con el tiempo
+      // por la duración medida) y aviso «video listo» DESPUÉS.
+      // Fail-closed: si no se puede editar, queda el ORIGINAL + nota.
+      try {
+        const absVideo = photoCliente.mediaAbs(MEDIA_DIR, post.image_path);
+        let durSec = 0;
+        try {
+          const { mediaInfo } = require('./reel-engine');
+          const info0 = absVideo ? await mediaInfo(absVideo) : null;
+          if (info0 && info0.duration) durSec = info0.duration;
+        } catch (e) {}
+        videoEditAvisoEditando(uid, en, durSec);
+        const ed = await videoEdicion.editarVideoCliente({
+          absPath: absVideo, mediaDir: MEDIA_DIR, uid,
+          rubro: rubroOf(uid), category: String((profile && profile.category) || ''),
+          seed: `${uid}:${postId}`, outBase: `video-edit-${postId}`,
+        });
+        if (ed && ed.ok) {
+          db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, cover_path = ? WHERE id = ?')
+            .run(String(ed.outRel), String(post.image_path || ''), String(ed.coverRel || ''), postId);
+          post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+          applied.push('video-editado');
+          videoEditAvisoListo(uid, en, postId, String(ed.outRel));
+        } else {
+          notes.push('video-edicion');
+        }
+      } catch (e) { console.error('[subir-foto] video-edicion:', e.message); notes.push('video-edicion'); }
+    }
     // (CHAT-FOTO) Guarda: un cambio pedido que no se pudo aplicar no deja
     // un posteo programado con la versión sin cambiar. El posteo queda
     // borrador y el cliente recibe qué falló; la mejora automática de luz
@@ -25539,13 +25661,48 @@ app.post('/api/subir-foto/programar', requireAuth, requireTrialValid, express.js
   if (g.title) reply += `\n"${g.title}"`;
   const noteLines = { 'otra-version': en ? 'I could not make another version of the photo, so I scheduled the original.' : 'no pude hacer otra versión de la foto, así que programé la original.',
     'recorte': en ? 'I could not make the different crop, so I scheduled the full photo.' : 'no pude hacer el recorte distinto, así que programé la foto entera.',
-    'titular': en ? 'I could not burn the headline on the photo, so it goes without text on the image.' : 'no pude quemar el titular en la foto, así que va sin texto en la imagen.' };
+    'titular': en ? 'I could not burn the headline on the photo, so it goes without text on the image.' : 'no pude quemar el titular en la foto, así que va sin texto en la imagen.',
+    'video-edicion': en ? 'I could not edit the video, so I scheduled the original as-is.' : 'no pude editar el video, así que programé el original tal cual.' };
   for (const n of g.notes) if (noteLines[n]) reply += `\n${noteLines[n]}`;
   try {
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', String(body.displayText || '').slice(0, 2000));
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
   } catch (e) {}
   res.json({ ok: true, postId: g.postId, when: g.when, whenLabel: g.whenLabel, applied: g.applied, notes: g.notes, reply });
+});
+
+// (LOTE VIDEO-EDICION-AVISOS) Feedback del cliente sobre el video editado:
+// «Me gusta» (confirma el edit) o «Cambiar algo» (Posty pregunta qué cambiar).
+// El feedback queda en posts.video_feedback; los mensajes van al chat.
+app.post('/api/posts/:id/video-feedback', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const postId = Number(req.params.id);
+  const fb = String((req.body || {}).feedback || '').toLowerCase();
+  if (!postId || (fb !== 'gusta' && fb !== 'cambiar')) return res.status(400).json({ ok: false, error: 'feedback_invalido' });
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+  if (!post) return res.status(404).json({ ok: false, error: 'post_no_encontrado' });
+  if (String(post.media_type || '') !== 'video') return res.status(400).json({ ok: false, error: 'no_es_video' });
+  const en = langOfUser(uid) === 'en';
+  try { db.prepare('UPDATE posts SET video_feedback = ? WHERE id = ?').run(fb, postId); } catch (e) {}
+  const msgs = [];
+  try {
+    if (fb === 'gusta') {
+      const u = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', en ? 'i like it 👍' : 'me gusta 👍');
+      const ack = '¡genial! 😍';
+      const a = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', ack);
+      msgs.push({ id: Number(u.lastInsertRowid), role: 'user', text: en ? 'i like it 👍' : 'me gusta 👍' });
+      msgs.push({ id: Number(a.lastInsertRowid), role: 'assistant', text: ack });
+    } else {
+      const u = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', en ? 'i want to change something' : 'quiero cambiar algo');
+      const q = en
+        ? 'tell me what you want to change: should i trim it more, change the music, or the cover?'
+        : 'decime qué querés cambiar: ¿lo recorto más, le cambio la música o la portada?';
+      const a = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', q);
+      msgs.push({ id: Number(u.lastInsertRowid), role: 'user', text: en ? 'i want to change something' : 'quiero cambiar algo' });
+      msgs.push({ id: Number(a.lastInsertRowid), role: 'assistant', text: q });
+    }
+  } catch (e) {}
+  res.json({ ok: true, postId, feedback: fb, messages: msgs });
 });
 
 // (foto-cliente-experto, 2026-10-26) «Mejorar» genera una PROPUESTA.
@@ -31072,11 +31229,12 @@ app.get('/api/trial/chat-onboarding', (req, res) => {
     const after = Math.max(0, parseInt(String((req.query && req.query.after) || '0'), 10) || 0);
     let rows = [];
     try {
-      rows = db.prepare('SELECT id, role, text, caption_post_id, caption_text, caption_estado FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || [];
+      try { rows = db.prepare('SELECT id, role, text, reply_to, reply_text, caption_post_id, caption_text, caption_estado FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || []; }
+      catch (e) { rows = db.prepare('SELECT id, role, text, caption_post_id, caption_text, caption_estado FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || []; }
     } catch (e) {
       try { rows = db.prepare('SELECT id, role, text FROM chat_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT 50').all(uid, after) || []; } catch (e2) { rows = []; }
     }
-    return res.json({ ok: true, user_id: uid, messages: rows.map((r) => ({ id: r.id, role: r.role, text: r.text, caption_post_id: r.caption_post_id || null, caption_text: r.caption_text || '', caption_estado: r.caption_estado || '' })) });
+    return res.json({ ok: true, user_id: uid, messages: rows.map((r) => ({ id: r.id, role: r.role, text: r.text, reply_to: r.reply_to || null, reply_text: r.reply_text || '', caption_post_id: r.caption_post_id || null, caption_text: r.caption_text || '', caption_estado: r.caption_estado || '' })) });
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'No pudimos leer el chat todavía.' });
   }
@@ -35975,7 +36133,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v937';
+const BUILD_ID = '20261105-v938';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

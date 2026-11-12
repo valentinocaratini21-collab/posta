@@ -1140,6 +1140,19 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-msg.u{align-self:flex-end;background:var(--cel);color:#fff;border-bottom-right-radius:6px}
 .chat-msg-hora{display:block;text-align:right;font-size:10.5px;font-weight:700;color:var(--mut);margin-top:4px;line-height:1}
 .chat-msg.u .chat-msg-hora{color:rgba(255,255,255,.8)}
+/* (LOTE VIDEO-EDICION-AVISOS · responder deslizando) Cita de la respuesta:
+   arriba de la burbuja, con barra lateral; tocable para saltar al original. */
+.pz-chat-quote{border-left:3px solid var(--cel);background:rgba(39,147,200,.08);border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11.5px;line-height:1.4;color:var(--mut);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-msg.u .pz-chat-quote{border-left-color:rgba(255,255,255,.7);background:rgba(255,255,255,.14);color:rgba(255,255,255,.85)}
+.pz-chat-quote-txt{display:block;overflow:hidden;text-overflow:ellipsis}
+/* Barra «Respondiendo a…» sobre el micrófono, con × para cancelar. */
+.pz-reply-bar{display:flex;align-items:center;gap:6px;background:#F2F9FD;border:1px solid var(--line);border-left:3px solid var(--cel);border-radius:10px;padding:7px 10px;margin:0 0 8px;font-size:12.5px}
+.pz-reply-bar-lbl{font-weight:700;white-space:nowrap}
+.pz-reply-bar-txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mut)}
+.pz-reply-bar-x{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:var(--mut);padding:2px 6px}
+/* «Tu video ya está listo»: el video no se sale del ancho en pantallas chicas. */
+.pz-video-listo video{max-height:420px}
+.chat-msg{will-change:transform}
 .chat-previews{display:flex;gap:10px;margin:4px 0 12px}
 .chat-prev{flex:1;border-radius:14px;overflow:hidden;cursor:pointer;border:3px solid var(--line-soft);transition:border-color .15s,box-shadow .15s;background:#fff;max-width:220px}
 .chat-prev canvas{width:100%;height:auto;display:block}

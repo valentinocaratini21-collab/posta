@@ -48,18 +48,20 @@ check('1j compartir: inserta user + ack con post_id y devuelve messageId/post', 
 check('1k nota: valida minimo 4 caracteres (400 si corta) y recorta a 500', srv.includes("texto.length < 4") && srv.includes(".trim().slice(0, 500)") && srv.includes("nota_corta"));
 check('1l nota: guarda en memoria_cliente via guardarMemoria (tipo nota)', srv.includes("memoriaCliente.guardarMemoria(db, uid, [{ tipo: 'nota', texto }], texto)"));
 check('1m nota: inserta user + ack y devuelve guardada', srv.includes('Nota a Posty: ') && srv.includes('guardada: guardadas > 0, messageId: ins.lastInsertRowid'));
-check('1n GET /api/ideas/chat: SELECT incluye post_id y photos_json', srv.includes('c.post_id, c.photos_json, c.caption_post_id')); // (re-base v936: el SELECT fusionado es el de v935 con JOIN+meta; el literal v879 ya no existe. El comportamiento lo prueban 6d/7e en el boot.)
+check('1n GET /api/ideas/chat: SELECT incluye post_id y photos_json', srv.includes('c.post_id, c.photos_json, c.reply_to, c.reply_text, c.caption_post_id')); // (re-base v938: la fusión video añade c.reply_to/c.reply_text al SELECT; el comportamiento lo prueban 6d/7e en el boot.)
 check('1o GET /api/ideas/chat: parsea photos (solo /media/, tope 10) y adjunta post', srv.includes("m.photos = JSON.parse(m.photos_json || '[]')") && srv.includes("m.photos = m.photos.filter(p => typeof p === 'string' && p.startsWith('/media/')).slice(0, 10)") && srv.includes('SELECT id, image_path, caption, scheduled_at, status, media_type FROM posts WHERE user_id = ? AND id IN ('));
 check('1p POST /api/ideas/chat: userPhotos se calcula una sola vez arriba del handler', srv.includes("const userPhotos = (Array.isArray(photoPaths) ? photoPaths : [])"));
-check('1q POST /api/ideas/chat: 6 INSERTs con photos_json (saludo, conserje, gustos x2, cerebro)', (() => {
+check('1q POST /api/ideas/chat: 6 INSERTs con photos_json (saludo, conserje, gustos x2, cerebro)', (() => { // (re-base v938: la fusión video reemplaza los 6 INSERTs literales por chatInsertUser con las fotos en el 5º param; las fotos siguen persistiendo)
   const a = srv.indexOf("app.post('/api/ideas/chat'");
   const b = srv.indexOf("app.post('/api/ideas/transcribe'", a);
-  return a > 0 && b > a && count(srv.slice(a, b), 'photos_json) VALUES') === 6;
-})(), 'en el handler: ' + (() => { const a = srv.indexOf("app.post('/api/ideas/chat'"); const b = srv.indexOf("app.post('/api/ideas/transcribe'", a); return count(srv.slice(a, b), 'photos_json) VALUES'); })());
+  if (!(a > 0 && b > a)) return false;
+  const sl = srv.slice(a, b);
+  return count(sl, 'chatInsertUser(db, ') === 6 && count(sl, 'JSON.stringify(userPhotos));') === 6;
+})(), 'en el handler: ' + (() => { const a = srv.indexOf("app.post('/api/ideas/chat'"); const b = srv.indexOf("app.post('/api/ideas/transcribe'", a); return count(srv.slice(a, b), 'chatInsertUser(db, '); })());
 check('1r cliente: chatMsgHtml rinde tarjeta del posteo (postcard + data-post-id)', app.includes('pz-chat-postcard') && app.includes('data-post-id'));
 check('1s cliente: chatMsgHtml rinde grilla de fotos (photogrid, video si .mp4)', app.includes('pz-chat-photogrid') && app.includes('<video src=') && app.includes('muted preload="metadata"'));
 check('1t cliente: chatLoadHistory lleva photos y post por mensaje', app.includes("photos: Array.isArray(m.photos) ? m.photos : []") && app.includes("post: (m.post && m.post.id) ? m.post : null"));
-check('1u cliente: chatSend manda photoPaths y la burbuja optimista ya lleva la grilla', app.includes('photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean)') && app.includes("chatMsgHtml('user', sendText, sts, 0, null, null, unsentPaths)"));
+check('1u cliente: chatSend manda photoPaths y la burbuja optimista ya lleva la grilla', app.includes('photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean)') && app.includes("chatMsgHtml('user', sendText, sts, 0, replyCtx, null, unsentPaths)")); // (re-base v938: reply en 5º, fotos en 7º)
 check('1v cliente: picker permite varias fotos (multiple, tope 10)', app.includes('CHAT_FOTOS_MAX = 10') && app.includes('multiple') && app.includes('chatUploadPhotos'));
 check('1w cliente: boton Compartir en el chat en el detalle del posteo', app.includes('apvShareChat') && app.includes('Compartir en el chat'));
 check('1x cliente: pzCompartirPosteoChat llama al endpoint y ancla el posteo', app.includes("api.post('/api/chat/compartir-posteo'") && app.includes('pzHablarDePosteo(post)'));
@@ -73,7 +75,9 @@ check('1ad flujo de confirmacion intacto (aprobar en sitio + programar no se toc
 // ---------------------------------------------------------------- 2. VM: chatMsgHtml
 console.log('== 2. VM: chatMsgHtml ==');
 {
-  const a = app.indexOf('function chatMsgHtml(');
+  // (re-base v938) El slice arranca en chatReplyQuoteHtml: chatMsgHtml la
+  // llama en la burbuja plana y la VM la necesita definida (real, no stub).
+  const a = app.indexOf('function chatReplyQuoteHtml(');
   const b = app.indexOf('async function logoCandidateRespond', a);
   check('2a chatMsgHtml extraible de app.js', a > 0 && b > a);
   const sandbox = {
@@ -86,7 +90,7 @@ console.log('== 2. VM: chatMsgHtml ==');
     chatHoraHtml: () => '',
     pzIc: () => '',
     gzT: x => x,
-    FP_MARKER_RE: /(?!)/, LC_MARKER_RE: /(?!)/, FOTO_MARKER_RE: /(?!)/,
+    FP_MARKER_RE: /(?!)/, LC_MARKER_RE: /(?!)/, FOTO_MARKER_RE: /(?!)/, VIDEO_LISTO_MARKER_RE: /$^/, // (re-base v938: chatMsgHtml referencia el marcador del lote video)
   };
   vm.createContext(sandbox);
   let vmOk = true, vmErr = '';

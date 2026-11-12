@@ -9095,6 +9095,7 @@ let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
 const LC_MARKER_RE = /\[logo-candidate(?::([^\]]+))?\]/;
 // (CHAT-FOTO) Marcador de foto dentro de un mensaje: [foto:/media/x.jpg]
 const FOTO_MARKER_RE = /\[foto:([^\]]+)\]/;
+const VIDEO_LISTO_MARKER_RE = /\[video-listo:(\d+):([^\]]+)\]/; // (LOTE VIDEO-EDICION-AVISOS) «tu video ya está listo» + vista previa + botones
 function chatStripLcMarker(t) { return String(t || '').replace(/\[logo-candidate(?::[^\]]+)?\]/g, '').trim(); }
 
 // ---- Nudge "¿publicamos tu primero?": banner con botón de 1 tap ----
@@ -9223,6 +9224,15 @@ function chatAppendMsg(box, html, ts) {
   return ref ? ref.previousElementSibling : box.lastElementChild;
 }
 
+// (LOTE VIDEO-EDICION-AVISOS · responder deslizando) Cita de la respuesta:
+// si el mensaje responde a otro, muestra la cita arriba (tocable: salta al original).
+function chatReplyQuoteHtml(reply) {
+  if (!reply || !reply.text) return '';
+  const to = reply.to ? ` data-reply-to="${esc(String(reply.to))}"` : '';
+  return `<div class="pz-chat-quote"${to}><span class="pz-chat-quote-txt">${esc(String(reply.text).slice(0, 120))}</span></div>`;
+}
+
+
 // HTML de un mensaje del chat: si trae el marcador de logo candidato,
 // renderiza el banner confirmable; si no, la burbuja normal.
 function chatMsgHtml(role, text, ts, id, reply, cap, photos, post) {
@@ -9327,7 +9337,22 @@ function chatMsgHtml(role, text, ts, id, reply, cap, photos, post) {
       : `<div class="pz-caption-btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzCaptionFeedback(${capPostId}, ${capMsgId}, 'gusta', this)">${enCap ? 'I like it like this 👍' : 'Me gusta así 👍'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzCaptionFeedback(${capPostId}, ${capMsgId}, 'cambiar', this)">${enCap ? 'Change something' : 'Cambiar algo'}</button></div>`;
     return `<div class="chat-msg ai pz-caption-propuesta"${mid} data-ts="${Number(ts) || ''}" data-caption-post="${capPostId}" data-caption-msg="${capMsgId}"><div>${linkifyEsc(text)}</div>${capQuote}${capBtns}${chatHoraHtml(ts)}</div>`;
   }
-  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}"${mid} data-ts="${Number(ts) || ''}">${linkifyEsc(text)}${chatHoraHtml(ts)}</div>`;
+  // (LOTE VIDEO-EDICION-AVISOS) «Tu video ya está listo»: vista previa del
+  // video editado + botones «Me gusta» / «Cambiar algo». El marcador lleva
+  // el postId y la ruta del video ([video-listo:ID:/media/...mp4]).
+  const vl = String(text || '').match(VIDEO_LISTO_MARKER_RE);
+  if (vl && role !== 'user') {
+    const vpid = Number(vl[1]);
+    const vpath = (vl[2] || '').trim();
+    const cleanV = String(text || '').replace(VIDEO_LISTO_MARKER_RE, '').trim();
+    const enV = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    return `<div class="chat-msg ai pz-video-listo"${mid} data-ts="${Number(ts) || ''}" data-video-post="${vpid}"><div>${linkifyEsc(cleanV)}</div>`
+      + (vpath ? `<video src="${esc(vpath)}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;display:block;margin-top:8px;max-height:420px;background:#000"></video>` : '')
+      + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-primary btn-sm" onclick="pzVideoListoFeedback(${vpid}, 'gusta', this)">${enV ? 'I like it 👍' : 'Me gusta 👍'}</button><button type="button" class="btn btn-soft btn-sm" onclick="pzVideoListoFeedback(${vpid}, 'cambiar', this)">${enV ? 'Change something' : 'Cambiar algo'}</button></div>`
+      + chatHoraHtml(ts)
+      + `</div>`;
+  }
+  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}"${mid} data-ts="${Number(ts) || ''}">${chatReplyQuoteHtml(reply)}${linkifyEsc(text)}${chatHoraHtml(ts)}</div>`;
   const imgPath = (m[1] || '').trim();
   const img = imgPath
     ? `<img src="${esc(imgPath)}" alt="Posible logo de tu marca" loading="lazy" style="width:96px;height:96px;object-fit:cover;border-radius:16px;display:block;margin:8px auto" onerror="this.closest('.lc-banner').remove()">`
@@ -9455,7 +9480,7 @@ async function chatLoadHistory() {
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
-        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0, cap: (m.caption_post_id && String(m.caption_text || '').trim()) ? { post_id: Number(m.caption_post_id), text: String(m.caption_text), estado: String(m.caption_estado || ''), msg_id: Number(m.id) || 0 } : null, photos: Array.isArray(m.photos) ? m.photos : [], post: (m.post && m.post.id) ? m.post : null }))
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 3000), ts: pzTsUTC(m.created_at), id: Number(m.id) || 0, cap: (m.caption_post_id && String(m.caption_text || '').trim()) ? { post_id: Number(m.caption_post_id), text: String(m.caption_text), estado: String(m.caption_estado || ''), msg_id: Number(m.id) || 0 } : null, photos: Array.isArray(m.photos) ? m.photos : [], post: (m.post && m.post.id) ? m.post : null, reply: (m.reply_to || m.reply_text) ? { to: Number(m.reply_to) || 0, text: String(m.reply_text || '') } : null }))
         .sort((a, b) => (a.ts - b.ts) || (a.id - b.id));
       // (LOTE CHAT-MEJORAS) Meta por mensaje (reacción/fijado/editado).
       CHAT_META = {};
@@ -9463,6 +9488,7 @@ async function chatLoadHistory() {
       const box = $('#chatBox');
       if (box) {
         box.innerHTML = CHAT.map(m => pzChatMsgFull(m)).join('');
+        try { pzChatReplySwipeInit(); } catch (e) {}
         try { pzChatRenderPinned(); } catch (e) {}
         // (v846 · ÚLTIMO ABAJO) El re-render no se come la burbuja de voz
         // optimista en vuelo: si sigue enviando, vuelve en su lugar por ts.
@@ -10295,6 +10321,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     </div><div id="chatAnchor"></div>${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
+    <div id="pzReplyBar" class="pz-reply-bar" hidden></div>
     <div class="pz-voicebar">
       <div class="pz-voice-primary">
         <button class="pz-cam-btn" id="chatPhotoBtn" type="button" title="Mandar una foto o video" aria-label="Mandar una foto o video">${pzIc('camera', 20)}</button>
@@ -11286,6 +11313,118 @@ function chatIsShortCommand(t) {
   return w.length > 0 && w.length <= 6;
 }
 
+// (LOTE VIDEO-EDICION-AVISOS · responder deslizando) Cita pendiente: el
+// cliente desliza sobre un mensaje de Posty y su respuesta lo cita.
+var PZ_CHAT_REPLY = null; // { id, text } o null
+function pzChatReplySet(id, text) {
+  const t = String(text || '').trim();
+  if (!id || !t) return;
+  PZ_CHAT_REPLY = { id: Number(id), text: t.slice(0, 300) };
+  pzChatReplyBar();
+}
+function pzChatReplyClear() {
+  PZ_CHAT_REPLY = null;
+  const bar = document.getElementById('pzReplyBar');
+  if (bar) { bar.hidden = true; bar.innerHTML = ''; }
+}
+function pzChatReplyBar() {
+  const bar = document.getElementById('pzReplyBar');
+  if (!bar) return;
+  if (!PZ_CHAT_REPLY) { bar.hidden = true; bar.innerHTML = ''; return; }
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  bar.innerHTML = `<span class="pz-reply-bar-lbl">${en ? 'Replying to' : 'Respondiendo a'}: </span><span class="pz-reply-bar-txt">${esc(PZ_CHAT_REPLY.text.slice(0, 120))}</span><button type="button" class="pz-reply-bar-x" onclick="pzChatReplyClear()" aria-label="×">×</button>`;
+  bar.hidden = false;
+}
+// Deslizar a la derecha sobre un mensaje de Posty = responderlo (WhatsApp).
+// Solo burbujas de Posty (.chat-msg.ai); un toque normal no hace nada.
+// La cita se salta tocándola (va al mensaje original).
+function pzChatReplySwipeInit() {
+  const box = document.getElementById('chatBox');
+  if (!box || box.__pzReplySwipe) return;
+  box.__pzReplySwipe = true;
+  let sx = 0, sy = 0, st = 0, el = null, active = false;
+  box.addEventListener('touchstart', (e) => {
+    try {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const b = t.target && t.target.closest ? t.target.closest('.chat-msg.ai') : null;
+      if (!b) return;
+      sx = t.clientX; sy = t.clientY; st = Date.now(); el = b; active = true;
+    } catch (err) {}
+  }, { passive: true });
+  box.addEventListener('touchmove', (e) => {
+    try {
+      if (!active || !el) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (dx > 12 && Math.abs(dy) < 40) { el.style.transform = `translateX(${Math.min(dx, 80)}px)`; el.style.transition = 'none'; }
+    } catch (err) {}
+  }, { passive: true });
+  box.addEventListener('touchend', (e) => {
+    try {
+      if (!active || !el) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      const dx = t ? t.clientX - sx : 0, dy = t ? t.clientY - sy : 0;
+      const dt = Date.now() - st;
+      el.style.transform = ''; el.style.transition = '';
+      active = false;
+      if (dx > 60 && Math.abs(dy) < 40 && dt < 600) {
+        const id = el.getAttribute('data-msg-id');
+        let txt = '';
+        try {
+          const c = el.cloneNode(true);
+          c.querySelectorAll('.pz-chat-quote, button, video, .chat-msg-hora').forEach(n => n.remove());
+          txt = (c.textContent || '').replace(/\s+/g, ' ').trim();
+        } catch (err) {}
+        if (id && txt) pzChatReplySet(id, txt.slice(0, 300));
+      }
+      el = null;
+    } catch (err) { try { if (el) { el.style.transform = ''; el.style.transition = ''; } } catch (e2) {} active = false; el = null; }
+  }, { passive: true });
+  box.addEventListener('click', (e) => {
+    try {
+      const q = e.target && e.target.closest ? e.target.closest('.pz-chat-quote') : null;
+      if (!q) return;
+      const to = q.getAttribute('data-reply-to');
+      if (!to) return;
+      const orig = box.querySelector(`.chat-msg[data-msg-id="${to}"]`);
+      if (orig) {
+        orig.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        orig.style.outline = '2px solid var(--cel)';
+        setTimeout(() => { try { orig.style.outline = ''; } catch (err) {} }, 1200);
+      }
+    } catch (err) {}
+  });
+}
+// Feedback del video listo («Me gusta» / «Cambiar algo»): un toque, sin
+// recargar. Los mensajes que devuelve el servidor se agregan al chat.
+async function pzVideoListoFeedback(postId, feedback, btn) {
+  const pid = Number(postId);
+  if (!pid || (feedback !== 'gusta' && feedback !== 'cambiar')) return;
+  try {
+    const card = btn && btn.closest ? btn.closest('.pz-video-listo') : null;
+    if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  } catch (e) {}
+  let r;
+  try { r = await api.post(`/api/posts/${pid}/video-feedback`, { feedback }); } catch (e) { r = null; }
+  if (!r || !r.ok) {
+    try { bbToast((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Could not save it, try again 🙏' : 'no se pudo guardar, probá de nuevo 🙏'); } catch (e) {}
+    try { const card = btn && btn.closest ? btn.closest('.pz-video-listo') : null; if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; }); } catch (e) {}
+    return;
+  }
+  const box = document.getElementById('chatBox');
+  if (box && Array.isArray(r.messages)) {
+    for (const m of r.messages) {
+      const ts = Date.now();
+      CHAT.push({ role: m.role, text: m.text, ts });
+      chatAppendMsg(box, chatMsgHtml(m.role, m.text, ts, m.id), ts);
+    }
+    chatScroll(true);
+  }
+}
+
+
 // (LOTE CAPTION-BOTONES) Feedback de la propuesta de caption («Me gusta
 // así» / «Cambiar algo»): un toque, sin recargar. Los mensajes que devuelve
 // el servidor se agregan al chat; los botones de la tarjeta se reemplazan
@@ -11386,14 +11525,18 @@ async function chatSend(textArg) {
   // las respuestas guardadas) — solo deja de ser la entrada por defecto.
   // AJUSTE ENTRADA DIRECTA: si hay foto pendiente, el texto es la instrucción.
   try { pzSftChatTexto(sendText); } catch (e) {}
+  // (LOTE VIDEO-EDICION-AVISOS · responder deslizando) La cita pendiente se
+  // consume con este envío (va en la burbuja optimista y en el POST).
+  const replyCtx = PZ_CHAT_REPLY;
+  pzChatReplyClear();
   const box = $('#chatBox');
   // Las opciones tocables se usan una sola vez: al responder se descartan
   const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
   const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
   const sts = Date.now();
-  CHAT.push({ role: 'user', text: sendText, ts: sts, photos: unsentPaths });
+  CHAT.push({ role: 'user', text: sendText, ts: sts, photos: unsentPaths, reply: replyCtx || undefined });
   track('chat_message', { len: sendText.length });
-  if (box) chatAppendMsg(box, chatMsgHtml('user', sendText, sts, 0, null, null, unsentPaths), sts); // (CHAT-678 · 7, re-base v936: las fotos van en el 7º param, no en reply)
+  if (box) chatAppendMsg(box, chatMsgHtml('user', sendText, sts, 0, replyCtx, null, unsentPaths), sts); // (CHAT-678 · 7 + VIDEO · re-base v938: reply en 5º, fotos en 7º)
   chatUpdateSendBtn();
   // (LOTE CHAT-SCROLL) Enviar te deja abajo.
   chatScroll(true);
@@ -11535,7 +11678,9 @@ async function chatSend(textArg) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     return;
   }
-  return chatExchange({ text: sendText, pushed: true });
+  const extra = {};
+  if (replyCtx && replyCtx.to) { extra.reply_to = replyCtx.to; extra.reply_text = replyCtx.text || ''; }
+  return chatExchange({ text: sendText, pushed: true, extra: Object.keys(extra).length ? extra : undefined });
 }
 
 // Comentarios de IG dentro del chat: la IA los trae y deja la respuesta lista.
@@ -11797,8 +11942,9 @@ async function chatExchange({ text, display, extra, pushed }) {
     const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
     const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
     const uts = Date.now();
-    CHAT.push({ role: 'user', text, ts: uts });
-    chatAppendMsg(box, chatMsgHtml('user', display || text, uts), uts);
+    const replyX = (extra && extra.reply_to) ? { to: Number(extra.reply_to), text: String(extra.reply_text || '') } : null;
+    CHAT.push({ role: 'user', text, ts: uts, reply: replyX || undefined });
+    chatAppendMsg(box, chatMsgHtml('user', display || text, uts, null, replyX), uts);
     // (LOTE CHAT-SCROLL) La burbuja del usuario es un envío: abajo.
     chatScroll(true);
   }
@@ -14274,6 +14420,7 @@ try { pzPhInstallObs(); } catch (e) {}
 
 async function bindChatView() {
   bindChat();
+  try { pzChatReplySwipeInit(); } catch (e) {} // responder deslizando
   bindReview();
   try { bindAlbumCard(); } catch (e) {}
   // Home simple: tocar un posteo del carrusel lo abre en grande (patrón data-lightbox).

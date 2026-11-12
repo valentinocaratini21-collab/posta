@@ -172,7 +172,7 @@ const sb = {
   pzIc: () => '',
   pcTz: () => 'America/New_York',
   chatStripCelebrate: (x) => x,
-  FP_MARKER_RE: /$^/, LC_MARKER_RE: /$^/, FOTO_MARKER_RE: /$^/,
+  FP_MARKER_RE: /$^/, LC_MARKER_RE: /$^/, FOTO_MARKER_RE: /$^/, VIDEO_LISTO_MARKER_RE: /$^/,
   chatStripFpMarker: (x) => x, chatStripLcMarker: (x) => x,
   linkifyEsc: (s) => sb.esc(s),
   chatScroll: () => { calls.chatScroll++; },
@@ -205,7 +205,7 @@ function extractFunc(name) {
   if (d !== 0) { t(false, 'B0: llaves sin cerrar en ' + name); return ''; }
   return APP.slice(i, k + 1);
 }
-for (const f of ['pzChatHoraFmt', 'chatHoraHtml', 'chatAppendMsg', 'chatMsgHtml', 'pzSubirFases', 'pzSubirPreviaBotones', 'pzSubirTarjetaPrevia', 'pzSubirTarjetaOriginal',
+for (const f of ['pzChatHoraFmt', 'chatHoraHtml', 'chatAppendMsg', 'chatReplyQuoteHtml', 'chatMsgHtml', 'pzSubirFases', 'pzSubirPreviaBotones', 'pzSubirTarjetaPrevia', 'pzSubirTarjetaOriginal',
   'pzCambioVoz', 'pzCambioVozPrompt', 'pzCambioVozPromptDeliver', 'pzCambioRefrescarTarjeta',
   'pzRitualPedirCambio', 'pzSftChatTarjetaArmada']) {
   const code = extractFunc(f);
