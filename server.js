@@ -15044,6 +15044,286 @@ app.post('/api/album/:id/armar', requireAuth, express.json(), async (req, res) =
     return res.json({ ok: true, post_id: ins.lastInsertRowid, scheduled_at: slot, dia: lab.dia, dia_label: lab.dia_label, hora: lab.hora, semana_llena: wk > mondayKeyOf(tzToday(tz)), caption: prop.caption || '', headline: prop.headline || '', hashtags: prop.hashtags || '', hard: prop.hard || [], kind: 'photo', image_path: asset.file_path });
   } catch (e) { console.error('[album-armar]', e.message); res.status(500).json({ ok: false, error: 'No pude armar el posteo' }); }
 });
+
+// ================= LOTE TAB-SUBIR + TIRA-VOZ (prov v1011) =================
+// (decisión Valentino 13/11 14:05 + addendums 14:15 no-rehacer-sin-pedido ·
+// 14:20 subir-es-tocando · 14:22 confirmación-en-la-misma-pantalla ·
+// 14:24 regla dura de cadencia · 14:25 la grilla de Inicio)
+// Hilo de la tira de voz: las notas del cliente y las respuestas de
+// Posty viven bajo el posteo (hilo='post', post_id) o bajo la semana
+// (hilo='semana', post_id=0). El historial general queda con hilo=''
+// y NO se mezcla: la tira lee y escribe solo su hilo.
+app.get('/api/chat/hilo', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pid = parseInt(req.query.post_id, 10) || 0;
+    if (pid) {
+      const post = db.prepare('SELECT id, prev_image_path FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+      if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+      const rows = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? AND post_id = ? AND hilo = 'post' ORDER BY id ASC LIMIT 200`).all(uid, pid);
+      return res.json({ ok: true, messages: rows, prev_image_path: String(post.prev_image_path || '') });
+    }
+    if (String(req.query.semana || '') === '1') {
+      const rows = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? AND post_id = 0 AND hilo = 'semana' ORDER BY id ASC LIMIT 200`).all(uid);
+      return res.json({ ok: true, messages: rows });
+    }
+    return res.status(400).json({ ok: false, error: 'Falta el posteo o la semana' });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'No se pudo leer el hilo' }); }
+});
+
+app.post('/api/chat/hilo/log', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const pid = parseInt(b.post_id, 10) || 0;
+    const semana = b.semana === true || b.semana === 1 || b.semana === '1';
+    const userText = String(b.user_text || '').slice(0, 4000);
+    const asstText = String(b.assistant_text || '').slice(0, 4000);
+    if (!userText && !asstText) return res.status(400).json({ ok: false, error: 'Nada para guardar' });
+    let hilo = '';
+    if (pid) {
+      const post = db.prepare('SELECT id FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+      if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
+      hilo = 'post';
+    } else if (semana) { hilo = 'semana'; }
+    else return res.status(400).json({ ok: false, error: 'Falta el destino' });
+    if (userText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', userText, pid, hilo);
+    if (asstText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', asstText, pid, hilo);
+    return res.json({ ok: true });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'No se pudo guardar el hilo' }); }
+});
+
+// La marca «Nuevo» de las celdas nacidas de Subir se apaga cuando el
+// cliente las VE en la grilla (no por tiempo): la grilla avisa acá.
+app.post('/api/posts/:id/visto', requireAuth, (req, res) => {
+  try {
+    const pid = parseInt(req.params.id, 10) || 0;
+    if (pid) db.prepare('UPDATE posts SET subir_nuevo = 0 WHERE id = ? AND user_id = ?').run(pid, req.session.userId);
+    return res.json({ ok: true });
+  } catch (e) { return res.json({ ok: false }); }
+});
+
+// (REGLA DURA DE CADENCIA · Valentino 13/11 14:24 · textual: «si se
+// sube algo que mandaron ellos, no se postea otra cosa ese dia. 1
+// posteo por dia como regla») El resolvedor de Subir ubica cada ítem
+// respetando la regla: un día tomado por un posteo DEL CLIENTE no se
+// pisa ni se desplaza; un día tomado por un posteo DE POSTY se puede
+// tomar solo si el de Posty se mueve a un día libre POSTERIOR de la
+// MISMA semana (conserva su hora de pared y su estado). Sin día
+// posible en la semana, el ítem va a la semana siguiente; sin día en
+// 60 días, queda en material. El plan se calcula SIN escribir (plan) y
+// el movimiento se ejecuta recién con el posteo ya creado (commit):
+// un fallo de armado nunca desplaza nada.
+function subirEsDeCliente(p) { return !!(p && (Number(p.client_photo) === 1 || p.source === 'album-armado' || p.source === 'subir')); }
+function subirTakenMap(uid) {
+  const tz = userTz(uid); const map = new Map();
+  try {
+    const rows = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status IN ('draft','scheduled') AND scheduled_at IS NOT NULL AND media_type != 'story'`).all(uid);
+    for (const r of rows) { const k = ymdInTz(r.scheduled_at, tz); if (k && !map.has(k)) map.set(k, r); }
+  } catch (e) {}
+  return map;
+}
+function subirPlannerWall(uid) {
+  try { const iso = armarNextFeedSlot(uid); if (iso) { const w = wallInTz(iso, userTz(uid)); if (w) return { ymd: ymdInTz(iso, userTz(uid)), hhmm: w.slice(11, 16) }; } } catch (e) {}
+  let bestHour = 19;
+  try { const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid); if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour; } catch (e) {}
+  return { ymd: null, hhmm: String(bestHour).padStart(2, '0') + ':00' };
+}
+function subirPlanDia(uid, kind, cuando) {
+  const tz = userTz(uid);
+  const taken = subirTakenMap(uid);
+  const closed = closedDaysOf(uid);
+  const wall0 = subirPlannerWall(uid);
+  const hhmm = wall0.hhmm;
+  const todayK = tzToday(tz);
+  const monday = mondayKeyOf(todayK); const sunday = shiftDays(monday, 6);
+  const diaValido = (k) => { const wd = weekdayOfYmd(k); if (closed.has(wd)) return false; if (kind === 'video' && wd !== 2 && wd !== 4) return false; return true; };
+  const librePosteriorEnSemana = (k) => {
+    const sun = shiftDays(mondayKeyOf(k), 6);
+    for (let d = shiftDays(k, 1); d <= sun; d = shiftDays(d, 1)) { if (d < todayK) continue; if (closed.has(weekdayOfYmd(d))) continue; if (!taken.has(d)) return d; }
+    return null;
+  };
+  const intentar = (k) => {
+    if (k < todayK || closed.has(weekdayOfYmd(k))) return null;
+    if (k === todayK) { const isoT = zonedWallToUtc(k + ' ' + hhmm, tz); if (!isoT || new Date(isoT).getTime() <= Date.now()) return null; }
+    if (kind === 'video' && !diaValido(k)) return null;
+    const occ = taken.get(k);
+    if (!occ) return { iso: zonedWallToUtc(k + ' ' + hhmm, tz), mover: null };
+    if (subirEsDeCliente(occ) || occ.pinned) return null;
+    const occMs = Date.parse(String(occ.scheduled_at || '').replace(' ', 'T') + (String(occ.scheduled_at || '').endsWith('Z') ? '' : 'Z'));
+    if (!occMs || occMs <= Date.now()) return null;
+    const dest = librePosteriorEnSemana(k);
+    if (!dest) return null;
+    return { iso: zonedWallToUtc(k + ' ' + hhmm, tz), mover: { post_id: occ.id, dest_ymd: dest } };
+  };
+  let startK = null;
+  if (kind === 'video') startK = shiftDays(todayK, 1);
+  else if (cuando === 'semana') startK = todayK; // la semana se escanea entera: acá vive el desplazamiento
+  else startK = wall0.ymd || shiftDays(todayK, 1);
+  const hasta = cuando === 'semana' ? sunday : shiftDays(startK, 60);
+  for (let k = startK; k <= hasta; k = shiftDays(k, 1)) { const r = intentar(k); if (r) return { iso: r.iso, mover: r.mover, semana_siguiente: false }; }
+  if (cuando === 'semana') {
+    for (let k = shiftDays(sunday, 1); k <= shiftDays(sunday, 60); k = shiftDays(k, 1)) { const r = intentar(k); if (r) return { iso: r.iso, mover: r.mover, semana_siguiente: true }; }
+  }
+  return null;
+}
+function subirMoverPost(uid, postId, destYmd) {
+  try {
+    const tz = userTz(uid);
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || !post.scheduled_at) return null;
+    const wall = wallInTz(post.scheduled_at, tz); if (!wall) return null;
+    const iso = zonedWallToUtc(destYmd + ' ' + wall.slice(11), tz); if (!iso) return null;
+    const wk = mondayKeyOf(destYmd);
+    db.prepare('UPDATE posts SET scheduled_at = ?, week_key = ? WHERE id = ? AND user_id = ?').run(iso, wk, postId, uid);
+    return iso;
+  } catch (e) { return null; }
+}
+// Subtítulos quemados DIRECTO sobre el posteo (sin propuesta): espejo
+// de la rama SRT del handler /api/drafts/:id/video-subtitles — mismo
+// texto (transcripción si hay clave; si no, el caption), mismo estilo
+// del negocio, mismo ffmpeg. La diferencia es el destino: el «Sí,
+// hacelo» del tab Subir ES la aprobación, así que el resultado entra
+// al posteo en el acto y el video anterior queda en prev_image_path
+// (volver = un toque, como en todo el paquete).
+async function subirAplicarSubtitulos(uid, postId) {
+  try {
+    const found = mcVideoPost(uid, postId);
+    if (!found) return false;
+    const { post, abs } = found;
+    const dur = await mcFfprobeDur(abs);
+    if (!dur) return false;
+    let text = '';
+    try {
+      const settings = getSettings(uid);
+      const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+      if (apiKey) {
+        const tmpAud = path.join(MEDIA_DIR, `sub-${postId}-${Date.now()}.m4a`);
+        const okAud = await mcFfmpeg(['-i', abs, '-vn', '-c:a', 'aac', '-b:a', '128k', tmpAud], 60000);
+        if (okAud && fs.existsSync(tmpAud)) {
+          const dataUrl = 'data:audio/mp4;base64,' + fs.readFileSync(tmpAud).toString('base64');
+          const tr = await transcribeAudio(dataUrl, apiKey).catch(() => '');
+          if (tr && String(tr).trim()) text = String(tr).trim();
+        }
+        try { fs.unlinkSync(tmpAud); } catch (e) {}
+      }
+    } catch (e) {}
+    if (!text) text = String(post.caption || '').trim();
+    if (!text) return false;
+    const estilo = mcSubStyle(uid);
+    const colorAss = estilo.color ? mediaCliente.assColor(estilo.color) : null;
+    const stem = path.basename(abs).replace(/(\.[a-z0-9]+)$/i, '');
+    const outName = mediaCliente.proposalName(path.basename(abs), 'sub');
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const srt = mediaCliente.srtFromText(text, dur);
+    if (!srt) return false;
+    const srtAbs = path.join(MEDIA_DIR, stem + '-sub.srt');
+    fs.writeFileSync(srtAbs, srt);
+    const pc = colorAss || '&HFFFFFF&';
+    const ok = await mcFfmpeg(['-i', abs, '-vf', `subtitles='${mcEscFilter(srtAbs)}':force_style='FontSize=26,PrimaryColour=${pc},OutlineColour=&H80000000&,BorderStyle=1,Outline=2'`, '-c:a', 'copy', outAbs], 180000);
+    try { fs.unlinkSync(srtAbs); } catch (e) {}
+    if (!ok || !fs.existsSync(outAbs)) { try { fs.unlinkSync(outAbs); } catch (e) {} return false; }
+    const nuevo = '/media/' + outName;
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(nuevo, String(post.image_path || ''), postId);
+    try { db.prepare(`INSERT INTO edicion_proyectos (user_id, post_id, kind, base_path, result_path) VALUES (?,?,?,?,?)`).run(uid, postId, 'subtitle', String(post.image_path || ''), nuevo); } catch (e) {}
+    return true;
+  } catch (e) { console.error('[subir-subtitulos]', e.message); return false; }
+}
+
+// El resolvedor del tab Subir: recibe el material ya subido (asset) y
+// las respuestas de un toque (o los defaults de «encargate de todo») y
+// deja TODO hecho en el acto: día según la regla de cadencia, caption
+// (de Posty con la promo viajando en el pedido, o el del cliente),
+// mejora aplicada en el lugar y subtítulos quemados — sin propuestas
+// intermedias: el toque del cliente ES la aprobación. La confirmación
+// se deriva de lo que quedó registrado de verdad.
+app.post('/api/subir/resolver', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const assetId = parseInt(b.asset_id, 10) || 0;
+    const asset = assetId ? sftAssetPropio(uid, assetId) : null;
+    if (!asset) return res.status(404).json({ ok: false, error: 'Ese material ya no está — subilo de nuevo' });
+    const cuando = ['posty', 'semana', 'guardar'].includes(String(b.cuando || '')) ? String(b.cuando) : 'posty';
+    const kind = asset.kind === 'video' ? 'video' : 'foto';
+    if (cuando === 'guardar') {
+      try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('guardar', asset.id); } catch (e) {}
+      return res.json({ ok: true, modo: 'guardado', asset_id: asset.id, kind });
+    }
+    const ya = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND foto_asset_id = ? AND source = 'subir'`).get(uid, asset.id);
+    if (ya) {
+      const sl = armarSlotLabel(uid, ya.scheduled_at);
+      return res.json({ ok: true, modo: 'posteado', post_id: ya.id, kind, scheduled_at: ya.scheduled_at, dia: sl.dia, dia_label: sl.dia_label, hora: sl.hora, caption: ya.caption || '', mejora_aplicada: false, subs_aplicados: false, desplazado: null, semana_siguiente: false, repetido: true });
+    }
+    let caption = '', hashtags = '';
+    const captionMio = String(b.caption_modo || 'posty') === 'mio';
+    if (captionMio) {
+      caption = String(b.caption_text || '').trim().slice(0, 2200);
+      if (!caption) return res.status(400).json({ ok: false, error: 'Pegá tu caption o dejá que lo escriba Posty' });
+    } else {
+      const promo = String(b.promo || 'no');
+      const parts = [];
+      if (promo === 'desc') parts.push('Es una promo con descuento: comunicá el descuento en el caption, sin inventar un porcentaje que el dueño no dijo');
+      if (promo === '2x1') parts.push('Es una promo 2x1: comunicá el 2x1 en el caption');
+      if (promo === 'envio') parts.push('Es una promo con envío gratis: comunicá el envío gratis en el caption');
+      const extra = String(b.extra || '').trim().slice(0, 400);
+      if (extra) parts.push('Dato extra del dueño (nota de voz): ' + extra);
+      let prop = null;
+      try { prop = await albumPropuesta(uid, asset.id, parts.join(' · '), ''); } catch (e) { prop = null; }
+      if (!prop || prop.error) return res.status(400).json({ ok: false, error: 'No pude preparar el posteo desde este material — probá de nuevo' });
+      caption = prop.caption; hashtags = prop.hashtags || '';
+    }
+    const plan = subirPlanDia(uid, kind, cuando);
+    if (!plan) {
+      try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('guardar', asset.id); } catch (e) {}
+      return res.json({ ok: true, modo: 'guardado', asset_id: asset.id, kind, sin_dia: true });
+    }
+    let postId = 0, mejoraOk = false, subsOk = false;
+    if (kind === 'video') {
+      const full = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
+      const built = await buildClientVideoReelPost(uid, full, 'subir', { caption, hashtags });
+      if (!built || built.error || built.gated || !built.postId) return res.status(400).json({ ok: false, error: 'No pude armar el video — probá de nuevo' });
+      postId = Number(built.postId);
+      db.prepare('UPDATE posts SET scheduled_at = ?, foto_asset_id = ?, week_key = ?, subir_nuevo = 1 WHERE id = ?').run(plan.iso, asset.id, mondayKeyOf(ymdInTz(plan.iso, userTz(uid))), postId);
+    } else {
+      const info = db.prepare(`INSERT INTO posts (user_id, caption, hashtags, image_path, media_type, status, scheduled_at, client_photo, foto_asset_id, source, week_key, subir_nuevo, created_at) VALUES (?,?,?,?,?, 'draft', ?, 1, ?, 'subir', ?, 1, datetime('now'))`).run(uid, caption, hashtags, asset.file_path, 'image', plan.iso, asset.id, mondayKeyOf(ymdInTz(plan.iso, userTz(uid))));
+      postId = Number(info.lastInsertRowid);
+    }
+    // Commit del desplazamiento: recién con el posteo creado. Si el
+    // movimiento fallara, el ítem se reubica a un día libre (la regla
+    // manda: nunca dos el mismo día).
+    let desplazado = null;
+    if (plan.mover) {
+      const movIso = subirMoverPost(uid, plan.mover.post_id, plan.mover.dest_ymd);
+      if (movIso) {
+        const slD = armarSlotLabel(uid, movIso);
+        desplazado = { post_id: plan.mover.post_id, dia_label: slD.dia_label, hora: slD.hora };
+      } else {
+        const libre = subirPlanDia(uid, kind, 'posty');
+        if (libre && !libre.mover) db.prepare('UPDATE posts SET scheduled_at = ?, week_key = ? WHERE id = ?').run(libre.iso, mondayKeyOf(ymdInTz(libre.iso, userTz(uid))), postId);
+      }
+    }
+    if (kind === 'foto' && String(b.mejora || 'si') === 'si') {
+      try {
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+        const gen = await enhancePhotoGenerate(uid, post);
+        if (gen && gen.proposalPath) {
+          db.prepare(`UPDATE posts SET image_path = ?, prev_image_path = ?, enhance_proposal_path = '', enhance_base_path = '' WHERE id = ?`).run(gen.proposalPath, String(post.image_path || ''), postId);
+          mejoraOk = true;
+        }
+      } catch (e) { /* sin mejora: el posteo queda con la foto original y la confirmación lo dice */ }
+    }
+    if (kind === 'video' && String(b.subs || 'si') === 'si') {
+      subsOk = await subirAplicarSubtitulos(uid, postId);
+    }
+    try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+    const sl = armarSlotLabel(uid, plan.iso);
+    const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(postId);
+    const slF = postRow && postRow.scheduled_at ? armarSlotLabel(uid, postRow.scheduled_at) : sl;
+    return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, desplazado, semana_siguiente: !!plan.semana_siguiente });
+  } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
+});
+
 // GET /api/posts/dias-libres — (LOTE CHAT-CLICKS · punto 2) días libres
 // para mover un posteo desde el chat (píldoras, sin salir del chat).
 app.get('/api/posts/dias-libres', requireAuth, (req, res) => {
@@ -37712,7 +37992,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1016';
+const BUILD_ID = '20261105-v1017';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

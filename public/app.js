@@ -943,7 +943,7 @@ function pzShellHeadHTML(tab) {
   // del feed (homeHeadHTML). La máquina de escribir murió con el título
   // fijo: el título ya no varía.)
   return `<header class="pz-shell-head">
-    <button type="button" class="pz-shell-ident" onclick="bbGo('#/app/chat')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
+    <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
       <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
       <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small>${en ? 'your community manager' : 'tu community manager'}</small></span>
     </button>
@@ -993,6 +993,7 @@ function bbShell(tab, content) {
     estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg>',
     feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>',
+    subir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 9.5 12 3.5l6 6"/><path d="M4 20h16"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
     ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
@@ -1001,11 +1002,11 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
-  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
+  return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'subir' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}${tabBtn('chat', '#/app/chat', gzT('Chat', 'Chat'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}</nav>
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -1572,7 +1573,7 @@ function mxPoderesBB() {
 // viejas (numeros, ads, jardin-posty) siguen vivas por URL pero no
 // tienen pestaña: devuelven '' (ninguna pestaña activa).
 function mxTabKey(tab) {
-  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat') return tab;
+  if (tab === 'oficina' || tab === 'bandeja' || tab === 'negocio' || tab === 'ajustes' || tab === 'chat' || tab === 'subir') return tab;
   if (tab === 'inicio') return 'inicio';
   if (tab === 'ads') return 'ads';
   if (tab === 'schedule' || tab === 'post') return 'semana';
@@ -6438,9 +6439,10 @@ function mzHomeHash() { return '#/app/inicio'; } // POSTY SOLO // (v331 addendum
 function mzTabsHTML(tab) {
   const on = tab === 'inicio' ? 'inicio'
     : tab === 'ads' ? 'ads'
-    : tab === 'chat' ? 'chat' : '';
+    : tab === 'subir' ? 'subir'
+    : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${t('chat', 'chat', pzIc('chat'), gzT('Chat', 'Chat'))}</nav>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${t('subir', 'subir', '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3l5 5h-3.5v7h-3V8H7zM5 19h14v2.5H5z"/></svg>', gzT('Subir', 'Upload'))}${t('ajustes', 'ajustes', pzIc('gear'), gzT('Ajustes', 'Settings'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -6521,7 +6523,7 @@ function appShell(tab, content) {
     <div class="side-posty" id="sidePosty" aria-label="Tu negocio"></div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>Ads</button>
-    <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
+    <button class="drawer-link ${tab === 'subir' ? 'on' : ''}" data-tab="subir"><span class="di"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3l5 5h-3.5v7h-3V8H7zM5 19h14v2.5H5z"/></svg></span>Subir</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
@@ -13276,6 +13278,7 @@ function weekCardHTML(d, o) {
           : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : 'Editar este posteo'}" aria-label="Ver posteo">${media}${(!simple && typeof hfCropOverlayHTML === 'function') ? hfCropOverlayHTML(4, 5, enW) : ''}${draftChipCard}</button>`}
       ${foot}${simpleAcceptHTML}
       ${simple ? '' : hfAskChangeBtnHTML(d)}
+      ${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(d) : ''}
     </div>`;
 }
 
@@ -19666,7 +19669,8 @@ function pzPrefetchKick() {
   let content = '';
   try {
   if (tab === 'oficina' || tab === 'negocio') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
-  else if (tab === 'chat') { pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE CHATPANTALLA) El chat principal es pantalla completa en vidrio, no hoja
+  else if (tab === 'subir') { pzPaintSkeleton(tab); content = await subirView(); } // (LOTE TAB-SUBIR · 13/11) El tab Subir: subir tocando, Posty resuelve
+  else if (tab === 'chat') { if (!(typeof pzIsGuest === 'function' && pzIsGuest())) { location.hash = '#/app/inicio'; return; } pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE TAB-SUBIR · 13/11) Sale el tab de Chat: la ruta queda SOLO para el invitado (su conversación de onboarding vive ahí, verificado) y como compat de deep-links; el cliente registrado vuelve a Inicio
   else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'feed') { location.hash = '#/app/inicio'; return; } // (v846) La pestaña Feed salió: el feed ya vive en Hoy. #/app/feed redirige a Hoy.
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
@@ -20540,7 +20544,7 @@ async function scheduleView() {
   // v223: la grilla del feed ya NO es una sección debajo de los posteos:
   // es el cuarto modo del filtro de la agenda (Día·Semana·Mes·Feed) y
   // la pinta schedFilterBlockHTML adentro de homeWeekBlock.
-  const homeChatBlock = `<div style="margin-top:18px">${chatCardHTML(true, true, true, true, true)}</div>`;
+  const homeChatBlock = `<div style="margin-top:18px">${pzVozSemanaHTML()}</div>`; // (LOTE TAB-SUBIR) La tarjeta de chat al pie de la Semana sale: su lugar lo ocupa la tira de voz de la semana (las notas sin posteo viven ahí)
   // (v442 · Corrección 02:20) La zona relegada pasa a la bandeja «Para
   // vos» (pvTrayHTML): filas de una línea con el bloque original
   // adentro. Orden relativo histórico conservado: trial, garantía,
@@ -20844,11 +20848,22 @@ function homeGridCompose(input) {
   // la cuenta, para el filtro «un posteo por día» del bucle de abajo.
   let hoyKey = '';
   try { const tzH = (typeof pcTz === 'function') ? pcTz() : undefined; hoyKey = new Date().toLocaleDateString('en-CA', tzH ? { timeZone: tzH } : {}); } catch (e) { hoyKey = ''; }
+  // (LOTE TAB-SUBIR-VOZ · addendum 14:25) Celdas nacidas de Subir: ver
+  // la recolección dentro del bucle de upcoming.
+  const subirTiles = [];
   for (const it of upcoming) {
     const p = it && it.p;
     if (!p || isStory(p) || p.status === 'failed') continue;
     if (p.status !== 'draft' && p.status !== 'scheduled') continue;
     if (p === nextPost) continue; // (LOTE POSTEO-DIA-2) El próximo sale del grupo: su tile va primera (idx 0), abierta.
+    // (LOTE TAB-SUBIR-VOZ · addendum 14:25 · «deberían aparecer acá»)
+    // Los posteos nacidos de Subir SÍ rinden en la grilla aunque sean
+    // futuros: entran como tiles y el orden vigente los ubica en su
+    // posición final (bloque de no publicados, justo antes de los
+    // publicados — la celda exacta que ocupan al salir), con el
+    // rótulo de día/hora debajo y la marca «Nuevo» hasta que el
+    // cliente los ve. El resto de los futuros sigue en Semana.
+    if (String(p.source || '') === 'subir' && p.scheduled_at) { subirTiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, subir: true }); continue; }
     // (LOTE RITUAL-1-OPCION · 6/11 · «un posteo por día») La grilla
     // muestra SOLO el posteo de hoy + los ya publicados. Los borradores
     // (futuros, sin programar) y los programados de días futuros NO
@@ -20909,6 +20924,7 @@ function homeGridCompose(input) {
     if (r.shortcode && archivedShortcodes.has(String(r.shortcode))) continue;
     tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false, pinned: r.pinned === true, likes: (typeof r.likes === 'number' ? r.likes : null), comments: (typeof r.comments === 'number' ? r.comments : null), shortcode: (r.shortcode ? String(r.shortcode) : null) });
   }
+  for (const t of subirTiles) tiles.push(t);
   // (Tanda feed 5 · ítem 3) FIJADOS del dueño (📌): las piezas propias
   // con pinned cargado rinden PRIMERAS, en su orden de fijado
   // (pinned_at, el más viejo primero, como los fijó), igual que en
@@ -21770,6 +21786,11 @@ function homeTileHTML(t, i) {
   // Posty para no confundirlas. Si por algún camino coincidieran, el
   // «Recién publicado» manda y HOY no se pinta (no se solapan).
   const hoyBadge = (t.hoy && !t.justPub) ? `<span class="hf-hoy-badge">${phEn ? 'TODAY' : 'HOY'}</span>` : '';
+  // (LOTE TAB-SUBIR-VOZ · addendum 14:25) Marca «Nuevo» de las celdas
+  // nacidas de Subir: vive sobre la celda hasta que el cliente la VE
+  // (la apaga el observador de la grilla vía /visto, no el tiempo).
+  const nuevoBadge = (p.subir_nuevo && p.status !== 'published') ? `<span class="hf-nuevo-badge">${phEn ? 'New' : 'Nuevo'}</span>` : '';
+  const capSubir = t.subir ? `<span class="hf-tile-cap"><b>${esc((typeof pzHoyPillSalida === 'function') ? (pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) || '') : '')}</b></span>` : '';
   // (LOTE FEED · marca de archivado) El archivado se ve MARCADO, no
   // se esconde: chip en la franja (la única excepción a «nada de
   // texto sobre la imagen», igual que la chapita) + borde propio.
@@ -21899,9 +21920,9 @@ function homeTileHTML(t, i) {
     const cuentaR1 = (typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, phEn) : '';
     const cuentaHtmlR1 = cuentaR1 ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at || ''))}">${esc(cuentaR1)}</span>` : '';
     const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
-    return `<span class="hf-cell" data-hf-filtro="pendientes"><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
+    return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${nuevoBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span></span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}${nuevoBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span>${capSubir}</span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -23469,14 +23490,13 @@ function pzHoyCardHTML(p, o) {
         + heroMedia
         + (caption ? `<p class="pz-hoy-hero-caption">${esc(caption)}</p>` : '')
         + tres
-        + (heroImg ? `<button type="button" class="pz-hoy-hero-link" data-pz-hoy-detalle="${esc(String(p.id))}">${en ? 'See the full post' : 'Ver el posteo completo'}</button>` : '')
-        + `${acciones}${notaOk}`
+        + `${acciones}${notaOk}${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}`
         + `</article>`;
     }
     return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
       + `<div class="pz-hoy-row"><div class="pz-hoy-thumb" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${media}<span class="pz-hoy-fmt">${fmt}</span>${pill ? `<span class="pz-hoy-pill">${esc(pill)}</span>` : ''}${cuando ? `<span class="pz-hoy-when">${esc(cuando)}</span>` : ''}</div>`
       + `<div class="pz-hoy-col">${cuentaHtml}${caption ? `<p>${esc(caption)}</p>` : ''}<div class="pz-hoy-meta">${en ? 'Tap the photo to see the detail →' : 'Tocá la foto para ver el detalle →'}</div></div></div>`
-      + `${acciones}${notaOk}`
+      + `${acciones}${notaOk}${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}`
       + `</article>`;
   } catch (e) { return ''; }
 }
@@ -25632,6 +25652,482 @@ function mzCloseSheet() {
    con fallback a innerHeight. El contenido es EXACTAMENTE el de la hoja
    (mismo chatCardHTML, mismos ids, mismo bindChat): solo cambia el
    contenedor. La hoja se retiró de Inicio; abrir el chat navega acá. */
+
+/* ================= LOTE TAB-SUBIR + TIRA-VOZ (prov v1011) =================
+   (decisión Valentino 13/11 14:05 + addendums: 14:15 Posty no rehace
+   imágenes sin pedido · 14:20 Subir es tocando, la voz es un extra
+   opcional al final · 14:22 confirmación en la misma pantalla ·
+   14:24 regla dura de cadencia · 14:25 la grilla de Inicio)
+   La tira de voz vive bajo cada posteo (tarjeta de Inicio, tarjeta del
+   cofre/Semana, detalle) y bajo la semana. SOLO voz del cliente:
+   Posty responde en TEXTO (veto intacto: nada de síntesis de voz).
+   La nota queda anclada a su posteo (hilo propio en el servidor) y se
+   procesa con los circuitos vigentes: el rehacer/mejorar PEDIDO entra
+   directo (el pedido ES la aprobación — sin propuesta intermedia, la
+   anterior queda a un toque) y el resto va al mismo cerebro del chat
+   con el posteo anclado. */
+function pzVozEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); }
+function pzVozStripHTML(p) {
+  try {
+    const pid = Number(p && p.id) || 0;
+    if (!pid) return '';
+    const en = pzVozEn();
+    const prev = String((p && p.prev_image_path) || '');
+    return `<section class="pz-voz" data-pz-voz="${pid}">`
+      + `<div class="pz-voz-hilo" data-pz-voz-hilo hidden></div>`
+      + (prev ? `<button type="button" class="pz-voz-volver" data-pz-voz-volver="${pid}">↩ ${en ? 'Back to the previous image' : 'Volver a la imagen anterior'}</button>` : '')
+      + `<div class="pz-voz-bar"><span class="pz-voz-hint">${en ? '<b>Hold down</b> and tell me if you need a change to this post' : '<b>Mantené apretado</b> y decime si necesitás un cambio en este posteo'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>`
+      + `<div class="pz-voz-estado" data-pz-voz-estado hidden></div>`
+      + `</section>`;
+  } catch (e) { return ''; }
+}
+function pzVozSemanaHTML() {
+  try {
+    const en = pzVozEn();
+    return `<section class="pz-voz pz-voz-semana" data-pz-voz="semana">`
+      + `<div class="pz-voz-tit">${en ? 'Something about your week?' : '¿Algo de tu semana?'}</div>`
+      + `<div class="pz-voz-hilo" data-pz-voz-hilo hidden></div>`
+      + `<div class="pz-voz-bar"><span class="pz-voz-hint">${en ? '<b>Hold down</b> and tell me what change you want in your week' : '<b>Mantené apretado</b> y contame qué cambio querés en tu semana'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>`
+      + `<div class="pz-voz-estado" data-pz-voz-estado hidden></div>`
+      + `</section>`;
+  } catch (e) { return ''; }
+}
+function pzVozMsgHTML(m) {
+  if (m.role === 'user') return `<div class="pz-voz-msg u"><span class="pz-voz-msg-ic">${pzIc('mic', 12)}</span><span>${esc(m.text)}</span></div>`;
+  return `<div class="pz-voz-msg a"><img class="pz-voz-face" src="/posty-logo.png" alt=""><span>${esc(m.text)}</span></div>`;
+}
+function pzVozHiloPintar(strip, msgs) {
+  const hilo = strip.querySelector('[data-pz-voz-hilo]');
+  if (!hilo) return;
+  strip._pzVozMsgs = msgs;
+  if (!msgs.length) { hilo.hidden = true; hilo.innerHTML = ''; return; }
+  hilo.hidden = false;
+  const open = strip.classList.contains('pz-voz-open');
+  const vis = open ? msgs : msgs.slice(-2);
+  const en = pzVozEn();
+  hilo.innerHTML = vis.map(pzVozMsgHTML).join('')
+    + (msgs.length > 2 ? `<button type="button" class="pz-voz-mas" data-pz-voz-mas>${open ? (en ? 'See less ▴' : 'Ver menos ▴') : (en ? 'See the whole conversation ▾' : 'Ver toda la conversación ▾')}</button>` : '');
+}
+async function pzVozEnhance(root) {
+  const strips = (root || document).querySelectorAll('[data-pz-voz]:not([data-pz-voz-on])');
+  for (const strip of strips) {
+    strip.setAttribute('data-pz-voz-on', '1');
+    const key = strip.getAttribute('data-pz-voz');
+    if (key === 'extra') continue;
+    try {
+      const r = key === 'semana' ? await api.get('/api/chat/hilo?semana=1') : await api.get('/api/chat/hilo?post_id=' + encodeURIComponent(key));
+      if (r && r.ok) pzVozHiloPintar(strip, Array.isArray(r.messages) ? r.messages : []);
+    } catch (e) {}
+  }
+}
+function pzVozEstado(strip, txt) {
+  const el = strip.querySelector('[data-pz-voz-estado]');
+  if (!el) return;
+  if (!txt) { el.hidden = true; el.textContent = ''; } else { el.hidden = false; el.textContent = txt; }
+}
+let PZ_VOZ_REC = null;
+async function pzVozRecStart(strip) {
+  if (PZ_VOZ_REC) return;
+  const en = pzVozEn();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = (typeof pzPickVoiceMime === 'function') ? pzPickVoiceMime() : '';
+    const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    const rec = PZ_VOZ_REC = { strip, stream, mr, chunks: [], mime: mr.mimeType || mime || 'audio/webm' };
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+    mr.onstop = () => pzVozRecFinish(rec);
+    mr.start();
+    strip.classList.add('pz-voz-grabando');
+    pzVozEstado(strip, en ? 'Recording… release to send' : 'Grabando… soltá para enviar');
+  } catch (e) { pzVozEstado(strip, en ? "I couldn't use the microphone — check the permission" : 'No pude usar el micrófono — revisá el permiso'); }
+}
+function pzVozRecStop() {
+  if (PZ_VOZ_REC && PZ_VOZ_REC.mr && PZ_VOZ_REC.mr.state !== 'inactive') { try { PZ_VOZ_REC.mr.stop(); } catch (e) {} }
+}
+async function pzVozRecFinish(rec) {
+  const strip = rec.strip;
+  const en = pzVozEn();
+  try { rec.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  if (PZ_VOZ_REC === rec) PZ_VOZ_REC = null;
+  strip.classList.remove('pz-voz-grabando');
+  const blob = new Blob(rec.chunks, { type: rec.mime });
+  if (!blob.size) { pzVozEstado(strip, ''); return; }
+  pzVozEstado(strip, en ? 'Listening…' : 'Escuchando…');
+  try {
+    const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+    const r = await api.post('/api/ideas/transcribe', { audio: dataUrl });
+    const text = String((r && r.transcript) || '').trim();
+    if (!text) { pzVozEstado(strip, en ? "I couldn't make that out — try again" : 'No se entendió — probá de nuevo'); return; }
+    pzVozEstado(strip, '');
+    await pzVozEnviar(strip, text);
+  } catch (e) { pzVozEstado(strip, en ? "It couldn't be sent — try again" : 'No se pudo enviar — probá de nuevo'); }
+}
+// Detector determinístico del pedido de imagen (addendum 14:15): solo
+// frases donde el verbo de cambio apunta a la foto/imagen. «Cambiá el
+// caption» NO entra (el caption no es la foto): va al cerebro.
+function pzVozLane(text) {
+  // Sin diacríticos antes de matchear: «rehacé»/«cambiá»/«mejorá» tienen
+  // que entrar — \w no cubre las vocales con tilde.
+  const t = ' ' + String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
+  if (/(rehac\w*|otra|nueva|distinta|cambi\w*|renov\w*)\s+(la\s+|el\s+)?(foto|imagen)/.test(t) || /(foto|imagen)\s+(nueva|distinta|otra)/.test(t)) return 'restyle';
+  if (/(mejor\w*|realz\w*|arregl\w*)\s+(la\s+|el\s+)?(foto|imagen)/.test(t)) return 'enhance';
+  return null;
+}
+function pzVozPintarFoto(pid, path) {
+  try {
+    document.querySelectorAll('[data-post-id="' + pid + '"]').forEach(card => {
+      card.querySelectorAll('img.pz-hoy-hero-img, img.pz-hoy-thumb-img').forEach(img => { img.src = (typeof mv === 'function') ? mv(path, 640) : path; img.setAttribute('data-full', path); });
+      const ig = card.querySelector('.igmock-media img'); if (ig) ig.src = path;
+    });
+    document.querySelectorAll('.hf-tile[data-post-id="' + pid + '"] img').forEach(img => { img.src = (typeof mv === 'function') ? mv(path, 640) : path; });
+  } catch (e) {}
+}
+function pzVozVolverPintar(strip, pid) {
+  if (!strip || strip.querySelector('[data-pz-voz-volver]')) return;
+  const bar = strip.querySelector('.pz-voz-bar');
+  if (!bar) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'pz-voz-volver'; b.setAttribute('data-pz-voz-volver', String(pid));
+  b.textContent = pzVozEn() ? '↩ Back to the previous image' : '↩ Volver a la imagen anterior';
+  strip.insertBefore(b, bar);
+}
+// El carril directo del pedido de imagen: reemplazo EN EL ACTO, sin
+// propuesta ni OK extra (el pedido ES la aprobación). Devuelve el
+// texto de confirmación, o null si el carril no aplica (publicado,
+// error desconocido) y lo toma el cerebro.
+async function pzVozAplicarDirecto(strip, pid, lane) {
+  const en = pzVozEn();
+  try {
+    if (lane === 'restyle') {
+      const r = await api.post('/api/drafts/' + pid + '/photo-restyle', {});
+      if (r && r.ok && r.path) {
+        pzVozPintarFoto(pid, r.path);
+        pzVozVolverPintar(strip, pid);
+        return en ? 'Done, I changed it ✓ If you don\'t like it, tap "Back to the previous image" and the old one comes back.' : 'Listo, la cambié ✓ Si no te gusta, tocá «Volver a la imagen anterior» y vuelve la de antes.';
+      }
+      return null;
+    }
+    if (lane === 'enhance') {
+      const r1 = await api.post('/api/drafts/' + pid + '/photo-enhance', {});
+      if (r1 && r1.ok && r1.proposal_path) {
+        const r2 = await api.post('/api/drafts/' + pid + '/photo-enhance-accept', {});
+        if (r2 && r2.ok && r2.path) {
+          pzVozPintarFoto(pid, r2.path);
+          pzVozVolverPintar(strip, pid);
+          return en ? 'Done, I improved it ✓ The previous one is saved in case you want it back.' : 'Listo, la mejoré ✓ Quedó guardada la anterior por si querés volver.';
+        }
+      }
+      return en ? "I couldn't improve it right now — your photo stays as it was." : 'No pude mejorarla ahora — quedó tu foto como estaba.';
+    }
+  } catch (e) {
+    if (e && e.status === 404) return null;
+    const msg = String((e && e.message) || '');
+    if (lane === 'restyle' && /rehac|redo|agot/i.test(msg)) return en ? 'You already used all the redos on this post. Tell me the exact change you want and we\'ll look at it.' : 'Ya usaste todos los rehaces de este posteo. Contame qué cambio puntual querés y lo vemos.';
+    return null;
+  }
+  return null;
+}
+async function pzVozCerrar(strip, key, userText, asstText) {
+  pzVozEstado(strip, '');
+  const msgs = Array.isArray(strip._pzVozMsgs) ? strip._pzVozMsgs.slice() : [];
+  if (userText) msgs.push({ role: 'user', text: userText });
+  if (asstText) msgs.push({ role: 'assistant', text: asstText });
+  pzVozHiloPintar(strip, msgs);
+  try {
+    await api.post('/api/chat/hilo/log', key === 'semana'
+      ? { semana: 1, user_text: userText, assistant_text: asstText }
+      : { post_id: Number(key), user_text: userText, assistant_text: asstText });
+  } catch (e) {}
+}
+async function pzVozEnviar(strip, text) {
+  const key = strip.getAttribute('data-pz-voz');
+  const en = pzVozEn();
+  if (key === 'extra') {
+    // La nota opcional del tab Subir: no se envía sola — viaja como
+    // dato extra con el «Listo». Ningún paso del flujo depende de ella.
+    PZ_SUBIR.extra = text;
+    const s = strip.querySelector('[data-subir-voz-txt]');
+    if (s) s.textContent = '✓ ' + text;
+    return;
+  }
+  if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzVozEnviar(strip, text)); return; }
+  pzVozEstado(strip, en ? 'Posty is on it…' : 'Posty está en eso…');
+  const pid = key === 'semana' ? 0 : Number(key) || 0;
+  if (pid) {
+    const lane = pzVozLane(text);
+    if (lane) {
+      const hecho = await pzVozAplicarDirecto(strip, pid, lane);
+      if (hecho !== null && hecho !== undefined) { await pzVozCerrar(strip, key, text, hecho); return; }
+    }
+  }
+  // Carril del cerebro: el mismo POST /api/ideas/chat que atiende el
+  // chat, con el posteo anclado (desde la semana, sin ancla: Posty lo
+  // ordena y lo aplica donde corresponde; si no puede ubicarlo, lo
+  // dice en su respuesta, que queda bajo la semana).
+  try {
+    const prev = Array.isArray(strip._pzVozMsgs) ? strip._pzVozMsgs.slice(-8) : [];
+    const messages = prev.map(m => ({ role: m.role, text: m.text }));
+    messages.push({ role: 'user', text });
+    const body = { messages, photos: [], library: [], libraryPaths: [], drafts: [], photoPaths: [] };
+    if (pid) body.anchor_post_id = pid;
+    const r = await api.post('/api/ideas/chat', body);
+    const reply = String((r && (r.reply || r.text)) || '').trim() || (en ? 'Done ✓' : 'Listo ✓');
+    await pzVozCerrar(strip, key, text, reply);
+  } catch (e) {
+    pzVozEstado(strip, en ? "It couldn't be sent — try again" : 'No se pudo enviar — probá de nuevo');
+  }
+}
+async function pzVozVolver(btn) {
+  const pid = Number(btn.getAttribute('data-pz-voz-volver')) || 0;
+  if (!pid) return;
+  const strip = btn.closest('[data-pz-voz]');
+  btn.disabled = true;
+  try {
+    const h = await api.get('/api/chat/hilo?post_id=' + pid);
+    const prev = String((h && h.prev_image_path) || '');
+    if (!prev) { btn.remove(); return; }
+    const r = await api.post('/api/drafts/' + pid + '/proyectos/restaurar', { path: prev });
+    if (r && r.ok) {
+      pzVozPintarFoto(pid, prev);
+      if (strip) await pzVozCerrar(strip, String(pid), '', pzVozEn() ? 'You are back to the previous image ✓' : 'Volviste a la imagen anterior ✓');
+      btn.remove();
+    } else { btn.disabled = false; }
+  } catch (e) { btn.disabled = false; }
+}
+function pzVozDelegar() {
+  if (window.__pzVozWired) return;
+  window.__pzVozWired = true;
+  document.addEventListener('pointerdown', (e) => {
+    const mic = e.target.closest('[data-pz-voz-mic]');
+    if (!mic) return;
+    const strip = mic.closest('[data-pz-voz]');
+    if (!strip) return;
+    e.preventDefault();
+    pzVozRecStart(strip);
+  });
+  document.addEventListener('pointerup', () => pzVozRecStop());
+  document.addEventListener('pointercancel', () => pzVozRecStop());
+  document.addEventListener('click', (e) => {
+    const mas = e.target.closest('[data-pz-voz-mas]');
+    if (mas) {
+      const strip = mas.closest('[data-pz-voz]');
+      if (strip) { strip.classList.toggle('pz-voz-open'); pzVozHiloPintar(strip, strip._pzVozMsgs || []); }
+      return;
+    }
+    const vol = e.target.closest('[data-pz-voz-volver]');
+    if (vol) pzVozVolver(vol);
+  });
+}
+pzVozDelegar();
+
+/* ---------- La grilla: marca «Nuevo» de Subir (addendum 14:25) ---------- */
+let PZ_NUEVO_OBS = null;
+function pzGridNuevoObserve(root) {
+  try {
+    if (!('IntersectionObserver' in window)) return;
+    if (!PZ_NUEVO_OBS) {
+      PZ_NUEVO_OBS = new IntersectionObserver((entries) => {
+        for (const en2 of entries) {
+          if (!en2.isIntersecting) continue;
+          const cell = en2.target;
+          PZ_NUEVO_OBS.unobserve(cell);
+          const tile = cell.querySelector('[data-post-id]');
+          const pid = tile ? tile.getAttribute('data-post-id') : '';
+          cell.removeAttribute('data-subir-nuevo');
+          const badge = cell.querySelector('.hf-nuevo-badge'); if (badge) badge.remove();
+          if (pid) api.post('/api/posts/' + encodeURIComponent(pid) + '/visto', {}).catch(() => {});
+        }
+      }, { threshold: 0.6 });
+    }
+    (root || document).querySelectorAll('[data-subir-nuevo="1"]').forEach(el => PZ_NUEVO_OBS.observe(el));
+  } catch (e) {}
+}
+function pzGridScrollNuevo() {
+  try {
+    const pid = sessionStorage.getItem('pz_ver_grilla');
+    if (!pid) return;
+    sessionStorage.removeItem('pz_ver_grilla');
+    const el = document.querySelector('.hf-tile[data-post-id="' + pid + '"], .hf-carta-magia[data-post-id="' + pid + '"]');
+    if (el) setTimeout(() => { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 350);
+  } catch (e) {}
+}
+
+/* ---------- Tab Subir (addendum 14:20: tocando; la voz, un extra) ---------- */
+const PZ_SUBIR = { asset: null, kind: '', thumb: '', todo: false, answers: { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' }, extra: '', busy: false };
+function pzSubirPayload() {
+  const a = PZ_SUBIR.answers;
+  const capEl = document.getElementById('pzSubirCapTxt');
+  return {
+    asset_id: PZ_SUBIR.asset,
+    cuando: a.cuando, promo: a.promo, mejora: a.mejora,
+    caption_modo: a.caption,
+    caption_text: a.caption === 'mio' ? String((capEl && capEl.value) || '') : '',
+    subs: a.subs,
+    extra: PZ_SUBIR.extra || '',
+  };
+}
+async function subirView() {
+  const en = pzVozEn();
+  PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = ''; PZ_SUBIR.todo = false; PZ_SUBIR.busy = false;
+  PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
+  const chips = (q, opts) => `<div class="chips">${opts.map(o => `<button type="button" class="chip${o.on ? ' on' : ''}" data-subir-q="${q}" data-subir-v="${o.v}">${o.on ? '✓ ' : ''}${o.t}</button>`).join('')}</div>`;
+  const inner = `<div class="pz-subir">
+    <h1>${en ? 'Upload' : 'Subir'}</h1>
+    <div class="sub">${en ? 'Photos and videos of your business.' : 'Fotos y videos de tu negocio.'}</div>
+    <button type="button" class="todo" id="pzSubirTodo"><img src="/posty-logo.png" alt=""><span><b>${en ? 'Posty, take care of everything' : 'Posty, encargate de todo'}</b><i>${en ? 'One tap and done: Posty picks the day, improves it and writes the caption. The questions below are only if you want to decide something yourself.' : 'Un toque y listo: Posty elige el día, lo mejora y escribe el caption. Las preguntas de abajo son solo si querés decidir vos algo.'}</i></span></button>
+    <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload a photo or a video' : 'Tocá para subir una foto o un video'}</p><div class="fuentes"><button type="button" class="fbtn" id="pzSubirGal">${en ? 'From your gallery' : 'De tu galería'}</button><button type="button" class="fbtn" id="pzSubirCam">${en ? 'Take a photo' : 'Sacar una foto'}</button></div></div>
+    <input type="file" id="pzSubirFile" accept="image/*,video/*" hidden>
+    <input type="file" id="pzSubirFileCam" accept="image/*" capture="environment" hidden>
+    <div id="pzSubirUp"></div>
+    <div class="preg-card" id="pzSubirPreg" hidden>
+      <div class="kick"><img src="/posty-logo.png" alt=""> ${en ? 'POSTY ASKS YOU — ONE TAP EACH' : 'POSTY TE PREGUNTA — UN TOQUE CADA UNA'}</div>
+      <div class="q"><p>${en ? 'When do we post it?' : '¿Cuándo lo subimos?'}</p>${chips('cuando', [{ v: 'posty', t: en ? 'Let Posty pick the day' : 'Que Posty elija el día', on: 1 }, { v: 'semana', t: en ? 'This week' : 'Esta semana' }, { v: 'guardar', t: en ? 'Just save it' : 'Solo guardarlo' }])}</div>
+      <div class="q"><p>${en ? 'Is it a promo?' : '¿Es una promo?'}</p>${chips('promo', [{ v: 'no', t: 'No', on: 1 }, { v: 'desc', t: en ? '% off' : '% de descuento' }, { v: '2x1', t: '2x1' }, { v: 'envio', t: en ? 'Free shipping' : 'Envío gratis' }])}</div>
+      <div class="q"><p>${en ? 'Shall we improve it?' : '¿Lo mejoramos?'}</p>${chips('mejora', [{ v: 'si', t: en ? 'Yes, improve it' : 'Sí, mejoralo', on: 1 }, { v: 'no', t: en ? 'As it is' : 'Así como está' }])}</div>
+      <div class="q"><p>${en ? 'The caption?' : '¿El caption?'}</p>${chips('caption', [{ v: 'posty', t: en ? 'You write it' : 'Escribilo vos', on: 1 }, { v: 'mio', t: en ? 'I have mine' : 'Ya tengo el mío' }])}<div id="pzSubirCapWrap" hidden><textarea id="pzSubirCapTxt" rows="3" placeholder="${en ? 'Paste your caption…' : 'Pegá tu caption…'}"></textarea></div></div>
+      <div class="q" id="pzSubirQVideo" hidden><p>${en ? "It's a video: subtitles and polish?" : 'Si es un video: ¿subtítulos y mejora?'}</p>${chips('subs', [{ v: 'si', t: en ? 'Yes, do it' : 'Sí, hacelo', on: 1 }, { v: 'no', t: en ? 'No need' : 'No hace falta' }])}</div>
+    </div>
+    <section class="pz-voz voz-op" data-pz-voz="extra" id="pzSubirVozOp" hidden>
+      <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
+      <div class="voz-op-txt"><div class="vq">${en ? 'Anything else?' : '¿Algo más?'}</div><div class="vs" data-subir-voz-txt>${en ? 'If you want, tell Posty with a voice note.' : 'Si querés, contale a Posty con una nota de voz.'}</div></div>
+      <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
+    </section>
+    <button type="button" class="listo" id="pzSubirListo" hidden>${en ? 'Done' : 'Listo'}</button>
+    <div class="pz-subir-err" id="pzSubirErr" hidden></div>
+    <div id="pzSubirRecibos"></div>
+  </div>`;
+  return appShell('subir', inner);
+}
+function pzSubirErr(msg) {
+  const el = document.getElementById('pzSubirErr');
+  if (!el) return;
+  if (!msg) { el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false; el.textContent = msg;
+}
+async function pzSubirUpload(file) {
+  const en = pzVozEn();
+  if (!file) return;
+  pzSubirErr('');
+  const zona = document.getElementById('pzSubirZona');
+  if (zona) zona.classList.add('subiendo');
+  try {
+    const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d || !d.ok || !d.id) throw new Error((d && d.error) || 'upload');
+    PZ_SUBIR.asset = d.id;
+    PZ_SUBIR.kind = d.kind === 'video' ? 'video' : 'foto';
+    PZ_SUBIR.thumb = d.thumb || d.path || '';
+    const up = document.getElementById('pzSubirUp');
+    if (up) up.innerHTML = `<div class="up">${PZ_SUBIR.thumb ? `<img src="${esc(PZ_SUBIR.thumb)}" alt="">` : ''}<div><div class="n">${en ? 'Just uploaded' : 'Recién subido'}</div><div class="e">✓ ${en ? 'Saved in your material' : 'Guardado en tu material'}</div></div><div class="tag">${PZ_SUBIR.kind === 'video' ? 'VIDEO' : 'FOTO'}</div></div>`;
+    const preg = document.getElementById('pzSubirPreg'); if (preg) preg.hidden = false;
+    const qv = document.getElementById('pzSubirQVideo'); if (qv) qv.hidden = PZ_SUBIR.kind !== 'video';
+    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = false;
+    const listo = document.getElementById('pzSubirListo'); if (listo) listo.hidden = false;
+    if (PZ_SUBIR.todo) { PZ_SUBIR.todo = false; pzSubirResolver(true); }
+  } catch (e) {
+    pzSubirErr(en ? "It couldn't be uploaded — try again" : 'No se pudo subir — probá de nuevo');
+  }
+  if (zona) zona.classList.remove('subiendo');
+}
+function pzSubirReciboPintar(r) {
+  const en = pzVozEn();
+  const cont = document.getElementById('pzSubirRecibos');
+  if (!cont) return;
+  let card = cont.querySelector('.recibo');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'recibo';
+    card.innerHTML = `<div class="r-head"><img src="/posty-logo.png" alt=""><div><div class="t">${en ? 'Done, I have it' : 'Listo, ya lo tengo'}</div><div class="s">${en ? 'This is what I will do:' : 'Esto es lo que voy a hacer:'}</div></div></div><div class="r-items"></div>`;
+    cont.appendChild(card);
+  }
+  const que = r.kind === 'video' ? (en ? 'The video' : 'El video') : (en ? 'The photo' : 'La foto');
+  let q, w;
+  if (r.modo === 'guardado') {
+    q = que + (en ? ': saved' : ': guardada');
+    w = '✓ ' + (en ? 'Saved in your material' : 'Guardado en tu material');
+  } else {
+    const extras = [];
+    if (r.mejora_aplicada) extras.push(en ? 'improved' : 'mejorada');
+    if (r.subs_aplicados) extras.push(en ? 'with subtitles' : 'con subtítulos');
+    q = que + ': ' + (en ? 'post' : 'posteo') + (extras.length ? ', ' + extras.join(', ') : '');
+    const dl = String(r.dia_label || '');
+    w = '✓ ' + (dl ? dl.charAt(0).toUpperCase() + dl.slice(1) : '') + (r.hora ? ' · ' + r.hora : '');
+  }
+  const items = card.querySelector('.r-items');
+  const div = document.createElement('div');
+  div.innerHTML = `<div class="item">${PZ_SUBIR.thumb ? `<img src="${esc(PZ_SUBIR.thumb)}" alt="">` : ''}<div><div class="q">${esc(q)}</div><div class="w">${esc(w)}</div></div></div>`
+    + (r.desplazado ? `<div class="r-note">${en ? 'I moved Posty\'s post from that day to ' : 'Moví el posteo de Posty de ese día al '}${esc(r.desplazado.dia_label || '')}${r.desplazado.hora ? ' · ' + esc(r.desplazado.hora) : ''}${en ? ': one post per day.' : ': un posteo por día.'}</div>` : '')
+    + (r.semana_siguiente ? `<div class="r-note">${en ? 'This week was already full: it goes out next week.' : 'Esta semana ya estaba completa: sale la semana que viene.'}</div>` : '')
+    + (r.sin_dia ? `<div class="r-note">${en ? 'There were no free days: it stays in your material.' : 'No había días libres: quedó en tu material.'}</div>` : '')
+    + (r.modo === 'posteado' ? `<button type="button" class="ver" data-subir-ver="${r.post_id}">${en ? 'See it in your week' : 'Verlo en tu semana'}</button>` : '');
+  items.appendChild(div);
+  const ver = div.querySelector('[data-subir-ver]');
+  if (ver) ver.onclick = () => { try { sessionStorage.setItem('pz_ver_grilla', String(r.post_id)); } catch (e) {} location.hash = '#/app/inicio'; };
+}
+async function pzSubirResolver(todoMode) {
+  const en = pzVozEn();
+  if (PZ_SUBIR.busy || !PZ_SUBIR.asset) return;
+  if (todoMode) PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
+  const listo = document.getElementById('pzSubirListo');
+  PZ_SUBIR.busy = true;
+  if (listo) { listo.disabled = true; listo.textContent = en ? 'Posty is on it…' : 'Posty está en eso…'; }
+  pzSubirErr('');
+  try {
+    const r = await api.post('/api/subir/resolver', pzSubirPayload());
+    if (!r || !r.ok) throw new Error((r && r.error) || 'resolver');
+    pzSubirReciboPintar(r);
+    // El formulario queda listo para otro ítem; el recibo acumula.
+    PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = '';
+    const up = document.getElementById('pzSubirUp'); if (up) up.innerHTML = '';
+    const preg = document.getElementById('pzSubirPreg'); if (preg) preg.hidden = true;
+    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = true;
+    if (listo) listo.hidden = true;
+    try { cardScrollRecibo(); } catch (e) {}
+  } catch (e) {
+    pzSubirErr(String((e && e.message) || (en ? "It couldn't be done — try again" : 'No se pudo — probá de nuevo')));
+  }
+  PZ_SUBIR.busy = false;
+  if (listo) { listo.disabled = false; listo.textContent = en ? 'Done' : 'Listo'; }
+}
+function cardScrollRecibo() {
+  const c = document.getElementById('pzSubirRecibos');
+  if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function bindSubir() {
+  const pick = (cam) => { const inp = document.getElementById(cam ? 'pzSubirFileCam' : 'pzSubirFile'); if (inp) { inp.value = ''; inp.click(); } };
+  const gal = document.getElementById('pzSubirGal');
+  const cam = document.getElementById('pzSubirCam');
+  const zona = document.getElementById('pzSubirZona');
+  if (gal) gal.onclick = (e) => { e.stopPropagation(); pick(false); };
+  if (cam) cam.onclick = (e) => { e.stopPropagation(); pick(true); };
+  if (zona) zona.onclick = () => pick(false);
+  const f1 = document.getElementById('pzSubirFile');
+  const f2 = document.getElementById('pzSubirFileCam');
+  if (f1) f1.onchange = () => pzSubirUpload(f1.files && f1.files[0]);
+  if (f2) f2.onchange = () => pzSubirUpload(f2.files && f2.files[0]);
+  const todo = document.getElementById('pzSubirTodo');
+  if (todo) todo.onclick = () => {
+    if (PZ_SUBIR.asset) { pzSubirResolver(true); return; }
+    PZ_SUBIR.todo = true;
+    pick(false);
+  };
+  document.querySelectorAll('[data-subir-q]').forEach(btn => {
+    btn.onclick = () => {
+      const q = btn.getAttribute('data-subir-q');
+      const v = btn.getAttribute('data-subir-v');
+      PZ_SUBIR.answers[q] = v;
+      document.querySelectorAll('[data-subir-q="' + q + '"]').forEach(b => {
+        const on = b === btn;
+        b.classList.toggle('on', on);
+        b.textContent = (on ? '✓ ' : '') + b.textContent.replace(/^✓\s*/, '');
+      });
+      if (q === 'caption') { const w = document.getElementById('pzSubirCapWrap'); if (w) w.hidden = v !== 'mio'; }
+    };
+  });
+  const listo = document.getElementById('pzSubirListo');
+  if (listo) listo.onclick = () => pzSubirResolver(false);
+}
+
 function chatFullView() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   // (LOTE CHAT-MUSE) Encabezado FINO estilo Muse: chevron + cara +
@@ -29797,8 +30293,9 @@ function bindSchedule() {
   if (pv) pv.onclick = () => { if (SCHED_DAY_OFFSET > 0) { SCHED_DAY_OFFSET--; render(); } };
   if (nx) nx.onclick = () => { SCHED_DAY_OFFSET++; render(); };
   if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; render(); };
-  // 2026-10-05: chat en el Schedule (home) — cablear como en #/app/chat.
-  try { bindChat(); } catch (e) {}
+  // (LOTE TAB-SUBIR) Schedule ya no trae tarjeta de chat: la tira de
+  // voz de la semana se cablea por delegación global (pzVozDelegar) y
+  // su hilo se carga en bindApp (pzVozEnhance).
   // 2026-10-07: botón "¿Por qué tarda tanto?" en el estado "armando".
   const diagBtn = $('#hsDiagBtn');
   if (diagBtn) diagBtn.onclick = async () => {
@@ -30005,6 +30502,10 @@ function bindApp(tab) {
   if (tab === 'numeros') bindStats(); // 📊 Tus números
   if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
   if (tab === 'ads') bindAds(); // 🚀 Potenciar: cablea Cargar crédito y CTAs (sin esto los botones no hacían nada)
+  if (tab === 'subir') bindSubir(); // (LOTE TAB-SUBIR) el tab Subir
+  try { pzVozEnhance(document); } catch (e) {} // (LOTE TAB-SUBIR) hilos de las tiras de voz visibles
+  try { pzGridNuevoObserve(document); } catch (e) {} // (LOTE TAB-SUBIR) la marca «Nuevo» se apaga al ver la celda
+  try { pzGridScrollNuevo(); } catch (e) {} // (LOTE TAB-SUBIR) «Verlo en tu semana» ubica la grilla en la celda nueva
   pwaWire();
   // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
   if (!window.__revMoreWired) {
@@ -30333,6 +30834,7 @@ async function approvalPostView(id) {
     ${apvReviewNotice}${actions}${draftActions}
     ${apvMoreHTML(p, st, canMenu, isDraft)}
     ${hfAskChangeBtnHTML(p)}
+    ${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}
   </div>`;
 }
 // LOTE 1 · ítem 3: menú completo en el detalle. Reusa handlers vigentes:

@@ -1396,6 +1396,11 @@ try { db.exec(`ALTER TABLE chat_messages ADD COLUMN transcript_feedback TEXT NOT
 // no existe arriba y el ALTER fallaba en silencio.
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN reply_to INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN reply_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE TAB-SUBIR-VOZ) Hilo de la tira de voz: '' = historial general de
+// siempre · 'post' = hilo bajo un posteo (post_id) · 'semana' = hilo de
+// la semana (post_id = 0). Sin esto, las notas de la tira se mezclarían
+// con el historial general y no vivirían bajo su posteo.
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN hilo TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CHAT-MUSE) Limpieza única: filas de assistant con texto «…»
 // (artefacto del tipeo viejo). Idempotente: tras la primera pasada no
 // queda ninguna; la guarda pzChatSaveReply impide que vuelvan a nacer.
@@ -1665,6 +1670,10 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch
 try { db.exec(`ALTER TABLE posts ADD COLUMN overlay_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) texto exacto sobre la foto
 try { db.exec(`ALTER TABLE posts ADD COLUMN overlay_zone TEXT DEFAULT 'top'`); } catch (e) { /* ya existe */ } // (CHAT-EDITA) posición del texto sobre la foto: 'top' (arriba) o 'bottom' (abajo); el re-render la respeta
 try { db.exec(`ALTER TABLE posts ADD COLUMN vision_note TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) nota de visión con la que nació el posteo
+// (LOTE TAB-SUBIR-VOZ) Marca «Nuevo» de las celdas que nacen de Subir:
+// 1 hasta que el cliente las VE en la grilla (la apaga POST
+// /api/posts/:id/visto), nunca por tiempo.
+try { db.exec(`ALTER TABLE posts ADD COLUMN subir_nuevo INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE post_versions ADD COLUMN overlay_text TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (CONTENIDO-FOTO) texto sobre la foto en el historial de versiones
 
 // FASE 1 (2026-10-05): una sola escalera de confianza — trust_level 0/1/2.

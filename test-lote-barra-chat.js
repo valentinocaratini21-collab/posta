@@ -96,8 +96,8 @@ t('C2: el subtítulo completo sigue presente («Tocá el micrófono grande…»)
   APPJS.includes('Tocá el micrófono grande y decile lo que sea, como en WhatsApp.'));
 t('C3: el hint de abajo sigue presente («Todo se responde tocando o hablando.»)',
   APPJS.includes('Todo se responde tocando o hablando.'));
-t('C4: las 5 llamadas a chatCardHTML siguen existiendo (4 con texto + 1 Chat)',
-  count(APPJS, 'chatCardHTML(true, true, true') === 5);
+t('C4: las 4 llamadas a chatCardHTML siguen existiendo (re-pin aterrizaje tab-subir v1017: la 5ª, la de Schedule, la reemplazó la tira de semana)',
+  count(APPJS, 'chatCardHTML(true, true, true') === 4);
 t('C5: solo la pestaña Chat pasa noVoiceTxt (la llamada de 8 true)',
   count(APPJS, 'chatCardHTML(true, true, true, true, true, true, true, true)') === 1);
 
