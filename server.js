@@ -10042,7 +10042,12 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
 app.get('/api/review-status', requireAuth, (req, res) => {
   let pending = 0;
   try {
-    pending = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(req.session.userId).n || 0;
+    // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · VERDAD) Un posteo
+    // PROGRAMADO pero retenido (needs_review=1) también está «en
+    // revisión»: antes solo contaban los borradores y el banner de
+    // Inicio podía declarar la semana aprobada con programados
+    // retenidos en silencio (corridas de Veja y Hungry Ghost).
+    pending = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status IN ('draft', 'scheduled') AND COALESCE(needs_review,0)=1`).get(req.session.userId).n || 0;
   } catch (e) {}
   res.json({ ok: true, training_wheels: trainingWheelsActive(req.session.userId), pending });
 });
@@ -15279,7 +15284,7 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
 function scheduleLintForPost(uid, postId) {
   try {
     if (!uid || !postId || typeof captionPasses !== 'function') return null;
-    const post = db.prepare('SELECT id, caption, week_key FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    const post = db.prepare('SELECT id, caption, week_key, source FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post) return null;
     const caption = String(post.caption || '');
     if (!caption.trim()) return { ok: true }; // sin caption no hay copy que lintear
@@ -15304,6 +15309,20 @@ function scheduleLintForPost(uid, postId) {
       } catch (e) {}
     }
     if (failReason) {
+      // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) El
+      // lint NO retiene los posteos de la prueba (source='trial'): su
+      // caption ya pasó las puertas del demo y el qualityGate previo a
+      // programar; retenerlos acá los dejaba programados pero invisibles
+      // para su dueño — semana vacía, grilla sin posteos propios,
+      // scheduler que nunca los publica — (el limbo de las corridas de
+      // Veja y Hungry Ghost). El veredicto se registra igual (el evento
+      // y el log quedan: la señal no se pierde), pero SIN la marca que
+      // los esconde: needs_review no se toca.
+      if (post.source === 'trial') {
+        evTrack(uid, 'schedule_lint_failed', { post_id: postId, reason: failReason.slice(0, 300), trial_sin_retencion: 1 });
+        console.log(`[schedule-lint] post ${postId} (user ${uid}): NO pasa el lint al programar — es de la PRUEBA: se registra pero NO se retiene. Motivo: ${failReason}`);
+        return { ok: false, reason: failReason, trial: true, held: false };
+      }
       db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postId);
       evTrack(uid, 'schedule_lint_failed', { post_id: postId, reason: failReason.slice(0, 300) });
       console.log(`[schedule-lint] post ${postId} (user ${uid}): NO pasa el lint al programar — queda marcado para revisión. Motivo: ${failReason}`);
@@ -16046,6 +16065,13 @@ function bestHourDe(uid) {
 function programarHoy(uid, postId, tz, hoy) {
   const iso = zonedWallToUtc(`${hoy} ${String(bestHourDe(uid)).padStart(2, '0')}:00`, tz);
   if (!iso) return null;
+  // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE) Nunca programar a una
+  // hora YA PASADA: en corridas post-19:00, ensure fijaba el posteo de
+  // hoy a las 19:00 de hoy — salía publicado al instante (41 s en Hungry
+  // Ghost) o quedaba retenido con una hora muerta. Sin slot futuro hoy
+  // no hay posteo de hoy por este camino: el llamador sigue su curso
+  // (el borrador queda para otro día / sin_slot), como ya contemplaba.
+  if (Date.parse(iso) <= Date.now()) return null;
   try {
     db.prepare(`UPDATE posts SET status = 'scheduled', scheduled_at = ? WHERE id = ? AND user_id = ? AND status = 'draft'`).run(iso, postId, uid);
     const p = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
@@ -16146,6 +16172,23 @@ async function ensureTodayPost(uid, tz, now) {
         const prog = programarHoy(uid, draft.id, tz, hoy);
         if (prog) return { ok: true, post: prog, fuente: 'borrador' };
       }
+      // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) La
+      // prueba NO se desplaza: si la secuencia de la prueba (días 1–3,
+      // source='trial') todavía no arrancó — su primer posteo cae mañana
+      // o pasado porque el arranque fue tras la hora de posteo — ensure
+      // NO crea un posteo extra para hoy: el día 1 de este usuario es el
+      // primer posteo de su prueba, no un generado al entrar (el 648 de
+      // Veja / el 644 de Hungry Ghost). Solo frena cuando la secuencia
+      // está por empezar (primer día dentro de los próximos 3 días): un
+      // posteo de prueba viejo o reprogramado lejos no bloquea la
+      // generación normal de la cuenta.
+      try {
+        const tFirst = db.prepare(`SELECT scheduled_at FROM posts WHERE user_id = ? AND source = 'trial' AND status = 'scheduled' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC LIMIT 1`).get(uid);
+        if (tFirst && tFirst.scheduled_at) {
+          const fd = morningPostPush.dayKeyInTz(new Date(String(tFirst.scheduled_at).replace(' ', 'T')), tz);
+          if (fd && fd > hoy && fd <= shiftDays(hoy, 3)) return { ok: false, reason: 'prueba_por_empezar' };
+        }
+      } catch (e) { /* sin lectura de prueba: el pipeline decide */ }
       // 3) Nada hoy: generar UNO. Cupo semanal de feed: sin cupo no se
       // genera (límite honesto del plan, igual que /api/ritual/elegir).
       try {
@@ -19307,12 +19350,32 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
       const candToday = zonedWallToUtc(`${today} ${String(hour).padStart(2, '0')}:00`, tz);
       if (candToday && Date.parse(candToday) > Date.now()) firstDay = today;
     }
-    for (let i = 0; i < 7; i++) {
-      const ymd = shiftDays(monday, i);
-      if (ymd < firstDay || tset.has(ymd)) continue;
-      if (closedSet.has(weekdayOfYmd(ymd))) continue;
-      const cand = zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
-      if (cand && ymdInTz(cand, tz) === ymd) { tset.add(ymd); iso = cand; break; }
+    if (d.source === 'trial') {
+      // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) Los
+      // posteos de la prueba se ANCLAN a la prueba: días 1, 2 y 3 corridos
+      // desde el arranque. firstDay ya es el primer día cuyo horario sigue
+      // en el futuro (hoy si la hora de hoy no pasó — v978 —; mañana si
+      // pasó). Desde ahí se busca día por día SIN el tope de la semana
+      // corriente: un arranque del viernes a la noche no deja el tercer
+      // posteo en espera hasta el lunes (la secuencia cruza el fin de
+      // semana) y jamás se acepta un horario ya pasado. Los días cerrados
+      // y los ya ocupados se siguen respetando: la corrida se estira,
+      // nunca se viola un cierre ni se pisa otro posteo.
+      for (let i = 0; i < 10 && !iso; i++) {
+        const ymd = shiftDays(firstDay, i);
+        if (tset.has(ymd)) continue;
+        if (closedSet.has(weekdayOfYmd(ymd))) continue;
+        const cand = zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
+        if (cand && ymdInTz(cand, tz) === ymd && Date.parse(cand) > Date.now()) { tset.add(ymd); iso = cand; }
+      }
+    } else {
+      for (let i = 0; i < 7; i++) {
+        const ymd = shiftDays(monday, i);
+        if (ymd < firstDay || tset.has(ymd)) continue;
+        if (closedSet.has(weekdayOfYmd(ymd))) continue;
+        const cand = zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
+        if (cand && ymdInTz(cand, tz) === ymd) { tset.add(ymd); iso = cand; break; }
+      }
     }
     if (!iso) { waiting.push({ id: d.id, week_key: monday, reason: closedSet.size >= 7 ? 'closed_days' : 'no_slot' }); continue; }
     pools.consume(monday, poolKey);
@@ -31753,11 +31816,12 @@ app.post('/api/guest/start', (req, res) => {
     // Programar los 3 (la grilla muestra solo scheduled): si el gate de
     // calidad retiene alguno, queda como borrador en Bandeja, igual que
     // una prueba por magic link de hoy.
-    // (v923 · CHAT-CANTIDAD-REAL · REGLA DE VERDAD) El mensaje de
-    // bienvenida cuenta los posteos REALMENTE PROGRAMADOS
-    // (sched.scheduled.length), NUNCA los importados (nImp): la prueba
-    // entrega 1 por día y el chat solo afirma lo que ya existe. Si el
-    // gate retuvo alguno, el mensaje dice solo lo que hay.
+    // (v923 · CHAT-CANTIDAD-REAL · REGLA DE VERDAD — actualizada por
+    // CORRECTIVO-1, decisión 20:09) El mensaje de bienvenida cuenta los
+    // posteos REALMENTE PROGRAMADOS (sched.scheduled.length), NUNCA los
+    // importados (nImp): la prueba arma los 3 desde el arranque (días
+    // 1–3, visibles en la semana) y el chat solo afirma lo que ya existe
+    // y se ve. Si el gate retuvo alguno, el mensaje dice solo lo que hay.
     let sched = null;
     try { sched = scheduleAllDrafts(g.userId); } catch (e) { console.error('[guest] schedule falló:', e.message); }
     const nSched = (sched && sched.scheduled) ? sched.scheduled.length : 0;
@@ -36574,7 +36638,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v981';
+const BUILD_ID = '20261105-v983';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

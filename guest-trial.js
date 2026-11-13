@@ -168,15 +168,15 @@ function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
 
 // Mensaje de bienvenida de Posty en el chat del invitado: qué armó, por
 // qué, y qué puede tocar (tocar = crear cuenta, sin sorpresas).
-// (v923 · CHAT-CANTIDAD-REAL · REGLA DE VERDAD) nPosts = posteos
-// REALMENTE PROGRAMADOS, verificados contra scheduleAllDrafts — NUNCA
-// los importados. La prueba entrega 1 posteo por día (la semana dice
-// «salen uno por uno, día por día»): el día 1 solo el primero está
-// listo; los otros llegan uno por día. Por eso el mensaje NUNCA afirma
-// una cantidad que no se verificó: con 3 programados dice «tu primer
-// posteo está listo; los otros dos llegan uno por día»; con menos,
-// solo lo que hay; con 0, no afirma ningún posteo. (La importación
-// trae como máximo 3, así que n >= 3 es siempre exactamente 3.)
+// (v923 · CHAT-CANTIDAD-REAL · REGLA DE VERDAD — actualizada por
+// CORRECTIVO-1, decisión 20:09) nPosts = posteos REALMENTE PROGRAMADOS,
+// verificados contra scheduleAllDrafts — NUNCA los importados. La
+// prueba arma los 3 posteos desde el arranque (días 1–3 de la prueba,
+// visibles en la semana del cliente): no hay goteo — nada «llega»
+// después; los 3 ya están. Por eso el mensaje afirma exactamente lo
+// programado: con 3 dice que están los 3 en su semana, uno para cada
+// día; con menos, solo lo que hay; con 0, no afirma ningún posteo. (La
+// importación trae como máximo 3, así que n >= 3 es siempre 3.)
 // (LOTE L10 · BIENVENIDA-IDEMPOTENTE · v955) Además: UNA sola
 // bienvenida por invitado — ver la guarda antes del INSERT.
 function welcomeGuestMessage(db, userId, { lang, business, nPosts }) {
@@ -190,13 +190,13 @@ function welcomeGuestMessage(db, userId, { lang, business, nPosts }) {
   let text;
   if (n >= 3) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ the other two arrive one per day 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ los otros dos llegan uno por día 👇`;
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ and the other two are too: all 3 are already in your week, one for each day of the trial 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ y los otros dos también: ya están los 3 en tu semana, uno para cada día de la prueba 👇`;
     text += cola;
   } else if (n === 2) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ the other one arrives tomorrow 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ el otro llega mañana 👇`;
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ and the second one too: both are already in your week 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ y el segundo también: ya están los 2 en tu semana 👇`;
     text += cola;
   } else if (n === 1) {
     text = en

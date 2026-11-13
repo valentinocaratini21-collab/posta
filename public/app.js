@@ -22918,6 +22918,13 @@ function pzHoyTiraDias(sem, posts, hoyKey, tz) {
       else if (esManana) revelado = hoySalio;
       else if (esPasado) revelado = !!(post && String(post.status || '') === 'published');
       else revelado = false;
+      // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) Un
+      // día cuyo posteo es DE LA PRUEBA (source='trial') se revela desde
+      // el arranque, esté donde esté en la tira: los 3 posteos de la
+      // prueba se muestran desde el inicio, sin «todavía no hay posteo
+      // acá» sobre un día que sí tiene el suyo. La revelación progresiva
+      // RS-2 sigue mandando para el resto de la semana.
+      if (post && String(post.source || '') === 'trial') revelado = true;
       out.push({ key: k, idx: i, estado: d.estado || '', post, revelado, esHoy, esManana, esPasado });
     }
   } catch (e) {}
@@ -22951,7 +22958,7 @@ function pzHoyTiraDetalleHTML(d, o) {
         ? (en ? 'You’ll see its post as soon as today’s goes out.' : 'Su posteo se ve apenas salga el de hoy.')
         : d.esPasado
           ? (en ? 'Nothing went out that day.' : 'Ese día no salió ningún posteo.')
-          : (en ? 'No post here yet: the week comes out one by one, day by day.' : 'Todavía no hay posteo acá: los de la semana salen uno por uno, día por día.');
+          : (en ? 'No post here yet: this day shows up as its date gets closer.' : 'Todavía no hay posteo acá: este día se muestra cuando se acerque su fecha.');
       return `<div class="pz-hoy-tira-detalle locked"><div class="t"><b>${esc(nombre)}</b><small>${esc(msg)}</small></div></div>`;
     }
     const p = d.post || null;
@@ -23059,7 +23066,13 @@ function pzHoyTiraBindDetalle(cont) {
 
 function pzHoyTiraBind(root) {
   if (!root) return;
-  const cont = root.querySelector ? root.querySelector('#pzHoyTira') : null;
+  // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE) El recableado tras un
+  // tap recibía el propio #pzHoyTira como raíz y lo buscaba como
+  // DESCENDIENTE de sí mismo: la búsqueda daba null, la función volvía
+  // sin cablear y los botones nuevos quedaban sin onclick (la tira
+  // respondía solo al primer clic tras recargar). Si la raíz ES el
+  // contenedor, se usa directo.
+  const cont = (root.id === 'pzHoyTira') ? root : (root.querySelector ? root.querySelector('#pzHoyTira') : null);
   if (!cont) return;
   const dias = (typeof PZ_HOY_TIRA_DIAS !== 'undefined' && Array.isArray(PZ_HOY_TIRA_DIAS)) ? PZ_HOY_TIRA_DIAS : [];
   cont.querySelectorAll('[data-pz-hoy-tira-dia]').forEach((b) => {
@@ -24043,7 +24056,18 @@ async function inicioView() {
   // 11/11: 591 y 584). pzHoyPendientes sigue (el saludo y la tira la
   // usan); el conteo del banner es pzHoyRevisionContar.
   const revR1 = (!HF_VISITOR) ? pzHoyRevisionContar(allPosts, hoyKeyR1, tz, modoR1.manual) : { needOK: 0, schedSolo: 0, drafts: [], schedPend: [] };
-  const needOKR1 = revR1.needOK;
+  // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · VERDAD) Los posteos
+  // en revisión (needs_review=1) NO llegan en /api/posts, así que el
+  // conteo de arriba no los ve: el saludo podía declarar «Tu semana ya
+  // está aprobada» con posteos retenidos en revisión (corridas de Veja
+  // y Hungry Ghost). /api/review-status cuenta los del dueño en
+  // revisión (borradores y programados retenidos): son conjuntos
+  // disjuntos de los de revR1 (que solo ve needs_review=0), así que se
+  // SUMAN al needOK — si hay algo en revisión, el saludo lo dice y la
+  // semana no se declara aprobada.
+  let revOcultaR1 = 0;
+  if (!HF_VISITOR) { try { const rsRevR1 = await api.get('/api/review-status'); revOcultaR1 = (rsRevR1 && Number(rsRevR1.pending)) || 0; } catch (e) { revOcultaR1 = 0; } }
+  const needOKR1 = revR1.needOK + revOcultaR1;
   const schedSoloR1 = revR1.schedSolo;
   // (LOTE SIMPLIFICAR-APP · PARTE 2 · REDISEÑO SIMPLE · 9/11: la semana
   // queda en Hoy como fila mini. semR1 = publicados reales de la semana
