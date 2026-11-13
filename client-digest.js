@@ -1359,6 +1359,13 @@ function buildFromParts(parts) {
     if (Object.keys(d.photo_map.entries).length) d.fuentes.photo_map = { at: now, fotos: Object.keys(d.photo_map.entries).length };
     else d.photo_map = null;
   }
+  // (CORRECTIVO-7) Veredictos de presencia de marca por foto: la
+  // clasificación corre AFUERA (con sus topes y guardas de gasto); acá
+  // solo se adoptan los veredictos ya emitidos — el false incluido.
+  if (p.brandPresence && typeof p.brandPresence === 'object' && Object.keys(p.brandPresence).length) {
+    d.brand_presence = { entries: sanitizeBrandPresence(p.brandPresence), at: now };
+    if (!Object.keys(d.brand_presence.entries).length) d.brand_presence = null;
+  }
   // (M3 FICHA-OFERTA) La ficha del estudio viaja tal cual (el módulo
   // study-offer es dueño de su forma): espacio de nombres propio dentro
   // del fundamento, sin reescribir nada de lo anterior.
@@ -1746,6 +1753,36 @@ function photoBrandVisible(digest, key) {
   const e = digest.photo_map.entries[String(key)];
   return !!(e && e.marca === true);
 }
+// (CORRECTIVO-7 · GATE DE MARCA EN FOTO REAL) Veredictos de presencia
+// por foto (deepRead.classifyBrandPresence): a diferencia del photo_map
+// — que solo conserva fotos CON match de producto y registra la marca
+// solo cuando se ve — este mapa guarda el veredicto de TODAS las fotos
+// chequeadas, incluido el false (la visión la vio y el negocio NO está
+// en la escena). Es la caché durable del gate: vive en el fundamento,
+// viaja en el payload de la prueba y la cuenta lo hereda al registrarse.
+function sanitizeBrandPresence(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (!v || typeof v !== 'object' || typeof v.marca !== 'boolean') continue;
+    out[String(k).slice(0, 300)] = { marca: v.marca === true, ...(v.detalle ? { detalle: String(v.detalle).slice(0, 140) } : {}) };
+    if (Object.keys(out).length >= 200) break;
+  }
+  return out;
+}
+// Veredicto de presencia de UNA foto: true (la visión verificó que el
+// negocio se ve en la escena) · false (la visión la vio y NO se ve) ·
+// null (SIN VERIFICAR: nadie la chequeó — para la entrega de la prueba
+// el null NO es un pase). Fuentes, en orden: el photo_map (marca:true
+// de la clasificación foto→producto) y el mapa de presencia.
+function brandPresenceOf(digest, key) {
+  if (!digest || !key) return null;
+  const k = String(key);
+  const pm = (digest.photo_map && digest.photo_map.entries) ? digest.photo_map.entries[k] : null;
+  if (pm && pm.marca === true) return true;
+  const bp = (digest.brand_presence && digest.brand_presence.entries) ? digest.brand_presence.entries[k] : null;
+  if (bp && typeof bp.marca === 'boolean') return bp.marca;
+  return null;
+}
 
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
  * estrella inferido se CONFIRMA con un toque y cada contradicción se
@@ -1853,6 +1890,13 @@ function applyDeepBlocks(stored, fresh) {
     const mergedEntries = { ...((out.photo_map && out.photo_map.entries) || {}), ...fresh.photo_map.entries };
     out.photo_map = { entries: mergedEntries, at: fresh.photo_map.at || new Date().toISOString() };
     if (fresh.fuentes && fresh.fuentes.photo_map) out.fuentes = { ...(out.fuentes || {}), photo_map: { at: out.photo_map.at, fotos: Object.keys(mergedEntries).length } };
+  }
+  // (CORRECTIVO-7) Los veredictos de presencia se fusionan como el
+  // photo_map: la corrida fresca pisa por clave, el resto sobrevive —
+  // una foto ya chequeada no se vuelve a pagar en el próximo refresco.
+  if (fresh.brand_presence && fresh.brand_presence.entries && Object.keys(fresh.brand_presence.entries).length) {
+    const mergedPresence = { ...((out.brand_presence && out.brand_presence.entries) || {}), ...fresh.brand_presence.entries };
+    out.brand_presence = { entries: mergedPresence, at: fresh.brand_presence.at || new Date().toISOString() };
   }
   // (LOTE PERSONALIZACIÓN · ítems 1 y 3) La voz se re-mina de los captions
   // y el logo se re-lee de la foto de perfil: solo reemplazan si la
@@ -2899,6 +2943,8 @@ module.exports = {
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
   lexDiceFor, voicePhraseFor,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
+  // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
+  sanitizeBrandPresence, brandPresenceOf,
   questionCandidatesOf, applyDeepBlocks,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
   rubroId,

@@ -529,6 +529,89 @@ async function classifyDigestPhotos({ photos, items, apiKey, userId, fetchImpl, 
   return out;
 }
 
+// ---------- Presencia de marca en la escena (visión) ----------
+// (CORRECTIVO-7 · GATE DE MARCA EN FOTO REAL) classifyDigestPhotos solo
+// conserva el veredicto de las fotos que calzan con un producto de la
+// lista: una foto SIN match de producto pierde su respuesta de marca
+// (la visión la vio, pero el mapa la descarta) — y es justo esa foto la
+// que el gate necesita juzgar (la foto linda genérica sin nada del
+// negocio). classifyBrandPresence usa la MISMA infraestructura de
+// visión (VISION_MODEL, mismo request, mismo parseo) pero pregunta
+// SOLO por la presencia: ¿se ve EL NEGOCIO en la escena — su logo, un
+// producto con su nombre, su packaging, el frente de su local?
+// Devuelve { [key]: { marca: true|false, detalle } } para TODAS las
+// fotos que la visión respondió (el false TAMBIÉN es veredicto: la
+// visión vio la foto y el negocio no está). Cualquier falla (sin
+// clave, red, JSON ilegible) → {} = SIN VERIFICAR: ningún llamador
+// puede leer {} como un pase.
+async function classifyBrandPresence({ photos, business, items, apiKey, userId, fetchImpl, max } = {}) {
+  if (!apiKey) return {};
+  const cap = Math.min(Math.max(parseInt(max, 10) || VISION_MAX_PHOTOS, 1), VISION_MAX_PHOTOS);
+  const usable = [];
+  for (const p of (photos || [])) {
+    if (!p || !p.key || !p.path || usable.length >= cap) continue;
+    try {
+      const st = fs.statSync(p.path);
+      if (!st.isFile() || st.size < 1024 || st.size > 4 * 1024 * 1024) continue;
+    } catch (e) { continue; }
+    usable.push(p);
+  }
+  if (!usable.length) return {};
+  const doFetch = fetchImpl || fetch;
+  const sentPhotos = [];
+  const imageParts = [];
+  for (const p of usable) {
+    const ext = path.extname(p.path).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    try {
+      imageParts.push({ type: 'image_url', image_url: { url: `data:${mime};base64,` + fs.readFileSync(p.path).toString('base64') } });
+      sentPhotos.push(p);
+    } catch (e) { /* foto ilegible: se salta y el índice no se corre */ }
+  }
+  const sent = sentPhotos.length;
+  if (!sent) return {};
+  const biz = String(business || '').trim().slice(0, 80);
+  const names = (items || []).map((x) => String((x && (x.nombre || x)) || '').trim()).filter((n) => n.length >= 3).slice(0, 24);
+  const ctxLines = [
+    biz ? `El negocio es «${biz}».` : 'El negocio es el dueño de estas fotos.',
+    names.length ? `Sus productos/servicios: ${names.join(', ')}.` : '',
+  ].filter(Boolean).join(' ');
+  const content = [
+    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). ${ctxLines}\nPara CADA foto decidí si se ve EL NEGOCIO dentro de la escena: su logo, un producto con su nombre o su marca, su packaging, el frente de su local con su nombre. marca=true SOLO si algo del negocio se ve de verdad en la foto; si la foto es genérica (un producto sin marca visible, una persona trabajando, un interior sin ningún nombre) → marca=false. Respondé SOLO este JSON: {"results":[{"i":0,"marca":true,"detalle":"qué se ve del negocio, en pocas palabras"}]}` },
+    ...imageParts,
+  ];
+  let data;
+  try {
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: VISION_MODEL, temperature: 0.1, max_tokens: 500,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content }],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r || !r.ok) return {};
+    data = await r.json().catch(() => null);
+  } catch (e) { return {}; }
+  if (!fetchImpl && costs && costs.trackUsage) {
+    try { costs.trackUsage({ feature: 'brand-presence', userId, model: VISION_MODEL, json: data }); } catch (e) {}
+  }
+  let parsed = null;
+  try { parsed = JSON.parse((data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || ''); } catch (e) {}
+  if (!parsed || !Array.isArray(parsed.results)) return {};
+  const out = {};
+  for (const res of parsed.results) {
+    const idx = parseInt(res && res.i, 10);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= sent) continue;
+    if (!res || typeof res.marca !== 'boolean') continue; // sin respuesta booleana no hay veredicto
+    const photo = sentPhotos[idx];
+    if (photo) out[photo.key] = { marca: res.marca === true, detalle: String(res.detalle || '').slice(0, 140) };
+  }
+  return out;
+}
+
 /* Clave durable de una foto local: hash de su CONTENIDO (la misma foto
  * con otro nombre sigue siendo la misma foto; la caché del mapa es por
  * contenido, no por ruta). */
@@ -544,6 +627,7 @@ module.exports = {
   fetchDeepCatalog,
   fetchBioLink,
   classifyDigestPhotos,
+  classifyBrandPresence,
   photoContentKey,
   // piezas internas, exportadas para tests y reuso
   itemsFromHtml,

@@ -499,6 +499,20 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
   for (let ti = 0; ti < tiers.length && ti <= maxTier; ti++) {
     const hit = webPool.find((w) => {
       if (used.has(w.path)) return false;
+      // (CORRECTIVO-7 · GATE DE MARCA EN LA PRUEBA) En la prueba, una
+      // foto real solo se entrega como imagen de una pieza si la visión
+      // VERIFICÓ que el negocio se ve dentro de la escena (su logo, su
+      // producto con su nombre, su packaging, su frente). La
+      // verificación es cualquiera de las dos señales de la misma
+      // visión: el veredicto de presencia (marca_verdict, anotado por
+      // buildDemoSpec desde el fundamento) o la marca que el mapa de
+      // fotos ya clasificó (marca_visible — en producción ambas salen
+      // del mismo chequeo y nunca se contradicen en el pase). La foto
+      // sin marca — o sin verificar, que para la entrega vale lo
+      // mismo — no sale «porque es la que hay»; el slot cae al camino
+      // de siempre para «sin foto real válida» (póster de marca).
+      // Fuera de la prueba (trialNoStock falso) el selector no cambia.
+      if (ctx && ctx.trialNoStock && w.marca_verdict !== true && w.marca_visible !== true) return false;
       // El rescate es del PRODUCTO (la visión lo identificó como EL
       // producto), no del índice del rango: una foto del producto
       // cuyos tags no alcanzan el mundo se rescata en cualquier rango —
@@ -1551,8 +1565,12 @@ function pickFirstPostCandidates(o) {
   let a = null;
   const hit = pickWebPhoto(topic, webPool, used, ctx, { maxTier: 1 });
   if (hit) {
-    const isBrand = !!(topic && topic._wow && hit.producto && clientDigest.sameItemName(hit.producto, topic.digest_anchor) && hit.marca_visible);
-    a = { photo: hit.path, photo_source: isBrand ? 'real-product-brand' : 'real-product', brand_visible: !!hit.marca_visible, producto: hit.producto || null };
+    // (CORRECTIVO-7) La marca en la escena la prueba el veredicto de
+    // presencia además de la anotación del photo_map: una foto del
+    // producto con presencia verificada ES 'real-product-brand'.
+    const brandShown = !!(hit.marca_visible || hit.marca_verdict === true);
+    const isBrand = !!(topic && topic._wow && hit.producto && clientDigest.sameItemName(hit.producto, topic.digest_anchor) && brandShown);
+    a = { photo: hit.path, photo_source: isBrand ? 'real-product-brand' : 'real-product', brand_visible: brandShown, producto: hit.producto || null };
   }
   let b = null;
   if (o && o.profilePicPath) b = { photo: o.profilePicPath, photo_source: 'brand-poster', brand_visible: true, producto: null };
@@ -1763,6 +1781,20 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // (v907) La marca DENTRO de la escena: la foto queda anotada si la
       // visión vio el logo/packaging/letrero en ella.
       if (w.url && clientDigest.photoBrandVisible(digest, w.url)) w.marca_visible = true;
+    }
+  }
+  // (CORRECTIVO-7 · GATE DE MARCA) Veredicto de presencia por foto del
+  // pool: true (la visión verificó que el negocio se ve en la escena) ·
+  // false (la vio y NO se ve) · sin anotar = SIN VERIFICAR. El veredicto
+  // se computó UNA vez, al ingerir las fotos de la prueba (server:
+  // trialBrandPresence → digest), y vive cacheado en el fundamento:
+  // armar el spec — y cada pieza que consume la foto — lo lee, no lo
+  // re-paga. pickWebPhoto lo exige en la prueba (ver su gate).
+  if (digest) {
+    for (const w of webPool) {
+      if (!w.url) continue;
+      const v = clientDigest.brandPresenceOf(digest, w.url);
+      if (v !== null) w.marca_verdict = v;
     }
   }
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia

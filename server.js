@@ -1505,6 +1505,9 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       catalog: (deep && deep.catalog) || null,
       bioLink: (deep && deep.bioLink) || null,
       photoEntries: (deep && deep.photoEntries) || null,
+      // (CORRECTIVO-7) Veredictos de presencia de marca de las fotos de
+      // la prueba: quedan cacheados en el fundamento (brand_presence).
+      brandPresence: (deep && deep.brandPresence) || null,
       webCopy: webData ? String(webData.description || '') : '',
       // (LOTE PERSONALIZACIÓN · ítem 3) Las palabras del dueño (respuestas
       // de la prueba) también alimentan los marcadores de voz.
@@ -1587,6 +1590,38 @@ async function trialPhotoEntries(webPhotos, itemNames) {
     if (!photos.length) return null;
     const entries = await deepRead.classifyDigestPhotos({ photos, items: itemNames, apiKey, fetchImpl: null });
     return entries && Object.keys(entries).length ? entries : null;
+  } catch (e) { return null; }
+}
+/* (CORRECTIVO-7 · GATE DE MARCA EN FOTO REAL) Veredictos de PRESENCIA
+ * para las fotos de la prueba: ¿se ve EL NEGOCIO dentro de la escena
+ * (logo, producto con nombre, packaging, frente)? Corre UNA vez, acá —
+ * en la ingesta de la prueba, en paralelo con el mapa foto→producto y
+ * bajo el mismo tope de gasto — y el veredicto queda CACHEADO en el
+ * fundamento (digest.brand_presence): ni el spec ni ninguna pieza lo
+ * re-pagan, y el render jamás lo espera (la regla <30 s no se toca).
+ * Sin clave, sin cupo o sin respuesta de la visión, las fotos quedan
+ * SIN VERIFICAR y el registro lo dice: para la entrega de la prueba,
+ * sin verificar = no-pase (la foto no se entrega «porque es la que
+ * hay»); el slot cae al camino de siempre sin foto real válida. */
+async function trialBrandPresence(webPhotos, itemNames, business) {
+  try {
+    if (!Array.isArray(webPhotos) || !webPhotos.length) return null;
+    const photos = webPhotos.filter((w) => w && w.url && w.path).slice(0, deepRead.VISION_MAX_PHOTOS)
+      .map((w) => ({ key: w.url, path: w.path }));
+    if (!photos.length) return null;
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey || !costs.demoAiCapOk()) {
+      console.log(`[foto-gate] prueba sin visión disponible (sin clave o tope de IA): ${photos.length} foto(s) reales quedan SIN VERIFICAR — no se entregan como imagen de pieza`);
+      return null;
+    }
+    const verdicts = await deepRead.classifyBrandPresence({ photos, business, items: itemNames, apiKey, fetchImpl: null });
+    if (!verdicts || !Object.keys(verdicts).length) {
+      console.log(`[foto-gate] la visión no devolvió veredictos de presencia: ${photos.length} foto(s) quedan SIN VERIFICAR — no-pase para la entrega de la prueba`);
+      return null;
+    }
+    const okN = Object.values(verdicts).filter((v) => v && v.marca === true).length;
+    console.log(`[foto-gate] presencia de marca en la prueba: ${okN}/${Object.keys(verdicts).length} foto(s) con el negocio visible en la escena`);
+    return verdicts;
   } catch (e) { return null; }
 }
 // Transferencia TOTAL al registrarse: la cuenta nace con el fundamento
@@ -13492,11 +13527,28 @@ function albumRefsForPiece(uid, { tipo = '', texts = '', max = 2 } = {}) {
   try { mapped = photoMappedRefsFor(uid, [texts]); } catch (e) { mapped = []; } // photoMappedRefsFor recibe la LISTA de textos de la pieza
   const mappedSet = new Set(mapped);
   const want = desiredAlbumTag(tipo, texts);
+  // (CORRECTIVO-7 · PREFERENCIA DE MARCA) Dentro de cada tier, la foto
+  // que YA muestra el negocio (veredicto de visión cacheado en el
+  // fundamento, por clave de contenido: logo, producto con nombre,
+  // packaging o frente visible) le gana a la que no lo muestra o nunca
+  // se verificó — y a la calidad medida: una foto del negocio con un
+  // issue leve viaja antes que una genérica impecable. El tier sigue
+  // mandando (la foto mapeada al producto de la pieza no se destrona).
+  // Sin ningún veredicto en la cuenta, el orden queda como siempre.
+  let albumDigest = null;
+  try { albumDigest = digestForUser(uid); } catch (e) { albumDigest = null; }
+  const presenceOf = (filePath) => {
+    try {
+      const ck = deepRead.photoContentKey(path.join(MEDIA_DIR, path.basename(String(filePath || ''))));
+      return ck ? clientDigest.brandPresenceOf(albumDigest, ck) : null;
+    } catch (e) { return null; }
+  };
   const scored = rows.map((r, i) => {
     const isMapped = mappedSet.has(r.file_path);
     const tier = isMapped ? 0 : (r.album_tag === want ? 1 : (r.album_tag ? 2 : 3));
     const bad = albumQualityIssues(r.album_quality).length ? 1 : 0;
-    return { file_path: r.file_path, role: isMapped ? 'product' : 'photo', score: tier * 2 + bad, _i: i };
+    const sinMarca = presenceOf(r.file_path) === true ? 0 : 1;
+    return { file_path: r.file_path, role: isMapped ? 'product' : 'photo', score: tier * 4 + sinMarca * 2 + bad, _i: i };
   }).sort((a, b) => (a.score - b.score) || (a._i - b._i));
   const top = scored.slice(0, Math.max(1, max));
   return { refs: top.map((s) => s.file_path), roles: top.map((s) => s.role) };
@@ -33156,8 +33208,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       marcaWebBrand(webData, webExtraPhotos);
       const catalog = await deepCatalogP;
       const itemNames = [...(webData.services || []), ...((catalog && catalog.items) || []).map((x) => x.nombre)];
-      const photoEntries = await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000);
-      deep = { catalog, photoEntries };
+      // (CORRECTIVO-7) La presencia de marca corre en la MISMA ventana
+      // que el mapa (en paralelo, mismo presupuesto): el veredicto
+      // queda en el fundamento y el gate del spec lo lee de ahí.
+      const [photoEntries, brandPresence] = await Promise.all([
+        raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000),
+        raceMs(trialBrandPresence(webExtraPhotos, itemNames, business), 7000),
+      ]);
+      deep = { catalog, photoEntries, brandPresence };
     }
     // (M3 FICHA-OFERTA) La ficha se completa con el catálogo profundo
     // (precios por ítem) y con las correcciones guardadas del cliente.
@@ -34376,8 +34434,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const itemNames = [...((webData && webData.services) || []),
         ...((catalog && catalog.items) || []).map((x) => x.nombre),
         ...((bioLink && bioLink.items) || []).map((x) => x.nombre)];
-      const photoEntries = webExtraPhotos.length ? await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : null;
-      deep = { catalog, bioLink, photoEntries };
+      // (CORRECTIVO-7) Presencia de marca en paralelo con el mapa,
+      // mismo presupuesto: veredictos al fundamento, gate en el spec.
+      const [photoEntries, brandPresence] = await Promise.all([
+        webExtraPhotos.length ? raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : Promise.resolve(null),
+        webExtraPhotos.length ? raceMs(trialBrandPresence(webExtraPhotos, itemNames, business), 6000) : Promise.resolve(null),
+      ]);
+      deep = { catalog, bioLink, photoEntries, brandPresence };
     }
     // (M3 FICHA-OFERTA) La ficha se completa con el catálogo profundo y,
     // si no hubo web, nace del feed (bio + captions) con sus correcciones.
@@ -36929,7 +36992,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v995';
+const BUILD_ID = '20261105-v996';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -37620,4 +37683,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
