@@ -4937,6 +4937,105 @@ app.post('/api/venty/piloto/fitswapp/email/enviar', requireAuthOrWebToken, async
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- VENTY SLICE 3: cierre real (pago/seña + agenda anti no-show) ----------
+// UN solo bloque aditivo (require + rutas) para que el preparador re-base
+// por hunks sin tocar los bloques de los otros lotes. Maquinaria GENÉRICA
+// (venty-cierre.js / venty-agenda.js): el link de pago sale del fundamento
+// del negocio (Venty nunca cobra), todo en modo prueba, la reseña solo se
+// pide dentro de la conversación de cierre, y ticket alto/inmuebles
+// escalan a Bandeja sin cerrar la venta. Todo bajo requireAuthOrWebToken
+// como el resto de /api/venty/*.
+const ventyCierre = require('./venty-cierre'); // VENTY SLICE 3: cierre con link del negocio, conciliación, reseña en el cierre, escalación V-10.
+const ventyAgenda = require('./venty-agenda'); // VENTY SLICE 3: turnos + recordatorios anti no-show como trabajos programados, agenda mínima propia.
+try { ventyCierre.ensureSchema(db); } catch (e) { console.error('[venty-cierre] init:', e.message); }
+try { ventyAgenda.ensureSchema(db); } catch (e) { console.error('[venty-agenda] init:', e.message); }
+app.get('/api/venty/cierre/config', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); const c = ventyCierre.configCierre(db, uid); res.json({ ok: true, modo: 'prueba', cierre: { link_pago: c.link_pago, proveedor: c.proveedor, credencial_ref: c.credencial_ref, titular_esperado: c.titular_esperado, sena_pct: c.sena_pct, umbral_aviso_dueno: c.umbral_aviso_dueno, ticket_alto_desde: c.ticket_alto_desde, escala_rubros: c.escala_rubros, resena_google_url: c.resena_google_url, modo_pago: c.modo } }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/cierre/config', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyCierre.fijarConfigCierre(db, ventyUid(req), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, campo: r.campo || '' });
+    res.json({ ok: true, modo: 'prueba' });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/partidas/:id/cierre/iniciar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyCierre.iniciarCierre(db, ventyUid(req), Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/cierre/pagos', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', pagos: ventyCierre.listarPagos(db, ventyUid(req), { partida_id: req.query.partida_id, estado: req.query.estado }) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/partidas/:id/pago/registrar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventyCierre.registrarPago(db, uid, { ...(req.body || {}), partida_id: Number(req.params.id) });
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/partidas/:id/resena/pedir', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyCierre.pedirResena(db, ventyUid(req), Number(req.params.id), {});
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/partidas/:id/escalar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyCierre.escalarPartida(db, ventyUid(req), Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/agenda/turnos', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', turnos: ventyAgenda.listarTurnos(db, ventyUid(req), { partida_id: req.query.partida_id, estado: req.query.estado }), config: ventyAgenda.configAgenda(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/agenda/turnos', requireAuthOrWebToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = ventyAgenda.crearTurno(db, ventyUid(req), Number(b.partida_id || 0), b);
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/agenda/trabajos', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', trabajos: ventyAgenda.listarTrabajos(db, ventyUid(req), { turno_id: req.query.turno_id, estado: req.query.estado }) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/agenda/procesar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyAgenda.procesarTrabajos(db, ventyUid(req), req.body || {});
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/agenda/turnos/:id/reagendar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyAgenda.reagendarTurno(db, ventyUid(req), Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/agenda/turnos/:id/cancelar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyAgenda.cancelarTurno(db, ventyUid(req), Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/agenda/turnos/:id/no-show', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyAgenda.registrarNoShow(db, ventyUid(req), Number(req.params.id), req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // ---------- Webhooks de Venty (Meta → Posta; públicos, verificados) ----------
 // Instagram: GET verifica con INSTAGRAM_VERIFY_TOKEN; POST verifica la
 // firma X-Hub-Signature-256 con INSTAGRAM_APP_SECRET. Sin secretos: 403.
@@ -36687,7 +36786,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v990';
+const BUILD_ID = '20261105-v991';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
