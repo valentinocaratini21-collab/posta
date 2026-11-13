@@ -1060,8 +1060,16 @@ function temaForText(text, category, subcat) {
 
 // ---------- construcción del digest ----------
 function parsePrice(str) {
-  const m = String(str || '').match(/\$\s?[\d.,]+/);
-  return m ? m[0].replace(/\s+/, ' ') : '';
+  // (AUDITORÍA DE ORIGEN DE PRECIOS · precisión 2 — LOTE
+  // PRIMER-POSTEO-PERFECTO) El parseo laxo promovía CUALQUIER token $
+  // del nombre a «precio del ítem» («Remera $500 OFF» nacía con precio
+  // $500: un descuento disfrazado de precio). El precio se lee del
+  // nombre SOLO si lo CIERRA (al final, como lo publican los
+  // catálogos: «Pizza grande $1.200»): un $ en el medio del nombre es
+  // texto del nombre, no un precio con fuente. El campo precio
+  // explícito del ítem no pasa por acá: es dato directo de la fuente.
+  const m = String(str || '').match(/\$\s?[\d.,]+\s*$/);
+  return m ? m[0].replace(/\s+/, ' ').trim() : '';
 }
 function toItem(raw) {
   if (!raw) return null;
@@ -1833,7 +1841,18 @@ function lexSegments(text) {
  * palabras de función EN (preposiciones, artículo, conjunciones) a STOP
  * SOLO para el recorte del borde derecho de la ventana; STOP no se toca
  * (lo usan el minado de distintivas y otros caminos). */
-const LEX_TRAILING_FUNCTION = new Set([...STOP,
+/* (LOTE PRIMER-POSTEO-PERFECTO · pieza 4 — CLASE SUBORDINANTE
+ * COLGANTE, auditoría Veja #7, posteo 659) Un nombre minado puede venir
+ * cortado a mitad de la frase subordinada de su caption de origen:
+ * «Salar, where» (de «Salar, where …»). Embebido en la fórmula del
+ * titular sale «Try Salar, where today» — un fragmento, no un nombre.
+ * Las subordinantes EN que abren una cláusula dependiente NUNCA pueden
+ * ser la última palabra de un nombre ni de una línea sin cierre: son la
+ * firma de la frase cortada. La clase es propia (no se mezcla con las
+ * preposiciones de L7): estos términos recortan el borde del minado,
+ * reparan nombres sembrados y frenan titulares/captions. */
+const EN_HANGING_SUBORDINATORS = new Set(['where', 'when', 'while', 'because', 'since', 'although', 'though', 'unless', 'until', 'whereas', 'wherever', 'whenever', 'if']);
+const LEX_TRAILING_FUNCTION = new Set([...STOP, ...EN_HANGING_SUBORDINATORS,
   ...('in on at to of by an as into onto upon over under between among about per via and or nor but').split(' ')]);
 function buildLexicon({ texts, items }) {
   const segs = [];
@@ -2207,10 +2226,31 @@ function bareEnName(s) {
  * artículo embebido tras posesivo/verbo («do the salar» — sin el
  * nombre, «do the» a secas no se puede juzgar: «do the right thing» es
  * inglés válido). Devuelve true si el texto está ROTO. */
-const EN_SPLICE_FUNCTION_TAIL = new Set(['the', 'a', 'an', 'of', 'to', 'for', 'with', 'and', 'or', 'your', 'our', 'in', 'on', 'at', 'by', 'from']);
+const EN_SPLICE_FUNCTION_TAIL = new Set(['the', 'a', 'an', 'of', 'to', 'for', 'with', 'and', 'or', 'your', 'our', 'in', 'on', 'at', 'by', 'from', ...EN_HANGING_SUBORDINATORS]);
+/* Última palabra con contenido de un texto: sin emoji, sin puntuación
+ * de borde («Salar, where ✨» → 'where'). Es la palabra que decide si
+ * el texto quedó cortado a mitad de frase. */
+function lastContentWord(text) {
+  const w = String(text || '').replace(/[\p{Extended_Pictographic}]/gu, ' ').split(/\s+/)
+    .map((x) => x.replace(/^[^a-zA-ZÀ-ÿ']+|[^a-zA-ZÀ-ÿ']+$/g, '').toLowerCase()).filter(Boolean);
+  return w.length ? w[w.length - 1] : '';
+}
+/* ¿El texto termina en palabra colgante (función o subordinante)? Devuelve
+ * la palabra o null. Lo usan el lint de empalmes, la puerta de captions
+ * de generator.js y el gate de mostrar del primer posteo. */
+function enHangingTail(text) {
+  const last = lastContentWord(text);
+  return (last && (EN_HANGING_SUBORDINATORS.has(last) || EN_SPLICE_FUNCTION_TAIL.has(last))) ? last : null;
+}
 function enSpliceLint(text, names) {
   const c = String(text || '');
   if (!c) return false;
+  // (ADDENDUM 6C · LOTE PRIMER-POSTEO-PERFECTO) ARRANQUE CON
+  // FRAGMENTO: «From, another favorite at Jeni's…» (posteo 666) — la
+  // clase colgante también corre al INICIO: una palabra de función
+  // seguida de coma como apertura es el resto de una frase cortada en
+  // el minado, nunca una apertura válida.
+  if (/^\s*(from|where|when|while|because|since|although|though|unless|until|whereas|with|without|by|of|to|for|and|but|or)\s*,/i.test(c)) return true;
   if (/\b(your|our|their|my|his|her|its)\s+(the|a|an)\b/i.test(c)) return true;
   if (/\b(the|a|an)\s+(the|a|an)\b/i.test(c)) return true;
   if (/\b(in|on|at|of|to|for|with|from|by|about|into|upon)\s+everyone's\b/i.test(c)) return true;
@@ -2222,6 +2262,33 @@ function enSpliceLint(text, names) {
       if (low.includes(` ${frame}${nm}`)) return true;
     }
   }
+  // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) LA CLASE SUBORDINANTE
+  // COLGANTE (auditoría Veja #7, posteo 659): «Try Salar, where today»
+  // no lo cazaba ningún patrón porque el texto no TERMINA en la
+  // subordinante — termina el NOMBRE embebido. Dos reglas:
+  //  (1) un nombre cuya última palabra es una subordinante colgante ES
+  //      un fragmento cortado: cualquier texto que lo embeba sale roto
+  //      («if» queda fuera acá: un nombre puede cerrar legítimamente
+  //      en «…If» como juego de palabras completo; como cola de línea
+  //      sin cierre sí es fragmento y lo caza la regla 2).
+  //  (2) una línea que termina en subordinante colgante SIN puntuación
+  //      de cierre es una frase cortada a la mitad.
+  for (const n of (names || [])) {
+    const last = lastContentWord(n);
+    if (last && last !== 'if' && EN_HANGING_SUBORDINATORS.has(last)) return true;
+  }
+  for (const line of c.split(/\n+/)) {
+    const t = line.trim();
+    if (!t || /[.!?…]["']?$/.test(t)) continue;
+    if (EN_HANGING_SUBORDINATORS.has(lastContentWord(t))) return true;
+  }
+  //  (3) LA COSTURA DEL EMPALME: «Salar, where today» — la fórmula
+  //      «Try {nombre} today» recibió el nombre cortado «Salar, where»
+  //      y la subordinante quedó EMBEBIDA, seguida del adverbio de la
+  //      fórmula. Una subordinante tras coma seguida de un adverbio
+  //      temporal suelto (today/tonight/tomorrow/now) no encabeza
+  //      ninguna cláusula válida en estos textos: es la costura.
+  if (/,\s*(where|when|while|because|since|although|though|unless|until|whereas)\s+(today|tonight|tomorrow|now)\b/i.test(c)) return true;
   return false;
 }
 /* Quita las palabras de función del borde derecho de un nombre/frase
@@ -2230,6 +2297,10 @@ function enSpliceLint(text, names) {
 function trimFunctionTail(s) {
   const w = String(s || '').trim().split(/\s+/).filter(Boolean);
   while (w.length > 1 && EN_SPLICE_FUNCTION_TAIL.has(w[w.length - 1].toLowerCase().replace(/[^a-z']/g, ''))) w.pop();
+  // (LOTE PRIMER-POSTEO-PERFECTO) El nombre cortado trae la coma de la
+  // frase de origen («Salar, where» → «Salar,»): sin subordinante ya no
+  // queda puntuación colgando del borde.
+  if (w.length) w[w.length - 1] = w[w.length - 1].replace(/[,;:]+$/, '');
   return w.join(' ');
 }
 function deriveTopics(digest, opts) {
@@ -2856,6 +2927,28 @@ function isGenericAnchorName(n) {
   if (toks.length === 1 && toks[0].length >= 4 && /^[A-ZÁÉÍÓÚÑ]+$/.test(toks[0])) return true;
   return false;
 }
+/* (ADDENDUM 6B · LOTE PRIMER-POSTEO-PERFECTO — guarda de la estrella,
+ * veredicto de la corrida de Jeni's) UNA SUSCRIPCIÓN NO ES LA
+ * ESTRELLA: la estrella/insignia tiene que ser un producto concreto y
+ * mostrable. «Pint Club» es la suscripción de Jeni's, no un sabor:
+ * ningún posteo nombró un producto real y la imagen generada no
+ * mostró ningún packaging. Suscripciones, planes, membresías, pases y
+ * abonos no califican; si el más vendido es una suscripción, la
+ * estrella es el producto que la suscripción ENTREGA (los sabores /
+ * productos reales detrás). «club» como palabra final de un nombre
+ * corto cuenta como suscripción («Pint Club»); un nombre que EMPIEZA
+ * con Club («Club sandwich») es un producto y no se toca. */
+function isSubscriptionLikeName(n) {
+  const s = String(n || '').trim();
+  if (!s) return false;
+  if (/(suscrip|subscri|membres|membership|abono)/i.test(s)) return true;
+  if (/\bplan(?:es)?\b/i.test(s)) return true;
+  if (/\bpass\b/i.test(s)) return true;
+  const toks = s.split(/\s+/).filter(Boolean);
+  if (toks.length >= 2 && toks.length <= 3 && /^club$/i.test(toks[toks.length - 1])) return true;
+  return false;
+}
+
 /* (LOTE L4) Wow degradado honesto para estrella null con ancla
  * genérica: el primer posteo NO nombra ningún producto — es una
  * invitación de marca sobre la foto real del negocio. Sin claim de
@@ -2876,7 +2969,10 @@ function degradedBrandWow(digest, opts) {
   // honesta de la casa, como cuando no hay diferencial.
   if (ritual && !minedPhraseOk(ritual, en)) ritual = '';
   const ritualTxt = ritual || (en ? 'made our way' : 'hecho a nuestra manera');
-  const detail = ritual || (en ? 'Made our way.' : 'Hecho a nuestra manera.');
+  // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) El detalle de fallback era
+  // un fragmento SIN SUJETO por construcción («Made our way.», auditoría
+  // Veja #7): la línea honesta de la casa es una oración completa.
+  const detail = ritual || (en ? 'We make it our way.' : 'Lo hacemos a nuestra manera.');
   const ctaLine = en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`;
   const caption = `${biz} ✨\n\n${detail}\n\n${ctaLine}`;
   let negativos = brandNegatives(digest);
@@ -2902,6 +2998,254 @@ function degradedBrandWow(digest, opts) {
     _wow: 1,
   };
 }
+/* (ADDENDUM 2 DE VALENTINO 13/11 16:03 — «sí, debería pasar eso como
+ * decís vos. Armalo así») LA INSIGNIA: rama explícita de la vara del
+ * primer posteo para negocios cuya oferta NO tiene nombres propios
+ * (gastronomía, servicios, oficios — el caso común de los clientes
+ * reales). Si la estrella validada por nombre no existe (sale
+ * categoría/genérico o no hay), la estrella es LA INSIGNIA: lo que el
+ * negocio es conocido por vender, lo más pedido, lo más fotografiado.
+ * Tres fuentes, en este orden:
+ *  (1) la respuesta del dueño a la pregunta 1 del onboarding
+ *      (dueno.mas_vendido: «¿qué es lo que más vendés?») — para estos
+ *      negocios ESA respuesta es la estrella, dicha por él; manda
+ *      cuando no validó como estrella por nombre (L3 exige calce con
+ *      un ítem y estas frases no siempre calzan);
+ *  (2) lo que el feed muestra y repite (inferred_star, SIN el piso de
+ *      confianza de la estrella por nombre: como insignia no se le
+ *      pide nombre propio, solo que sea la cosa repetida);
+ *  (3) el producto_estrella sembrado del fundamento.
+ * Una palabra suelta de categoría («pastas», «café») NO es insignia:
+ * la insignia es una COSA nombrable como la piden los clientes. */
+function insigniaOf(digest) {
+  if (!digest || typeof digest !== 'object') return null;
+  const limpia = (s) => String(s || '').trim().replace(/\s+/g, ' ');
+  const usable = (s) => {
+    const v = limpia(s);
+    if (v.length < 3 || v.length > 60) return false;
+    if (!isPlausibleOfferItem(v) || isChromeDerivedName(v) || isCreditRoleName(v)) return false;
+    if (isSubscriptionLikeName(v)) return false; // (ADDENDUM 6B) una suscripción tampoco es la insignia
+    if (isVetoText(v, digest.onboarding)) return false;
+    // Categoría pelada de una palabra = rubro, no insignia.
+    if (!/\s/.test(v) && isGenericCategoryName(v)) return false;
+    return true;
+  };
+  const mv = digest.dueno && digest.dueno.mas_vendido;
+  if (usable(mv)) return { frase: limpia(mv), fuente: 'dueno' };
+  const inf = digest.inferred_star;
+  if (inf && inf.item && usable(inf.item)) return { frase: limpia(inf.item), fuente: 'feed' };
+  if (usable(digest.producto_estrella)) return { frase: limpia(digest.producto_estrella), fuente: 'fundamento' };
+  return null;
+}
+/* El wow de la INSIGNIA (espejo del degradado honesto, pero NOMBRANDO
+ * la cosa): el primer posteo es de la insignia, nombrada como la piden
+ * los clientes (la frase del dueño/feed, intacta). Sin claim de
+ * estrella por nombre (star_missing queda: no hay nombre validado) y
+ * sin precio (la insignia no es un ítem con precio propio: la puerta
+ * de precios de la vara lo frenaría igual). */
+function deriveInsigniaWow(digest, opts) {
+  const o = opts || {};
+  const en = o.lang === 'en';
+  const category = o.category || (digest && digest.category) || 'otro';
+  const business = String((digest && digest.business) || '').trim();
+  if (!digest || !hasFoundation(digest)) return null;
+  const ins = insigniaOf(digest);
+  if (!ins) return null;
+  const frase = ins.frase;
+  const fraseCap = frase.charAt(0).toUpperCase() + frase.slice(1);
+  const biz = business || (en ? 'the house' : 'la casa');
+  const difRaw = String(digest.diferencial || (digest.onboarding && digest.onboarding.diferencial) || '').trim();
+  let ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  if (ritual && !minedPhraseOk(ritual, en)) ritual = '';
+  let detail = ritual;
+  if (!detail) {
+    const voice = voicePhraseFor(digest, frase);
+    if (voice && minedPhraseOk(voice, en)) detail = voice;
+  }
+  if (!detail) detail = en ? 'We make it our way.' : 'Lo hacemos a nuestra manera.';
+  const SERVICE_FAMILY_CATS = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
+  const serviceFamily = SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''));
+  const ctaLine = serviceFamily
+    ? (en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`)
+    : (en ? `Order yours today by DM 📩` : `Pedilo hoy por DM 📩`);
+  const caption = `${fraseCap} ✨\n\n${detail}\n\n${ctaLine}`;
+  let negativos = brandNegatives(digest);
+  if (negativos.some((t) => /espresso/.test(t))) negativos.push(en ? 'espresso-based drinks' : 'bebidas con espresso');
+  negativos = [...new Set(negativos)].slice(0, 4);
+  const ritualTxt = ritual || (en ? 'made our way' : 'hecho a nuestra manera');
+  let imagePrompt = en
+    ? `Hero photo of ${frase} from ${biz}: ${ritualTxt} Real photo from the client, close-up of the signature dish/product with the brand inside the scene (their packaging, their bags, their store), natural light, no text over the product. Never as a designed band or applied logo.`
+    : `Foto hero de ${frase} de ${biz}: ${ritualTxt} Foto real del cliente, primer plano de la insignia con la marca dentro de la escena (su packaging, sus bolsas, su local), luz natural, sin texto sobre el producto. Nunca como banda diseñada ni logo aplicado.`;
+  if (negativos.length) imagePrompt += en ? ` DO NOT show: ${negativos.join(', ')}.` : ` NO mostrar: ${negativos.join(', ')}.`;
+  return {
+    kind: 'novedad',
+    tag: en ? 'NEW' : 'NUEVO',
+    tema: temaForText(frase, category, (digest && digest.subcat) || ''),
+    headline: capWords(fraseCap, 6),
+    subline: '',
+    cta: serviceFamily ? (en ? 'Tell me more' : 'Quiero saber más') : (en ? 'I want mine' : 'Quiero el mío'),
+    caption,
+    image_prompt: imagePrompt,
+    negativos,
+    _digest: 1, digest_anchor: frase,
+    intent: 'autoridad', angle: 'directo', proof: '',
+    star_missing: true, star_retry_hint: 'insignia',
+    _wow: 1, _insignia: 1, _insignia_fuente: ins.fuente,
+  };
+}
+
+/* (ADDENDUM 3B DE VALENTINO 13/11 16:03 — PUERTA DE INTEGRIDAD DE
+ * PRECIOS; evidencia en vivo: el caption de Jeni's afirmó «Yours for
+ * $199.00, just like you see it» y $199 es el precio del plan de Posty,
+ * no del producto) NINGÚN posteo lleva un precio que no venga de los
+ * datos reales del negocio. La única fuente válida para el texto de
+ * una pieza es el precio DEL ÍTEM DE ESA PIEZA (su producto ancla) en
+ * el fundamento: un precio de otro ítem — o de ningún ítem — en el
+ * caption del ancla es un precio sin fuente y se frena. Fail-closed. */
+const PRICE_TOKEN_RE = /\$\s?\d[\d.,]*|\b(?:USD|EUR)\s?\d[\d.,]*|\b\d[\d.,]*\s?(?:USD|EUR|dólares|dolares)\b/gi;
+function priceValorOf(raw) {
+  // La puntuación de la oración no es parte del precio («$199.00, just
+  // like…» vale 199, no 19900): se recorta el borde antes de parsear.
+  let s = String(raw || '').replace(/[^0-9.,]/g, '').replace(/^[.,]+|[.,]+$/g, '');
+  if (!s) return null;
+  if (s.includes(',') && s.includes('.')) {
+    // El ÚLTIMO separador es el decimal; el otro es de miles.
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (s.includes(',')) {
+    s = /,\d{2}$/.test(s) ? s.replace(',', '.') : s.replace(/,/g, '');
+  } else if (s.includes('.')) {
+    // «12.500» (miles AR) vs «199.00» (decimal EN): 3 dígitos tras un
+    // único punto y parte entera corta = miles; 1-2 dígitos = decimal.
+    if (/^\d{1,3}\.\d{3}$/.test(s)) s = s.replace('.', '');
+    else if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, '');
+  }
+  const v = parseFloat(s);
+  return Number.isFinite(v) ? v : null;
+}
+function priceTokensOf(text) {
+  const out = [];
+  const re = new RegExp(PRICE_TOKEN_RE.source, 'gi');
+  const t = String(text || '');
+  let m;
+  while ((m = re.exec(t))) {
+    const valor = priceValorOf(m[0]);
+    if (valor !== null && valor > 0) out.push({ raw: m[0].trim(), valor });
+  }
+  return out;
+}
+/* Precios con fuente para UNA pieza: los del ítem ancla en el
+ * fundamento — las MISMAS listas que digestNumbers reconoce como
+ * verdad del negocio (productos, servicios, catálogo profundo,
+ * bio-link y ficha de oferta). Sin ancla, el conjunto es vacío a
+ * propósito: sin producto propio no hay precio publicable. */
+function sourcedPricesOf(digest, anchor) {
+  const set = new Set();
+  if (!digest || !anchor) return set;
+  const lists = [digest.productos, digest.servicios,
+    digest.catalog && digest.catalog.items, digest.bio_link && digest.bio_link.items,
+    digest.offerSheet && digest.offerSheet.productos];
+  for (const list of lists) {
+    for (const it of (Array.isArray(list) ? list : [])) {
+      if (!it || typeof it !== 'object') continue;
+      if (!sameItemName(String(it.nombre || it.titulo || ''), anchor)) continue;
+      for (const t of priceTokensOf(it.precio || '')) set.add(t.valor);
+    }
+  }
+  return set;
+}
+/* (Auditoría de origen de precios — precisión sobre la regla B) Un
+ * precio de SUSCRIPCIÓN o de VARIANTE no se afirma pelado: el $199 de
+ * Jeni's era real, pero era la suscripción de 3 meses y el caption lo
+ * afirmó con «just like you see it» — precio real, afirmación
+ * engañosa. Si alguna fuente del fundamento trae el calificador de
+ * ese precio para ese ítem (en su campo precio, su nombre o el
+ * contexto de la ficha), el texto que lo afirma tiene que llevarlo;
+ * si no lo lleva, la oración sale sin precio. */
+const PRICE_QUALIFIER_RE = /(suscrip[a-záéíóúñü]*|subscri[a-záéíóúñü]*|mensual[a-záéíóúñü]*|por\s+mes|al\s+mes|\/\s?mes|\d+\s?(?:meses|months|d[ií]as|days)|por\s+a[ñn]o|anual[a-záéíóúñü]*|plan\s+(?:mensual|anual|trimestral|semestral))/i;
+function priceQualifierOf(digest, anchor, valor) {
+  if (!digest || !anchor || valor == null) return null;
+  const chunks = [];
+  const lists = [digest.productos, digest.servicios, digest.promos,
+    digest.catalog && digest.catalog.items, digest.bio_link && digest.bio_link.items,
+    digest.offerSheet && digest.offerSheet.productos];
+  for (const list of lists) {
+    for (const it of (Array.isArray(list) ? list : [])) {
+      if (!it || typeof it !== 'object') continue;
+      if (!sameItemName(String(it.nombre || it.titulo || ''), anchor)) continue;
+      chunks.push(String(it.precio || ''), String(it.nombre || it.titulo || ''));
+    }
+  }
+  for (const p of ((digest.offerSheet && digest.offerSheet.precios) || [])) {
+    if (!p || typeof p !== 'object') continue;
+    const toks = priceTokensOf(p.precio || '');
+    if (toks.some((t) => t.valor === valor)) chunks.push(String(p.contexto || ''), String(p.precio || ''));
+  }
+  for (const c of chunks) {
+    const m = c.match(PRICE_QUALIFIER_RE);
+    if (m) return m[0].trim();
+  }
+  return null;
+}
+function unsourcedPriceTokens(text, sourced) {
+  return priceTokensOf(text).filter((t) => !(sourced && sourced.has(t.valor)));
+}
+/* Escaneo por oración de la puerta de precios: cada oración con un
+ * token de precio se juzga — (a) el número está entre los precios con
+ * fuente del ancla (si no: 'sin-fuente'); (b) si ese precio trae
+ * calificador en las fuentes (suscripción/variante), la oración tiene
+ * que llevar el calificador (si no: 'sin-calificador'). Devuelve las
+ * oraciones malas con su motivo: el análisis y el corte comparten el
+ * mismo juicio. */
+function priceSentenceScan(text, sourced, qualifierFor) {
+  const malas = [];
+  const t = String(text || '');
+  if (!t) return malas;
+  const normLow = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  for (const block of t.split(/\n\s*\n/)) {
+    for (const s of block.split(/(?<=[.!?…])\s+/)) {
+      const toks = priceTokensOf(s);
+      for (const tok of toks) {
+        if (!(sourced && sourced.has(tok.valor))) { malas.push({ sentence: s, raw: tok.raw, valor: tok.valor, motivo: 'sin-fuente' }); continue; }
+        if (typeof qualifierFor === 'function') {
+          const q = qualifierFor(tok.valor);
+          if (q) {
+            const qWords = normLow(q).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 || /^\d+$/.test(w));
+            const sLow = normLow(s);
+            if (!qWords.some((w) => sLow.includes(w))) malas.push({ sentence: s, raw: tok.raw, valor: tok.valor, motivo: 'sin-calificador', calificador: q });
+          }
+        }
+      }
+    }
+  }
+  return malas;
+}
+function priceGateAnalyze(text, digest, anchor) {
+  const sourced = sourcedPricesOf(digest, anchor);
+  const malas = priceSentenceScan(text, sourced, (valor) => priceQualifierOf(digest, anchor, valor));
+  return {
+    tokens: priceTokensOf(text),
+    sin_fuente: malas.filter((m) => m.motivo === 'sin-fuente'),
+    sin_calificador: malas.filter((m) => m.motivo === 'sin-calificador'),
+    ok: malas.length === 0,
+  };
+}
+/* Saca las ORACIONES que la puerta frena (la cláusula de precio
+ * entera: «Yours for $199.00, just like you see it.» sale completa —
+ * la frase de venta no se conserva pegada a un precio que no pasa).
+ * Devuelve { text, quitados: [{raw, motivo}] } . */
+function stripPriceSentences(text, sourced, qualifierFor) {
+  const malas = priceSentenceScan(text, sourced, qualifierFor);
+  if (!malas.length) return { text: String(text || ''), quitados: [] };
+  const badSentences = new Set(malas.map((m) => m.sentence));
+  const quitados = malas.map((m) => ({ raw: m.raw, motivo: m.motivo }));
+  const blocks = String(text || '').split(/\n\s*\n/).map((b) => {
+    const kept = b.split(/(?<=[.!?…])\s+/).filter((s) => !badSentences.has(s));
+    return kept.join(' ');
+  }).filter((b) => b.trim());
+  return { text: blocks.join('\n\n'), quitados };
+}
+
 /* (LOTE PRIMER-POSTEO-MEJOR · idea 5) VOZ DE LA MARCA: cómo nombra
  * LA MARCA a su estrella (forma `dice` del léxico) y qué frase suya
  * usar cuando no hay ritual ni precio. Sin léxico ni marcadores, null
@@ -2970,11 +3314,25 @@ function deriveFirstPostWow(digest, opts) {
   // tratando como estrella — su validación contra lo evidenciado es L3,
   // no este lote.
   let starItem = null;
+  let starEffSource = null;
   try {
     const eff = effectiveStarOf(digest);
     if (eff && eff.item) {
       const si = items.findIndex((x) => sameItemName(name(x), eff.item));
-      if (si >= 0) starItem = items[si];
+      if (si >= 0) { starItem = items[si]; starEffSource = eff.source || null; }
+      else if (isPlausibleOfferItem(eff.item) && !isGenericAnchorName(eff.item) && !isChromeDerivedName(eff.item)) {
+        // (LOTE PRIMER-POSTEO-PERFECTO · pieza 1 — LA ESTRELLA MANDA) La
+        // estrella VALIDADA (dueño con calce de L3, ventas reales o
+        // inferida con evidencia ≥0,5) manda AUNQUE el minado de ítems
+        // no la liste: en Veja #7 la inferida era «The Atlas» y, al no
+        // calzar con ningún ítem, el wow ancló en el primer ítem de la
+        // lista — el primer posteo salió de otro producto. La estrella
+        // validada ancla el wow con su nombre; el match de foto sigue
+        // siendo por nombre contra el mapa, así que una foto real de
+        // la estrella gana igual si existe.
+        starItem = { nombre: String(eff.item) };
+        starEffSource = eff.source || null;
+      }
     }
   } catch (e) {}
   if (!starItem && digest.dueno && digest.dueno.mas_vendido && !digest.inferred_star) {
@@ -2996,8 +3354,29 @@ function deriveFirstPostWow(digest, opts) {
     starItem = items[0];
     starMissing = true;
   }
-  const A = name(starItem);
+  let A = name(starItem);
   if (A.length < 3) return null;
+  // (ADDENDUM 6B · LOTE PRIMER-POSTEO-PERFECTO) GUARDA DE SUSCRIPCIÓN:
+  // si lo coronado es una suscripción/plan/membresía («Pint Club» en
+  // Jeni's), NO es la estrella — la estrella es el producto que la
+  // suscripción entrega: el primer ítem real no-suscripción de la
+  // lista ancla como producto más visible (sin claim de estrella,
+  // queda para el reintento) y el rechazo queda registrado en el
+  // topic (_star_rechazada). Sin producto detrás: degradado honesto
+  // con el rechazo registrado — la suscripción nunca se corona.
+  let starRechazada = null;
+  if (isSubscriptionLikeName(A)) {
+    starRechazada = A;
+    const alt = items.find((x) => { const nx = name(x); return nx && nx !== A && !isSubscriptionLikeName(nx) && !isGenericAnchorName(nx); });
+    if (!alt) {
+      const dw = degradedBrandWow(digest, o);
+      if (dw) dw._star_rechazada = 'suscripcion:' + A;
+      return dw;
+    }
+    starItem = alt;
+    A = name(alt);
+    starMissing = true;
+  }
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) El nombre MOSTRADO usa la
   // forma con la que LA MARCA nombra a su estrella (léxico `dice`)
   // cuando existe; el ancla formal (digest_anchor) sigue siendo el
@@ -3008,6 +3387,11 @@ function deriveFirstPostWow(digest, opts) {
     const dice = lexDiceFor(digest, A);
     if (dice && dice !== A) { displayA = dice; voiceUsed = 'dice'; }
   } catch (e) {}
+  // (ADDENDUM 6B) La guarda de suscripción manda también sobre el
+  // nombre MOSTRADO: si el léxico de la marca nombra al producto con
+  // el nombre de la suscripción rechazada («Pint Club» por un sabor),
+  // el titular no lo corona — se muestra el nombre del producto real.
+  if (displayA !== A && isSubscriptionLikeName(displayA)) { displayA = A; voiceUsed = null; }
   const precio = String(starItem.precio || '').trim();
   // Familia de servicios (espejo del set de deriveTopics): cambia el
   // verbo del gancho y el CTA, no la estrella.
@@ -3064,7 +3448,7 @@ function deriveFirstPostWow(digest, opts) {
   const priceLine = precio ? (en ? `Yours for ${precio}, just like you see it.` : `Lo tenés a ${precio}, como lo ves.`) : '';
   let detail = [ritual, priceLine].filter(Boolean).join(' ');
   if (!detail) {
-    if (starMissing) detail = en ? 'Made our way.' : 'Hecho a nuestra manera.';
+    if (starMissing) detail = en ? 'We make it our way.' : 'Lo hacemos a nuestra manera.'; // (PRIMER-POSTEO-PERFECTO) oración completa, con sujeto — nunca el fragmento «Made our way.»
     else {
       const voiceLine = voicePhraseFor(digest, A);
       // (CORRECTIVO-9) La frase de voz también es una frase minada:
@@ -3113,6 +3497,13 @@ function deriveFirstPostWow(digest, opts) {
       ? { star_missing: true, star_retry_hint: 'confirm-from-photo' }
       : { _star: 1 }),
     _wow: 1,
+    // (LOTE PRIMER-POSTEO-PERFECTO) De dónde salió la estrella que ancla
+    // el wow ('dueno'|'sales'|'inferred'), para el registro del gate de
+    // mostrar del slot 0. null cuando el ancla es el ítem más visible.
+    _star_source: starEffSource,
+    // (ADDENDUM 6B) La suscripción rechazada como estrella, si la hubo
+    // ('suscripcion:<nombre>'): el registro de la guarda.
+    _star_rechazada: starRechazada ? 'suscripcion:' + starRechazada : null,
     // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Qué voz se usó, si alguna:
     // 'dice' (forma propia de la marca para la estrella) o 'frase'
     // (frase real de la marca como detalle). null = sin voz (como hoy).
@@ -3250,6 +3641,16 @@ module.exports = {
   // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Formato dominante del feed.
   formatosFromPosts, formatoDominanteDe,
   deriveTopics, deriveFirstPostWow, brandNegatives, ensureTable, saveDigest, getStoredDigest, getDigest,
+  // (ADDENDUM 2 · LOTE PRIMER-POSTEO-PERFECTO) La insignia: la estrella
+  // de los negocios sin nombres propios en su oferta.
+  insigniaOf, deriveInsigniaWow,
+  // (ADDENDUM 3B · LOTE PRIMER-POSTEO-PERFECTO) Puerta de integridad de
+  // precios: tokens, precios con fuente por ancla y corte de oraciones.
+  priceTokensOf, sourcedPricesOf, unsourcedPriceTokens, stripPriceSentences,
+  priceQualifierOf, priceSentenceScan, priceGateAnalyze,
+  // (ADDENDUM 6B · LOTE PRIMER-POSTEO-PERFECTO) Una suscripción no es
+  // la estrella: guarda de nombre para estrella e insignia.
+  isSubscriptionLikeName,
   // (v348) Etapa pre-lanzamiento + remediación admin del fundamento
   detectEtapa, deleteDigest,
   dnaFragmentFromDigest,
@@ -3280,6 +3681,10 @@ module.exports = {
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
   // (LOTE LÉXICO-INGLÉS · L7) Nombre pelado para fórmulas EN + lint de empalmes.
   bareEnName, enSpliceLint,
+  // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) La clase subordinante
+  // colgante como utilidades compartidas (puerta de captions, gate del
+  // primer posteo).
+  EN_HANGING_SUBORDINATORS, lastContentWord, enHangingTail, trimFunctionTail,
   // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
   sanitizeBrandPresence, brandPresenceOf,
   questionCandidatesOf, applyDeepBlocks,

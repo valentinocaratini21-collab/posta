@@ -397,6 +397,20 @@ function trialProfileFromAudit(data, fallbackPic) {
     following: num(p.following),
     pic: p.pic || fallbackPic || null,
     photos: (data.posts || []).map((x) => (x && x.thumb) || null).filter(Boolean).slice(0, 9),
+    // (ADDENDUM 8 · LOTE PRIMER-POSTEO-PERFECTO) EL ESPEJO DE LA
+    // PANTALLA DE ESPERA: su posteo con MÁS ME GUSTA, con su foto —
+    // dato REAL de esta lectura (los likes viajan en los posteos
+    // públicos). Sin posteo con likes y foto: null, y la pantalla no
+    // muestra el bloque (nunca relleno). La miniatura se localiza en
+    // localizeTrialPhotos, como las demás.
+    best_post: (() => {
+      let best = null;
+      for (const x of (data.posts || [])) {
+        if (!x || !x.thumb || !(Number(x.likes) > 0)) continue;
+        if (!best || Number(x.likes) > Number(best.likes)) best = x;
+      }
+      return best ? { thumb: best.thumb, caption: String(best.caption || '').split('\n')[0].slice(0, 90), likes: Number(best.likes) } : null;
+    })(),
     // (v229) FUNDAMENTO: los captions reales de sus últimos posteos —
     // de acá el client_digest mina los temas de SU feed (antes el perfil
     // de la prueba descartaba los captions que parseEmbedPosts ya traía).
@@ -657,7 +671,7 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
   // en IG). La tira de la prueba sigue capada en su propio sitio
   // (trialProfileFromAudit: photos .slice(0, 9)); acá se localiza todo lo
   // que llega, sin ventana que corte: TODOS los posteos tienen que aparecer.
-  profile.photos = await Promise.all(profile.photos.map(async (rawUrl) => {
+  const locOne = async (rawUrl) => {
     try {
       if (!rawUrl || typeof rawUrl !== 'string') return null;
       // Las URLs del embed vienen con escapes residuales (\/ por nivel de
@@ -679,7 +693,14 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
       if (!st.isFile() || st.size < 200) { try { fs.unlinkSync(abs); } catch (e) {} return null; }
       return '/media/' + name;
     } catch (e) { return null; }
-  }));
+  };
+  profile.photos = await Promise.all(profile.photos.map(locOne));
+  // (ADDENDUM 8) La miniatura del espejo (su posteo con más me gusta)
+  // se localiza con la MISMA rutina: si no se pudo, el bloque no se
+  // muestra (best_post.thumb queda null, nunca una URL muerta).
+  if (profile.best_post && profile.best_post.thumb) {
+    profile.best_post.thumb = await locOne(profile.best_post.thumb);
+  }
   return profile;
 }
 

@@ -151,7 +151,7 @@ console.log('— Parte 4: el camino determinístico no reusa frases en otro idio
   ok(!!wow, 'el wow de la marca EN nace');
   if (MODE === 'release') {
     ok(wow && !/caoutchouc|matériaux/.test(wow.caption), 'el diferencial en francés NO entra como detalle del wow');
-    ok(wow && wow.caption.includes('Made our way.'), 'sin detalle en su idioma, el wow cae a la línea honesta de la casa');
+    ok(wow && wow.caption.includes('We make it our way.'), 'sin detalle en su idioma, el wow cae a la línea honesta de la casa');
   } else {
     ok(wow && /caoutchouc/.test(wow.caption), 'CONTROL base: el wow lleva el diferencial en francés palabra por palabra (posteo 650)');
   }
@@ -174,7 +174,7 @@ console.log('— Parte 4: el camino determinístico no reusa frases en otro idio
   // Espejo ES: marca en español, diferencial minado en inglés.
   const dgEs = { business: 'Café Aroma', category: 'cafeteria', productos: [{ nombre: 'Medialuna' }], servicios: [], diferencial: 'Small-batch beans, roasted in-house every morning with our own recipe and a lot of care for every cup we serve.', onboarding: {}, temas_feed: [] };
   const wowEs = clientDigest.deriveFirstPostWow(dgEs, { lang: 'es' });
-  if (MODE === 'release') ok(wowEs && !/Small-batch/.test(wowEs.caption) && wowEs.caption.includes('Hecho a nuestra manera.'), 'espejo ES: el diferencial en inglés no entra en el wow de una marca en español');
+  if (MODE === 'release') ok(wowEs && !/Small-batch/.test(wowEs.caption) && wowEs.caption.includes('Lo hacemos a nuestra manera.'), 'espejo ES: el diferencial en inglés no entra en el wow de una marca en español');
   else ok(wowEs && /Small-batch/.test(wowEs.caption), 'CONTROL base (espejo): el diferencial en inglés entra en el wow ES');
 }
 

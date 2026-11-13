@@ -20865,6 +20865,19 @@ function logoSealArgsForUser(uid) {
     return ['--logo', abs];
   } catch (e) { return []; }
 }
+// (LOTE PRIMER-POSTEO-PERFECTO · addendum 7) La ruta absoluta del
+// archivo de logo que trae el DIGEST de la prueba (logo-trial-* en
+// MEDIA_DIR, escrito por logoPaletaYArchivo): es el logo REAL que el
+// sello híbrido integra en la escena generada. Espejo de la rama
+// digest de logoSealArgsForUser, pero para un digest (no una cuenta).
+function trialLogoAbsPath(digest) {
+  try {
+    const f = digest && digest.logo_file;
+    if (!f || /[/\\]/.test(String(f))) return null;
+    const abs = path.join(MEDIA_DIR, String(f));
+    return fs.existsSync(abs) ? abs : null;
+  } catch (e) { return null; }
+}
 // ---------- 🏠 HOME (v331): el perfil literal del cliente ----------
 // La home de la app es el perfil de Instagram del cliente TAL CUAL es:
 // encabezado fiel (foto, @, nombre, bio, link, conteos) + sus posteos
@@ -25036,6 +25049,123 @@ async function generateNoPhotoFirstPostImage({ prompt, topicText, apiKey, gemini
     }
   } catch (e) { /* el QA nunca rompe: la pieza sigue su curso */ }
   return { b64: gen.b64, engine: gen.engine || null, qa: qaInfo };
+}
+// (LOTE PRIMER-POSTEO-PERFECTO · addendums 5/7) LA CADENA DE RESCATE
+// DE UNA PIEZA, completa: genera la escena cruda (método híbrido: el
+// prompt deja el soporte natural listo y SIN logo dibujado — QA de
+// concepto incluido), la compone con el titular y el LOGO REAL desde
+// su archivo (composite --logo: la familia de logoSealArgsForUser
+// aplicada por fin al camino de la prueba), y acepta SOLO si el QA
+// del texto compuesto pasa Y el QA del logo verifica (presente ·
+// integrado · legible). Si el logo sale mal, reintenta la generación
+// con la directiva del logo — hasta 3 generaciones, chequeando el
+// tope de gasto entre intentos (addendum 4: el límite real es el
+// gasto de IA, no el tiempo). Devuelve { buf, engine, qa, logoQa } o
+// null si no se logró (la pieza queda en armado honesto).
+async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logoPath = null, headline = '', textMode = '', accent = null, workDir, index = 0, apiKey = '', geminiKey = '' } = {}) {
+  if (!workDir || !prompt) return null;
+  const key = apiKey || process.env.OPENAI_API_KEY || '';
+  let promptNow = prompt;
+  let lastLogoQa = null;
+  for (let att = 1; att <= 3; att++) {
+    try { if (!costs.demoAiCapOk()) return null; } catch (e) { return null; }
+    const gen = await generateNoPhotoFirstPostImage({ prompt: promptNow, topicText, apiKey: key || undefined, geminiKey: geminiKey || undefined }).catch(() => null);
+    if (!gen || !gen.b64) return null;
+    if (gen.qa && gen.qa.passed === false) {
+      // El concepto no pasó su propio QA (con su reintento interno):
+      // no se sella una escena mala — la cadena sigue en fondo.
+      return null;
+    }
+    const buf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: textMode === 'clean' ? '' : (headline || ''), gradeHex: accent, workDir, index, headlineScale: 1, inkHex: null, zone: 'top', logoPath: logoPath || null }).catch(() => null);
+    if (!buf) return null;
+    if (headline && textMode !== 'clean') {
+      const tqa = await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: key }).catch(() => null);
+      if (tqa && !tqa.passed) {
+        // Titular compuesto ilegible: se re-compone SIN titular (la
+        // pieza limpia de la casa) en vez de descartar la escena.
+        const bufClean = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: '', gradeHex: accent, workDir, index, headlineScale: 1, inkHex: null, logoPath: logoPath || null }).catch(() => null);
+        if (!bufClean) return null;
+        if (logoPath) {
+          lastLogoQa = await demoAi.qaGeneratedLogo({ b64: bufClean.toString('base64'), business, apiKey: key }).catch(() => null);
+          if (!lastLogoQa || !lastLogoQa.ok) { promptNow = prompt + '\n\n' + demoAi.logoQaRetryDirective(lastLogoQa, business); continue; }
+        }
+        return { buf: bufClean, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa, texto: 'sin-titular' };
+      }
+    }
+    if (logoPath) {
+      lastLogoQa = await demoAi.qaGeneratedLogo({ b64: buf.toString('base64'), business, apiKey: key }).catch(() => null);
+      if (!lastLogoQa || !lastLogoQa.ok) {
+        promptNow = prompt + '\n\n' + demoAi.logoQaRetryDirective(lastLogoQa, business);
+        continue;
+      }
+    }
+    return { buf, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa };
+  }
+  return null;
+}
+// (LOTE PRIMER-POSTEO-PERFECTO · pieza 2 + addendum 6A) EL RESCATE DE
+// FONDO DE LA SEMANA: espejo del contrato de scheduleFirstPostRetry —
+// trabaja sobre trial_cache y SOLO si la semana sigue sin importar
+// (borrador: ningún posteo con este digest_hash), reemplazando cada
+// pieza en armado por la que pasa la vara. Corre tras la respuesta:
+// en vivo la pieza nunca salió como placa (salió en armado honesto) y
+// acá la cadena la sigue trabajando. LÍMITE DECLARADO: si el invitado
+// importa la semana antes de que el rescate aterrice, la pieza
+// importada no se actualiza (la misma ventana que ya acepta
+// scheduleFirstPostRetry). Nunca tira.
+async function scheduleWeekRescue(o) {
+  try {
+    if (!o || !o.cacheKey || !Array.isArray(o.pieces) || !o.pieces.length) return { applied: false, reason: 'sin-datos' };
+    const readCache = () => {
+      try {
+        const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(o.cacheKey);
+        return row && row.payload ? JSON.parse(row.payload) : null;
+      } catch (e) { return null; }
+    };
+    const imported = () => {
+      if (!o.digestHash) return true; // sin hash: fail-closed, no se toca
+      try { return !!db.prepare('SELECT 1 FROM posts WHERE digest_hash LIKE ? LIMIT 1').get(String(o.digestHash) + '%'); } catch (e) { return true; }
+    };
+    let payload = readCache();
+    if (!payload || !Array.isArray(payload.posts)) return { applied: false, reason: 'no-cache' };
+    if (imported()) return { applied: false, reason: 'imported' };
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-rescate-'));
+    let applied = 0;
+    try {
+      for (const piece of o.pieces) {
+        const idx = piece.idx | 0;
+        if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
+        const r = await rescuePieceWithSeal({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '' }).catch(() => null);
+        if (!r) continue;
+        const fresh = readCache();
+        if (!fresh || !Array.isArray(fresh.posts) || imported()) break;
+        payload = fresh;
+        if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
+        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null } };
+        if (payload.design && Array.isArray(payload.design.posts) && payload.design.posts[idx]) payload.design.posts[idx].photo_source = 'ai-generated';
+        if (idx === 0 && payload.primer_posteo) {
+          payload.primer_posteo.etapa = 'fondo';
+          payload.primer_posteo.foto = { fuente: 'ai-generated', cadena: 'generada', via: null };
+          if (payload.primer_posteo.logo) { payload.primer_posteo.logo.veredicto = r.logoQa || null; payload.primer_posteo.logo.estado = 'sellado-verificado'; }
+          payload.primer_posteo.veredicto = { pasa: true, cadena: 'generada', motivos: [] };
+          payload.primer_posteo.armando = false;
+        }
+        if (Array.isArray(payload.rescate_semana)) {
+          const ent = payload.rescate_semana.find((x) => x && x.idx === idx);
+          if (ent) { ent.cadena = 'generada-fondo'; if (r.logoQa) ent.logo = { ok: true, detalle: r.logoQa.detalle || null }; }
+        }
+        try {
+          db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(payload), Date.now());
+          applied++;
+        } catch (e) {}
+      }
+    } finally {
+      try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
+    }
+    return { applied: applied > 0, reason: applied ? 'ok' : 'sin-reemplazos', piezas: applied };
+  } catch (e) {
+    return { applied: false, reason: 'error' };
+  }
 }
 // Devuelve SOLO el prompt expandido para un concepto. Útil para previsualizar
 // el brief antes de gastar una generación de imagen.
@@ -34041,6 +34171,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       const itemNames = [...(webData.services || []), ...((catalog && catalog.items) || []).map((x) => x.nombre)];
       const itemNamesBase = itemNames.length;
       const feedNamesAdded = trialExtendItemNames(itemNames, trialFeedItemNames({ captions: feedCapsForMap, items: itemNames, business, handle: ig }));
+      // (ADDENDUM 2 · LA INSIGNIA) La frase del dueño (pregunta 1 del
+      // onboarding: lo que más vende) entra al vocabulario del mapa:
+      // la visión puede etiquetar una foto CON la insignia — es el
+      // camino de calificación POR IMAGEN de la rama insignia.
+      if (ocAns && ocAns.producto_estrella && !itemNames.some((n) => String(n).toLowerCase() === String(ocAns.producto_estrella).toLowerCase())) itemNames.push(ocAns.producto_estrella);
       // (CORRECTIVO-7) La presencia de marca corre en la MISMA ventana
       // que el mapa (en paralelo): el veredicto queda en el fundamento
       // y el gate del spec lo lee de ahí. (LOTE FOTOS-ELEGIBILIDAD · L2)
@@ -34053,15 +34188,26 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000),
         raceMs(presenceJob.promise, TRIAL_PRESENCE_BUDGET_MS),
       ]);
-      const brandPresence = presenceRes ? presenceRes.verdicts : null;
+      // (LOTE PRIMER-POSTEO-PERFECTO · pieza 3) LA FOTO REAL TIENE EL
+      // PRESUPUESTO COMPLETO para decidir el primer posteo: si la
+      // carrera corta se perdió pero hay visión y hay fotos, se espera
+      // el job COMPLETO (memoizado; su timeout interno de visión es el
+      // techo real) — la foto de la estrella nunca pierde por el
+      // límite corto del embudo. Queda registrado en foto_gate.
+      let presenceResFull = presenceRes;
+      if (!presenceResFull && webExtraPhotos.length && presenceJob.estadoPre === 'ok') {
+        presenceResFull = await presenceJob.promise;
+      }
+      const brandPresence = presenceResFull ? presenceResFull.verdicts : null;
       deep = { catalog, photoEntries, brandPresence };
       trialGateInfo = {
         presencia: {
           estado: !webExtraPhotos.length ? 'sin_fotos'
             : presenceJob.estadoPre === 'sin_vision' ? 'sin_vision'
-            : !presenceRes ? 'carrera_perdida'
-            : (presenceRes.estado || 'ok'),
-          fuente: presenceRes ? (presenceRes.fuente || null) : null,
+            : !presenceResFull ? 'carrera_perdida'
+            : (presenceResFull.estado || 'ok'),
+          fuente: presenceResFull ? (presenceResFull.fuente || null) : null,
+          ...(presenceResFull && !presenceRes ? { espera_completa: true } : {}),
           con_marca: brandPresence ? Object.values(brandPresence).filter((v) => v && v.marca === true).length : 0,
           total: brandPresence ? Object.keys(brandPresence).length : 0,
         },
@@ -34178,7 +34324,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (LOTE L6) Medallón del perfil: la descarga arrancó en segundo plano
     // arriba; a esta altura ya está (o no llega: póster tipográfico).
     profilePicPath = await raceMs(profilePicPathP, 2000);
-    const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual, generateImage: (a) => generateNoPhotoFirstPostImage({ prompt: a.prompt, topicText: a.topicText }) });
+    const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual, generateImage: (a) => generateNoPhotoFirstPostImage({ prompt: a.prompt, topicText: a.topicText }), logoPath: trialLogoAbsPath(trialDigest), verifySealedPiece: (a) => demoAi.qaGeneratedLogo({ b64: a.b64, business: a.business, apiKey: process.env.OPENAI_API_KEY || '' }) });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -34302,6 +34448,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
+      primer_posteo: (spec && spec.primer_posteo) || null, // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) veredicto del gate de mostrar del slot 0: auditable desde el payload
+      rescate_semana: (spec && spec.rescate_semana) || [], // (ADDENDUM 6A) registro del rescate de semana entera
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
       ig_pic: igPic, ig_name: igName,
@@ -34359,6 +34507,33 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         if (_sp0) {
           setImmediate(() => {
             demo.scheduleFirstPostRetry({ cacheKey: igKey, digestHash: (trialDigest && trialDigest.hash) || '', specPost0: _sp0, colors: { accent, btn }, db }).catch(() => {});
+          });
+        }
+      } catch (e) {}
+    }
+    // (LOTE PRIMER-POSTEO-PERFECTO · pieza 2 + addendum 6A) Rescate
+    // de fondo de la semana: toda pieza que salió en ARMADO HONESTO
+    // (jamás la placa) sigue la cadena acá — generación sellada con el
+    // logo real + sus QA — sobre trial_cache y solo si la semana
+    // sigue en borrador. La estrella del prompt de fondo es la
+    // sembrada del fundamento (la cadena en vivo ya usó la validada).
+    if (!testMode && igKey && Array.isArray(posts)) {
+      try {
+        const armingIdxPP = [];
+        posts.forEach((p, i) => { if (p && p.armando) armingIdxPP.push(i); });
+        if (armingIdxPP.length) {
+          const piecesBG = armingIdxPP.map((i) => {
+            const spI = (spec && spec.posts && spec.posts[i]) || {};
+            return {
+              idx: i,
+              prompt: demo.buildNoPhotoBrandPrompt({ business, category: effCategory, subcat: spec && spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: estiloPaletteNames, description: webData ? (webData.description || '') : '', star: (trialDigest && trialDigest.producto_estrella) || null }),
+              topicText: [spI.tema, spI.headline, spI.subline].filter(Boolean).join(' '),
+              headline: spI.headline || '',
+              textMode: spI.text_mode || '',
+            };
+          });
+          setImmediate(() => {
+            scheduleWeekRescue({ cacheKey: igKey, digestHash: (trialDigest && trialDigest.hash) || '', pieces: piecesBG, business, logoPath: trialLogoAbsPath(trialDigest), accent, apiKey: process.env.OPENAI_API_KEY || '', geminiKey: process.env.GEMINI_API_KEY || '' }).catch(() => {});
           });
         }
       } catch (e) {}
@@ -35315,6 +35490,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       // están leídas en esta ruta: trialProfile — cero fetches nuevos).
       const itemNamesBase = itemNames.length;
       const feedNamesAdded = trialExtendItemNames(itemNames, trialFeedItemNames({ captions: (trialProfile && trialProfile.captions) || [], items: itemNames, business, handle: ig }));
+      // (ADDENDUM 2 · LA INSIGNIA) La frase del dueño (pregunta 1 del
+      // onboarding) entra al vocabulario del mapa, igual que en la
+      // ruta sync: la visión etiqueta la foto CON la insignia.
+      if (ocAns && ocAns.producto_estrella && !itemNames.some((n) => String(n).toLowerCase() === String(ocAns.producto_estrella).toLowerCase())) itemNames.push(ocAns.producto_estrella);
       // (CORRECTIVO-7) Presencia de marca en paralelo con el mapa:
       // veredictos al fundamento, gate en el spec. (LOTE
       // FOTOS-ELEGIBILIDAD · L2) Como JOB con presupuesto propio y
@@ -35324,15 +35503,23 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         webExtraPhotos.length ? raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : Promise.resolve(null),
         webExtraPhotos.length ? raceMs(presenceJob.promise, TRIAL_PRESENCE_BUDGET_MS) : Promise.resolve(null),
       ]);
-      const brandPresence = presenceRes ? presenceRes.verdicts : null;
+      // (LOTE PRIMER-POSTEO-PERFECTO · pieza 3) PRESUPUESTO COMPLETO
+      // para el primer posteo: perdida la carrera corta, se espera el
+      // job completo (memoizado; techo = su timeout interno de visión).
+      let presenceResFull = presenceRes;
+      if (!presenceResFull && webExtraPhotos.length && presenceJob.estadoPre === 'ok') {
+        presenceResFull = await presenceJob.promise;
+      }
+      const brandPresence = presenceResFull ? presenceResFull.verdicts : null;
       deep = { catalog, bioLink, photoEntries, brandPresence };
       trialGateInfo = {
         presencia: {
           estado: !webExtraPhotos.length ? 'sin_fotos'
             : presenceJob.estadoPre === 'sin_vision' ? 'sin_vision'
-            : !presenceRes ? 'carrera_perdida'
-            : (presenceRes.estado || 'ok'),
-          fuente: presenceRes ? (presenceRes.fuente || null) : null,
+            : !presenceResFull ? 'carrera_perdida'
+            : (presenceResFull.estado || 'ok'),
+          fuente: presenceResFull ? (presenceResFull.fuente || null) : null,
+          ...(presenceResFull && !presenceRes ? { espera_completa: true } : {}),
           con_marca: brandPresence ? Object.values(brandPresence).filter((v) => v && v.marca === true).length : 0,
           total: brandPresence ? Object.keys(brandPresence).length : 0,
         },
@@ -35476,10 +35663,31 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // trazabilidad del packshot anclado nace acá y se resuelve tras
     // generar las piezas (bloque junto al paso de video).
     let uploadProduct = { classified: false };
+    // (ADDENDUM 8 · PANTALLA DE ESPERA) HITO 1 — «Leí tu Instagram»:
+    // las lecturas del negocio (IG/web/fotos/presencia) ya terminaron
+    // de verdad a esta altura; el medallón se enciende recién ahora.
+    send('hito', { hito: 'ig' });
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
     const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLangS, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     const { specPosts, videoIdx, count: n, goalLine, topics, voiceMarkers } = spec;
+    // (ADDENDUM 8) HITO 2 — «Tu estrella»: el spec ya determinó la
+    // estrella/insignia del primer posteo. Si la cadena es FOTO REAL
+    // (la foto existe y trae la marca en escena), la escena ya está
+    // (HITO 3) y su foto viaja como héroe del revelado; si el gate ya
+    // pasó en el spec, también el HITO 4. En la cadena generada, los
+    // hitos 3 y 4 llegan con el rescate (bloque de abajo).
+    send('hito', { hito: 'estrella' });
+    if (spec.primer_posteo && spec.primer_posteo.foto && spec.primer_posteo.foto.cadena === 'foto-real') {
+      try {
+        const heroPath = spec.photos && spec.photos[0];
+        if (typeof heroPath === 'string' && heroPath && fs.existsSync(heroPath)) {
+          send('hero', { image: 'data:image/jpeg;base64,' + fs.readFileSync(heroPath).toString('base64') });
+        }
+      } catch (e) { /* el héroe es best-effort: la espera sigue sin él */ }
+      send('hito', { hito: 'escena' });
+      if (spec.primer_posteo.veredicto && spec.primer_posteo.veredicto.pasa) send('hito', { hito: 'chequeo' });
+    }
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
     const withPhotos = specPosts.map((p) => (
@@ -35511,6 +35719,38 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         headline: specPosts[i].headline,
       };
     });
+    // (ADDENDUM 3B · PUERTA DE PRECIOS) La puerta corre sobre los
+    // captions FINALES de TODA la semana antes del render: las
+    // oraciones con precio sin fuente del negocio (o de suscripción
+    // sin su calificador, o de otro ítem) se cortan y el corte viaja
+    // registrado (out.precio_gate + el registro del slot 0).
+    const precioGateS = [];
+    try {
+      if (trialDigest) {
+        made.forEach((m, i) => {
+          const anchorI = (topics[i] && topics[i].digest_anchor) || '';
+          const sourcedI = clientDigest.sourcedPricesOf(trialDigest, anchorI);
+          const stripI = clientDigest.stripPriceSentences(m.caption, sourcedI, (v) => clientDigest.priceQualifierOf(trialDigest, anchorI, v));
+          if (stripI.quitados.length) {
+            m.caption = stripI.text;
+            precioGateS.push({ idx: i, quitados: stripI.quitados });
+            if (i === 0 && spec.primer_posteo) spec.primer_posteo.texto.precio_cortado_final = stripI.quitados;
+          }
+        });
+      }
+    } catch (e) { /* la puerta jamás frena la prueba */ }
+    // (LOTE PRIMER-POSTEO-PERFECTO · piezas 2/6A + addendum 3A) Las
+    // piezas que entran a la cadena de rescate: todo ganador-póster de
+    // la semana + el slot 0 si su foto real no trae el logo en escena.
+    // Sus eventos 'post' se RETIENEN en el render: el visitante ve el
+    // estado de armado honesto (progreso del stream), nunca la tarjeta
+    // del póster — la pieza llega por el mismo evento cuando pasa la
+    // vara, o en estado `armando` si la cadena sigue en fondo.
+    const ppRecS = spec.primer_posteo || null;
+    const slot0LogoAusenteS = !!(ppRecS && ppRecS.veredicto && Array.isArray(ppRecS.veredicto.motivos) && ppRecS.veredicto.motivos.includes('logo-ausente'));
+    const rescueIdxS = new Set();
+    specPosts.forEach((sp, i) => { if (sp && sp.photo_source === 'brand-poster') rescueIdxS.add(i); });
+    if (slot0LogoAusenteS) rescueIdxS.add(0);
     const posts = new Array(n).fill(null);
     // 3) Render con streaming: cada PNG que aparece se emite como post imagen
     send('status', { step: 'diseno', text: lang === 'en' ? "Got the ideas: now I'm designing your posts one by one…" : 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
@@ -35528,7 +35768,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       };
       const _prI = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
       posts[i].prompt_simple = _prI.prompt_simple; posts[i].prompt_detalle = _prI.prompt_detalle;
-      send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
+      // (ADDENDUM 3A) La pieza en cadena de rescate NO se emite con el
+      // póster: su evento llega tras el rescate (o en armado honesto).
+      if (!rescueIdxS.has(i)) send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
@@ -35757,90 +35999,110 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
     }
 
-    // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Sin foto real para el
-    // primer posteo — 0 posteos en IG, sin fotos en la web, sin foto de
-    // perfil (spec.photos[0] == null) — la imagen SE GENERA con el
-    // modelo (prompt de marca, sin referencias), en vez de dejar el
-    // póster tipográfico. Misma arquitectura que las piezas ilustradas:
-    // el póster ya se emitió como 'post' 0 (el primer posteo aparece en
-    // <30 s, sin timeout falso del watchdog de L6) y la pieza generada
-    // lo REEMPLAZA por el mismo evento 'post' 0; el payload final y la
-    // caché quedan con la imagen generada. La generación tarda más que
-    // el camino rápido: es la EXCEPCIÓN a la regla <30 s (el póster
-    // sale a tiempo; la imagen generada llega después). Un póster CON
-    // foto de perfil ya muestra la marca: no se genera. Si el modelo
-    // no está disponible o falla, el póster queda y se avisa con un
-    // status honesto. No toca: foto-real-primero, idioma/estrella
-    // (L1–L4), popup (L8), chat, Ads, conserje. No marca la prueba
-    // como usada: es el mismo intento de generación.
-    if (demo.firstPostNeedsGeneratedImage(spec) && posts[0] && posts[0].type === 'image' && !posts[0].ai && demoApiKey && costs.demoAiCapOk()) {
-      send('status', { step: 'imagen-generada', text: lang === 'en' ? "Your brand had no photos: I'm creating your first post's image…" : 'Tu marca no tenía fotos: estoy creando la imagen de tu primer posteo…' });
-      const genKeepalive = setInterval(() => {
-        send('status', { step: 'imagen-generada', text: lang === 'en' ? "I'm creating your first post's image…" : 'Estoy creando la imagen de tu primer posteo…' });
+    // (LOTE PRIMER-POSTEO-PERFECTO · piezas 2/6A + addendums 3A/4/5/7 —
+    // REEMPLAZA el bloque v960) LA CADENA DE RESCATE DE LA SEMANA:
+    // cada pieza retenida (ganador-póster, o slot 0 con foto real sin
+    // logo en escena) se genera con su estrella/insignia en escena y
+    // se SELLA con el logo REAL (método híbrido) antes de existir para
+    // el visitante. Su evento 'post' fue retenido en el render: llega
+    // AHORA, con la pieza que pasa la vara — o en ESTADO DE ARMADO
+    // HONESTO (armando:true, sin imagen) si la cadena sigue en fondo.
+    // La placa nunca se emite, ni transitoria ni final (addendum 3A).
+    // Sin clave o sin tope de gasto, las piezas van directo a armado
+    // y el rescate de fondo (tras el done, sobre trial_cache) sigue.
+    const rescateSemanaS = [];
+    const trialLogoPathS = trialLogoAbsPath(trialDigest);
+    if (rescueIdxS.size) {
+      const idxsRescue = [...rescueIdxS].sort((a, b) => a - b);
+      const emittedRescue = new Set();
+      send('status', { step: 'imagen-generada', text: lang === 'en' ? "I'm creating the images your brand was missing, with your logo in the scene…" : 'Estoy creando las imágenes que le faltaban a tu marca, con tu logo en la escena…' });
+      const rescueKeepalive = setInterval(() => {
+        send('status', { step: 'imagen-generada', text: lang === 'en' ? "Still creating your images…" : 'Sigo creando tus imágenes…' });
       }, 20000);
-      if (genKeepalive.unref) genKeepalive.unref();
-      try {
-        const noPhotoPrompt = demo.buildNoPhotoBrandPrompt({ business, category: effCategory, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: estiloPaletteNames, description: bioText, star: (trialDigest && trialDigest.producto_estrella) || null });
-        const noPhotoTopic = [specPosts[0] && specPosts[0].headline, specPosts[0] && specPosts[0].subline].filter(Boolean).join(' ');
-        const makeNoPhotoPiece = async (i) => {
-          const gen = await generateNoPhotoFirstPostImage({ prompt: noPhotoPrompt, topicText: noPhotoTopic, apiKey: demoApiKey, geminiKey });
-          if (!gen) return null;
-          pieceEngines[i] = gen.engine;
-          let buf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: specPosts[i].text_mode === 'clean' ? '' : (made[i].headline || ''), gradeHex: accent, workDir: runDir, index: i, headlineScale: 1, inkHex: null, zone: 'top' });
-          let textInfo = { passed: true, zone: 'top', retried: false };
-          const textQa = buf ? await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: demoApiKey }) : null;
-          if (textQa) textInfo.passed = textQa.passed;
-          if (buf && textQa && !textQa.passed && costs.demoAiCapOk()) {
-            const bufClean = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: '', gradeHex: accent, workDir: runDir, index: i, headlineScale: 1, inkHex: null }).catch(() => null);
-            if (bufClean) { buf = bufClean; textInfo = { passed: true, zone: 'none', retried: true }; }
-            else textInfo = { passed: false, zone: 'top', retried: true };
-          }
-          pieceQa[i] = { ...(gen.qa || { passed: true, retried: false }), text: textInfo };
-          return buf;
+      if (rescueKeepalive.unref) rescueKeepalive.unref();
+      const emitArming = (i) => {
+        posts[i] = {
+          type: 'image',
+          image: null,
+          armando: true,
+          caption: made[i].caption,
+          hashtags: made[i].hashtags,
+          headline: made[i].headline,
+          style: specPosts[i].style,
+          style_name: specPosts[i].style_name,
+          text_mode: specPosts[i].text_mode || 'text',
+          estilo_visual: specPosts[i].estilo_visual || null,
         };
-        const { replaced: noPhotoReplaced } = await demoAi.replacePiecesWithAi({
-          indexes: [0],
-          capOk: () => costs.demoAiCapOk(),
-          makePiece: makeNoPhotoPiece,
-          onPiece: async (i, buf) => {
-            bufs[i] = buf;
-            try { fs.writeFileSync(path.join(runDir, `post-${i}.jpg`), buf); } catch (e) {}
+        if (i > 0 && !rescateSemanaS.some((x) => x.idx === i)) rescateSemanaS.push({ idx: i, cadena: 'en-rescate', motivo: 'cadena-en-fondo' });
+        if (i === 0 && ppRecS) {
+          ppRecS.etapa = 'ruta';
+          ppRecS.veredicto = { pasa: false, cadena: 'en-rescate', motivos: ['rescate-en-fondo'] };
+          ppRecS.armando = true;
+        }
+        send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
+        emittedRescue.add(i);
+      };
+      try {
+        for (const i of idxsRescue) {
+          if (!posts[i] || posts[i].ai) { // ya la produjo el pipeline IA ilustrado: su QA viaja en demo_ai
+            if (i > 0) rescateSemanaS.push({ idx: i, cadena: 'pipeline-ia' });
+            emittedRescue.add(i);
+            continue;
+          }
+          const tI = topics[i] || {};
+          const starI = (tI._insignia || tI._star) ? (tI.digest_anchor || null) : ((trialDigest && trialDigest.producto_estrella) || null);
+          const promptI = demo.buildNoPhotoBrandPrompt({ business, category: effCategory, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: estiloPaletteNames, description: bioText, star: starI });
+          const topicTextI = [specPosts[i] && specPosts[i].headline, specPosts[i] && specPosts[i].subline].filter(Boolean).join(' ');
+          let r = null;
+          if (demoApiKey && costs.demoAiCapOk()) {
+            r = await rescuePieceWithSeal({ prompt: promptI, topicText: topicTextI, business, logoPath: trialLogoPathS, headline: made[i].headline || '', textMode: specPosts[i].text_mode || '', accent, workDir: runDir, index: i, apiKey: demoApiKey, geminiKey }).catch(() => null);
+          }
+          if (r) {
+            bufs[i] = r.buf;
+            try { fs.writeFileSync(path.join(runDir, `post-${i}.jpg`), r.buf); } catch (e) {}
             posts[i] = {
               type: 'image',
-              image: 'data:image/jpeg;base64,' + buf.toString('base64'),
+              image: 'data:image/jpeg;base64,' + r.buf.toString('base64'),
               caption: made[i].caption,
               hashtags: made[i].hashtags,
               headline: made[i].headline,
               style: specPosts[i].style,
               style_name: specPosts[i].style_name,
               text_mode: specPosts[i].text_mode || 'text',
+              estilo_visual: specPosts[i].estilo_visual || null,
               ai: true,
-              engine: pieceEngines[i] || null,
-              qa: pieceQa[i] || null,
+              engine: r.engine,
+              qa: { ...(r.qa || {}), logo: r.logoQa || null },
             };
             if (specPosts[i]) specPosts[i].photo_source = 'ai-generated';
-            const _prN = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
-            posts[i].prompt_simple = _prN.prompt_simple; posts[i].prompt_detalle = _prN.prompt_detalle;
+            const _prR = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+            posts[i].prompt_simple = _prR.prompt_simple; posts[i].prompt_detalle = _prR.prompt_detalle;
+            demoAiInfo.used = true;
+            demoAiInfo.pieces = (demoAiInfo.pieces || 0) + 1;
+            if (i > 0) rescateSemanaS.push({ idx: i, cadena: 'generada', logo: r.logoQa ? { ok: true, detalle: r.logoQa.detalle || null } : { estado: 'sin-archivo-de-logo' } });
+            if (i === 0 && ppRecS) {
+              ppRecS.etapa = 'ruta';
+              ppRecS.foto = { fuente: 'ai-generated', cadena: 'generada', via: null };
+              if (ppRecS.logo) { ppRecS.logo.veredicto = r.logoQa || { estado: 'sin-archivo-de-logo' }; ppRecS.logo.estado = r.logoQa ? 'sellado-verificado' : 'sin-archivo-de-logo'; }
+              ppRecS.veredicto = { pasa: true, cadena: 'generada', motivos: [] };
+            }
+            if (i === 0) { send('hito', { hito: 'escena' }); send('hito', { hito: 'chequeo' }); } // (ADDENDUM 8) la escena sellada pasó el chequeo pre-muestra
             send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
-          },
-        });
-        if (noPhotoReplaced.size > 0) {
-          demoAiInfo.used = true;
-          demoAiInfo.pieces = (demoAiInfo.pieces || 0) + noPhotoReplaced.size;
-          demoAiInfo.engines = posts.map((_, i) => pieceEngines[i] || (demoAiInfo.engines && demoAiInfo.engines[i]) || null);
-          demoAiInfo.qa = posts.map((_, i) => pieceQa[i] || (demoAiInfo.qa && demoAiInfo.qa[i]) || null);
-          demoAiInfo.text_modes = specPosts.map((sp) => sp.text_mode || 'text');
-          demoAiInfo.no_photo_generated = true;
-        } else {
-          send('status', { step: 'imagen-generada', text: lang === 'en' ? "I couldn't create the image: your first post stays with your brand's design…" : 'No se pudo crear la imagen: tu primer posteo queda con el diseño de tu marca…' });
+            emittedRescue.add(i);
+          } else {
+            emitArming(i);
+          }
         }
       } catch (e) {
-        console.error('[posta] imagen-generada-sin-foto: falló, queda el póster:', e.message);
+        console.error('[posta] primer-posteo-perfecto: la cadena de rescate falló:', e.message);
+        // Toda pieza retenida sin emitir sale en armado honesto —
+        // jamás con el póster del render interno.
+        for (const i of idxsRescue) {
+          if (!emittedRescue.has(i) && posts[i]) { try { emitArming(i); } catch (e2) {} }
+        }
       } finally {
-        clearInterval(genKeepalive);
+        clearInterval(rescueKeepalive);
       }
-      // El costo de esta generación llega después del cómputo de arriba:
-      // se vuelve a medir para que demo_ai.cost_usd la incluya.
       if (demoSpendBefore != null) {
         demoAiInfo.cost_usd = Math.round(Math.max(0, costs.demoAiSpendTodayUsd() - demoSpendBefore) * 100) / 100;
       }
@@ -36021,8 +36283,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // carrusel (formato de la marca), el video NO la pisa: el prompt y
     // el envío de abajo corren igual sobre la pieza carrusel.
     const videoIdxEsCarrusel = !!(posts[videoIdx] && posts[videoIdx].type === 'carousel');
-    if (videoIdxEsCarrusel) {
-      // pieza carrusel: queda como está.
+    // (ADDENDUM 6A) Una pieza en armado honesto NUNCA se convierte en
+    // video: el tour animaría el diseño interno (video-placa).
+    const videoIdxEnArmado = !!(posts[videoIdx] && posts[videoIdx].armando);
+    if (videoIdxEsCarrusel || videoIdxEnArmado) {
+      // pieza carrusel o en armado: queda como está.
     } else if (videoB64) {
       posts[videoIdx] = {
         type: 'video',
@@ -36133,6 +36398,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
+      primer_posteo: ppRecS || null, // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) veredicto del gate de mostrar del slot 0, completado por la cadena de rescate
+      rescate_semana: rescateSemanaS, // (ADDENDUM 6A) registro del rescate de semana entera
+      precio_gate: precioGateS.length ? { piezas: precioGateS } : null, // (ADDENDUM 3B) cortes de la puerta de precios, por pieza
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
@@ -36170,6 +36438,31 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`).run(igKey, payload, Date.now());
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
+    }
+    // (LOTE PRIMER-POSTEO-PERFECTO · pieza 2 + addendum 6A) Rescate
+    // de fondo: las piezas que quedaron en armado honesto siguen la
+    // cadena sobre la caché (solo si la semana sigue en borrador).
+    if (!testMode && igKey) {
+      try {
+        const armingIdxS = [];
+        (out.posts || []).forEach((p, i) => { if (p && p.armando) armingIdxS.push(i); });
+        if (armingIdxS.length) {
+          const piecesBGS = armingIdxS.map((i) => {
+            const tI = topics[i] || {};
+            const starI = (tI._insignia || tI._star) ? (tI.digest_anchor || null) : ((trialDigest && trialDigest.producto_estrella) || null);
+            return {
+              idx: i,
+              prompt: demo.buildNoPhotoBrandPrompt({ business, category: effCategory, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: estiloPaletteNames, description: bioText, star: starI }),
+              topicText: [specPosts[i] && specPosts[i].headline, specPosts[i] && specPosts[i].subline].filter(Boolean).join(' '),
+              headline: (specPosts[i] && specPosts[i].headline) || '',
+              textMode: (specPosts[i] && specPosts[i].text_mode) || '',
+            };
+          });
+          setImmediate(() => {
+            scheduleWeekRescue({ cacheKey: igKey, digestHash: (trialDigest && trialDigest.hash) || '', pieces: piecesBGS, business, logoPath: trialLogoPathS, accent, apiKey: demoApiKey || '', geminiKey: geminiKey || '' }).catch(() => {});
+          });
+        }
+      } catch (e) {}
     }
     // (LOTE PRUEBA-ENTRADA-DIRECTA) Y por dominio, para entrar sin @.
     if (!testMode) trialCacheWriteWeb(fields.web, out, testMode);
@@ -37992,7 +38285,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1018';
+const BUILD_ID = '20261105-v1019';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

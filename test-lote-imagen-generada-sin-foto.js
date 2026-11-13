@@ -9,6 +9,13 @@
 // estrella viaja solo si está confirmada (digest.producto_estrella, L3).
 // El póster sale primero (<30 s, sin timeout falso del watchdog de L6)
 // y la imagen generada lo reemplaza por el mismo evento 'post' 0.
+// (RE-PIN DEL ATERRIZAJE v1019 · LOTE PRIMER-POSTEO-PERFECTO: el
+// diseño v960 de arriba —póster primero y reemplazo— quedó invertido
+// por los addendums 3A/4/5/7 de ese lote: retención del evento post,
+// rescate sellado con el logo real y armado honesto. Los pins A1, A4,
+// A5, A7, A17, A18, A22, A23, A24, A25, C1, C2 y C5 de esta suite se
+// re-pinearon 1:1 con la clasificación del STATUS de ese lote; el
+// mecanismo (§B/§E: predicado, prompt, gate, generador) no cambió.)
 // Se corre desde la raíz del release:
 //   NODE_PATH=/home/hatch/workspace/posta/node_modules node test-lote-imagen-generada-sin-foto.js
 // (el NODE_PATH es obligatorio: la §B/§D requieren demo.js, que abre la
@@ -23,7 +30,7 @@ const http = require('http');
 const { spawn, execFileSync } = require('child_process');
 
 const ROOT = __dirname;
-const BASE = path.join(ROOT, '..', 'base'); // (aterrizaje v1015: la base es el árbol v1014)
+const BASE = path.join(ROOT, '..', 'base'); // (aterrizaje v1019: la base es el árbol v1018)
 const SERVER = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 const SERVER_BASE = fs.readFileSync(path.join(BASE, 'server.js'), 'utf8');
 const DEMO = fs.readFileSync(path.join(ROOT, 'demo.js'), 'utf8');
@@ -48,13 +55,13 @@ function md5(b) { return crypto.createHash('md5').update(b).digest('hex'); }
 
 // ── §A · estáticos ──
 console.log('\n[A] Estáticos (estampado + alcance)');
-eq(count(SERVER, '20261105-v1015'), 1, 'A1 BUILD v1015 x1 solo en server.js (re-estampado del aterrizaje)');
+eq(count(SERVER, '20261105-v1019'), 1, 'A1 BUILD v1019 x1 solo en server.js (re-estampado del aterrizaje v1019)');
 eq(count(SERVER, '20261105-v1014'), 0, 'A2 BUILD v1014 x0 (sin restos del viejo)');
 eq(count(SERVER, '20261105-v957'), 0, 'A3 BUILD v957 x0 (el provisional chocado, nunca estampado)');
-eq(count(IDX_ES, 'app.js?v=696'), 1, 'A4 index ES app.js?v=696 x1 (sin bump: no se toca app.js)');
-eq(count(IDX_ES, 'styles.css?v=20261274'), 1, 'A5 index ES styles 20261274 x1 (sin cambio)');
+eq(count(IDX_ES, 'app.js?v=697'), 1, 'A4 index ES app.js?v=697 x1 (re-pin de stamps v1019: el 697 es de v1017; este lote no toca app.js)');
+eq(count(IDX_ES, 'styles.css?v=20261278'), 1, 'A5 index ES styles 20261278 x1 (re-pin v1019: stamp de v1017, sin cambio propio)');
 eq(count(IDX_EN, 'app.js?v='), 0, 'A6 index EN sin app.js?v=');
-eq(count(IDX_EN, 'styles.css?v=20261274'), 1, 'A7 index EN styles 20261274 x1');
+eq(count(IDX_EN, 'styles.css?v=20261278'), 1, 'A7 index EN styles 20261278 x1 (re-pin v1019)');
 eq(md5(APPJS), md5(APPJS_BASE), 'A8 public/app.js byte-idéntico a la base');
 eq(md5(STYLES), md5(STYLES_BASE), 'A9 styles.css byte-idéntico a la base');
 eq(md5(IDX_EN), md5(IDX_EN_BASE), 'A10 index EN byte-idéntico a la base');
@@ -64,38 +71,53 @@ ok(DEMO.includes('function firstPostNeedsGeneratedImage(spec)') && DEMO.includes
 ok(DEMO.includes('genFirstPromise') && DEMO.includes('compositeDemoPiece') && DEMO.includes("specPosts[0].photo_source = 'ai-generated'"), 'A14 generateDemo: generación en paralelo + composite + marca ai-generated');
 ok(SERVER.includes('async function generateNoPhotoFirstPostImage(') && SERVER.includes('generateDemoPieceImage({ prompt, refs: [], geminiKey: gKey, genGpt, refNote: null })') && SERVER.includes('qaDemoPiece({ b64: gen.b64') && SERVER.includes('qaRetryDirective(qaRes)'), 'A15 helper del server: cadena Nano→gpt sin refs + QA + 1 reintento');
 ok(SERVER.includes("generateImage: (a) => generateNoPhotoFirstPostImage({ prompt: a.prompt, topicText: a.topicText })"), 'A16 clásico /api/trial/generate pasa el generador a generateDemo');
-ok(SERVER.includes("step: 'imagen-generada'") && SERVER.includes('demo.firstPostNeedsGeneratedImage(spec)') && SERVER.includes('indexes: [0]') && SERVER.includes('no_photo_generated = true') && SERVER.includes('genKeepalive'), 'A17 stream: status imagen-generada + predicado + reemplazo del slot 0 + keepalive');
-eq(count(SERVER, "step: 'imagen-generada'"), 3, 'A18 step imagen-generada x3 (inicio + keepalive + fallo honesto)');
+ok(SERVER.includes("step: 'imagen-generada'") && SERVER.includes('const rescueIdxS = new Set()') && SERVER.includes("sp.photo_source === 'brand-poster'") && SERVER.includes('rescuePieceWithSeal') && SERVER.includes('rescueKeepalive') && SERVER.includes('emitArming'), 'A17 stream (re-pin v1019 · ADD-3A/5/7): status imagen-generada + retención rescueIdxS (ganador-póster / slot 0 sin logo) + rescate sellado + keepalive + armado honesto');
+eq(count(SERVER, "step: 'imagen-generada'"), 2, 'A18 step imagen-generada x2 (re-pin v1019: inicio + keepalive; el fallo honesto sale como armado vía emitArming)');
 ok(!/fal\.ai|FAL_KEY/.test(SERVER) && !/fal\.ai|FAL_KEY/.test(DEMO) && !/fal\.ai|FAL_KEY/.test(fs.readFileSync(path.join(ROOT, 'demo-ai.js'), 'utf8')), 'A19 sin fal.ai en el camino de la prueba (fal solo en ai-video.js)');
 eq(count(SERVER, 'trial_used'), count(SERVER_BASE, 'trial_used'), 'A20 trial_used: mismo conteo que la base (el fallback no marca la prueba como usada)');
 eq(count(DEMO, 'trial_used'), count(DEMO_BASE, 'trial_used'), 'A21 trial_used en demo.js: mismo conteo que la base');
-// Orden honesto: el póster del render se emite ANTES de que empiece la
-// generación (el primer posteo ya está mostrado cuando el modelo
-// arranca) y el status de generación precede al reemplazo.
+// (RE-PIN DEL ATERRIZAJE v1019 — mapeo 1:1 con la clasificación del
+// STATUS del LOTE PRIMER-POSTEO-PERFECTO: A22/A23/A24 afirmaban el
+// comportamiento v960 «el póster sale primero», INVERTIDO por orden
+// expresa del addendum 3A (retención): la pieza en rescate NO se
+// emite en el render; su evento 'post' llega tras la cadena de
+// rescate sellado, o en estado de armado honesto si sigue en fondo.
+// Las aserciones de abajo pinean el comportamiento nuevo sobre los
+// anclajes reales del fusionado.)
 (function () {
-  const renderPost = SERVER.indexOf("send('post', { index: i, day: week[i].day");
-  const genBlock = SERVER.indexOf('demo.firstPostNeedsGeneratedImage(spec)');
-  const statusGen = SERVER.indexOf("step: 'imagen-generada'", genBlock);
-  const replaceCall = SERVER.indexOf('replacePiecesWithAi', genBlock);
-  ok(renderPost !== -1 && genBlock !== -1 && renderPost < genBlock, 'A22 el post del render se emite ANTES del bloque de generación (el póster sale primero)');
-  ok(statusGen !== -1 && replaceCall !== -1 && statusGen < replaceCall, 'A23 el status de generación precede al reemplazo (progreso real, no mudo)');
-  ok(SERVER.includes("posts[0] && posts[0].type === 'image' && !posts[0].ai"), 'A24 la generación solo corre si el póster 0 ya existe como imagen (nunca sin primer posteo)');
+  const renderGuard = SERVER.indexOf("if (!rescueIdxS.has(i)) send('post'");
+  const rescueBlock = SERVER.indexOf('const rescateSemanaS = []');
+  const statusGen = SERVER.indexOf("step: 'imagen-generada'", rescueBlock);
+  const sealCall = SERVER.indexOf('rescuePieceWithSeal', rescueBlock);
+  ok(renderGuard !== -1 && rescueBlock !== -1 && renderGuard < rescueBlock, 'A22 (invertido · ADD-3A) el render RETIENE el post de la pieza en rescate (if (!rescueIdxS.has(i))) y su evento sale recién tras la cadena de rescate — el póster NUNCA sale primero');
+  ok(statusGen !== -1 && sealCall !== -1 && statusGen < sealCall, 'A23 (re-pin) el status de generación precede a la llamada de rescate sellado (progreso real, no mudo)');
+  ok(SERVER.includes('if (!posts[i] || posts[i].ai)') && SERVER.includes('slot0LogoAusenteS'), 'A24 (re-pin) la cadena saltea las piezas que ya produjo el pipeline IA (posts[i].ai) y el disparador suma el slot 0 con logo ausente (slot0LogoAusenteS)');
 })();
 (function () {
-  // Diff = exactamente el lote: solo server.js y demo.js difieren, y el
-  // único archivo nuevo es esta suite (se ignora data/, que la base
-  // trae de la copia del lote L6 y el release no tiene).
+  // Diff = exactamente el alcance del LOTE PRIMER-POSTEO-PERFECTO
+  // (re-pin v1019: el pin de alcance v960 —solo server.js+demo.js—
+  // quedó superseded por el alcance de este lote, según su STATUS):
+  // difieren los 9 archivos del lote + esta suite (re-pineada en este
+  // aterrizaje), y el único archivo nuevo es la suite del lote.
   let out = '';
   try { out = execFileSync('diff', ['-rq', BASE, ROOT], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }); } catch (e) { out = (e.stdout || '').toString(); }
   const lines = out.split('\n').filter(Boolean).filter((l) => !/Only in .*base: data$/.test(l));
   const expected = [
+    'Files ' + path.join(BASE, 'client-digest.js') + ' and ' + path.join(ROOT, 'client-digest.js') + ' differ',
+    'Files ' + path.join(BASE, 'demo-ai.js') + ' and ' + path.join(ROOT, 'demo-ai.js') + ' differ',
     'Files ' + path.join(BASE, 'demo.js') + ' and ' + path.join(ROOT, 'demo.js') + ' differ',
+    'Files ' + path.join(BASE, 'feed-audit.js') + ' and ' + path.join(ROOT, 'feed-audit.js') + ' differ',
+    'Files ' + path.join(BASE, 'generator.js') + ' and ' + path.join(ROOT, 'generator.js') + ' differ',
     'Files ' + path.join(BASE, 'server.js') + ' and ' + path.join(ROOT, 'server.js') + ' differ',
-    'Only in ' + ROOT + ': test-lote-imagen-generada-sin-foto.js',
+    'Files ' + path.join(BASE, 'public', 'en-prueba.html') + ' and ' + path.join(ROOT, 'public', 'en-prueba.html') + ' differ',
+    'Files ' + path.join(BASE, 'public', 'prueba.html') + ' and ' + path.join(ROOT, 'public', 'prueba.html') + ' differ',
+    'Files ' + path.join(BASE, 'test-lote-c9-idioma-positivo.js') + ' and ' + path.join(ROOT, 'test-lote-c9-idioma-positivo.js') + ' differ',
+    'Files ' + path.join(BASE, 'test-lote-imagen-generada-sin-foto.js') + ' and ' + path.join(ROOT, 'test-lote-imagen-generada-sin-foto.js') + ' differ',
+    'Only in ' + ROOT + ': test-lote-primer-posteo-perfecto.js',
   ];
   const extra = lines.filter((l) => !expected.includes(l));
   const missing = expected.filter((l) => !lines.includes(l));
-  ok(extra.length === 0 && missing.length === 0, 'A25 diff vs base = exactamente el lote (server.js + demo.js + suite)', { extra, missing, lines: lines.slice(0, 6) });
+  ok(extra.length === 0 && missing.length === 0, 'A25 diff vs base = exactamente el alcance del LOTE PRIMER-POSTEO-PERFECTO (re-pin v1019)', { extra, missing, lines: lines.slice(0, 6) });
 })();
 
 // ── §B · VM del camino nuevo (demo.js real, sin red ni claves) ──
@@ -216,18 +238,18 @@ async function runBootAndRegressions() {
     let up = false;
     for (let i = 0; i < 60 && !up; i++) {
       const r = await req('GET', '/api/version');
-      if (r.status === 200) { try { up = JSON.parse(r.body).build === '20261105-v1015'; } catch (e) { up = false; } }
+      if (r.status === 200) { try { up = JSON.parse(r.body).build === '20261105-v1019'; } catch (e) { up = false; } }
       if (!up) await new Promise((r2) => setTimeout(r2, 500));
     }
-    ok(up, 'C1 /api/version = 20261105-v1015');
+    ok(up, 'C1 /api/version = 20261105-v1019');
     const idx = await req('GET', '/');
-    ok(idx.status === 200 && idx.body.includes('app.js?v=696'), 'C2 index servido con app.js?v=696 (sin bump)');
+    ok(idx.status === 200 && idx.body.includes('app.js?v=697'), 'C2 index servido con app.js?v=697 (re-pin v1019: stamp de v1017, sin bump propio)');
     const gs = await req('POST', '/api/trial/generate-stream', 'basura');
     ok(gs.status === 200 && /text\/event-stream/.test(String(gs.headers['content-type'] || '')), 'C3 POST /api/trial/generate-stream con cuerpo inválido → 200 SSE', 'status=' + gs.status + ' ct=' + gs.headers['content-type']);
     ok(gs.body.includes('event: error'), 'C4 el stream inválido emite event: error (falla seguro, no HTML)', gs.body.slice(0, 200));
     const again = await req('GET', '/api/version');
     let alive = false;
-    try { alive = again.status === 200 && JSON.parse(again.body).build === '20261105-v1015'; } catch (e) {}
+    try { alive = again.status === 200 && JSON.parse(again.body).build === '20261105-v1019'; } catch (e) {}
     ok(alive, 'C5 el server sigue vivo tras el stream inválido');
   } finally {
     try { child.kill('SIGTERM'); } catch (e) {}

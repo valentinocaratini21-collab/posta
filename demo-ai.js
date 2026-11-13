@@ -1059,7 +1059,7 @@ async function qaComposedText({ b64, zone, apiKey, fetchImpl } = {}) {
 // La IA genera la escena LIMPIA (sin texto); el titular lo compone el
 // código con composite-headline.py — el mismo del pipeline real — y la
 // pieza final sale JPEG 1080x1350 como las de plantilla.
-function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale, inkHex, zone }) {
+function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale, inkHex, zone, logoPath }) {
   return new Promise((resolve) => {
     try {
       const dir = workDir || os.tmpdir();
@@ -1068,6 +1068,13 @@ function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineS
       const jpg = path.join(dir, `ai-${index}.jpg`);
       fs.writeFileSync(raw, Buffer.from(String(b64 || ''), 'base64'));
       const args = [COMPOSITE_SCRIPT, '--in', raw, '--headline', String(headline || ''), '--out', fin];
+      // (ADDENDUM 7 · LOTE PRIMER-POSTEO-PERFECTO — MÉTODO HÍBRIDO,
+      // reemplaza la integración solo-por-prompt del addendum 1) El
+      // logo que se ve es el ARCHIVO REAL del negocio, integrado por
+      // el mismo composite-headline.py del pipeline registrado con el
+      // argumento --logo de logoSealArgsForUser (server.js): el sello
+      // sigue la superficie; el modelo nunca dibuja el logo.
+      if (logoPath && fs.existsSync(logoPath)) args.push('--logo', String(logoPath));
       if (gradeHex) args.push('--grade', String(gradeHex));
       // v203: piezas de fondo plano/gráficas (FLAT STUDIO, GRAPHIC
       // POSTER) llevan el titular en tinta oscura de su paleta, sin el
@@ -1096,6 +1103,110 @@ function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineS
       });
     } catch (e) { resolve(null); }
   });
+}
+
+// ---------- 3b) QA DEL LOGO INTEGRADO (addendum de Valentino 13/11) --
+// (ADDENDUMS 1/5/7 · LOTE PRIMER-POSTEO-PERFECTO) En la imagen del
+// rescate, el logo del negocio va SIEMPRE integrado en la escena: por
+// el MÉTODO HÍBRIDO (addendum 7, reemplaza el solo-prompt del
+// addendum 1) — la escena se genera con el soporte natural listo y el
+// logo REAL se integra desde su archivo con el sello del pipeline
+// (composite-headline.py --logo). Este QA es la aceptación del
+// addendum 5: logo PRESENTE, INTEGRADO (perspectiva y curvatura del
+// soporte, sin bordes de sticker, sin tapar la estrella) y LEGIBLE
+// (es el archivo real: lo que se verifica es que la integración se
+// lee completa y nítida). Sin logo verificado no se muestra: la
+// cadena reintenta (logoQaRetryDirective + re-composición).
+// Devuelve { ok, presente, integrado, legible, texto_visto, detalle }
+// o null si el chequeo no se pudo hacer (sin clave / sin respuesta):
+// null NUNCA es un pase — el llamador lo registra como 'sin-vision'.
+const QA_LOGO_SYSTEM = [
+  'Sos el control de calidad del logo en la imagen FINAL de un posteo. El logo es el archivo real del negocio, integrado sobre un soporte natural de la escena (packaging, bolsa, caja, etiqueta, cartel del local) siguiendo su perspectiva y curvatura. Respondé SOLO un JSON válido, sin markdown:',
+  '{"logo_presente":true,"integrado":true,"legible":true,"texto_visto":"el texto exacto que se lee en el logo","detalle":"una frase concreta"}',
+  '- logo_presente: se ve el logo del negocio integrado en algún soporte de la escena. Si no hay ningún logo → false.',
+  '- integrado: el logo sigue la perspectiva, la curvatura, la luz y el material del soporte, como branding real fotografiado, sin bordes de sticker ni recorte plano, y NO tapa el producto protagonista. Si parece un sticker pegado encima, un cartel flotante o una placa sola sin escena → false.',
+  '- legible: el texto del logo se lee EXACTAMENTE como el nombre del negocio que te paso, completo y nítido. Si sale deformado, cortado, tapado o ilegible → false.',
+].join('\n');
+
+function parseLogoQaContent(content) {
+  let txt = String((content && content.trim()) || '');
+  if (!txt) return null;
+  txt = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let j = null;
+  try { j = JSON.parse(txt); } catch (e) {
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (m) { try { j = JSON.parse(m[0]); } catch (e2) { /* cae a null */ } }
+  }
+  if (!j || typeof j !== 'object') return null;
+  if (typeof j.logo_presente !== 'boolean' || typeof j.integrado !== 'boolean' || typeof j.legible !== 'boolean') return null;
+  return {
+    ok: j.logo_presente === true && j.integrado === true && j.legible === true,
+    presente: j.logo_presente === true,
+    integrado: j.integrado === true,
+    legible: j.legible === true,
+    texto_visto: String(j.texto_visto || '').slice(0, 120),
+    detalle: String(j.detalle || '').slice(0, 200),
+  };
+}
+
+async function qaGeneratedLogo({ b64, business, apiKey, fetchImpl } = {}) {
+  try {
+    if (!b64 || !apiKey || !business) return null;
+    const doFetch = fetchImpl || fetch;
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: QA_MODEL,
+        temperature: 0,
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: QA_LOGO_SYSTEM },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `El nombre del negocio es exactamente: "${business}". Evaluá el logo de esta imagen contra ese nombre.` },
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r || !r.ok) return null;
+    const j = await r.json().catch(() => null);
+    if (!fetchImpl && j) {
+      try { costs.trackUsage({ feature: 'demo-ai-qa', model: QA_MODEL, json: j }); } catch (e) {}
+    }
+    const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+    return parseLogoQaContent(content);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Directiva reforzada cuando el QA del logo frena la pieza (método
+// híbrido): el logo NO lo dibuja el modelo — se integra desde el
+// archivo real sobre el soporte que la escena deja listo. Si la
+// integración falló, la escena nueva tiene que ofrecer un soporte
+// mejor: más grande, más plano, de frente y bien iluminado, sin
+// tapar a la estrella.
+function logoQaRetryDirective(logoQa, business) {
+  const name = String(business || '').trim();
+  if (!name) return '';
+  const fails = [];
+  if (logoQa) {
+    if (!logoQa.presente) fails.push('the prepared support ended up hidden or too small to carry the logo');
+    if (logoQa.presente && !logoQa.integrado) fails.push('the support surface was too angled or curved for a clean integration');
+    if (logoQa.presente && !logoQa.legible) fails.push('the support was too far, dark or occluded for the logo to read');
+  }
+  return [
+    'LOGO RETRY — the previous version FAILED the logo integration check' + (fails.length ? ` (${fails.join('; ')})` : '') + '. Regenerate the same scene fixing EXACTLY this:',
+    `- The natural support that will carry the logo of "${name}" (the main packaging) must be LARGE, FLAT, FRONT-FACING and well lit, close to camera, fully visible and unobstructed.`,
+    '- Keep that support surface completely clean and empty: the real logo file is integrated onto it afterwards — do not draw any logo, lettering or text on it.',
+    '- The hero product stays the protagonist: the support frames it, never covers it.',
+  ].join('\n');
 }
 
 module.exports = {
@@ -1134,6 +1245,11 @@ module.exports = {
   qaComposedText,
   parseComposedQaContent,
   QA_COMPOSED_SYSTEM,
+  // (ADDENDUM · LOTE PRIMER-POSTEO-PERFECTO) QA del logo integrado en
+  // la imagen generada del rescate del primer posteo.
+  qaGeneratedLogo,
+  parseLogoQaContent,
+  logoQaRetryDirective,
   replacePiecesWithAi,
   compositeDemoPiece,
 };

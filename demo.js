@@ -1595,8 +1595,9 @@ function firstPostGate(c) {
   // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) 'ai-generated' es una
   // escena de marca generada con el modelo (prompt con marca+paleta y
   // QA visual del brief): nunca foto de tema ni stock. El logo no se
-  // regenera (regla 2): la escena no lleva logo ni texto.
-  if (ps !== 'real-product-brand' && ps !== 'real-product' && ps !== 'brand-poster' && ps !== 'ai-generated') { failures.push('foto-tema'); score -= 40; }
+  // regenera sobre foto real (regla 2); en la escena GENERADA el logo
+  // va integrado vía prompt con su QA propio (addendum 13/11 15:51).
+  if (ps !== 'real-product-brand' && ps !== 'real-product' && ps !== 'brand-poster' && ps !== 'ai-generated' && ps !== 'real-insignia') { failures.push('foto-tema'); score -= 40; }
   const logoOk = !!((c && c.brand_visible)) || ps === 'brand-poster';
   if (!logoOk) { failures.push('sin-logo'); score -= 40; }
   if (c && c.voice_used) score += 10;
@@ -1613,13 +1614,39 @@ function firstPostGate(c) {
 // no tiene NINGUNA foto real — 0 posteos en IG, sin fotos en la web,
 // sin foto de perfil — la imagen SE GENERA con el modelo, en vez de
 // dejar un póster tipográfico sin producto. El prompt lleva la marca
-// (nombre, rubro, identidad, paleta) y NUNCA un logo: el logo real no
-// se regenera (lo deforma, regla 2); la imagen es la ESCENA del negocio
-// en su paleta, sin texto ni logos, y el titular lo compone el código
+// (nombre, rubro, identidad, paleta) y el titular lo compone el código
 // después. La estrella viaja SOLO si está confirmada (digest.
 // producto_estrella validado por L3): sin estrella confirmada el prompt
 // no inventa ningún modelo/producto — la escena es genérica del rubro
 // (wow degradado L4: invitación de marca, sin estrella inventada).
+// (ADDENDUMS 13/11 — SUPERSEDEN la frase «NUNCA un logo» de v960 SOLO
+// para esta imagen generada: por orden de Valentino el logo del
+// negocio va SIEMPRE en la imagen (regla absoluta, addendum 5) y en
+// la generada entra por el MÉTODO HÍBRIDO (addendum 7): la escena se
+// genera con el soporte natural listo y el logo REAL se integra
+// desde su archivo con el sello del pipeline — ver la línea del
+// prompt más abajo. Sobre foto REAL no cambia nada: el logo se
+// compone por código siguiendo su geometría, nunca se regenera.)
+// (ADDENDUMS DE VALENTINO 13/11 — la vara: «con el logo que sea parte
+// de la imagen» · método híbrido del addendum 7) El soporte natural
+// que RECIBE el logo real dentro de la escena, por rubro:
+// determinístico, como las superficies del logo estratégico —
+// packaging, bolsa, caja, etiqueta, cartel del local; la escena lo
+// deja listo y el sello lo integra siguiendo su perspectiva y
+// curvatura; nunca un sticker ni la placa sola.
+function logoSupportFor(category, subcat) {
+  const c = `${String(category || '')} ${String(subcat || '')}`.toLowerCase();
+  if (/cafe|café|coffee|cowork/.test(c)) return 'the takeaway cup sleeve and the paper bag on the counter';
+  if (/panader|pasteler|bakery|dulce|torta/.test(c)) return 'the pastry box and the paper bag';
+  if (/perfum|fragancia/.test(c)) return 'the perfume box and its label';
+  if (/belleza|beauty|cosmet|unas|uñas|peluquer|barber/.test(c)) return 'the product box and the bag on the counter';
+  if (/joyer|accesor|reloj/.test(c)) return 'the jewelry box and the shopping bag';
+  if (/ropa|indumentaria|moda|fashion|calzado|zapatilla|sneaker|deporte/.test(c)) return 'the shopping bag and the clothing tag';
+  if (/comida|restaur|pizza|burger|gastro|food|hamburg/.test(c)) return 'the takeaway packaging and the menu board by the counter';
+  if (/bar|cervec|vino|drink/.test(c)) return 'the bottle label and the coaster on the bar';
+  return 'the packaging and the shop sign';
+}
+
 function buildNoPhotoBrandPrompt({ business, category, subcat, paletteHex, paletteNames, description, star } = {}) {
   const name = String(business || '').trim() || 'this business';
   const cat = String(category || 'otro').trim();
@@ -1635,7 +1662,20 @@ function buildNoPhotoBrandPrompt({ business, category, subcat, paletteHex, palet
   if (starName) lines.push(`Hero product: ${starName} — show it clearly as the protagonist of the scene, true to a real ${cat} business.`);
   else lines.push(`Show a welcoming, true-to-life ${cat} scene — the product and the atmosphere of a real ${cat} business, with no specific product name.`);
   if (pal.length) lines.push(`Brand palette (use these colors in the scene): ${pal.join(', ')}${palNames.length ? ` (${palNames.join(', ')})` : ''}.`);
-  lines.push('Vertical 4:5 photograph, natural light, no text, no words, no letters, no logos, no watermarks, no people, no faces.');
+  // (ADDENDUM 7 DE VALENTINO 13/11 16:11 — MÉTODO HÍBRIDO, reemplaza
+  // la integración solo-por-prompt del addendum 1) El prompt arma la
+  // escena con el SOPORTE NATURAL LISTO para recibir el logo: limpio,
+  // vacío, de frente y bien iluminado. El logo que se ve en la pieza
+  // final es el ARCHIVO REAL del negocio, integrado sobre ese soporte
+  // por el sello del pipeline (composite-headline.py --logo, la
+  // familia de logoSealArgsForUser) siguiendo su perspectiva y
+  // curvatura — nunca el logo dibujado por el modelo (con prompt solo
+  // sale ausente o deformado una parte de las veces, siempre), nunca
+  // sticker plano, nunca la placa sola. La vara del addendum 1 queda:
+  // soporte natural, integración en la escena, y la aceptación es el
+  // QA del logo sobre la pieza final (demoAi.qaGeneratedLogo).
+  lines.push(`Leave ${logoSupportFor(cat, sub)} clean, empty and fully visible, front-facing and well lit, ready to carry the business's logo: the real logo of "${name}" is integrated onto that support afterwards from its own file, following its perspective — do NOT draw any logo, brand name or lettering on it yourself.`);
+  lines.push('Vertical 4:5 photograph, natural light, no text, no words, no letters, no logos drawn by you, no watermarks, no people, no faces.');
   return lines.join('\n');
 }
 
@@ -1663,12 +1703,16 @@ function firstPostNeedsGeneratedImage(spec) {
 // fallo del modelo o timeout: el póster queda, como hoy — la prueba
 // nunca se rompe por este paso). Nunca inventa estrella: el prompt
 // lleva solo la estrella confirmada.
-async function generateFirstPostImageIfNeeded({ spec, business, category, subcat, paletteHex, paletteNames, description, star, generateImage, topicText, timeoutMs } = {}) {
-  if (!firstPostNeedsGeneratedImage(spec)) return null;
+async function generateFirstPostImageIfNeeded({ spec, business, category, subcat, paletteHex, paletteNames, description, star, generateImage, topicText, timeoutMs, promptExtra, force } = {}) {
+  if (!force && !firstPostNeedsGeneratedImage(spec)) return null;
   if (typeof generateImage !== 'function') return null;
-  const prompt = buildNoPhotoBrandPrompt({ business, category, subcat, paletteHex, paletteNames, description, star });
+  // (ADDENDUM 4 · PERFECCIÓN ANTES QUE VELOCIDAD) El timeout default
+  // sube a 300 s: ya no es un presupuesto de salida (la regla <30 s
+  // quedó SIN EFECTO para el slot 0) — es solo una red anti-cuelgue
+  // por intento; la cadena reintenta y el rescate de fondo sigue.
+  const prompt = buildNoPhotoBrandPrompt({ business, category, subcat, paletteHex, paletteNames, description, star }) + (promptExtra ? `\n\n${promptExtra}` : '');
   try {
-    const gen = await raceMsLocal(generateImage({ prompt, topicText: topicText || '' }), timeoutMs || 120000);
+    const gen = await raceMsLocal(generateImage({ prompt, topicText: topicText || '' }), timeoutMs || 300000);
     if (!gen || !gen.b64) return null;
     return { b64: gen.b64, engine: gen.engine || null, qa: gen.qa || null, prompt };
   } catch (e) { return null; }
@@ -1699,7 +1743,29 @@ function pickFirstPostCandidates(o) {
   const star = String(topic.digest_anchor || '');
   const voiceUsed = topic.voice_used || null;
   let a = null;
-  const hit = pickWebPhoto(topic, webPool, used, ctx, { maxTier: 1 });
+  // (ADDENDUM 2 · LA INSIGNIA) LA FOTO DE LA INSIGNIA CALIFICA POR
+  // IMAGEN: el mapa foto→producto es un veredicto de VISIÓN (la frase
+  // de la insignia viaja en la lista del clasificador desde la ruta:
+  // la visión etiqueta la foto CON la insignia cuando la ve). La foto
+  // gana si la etiqueta que la visión le dio comparte las palabras
+  // distintivas de la insignia — es un camino paralelo al de nombres,
+  // nunca el cruce exacto sameItemName del camino de la estrella.
+  if (!a && topic && topic._insignia && topic.digest_anchor) {
+    const insWords = new Set();
+    for (const w of clientDigest.distinctiveWords(topic.digest_anchor)) for (const f of clientDigest.wordForms(w)) insWords.add(f);
+    if (insWords.size) {
+      for (const w of webPool) {
+        if (!w || !w.path || used.has(w.path) || !w.producto) continue;
+        const labelWords = new Set();
+        for (const lw of clientDigest.distinctiveWords(w.producto)) for (const f of clientDigest.wordForms(lw)) labelWords.add(f);
+        if (![...insWords].some((x) => labelWords.has(x))) continue;
+        const brandShown = !!(w.marca_visible || w.marca_verdict === true);
+        a = { photo: w.path, photo_source: 'real-insignia', brand_visible: brandShown, producto: w.producto || null };
+        break;
+      }
+    }
+  }
+  const hit = a ? null : pickWebPhoto(topic, webPool, used, ctx, { maxTier: 1 });
   if (hit) {
     // (CORRECTIVO-7) La marca en la escena la prueba el veredicto de
     // presencia además de la anotación del photo_map: una foto del
@@ -1717,6 +1783,157 @@ function pickFirstPostCandidates(o) {
   else if (a) winner = 'a';
   else if (b) winner = 'b';
   return { a, b, winner, gateA, gateB };
+}
+
+// (LOTE PRIMER-POSTEO-PERFECTO — la vara completa del primer posteo:
+// orden de Valentino 13/11 15:49 «es importantisimo el primer posteo…
+// tiene que ser perfecto» + addendums 1 a 7 del mismo día) EL GATE DE
+// MOSTRAR DEL SLOT 0: la verificación ANTES de que el visitante vea el
+// primer posteo, con su veredicto REGISTRADO (el registro viaja en el
+// payload como out.primer_posteo y en el spec como spec.primer_posteo
+// — auditable sin logs, como foto_gate y formato_diag). Puro y
+// síncrono a nivel spec (etapa 'spec'); la ruta lo completa con el
+// resultado de la cadena de rescate (etapa 'ruta'/'fondo').
+// LA VARA, completa:
+//   1. LA ESTRELLA MANDA (o LA INSIGNIA, addendum 2): el tema del
+//      slot 0 es la estrella validada — o, sin nombres propios en la
+//      oferta, la insignia (frase del dueño/feed) — nunca un tema
+//      genérico o secundario; una suscripción NO es la estrella
+//      (addendum 6B: la guarda corre en deriveFirstPostWow y acá se
+//      verifica su registro). La re-tematización corre en el armado;
+//      acá se VERIFICA, no se asume.
+//   2. NUNCA PLACA: cadena de rescate en orden — foto real → generada
+//      (escena de la estrella/insignia con el logo sellado) → esperar
+//      y reintentar en el flujo y en fondo. La placa es dato interno
+//      del armado, jamás la tarjeta del primer posteo, ni transitoria
+//      (addendum 3A) ni final.
+//   3. LA FOTO REAL TIENE EL PRESUPUESTO COMPLETO: la presencia se
+//      espera completa para decidir el slot 0 (server, rutas).
+//   4. TEXTO A LA ALTURA: titular ≤6 palabras que nombra la
+//      estrella/insignia; caption con motivo real; CERO fragmentos —
+//      la clase subordinante colgante corre al cierre (pieza 4) y al
+//      ARRANQUE (addendum 6C) — y PUERTA DE PRECIOS (addendum 3B):
+//      ningún precio sin fuente del negocio, y el de suscripción no
+//      se afirma sin su calificador.
+//   5. FORMATO CON GUARDA: el dominante de la marca, salvo el
+//      video-placa: video solo si es video real de producto.
+//   6. VERIFICACIÓN ANTES DE MOSTRAR con veredicto registrado.
+//   + LOGO SIEMPRE (addendums 5 y 7 — regla absoluta): toda imagen
+//     lleva el logo del negocio integrado en la escena sobre un
+//     soporte natural, nunca sticker plano. Foto real que ya lo trae
+//     en escena: pasa por presencia. Foto real sin logo: entra al
+//     camino de integración del logo real (registrado como pendiente
+//     hasta que la pieza lo tenga). Generada: método HÍBRIDO — la
+//     escena deja el soporte listo y el logo REAL se sella desde su
+//     archivo (composite --logo); la aceptación es el QA del logo
+//     (presente · integrado · legible) sobre la pieza final. Sin logo
+//     verificado, NO se muestra: la cadena sigue (addendum 4:
+//     perfección antes que velocidad — ningún timeout fuerza la
+//     salida; el límite real es el tope de gasto de IA).
+function primerPosteoGate(o) {
+  const oo = o || {};
+  const star = String(oo.star || '').trim();
+  const temaFinal = String(oo.temaFinal || '').trim();
+  const headline = String(oo.headline || '').trim();
+  const caption = String(oo.caption || '').trim();
+  const lang = oo.lang || null;
+  const photoSource = oo.photoSource || null;
+  const brandVisible = !!oo.brandVisible;
+  const dominante = oo.dominante || null;
+  const formatoSlot0 = oo.formatoSlot0 || 'foto';
+  const modo = oo.modo || 'nombre';
+  const motivos = [];
+  // 1 · Estrella / insignia
+  let estrellaOk = true;
+  if (star) {
+    estrellaOk = modo === 'insignia'
+      ? !!(temaFinal && clientDigest.norm(temaFinal) === clientDigest.norm(star))
+      : !!(temaFinal && clientDigest.sameItemName(temaFinal, star));
+    if (!estrellaOk) motivos.push(modo === 'insignia' ? 'insignia-no-manda' : 'estrella-no-manda');
+  }
+  // 4 · Texto: titular ≤6 palabras + clases de fragmento (cierre y
+  // arranque) + puerta de precios.
+  const titularPalabras = headline ? headline.split(/\s+/).filter(Boolean).length : 0;
+  let titularOk = !!headline && titularPalabras <= 6;
+  if (!titularOk) motivos.push('titular-largo-o-vacio');
+  let textoClase = null;
+  if (lang === 'en') {
+    const names = [star, temaFinal].filter(Boolean);
+    if (clientDigest.enSpliceLint(headline, names) || clientDigest.enHangingTail(headline)) { titularOk = false; textoClase = textoClase || 'fragmento-titular'; }
+    if (caption && (clientDigest.enSpliceLint(caption, names)
+      || caption.split(/\n+/).some((l) => { const t = l.trim(); return t && !/[.!?…]["']?$/.test(t) && !!clientDigest.enHangingTail(t); }))) textoClase = textoClase || 'fragmento-caption';
+  }
+  const captionOk = textoClase === null;
+  if (textoClase) motivos.push('texto-' + textoClase);
+  if (!titularOk && textoClase) motivos.push('titular-' + textoClase);
+  // 4b · Puerta de precios (addendum 3B + diseño de la auditoría de
+  // origen): todo token con forma de precio en titular+caption tiene
+  // que ser precio DEL ÍTEM ANCLA según el fundamento (que a su vez
+  // está entre los números del digest); el de suscripción/variante no
+  // se afirma sin su calificador. El corte de las oraciones malas
+  // corre en el armado/ruta (stripPriceSentences): acá se verifica y
+  // se registra.
+  let precioReg = { ok: true, sin_fuente: [], sin_calificador: [] };
+  if (oo.digest && (headline || caption)) {
+    try {
+      const an = clientDigest.priceGateAnalyze([headline, caption].filter(Boolean).join('\n'), oo.digest, temaFinal || star);
+      precioReg = { ok: an.ok, sin_fuente: an.sin_fuente.map((m) => m.raw), sin_calificador: an.sin_calificador.map((m) => m.raw) };
+      if (!an.ok) motivos.push('precio-sin-fuente');
+    } catch (e) { /* la puerta jamás frena el armado: el corte va por el strip */ }
+  }
+  // 5 · Formato
+  let guarda = null;
+  if (dominante === 'reel') guarda = 'dominante-reel: el slot 0 sale foto o carrusel real — el video del demo anima diseños (video-placa) y nunca es el primer posteo; video solo con video real de producto';
+  if (formatoSlot0 === 'video') motivos.push('formato-video-placa');
+  // 2 + logo · Cadena de la foto y estado del logo
+  const esReal = photoSource === 'real-product-brand' || photoSource === 'real-product' || photoSource === 'real-insignia';
+  const logoEnEscena = esReal && (photoSource === 'real-product-brand' || brandVisible);
+  let cadena;
+  let logoEstado;
+  let logoMetodo = null;
+  if (esReal && logoEnEscena) { cadena = 'foto-real'; logoEstado = 'en-escena'; }
+  else if (esReal) { cadena = 'integracion-o-generada'; logoEstado = 'ausente-en-foto-real'; motivos.push('logo-ausente'); }
+  else if (photoSource === 'ai-generated') { cadena = 'generada'; logoEstado = 'sellado-pendiente-de-qa'; logoMetodo = 'hibrido-sello-real'; }
+  else { cadena = 'generada'; logoEstado = 'pendiente-rescate'; logoMetodo = 'hibrido-sello-real'; motivos.push('placa-no-es-salida'); }
+  const pasa = motivos.length === 0;
+  return {
+    v: 2,
+    etapa: 'spec',
+    estrella: {
+      modo,
+      esperada: star || null,
+      fuente: oo.starSource || null,
+      rechazada: oo.starRechazada || null,
+      tema_original: oo.temaOriginal || null,
+      tema_final: temaFinal || null,
+      retematizado: !!oo.retematizado,
+      sin_confirmar: !!oo.starMissing,
+      ok: estrellaOk,
+    },
+    texto: {
+      titular: headline || null,
+      titular_palabras: titularPalabras,
+      titular_ok: titularOk,
+      titular_reparado: !!oo.titularReparado,
+      caption_ok: captionOk,
+      clase_frenada: textoClase,
+      precio: precioReg,
+    },
+    foto: {
+      fuente: photoSource,
+      cadena,
+      via: photoSource === 'real-insignia' ? 'vision-insignia' : (esReal ? 'nombre' : null),
+    },
+    formato: { dominante, aplicado: formatoSlot0, guarda },
+    logo: {
+      requerido: true, // (ADDENDUM 5) sin excepciones ni caminos
+      estado: logoEstado,
+      metodo: logoMetodo, // (ADDENDUM 7) híbrido: escena + sello del archivo real
+      soporte: cadena === 'generada' ? logoSupportFor(oo.category, oo.subcat) : null,
+      veredicto: null, // lo completa la ruta con demoAi.qaGeneratedLogo
+    },
+    veredicto: { pasa, cadena, motivos },
+  };
 }
 
 // scheduleFirstPostRetry: el reintento correctivo EN SEGUNDO PLANO,
@@ -2038,6 +2255,12 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // `else` y el mapa de specPosts está afuera del if/else.
   const photoSourceOf = new Map();
   let wowGateInfo = null;
+  // (LOTE PRIMER-POSTEO-PERFECTO) Registro del gate de mostrar del
+  // slot 0: el tema que ocupaba el slot ANTES del wow (para declarar la
+  // re-tematización de la pieza 1) y si el titular se reparó (pieza 4).
+  let ppTemaOriginal = null;
+  let ppTitularReparado = false;
+  let ppPrecioCortado = [];
   const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
     && base.styles.every((c) => { const IS = imageStyles(); return IS && IS.getStyle(c); });
   if (baseStylesOk && Array.isArray(base.photos) && base.photos.length >= n) {
@@ -2127,6 +2350,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (trialNoStock && digest) {
       try { wowFirst = clientDigest.deriveFirstPostWow(digest, { category: cat, lang }); } catch (e) { wowFirst = null; }
       if (wowFirst && topics.length) {
+        // (LOTE PRIMER-POSTEO-PERFECTO · pieza 1) El tema que el slot 0
+        // traía ANTES del wow queda registrado: si no era la estrella,
+        // el reemplazo ES la re-tematización y el gate lo declara.
+        ppTemaOriginal = topics[0] ? (topics[0].digest_anchor || topics[0].headline || null) : null;
         topics[0] = wowFirst;
         if (topics.length > 1 && topics[1] && topicProductKey(topics[1]) && topicProductKey(topics[1]) === topicProductKey(wowFirst)) {
           const inUseWow = new Set(topics.map((t) => topicProductKey(t)).filter(Boolean));
@@ -2135,6 +2362,45 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
           if (replWow) topics[1] = replWow;
         }
       }
+      // (ADDENDUM 2 · LA INSIGNIA) Sin estrella validada por nombre
+      // (sale categoría/genérico o no hay), la estrella del primer
+      // posteo es LA INSIGNIA — la cosa que el negocio es conocido por
+      // vender (frase del dueño a la Q1, lo que el feed repite o el
+      // fundamento sembrado). Reemplaza al wow degradado (invitación
+      // de marca sin producto) y a la rotación genérica cuando la
+      // fuente es el dueño: el primer posteo NOMBRA la insignia.
+      try {
+        const effStarPP = clientDigest.effectiveStarOf(digest);
+        const sinEstrellaNombre = !effStarPP || clientDigest.isGenericCategoryName(effStarPP.item);
+        if (sinEstrellaNombre && topics.length) {
+          const insPP = clientDigest.insigniaOf(digest);
+          const wowDegradadoPP = !wowFirst || (wowFirst.star_missing && !wowFirst.digest_anchor);
+          if (insPP && (wowDegradadoPP || insPP.fuente === 'dueno')) {
+            const insWow = clientDigest.deriveInsigniaWow(digest, { category: cat, lang });
+            if (insWow) {
+              if (ppTemaOriginal === null) ppTemaOriginal = topics[0] ? (topics[0].digest_anchor || topics[0].headline || null) : null;
+              topics[0] = insWow;
+              wowFirst = insWow;
+            }
+          }
+        }
+      } catch (e) { /* la insignia nunca frena la prueba */ }
+      // (ADDENDUM 3B · PUERTA DE PRECIOS) El caption del topic del
+      // slot 0 pasa la puerta ANTES de que lo consuma el resolvedor de
+      // captions: las oraciones con precio sin fuente (o de
+      // suscripción sin calificador) se cortan acá y el corte queda
+      // registrado para el gate (ppPrecioCortado).
+      try {
+        const t0pp = topics[0];
+        if (t0pp && t0pp.caption) {
+          const sourcedPP = clientDigest.sourcedPricesOf(digest, t0pp.digest_anchor || '');
+          const stripPP = clientDigest.stripPriceSentences(t0pp.caption, sourcedPP, (valor) => clientDigest.priceQualifierOf(digest, t0pp.digest_anchor || '', valor));
+          if (stripPP.quitados.length) {
+            t0pp.caption = stripPP.text;
+            ppPrecioCortado = stripPP.quitados;
+          }
+        }
+      } catch (e) { /* la puerta jamás frena el armado */ }
     }
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
     // (La variedad de esqueletos la garantiza enforceSkeletonVariety más
@@ -2162,6 +2428,21 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         let headline0 = topics[0].headline || '';
         if (tone === 'tu') headline0 = captions.TU_HEADLINES[headline0] || headline0;
         headline0 = captions.capHeadlineWords(headline0, 6, lang);
+        // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) El titular del slot 0
+        // pasa la clase subordinante ANTES de elegir foto y de
+        // renderizar: si el titular renderizado está roto (la fórmula
+        // embebió un nombre cortado — «Try Salar, where today»,
+        // auditoría Veja #7), cae al nombre limpio de la estrella y el
+        // tema queda reparado para el spec entero (specPosts lee el
+        // titular del tema). El texto roto nunca llega al render.
+        if (lang === 'en' && clientDigest.enSpliceLint(headline0, [topics[0].digest_anchor || '', topics[0].headline || ''])) {
+          const cleanStar = clientDigest.trimFunctionTail(topics[0].digest_anchor || headline0);
+          if (cleanStar && cleanStar !== headline0) {
+            headline0 = captions.capHeadlineWords(cleanStar, 6, lang);
+            topics[0] = { ...topics[0], headline: headline0 };
+            ppTitularReparado = true;
+          }
+        }
         const cands = pickFirstPostCandidates({ topic: topics[0], headline: headline0, webPool, used: usedWeb, ctx, lang, profilePicPath });
         wowGateInfo = cands;
         const win = cands.winner === 'b' ? cands.b : cands.a;
@@ -2169,7 +2450,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
           if (cands.winner === 'b') { posterAt.add(0); photos[0] = win.photo; photoSourceOf.set(0, 'brand-poster'); }
           else {
             usedWeb.add(win.photo); photos[0] = win.photo; photoSourceOf.set(0, win.photo_source);
-            if (win.producto && topics[0].digest_anchor && clientDigest.sameItemName(win.producto, topics[0].digest_anchor)) photoProductOf.set(0, win.producto);
+            if (win.producto && topics[0].digest_anchor && (clientDigest.sameItemName(win.producto, topics[0].digest_anchor) || topics[0]._insignia)) photoProductOf.set(0, win.producto);
           }
         } else {
           // Sin foto real ni foto de perfil: póster sin foto (el render
@@ -2371,7 +2652,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       const loserGate = wowGateInfo.winner === 'b' ? wowGateInfo.gateA : wowGateInfo.gateB;
       specPosts[0]._gate = { pass: g.pass, score: g.score, failures: g.failures, correction: g.correction, winner: wowGateInfo.winner, loser: loserGate || null };
     }
-    specPosts[0].fast = (photoSourceOf.get(0) === 'real-product-brand' || photoSourceOf.get(0) === 'real-product');
+    specPosts[0].fast = (photoSourceOf.get(0) === 'real-product-brand' || photoSourceOf.get(0) === 'real-product' || photoSourceOf.get(0) === 'real-insignia');
   }
   // (v209) DOSIFICACIÓN DE TEXTO: exactamente 2 piezas de la semana
   // llevan titular+CTA quemados sobre la imagen; las demás salen con la
@@ -2670,8 +2951,44 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       },
     };
   } catch (e) { fotoGate = null; /* el registro jamás frena el spec */ }
+  // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) EL REGISTRO DEL GATE DE
+  // MOSTRAR DEL SLOT 0 (etapa spec): la ruta lo completa con el
+  // resultado de la cadena de rescate (foto final, sello del logo y su
+  // QA, veredicto final). Solo la semana de prueba es esta superficie.
+  let primerPosteo = null;
+  if (trialNoStock && specPosts[0]) {
+    try {
+      const t0 = topics[0] || {};
+      const effPP = digest ? clientDigest.effectiveStarOf(digest) : null;
+      const modoPP = t0._insignia ? 'insignia' : 'nombre';
+      const esperadoPP = t0._insignia ? (t0.digest_anchor || null) : (effPP ? effPP.item : (t0._star ? (t0.digest_anchor || null) : null));
+      const ganadorPP = wowGateInfo ? (wowGateInfo.winner === 'b' ? wowGateInfo.b : wowGateInfo.a) : null;
+      const w0pp = (typeof photos[0] === 'string') ? webPool.find((w) => w && w.path === photos[0]) : null;
+      primerPosteo = primerPosteoGate({
+        star: esperadoPP,
+        starSource: t0._insignia ? ('insignia:' + (t0._insignia_fuente || '')) : (t0._star_source || (effPP && effPP.source) || null),
+        starRechazada: t0._star_rechazada || null,
+        modo: modoPP,
+        temaOriginal: ppTemaOriginal,
+        temaFinal: t0.digest_anchor || t0.headline || null,
+        retematizado: !!(ppTemaOriginal && esperadoPP && ppTemaOriginal !== esperadoPP),
+        headline: specPosts[0].headline || '',
+        caption: t0.caption || '',
+        lang,
+        photoSource: photoSourceOf.get(0) || null,
+        brandVisible: ganadorPP ? !!ganadorPP.brand_visible : (w0pp ? !!(w0pp.marca_visible || w0pp.marca_verdict === true) : false),
+        dominante: formatoDomB,
+        formatoSlot0: specPosts[0].formato === 'carrusel' ? 'carrusel' : 'foto',
+        starMissing: !!t0.star_missing,
+        titularReparado: ppTitularReparado,
+        category: cat, subcat,
+        digest,
+      });
+      if (ppPrecioCortado.length) primerPosteo.texto.precio_cortado = ppPrecioCortado;
+    } catch (e) { primerPosteo = null; /* el registro jamás frena el spec */ }
+  }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -2802,7 +3119,7 @@ function dataUrlDeArchivo(p) {
   } catch (e) { return null; }
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null, renderTimeoutMs = null, generateImage = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null, renderTimeoutMs = null, generateImage = null, logoPath = null, verifySealedPiece = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Presupuesto duro del
   // render+video: si expira, el primer posteo sale con la foto real.
   const t0 = Date.now();
@@ -2823,6 +3140,12 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     // (LOTE FOTOS-ELEGIBILIDAD · L2b) El registro del gate viaja en el
     // spec guardado: la ruta sync lo levanta al payload (out.foto_gate).
     foto_gate: spec.foto_gate || null,
+    // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) El registro del gate de
+    // mostrar del slot 0 viaja igual (se completa más abajo con el
+    // resultado de la cadena de rescate) + el registro del rescate de
+    // semana entera (addendum 6A).
+    primer_posteo: spec.primer_posteo || null,
+    rescate_semana: [],
   };
   // En generación inicial photoPath existe: lo inyectamos directo.
   const withPhotos = specPosts.map((p) => (
@@ -2834,8 +3157,20 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   // PARALELO al render para no sumar su latencia al camino rápido; si
   // no está disponible, el póster queda como hoy. No marca la prueba
   // como usada: es el mismo intento de generación, no uno nuevo.
-  const genFirstPromise = (typeof generateImage === 'function' && firstPostNeedsGeneratedImage(spec))
-    ? generateFirstPostImageIfNeeded({ spec, business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: (digest && digest.producto_estrella) || null, generateImage, topicText: (topics[0] ? [topics[0].headline, topics[0].subline].filter(Boolean).join(' ') : '') })
+  // (LOTE PRIMER-POSTEO-PERFECTO · piezas 2/3 + addendums 4/5/7) El
+  // rescate del slot 0 corre si el ganador fue el póster (mecanismo
+  // v960) O si la foto real ganadora no trae el logo en escena (la
+  // vara del logo es absoluta: sin logo no se muestra). La estrella
+  // del prompt es la del topic armado (wow/insignia validada), no la
+  // sembrada cruda del digest.
+  const pp0 = spec.primer_posteo || null;
+  const slot0LogoAusente = !!(pp0 && pp0.veredicto && Array.isArray(pp0.veredicto.motivos) && pp0.veredicto.motivos.includes('logo-ausente'));
+  const slot0NeedsRescue = trialNoStock && (firstPostNeedsGeneratedImage(spec) || slot0LogoAusente);
+  const starPP0 = (topics[0] && topics[0]._insignia) ? (topics[0].digest_anchor || null)
+    : ((topics[0] && topics[0]._star) ? (topics[0].digest_anchor || null) : ((digest && digest.producto_estrella) || null));
+  const topicTextPP0 = topics[0] ? [topics[0].headline, topics[0].subline].filter(Boolean).join(' ') : '';
+  const genFirstPromise = (typeof generateImage === 'function' && slot0NeedsRescue)
+    ? generateFirstPostImageIfNeeded({ spec, business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: starPP0, generateImage, topicText: topicTextPP0, force: true })
     : Promise.resolve(null);
   const { bufs, runDir, timedOut } = await renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, () => {}, renderBudget);
   // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Si el render expiró, cada
@@ -2859,17 +3194,92 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   // código, no el modelo). El JPG también pisa runDir/post-0.jpg para
   // que el video-tour la recorra. Va ANTES del throw: sin foto real y
   // sin generación, el throw de siempre sigue mandando.
+  // (LOTE PRIMER-POSTEO-PERFECTO · addendums 5/7) EL SELLO HÍBRIDO:
+  // la escena cruda se compone con el titular y el LOGO REAL desde su
+  // archivo (composite --logo), y la pieza sellada pasa el QA del
+  // logo (la ruta inyecta verifySealedPiece: demo.js no conoce claves).
+  // Sin logo verificado la pieza NO entra: la cadena reintenta la
+  // generación con la directiva del logo (hasta 3 generaciones en
+  // esta ruta; el rescate de fondo sigue después). Sin sello posible
+  // (sin archivo de logo o sin verificador) la pieza queda en armado
+  // honesto — jamás sale la placa ni una generada sin logo.
   let generatedFirstInfo = null;
-  const generatedFirst = await genFirstPromise.catch(() => null);
-  if (generatedFirst && generatedFirst.b64) {
-    const compBuf = await demoAi.compositeDemoPiece({ b64: generatedFirst.b64, headline: specPosts[0] && specPosts[0].text_mode === 'clean' ? '' : (specPosts[0] && specPosts[0].headline ? specPosts[0].headline : ''), gradeHex: accent, workDir: runDir, index: 0 }).catch(() => null);
-    if (compBuf) {
-      finalBufs[0] = compBuf;
-      try { fs.writeFileSync(path.join(runDir, 'post-0.jpg'), compBuf); } catch (e) {}
-      if (specPosts[0]) specPosts[0].photo_source = 'ai-generated';
-      generatedFirstInfo = { engine: generatedFirst.engine || null, qa: generatedFirst.qa || null };
+  let firstLogoQa = null;
+  let slot0Arming = false;
+  const sealFirstAttempt = async (gen) => {
+    if (!gen || !gen.b64) return false;
+    const compBuf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: specPosts[0] && specPosts[0].text_mode === 'clean' ? '' : (specPosts[0] && specPosts[0].headline ? specPosts[0].headline : ''), gradeHex: accent, workDir: runDir, index: 0, logoPath: logoPath || null }).catch(() => null);
+    if (!compBuf) return false;
+    if (logoPath) {
+      if (typeof verifySealedPiece !== 'function') { firstLogoQa = { estado: 'sin-verificador' }; return false; }
+      try { firstLogoQa = await verifySealedPiece({ b64: compBuf.toString('base64'), business }); } catch (e) { firstLogoQa = null; }
+      if (!firstLogoQa || !firstLogoQa.ok) return false;
+    }
+    finalBufs[0] = compBuf;
+    try { fs.writeFileSync(path.join(runDir, 'post-0.jpg'), compBuf); } catch (e) {}
+    if (specPosts[0]) specPosts[0].photo_source = 'ai-generated';
+    generatedFirstInfo = { engine: gen.engine || null, qa: gen.qa || null, logo: firstLogoQa };
+    return true;
+  };
+  {
+    let generatedFirst = await genFirstPromise.catch(() => null);
+    let sealedFirst = await sealFirstAttempt(generatedFirst);
+    for (let att = 2; !sealedFirst && slot0NeedsRescue && att <= 3; att++) {
+      const extra = firstLogoQa ? demoAi.logoQaRetryDirective(firstLogoQa, business) : '';
+      generatedFirst = await generateFirstPostImageIfNeeded({ spec, business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: starPP0, generateImage, topicText: topicTextPP0, force: true, promptExtra: extra }).catch(() => null);
+      if (!generatedFirst) break;
+      sealedFirst = await sealFirstAttempt(generatedFirst);
+    }
+    slot0Arming = !!(slot0NeedsRescue && !generatedFirstInfo);
+  }
+  // (ADDENDUM 6A · ALCANCE DE SEMANA ENTERA) Toda pieza de la prueba
+  // cuyo ganador fue el póster entra a la MISMA cadena: generar su
+  // escena (su producto si el topic lo tiene; rubro si no) y sellarla
+  // con el logo real. La que no se logra queda en armado honesto y el
+  // rescate de fondo la sigue trabajando — el video-placa y la placa
+  // quedan prohibidos como CUALQUIER pieza, no solo la primera.
+  const rescateSemana = [];
+  if (trialNoStock && typeof generateImage === 'function') {
+    for (let i = 1; i < specPosts.length; i++) {
+      const spI = specPosts[i];
+      if (!spI || spI.photo_source !== 'brand-poster') continue;
+      const tI = topics[i] || {};
+      const starI = (tI._insignia || tI._star) ? (tI.digest_anchor || null) : null;
+      const promptI = buildNoPhotoBrandPrompt({ business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: starI });
+      const topicTextI = [tI.headline, tI.subline].filter(Boolean).join(' ');
+      const genI = await raceMsLocal(generateImage({ prompt: promptI, topicText: topicTextI }), 300000).catch(() => null);
+      if (!genI || !genI.b64) { rescateSemana.push({ idx: i, cadena: 'en-rescate', motivo: 'generacion-fallo' }); continue; }
+      const compI = await demoAi.compositeDemoPiece({ b64: genI.b64, headline: spI.text_mode === 'clean' ? '' : (spI.headline || ''), gradeHex: accent, workDir: runDir, index: i, logoPath: logoPath || null }).catch(() => null);
+      let logoQaI = null;
+      if (compI && logoPath && typeof verifySealedPiece === 'function') { try { logoQaI = await verifySealedPiece({ b64: compI.toString('base64'), business }); } catch (e) { logoQaI = null; } }
+      if (compI && (!logoPath || (logoQaI && logoQaI.ok))) {
+        finalBufs[i] = compI;
+        try { fs.writeFileSync(path.join(runDir, `post-${i}.jpg`), compI); } catch (e) {}
+        spI.photo_source = 'ai-generated';
+        rescateSemana.push({ idx: i, cadena: 'generada', logo: logoQaI ? { ok: true, detalle: logoQaI.detalle || null } : { estado: 'sin-verificar' } });
+      } else {
+        rescateSemana.push({ idx: i, cadena: 'en-rescate', motivo: 'logo-qa', logo: logoQaI });
+      }
     }
   }
+  // (LOTE PRIMER-POSTEO-PERFECTO) El registro del gate se completa
+  // con el resultado real de la cadena de rescate (etapa 'ruta'): qué
+  // salió, con qué sello y con qué veredicto — auditable en el payload.
+  if (savedSpec.primer_posteo) {
+    const recPP = savedSpec.primer_posteo;
+    recPP.etapa = 'ruta';
+    if (generatedFirstInfo) {
+      recPP.foto = { fuente: 'ai-generated', cadena: 'generada', via: null };
+      recPP.logo.veredicto = generatedFirstInfo.logo || { estado: 'sin-archivo-de-logo' };
+      recPP.logo.estado = generatedFirstInfo.logo ? 'sellado-verificado' : 'sin-archivo-de-logo';
+      const qaOkPP = !(generatedFirstInfo.qa && generatedFirstInfo.qa.passed === false);
+      recPP.veredicto = { pasa: qaOkPP, cadena: 'generada', motivos: qaOkPP ? [] : ['qa-concepto'] };
+    } else if (slot0Arming) {
+      recPP.veredicto = { pasa: false, cadena: 'en-rescate', motivos: ['rescate-en-fondo'] };
+      recPP.armando = true;
+    }
+  }
+  savedSpec.rescate_semana = rescateSemana;
   if (finalBufs.some((b) => !b)) throw new Error('Render expiró sin foto real para el fallback');
   try {
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
@@ -2920,7 +3330,32 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     // marcada carrusel cuyas láminas no se pudieron leer): se cuentan
     // para formato_diag.promocion_fallida — antes solo quedaba el warn.
     let promocionFallidaB = 0;
+    // (ADDENDUM 3B · PUERTA DE PRECIOS) La puerta corre también sobre
+    // el caption FINAL del slot 0 (el caption resuelto puede traer un
+    // precio que el topic no traía): las oraciones sin fuente se
+    // cortan antes de que la pieza exista, y el corte se registra.
+    try {
+      if (trialNoStock && made[0] && digest) {
+        const anchorPP0 = (topics[0] && topics[0].digest_anchor) || '';
+        const sourcedPP0 = clientDigest.sourcedPricesOf(digest, anchorPP0);
+        const stripPP0 = clientDigest.stripPriceSentences(made[0].caption, sourcedPP0, (v) => clientDigest.priceQualifierOf(digest, anchorPP0, v));
+        if (stripPP0.quitados.length) {
+          made[0].caption = stripPP0.text;
+          if (savedSpec.primer_posteo) savedSpec.primer_posteo.texto.precio_cortado_final = stripPP0.quitados;
+        }
+      }
+    } catch (e) { /* la puerta jamás frena el armado */ }
     const posts = made.map((m, i) => {
+      // (ADDENDUM 3A · EL TRANSITORIO NO ES EL PÓSTER DISFRAZADO) Una
+      // pieza que la cadena de rescate no logró todavía sale en
+      // ESTADO DE ARMADO HONESTO (armando:true, sin imagen): la
+      // superficie muestra el progreso real, nunca la placa con pinta
+      // de posteo. El rescate de fondo la reemplaza en trial_cache.
+      const spArm = specPosts[i] || {};
+      const enArmado = trialNoStock && ((i === 0 && slot0Arming) || (i > 0 && spArm.photo_source === 'brand-poster'));
+      if (enArmado) {
+        return { type: 'image', image: null, armando: true, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: spArm.estilo_visual || null };
+      }
       // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Pieza carrusel: la
       // portada es la pieza diseñada y las láminas son las fotos reales
       // del spec (sp.slides). Manda sobre el video: una marca de
@@ -3776,6 +4211,7 @@ module.exports = {
   // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Prompt de marca, predicado
   // sin-foto-real y generador del primer posteo (inyectado por el server).
   buildNoPhotoBrandPrompt, firstPostNeedsGeneratedImage, generateFirstPostImageIfNeeded,
+  primerPosteoGate, logoSupportFor,
   FIRST_POST_RENDER_BUDGET_MS, FIRST_POST_VIDEO_BUDGET_MS, FIRST_POST_RETRY_BUDGET_MS,
   raceMsLocal,
   applyVoiceToTopics,

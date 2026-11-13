@@ -61,6 +61,40 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .preview .pv-head{font-weight:800;margin-top:6px}
 .preview .pv-cap{color:var(--mut);margin-top:4px}
 .preview .pv-note{color:var(--mut);font-size:13px;margin-top:8px}
+/* (ADDENDUM 8 · PANTALLA DE ESPERA DEL PRIMER POSTEO — la vara es el
+   mock aprobado por Valentino el 13/11, mock-espera-v3: revelado real
+   de arriba hacia abajo, medallones de hitos reales, espejo con dato
+   real y salida digna. Nunca la placa con pinta de posteo.) */
+.wait{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-bottom:16px;text-align:left;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.wait-hero{position:relative;height:290px;background:linear-gradient(180deg,#DCEEF8,#F7FBFE)}
+.wait-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.wait-hero .wblur{filter:blur(16px) saturate(1.05);transform:scale(1.07)}
+.wait-hero .wsharp{clip-path:inset(0 0 calc(100% - var(--rev,12%)) 0);transition:clip-path 1.1s ease}
+.wait-pill{position:absolute;top:12px;left:12px;background:var(--navy);color:#fff;font-weight:800;font-size:13px;border-radius:999px;padding:8px 14px;z-index:3}
+.wait-spark{position:absolute;top:10px;right:14px;font-size:18px;z-index:3}
+.wait-body{padding:0 22px 20px}
+.wait-badge{width:74px;height:74px;border-radius:50%;border:3px solid var(--yl);background:#fff;box-shadow:0 6px 18px rgba(10,30,51,.15);margin-top:-37px;position:relative;z-index:4;display:block;object-fit:cover}
+.wait h2{font-size:23px;font-weight:900;line-height:1.2;margin:12px 0 10px}
+.wait-line{display:inline-block;background:#FEF3D3;color:var(--navy);font-weight:800;font-size:14px;border-radius:999px;padding:9px 16px}
+.wait-steps{display:flex;align-items:flex-start;margin:22px 2px 4px;position:relative}
+.wait-steps:before{content:'';position:absolute;top:22px;left:12%;right:12%;height:3px;background:var(--line);border-radius:2px}
+.wstep{flex:1;text-align:center;position:relative;z-index:1}
+.wstep .med{width:44px;height:44px;border-radius:50%;margin:0 auto;background:#EAF3F9;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:900}
+.wstep.done .med{background:var(--cel)}
+.wstep.now .med{background:var(--yl);box-shadow:0 0 0 5px rgba(254,193,77,.35)}
+.wstep .med .dotin{width:12px;height:12px;border-radius:50%;background:var(--navy)}
+.wstep .med .todo{width:14px;height:14px;border-radius:50%;border:2.5px solid #B9CFDE}
+.wstep label{display:block;margin-top:7px;font-size:10px;font-weight:800;letter-spacing:.03em;color:var(--mut);line-height:1.3}
+.wstep.done label,.wstep.now label{color:var(--navy)}
+.wait-now{font-size:15px;margin-top:8px;line-height:1.5}
+.wait-now b{color:var(--navy)}
+.wait-now span{color:#B57F14;font-weight:700}
+.wait-mirror{margin-top:18px;border-top:1px solid var(--line);padding-top:14px;display:flex;gap:12px;align-items:center}
+.wait-mirror img{width:64px;height:64px;border-radius:12px;object-fit:cover;flex:none}
+.wait-mirror .mk{font-size:11px;font-weight:800;letter-spacing:.05em;color:#B57F14}
+.wait-mirror .mt{font-weight:800;font-size:15px;margin:2px 0}
+.wait-mirror .ms{color:var(--mut);font-size:13px;line-height:1.45}
+.wait-exit{margin-top:18px;border:1.5px solid var(--line);border-radius:14px;padding:12px 16px;font-size:14px;color:var(--navy);text-align:center;line-height:1.5}
 .tiny{text-align:center;font-size:13px;color:var(--mut);margin-top:14px;line-height:1.6}
 .tiny a{color:var(--cel);font-weight:700}
 .hero-note{text-align:center;font-size:14px;color:var(--mut);margin:20px 0 40px}
@@ -102,6 +136,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     </div>
     <div id="fErr" class="err" hidden></div>
     <div id="fStatus" class="status" hidden></div>
+    <div id="fWait" class="wait" hidden></div>
     <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">Armar mi primer posteo</button>
     <p class="tiny">¿Ya tenés cuenta? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrá</a></p>
@@ -128,7 +163,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // marca, cuando el servidor la pide (falta_idioma_marca): queda pegada
   // para los reenvíos de esta visita, como la estrella.
   var brandLangChoice = '';
-  var errEl = $('fErr'), statusEl = $('fStatus'), previewEl = $('fPreview'), btn = $('btnGo'), form = $('fEntry');
+  var errEl = $('fErr'), statusEl = $('fStatus'), previewEl = $('fPreview'), waitEl = $('fWait'), btn = $('btnGo'), form = $('fEntry');
   var qIg = (qs.get('ig') || '').trim().replace(/^@/, '');
   var qWeb = (qs.get('web') || '').trim();
   if (qIg) igEl.value = '@' + qIg;
@@ -147,10 +182,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // siempre #fStatus; el camino need_star usa showStatus y no se toca.
   // (LOTE L6) Un error también apaga la vista previa del primer posteo:
   // una vista previa vieja junto a un error miente igual que el spinner.
-  function showErr(m) { statusEl.hidden = true; previewEl.hidden = true; errEl.textContent = m; errEl.hidden = false; }
-  function showErrHtml(h) { statusEl.hidden = true; previewEl.hidden = true; errEl.innerHTML = h; errEl.hidden = false; }
-  function showStatus(m) { statusEl.textContent = m; statusEl.hidden = false; }
-  function hideNotes() { errEl.hidden = true; statusEl.hidden = true; previewEl.hidden = true; }
+  function showErr(m) { statusEl.hidden = true; previewEl.hidden = true; if (waitEl) waitEl.hidden = true; errEl.textContent = m; errEl.hidden = false; }
+  function showErrHtml(h) { statusEl.hidden = true; previewEl.hidden = true; if (waitEl) waitEl.hidden = true; errEl.innerHTML = h; errEl.hidden = false; }
+  function showStatus(m) {
+    // (ADDENDUM 8) Con la pantalla de espera visible, el progreso vive
+    // en su línea «Ahora:» — no en la caja de estado de siempre.
+    if (waitEl && !waitEl.hidden && waitState.built && !waitState.done) { statusEl.textContent = m; setWaitNow(m); return; }
+    statusEl.textContent = m; statusEl.hidden = false;
+  }
+  function hideNotes() { errEl.hidden = true; statusEl.hidden = true; previewEl.hidden = true; if (waitEl) waitEl.hidden = true; }
   function deviceId() {
     try {
       var d = localStorage.getItem('pz_device_id');
@@ -212,13 +252,122 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // pestaña o una recarga ya tiene una generación en curso para este @,
   // se polea /api/trial/gen-status en vez de duplicar el trabajo.
   var L6_SLOW_NOTE_MS = 25000; // sin evento: aviso honesto, se sigue esperando
-  var L6_FIRST_POST_TIMEOUT_MS = 60000; // sin primer posteo: algo se trabó
+  var L6_FIRST_POST_TIMEOUT_MS = 60000; // (ADDENDUM 4) sin EVENTOS por 60 s: algo se trabó — el silencio frena, no el reloj: la cadena de rescate manda sus keepalives y tarda lo que necesite
   var L6_IDLE_NOTE_MS = 60000; // con primer posteo: aviso si el stream se queda mudo
   var L6_STATUS_POLL_MS = 3000; // poleo del trial_cache si ya genera otro
   var L6_STATUS_MAX_MS = 180000; // tope del poleo: después se sigue al stream
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  /* (ADDENDUM 8 · PANTALLA DE ESPERA DEL PRIMER POSTEO — diseño
+     aprobado por Valentino el 13/11, mock-espera-v3) El estado de
+     armado honesto (addendum 3A) con su forma cerrada:
+       · la foto del posteo se REVELA de arriba hacia abajo siguiendo
+         el avance REAL de la cadena (los hitos que manda el servidor:
+         ig → estrella → escena → chequeo; sin hito, no hay revelado);
+       · la cara de Posty en insignia dorada al pie de la foto, su
+         título y su línea textual «Lo estoy haciendo bien, no rápido.»;
+       · el recorrido de 4 medallones: cada uno se enciende SOLO
+         cuando su hito terminó de verdad — sin porcentajes inventados;
+       · el espejo: su posteo con más me gusta (dato real del evento
+         'profile'); sin dato real, el bloque no existe;
+       · la salida digna: el posteo lo espera en Inicio.
+     La tarjeta del póster NUNCA se renderiza acá: una pieza en armado
+     (armando:true) se queda en esta pantalla, y la tarjeta «ya está
+     listo» aparece solo con la imagen que pasó la vara. */
+  var WSTEPS = [
+    { k: 'ig', label: 'LEÍ TU<br>INSTAGRAM' },
+    { k: 'estrella', label: 'TU<br>ESTRELLA' },
+    { k: 'escena', label: 'LA<br>ESCENA' },
+    { k: 'chequeo', label: 'CHEQUEO<br>FINAL' }
+  ];
+  var waitState = { built: false, lit: {}, nowText: '', hero: null, espejo: null, done: false };
+  function waitRevealPct() {
+    if (waitState.done) return 100;
+    var c = 0;
+    for (var i = 0; i < WSTEPS.length; i++) if (waitState.lit[WSTEPS[i].k]) c++;
+    return 12 + 20 * c;
+  }
+  function buildWait() {
+    waitState = { built: true, lit: {}, nowText: '', hero: null, espejo: null, done: false };
+    var steps = WSTEPS.map(function (s, i) {
+      return '<div class="wstep" data-k="' + s.k + '"><div class="med">' + (i === 0 ? '<span class="dotin"></span>' : '<span class="todo"></span>') + '</div><label>' + s.label + '</label></div>';
+    }).join('');
+    waitEl.innerHTML =
+      '<div class="wait-hero" id="wHero">' +
+        '<span class="wait-pill">✨ Revelando tu posteo…</span><span class="wait-spark">✨</span>' +
+        '<img class="wblur" id="wHeroBlur" alt="" hidden><img class="wsharp" id="wHeroSharp" alt="" hidden>' +
+      '</div>' +
+      '<div class="wait-body">' +
+        '<img class="wait-badge" src="/ai-avatar.png" alt="Posty">' +
+        '<h2>Estoy armando tu primer posteo</h2>' +
+        '<span class="wait-line">Lo estoy haciendo bien, no rápido.</span>' +
+        '<div class="wait-steps">' + steps + '</div>' +
+        '<p class="wait-now"><b>Ahora:</b> <span id="wNow">leyendo tu cuenta…</span></p>' +
+        '<div class="wait-mirror" id="wMirror" hidden>' +
+          '<img id="wMirrorImg" alt="">' +
+          '<div><div class="mk">MIENTRAS TANTO, ALGO TUYO</div><div class="mt">Este fue tu posteo con más me gusta</div><div class="ms" id="wMirrorTxt"></div></div>' +
+        '</div>' +
+        '<div class="wait-exit">¿Tarda un poco? <b>Andá tranquilo</b> — te aviso cuando esté listo.</div>' +
+      '</div>';
+    paintWait();
+  }
+  function paintWait() {
+    // La pantalla es presentación: NUNCA rompe el flujo (un DOM
+    // parcial o un nodo ausente no puede frenar la prueba).
+    try { paintWaitInner(); } catch (e) {}
+  }
+  function paintWaitInner() {
+    if (!waitState.built) return;
+    var hero = $('wHero');
+    if (hero) hero.style.setProperty('--rev', waitRevealPct() + '%');
+    var firstUnlit = -1;
+    WSTEPS.forEach(function (s, i) { if (!waitState.lit[s.k] && firstUnlit < 0) firstUnlit = i; });
+    try {
+      var nodes = waitEl.querySelectorAll('.wstep');
+      WSTEPS.forEach(function (s, i) {
+        var n = nodes[i]; if (!n) return;
+        var med = n.querySelector('.med');
+        if (waitState.lit[s.k]) { n.className = 'wstep done'; med.innerHTML = '✓'; }
+        else if (i === firstUnlit && !waitState.done) { n.className = 'wstep now'; med.innerHTML = '<span class="dotin"></span>'; }
+        else { n.className = 'wstep'; med.innerHTML = '<span class="todo"></span>'; }
+      });
+    } catch (e) { /* los medallones son presentación: jamás rompen el flujo */ }
+    var nowEl = $('wNow');
+    if (nowEl && waitState.nowText) nowEl.textContent = waitState.nowText;
+    var hb = $('wHeroBlur'), hs = $('wHeroSharp');
+    if (waitState.hero) {
+      if (hb) { if (hb.getAttribute('src') !== waitState.hero) hb.src = waitState.hero; hb.hidden = false; }
+      if (hs) { if (hs.getAttribute('src') !== waitState.hero) hs.src = waitState.hero; hs.hidden = false; }
+    }
+    var mir = $('wMirror');
+    if (mir && waitState.espejo) {
+      mir.hidden = false;
+      var mi = $('wMirrorImg'); if (mi && mi.getAttribute('src') !== waitState.espejo.thumb) mi.src = waitState.espejo.thumb;
+      var mt = $('wMirrorTxt');
+      if (mt) mt.textContent = (waitState.espejo.caption ? waitState.espejo.caption + ' — ' : '') + 'tu gente la ama.';
+    }
+  }
+  function showWait() { if (!waitEl) return; buildWait(); statusEl.hidden = true; previewEl.hidden = true; waitEl.hidden = false; }
+  function setWaitNow(t) { waitState.nowText = String(t || ''); paintWait(); }
+  function lightHito(k) { if (!waitState.built) showWait(); waitState.lit[k] = true; paintWait(); }
+  function setWaitHero(src) { if (!src) return; waitState.hero = src; paintWait(); }
+  function setWaitEspejo(bp) { if (!bp || !bp.thumb) return; waitState.espejo = bp; paintWait(); }
+  function completeWait(post) {
+    waitState.done = true;
+    for (var i = 0; i < WSTEPS.length; i++) waitState.lit[WSTEPS[i].k] = true;
+    if (post && post.image) waitState.hero = post.image;
+    paintWait();
+    if (waitEl) waitEl.hidden = true;
+    showFirstPostPreview(post);
+  }
   function showFirstPostPreview(post) {
     if (!previewEl || !post) return;
+    // (ADDENDUM 3A) Una pieza en armado JAMÁS se renderiza como
+    // tarjeta de posteo: se queda en la pantalla de espera honesta.
+    if (post.armando || !post.image) {
+      showWait();
+      setWaitNow('Tu primer posteo sigue en armado — cuando esté listo, con tu logo en la escena, te espera en Inicio.');
+      return;
+    }
     var img = post.image || post.cover || '';
     var cap = String(post.caption || '').slice(0, 200);
     var head = String(post.headline || '');
@@ -267,6 +416,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       return false;
     }
     var reader = res.body.getReader();
+    showWait(); // (ADDENDUM 8) la espera ES la pantalla desde que el stream arranca
     var decoder = new TextDecoder();
     var buf = '';
     var startedAt = Date.now();
@@ -285,7 +435,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         slowShown = true;
         showStatus('Tarda más de lo normal — sigo trabajando en tu primer posteo, no cierres esta ventana…');
       }
-      if (!firstPostShown && now - startedAt > L6_FIRST_POST_TIMEOUT_MS) {
+      if (!firstPostShown && now - lastEventAt > L6_FIRST_POST_TIMEOUT_MS) {
         outcome = false;
         outcomeErr = 'Se trabó la generación — probá de nuevo.';
         try { reader.cancel(); } catch (e) {}
@@ -314,13 +464,31 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
           try { d = JSON.parse(data); } catch (e) { continue; }
           if (ev === 'status') {
             if (d && d.text) showStatus(d.text);
+          } else if (ev === 'hito') {
+            // (ADDENDUM 8) Un medallón se enciende solo con su hito real.
+            if (d && d.hito) lightHito(d.hito);
+          } else if (ev === 'hero') {
+            if (d && d.image) setWaitHero(d.image);
+          } else if (ev === 'profile') {
+            // (ADDENDUM 8) El espejo: solo con el dato real (su posteo
+            // con más me gusta, con su foto); sin dato, no hay bloque.
+            if (d && d.profile && d.profile.best_post) setWaitEspejo(d.profile.best_post);
           } else if (ev === 'post') {
             postsSeen++;
-            if (d && d.post && !firstPostShown) {
+            // (LOTE PRIMER-POSTEO-PERFECTO) La vista previa es SOLO del
+            // índice 0: con la retención del rescate, el primer evento
+            // 'post' puede ser de otra pieza y no es el primer posteo.
+            if (d && d.post && d.index === 0 && !firstPostShown) {
               firstPostShown = true;
               firstPostAt = Date.now();
-              showFirstPostPreview(d.post);
-              showStatus('Tu primer posteo ya está listo — termino tu semana…');
+              if (d.post.armando) {
+                // La pieza sigue en la cadena (fondo): la espera sigue
+                // en pantalla, honesta — nunca una tarjeta-póster.
+                showFirstPostPreview(d.post);
+              } else {
+                completeWait(d.post);
+                showStatus('Tu primer posteo ya está listo — termino tu semana…');
+              }
             } else if (d && d.post) {
               showStatus('Posteo ' + postsSeen + ' de 5 listo — sigo con tu semana…');
             }

@@ -1690,6 +1690,12 @@ function captionOpenIsGarbledEn(caption) {
     const first = (blocks[bi].split('\n')[0] || '').trim();
     if (!first) continue;
     if (/^(the|a|an)\s+(from|to|of|for|with|in|on|at|by)\b/i.test(first)) return true;
+    // (ADDENDUM 6C · LOTE PRIMER-POSTEO-PERFECTO) La clase de fragmento
+    // corre TAMBIÉN AL ARRANQUE: «From, another favorite at Jeni's…»
+    // (corrida de Jeni's, posteo 666) es un fragmento subordinado
+    // suelto en posición inicial del bloque — ningún texto arranca
+    // con una subordinante/preposición cortada por coma.
+    if (/^(?:from|where|when|while|because|since|although|though|unless|until|whereas|with|without|by|of|to|for|and|but|or)\s*,/i.test(first)) return true;
     if (/\b(\w+)\s+\1\b/i.test(first)) return true;
     // EMPALME-EN-POSESIVO (Juli, 2026-11-13 — LOTE MNO v1007, ítem (m)
     // de M208.3; id real 656, semana regenerada de VEJA en la corrida
@@ -1703,11 +1709,24 @@ function captionOpenIsGarbledEn(caption) {
     // Palabra colgante: solo en el GANCHO (primer bloque) y solo si la
     // línea no cierra con puntuación — una oración completa que termina
     // en preposición ("…asking for.") es inglés válido, no un empalme.
+    // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) La lista suma las
+    // SUBORDINANTES colgantes (clase de la auditoría Veja #7, posteo
+    // 659: el gancho «Salar, where ✨» es una frase cortada a la mitad).
     if (bi === 0 && !/[.!?…]["']?$/.test(first)) {
       const words = first.replace(/[\p{Extended_Pictographic}]/gu, '').trim().split(/\s+/).filter(Boolean);
       const last = words.length ? words[words.length - 1].toLowerCase().replace(/[^a-z']/g, '') : '';
-      if (['the', 'a', 'an', 'of', 'to', 'for', 'with', 'and', 'or', 'your', 'our', 'in', 'on', 'at'].includes(last)) return true;
+      if (['the', 'a', 'an', 'of', 'to', 'for', 'with', 'and', 'or', 'your', 'our', 'in', 'on', 'at',
+        'where', 'when', 'while', 'because', 'since', 'although', 'though', 'unless', 'until', 'whereas'].includes(last)) return true;
     }
+    // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) La misma clase en
+    // CUALQUIER bloque: un bloque que cierra en subordinante colgante
+    // sin puntuación final es un fragmento cortado, esté donde esté
+    // («Made our way.» no se caza acá — eso era un detalle sin sujeto
+    // que ya no se produce; esto caza la subordinante viva).
+    const blockLines = blocks[bi].split('\n').map((s) => s.trim()).filter(Boolean);
+    const lastLine = blockLines.length ? blockLines[blockLines.length - 1] : '';
+    if (lastLine && !/[.!?…]["']?$/.test(lastLine)
+      && clientDigest.EN_HANGING_SUBORDINATORS && clientDigest.EN_HANGING_SUBORDINATORS.has(clientDigest.lastContentWord(lastLine))) return true;
   }
   return false;
 }
