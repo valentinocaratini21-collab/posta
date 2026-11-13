@@ -177,6 +177,8 @@ function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
 // posteo está listo; los otros dos llegan uno por día»; con menos,
 // solo lo que hay; con 0, no afirma ningún posteo. (La importación
 // trae como máximo 3, así que n >= 3 es siempre exactamente 3.)
+// (LOTE L10 · BIENVENIDA-IDEMPOTENTE · v955) Además: UNA sola
+// bienvenida por invitado — ver la guarda antes del INSERT.
 function welcomeGuestMessage(db, userId, { lang, business, nPosts }) {
   const en = lang === 'en';
   const biz = String(business || '').trim();
@@ -206,6 +208,41 @@ function welcomeGuestMessage(db, userId, { lang, business, nPosts }) {
       ? `hi! i'm posty 💙 i'm finishing your week${paraBiz} ✨ i'll let you know when your first post is ready`
       : `hola! soy posty 💙 estoy terminando de armar tu semana${paraBiz} ✨ te aviso cuando tu primer posteo esté listo`;
   }
+  // (LOTE L10 · BIENVENIDA-IDEMPOTENTE · v955) Una sola bienvenida por
+  // invitado: guest/start puede tener éxito varias veces para el mismo
+  // invitado (re-entrada, multi-pestaña) y cada éxito insertaba otra
+  // copia (en vivo: 4 copias + la vieja). Antes de insertar se busca si
+  // ya existe una bienvenida de prueba para este invitado. Marcadores
+  // (el texto exacto varía por idioma y por nPosts; la pregunta por el
+  // @ — «¿cuál es tu Instagram?» — NO es bienvenida de prueba y no casa
+  // con ninguno): REAL (n>=1, wording v923 + legacy pre-v923): 'tu
+  // primer posteo está listo' / 'your first post is ready' / 'ya armé
+  // tus primeros 3 posteos' / 'first 3 posts' (el EN legacy solo consta
+  // por el regex negativo de test-lote-chat-cantidad-real.js: el texto
+  // viejo EN no sobrevive en el código). PLACEHOLDER (n=0): 'estoy
+  // terminando de armar tu semana' / "i'm finishing your week". Regla:
+  // una bienvenida REAL previa bloquea cualquier otra (real o
+  // placeholder); un placeholder previo solo bloquea otro placeholder —
+  // si la primera entrada no tenía nada programado y la segunda sí, el
+  // mensaje real ES el aviso prometido («te aviso cuando esté listo») y
+  // sí se inserta. Sin soporte de lectura (stub de test sin .get) se
+  // sigue como antes: el INSERT corre y la idempotencia la da la DB real.
+  // Devuelve false también cuando ya existe (no es error: el llamador
+  // ignora el valor).
+  const isReal = n >= 1;
+  const REAL_MARKERS = ['tu primer posteo está listo', 'your first post is ready', 'ya armé tus primeros 3 posteos', 'first 3 posts'];
+  const HOLD_MARKERS = ['estoy terminando de armar tu semana', "i'm finishing your week"];
+  const hasMarker = (markers) => {
+    const q = markers.map(() => 'text LIKE ?').join(' OR ');
+    const row = db.prepare(
+      `SELECT 1 AS x FROM chat_messages WHERE user_id = ? AND role = 'assistant' AND (${q}) LIMIT 1`
+    ).get(userId, ...markers.map((m) => '%' + m + '%'));
+    return !!row;
+  };
+  try {
+    if (hasMarker(REAL_MARKERS)) return false;
+    if (!isReal && hasMarker(HOLD_MARKERS)) return false;
+  } catch (e) { /* sin .get (stub de test): seguir como antes */ }
   try {
     db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(userId, text);
     return true;

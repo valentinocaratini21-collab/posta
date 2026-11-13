@@ -8808,10 +8808,21 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
     if (domainKey) cacheKeys.push('web:' + domainKey);
     let nCache = 0;
     for (const k of cacheKeys) nCache += cnt('SELECT COUNT(*) AS n FROM trial_cache WHERE ig = ?', k);
-    const total = nUsed + nLocks + nPosts + nCache;
+    // (LOTE L10 · BIENVENIDA-IDEMPOTENTE · v955) El chat del invitado
+    // SOBREVIVÍA a los reseteos (trial-reset nunca borraba
+    // chat_messages): tras un reseteo el invitado volvía a ver los
+    // mensajes viejos — y la bienvenida se reinsertaba encima. Se
+    // cuenta el chat del invitado (solo si sigue is_guest=1, como los
+    // posteos) y se borra con el reseteo, con sus meta. Nunca el chat
+    // de otro usuario ni el de una cuenta registrada.
+    let nChat = 0;
+    try {
+      if (guestId && guestIsGuest) nChat = cnt('SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ?', guestId);
+    } catch (e) {}
+    const total = nUsed + nLocks + nPosts + nCache + nChat;
     const base = {
       ok: true, ig: igKey, domain: domainKey,
-      trial_used: nUsed, trial_locks: nLocks, posts: nPosts, trial_cache: nCache,
+      trial_used: nUsed, trial_locks: nLocks, posts: nPosts, trial_cache: nCache, chat_messages: nChat,
       guest_id: guestId, guest_is_guest: guestIsGuest, total,
     };
     if (total === 0) return res.json({ ...base, sin_registro: true });
@@ -8819,6 +8830,7 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
     const usedDeleted = trialLock.purgeUsed ? trialLock.purgeUsed(db, igKey, domainKey) : 0;
     const locksDeleted = trialLock.purgeLock ? trialLock.purgeLock(db, igKey, domainKey) : 0;
     let postsDeleted = 0, clockRefreshed = false;
+    let chatDeleted = 0, chatMetaDeleted = 0;
     if (guestId && guestIsGuest) {
       try {
         const r = db.prepare('DELETE FROM posts WHERE user_id = ?').run(guestId);
@@ -8830,6 +8842,18 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
           .run(Date.now() + days * 24 * 3600 * 1000, guestId);
         clockRefreshed = true;
       } catch (e) {}
+      // (LOTE L10 · v955) El chat del invitado se borra con el reseteo:
+      // primero las meta (tienen user_id propio) y después los mensajes
+      // — sin huérfanos. Solo el invitado reseteado, nunca otro usuario
+      // ni una cuenta registrada (este bloque solo corre con is_guest=1).
+      try {
+        const m = db.prepare('DELETE FROM chat_message_meta WHERE user_id = ?').run(guestId);
+        chatMetaDeleted = (m && m.changes) || 0;
+      } catch (e) {}
+      try {
+        const r = db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(guestId);
+        chatDeleted = (r && r.changes) || 0;
+      } catch (e) {}
     }
     let cacheDeleted = 0;
     for (const k of cacheKeys) {
@@ -8838,11 +8862,11 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
         cacheDeleted += (r && r.changes) || 0;
       } catch (e) {}
     }
-    console.log(`[admin] trial-reset @${igKey || '—'} (${domainKey || '—'}): used=${usedDeleted} locks=${locksDeleted} posts=${postsDeleted} cache=${cacheDeleted} guest=${guestId || '—'}`);
+    console.log(`[admin] trial-reset @${igKey || '—'} (${domainKey || '—'}): used=${usedDeleted} locks=${locksDeleted} posts=${postsDeleted} cache=${cacheDeleted} chat=${chatDeleted} meta=${chatMetaDeleted} guest=${guestId || '—'}`);
     return res.json({
       ...base,
       trial_used: usedDeleted, trial_locks: locksDeleted, posts: postsDeleted,
-      trial_cache: cacheDeleted, reset_hecho: true, trial_ends_refrescado: clockRefreshed,
+      trial_cache: cacheDeleted, chat_messages: chatDeleted, reset_hecho: true, trial_ends_refrescado: clockRefreshed,
     });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
@@ -36550,7 +36574,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v979';
+const BUILD_ID = '20261105-v980';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
