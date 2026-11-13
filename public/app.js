@@ -23386,6 +23386,11 @@ function pzHoyPillSalida(p, tz, en) {
     const rel = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(d, tz, en) : '';
     const hh = pzHoyHoraCorta(p.scheduled_at, tz, en);
     if (!hh) return '';
+    // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) Sin Instagram conectado
+    // la píldora de Hoy no afirma la salida: queda pendiente de
+    // conexión. Misma guardia inline que en apvPill (extracción a VM).
+    const igOk = (typeof PROFILE === 'undefined' || !PROFILE) ? true : !!PROFILE.ig_connected;
+    if (!igOk) return en ? 'Pending: connect your Instagram' : 'Pendiente: conectá tu Instagram';
     if (rel === 'hoy' || rel === 'today') return en ? ('Goes out today · ' + hh) : ('Se postea hoy · ' + hh);
     if (rel === 'mañana' || rel === 'tomorrow') return en ? ('Goes out tomorrow · ' + hh) : ('Se postea mañana · ' + hh);
     if (rel) return en ? ('Goes out ' + rel + ' · ' + hh) : ('Se postea ' + rel + ' · ' + hh);
@@ -23458,8 +23463,13 @@ function pzHoyCardHTML(p, o) {
     const acciones = pendiente
       ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button><button type="button" class="btn btn-ghost" data-pz-hoy-cambiar="${esc(String(p.id))}">${en ? 'Change it' : 'Cambialo'}</button></div>`
       : '';
+    // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La nota de la tarjeta
+    // aprobada tampoco afirma la salida (ni la historia) sin conexión.
+    const igOkHoy = (typeof PROFILE === 'undefined' || !PROFILE) ? true : !!PROFILE.ig_connected;
     const notaOk = (!pendiente && st === 'scheduled')
-      ? `<div class="pz-hoy-ok">✓ ${esc(pill || cuando || (en ? 'Scheduled' : 'Agendado'))}. ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>` : '';
+      ? (igOkHoy
+        ? `<div class="pz-hoy-ok">✓ ${esc(pill || cuando || (en ? 'Scheduled' : 'Agendado'))}. ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>`
+        : `<div class="pz-hoy-ok">⏳ ${esc(cuando || (en ? 'Scheduled' : 'Agendado'))} — ${en ? 'it goes out once you connect your Instagram.' : 'sale cuando conectes tu Instagram.'}</div>`) : '';
     // (LOTE POSTEO-HOY-COMPACTO v859 · 9/11 · mock aprobado por Valentino:
     // tarjeta horizontal — miniatura 96x120 4:5 a la izquierda + columna
     // de texto; el caption aparece UNA sola vez, en el cuerpo; la chapita
@@ -30634,6 +30644,14 @@ function apvCountdown(d) {
 function apvPill(p, d, dOk) {
   const ap = String(p.approval || ''), st = String(p.status || '');
   const tz = apvTz();
+  // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La CONEXIÓN es una entrada
+  // del estado: sin Instagram conectado, un programado en automático
+  // NO sale solo — se muestra pendiente-de-conexión, nunca la salida
+  // automática afirmada (corrida The Ordinary: «Sale solo a las
+  // 19:00» con «Te faltan 2 pasos» de conexión). Guardia inline a
+  // propósito: las suites extraen esta función sola a una VM; sin
+  // PROFILE en el sandbox manda el comportamiento de siempre.
+  const igOk = (typeof PROFILE === 'undefined' || !PROFILE) ? true : !!PROFILE.ig_connected;
   // (v925 · PUBLICADO-SOLO-SI-SE-PUBLICO) «Publicado» y «Ver en Instagram»
   // solo si se publicó de verdad. Una simulación de demo (status published
   // con ig_media_id 'demo_*' o permalink '/demo_*') muestra Pendiente:
@@ -30651,7 +30669,9 @@ function apvPill(p, d, dOk) {
   // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) Programado + 'auto' TODAVÍA
   // no salió: el texto en pasado («Salió solo») afirmaba un hecho falso.
   // Futuro honesto: sale solo a su hora, sin afirmar aprobación.
+  if (ap === 'auto' && st === 'scheduled' && !igOk) return '<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale cuando conectes tu Instagram</span>';
   if (ap === 'auto' && st === 'scheduled') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + (dOk ? ` Sale solo a las ${esc(apvHM(d, tz))}` : ' Sale solo') + '</span>';
+  if (ap === 'auto' && !igOk) return '<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale cuando conectes tu Instagram</span>';
   if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + ' Salió solo (no lo viste a tiempo)</span>';
   if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
   if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;

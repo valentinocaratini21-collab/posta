@@ -781,6 +781,45 @@ function namedItemCorroborated(digest, name) {
   if (!matches.length) return true;
   return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e));
 }
+/* (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) ¿Este ítem tiene evidencia
+ * de PRODUCTO (cosa vendible fotografiable), no de servicio? La
+ * familia de servicios sale del RUBRO, pero no puede narrar como
+ * servicio a un ítem que el propio fundamento evidencia como
+ * producto: la corrida The Ordinary (13/11) narró «The Holiday
+ * Bundle» — un pack de productos de su tienda — como «another
+ * service… we'll reply with a clear proposal» y coronó el slot 0 con
+ * la plantilla de reserva «Book … today». Evidencia de producto:
+ * · una FOTO REAL mapeada a este ítem en el photo_map (foto↔producto
+ *   con marca), o
+ * · una entrada de productos_nombrados del CATÁLOGO de su tienda
+ *   (clase 'catalogo' con fuente de catálogo: 'catalogo',
+ *   'web-catalog' o 'bio-link' — la tienda vende cosas; la lista
+ *   genérica de la web, fuente 'web', mezcla productos y servicios
+ *   y NO discrimina: un «Corte y peinado» listado en la web de la
+ *   peluquería no es un producto por estar listado).
+ * Sin ninguna de las dos, el ítem se narra como lo diga su familia:
+ * un servicio puro de un rubro de servicios no gana evidencia de
+ * producto por estar en la lista mezclada de la web (v348 · D1). */
+function itemHasProductEvidence(digest, itemName) {
+  if (!digest) return false;
+  const nm = String(itemName || '').trim();
+  if (!nm) return false;
+  try {
+    const pm = digest.photo_map && digest.photo_map.entries;
+    if (pm && typeof pm === 'object') {
+      for (const e of Object.values(pm)) {
+        if (e && e.item && sameItemName(String(e.item), nm)) return true;
+      }
+    }
+    if (Array.isArray(digest.productos_nombrados)) {
+      for (const x of digest.productos_nombrados) {
+        if (x && sameItemName(String(x.nombre || x), nm) && Array.isArray(x.clases) && x.clases.includes('catalogo')
+          && ['catalogo', 'web-catalog', 'bio-link'].includes(String(x.fuente || ''))) return true;
+      }
+    }
+  } catch (e) { /* sin evidencia legible: manda la familia */ }
+  return false;
+}
 /* ¿La estrella tiene evidencia de NOMBRE PROPIO de producto?
  * Principio (LOTE CORRECTIVO-4): una categoría o una línea NUNCA es
  * estrella, aunque «aparezca» — la estrella calza con un producto o
@@ -2465,6 +2504,12 @@ function deriveTopics(digest, opts) {
   // y suma a la lista de espera hasta su fecha.
   const SERVICE_FAMILY_CATS = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
   const serviceFamily = SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''));
+  // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) La familia manda por
+  // ÍTEM, no por rubro pelado: un ítem con evidencia de producto
+  // (itemHasProductEvidence) se narra como producto aunque el rubro
+  // sea de la familia de servicios — el bundle de una tienda no es
+  // «another service». Sin evidencia, el ítem sigue a su familia.
+  const narraServicio = (it) => serviceFamily && !itemHasProductEvidence(digest, name(it));
   let etapaNow = (digest.etapa === 'pre-lanzamiento') ? digest.etapa : '';
   let launchFecha = digest.lanzamiento_fecha || null;
   if (!etapaNow) {
@@ -2537,7 +2582,7 @@ function deriveTopics(digest, opts) {
       subline: () => (fechaTxt ? `Llega el ${fechaTxt}` : 'Muy pronto'),
       cta: 'Quiero enterarme',
       caption: (x) => `${x} es parte de lo que se viene en ${bizPh} ✨\n\nEstamos preparando todo${fechaTxt ? `: el lanzamiento es el ${fechaTxt}` : ' — abrimos muy pronto'}.\n\nEscribinos por DM y sumate a los primeros 📩`,
-    })) : serviceFamily ? (en ? mk('novedad', A, {
+    })) : narraServicio(it1) ? (en ? mk('novedad', A, {
       tag: 'NEW',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `${it1.precio}, just like you see it` : ''),
@@ -2645,7 +2690,7 @@ function deriveTopics(digest, opts) {
     const it2 = pickItem(1);
     if (it2) {
       const A = name(it2);
-      const t = serviceFamily ? (en ? mk('novedad', A, {
+      const t = narraServicio(it2) ? (en ? mk('novedad', A, {
         tag: 'NEW',
         headline: (x) => x,
         subline: (x) => (it2.precio ? `${it2.precio}` : ''),
@@ -2769,7 +2814,7 @@ function deriveTopics(digest, opts) {
   } else if (it1) {
     const A = name(it1);
     if (!topics.some((t) => t.kind === 'reserva')) {
-      const t = serviceFamily ? (en ? mk('reserva', A, {
+      const t = narraServicio(it1) ? (en ? mk('reserva', A, {
         tag: '',
         headline: (x) => `${capWords(x, 4)}: get a free quote`,
         subline: () => '',
@@ -3064,7 +3109,9 @@ function deriveInsigniaWow(digest, opts) {
   }
   if (!detail) detail = en ? 'We make it our way.' : 'Lo hacemos a nuestra manera.';
   const SERVICE_FAMILY_CATS = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
-  const serviceFamily = SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''));
+  // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) Ídem deriveTopics: la
+  // insignia con evidencia de producto cierra como producto.
+  const serviceFamily = (SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''))) && !itemHasProductEvidence(digest, frase);
   const ctaLine = serviceFamily
     ? (en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`)
     : (en ? `Order yours today by DM 📩` : `Pedilo hoy por DM 📩`);
@@ -3396,7 +3443,10 @@ function deriveFirstPostWow(digest, opts) {
   // Familia de servicios (espejo del set de deriveTopics): cambia el
   // verbo del gancho y el CTA, no la estrella.
   const SERVICE_FAMILY_CATS = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
-  const serviceFamily = SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''));
+  // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) La estrella con evidencia
+  // de PRODUCTO no se corona con la plantilla de reserva («Book …
+  // today») ni el CTA de servicio: se narra como producto («Try …»).
+  const serviceFamily = (SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''))) && !itemHasProductEvidence(digest, A);
   // Ritual propio: la primera frase del diferencial (sus palabras), sin
   // las cláusulas de negación (el «sin espresso» vive en los negativos,
   // no en el caption ni en el ritual).
@@ -3661,7 +3711,7 @@ module.exports = {
   // (LOTE CORRECTIVO-4) Productos con nombre: extracción + evidencia.
   extractNamedProducts, starNamedEvidenceOk,
   // (LOTE CORRECTIVO-8) Rótulos de rol de créditos + corroboración.
-  isCreditRoleName, namedItemCorroborated,
+  isCreditRoleName, namedItemCorroborated, itemHasProductEvidence,
   // (LOTE FOTOS-ELEGIBILIDAD · L1) La corroboración de UNA entrada,
   // exportada: el vocabulario del mapa foto→producto filtra los
   // nombrados del feed con la MISMA regla de C8 (sin auto-validación).

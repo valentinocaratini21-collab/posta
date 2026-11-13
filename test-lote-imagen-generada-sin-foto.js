@@ -16,6 +16,16 @@
 // A5, A7, A17, A18, A22, A23, A24, A25, C1, C2 y C5 de esta suite se
 // re-pinearon 1:1 con la clasificación del STATUS de ese lote; el
 // mecanismo (§B/§E: predicado, prompt, gate, generador) no cambió.)
+// (RE-PIN DEL ATERRIZAJE v1020 · LOTE ILUSTRADA-BAJO-LA-VARA: ese
+// lote toca app.js (pieza 7: «Sale solo» con la conexión como
+// entrada) y reestructura la retención y la exención del rescate
+// (piezas 5 y 3). Se re-pinean 1:1 con el mapeo de su STATUS: A1/C1/C5
+// (BUILD v1020), A4/C2 (stamp app.js?v=698), A8 (md5 de app.js del
+// lote), A22 (literal de retención nuevo), A24 (la exención
+// incondicional quedó SUPERSEDIDA por la pieza 3), A25 (alcance del
+// aterrizaje) y D1a/D1b (el pin A3 de L6 incrusta el md5 real de
+// app.js en el texto del fallo: los conjuntos se comparan con los
+// md5 normalizados). El mecanismo (§B/§E) no cambió.)
 // Se corre desde la raíz del release:
 //   NODE_PATH=/home/hatch/workspace/posta/node_modules node test-lote-imagen-generada-sin-foto.js
 // (el NODE_PATH es obligatorio: la §B/§D requieren demo.js, que abre la
@@ -30,7 +40,7 @@ const http = require('http');
 const { spawn, execFileSync } = require('child_process');
 
 const ROOT = __dirname;
-const BASE = path.join(ROOT, '..', 'base'); // (aterrizaje v1019: la base es el árbol v1018)
+const BASE = path.join(ROOT, '..', 'base'); // (aterrizaje v1020: la base es el árbol v1019)
 const SERVER = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 const SERVER_BASE = fs.readFileSync(path.join(BASE, 'server.js'), 'utf8');
 const DEMO = fs.readFileSync(path.join(ROOT, 'demo.js'), 'utf8');
@@ -55,14 +65,14 @@ function md5(b) { return crypto.createHash('md5').update(b).digest('hex'); }
 
 // ── §A · estáticos ──
 console.log('\n[A] Estáticos (estampado + alcance)');
-eq(count(SERVER, '20261105-v1019'), 1, 'A1 BUILD v1019 x1 solo en server.js (re-estampado del aterrizaje v1019)');
+eq(count(SERVER, '20261105-v1020'), 1, 'A1 BUILD v1020 x1 solo en server.js (re-estampado del aterrizaje v1020)');
 eq(count(SERVER, '20261105-v1014'), 0, 'A2 BUILD v1014 x0 (sin restos del viejo)');
 eq(count(SERVER, '20261105-v957'), 0, 'A3 BUILD v957 x0 (el provisional chocado, nunca estampado)');
-eq(count(IDX_ES, 'app.js?v=697'), 1, 'A4 index ES app.js?v=697 x1 (re-pin de stamps v1019: el 697 es de v1017; este lote no toca app.js)');
+eq(count(IDX_ES, 'app.js?v=698'), 1, 'A4 index ES app.js?v=698 x1 (re-pin del aterrizaje v1020: la pieza 7 del lote ILUSTRADA-BAJO-LA-VARA toca app.js y bumpea el stamp de v1017)');
 eq(count(IDX_ES, 'styles.css?v=20261278'), 1, 'A5 index ES styles 20261278 x1 (re-pin v1019: stamp de v1017, sin cambio propio)');
 eq(count(IDX_EN, 'app.js?v='), 0, 'A6 index EN sin app.js?v=');
 eq(count(IDX_EN, 'styles.css?v=20261278'), 1, 'A7 index EN styles 20261278 x1 (re-pin v1019)');
-eq(md5(APPJS), md5(APPJS_BASE), 'A8 public/app.js byte-idéntico a la base');
+eq(md5(APPJS), 'b4a00196367798807c050f18c66abac6', 'A8 (re-pin del aterrizaje v1020) public/app.js = el del lote ILUSTRADA-BAJO-LA-VARA (md5 pineado): difiere de la base SOLO por la pieza 7 de ese lote');
 eq(md5(STYLES), md5(STYLES_BASE), 'A9 styles.css byte-idéntico a la base');
 eq(md5(IDX_EN), md5(IDX_EN_BASE), 'A10 index EN byte-idéntico a la base');
 ok(DEMO.includes('function buildNoPhotoBrandPrompt(') && DEMO.includes('buildNoPhotoBrandPrompt, firstPostNeedsGeneratedImage, generateFirstPostImageIfNeeded,'), 'A11 demo.js exporta las 3 funciones nuevas');
@@ -85,39 +95,37 @@ eq(count(DEMO, 'trial_used'), count(DEMO_BASE, 'trial_used'), 'A21 trial_used en
 // Las aserciones de abajo pinean el comportamiento nuevo sobre los
 // anclajes reales del fusionado.)
 (function () {
-  const renderGuard = SERVER.indexOf("if (!rescueIdxS.has(i)) send('post'");
+  const renderGuard = SERVER.indexOf("if (rescueIdxS.has(i) || (i === 0 && classifyPromise)) return;");
   const rescueBlock = SERVER.indexOf('const rescateSemanaS = []');
   const statusGen = SERVER.indexOf("step: 'imagen-generada'", rescueBlock);
   const sealCall = SERVER.indexOf('rescuePieceWithSeal', rescueBlock);
-  ok(renderGuard !== -1 && rescueBlock !== -1 && renderGuard < rescueBlock, 'A22 (invertido · ADD-3A) el render RETIENE el post de la pieza en rescate (if (!rescueIdxS.has(i))) y su evento sale recién tras la cadena de rescate — el póster NUNCA sale primero');
+  ok(renderGuard !== -1 && rescueBlock !== -1 && renderGuard < rescueBlock, 'A22 (re-pin del aterrizaje v1020 · pieza 5 del lote ilustrada) el render RETIENE el post de la pieza en rescate y el del slot 0 con la clasificación en vuelo (guardia+return reestructurada, misma semántica ADD-3A) y su evento sale recién tras la cadena de rescate — el póster NUNCA sale primero');
   ok(statusGen !== -1 && sealCall !== -1 && statusGen < sealCall, 'A23 (re-pin) el status de generación precede a la llamada de rescate sellado (progreso real, no mudo)');
-  ok(SERVER.includes('if (!posts[i] || posts[i].ai)') && SERVER.includes('slot0LogoAusenteS'), 'A24 (re-pin) la cadena saltea las piezas que ya produjo el pipeline IA (posts[i].ai) y el disparador suma el slot 0 con logo ausente (slot0LogoAusenteS)');
+  ok(SERVER.includes('if (!posts[i] || (posts[i].ai && aiPasaVaraI))') && SERVER.includes('slot0LogoAusenteS'), 'A24 (re-pin del aterrizaje v1020 · SUPERSEDIDO por la pieza 3 del lote ilustrada) la cadena saltea SOLO las piezas IA que pasan la vara final (aiPasaVaraI) — la exención incondicional ya no existe — y el disparador suma el slot 0 con logo ausente (slot0LogoAusenteS)');
 })();
 (function () {
-  // Diff = exactamente el alcance del LOTE PRIMER-POSTEO-PERFECTO
-  // (re-pin v1019: el pin de alcance v960 —solo server.js+demo.js—
-  // quedó superseded por el alcance de este lote, según su STATUS):
-  // difieren los 9 archivos del lote + esta suite (re-pineada en este
-  // aterrizaje), y el único archivo nuevo es la suite del lote.
+  // Diff = exactamente el alcance del aterrizaje v1020 (LOTE
+  // ILUSTRADA-BAJO-LA-VARA + los re-pins de este aterrizaje):
+  // difieren los 6 archivos del lote + las 2 suites vecinas
+  // re-pineadas (perfecto y esta), y el único archivo nuevo es la
+  // suite del lote.
   let out = '';
   try { out = execFileSync('diff', ['-rq', BASE, ROOT], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }); } catch (e) { out = (e.stdout || '').toString(); }
   const lines = out.split('\n').filter(Boolean).filter((l) => !/Only in .*base: data$/.test(l));
   const expected = [
     'Files ' + path.join(BASE, 'client-digest.js') + ' and ' + path.join(ROOT, 'client-digest.js') + ' differ',
-    'Files ' + path.join(BASE, 'demo-ai.js') + ' and ' + path.join(ROOT, 'demo-ai.js') + ' differ',
     'Files ' + path.join(BASE, 'demo.js') + ' and ' + path.join(ROOT, 'demo.js') + ' differ',
-    'Files ' + path.join(BASE, 'feed-audit.js') + ' and ' + path.join(ROOT, 'feed-audit.js') + ' differ',
-    'Files ' + path.join(BASE, 'generator.js') + ' and ' + path.join(ROOT, 'generator.js') + ' differ',
     'Files ' + path.join(BASE, 'server.js') + ' and ' + path.join(ROOT, 'server.js') + ' differ',
-    'Files ' + path.join(BASE, 'public', 'en-prueba.html') + ' and ' + path.join(ROOT, 'public', 'en-prueba.html') + ' differ',
-    'Files ' + path.join(BASE, 'public', 'prueba.html') + ' and ' + path.join(ROOT, 'public', 'prueba.html') + ' differ',
-    'Files ' + path.join(BASE, 'test-lote-c9-idioma-positivo.js') + ' and ' + path.join(ROOT, 'test-lote-c9-idioma-positivo.js') + ' differ',
+    'Files ' + path.join(BASE, 'demo-captions.js') + ' and ' + path.join(ROOT, 'demo-captions.js') + ' differ',
+    'Files ' + path.join(BASE, 'public', 'app.js') + ' and ' + path.join(ROOT, 'public', 'app.js') + ' differ',
+    'Files ' + path.join(BASE, 'public', 'index.html') + ' and ' + path.join(ROOT, 'public', 'index.html') + ' differ',
+    'Files ' + path.join(BASE, 'test-lote-primer-posteo-perfecto.js') + ' and ' + path.join(ROOT, 'test-lote-primer-posteo-perfecto.js') + ' differ',
     'Files ' + path.join(BASE, 'test-lote-imagen-generada-sin-foto.js') + ' and ' + path.join(ROOT, 'test-lote-imagen-generada-sin-foto.js') + ' differ',
-    'Only in ' + ROOT + ': test-lote-primer-posteo-perfecto.js',
+    'Only in ' + ROOT + ': test-lote-ilustrada-vara.js',
   ];
   const extra = lines.filter((l) => !expected.includes(l));
   const missing = expected.filter((l) => !lines.includes(l));
-  ok(extra.length === 0 && missing.length === 0, 'A25 diff vs base = exactamente el alcance del LOTE PRIMER-POSTEO-PERFECTO (re-pin v1019)', { extra, missing, lines: lines.slice(0, 6) });
+  ok(extra.length === 0 && missing.length === 0, 'A25 diff vs base = exactamente el alcance del aterrizaje v1020 (LOTE ILUSTRADA-BAJO-LA-VARA + re-pins) (re-pin v1020)', { extra, missing, lines: lines.slice(0, 6) });
 })();
 
 // ── §B · VM del camino nuevo (demo.js real, sin red ni claves) ──
@@ -238,18 +246,18 @@ async function runBootAndRegressions() {
     let up = false;
     for (let i = 0; i < 60 && !up; i++) {
       const r = await req('GET', '/api/version');
-      if (r.status === 200) { try { up = JSON.parse(r.body).build === '20261105-v1019'; } catch (e) { up = false; } }
+      if (r.status === 200) { try { up = JSON.parse(r.body).build === '20261105-v1020'; } catch (e) { up = false; } }
       if (!up) await new Promise((r2) => setTimeout(r2, 500));
     }
-    ok(up, 'C1 /api/version = 20261105-v1019');
+    ok(up, 'C1 /api/version = 20261105-v1020');
     const idx = await req('GET', '/');
-    ok(idx.status === 200 && idx.body.includes('app.js?v=697'), 'C2 index servido con app.js?v=697 (re-pin v1019: stamp de v1017, sin bump propio)');
+    ok(idx.status === 200 && idx.body.includes('app.js?v=698'), 'C2 index servido con app.js?v=698 (re-pin del aterrizaje v1020: bump de la pieza 7 del lote ilustrada)');
     const gs = await req('POST', '/api/trial/generate-stream', 'basura');
     ok(gs.status === 200 && /text\/event-stream/.test(String(gs.headers['content-type'] || '')), 'C3 POST /api/trial/generate-stream con cuerpo inválido → 200 SSE', 'status=' + gs.status + ' ct=' + gs.headers['content-type']);
     ok(gs.body.includes('event: error'), 'C4 el stream inválido emite event: error (falla seguro, no HTML)', gs.body.slice(0, 200));
     const again = await req('GET', '/api/version');
     let alive = false;
-    try { alive = again.status === 200 && JSON.parse(again.body).build === '20261105-v1019'; } catch (e) {}
+    try { alive = again.status === 200 && JSON.parse(again.body).build === '20261105-v1020'; } catch (e) {}
     ok(alive, 'C5 el server sigue vivo tras el stream inválido');
   } finally {
     try { child.kill('SIGTERM'); } catch (e) {}
@@ -288,7 +296,13 @@ async function runBootAndRegressions() {
     const fails = [];
     const idx = out.indexOf('Fallos:');
     if (idx !== -1) {
-      out.slice(idx).split('\n').forEach((l) => { const mm = l.match(/^\s*- (.+)$/); if (mm) fails.push(mm[1].trim()); });
+      // (Re-pin del aterrizaje v1020 · mapeo D1a/D1b del STATUS del
+      // lote ilustrada: el pin A3 de L6 incrusta el md5 REAL de
+      // app.js en el texto de su fallo; cuando un lote toca app.js
+      // —pieza 7 del ilustrada— ese texto difiere entre la base y el
+      // release sin que el fallo cambie. Los conjuntos se comparan
+      // con los md5 normalizados a '<md5>'.)
+      out.slice(idx).split('\n').forEach((l) => { const mm = l.match(/^\s*- (.+)$/); if (mm) fails.push(mm[1].trim().replace(/[0-9a-f]{32}/g, '<md5>')); });
     }
     return { ok: m ? +m[1] : -1, fail: m ? +m[2] : -1, fails };
   }

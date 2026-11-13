@@ -35678,15 +35678,29 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // pasó en el spec, también el HITO 4. En la cadena generada, los
     // hitos 3 y 4 llegan con el rescate (bloque de abajo).
     send('hito', { hito: 'estrella' });
+    // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 6) Si la clasificación de
+    // feed sigue en vuelo, el hero y los hitos escena/chequeo del
+    // slot 0 NO se encienden con la pieza del spec: la rama ilustrada
+    // puede reemplazarla y la espera certificaría la pieza equivocada
+    // (corrida The Ordinary, 13/11: el «chequeo» era el del spec
+    // mientras la entrega era otra imagen). Se difieren al bloque de
+    // resolución del slot 0, con la pieza FINAL y su veredicto.
+    let slot0HitosPendientes = false;
+    let slot0Emitido = false;
+    let feedClasificacion = null; // (PIEZA 1) veredicto auditable de la clasificación, viaja en el payload
     if (spec.primer_posteo && spec.primer_posteo.foto && spec.primer_posteo.foto.cadena === 'foto-real') {
-      try {
-        const heroPath = spec.photos && spec.photos[0];
-        if (typeof heroPath === 'string' && heroPath && fs.existsSync(heroPath)) {
-          send('hero', { image: 'data:image/jpeg;base64,' + fs.readFileSync(heroPath).toString('base64') });
-        }
-      } catch (e) { /* el héroe es best-effort: la espera sigue sin él */ }
-      send('hito', { hito: 'escena' });
-      if (spec.primer_posteo.veredicto && spec.primer_posteo.veredicto.pasa) send('hito', { hito: 'chequeo' });
+      if (classifyPromise) {
+        slot0HitosPendientes = true;
+      } else {
+        try {
+          const heroPath = spec.photos && spec.photos[0];
+          if (typeof heroPath === 'string' && heroPath && fs.existsSync(heroPath)) {
+            send('hero', { image: 'data:image/jpeg;base64,' + fs.readFileSync(heroPath).toString('base64') });
+          }
+        } catch (e) { /* el héroe es best-effort: la espera sigue sin él */ }
+        send('hito', { hito: 'escena' });
+        if (spec.primer_posteo.veredicto && spec.primer_posteo.veredicto.pasa) send('hito', { hito: 'chequeo' });
+      }
     }
     const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
@@ -35702,6 +35716,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Igual que en demo.generateDemo:
         // cada caption cierra con una frase real del cliente.
         voiceLine: demo.trialVoiceEcho(voiceMarkers, i, contentLangS),
+        // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) El subrubro entra a
+        // la elección de hashtags (pool por rubro+subrubro).
+        subcat: spec.subcat || '',
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
       // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
@@ -35770,7 +35787,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       posts[i].prompt_simple = _prI.prompt_simple; posts[i].prompt_detalle = _prI.prompt_detalle;
       // (ADDENDUM 3A) La pieza en cadena de rescate NO se emite con el
       // póster: su evento llega tras el rescate (o en armado honesto).
-      if (!rescueIdxS.has(i)) send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
+      // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 5) El slot 0 también se
+      // retiene mientras la clasificación de feed esté en vuelo: su
+      // pieza todavía no es la final y la primera emisión es la que la
+      // página fija como previa («ya está listo») — vitrina = entrega
+      // exige un solo evento, con la pieza final (bloque de resolución).
+      if (rescueIdxS.has(i) || (i === 0 && classifyPromise)) return;
+      send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
+      if (i === 0) slot0Emitido = true;
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
@@ -35792,17 +35816,58 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const pieceEngines = {};
     const pieceQa = {};
     let demoTreatments = null; // tratamientos de la tanda IA (para el posteo video)
+    // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 1) CORROBORACIÓN DE LA
+    // BIFURCACIÓN: la clasificación de feed es UNA llamada de visión
+    // sobre una hoja de contacto — si la elegibilidad y la presencia
+    // ya admitieron una FOTO REAL DE PRODUCTO CON LA MARCA VISIBLE,
+    // esa evidencia manda y el feed NO puede clasificarse ilustrado
+    // (la corrida The Ordinary cayó a ilustrado por un carrusel
+    // infográfico con packshots reales, teniendo en la mano 4 fotos
+    // admitidas con marca y presencia de botellas con logo).
+    const fotoRealConMarcaS = (() => {
+      try {
+        const fg = spec.foto_gate;
+        if (fg && Array.isArray(fg.fotos) && fg.fotos.some((f) => f && f.admitida && f.producto && (f.marca_visible || f.marca_verdict === true))) return true;
+        const pm = trialDigest && trialDigest.photo_map && trialDigest.photo_map.entries;
+        if (pm && typeof pm === 'object' && Object.values(pm).some((e) => e && e.item && e.marca === true)) return true;
+        if (trialGateInfo && trialGateInfo.presencia && trialGateInfo.presencia.con_marca > 0) return true;
+        if (deep && deep.brandPresence && Object.values(deep.brandPresence).some((v) => v && v.marca === true)) return true;
+      } catch (e) { /* sin corroboración legible: manda la clasificación */ }
+      return false;
+    })();
     if (classifyPromise) {
       const cls = await Promise.race([
         classifyPromise,
         new Promise((r) => setTimeout(() => r(null), 20000)),
       ]).catch(() => null);
-      if (cls && cls.kind === 'illustrated') {
+      if (cls) {
+        // El veredicto de la clasificación queda REGISTRADO en el
+        // payload (antes character/style se descartaban: inauditable).
+        feedClasificacion = {
+          kind_modelo: cls.kind,
+          kind_final: cls.kind,
+          character: cls.character || '',
+          style: cls.style || '',
+          muestra: (feedPhotoPaths || []).slice(0, 4).map((p) => String(p).split('/').pop()),
+          foto_real_con_marca: fotoRealConMarcaS,
+        };
+        if (cls.kind === 'illustrated' && fotoRealConMarcaS) {
+          feedClasificacion.kind_final = 'photo';
+          feedClasificacion.vetada = true;
+          feedClasificacion.motivo = 'foto-real-de-producto-con-marca-admitida';
+          console.log('[posta] trial stream: clasificación «illustrated» VETADA por foto real de producto con marca admitida — el feed queda photo');
+        }
+      }
+      if (cls && cls.kind === 'illustrated' && !(feedClasificacion && feedClasificacion.vetada)) {
         feedKind = 'illustrated';
         if (demoApiKey && costs.demoAiCapOk()) {
-          send('status', { step: 'personaje', text: lang === 'en' ? "Your brand is illustrated: I'm creating your posts with your character, in your feed's line…" : 'Tu marca es ilustrada: estoy creando tus posteos con tu personaje, en la línea de tu feed…' });
+          // (PIEZA 6) Los estados de esta fase narran la ESCENA en
+          // curso (step 'escena'): el medallón Escena de la espera se
+          // enciende recién con el hito, tras la pieza final — el
+          // texto ya no promete un «personaje» como paso cumplido.
+          send('status', { step: 'escena', text: lang === 'en' ? "Your brand is illustrated: I'm building the scene of your posts with your character…" : 'Tu marca es ilustrada: estoy armando la escena de tus posteos con tu personaje…' });
           const aiKeepalive = setInterval(() => {
-            send('status', { step: 'personaje', text: lang === 'en' ? "I'm creating your posts with your character…" : 'Estoy creando tus posteos con tu personaje…' });
+            send('status', { step: 'escena', text: lang === 'en' ? "Still building the scene with your character…" : 'Sigo armando la escena con tu personaje…' });
           }, 20000);
           if (aiKeepalive.unref) aiKeepalive.unref();
           try {
@@ -35912,6 +35977,20 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   console.error(`[posta] demo-ai QA: la pieza ${i} (${sp.headline}) quedó sin pasar tras el reintento: ${(qaRes.failures || []).join(', ')} — ${qaRes.detalle || ''}`);
                 }
               }
+              // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 4) QA FAIL-CLOSED
+              // EN LA PRUEBA: si el QA propio del pipeline reprueba la
+              // pieza (con o sin reintento disponible), la pieza NO
+              // reemplaza — vuelve null y queda la de plantilla, que
+              // sigue su cadena (rescate si le toca). El «registrar el
+              // error y entregar igual» de la corrida The Ordinary
+              // (4 de 5 piezas reprobadas y entregadas) queda prohibido.
+              // Sin veredicto (qaRes null) no hay reprobación: passed
+              // queda true por construcción, como hoy.
+              if (!qaInfo.passed) {
+                pieceQa[i] = { ...qaInfo, text: null };
+                console.error(`[posta] demo-ai QA fail-closed: la pieza ${i} (${sp.headline}) no reemplaza a la de plantilla`);
+                return null;
+              }
               pieceEngines[i] = gen.engine;
               // (v209, v862 HUECO VACÍO) DOSIFICACIÓN también en la
               // ruta IA: la pieza limpia NO compone titular (su imagen
@@ -35952,6 +36031,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 }
               }
               pieceQa[i] = { ...qaInfo, text: textInfo };
+              // (PIEZA 4) Ídem fail-closed para el 4º chequeo: si el
+              // titular tapa al sujeto y la versión limpia no se pudo
+              // producir, la pieza compuesta NO sale — queda la de
+              // plantilla (antes salía con textInfo.passed=false).
+              if (!textInfo.passed) {
+                console.error(`[posta] demo-ai QA texto fail-closed: la pieza ${i} (${made[i].headline}) no reemplaza a la de plantilla`);
+                return null;
+              }
               return buf;
             };
             const { replaced } = await demoAi.replacePiecesWithAi({
@@ -35979,7 +36066,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 };
                 const _prP = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
                 posts[i].prompt_simple = _prP.prompt_simple; posts[i].prompt_detalle = _prP.prompt_detalle;
+                // (PIEZA 5) Si el slot 0 está en la cadena de rescate,
+                // su emisión es de la cadena (que decide con la vara
+                // final, pieza 3): acá solo se reemplaza el contenido.
+                if (i === 0 && rescueIdxS.has(0)) return;
                 send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
+                if (i === 0) slot0Emitido = true;
               },
             });
             demoAiInfo.used = replaced.size > 0;
@@ -35996,6 +36088,40 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
       if (demoSpendBefore != null) {
         demoAiInfo.cost_usd = Math.round(Math.max(0, costs.demoAiSpendTodayUsd() - demoSpendBefore) * 100) / 100;
+      }
+    }
+
+    // (LOTE ILUSTRADA-BAJO-LA-VARA · piezas 5 y 6) RESOLUCIÓN DEL
+    // SLOT 0 RETENIDO: con la clasificación ya resuelta, la pieza del
+    // slot 0 es FINAL salvo que la cadena de rescate la posea (los
+    // índices de rescueIdxS se resuelven ahí, como siempre). Si nadie
+    // la emitió todavía, sale AHORA su único evento 'post' — la de
+    // plantilla si la clasificación fue photo o vetada, o nada si la
+    // rama ilustrada ya la emitió por onPiece — y los hitos diferidos
+    // (hero/escena/chequeo) se encienden con ESTA pieza: el hero es su
+    // imagen y el chequeo solo si la pieza final pasa su control
+    // (el veredicto del spec si no cambió; el QA si es pieza IA).
+    if (!rescueIdxS.has(0) && posts[0]) {
+      const finOk0 = posts[0].ai
+        ? (!pieceQa[0] || pieceQa[0].passed !== false)
+        : !!(ppRecS && ppRecS.veredicto && ppRecS.veredicto.pasa);
+      if (slot0HitosPendientes) {
+        try {
+          // Pieza final de foto real: el héroe es la foto cruda, como
+          // en el camino sin diferir. Pieza IA: su propia imagen.
+          if (!posts[0].ai) {
+            const heroPath = spec.photos && spec.photos[0];
+            if (typeof heroPath === 'string' && heroPath && fs.existsSync(heroPath)) {
+              send('hero', { image: 'data:image/jpeg;base64,' + fs.readFileSync(heroPath).toString('base64') });
+            } else if (posts[0].image) send('hero', { image: posts[0].image });
+          } else if (posts[0].image) send('hero', { image: posts[0].image });
+        } catch (e) { /* el héroe es best-effort */ }
+        send('hito', { hito: 'escena' });
+        if (finOk0) send('hito', { hito: 'chequeo' });
+      }
+      if (!slot0Emitido) {
+        send('post', { index: 0, day: week[0].day, date: week[0].date, hour: week[0].hour, post: posts[0] });
+        slot0Emitido = true;
       }
     }
 
@@ -36044,7 +36170,23 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       };
       try {
         for (const i of idxsRescue) {
-          if (!posts[i] || posts[i].ai) { // ya la produjo el pipeline IA ilustrado: su QA viaja en demo_ai
+          // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 3) SIN EXENCIÓN: una
+          // pieza del pipeline IA solo se saltea si PASA la vara final
+          // (su QA y el QA de texto sin reprobar). La que no pasa cae
+          // a la generación con sello de esta cadena, como cualquier
+          // pieza retenida — el salto incondicional dejaba fuera del
+          // rescate justamente a las piezas que lo necesitaban.
+          const aiPasaVaraI = !!(posts[i] && posts[i].ai && posts[i].qa && posts[i].qa.passed !== false && (!posts[i].qa.text || posts[i].qa.text.passed !== false));
+          if (!posts[i] || (posts[i].ai && aiPasaVaraI)) { // ya la produjo el pipeline IA ilustrado y pasa la vara: su QA viaja en demo_ai
+            if (i === 0 && posts[i] && posts[i].ai) {
+              // El slot 0 retenido por esta cadena se emite ACÁ, con
+              // su pieza final y sus hitos (onPiece no lo emitió).
+              try { if (posts[0].image) send('hero', { image: posts[0].image }); } catch (e) { /* el héroe es best-effort */ }
+              send('hito', { hito: 'escena' });
+              send('hito', { hito: 'chequeo' });
+              send('post', { index: 0, day: week[0].day, date: week[0].date, hour: week[0].hour, post: posts[0] });
+              slot0Emitido = true;
+            }
             if (i > 0) rescateSemanaS.push({ idx: i, cadena: 'pipeline-ia' });
             emittedRescue.add(i);
             continue;
@@ -36381,6 +36523,55 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // la tanda ya terminó casi siempre; si no, `out.ideas` queda vacío
     // como cuando la llamada al LLM falla hoy.
     const ideas = (await raceMs(ideasPromiseS, 5000)) || [];
+    // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 2) VEREDICTO SOBRE LA
+    // PIEZA FINAL DEL SLOT 0: el registro que el gate computó sobre
+    // el SPEC no puede seguir diciendo «pasa» si un reemplazo
+    // posterior (rama ilustrada, packshot anclado, rescate) cambió la
+    // pieza — en la corrida The Ordinary el payload guardó
+    // pasa:true/cadena foto-real para una entrega que era la
+    // ilustración sin producto ni logo. Acá, con TODOS los reemplazos
+    // ya aplicados, el registro se cierra en etapa «final»: el
+    // veredicto del spec se conserva en veredicto_spec y el vigente
+    // describe la pieza que efectivamente se entrega.
+    if (ppRecS) {
+      try {
+        const p0F = posts[0];
+        const specVerd = ppRecS.veredicto || null;
+        let finCadena = 'sin-pieza';
+        let finPasa = false;
+        let finMotivos = ['sin-pieza-final'];
+        let finFuente = null;
+        if (p0F && p0F.armando) {
+          finCadena = 'en-rescate'; finMotivos = ['rescate-en-fondo'];
+        } else if (p0F && p0F.ai && feedKind === 'illustrated' && !p0F.upload_anchored) {
+          finCadena = 'ilustrada'; finFuente = 'pipeline-ilustrado';
+          const qaF = p0F.qa || pieceQa[0] || null;
+          finPasa = !!(qaF && qaF.passed !== false && (!qaF.text || qaF.text.passed !== false));
+          finMotivos = finPasa ? [] : ['qa-ilustrado-no-pasa'];
+        } else if (p0F && p0F.upload_anchored) {
+          finCadena = 'foto-anclada-ia'; finFuente = 'packshot-anclado';
+          finPasa = true; // el anclado solo reemplaza con su QA de fidelidad aprobado (fail-closed de origen)
+          finMotivos = [];
+        } else if (p0F && p0F.ai) {
+          // Generada por la cadena de rescate y sellada: su veredicto
+          // ya lo dejó la cadena (etapa «ruta»).
+          finCadena = specVerd && specVerd.cadena ? specVerd.cadena : 'generada';
+          finFuente = ppRecS.foto && ppRecS.foto.fuente ? ppRecS.foto.fuente : 'rescate-sellado';
+          finPasa = specVerd ? !!specVerd.pasa : true;
+          finMotivos = specVerd && Array.isArray(specVerd.motivos) ? specVerd.motivos : [];
+        } else if (p0F) {
+          finCadena = specVerd && specVerd.cadena ? specVerd.cadena : 'foto-real';
+          finFuente = ppRecS.foto ? ppRecS.foto.fuente : null;
+          finPasa = specVerd ? !!specVerd.pasa : false;
+          finMotivos = specVerd && Array.isArray(specVerd.motivos) ? specVerd.motivos : ['sin-veredicto-spec'];
+        }
+        ppRecS.veredicto_spec = specVerd;
+        if (ppRecS.foto) ppRecS.foto_spec = ppRecS.foto;
+        ppRecS.etapa = 'final';
+        ppRecS.foto = { fuente: finFuente, cadena: finCadena, via: ppRecS.foto ? ppRecS.foto.via : null };
+        ppRecS.veredicto = { pasa: finPasa, cadena: finCadena, motivos: finMotivos };
+      } catch (e) { /* el registro jamás frena la prueba */ }
+    }
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
     const out = {
       ok: true,
@@ -36402,6 +36593,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       rescate_semana: rescateSemanaS, // (ADDENDUM 6A) registro del rescate de semana entera
       precio_gate: precioGateS.length ? { piezas: precioGateS } : null, // (ADDENDUM 3B) cortes de la puerta de precios, por pieza
       feed_kind: feedKind,
+      feed_clasificacion: feedClasificacion, // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 1) veredicto auditable de la clasificación (modelo vs final, veto, muestra)
       feed_formula: feedFormula,
       feed_palette: feedPalette,
       diagnosis: trialDiagnosis, // (v379 · ítem 5) diagnóstico express de su línea
@@ -38285,7 +38477,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1019';
+const BUILD_ID = '20261105-v1020';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

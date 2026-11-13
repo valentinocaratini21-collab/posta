@@ -3295,6 +3295,9 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
         // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Cada caption cierra con una
         // frase real del cliente (un marcador por pieza, rotando).
         voiceLine: trialVoiceEcho(voiceMarkers, i, lang),
+        // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) El subrubro entra a
+        // la elección de hashtags (pool por rubro+subrubro).
+        subcat: (spec && spec.subcat) || '',
       });
       // (v209) Pieza LIMPIA: sin titular ni botón en la imagen, el
       // caption carga la idea y CIERRA con el CTA — garantizado acá.

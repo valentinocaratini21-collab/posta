@@ -198,10 +198,10 @@ console.log('\n[K] Formato: dominante video sin video real → foto');
        transitorio honesto · registro en el payload) ─────────────── */
 console.log('\n[L/M/N] Pins estructurales sobre server.js y demo.js');
 {
-  eq(count(SERVER, "20261105-v1019"), 1, 'M0 BUILD v1019 x1 en server.js (re-estampado del aterrizaje: el provisorio del builder era v1016)');
+  eq(count(SERVER, "20261105-v1020"), 1, 'M0 BUILD v1020 x1 en server.js (re-estampado del aterrizaje v1020)');
   eq(count(SERVER, 'await presenceJob.promise'), 2, 'M1 la presencia se espera COMPLETA en las dos rutas de prueba (pieza 3)');
   ok(count(SERVER, 'espera_completa: true') >= 2, 'M2 la espera completa queda registrada en foto_gate');
-  ok(/if \(!rescueIdxS\.has\(i\)\) send\('post'/.test(SERVER), 'M3 el evento post de una pieza en rescate se RETIENE (el póster nunca se emite)');
+  ok(/if \(rescueIdxS\.has\(i\) \|\| \(i === 0 && classifyPromise\)\) return;/.test(SERVER), 'M3 (re-pin del aterrizaje v1020) el evento post de una pieza en rescate se RETIENE: la pieza 5 del lote ILUSTRADA-BAJO-LA-VARA reestructuró la línea a guardia+return con la misma semántica de retención, extendida al slot 0 con la clasificación en vuelo (el póster nunca se emite)');
   ok(count(SERVER, 'armando: true') >= 1 && count(DEMO, 'armando: true') >= 1, 'M4 las piezas sin rescatar salen en armado honesto en las dos superficies (stream y generateDemo)');
   ok(/rescuePieceWithSeal/.test(SERVER) && /qaGeneratedLogo/.test(SERVER), 'M5 la cadena de rescate sella con el logo real y lo verifica (QA del logo)');
   ok(/trialLogoAbsPath\(trialDigest\)/.test(SERVER), 'M6 el logo de la prueba sale del digest (logo-trial) por trialLogoAbsPath');

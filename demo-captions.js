@@ -169,6 +169,8 @@ const TAGS_AR = {
   moda: ['#modaargentina', '#tiendaderopa', '#ootd', '#comprelocal', '#nuevacoleccion'],
   gastronomia: ['#foodieargentina', '#gastronomia', '#antojo', '#restaurante', '#buenosairesfood'],
   belleza: ['#bellezaargentina', '#peluqueria', '#estetica', '#makeup', '#skincare'],
+  peluqueria: ['#peluqueria', '#peluqueriaargentina', '#coloracion', '#peluqueriabuenosaires', '#cortedepelo'],
+  makeup: ['#maquillaje', '#makeupargentina', '#makeup', '#skincare', '#belleza'],
   fitness: ['#fitnessargentina', '#entrenamiento', '#gymlife', '#vidasana', '#personaltrainer'],
   mascotas: ['#mascotasargentina', '#veterinaria', '#petshop', '#doglover', '#gatos'],
   salud: ['#saludargentina', '#odontologia', '#bienestar', '#saluddental', '#habitossaludables'],
@@ -202,6 +204,8 @@ const TAGS_NEUTRAL = {
   moda: ['#moda', '#tiendaderopa', '#ootd', '#fashion', '#nuevacoleccion'],
   gastronomia: ['#foodie', '#gastronomia', '#antojo', '#restaurante', '#foodlover'],
   belleza: ['#belleza', '#peluqueria', '#estetica', '#makeup', '#skincare'],
+  peluqueria: ['#peluqueria', '#coloracion', '#cortedepelo', '#hairsalon', '#balayage'],
+  makeup: ['#maquillaje', '#makeup', '#skincare', '#belleza', '#makeupartist'],
   fitness: ['#fitness', '#entrenamiento', '#gymlife', '#vidasana', '#personaltrainer'],
   mascotas: ['#mascotas', '#veterinaria', '#petshop', '#doglover', '#mascotasfelices'],
   salud: ['#salud', '#odontologia', '#bienestar', '#saluddental', '#habitossaludables'],
@@ -226,9 +230,17 @@ const TAGS_NEUTRAL = {
   otro: ['#pymes', '#negocioslocales', '#comerciolocal', '#apoyolocal'],
 };
 
-function demoHashtags(category, country, tone, lang) {
+function demoHashtags(category, country, tone, lang, subcat) {
   const base = (lang === 'en' || country === 'US') ? TAGS_US : tone === 'tu' ? TAGS_NEUTRAL : country === 'UY' ? TAGS_UY : TAGS_AR;
-  const tags = [...(base[category] || base.otro)]
+  // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) El pool se elige por
+  // RUBRO+SUBRUBRO: si el subrubro tiene pool propio en la tabla
+  // (makeup, peluqueria…), manda él; el rubro pelado ya no alcanza —
+  // belleza/makeup salía con hashtags de peluquería porque 'belleza'
+  // era la única clave consultada. Sin pool de subrubro, el de
+  // siempre (compatibilidad total con los llamadores históricos).
+  const sub = String(subcat || '').trim().toLowerCase();
+  const key = (sub && base[sub]) ? sub : category;
+  const tags = [...(base[key] || base[category] || base.otro)]
     .sort(() => Math.random() - 0.5)
     .slice(0, 5);
   return tags.join(' ');
@@ -819,7 +831,13 @@ const DEMO_TOPICS = {
 const TAGS_US = {
   moda: ['#fashion', '#boutique', '#ootd', '#shoplocal', '#newarrivals'],
   gastronomia: ['#foodie', '#foodlover', '#restaurant', '#eatlocal', '#foodstagram'],
-  belleza: ['#beauty', '#hairsalon', '#hairgoals', '#salonlife', '#balayage'],
+  // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) El pool 'belleza' EN era un
+  // set de PELUQUERÍA: una marca de skincare/maquillaje salía con
+  // #balayage #hairsalon (corrida The Ordinary, 13/11). 'belleza' pasa
+  // a ser el pool genérico de belleza/cuidado; el pelo vive en su
+  // propio pool 'peluqueria', que demoHashtags elige por SUBRUBRO.
+  belleza: ['#beauty', '#skincare', '#glowingskin', '#beautyroutine', '#selfcare'],
+  peluqueria: ['#beauty', '#hairsalon', '#hairgoals', '#salonlife', '#balayage'],
   makeup: ['#makeup', '#mua', '#softglam', '#makeupartist', '#bridalmakeup'],
   fitness: ['#fitness', '#gymlife', '#training', '#healthylifestyle', '#personaltrainer'],
   mascotas: ['#petcare', '#doggrooming', '#petlovers', '#dogsofinstagram', '#petshop'],
@@ -1532,7 +1550,7 @@ function anchorsMatch348(a, b) {
 //    generator también los recibe por primera vez en la prueba).
 //  · Las piezas SIN ancla (relleno de pool) conservan el préstamo
 //    histórico entre temas del rubro.
-function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang, prevCaptions, voiceLine }) {
+function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang, prevCaptions, voiceLine, subcat }) {
   const en = lang === 'en';
   const list = Array.isArray(topics) ? topics : [];
   const piece = list[idx] || {};
@@ -1569,7 +1587,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
     }
     const caption = buildFinalCaption(t, { business, tone, goalLine: at.gl, voiceLine: at.vl });
     if (usedBodies.has(bodyKey(caption))) continue;
-    const hashtags = demoHashtags(cat, country, tone, lang);
+    const hashtags = demoHashtags(cat, country, tone, lang, subcat);
     // (CORRECTIVO-9) El gateInput declara el idioma: la puerta ES de
     // este camino también queda positiva (sin lang, captionPasses no
     // aplica el chequeo de idioma — ver generator.js).
@@ -1627,7 +1645,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
       if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
     }
   }
-  return { caption, hashtags: demoHashtags(cat, country, tone, lang), topicIndex: idx, ok: true, fallback: true };
+  return { caption, hashtags: demoHashtags(cat, country, tone, lang, subcat), topicIndex: idx, ok: true, fallback: true };
 }
 
 // ---------- Reglas de pieza v209: helpers compartidos ----------
