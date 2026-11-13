@@ -2461,9 +2461,27 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // foto ni un formato fingido. Dominante reel/foto/sin dato: las
   // piezas quedan como siempre (el video del demo ya es el camino de
   // video; la foto es el histórico) y solo viaja el registro.
+  // (LOTE B · FORMATO SIN SILENCIO) El diagnóstico estructurado del
+  // formato (formato_diag): el resumen spec.formato de C5 cuenta, pero
+  // el detalle de cada fallback (pieza + motivo) vivía solo embebido en
+  // las piezas, y el caso «digest sin formatos» no dejaba registro
+  // alguno. formato_diag se construye SIEMPRE (también sin dominante):
+  // dominante, posteos del feed leídos, tamaño del pool, candidatos,
+  // carruseles marcados, fallbacks por motivo con su detalle por pieza
+  // y (lo completa el armado/la ruta) las promociones fallidas. No
+  // cambia ninguna decisión de formato: solo observa y registra.
+  let formatoDomB = null;
+  let formatoCandidatosB = 0;
+  const formatoFallbackMotivosB = {};
+  const formatoFallbackDetalleB = [];
+  const regFormatoFallbackB = (i, motivo) => {
+    formatoFallbackMotivosB[motivo] = (formatoFallbackMotivosB[motivo] || 0) + 1;
+    formatoFallbackDetalleB.push({ idx: i, motivo });
+  };
   let formatoSpec = null;
   try {
     const domF = (digest && clientDigest.formatoDominanteDe) ? clientDigest.formatoDominanteDe(digest) : null;
+    formatoDomB = domF;
     if (domF) {
       formatoSpec = { dominante: domF, carrusel: 0, fallback: 0 };
       if (domF === 'carrusel') {
@@ -2476,8 +2494,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
           const heroReal = (typeof sp.photo === 'string' && webPaths.has(sp.photo))
             || (sp.photo && typeof sp.photo === 'object' && sp.photo.userPhoto && photoPath);
           if (heroReal) candidatos.push(i);
-          else { sp.formato_fallback = { pedido: 'carrusel', aplicado: 'foto', motivo: 'sin-foto-real' }; formatoSpec.fallback++; }
+          else { sp.formato_fallback = { pedido: 'carrusel', aplicado: 'foto', motivo: 'sin-foto-real' }; formatoSpec.fallback++; regFormatoFallbackB(i, 'sin-foto-real'); }
         });
+        formatoCandidatosB = candidatos.length;
         const extrasPorPieza = new Map(candidatos.map((i) => [i, []]));
         let ronda = 0;
         for (const pth of extraPool) {
@@ -2496,13 +2515,27 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
           } else {
             specPosts[i].formato_fallback = { pedido: 'carrusel', aplicado: 'foto', motivo: 'sin-material' };
             formatoSpec.fallback++;
+            regFormatoFallbackB(i, 'sin-material');
           }
         }
       }
     }
   } catch (e) { formatoSpec = null; /* el formato jamás frena la prueba */ }
+  // (LOTE B) El resumen estructurado viaja como salida del spec (no
+  // solo embebido en las piezas): es la materia prima del log
+  // [formato-marca] y de out.formato_diag de las rutas de la prueba.
+  const formatoDiagB = {
+    dominante: formatoDomB,
+    feed_posts: (digest && digest.formatos && Number.isFinite(digest.formatos.total)) ? digest.formatos.total : 0,
+    pool: webPool.length,
+    candidatos: formatoCandidatosB,
+    carruseles: formatoSpec ? formatoSpec.carrusel : 0,
+    fallback: formatoFallbackMotivosB,
+    fallbacks: formatoFallbackDetalleB,
+    promocion_fallida: 0,
+  };
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, formato_diag: formatoDiagB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -2718,6 +2751,10 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     const videoBudget = Math.max(2000, renderBudget - (Date.now() - t0));
     const videoB64 = await raceMsLocal(renderVideoB64(designPaths, runDir, videoIdx), videoBudget);
 
+    // (LOTE B) Promociones de carrusel fallidas en ESTE armado (pieza
+    // marcada carrusel cuyas láminas no se pudieron leer): se cuentan
+    // para formato_diag.promocion_fallida — antes solo quedaba el warn.
+    let promocionFallidaB = 0;
     const posts = made.map((m, i) => {
       // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Pieza carrusel: la
       // portada es la pieza diseñada y las láminas son las fotos reales
@@ -2734,12 +2771,17 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
           return { type: 'carousel', image: m.image, images: imgs, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: spF.estilo_visual || null, formato: 'carrusel' };
         }
         console.warn('[formato-marca] pieza carrusel sin láminas legibles en el armado: sale como foto');
+        promocionFallidaB++;
       }
       return (i === videoIdx && videoB64)
         ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
         : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null };
     });
-    return { posts, spec: savedSpec, timedOut: !!timedOut };
+    // (LOTE B) El diagnóstico de formato del spec, completado con las
+    // promociones fallidas de este armado, sale como campo propio: la
+    // ruta sync lo vuelca a out.formato_diag y a la línea de log.
+    const formatoDiagGen = spec.formato_diag ? { ...spec.formato_diag, promocion_fallida: promocionFallidaB } : null;
+    return { posts, spec: savedSpec, timedOut: !!timedOut, formato_diag: formatoDiagGen };
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
   }

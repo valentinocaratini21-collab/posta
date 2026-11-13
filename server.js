@@ -2355,6 +2355,23 @@ function trialPostUsesClientPhoto(out, i) {
 // y client_photo=1 en los posteos que usan fotos reales del cliente.
 // expectedBusiness (opcional): si se pasa, la semana cacheada tiene que ser de
 // ese negocio — si es de otro (cache cruzado), NO se importa nada.
+// (LOTE B · FORMATO SIN SILENCIO) Línea única de diagnóstico de
+// formato por generación de prueba (§4.4 del diagnóstico
+// imagen/formato): dominante detectado, posteos del feed leídos,
+// tamaño del pool, candidatos, carruseles marcados, fallbacks por
+// motivo y promociones fallidas. La emite cada ruta al cerrar su
+// generación; el mismo resumen viaja en out.formato_diag al
+// trial_cache y queda visible en el detalle del posteo/semana.
+function trialFormatoDiagLog(ig, diag) {
+  try {
+    const d = (diag && typeof diag === 'object') ? diag : {};
+    const fb = (d.fallback && typeof d.fallback === 'object')
+      ? Object.keys(d.fallback).map((k) => `${k}:${d.fallback[k]}`).join(',')
+      : '';
+    console.log(`[formato-marca] trial ig=${ig || ''} dominante=${d.dominante || 'null'} feed_posts=${d.feed_posts || 0} pool=${d.pool || 0} candidatos=${d.candidatos || 0} carruseles=${d.carruseles || 0} fallback={${fb}} promocion_fallida=${d.promocion_fallida || 0}`);
+  } catch (e) { /* el diagnóstico nunca frena la prueba */ }
+}
+
 function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
   // (LOTE PRUEBA-ENTRADA-DIRECTA) cacheKey: la entrada solo-web lee su
@@ -2397,6 +2414,7 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
     if (gu && gu.is_guest) { trialSignal = 'auto'; trialSignalAuto = 1; }
   } catch (e) {}
   let n = 0;
+  let carruselesImportados = 0; // (LOTE B) carruseles que SÍ nacieron carrusel en esta importación
   let idx = -1;
   for (const p of posts.slice(0, (opts && opts.limit) || 7)) {
     idx++;
@@ -2439,6 +2457,17 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
         if (!buf.length || buf.length > 15 * 1024 * 1024) { console.error(`[posta] importTrialWeek: posteo idx=${idx} imagen vacía o >15MB (${buf.length}b) — se salta`); continue; }
         name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
         fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+      }
+      // (LOTE B · FORMATO SIN SILENCIO) La pieza que llegó marcada
+      // carrusel y se importa como foto deja registro con su motivo
+      // (album<2: traía láminas pero el álbum válido quedó corto;
+      // sin-images: no traía láminas utilizables) — esa degradación
+      // era muda. Y los carruseles logrados se cuentan para el
+      // evento de degradación total de abajo.
+      if (mediaType === 'carousel') carruselesImportados++;
+      else if (p.type === 'carousel') {
+        const motImp = (Array.isArray(p.images) && p.images.length >= 2) ? 'album<2' : 'sin-images';
+        console.log(`[formato-marca] trial import ig=${ig} idx=${idx} pieza degradada a foto motivo=${motImp}`);
       }
       const clientPhoto = trialPostUsesClientPhoto(out, idx) ? 1 : 0;
       // El estilo del catálogo viaja con el posteo: posts.style_code y la
@@ -2501,6 +2530,19 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
       }
     }
   } catch (e) { /* la siembra nunca frena la importación */ }
+  // (LOTE B · FORMATO SIN SILENCIO) Si la marca era carrusel-dominante
+  // (out.formato_diag, que la generación dejó en el payload) y la
+  // semana importada salió con 0 carruseles, el fallo queda como
+  // EVENTO consultable por admin (trial_formato_degradado) además del
+  // log: es la señal de QA que la corrida #5 no tuvo. Los payloads
+  // viejos sin formato_diag no atribuyen: no se emite nada.
+  try {
+    const fdImp = out && out.formato_diag;
+    if (fdImp && fdImp.dominante === 'carrusel' && n > 0 && carruselesImportados === 0) {
+      evTrack(userId, 'trial_formato_degradado', { ig, dominante: 'carrusel', carruseles: 0, importados: n, fallback: (fdImp.fallback && typeof fdImp.fallback === 'object') ? fdImp.fallback : {} });
+      console.log(`[formato-marca] trial import ig=${ig} degradado total: dominante=carrusel importados=${n} carruseles=0 (evento trial_formato_degradado)`);
+    }
+  } catch (e) { /* el registro nunca frena la importación */ }
   return n;
 }
 
@@ -33594,7 +33636,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (LOTE L6) Medallón del perfil: la descarga arrancó en segundo plano
     // arriba; a esta altura ya está (o no llega: póster tipográfico).
     profilePicPath = await raceMs(profilePicPathP, 2000);
-    const { posts, spec, timedOut: genTimedOut } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
+    const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -33724,6 +33766,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       competition_line: trialCompetition,
       ideas: ideasForOut.slice(0, 6),
       posts,
+      formato_diag: genFormatoDiag || null, // (LOTE B · FORMATO SIN SILENCIO) resumen de formato de la semana: viaja al trial_cache y al detalle
       design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
       week: buildTrialWeek(posts.length, lang),
       screenshot,
@@ -33746,6 +33789,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (v323 · pieza 8) Nace el candado de 90 días de este negocio (@ o
     // dominio): la próxima generación de esta identidad espera al día 91.
     if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
+    trialFormatoDiagLog(ig, genFormatoDiag); // (LOTE B) una línea por generación, también en la ruta sync
     track(null, 'prueba_done', igKey);
     ok = true;
     res.json(out);
@@ -35206,6 +35250,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // con las láminas como data URL. Lámina ilegible se salta; si el
     // álbum queda en <2, la pieza queda foto y el fallback se registra
     // en el log — nunca un carrusel de una sola foto.
+    let streamPromocionFallida = 0; // (LOTE B) piezas marcadas carrusel que no se pudieron promover en este stream
     try {
       for (let i = 0; i < n; i++) {
         const sp = specPosts[i];
@@ -35224,9 +35269,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           posts[i] = { ...cur, type: 'carousel', images: imgs, formato: 'carrusel' };
         } else {
           console.warn('[formato-marca] pieza', i, 'del stream sin láminas legibles: queda como foto');
+          streamPromocionFallida++;
         }
       }
     } catch (e) { console.error('[formato-marca] enriquecimiento carrusel (stream):', e.message); }
+    // (LOTE B) Las promociones fallidas del stream completan el
+    // diagnóstico que buildDemoSpec dejó en el spec.
+    if (spec.formato_diag) spec.formato_diag.promocion_fallida = streamPromocionFallida;
 
     // 4) El video (v182): recorre TODOS los diseños con cortes (tour por
     // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
@@ -35422,6 +35471,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       grid_extra: gridExtra,
       ideas: ideas.slice(0, 6),
       posts,
+      formato_diag: spec.formato_diag || null, // (LOTE B · FORMATO SIN SILENCIO) resumen de formato de la semana: viaja al trial_cache y al detalle
       design: {
         posts: specPosts,
         styles: spec.styles,
@@ -35449,6 +35499,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     if (!testMode) trialCacheWriteWeb(fields.web, out, testMode);
     // (v323 · pieza 8) Nace el candado de 90 días de este negocio.
     if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
+    trialFormatoDiagLog(ig, spec.formato_diag); // (LOTE B) una línea por generación, también en la ruta stream
     track(null, 'prueba_done', igKey);
     if (!closed) { send('done', { out }); doneSent = true; }
     finish();
@@ -37265,7 +37316,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1008';
+const BUILD_ID = '20261105-v1009';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
