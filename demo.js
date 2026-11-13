@@ -2534,8 +2534,66 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     fallbacks: formatoFallbackDetalleB,
     promocion_fallida: 0,
   };
+  // (LOTE FOTOS-ELEGIBILIDAD · L2b) EL RESULTADO DEL GATE VIAJA EN EL
+  // SPEC: qué fotos del sitio entraron al pool, qué veredicto tuvo cada
+  // una (el producto que el mapa vio en ella / el veredicto de
+  // presencia), por qué vía quedó elegible y en qué pieza se usó. Sin
+  // este registro, una semana de pósteres era indistinguible de una
+  // semana sin fotos — el diagnóstico de la corrida Veja #6 (§2) tuvo
+  // que reconstruir a mano lo que el payload no decía. SOLO REGISTRA:
+  // no cambia ninguna decisión del spec (la puerta sigue fail-closed).
+  let fotoGate = null;
+  try {
+    const usadasPorPath = new Map();
+    (Array.isArray(photos) ? photos : []).forEach((p, i) => {
+      if (typeof p !== 'string') return;
+      if (!usadasPorPath.has(p)) usadasPorPath.set(p, []);
+      usadasPorPath.get(p).push(i);
+    });
+    const poolPorUrl = new Map();
+    for (const w of webPool) if (w && w.url && !poolPorUrl.has(w.url)) poolPorUrl.set(w.url, w);
+    const fotosGate = [];
+    const vistasGate = new Set();
+    for (const raw of (Array.isArray(extraPhotos) ? extraPhotos : [])) {
+      if (!raw || typeof raw.path !== 'string') continue;
+      const claveGate = raw.url || raw.path;
+      if (vistasGate.has(claveGate)) continue;
+      vistasGate.add(claveGate);
+      const wPool = raw.url ? (poolPorUrl.get(raw.url) || null) : null;
+      const productoGate = wPool ? (wPool.producto || null) : (raw.url ? clientDigest.photoProductFor(digest, raw.url) : null);
+      const marcaVisibleGate = wPool ? !!wPool.marca_visible : (raw.url ? clientDigest.photoBrandVisible(digest, raw.url) : false);
+      const mvGate = wPool && typeof wPool.marca_verdict === 'boolean' ? wPool.marca_verdict : (raw.url ? clientDigest.brandPresenceOf(digest, raw.url) : null);
+      fotosGate.push({
+        url: raw.url || null,
+        temas: Array.isArray(raw.temas) ? raw.temas.slice(0, 8) : [],
+        admitida: !!wPool,
+        producto: productoGate || null,
+        marca_visible: marcaVisibleGate,
+        marca_verdict: typeof mvGate === 'boolean' ? mvGate : null,
+        via: productoGate ? 'producto' : (mvGate === true || marcaVisibleGate) ? 'marca' : 'ninguna',
+        piezas: (usadasPorPath.get(raw.path) || []).slice(),
+      });
+    }
+    fotoGate = {
+      fotos: fotosGate,
+      piezas: specPosts.map((sp, i) => ({
+        i,
+        origen: photoSourceOf.get(i) || null,
+        producto: photoProductOf.get(i) || null,
+        poster: posterAt.has(i),
+      })),
+      resumen: {
+        sitio: fotosGate.length,
+        admitidas: fotosGate.filter((f) => f.admitida).length,
+        con_producto: fotosGate.filter((f) => !!f.producto).length,
+        con_marca: fotosGate.filter((f) => f.via === 'marca' || f.marca_visible).length,
+        piezas_con_foto_web: fotosGate.reduce((a, f) => a + f.piezas.length, 0),
+        piezas_poster: specPosts.filter((sp, i) => posterAt.has(i)).length,
+      },
+    };
+  } catch (e) { fotoGate = null; /* el registro jamás frena el spec */ }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, formato_diag: formatoDiagB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -2684,6 +2742,9 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     videoIdx, count: n,
     engine: DEMO_ENGINE_V,
     subcat: spec.subcat || null,
+    // (LOTE FOTOS-ELEGIBILIDAD · L2b) El registro del gate viaja en el
+    // spec guardado: la ruta sync lo levanta al payload (out.foto_gate).
+    foto_gate: spec.foto_gate || null,
   };
   // En generación inicial photoPath existe: lo inyectamos directo.
   const withPhotos = specPosts.map((p) => (

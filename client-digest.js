@@ -3159,6 +3159,10 @@ module.exports = {
   extractNamedProducts, starNamedEvidenceOk,
   // (LOTE CORRECTIVO-8) Rótulos de rol de créditos + corroboración.
   isCreditRoleName, namedItemCorroborated,
+  // (LOTE FOTOS-ELEGIBILIDAD · L1) La corroboración de UNA entrada,
+  // exportada: el vocabulario del mapa foto→producto filtra los
+  // nombrados del feed con la MISMA regla de C8 (sin auto-validación).
+  namedEntryCorroborated,
   // (v231) Adopción de patrones: candado de números de promo
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda

@@ -1595,6 +1595,35 @@ function trialBioLink(link) {
   return p;
 }
 const raceMs = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
+/* (LOTE FOTOS-ELEGIBILIDAD · L1) VOCABULARIO DEL FEED PARA EL MAPA
+ * FOTO→PRODUCTO: hasta este lote, los itemNames de trialPhotoEntries
+ * salían SOLO de la web (services + catálogo + link de bio) — para una
+ * tienda sin catálogo legible (Veja: services [] y catálogo null) el
+ * mapa no podía existir y productHit era imposible POR CONSTRUCCIÓN,
+ * aunque el feed nombrara los productos en cada caption (diagnóstico
+ * corrida Veja #6, §2.3: los dos vocabularios eran disjuntos). Los
+ * temas del spec se anclan en digest.productos, que SUMA los
+ * nombrados de las captions: el mapa se clasifica también contra los
+ * productos_nombrados del propio feed, filtrados por la corroboración
+ * cruzada de C8 (namedEntryCorroborated) — el nombre suelto sin
+ * evidencia NO entra: la puerta no se auto-valida. */
+function trialFeedItemNames({ captions, items, business, handle } = {}) {
+  try {
+    const named = clientDigest.extractNamedProducts({ captions: captions || [], items: items || [], business: business || '', handle: handle || '' });
+    return (named || []).filter((e) => e && e.nombre && clientDigest.namedEntryCorroborated(e)).map((e) => e.nombre);
+  } catch (e) { return []; }
+}
+/* Suma nombres a itemNames sin duplicar (match de ítem de C8) y
+ * devuelve cuántos sumó — el payload lo registra en foto_gate. */
+function trialExtendItemNames(itemNames, feedNames) {
+  let added = 0;
+  for (const n of (feedNames || [])) {
+    if (!n) continue;
+    if (itemNames.some((x) => clientDigest.sameItemName(String((x && (x.nombre || x)) || ''), n))) continue;
+    itemNames.push(n); added++;
+  }
+  return added;
+}
 /* Mapa foto→producto de la PRUEBA: clasifica las fotos de SU web contra
  * los ítems ya conocidos (web + catálogo), bajo el MISMO tope diario del
  * demo con IA y solo si hay clave. Best-effort total: sin mapa, la
@@ -1622,25 +1651,86 @@ async function trialPhotoEntries(webPhotos, itemNames) {
  * SIN VERIFICAR y el registro lo dice: para la entrega de la prueba,
  * sin verificar = no-pase (la foto no se entrega «porque es la que
  * hay»); el slot cae al camino de siempre sin foto real válida. */
+/* (LOTE FOTOS-ELEGIBILIDAD · L2) PRESENCIA CON PRESUPUESTO REAL Y
+ * CACHÉ POR CONTENIDO: la llamada de visión tarda lo que tarda (su
+ * timeout interno es 45 s) y la carrera de 6/7 s la condenaba a
+ * perderse — el gate quedaba «sin verificar» corrida tras corrida y
+ * desde afuera era indistinguible de un «todo false» (diagnóstico
+ * corrida Veja #6, §2.4). Tres piezas, sin tocar la puerta:
+ * (1) PRESUPUESTO PROPIO: las rutas corren el job contra
+ * TRIAL_PRESENCE_BUDGET_MS (12 s), en paralelo con el mapa como
+ * siempre — la carrera sigue acotada, pero ya no es imposible.
+ * (2) CACHÉ POR CONTENIDO: el job se memoiza por hash de contenido de
+ * las fotos + negocio (deepRead.photoContentKey), con el patrón de
+ * trialDeepPromises: si la carrera se pierde, la promesa SIGUE en
+ * segundo plano y su veredicto queda cacheado 30 min — la próxima
+ * corrida del mismo negocio (reintento, set-ig, regeneración) lo lee
+ * al instante y NO re-paga la visión.
+ * (3) ESTADO AUDITABLE: el job resuelve { verdicts, estado, fuente }
+ * y las rutas vuelcan el estado en el payload (foto_gate.presencia):
+ * la próxima corrida caída se diagnostica desde el payload, sin logs.
+ * El contrato histórico de trialBrandPresence (veredictos | null) se
+ * conserva como envoltorio del job. */
+const TRIAL_PRESENCE_BUDGET_MS = 12000;
+const trialPresenceCache = new Map();
+function trialPresenceKey(webPhotos, business) {
+  try {
+    const hs = [];
+    for (const w of (webPhotos || [])) {
+      const k = w && w.path ? deepRead.photoContentKey(w.path) : null;
+      if (k) hs.push(k);
+    }
+    if (!hs.length) return null;
+    hs.sort();
+    return 'pres:' + crypto.createHash('sha1').update(String(business || '') + '|' + hs.join(',')).digest('hex').slice(0, 20);
+  } catch (e) { return null; }
+}
+/* Job de presencia: { promise, estadoPre }. La promesa resuelve
+ * { verdicts, estado, fuente } y NUNCA rechaza. estadoPre adelanta lo
+ * que la ruta ya sabe sin esperar: 'sin_fotos' · 'sin_vision' · 'ok'
+ * (job en vuelo o veredictos ya cacheados). */
+function trialBrandPresenceJob(webPhotos, itemNames, business) {
+  const photos = (Array.isArray(webPhotos) ? webPhotos : []).filter((w) => w && w.url && w.path)
+    .slice(0, deepRead.VISION_MAX_PHOTOS).map((w) => ({ key: w.url, path: w.path }));
+  if (!photos.length) return { promise: Promise.resolve({ verdicts: null, estado: 'sin_fotos', fuente: 'ninguna' }), estadoPre: 'sin_fotos' };
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!apiKey || !costs.demoAiCapOk()) {
+    console.log(`[foto-gate] prueba sin visión disponible (sin clave o tope de IA): ${photos.length} foto(s) reales quedan SIN VERIFICAR — no se entregan como imagen de pieza`);
+    return { promise: Promise.resolve({ verdicts: null, estado: 'sin_vision', fuente: 'ninguna' }), estadoPre: 'sin_vision' };
+  }
+  const key = trialPresenceKey(photos, business);
+  if (key) {
+    const hit = trialPresenceCache.get(key);
+    if (hit && hit.res) return { promise: Promise.resolve({ ...hit.res, fuente: 'cache' }), estadoPre: 'ok' };
+    if (hit) return { promise: hit.promise, estadoPre: 'ok' };
+  }
+  const promise = (async () => {
+    let res;
+    try {
+      const verdicts = await deepRead.classifyBrandPresence({ photos, business, items: itemNames, apiKey, fetchImpl: null });
+      if (!verdicts || !Object.keys(verdicts).length) {
+        console.log(`[foto-gate] la visión no devolvió veredictos de presencia: ${photos.length} foto(s) quedan SIN VERIFICAR — no-pase para la entrega de la prueba`);
+        res = { verdicts: null, estado: 'sin_veredictos', fuente: 'vision' };
+      } else {
+        const okN = Object.values(verdicts).filter((v) => v && v.marca === true).length;
+        console.log(`[foto-gate] presencia de marca en la prueba: ${okN}/${Object.keys(verdicts).length} foto(s) con el negocio visible en la escena`);
+        res = { verdicts, estado: 'ok', fuente: 'vision' };
+      }
+    } catch (e) { res = { verdicts: null, estado: 'error', fuente: 'vision' }; }
+    if (key) { const ent = trialPresenceCache.get(key); if (ent) ent.res = res; }
+    return res;
+  })();
+  if (key) {
+    trialPresenceCache.set(key, { promise, res: null });
+    if (trialPresenceCache.size > 300) trialPresenceCache.clear();
+    promise.then(() => { const t = setTimeout(() => trialPresenceCache.delete(key), 30 * 60 * 1000); if (t.unref) t.unref(); });
+  }
+  return { promise, estadoPre: 'ok' };
+}
 async function trialBrandPresence(webPhotos, itemNames, business) {
   try {
-    if (!Array.isArray(webPhotos) || !webPhotos.length) return null;
-    const photos = webPhotos.filter((w) => w && w.url && w.path).slice(0, deepRead.VISION_MAX_PHOTOS)
-      .map((w) => ({ key: w.url, path: w.path }));
-    if (!photos.length) return null;
-    const apiKey = process.env.OPENAI_API_KEY || '';
-    if (!apiKey || !costs.demoAiCapOk()) {
-      console.log(`[foto-gate] prueba sin visión disponible (sin clave o tope de IA): ${photos.length} foto(s) reales quedan SIN VERIFICAR — no se entregan como imagen de pieza`);
-      return null;
-    }
-    const verdicts = await deepRead.classifyBrandPresence({ photos, business, items: itemNames, apiKey, fetchImpl: null });
-    if (!verdicts || !Object.keys(verdicts).length) {
-      console.log(`[foto-gate] la visión no devolvió veredictos de presencia: ${photos.length} foto(s) quedan SIN VERIFICAR — no-pase para la entrega de la prueba`);
-      return null;
-    }
-    const okN = Object.values(verdicts).filter((v) => v && v.marca === true).length;
-    console.log(`[foto-gate] presencia de marca en la prueba: ${okN}/${Object.keys(verdicts).length} foto(s) con el negocio visible en la escena`);
-    return verdicts;
+    const r = await trialBrandPresenceJob(webPhotos, itemNames, business).promise;
+    return r ? r.verdicts : null;
   } catch (e) { return null; }
 }
 // Transferencia TOTAL al registrarse: la cuenta nace con el fundamento
@@ -33516,21 +33606,61 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // corrían en serie (fotos → catálogo 7 s → entradas 7 s): ahora las
     // dos primeras corren en paralelo; las entradas siguen después porque
     // necesitan los ítems del catálogo.
+    // (LOTE FOTOS-ELEGIBILIDAD · L1) Los captions del embed se leen ACÁ
+    // (la MISMA promesa que más abajo alimenta la voz y la señal de
+    // cariño — cero fetches nuevos) para minar los productos nombrados
+    // del feed ANTES de clasificar las fotos: son el vocabulario que le
+    // faltaba al mapa (ver trialFeedItemNames). Si el embed no llega en
+    // 2 s, el mapa va con el vocabulario web de siempre (como hasta hoy).
+    let feedCapsForMap = [];
+    if (ig) {
+      try {
+        const _htmlForMap = await raceMs(embedPromise, 2000);
+        if (_htmlForMap) feedCapsForMap = (feedAudit.parseEmbedPosts(_htmlForMap) || []).map((p) => (p && p.caption) || '').filter(Boolean);
+      } catch (e) { /* sin embed a tiempo: vocabulario web de siempre */ }
+    }
     let deep = null;
+    let trialGateInfo = null;
     if (webData) {
       const deepCatalogP = raceMs(trialDeepCatalog(webData), 7000);
       webExtraPhotos = await webPhotosP;
       marcaWebBrand(webData, webExtraPhotos);
       const catalog = await deepCatalogP;
       const itemNames = [...(webData.services || []), ...((catalog && catalog.items) || []).map((x) => x.nombre)];
+      const itemNamesBase = itemNames.length;
+      const feedNamesAdded = trialExtendItemNames(itemNames, trialFeedItemNames({ captions: feedCapsForMap, items: itemNames, business, handle: ig }));
       // (CORRECTIVO-7) La presencia de marca corre en la MISMA ventana
-      // que el mapa (en paralelo, mismo presupuesto): el veredicto
-      // queda en el fundamento y el gate del spec lo lee de ahí.
-      const [photoEntries, brandPresence] = await Promise.all([
+      // que el mapa (en paralelo): el veredicto queda en el fundamento
+      // y el gate del spec lo lee de ahí. (LOTE FOTOS-ELEGIBILIDAD · L2)
+      // La presencia corre como JOB con su presupuesto propio y caché
+      // por contenido: si la carrera se pierde, el veredicto igual
+      // queda para la próxima corrida y el payload dice cuál fue el
+      // estado (foto_gate) — nunca más un «sin verificar» mudo.
+      const presenceJob = trialBrandPresenceJob(webExtraPhotos, itemNames, business);
+      const [photoEntries, presenceRes] = await Promise.all([
         raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000),
-        raceMs(trialBrandPresence(webExtraPhotos, itemNames, business), 7000),
+        raceMs(presenceJob.promise, TRIAL_PRESENCE_BUDGET_MS),
       ]);
+      const brandPresence = presenceRes ? presenceRes.verdicts : null;
       deep = { catalog, photoEntries, brandPresence };
+      trialGateInfo = {
+        presencia: {
+          estado: !webExtraPhotos.length ? 'sin_fotos'
+            : presenceJob.estadoPre === 'sin_vision' ? 'sin_vision'
+            : !presenceRes ? 'carrera_perdida'
+            : (presenceRes.estado || 'ok'),
+          fuente: presenceRes ? (presenceRes.fuente || null) : null,
+          con_marca: brandPresence ? Object.values(brandPresence).filter((v) => v && v.marca === true).length : 0,
+          total: brandPresence ? Object.keys(brandPresence).length : 0,
+        },
+        mapa: {
+          estado: !webExtraPhotos.length ? 'sin_fotos'
+            : photoEntries ? 'ok'
+            : (!itemNames.length ? 'sin_vocabulario' : 'sin_mapa'),
+          entradas: photoEntries ? Object.keys(photoEntries).length : 0,
+        },
+        vocabulario: { base: itemNamesBase, feed: feedNamesAdded, total: itemNames.length },
+      };
     }
     // (M3 FICHA-OFERTA) La ficha se completa con el catálogo profundo
     // (precios por ítem) y con las correcciones guardadas del cliente.
@@ -33759,6 +33889,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       feedMap: (trialDigest && trialDigest.feedMap) || null, // (ESTUDIO-PROFUNDO · mejora 4) mapa del feed, también en el payload
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
+      foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
       ig_pic: igPic, ig_name: igName,
@@ -34735,6 +34866,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // carreras acotadas) justo ANTES del spec — los temas de la semana
     // se derivan de él, no del catálogo por rubro.
     let deep = null;
+    let trialGateInfo = null;
     {
       // (LOTE L6) Catálogo, bio-link y fotos de la web son independientes:
       // antes iban en serie (catálogo 6 s → bio-link 4 s → entradas 6 s,
@@ -34751,13 +34883,40 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const itemNames = [...((webData && webData.services) || []),
         ...((catalog && catalog.items) || []).map((x) => x.nombre),
         ...((bioLink && bioLink.items) || []).map((x) => x.nombre)];
-      // (CORRECTIVO-7) Presencia de marca en paralelo con el mapa,
-      // mismo presupuesto: veredictos al fundamento, gate en el spec.
-      const [photoEntries, brandPresence] = await Promise.all([
+      // (LOTE FOTOS-ELEGIBILIDAD · L1) El vocabulario del mapa suma los
+      // productos nombrados CORROBORADOS del feed (las captions ya
+      // están leídas en esta ruta: trialProfile — cero fetches nuevos).
+      const itemNamesBase = itemNames.length;
+      const feedNamesAdded = trialExtendItemNames(itemNames, trialFeedItemNames({ captions: (trialProfile && trialProfile.captions) || [], items: itemNames, business, handle: ig }));
+      // (CORRECTIVO-7) Presencia de marca en paralelo con el mapa:
+      // veredictos al fundamento, gate en el spec. (LOTE
+      // FOTOS-ELEGIBILIDAD · L2) Como JOB con presupuesto propio y
+      // caché por contenido, y su estado viaja en el payload.
+      const presenceJob = trialBrandPresenceJob(webExtraPhotos, itemNames, business);
+      const [photoEntries, presenceRes] = await Promise.all([
         webExtraPhotos.length ? raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : Promise.resolve(null),
-        webExtraPhotos.length ? raceMs(trialBrandPresence(webExtraPhotos, itemNames, business), 6000) : Promise.resolve(null),
+        webExtraPhotos.length ? raceMs(presenceJob.promise, TRIAL_PRESENCE_BUDGET_MS) : Promise.resolve(null),
       ]);
+      const brandPresence = presenceRes ? presenceRes.verdicts : null;
       deep = { catalog, bioLink, photoEntries, brandPresence };
+      trialGateInfo = {
+        presencia: {
+          estado: !webExtraPhotos.length ? 'sin_fotos'
+            : presenceJob.estadoPre === 'sin_vision' ? 'sin_vision'
+            : !presenceRes ? 'carrera_perdida'
+            : (presenceRes.estado || 'ok'),
+          fuente: presenceRes ? (presenceRes.fuente || null) : null,
+          con_marca: brandPresence ? Object.values(brandPresence).filter((v) => v && v.marca === true).length : 0,
+          total: brandPresence ? Object.keys(brandPresence).length : 0,
+        },
+        mapa: {
+          estado: !webExtraPhotos.length ? 'sin_fotos'
+            : photoEntries ? 'ok'
+            : (!itemNames.length ? 'sin_vocabulario' : 'sin_mapa'),
+          entradas: photoEntries ? Object.keys(photoEntries).length : 0,
+        },
+        vocabulario: { base: itemNamesBase, feed: feedNamesAdded, total: itemNames.length },
+      };
     }
     // (M3 FICHA-OFERTA) La ficha se completa con el catálogo profundo y,
     // si no hubo web, nace del feed (bio + captions) con sus correcciones.
@@ -35457,6 +35616,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
+      foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
@@ -37316,7 +37476,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1010';
+const BUILD_ID = '20261105-v1011';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
