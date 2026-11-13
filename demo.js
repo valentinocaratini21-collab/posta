@@ -2337,8 +2337,61 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     const vIdx = Math.min(2, Math.max(0, specPosts.length - 1));
     if (specPosts[vIdx]) specPosts[vIdx].muestra_neutra = true;
   }
+  // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) El formato sigue a la
+  // marca (digest.formatos, calculado de su feed ya leído): si el
+  // dominante es CARRUSEL, las piezas con foto real propia (web o la
+  // subida por el dueño — nunca stock, nunca el póster) se arman en
+  // carrusel: la pieza diseñada es la portada y las láminas extra son
+  // fotos reales del negocio del pool web que no son portada de otra
+  // pieza (reparto en ronda, tope 3 extra por pieza). Sin material
+  // (portada no real, o ninguna lámina extra), la pieza cae a foto y el
+  // fallback queda REGISTRADO en la pieza (formato_fallback) y en el
+  // resumen del spec (spec.formato) — jamás un «carrusel» de una sola
+  // foto ni un formato fingido. Dominante reel/foto/sin dato: las
+  // piezas quedan como siempre (el video del demo ya es el camino de
+  // video; la foto es el histórico) y solo viaja el registro.
+  let formatoSpec = null;
+  try {
+    const domF = (digest && clientDigest.formatoDominanteDe) ? clientDigest.formatoDominanteDe(digest) : null;
+    if (domF) {
+      formatoSpec = { dominante: domF, carrusel: 0, fallback: 0 };
+      if (domF === 'carrusel') {
+        const webPaths = new Set(webPool.map((w) => w.path).filter(Boolean));
+        const heroPaths = new Set(specPosts.map((p) => (p && typeof p.photo === 'string') ? p.photo : null).filter(Boolean));
+        const extraPool = webPool.map((w) => w.path).filter((pth) => pth && !heroPaths.has(pth));
+        const candidatos = [];
+        specPosts.forEach((sp, i) => {
+          if (!sp || posterAt.has(i)) return;
+          const heroReal = (typeof sp.photo === 'string' && webPaths.has(sp.photo))
+            || (sp.photo && typeof sp.photo === 'object' && sp.photo.userPhoto && photoPath);
+          if (heroReal) candidatos.push(i);
+          else { sp.formato_fallback = { pedido: 'carrusel', aplicado: 'foto', motivo: 'sin-foto-real' }; formatoSpec.fallback++; }
+        });
+        const extrasPorPieza = new Map(candidatos.map((i) => [i, []]));
+        let ronda = 0;
+        for (const pth of extraPool) {
+          if (!candidatos.length) break;
+          const i = candidatos[ronda % candidatos.length];
+          const arr = extrasPorPieza.get(i);
+          if (arr.length < 3) arr.push(pth);
+          ronda++;
+        }
+        for (const i of candidatos) {
+          const extras = extrasPorPieza.get(i) || [];
+          if (extras.length >= 1) {
+            specPosts[i].formato = 'carrusel';
+            specPosts[i].slides = extras;
+            formatoSpec.carrusel++;
+          } else {
+            specPosts[i].formato_fallback = { pedido: 'carrusel', aplicado: 'foto', motivo: 'sin-material' };
+            formatoSpec.fallback++;
+          }
+        }
+      }
+    }
+  } catch (e) { formatoSpec = null; /* el formato jamás frena la prueba */ }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -2456,6 +2509,19 @@ function appendOfferTerms(caption, topic, lang) {
   } catch (e) { return caption; }
 }
 
+/* (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Foto real del negocio como
+ * data URL (para las láminas extra de un carrusel): mime por extensión;
+ * archivo ilegible o inexistente → null (la lámina se salta, nunca se
+ * finge). */
+function dataUrlDeArchivo(p) {
+  try {
+    if (!p || typeof p !== 'string' || !fs.existsSync(p)) return null;
+    const ext = (p.split('.').pop() || '').toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    return `data:${mime};base64,` + fs.readFileSync(p).toString('base64');
+  } catch (e) { return null; }
+}
+
 async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null, renderTimeoutMs = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Presupuesto duro del
   // render+video: si expira, el primer posteo sale con la foto real.
@@ -2541,11 +2607,27 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     const videoBudget = Math.max(2000, renderBudget - (Date.now() - t0));
     const videoB64 = await raceMsLocal(renderVideoB64(designPaths, runDir, videoIdx), videoBudget);
 
-    const posts = made.map((m, i) => (
-      i === videoIdx && videoB64
+    const posts = made.map((m, i) => {
+      // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Pieza carrusel: la
+      // portada es la pieza diseñada y las láminas son las fotos reales
+      // del spec (sp.slides). Manda sobre el video: una marca de
+      // carruseles no recibe una pieza de video en su lugar. Si alguna
+      // lámina no se puede leer, se salta; si el total queda en 1, la
+      // pieza degrada a foto (registrado en el log) — nunca un
+      // «carrusel» de una sola imagen.
+      const spF = specPosts[i] || {};
+      if (spF.formato === 'carrusel' && Array.isArray(spF.slides) && spF.slides.length) {
+        const imgs = [m.image];
+        for (const sPath of spF.slides) { const du = dataUrlDeArchivo(sPath); if (du) imgs.push(du); }
+        if (imgs.length >= 2) {
+          return { type: 'carousel', image: m.image, images: imgs, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: spF.estilo_visual || null, formato: 'carrusel' };
+        }
+        console.warn('[formato-marca] pieza carrusel sin láminas legibles en el armado: sale como foto');
+      }
+      return (i === videoIdx && videoB64)
         ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
-        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null }
-    ));
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null };
+    });
     return { posts, spec: savedSpec, timedOut: !!timedOut };
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}

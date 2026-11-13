@@ -976,6 +976,14 @@ function emptyDigest() {
     // para el lote semanal de tendencias). null = todavía no estudiada. El
     // hash de anclas NO la cubre y el refresco la preserva por copia base.
     competitors: null,
+    // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Formato dominante del
+    // feed: { dominante: 'carrusel'|'reel'|'foto'|null, conteos:
+    // {carrusel, foto, reel}, total, fuente } calculado de los posteos
+    // ya leídos. null = nunca calculado (digest viejo o sin lectura de
+    // posteos); dominante null adentro = calculado pero sin mayoría
+    // clara («sin dato»: el comportamiento es el histórico). El hash de
+    // anclas NO lo cubre y el refresco lo preserva (applyDeepBlocks).
+    formatos: null,
     inferred_star: null, contradictions: [], question_candidates: [],
     // (LOTE CORRECTIVO-4) Productos CON NOMBRE evidenciados
     // [{nombre, fuente, menciones}]: minados de las captions del feed
@@ -1032,8 +1040,55 @@ function emptyDigest() {
  *          ownerWords: [textos del dueño (respuestas/chat)] | null,
  *          dna:  {…business_dna…} | null,
  *          palette: [{hex, rol}] | feedPalette | null,
- *          registro: 'light'|'dark'|null }
+ *          registro: 'light'|'dark'|null,
+ *          feedPosts: [posteos ya leídos del feed (embed/auditoría)] | null }
  * Prioridad de listas: ADN (editado por el dueño) → web → texto minado. */
+
+/* (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) El formato también sigue a
+ * la marca (regla de Valentino 12/11 20:32: «lo que veo en veja es que
+ * suben carrousel en todos los posteos»): el estudio guarda el formato
+ * DOMINANTE del feed — distribución carrusel/foto/reel con conteos —
+ * calculado SOLO de los posteos ya leídos (embed/auditoría; sin fetches
+ * nuevos). Dominante = mayoría clara: ≥3 posteos leídos, un único
+ * formato al frente y con ≥50% del total. Sin eso, dominante = null
+ * («sin dato»): los generadores se comportan como siempre. El bloque NO
+ * entra en el hash de anclas (no es fundamento leído de oferta) y el
+ * refresco lo preserva si la corrida fresca no trajo posteos
+ * (applyDeepBlocks). */
+const FORMATO_MIN_POSTS = 3;
+function formatoDePosteoLeido(p) {
+  if (!p || typeof p !== 'object') return null;
+  const t = String(p.type || p.media_type || p.mediaType || '').trim().toLowerCase();
+  if (t === 'graphsidecar' || t === 'sidecar' || t === 'carousel' || t === 'carousel_album' || t === 'carrusel') return 'carrusel';
+  if (t === 'graphvideo' || t === 'video' || t === 'reel' || t === 'reels') return 'reel';
+  if (t === 'graphimage' || t === 'image' || t === 'foto' || t === 'photo') return 'foto';
+  if (p.is_video || p.video_url) return 'reel';
+  return null;
+}
+function formatosFromPosts(posts) {
+  const conteos = { carrusel: 0, foto: 0, reel: 0 };
+  let total = 0;
+  for (const p of (Array.isArray(posts) ? posts : [])) {
+    const f = formatoDePosteoLeido(p);
+    if (!f) continue;
+    conteos[f]++; total++;
+  }
+  let dominante = null;
+  if (total >= FORMATO_MIN_POSTS) {
+    const orden = Object.keys(conteos).sort((a, b) => conteos[b] - conteos[a]);
+    const top = orden[0];
+    if (conteos[top] > conteos[orden[1]] && conteos[top] * 2 >= total) dominante = top;
+  }
+  return { dominante, conteos, total, fuente: 'feed' };
+}
+/* El dominante que consumen los generadores: 'carrusel'|'reel'|'foto'
+ * o null (sin dato / digest viejo). Nunca inventa: un bloque malformado
+ * o sin dominante vale null. */
+function formatoDominanteDe(digest) {
+  const f = digest && digest.formatos;
+  if (!f || typeof f !== 'object') return null;
+  return (f.dominante === 'carrusel' || f.dominante === 'reel' || f.dominante === 'foto') ? f.dominante : null;
+}
 function buildFromParts(parts) {
   const p = parts || {};
   const d = emptyDigest();
@@ -1180,6 +1235,15 @@ function buildFromParts(parts) {
   // --- fuentes con fecha por bloque ---
   if (p.web) d.fuentes.web = { at: now, url: String(p.web.url || '').slice(0, 200) };
   if (p.feed) d.fuentes.feed = { at: now, handle: String(p.feed.handle || '').slice(0, 40), posts: Array.isArray(p.feed.captions) ? p.feed.captions.length : 0 };
+  // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Formato dominante del
+  // feed desde los posteos YA LEÍDOS (parts.feedPosts, o parts.feed.posts
+  // si el llamador los trae ahí): sin fetches nuevos. Sin posteos en las
+  // partes, el bloque queda null y el refresco preserva el guardado.
+  try {
+    const feedPosts = Array.isArray(p.feedPosts) ? p.feedPosts
+      : (p.feed && Array.isArray(p.feed.posts) ? p.feed.posts : null);
+    if (feedPosts) d.formatos = formatosFromPosts(feedPosts);
+  } catch (e) { /* el formato jamás rompe el digest */ }
   if (p.form) {
     d.fuentes.form = { at: now };
     // (v343) El detalle del dueño viaja ENTERO en el digest: es su
@@ -1799,6 +1863,11 @@ function applyDeepBlocks(stored, fresh) {
     if (Array.isArray(fresh.voz_marcadores)) out.voz_marcadores = fresh.voz_marcadores;
     if (fresh.logo_url) out.logo_url = fresh.logo_url;
   }
+  // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) El formato dominante se
+  // recalcula cuando la corrida fresca trajo posteos leídos; sin esa
+  // lectura (fresh.formatos null), el guardado sobrevive por la copia
+  // base de arriba — una corrida parcial no borra lo aprendido del feed.
+  if (fresh.formatos) out.formatos = fresh.formatos;
   // (v238) El estrella que confirmó el DUEÑO (Posty pregunta) no lo pisa
   // una inferencia fresca: la respuesta en persona es la fuente más
   // fuerte. El bloque `dueno` entero sobrevive por la copia base de
@@ -2805,6 +2874,8 @@ module.exports = {
   // (LOTE LÍNEAS-ROJAS-TITULAR · 7/11) Las líneas rojas son veto, nunca tema.
   isVetoLabelText, isVetoText, vetoTermsFromOnboarding, stripVetoLines, dropVetoTopics,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
+  // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Formato dominante del feed.
+  formatosFromPosts, formatoDominanteDe,
   deriveTopics, deriveFirstPostWow, brandNegatives, ensureTable, saveDigest, getStoredDigest, getDigest,
   // (v348) Etapa pre-lanzamiento + remediación admin del fundamento
   detectEtapa, deleteDigest,

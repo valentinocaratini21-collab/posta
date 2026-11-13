@@ -1487,7 +1487,7 @@ async function classifyWithVision(signals, photoUrls, lang, photoShortcodes) {
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap, starSignals }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap, starSignals, feedPosts }) {
   try {
     const _trialDigestBuilt = clientDigest.buildFromParts({
       business,
@@ -1514,6 +1514,10 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // calculan de los datos ya leídos (embed / trialData.posts) y las
       // pasan acá; buildFromParts ya las lee (p.starSignals.metrics).
       starSignals: starSignals || null,
+      // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Los posteos ya leídos
+      // del feed (embed) alimentan el formato dominante del digest
+      // (buildFromParts → digest.formatos). Sin posteos, queda null.
+      feedPosts: feedPosts || null,
       // (M3 FICHA-OFERTA) La ficha del estudio viaja en su espacio de
       // nombres propio dentro del fundamento (digest.offerSheet).
       offerSheet: offerSheet || null,
@@ -2330,13 +2334,44 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
     idx++;
     try {
       const isVideo = p.type === 'video' && p.video;
-      const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
-      if (!m) { console.error(`[posta] importTrialWeek: posteo idx=${idx} sin imagen válida (base64) — se salta`); continue; }
-      const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
-      const buf = Buffer.from(m[3], 'base64');
-      if (!buf.length || buf.length > 15 * 1024 * 1024) { console.error(`[posta] importTrialWeek: posteo idx=${idx} imagen vacía o >15MB (${buf.length}b) — se salta`); continue; }
-      const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-      fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+      let name = null;
+      let mediaType = isVideo ? 'video' : 'image';
+      let carouselPaths = '';
+      // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Pieza carrusel de la
+      // prueba (type 'carousel' + images[]): se escriben TODAS las
+      // láminas y el posteo nace media_type='carousel' (image_path =
+      // portada, carousel_paths = el álbum). Lámina ilegible se salta;
+      // si el álbum válido queda en <2, se cae al camino de foto única
+      // de abajo — nunca un carrusel de una sola foto.
+      if (!isVideo && p.type === 'carousel' && Array.isArray(p.images) && p.images.length >= 2) {
+        const dec = [];
+        for (const s of p.images) {
+          const mm = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(String(s || ''));
+          if (!mm) continue;
+          const b = Buffer.from(mm[3], 'base64');
+          if (!b.length || b.length > 15 * 1024 * 1024) continue;
+          dec.push({ buf: b, ext: mm[2] === 'jpeg' ? 'jpg' : mm[2] });
+        }
+        if (dec.length >= 2) {
+          const names = dec.map((f) => {
+            const nm = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${f.ext}`;
+            fs.writeFileSync(path.join(MEDIA_DIR, nm), f.buf);
+            return nm;
+          });
+          name = names[0];
+          mediaType = 'carousel';
+          carouselPaths = JSON.stringify(names.map((nm) => `/media/${nm}`));
+        }
+      }
+      if (!name) {
+        const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
+        if (!m) { console.error(`[posta] importTrialWeek: posteo idx=${idx} sin imagen válida (base64) — se salta`); continue; }
+        const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
+        const buf = Buffer.from(m[3], 'base64');
+        if (!buf.length || buf.length > 15 * 1024 * 1024) { console.error(`[posta] importTrialWeek: posteo idx=${idx} imagen vacía o >15MB (${buf.length}b) — se salta`); continue; }
+        name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+        fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+      }
       const clientPhoto = trialPostUsesClientPhoto(out, idx) ? 1 : 0;
       // El estilo del catálogo viaja con el posteo: posts.style_code y la
       // fila de post_signals (así el aprendizaje por estilo lo ve desde el
@@ -2356,8 +2391,8 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
         }
       } catch (e) {}
       const ins = db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc);
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths);
       try {
         db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo)
           VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?)
@@ -8363,11 +8398,15 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), async (
         } catch (e) { /* web caída: se reconstruye con el resto y queda asentado */ }
       }
       let feed = null, feedOk = false;
+      let feedPostsRebuild = null;
       if (prof.ig_username) {
         try {
           const data = await feedAudit.fetchAuditData(prof.ig_username);
           if (data && data.ok && data.profile) {
             feed = { bio: data.profile.bio || '', captions: (data.posts || []).map((x) => String((x && x.caption) || '').slice(0, 240)).filter(Boolean).slice(0, 12), name: data.profile.name || '', handle: data.profile.handle || prof.ig_username };
+            // (LOTE CORRECTIVO-5) Los posteos de la misma lectura
+            // alimentan el formato dominante del digest reconstruido.
+            feedPostsRebuild = Array.isArray(data.posts) ? data.posts : null;
             feedOk = true;
           }
         } catch (e) { /* feed no disponible: queda asentado en la respuesta */ }
@@ -8378,6 +8417,7 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), async (
         dna,
         web,
         feed,
+        feedPosts: feedPostsRebuild,
         // La descripción guardada puede ser la corrupta: NO realimentarla.
         form: { description: '' },
         webCopy: web ? String(web.description || '') : '',
@@ -16246,7 +16286,21 @@ function ideaDiariaSintetica(uid, hoy) {
     // (v959) El día 'novedad' antes caía a 'detras' en makeIdeaDraft:
     // el formato 'reel' es lo que lo distingue (source 'reel' solo no
     // alcanza); acá se corrige.
-    const format = tipo === 'novedad' ? 'reel' : 'image';
+    const formatRotacion = tipo === 'novedad' ? 'reel' : 'image';
+    // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) La rotación por día ya
+    // no pisa el formato de la marca: si el digest conoce el formato
+    // dominante del feed del negocio, el primer posteo sale en ESE
+    // formato (carrusel → makeIdeaDraft lo arma con fotos reales o
+    // devuelve no-ok y ensureTodayPost cae a foto con el fallback
+    // registrado; reel → el camino de video; foto → foto). Sin dato en
+    // el digest, manda la rotación de siempre.
+    let format = formatRotacion;
+    try {
+      const domF = clientDigest.formatoDominanteDe(dg);
+      if (domF === 'carrusel') format = 'carrusel';
+      else if (domF === 'reel') format = 'reel';
+      else if (domF === 'foto') format = 'image';
+    } catch (e) { /* formato sin dato: manda la rotación */ }
     const star = clientDigest.effectiveStarOf(dg);
     if (star && star.item) {
       return { title: String(star.item), brief: '', why: '', source: srcFor[tipo], format, angle_key: 'diaria-' + tipo };
@@ -16263,7 +16317,7 @@ function ideaDiariaSintetica(uid, hoy) {
     // dato real (del digest); sin ni siquiera eso, no hay idea.
     const biz = String((dg && dg.business) || '').trim();
     if (!biz) return null;
-    return { title: biz, brief: '', why: '', source: 'winner', format: 'image', angle_key: 'diaria-neutra' };
+    return { title: biz, brief: '', why: '', source: 'winner', format, angle_key: 'diaria-neutra' };
   } catch (e) { return null; }
 }
 async function ensureTodayPost(uid, tz, now) {
@@ -16340,6 +16394,16 @@ async function ensureTodayPost(uid, tz, now) {
       if (!idea) return { ok: false, reason: 'no_idea' };
       let gen = null;
       try { gen = await makeIdeaDraft(uid, idea); } catch (e) { return { ok: false, reason: 'ai_error' }; }
+      // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Fallback honesto del
+      // formato de la marca: si el primer posteo no pudo salir en el
+      // formato dominante (p. ej. carrusel sin material real suficiente
+      // → makeIdeaDraft devuelve no_carousel), se reintenta UNA vez como
+      // foto (el formato posible) y el fallback queda registrado en el
+      // log — nunca se finge el formato ni se pierde el posteo del día.
+      if ((!gen || !gen.ok) && idea.format && idea.format !== 'image') {
+        console.log(`[formato-marca] el primer posteo no salió en formato ${idea.format} (uid=${uid}, motivo=${(gen && gen.reason) || 'sin_resultado'}); fallback honesto a foto`);
+        try { gen = await makeIdeaDraft(uid, { ...idea, format: 'image' }); } catch (e) { /* queda el fallo original */ }
+      }
       if (!gen || !gen.ok || !gen.post_id) return { ok: false, reason: (gen && gen.reason) || 'ai_error' };
       // Otro llamador pudo programar mientras se generaba: el suyo
       // manda; el recién generado queda borrador para otro día (nunca
@@ -33111,7 +33175,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         }
       } catch (e) { /* sin embed: la estrella se infiere como hoy */ }
     }
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet, starSignals: _trialStarSignals });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet, starSignals: _trialStarSignals, feedPosts: _embedPostsVoz || null });
     // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Esta ruta no pasa el feed al digest
     // (feed: null): sin captions, la voz quedaba vacía aunque el @ las
     // tenga. Se reponen SOLO los marcadores de voz (best-effort, carrera
@@ -33268,7 +33332,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       }
     } catch (e) { /* el análisis nunca frena la prueba */ }
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
-    if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
+    // (LOTE CORRECTIVO-5) Una prueba de marca carrusel puede no traer
+    // video A PROPÓSITO (el carrusel ocupó la pieza del índice): no es
+    // la alarma de render caído.
+    const carruselOk = posts.some((p) => p && p.type === 'carousel' && Array.isArray(p.images) && p.images.length >= 2);
+    if (!videoOk && !carruselOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
     // (LOTE PERSONALIZACIÓN · ítem 1) LOGO: paleta desde la foto de
     // perfil + archivo local para el sello. Viaja en el digest al
     // trial_cache y a la cuenta al registrarse.
@@ -34358,6 +34426,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig, pic: trialProfile.pic || igPic || '' } : null,
       formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap, starSignals: _trialStarSignalsS,
+      feedPosts: (trialData && Array.isArray(trialData.posts)) ? trialData.posts : null,
     });
     // (LOTE IDIOMA-POSTEO-MARCA · v922) Igual que en /api/trial/generate:
     // el idioma del CONTENIDO es el idioma en que postea LA MARCA
@@ -34778,6 +34847,35 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       } catch (e) { console.error('[posta] packshot anclado (stream):', e.message); }
     }
 
+    // 3b) (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) Carrusel de la marca
+    // en la prueba: las piezas que el spec marcó formato 'carrusel'
+    // (portada = la pieza diseñada ya rendida; láminas = las fotos
+    // reales del negocio en spec.slides) se promueven a posteo carrusel
+    // con las láminas como data URL. Lámina ilegible se salta; si el
+    // álbum queda en <2, la pieza queda foto y el fallback se registra
+    // en el log — nunca un carrusel de una sola foto.
+    try {
+      for (let i = 0; i < n; i++) {
+        const sp = specPosts[i];
+        if (!sp || sp.formato !== 'carrusel' || !Array.isArray(sp.slides) || !sp.slides.length) continue;
+        const cur = posts[i];
+        if (!cur || cur.type !== 'image' || !cur.image) continue;
+        const imgs = [cur.image];
+        for (const sPath of sp.slides) {
+          try {
+            if (!sPath || !fs.existsSync(sPath)) continue;
+            const extS = String(sPath).split('.').pop().toLowerCase();
+            imgs.push(`data:${TRIAL_IMG_MIME[extS] || 'image/jpeg'};base64,` + fs.readFileSync(sPath).toString('base64'));
+          } catch (e) { /* lámina ilegible: se salta */ }
+        }
+        if (imgs.length >= 2) {
+          posts[i] = { ...cur, type: 'carousel', images: imgs, formato: 'carrusel' };
+        } else {
+          console.warn('[formato-marca] pieza', i, 'del stream sin láminas legibles: queda como foto');
+        }
+      }
+    } catch (e) { console.error('[formato-marca] enriquecimiento carrusel (stream):', e.message); }
+
     // 4) El video (v182): recorre TODOS los diseños con cortes (tour por
     // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
     // diseños listos, así que arranca acá; los JPG ya están en runDir.
@@ -34843,7 +34941,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       try { return ig ? await buildTrialGridExtras() : []; } catch (e) { return []; }
     })();
     const videoB64 = await demo.renderVideoB64(designPaths, runDir, videoIdx);
-    if (videoB64) {
+    // (LOTE CORRECTIVO-5) Si la pieza del índice de video ya salió como
+    // carrusel (formato de la marca), el video NO la pisa: el prompt y
+    // el envío de abajo corren igual sobre la pieza carrusel.
+    const videoIdxEsCarrusel = !!(posts[videoIdx] && posts[videoIdx].type === 'carousel');
+    if (videoIdxEsCarrusel) {
+      // pieza carrusel: queda como está.
+    } else if (videoB64) {
       posts[videoIdx] = {
         type: 'video',
         video: 'data:video/mp4;base64,' + videoB64,
@@ -34878,7 +34982,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, hour: week[videoIdx].hour, post: posts[videoIdx] });
 
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
-    if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
+    // (LOTE CORRECTIVO-5) Una prueba de marca carrusel puede no traer
+    // video A PROPÓSITO (el carrusel ocupó la pieza del índice): no es
+    // la alarma de render caído.
+    const carruselOk = posts.some((p) => p && p.type === 'carousel' && Array.isArray(p.images) && p.images.length >= 2);
+    if (!videoOk && !carruselOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
     let screenshot = null;
     if (photoPath) {
@@ -36805,7 +36913,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v993';
+const BUILD_ID = '20261105-v994';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
