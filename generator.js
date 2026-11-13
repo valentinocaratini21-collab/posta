@@ -689,6 +689,20 @@ const ENERGY_SYSTEM = (n) =>
   `Generá exactamente ${n} captions DISTINTOS entre sí (distinta técnica de hook y distinta estructura). ` +
   `Hashtags: máximo 8, mezclá grandes, de nicho y locales.`;
 
+// (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Espejo en inglés estadounidense de
+// ENERGY_SYSTEM: el prompt de openaiCaptions quedó entero en español
+// (deuda admitida en v959) y un prompt en español empuja captions en
+// español para marcas que postean en inglés. Con lang 'en' el system y
+// las etiquetas fijas del user van en inglés (los bloques de datos
+// siguen en el idioma en que están guardados, como en openaiGenerate).
+const ENERGY_SYSTEM_EN = (n) =>
+  `You are an expert US Instagram copywriter who sells for real.\n${CAPTION_CRAFT_EN}\n` +
+  `IDENTITY RULE: the service is called "Posty", never "Posta" (never "With Posta", "Posta helps you", "try Posta"). If the business is Posta, write about "Posty" in the first person singular ("I put it together for you", "message me"), never in the plural ("we", "message us", "we help you"). ` +
+  `Reply ONLY with a JSON: {"captions": ["...", ...], "overlays": ["...", ...], "hashtags": "#tag1 #tag2 ..."}. ` +
+  `"overlay" is the headline of AT MOST 5 words that goes ON the image: short, punchy, no emojis (e.g.: "2X1 THIS WEEKEND", "JUST IN", "UP TO 40% OFF"). ` +
+  `Generate exactly ${n} captions, all DIFFERENT from each other (different hook technique and different structure). ` +
+  `Hashtags: at most 8, mixing big, niche and local ones.`;
+
 // Frases prohibidas (extraídas del PROHIBIDO de CAPTION_CRAFT): suenan a IA y están quemadas.
 // Se matchean sin acentos y en minúsculas.
 const BANNED_PHRASES = [
@@ -2221,16 +2235,21 @@ function templateGenerateEn(input) {
     const tags = [...GENERIC_TAGS_EN].sort(() => Math.random() - 0.5).slice(0, 3);
     return { caption: made.caption, overlay, hashtags: tags.join(' '), hookId: made.hookId };
   };
-  let first = null, firstReason = '';
-  for (const extra of [0, 7, 13]) {
+  // (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Antes: si ningún seed pasaba
+  // captionPassesEn, devolvía el primero reprobado ("va el primero") —
+  // una plantilla en el idioma correcto pero fuera de la puerta, y era
+  // el respaldo de ÚLTIMO recurso de generateContent. Ahora prueba más
+  // semillas y, si ninguna pasa, LANZA: el llamador cuenta el slot como
+  // fallido (estado honesto) en vez de publicar un caption reprobado.
+  // La vía ES (templateGenerate) conserva su comportamiento histórico.
+  let firstReason = '';
+  for (const extra of [0, 7, 13, 21, 29, 37, 45, 53, 61, 71, 83, 97]) {
     const cand = mk(extra);
-    if (!first) first = cand;
     const chk = captionPassesEn(cand.caption, input);
     if (chk.ok) return cand;
     if (!firstReason) firstReason = chk.reason;
   }
-  console.error('[plantilla-en] ningún seed pasó captionPassesEn, va el primero:', firstReason);
-  return first;
+  throw new Error(`plantilla EN sin caption válido: ningún seed pasó captionPassesEn (${firstReason})`);
 }
 
 // "Primera semana con rueditas": posteos APROBADOS en revisión como few-shot
@@ -2275,7 +2294,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             en
               ? 'You are an expert Instagram copywriter who sells for real.\n' +
               CAPTION_CRAFT_EN +
-              (captionExtras ? '\n' + captionExtras : '') +
+              (captionExtras ? '\n' + localizedCaptionExtras(captionExtras, true) : '') +
               '\nANTI-INVENTION RULE: if the post topic is a generic open question ("what do you prefer?", "pick one", "we read you"), the question HAS to be about the real business in the context: its real products, services or promos, with concrete options that exist. NEVER invent options, products, prices or topics that are not in the business description. A generic post with invented things is worse than not posting. ' +
               '\nIDENTITY RULE: the service is called "Posty", never "Posta" (never "With Posta", "Posta helps you", "try Posta"). If the business is Posta, write about "Posty" in the first person singular ("I put it together for you", "message me"), never in the plural ("we", "message us", "we help you"). ' +
               '\nReply ONLY with a JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
@@ -2284,7 +2303,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
               'Hashtags: at most 8, mixing big, niche and local ones.'
               : 'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
               CAPTION_CRAFT +
-              (captionExtras ? '\n' + captionExtras : '') +
+              (captionExtras ? '\n' + localizedCaptionExtras(captionExtras, false) : '') +
               '\nREGLA ANTI-INVENCIÓN: si el tema del post es una pregunta abierta genérica ("¿qué preferís?", "elegí", "te leemos"), la pregunta TIENE que ser sobre el negocio real del contexto: sus productos, servicios o promos de verdad, con opciones concretas que existen. PROHIBIDO inventar opciones, productos, precios o temas que no estén en la descripción del negocio. Un posteo genérico con cosas inventadas es peor que no postear. ' +
               '\nREGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta" (prohibido "Con Posta", "Posta te ayuda", "probá Posta"). Si el negocio es Posta, escribí sobre "Posty" en primera persona del singular ("yo te lo armo", "escribime"), nunca en plural ("nosotros", "escribinos", "te ayudamos"). ' +
               '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
@@ -2398,6 +2417,56 @@ function captionGateFor(input) {
   return input && input.lang === 'en' ? captionPassesEn : captionPasses;
 }
 
+// (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Reglamento localizado en el punto
+// de inyección: captionExtras puede traer el checklist anti-genérico en
+// español (CUERPO-57: la orden de escribir en rioplatense con sus
+// ejemplos) porque lo armó un llamador sin idioma. Con lang 'en' ese
+// texto NO entra al prompt: se reemplaza el checklist ES exacto por su
+// espejo EN (caption-style lo exporta). server.js ya localiza en la
+// fuente (captionExtrasFor(uid, lang)); esto es la red para cualquier
+// llamador que pase los extras crudos. Con 'es' devuelve el texto
+// intacto. Nunca lanza.
+function localizedCaptionExtras(captionExtras, en) {
+  if (!en || !captionExtras) return captionExtras;
+  let ex = String(captionExtras);
+  try {
+    const cs = require('./caption-style');
+    if (cs && cs.CAPTION_CHECKLIST && cs.CAPTION_CHECKLIST_EN && ex.includes(cs.CAPTION_CHECKLIST)) {
+      ex = ex.split(cs.CAPTION_CHECKLIST).join(cs.CAPTION_CHECKLIST_EN);
+    }
+  } catch (e) {}
+  return ex;
+}
+
+// (CORRECTIVO-3) Las correcciones post-hook de generateContent (fusión
+// del bloque-hook a la primera línea + reparación de largo), extraídas
+// tal cual a una función para reusarlas en el respaldo fail-closed: cada
+// corrección solo se acepta si el resultado pasa la puerta COMPLETA del
+// idioma del input. Nunca lanza.
+function fixHookedCaptionGate(hookedObj, input) {
+  const enX = !!(input && input.lang === 'en');
+  const g = captionGateFor(input);
+  try {
+    let hc = g(hookedObj.caption, input);
+    if (!hc.ok && (enX ? /text blocks/.test(hc.reason) : /bloques de texto/.test(hc.reason))) {
+      const merged = mergeHookBlock(hookedObj.caption);
+      if (merged) {
+        if (g(merged, input).ok) hookedObj.caption = merged;
+        else {
+          const fixedMerged = repairCaptionLength(merged);
+          if (fixedMerged !== merged && g(fixedMerged, input).ok) hookedObj.caption = fixedMerged;
+        }
+      }
+    }
+    hc = g(hookedObj.caption, input);
+    if (!hc.ok && (enX ? /^too long/.test(hc.reason) : /^es demasiado largo/.test(hc.reason))) {
+      const fixed = repairCaptionLength(hookedObj.caption);
+      if (fixed && fixed !== hookedObj.caption && g(fixed, input).ok) hookedObj.caption = fixed;
+    }
+  } catch (e) {}
+  return hookedObj;
+}
+
 async function generateContent(input, apiKey) {
   let out = null;
   // (v959) El idioma del CONTENIDO (input.lang, que pone
@@ -2461,8 +2530,20 @@ async function generateContent(input, apiKey) {
       feedback = `${reasons.join(' ')} Regeneralo corrigiendo eso, sin cambiar el tema.`;
     }
     if (!out && best) {
-      out = best;
-      console.error(`[generate] ningún intento pasó la puerta completa; sale el mejor candidato (puntaje ${bestScore}/7)`);
+      // (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Con lang 'en', el mejor
+      // candidato SOLO sale si pasa la puerta EN: un candidato que la
+      // reprueba (p. ej. cuerpo en español con fuga rioplatense, el
+      // caso real de Hungry Ghost/Veja) ya NO se entrega — out queda
+      // null y el flujo cae a la plantilla EN gateada o al error
+      // honesto. Un candidato que pasa la puerta pero no ancla sigue
+      // saliendo marcado _anchored=false (diseño v229, intacto). Con
+      // 'es', el comportamiento histórico no cambia.
+      if (en && !gate(best.caption, input).ok) {
+        console.error('[generate] ningún intento pasó la puerta EN y el mejor candidato también la reprueba: NO sale (fail-closed de idioma); cae a plantilla EN gateada o error honesto');
+      } else {
+        out = best;
+        console.error(`[generate] ningún intento pasó la puerta completa; sale el mejor candidato (puntaje ${bestScore}/7)`);
+      }
     }
     if (!out) console.error('OpenAI falló, usando plantillas');
   }
@@ -2481,24 +2562,9 @@ async function generateContent(input, apiKey) {
   // corrige en ese orden — fusión del bloque-hook a la primera línea y
   // reparación de largo con la primera línea intacta — y cada corrección
   // solo se acepta si el resultado pasa la puerta COMPLETA.
-  try {
-    let hc = gate(hooked.caption, input);
-    if (!hc.ok && (en ? /text blocks/.test(hc.reason) : /bloques de texto/.test(hc.reason))) {
-      const merged = mergeHookBlock(hooked.caption);
-      if (merged) {
-        if (gate(merged, input).ok) hooked.caption = merged;
-        else {
-          const fixedMerged = repairCaptionLength(merged);
-          if (fixedMerged !== merged && gate(fixedMerged, input).ok) hooked.caption = fixedMerged;
-        }
-      }
-    }
-    hc = gate(hooked.caption, input);
-    if (!hc.ok && (en ? /^too long/.test(hc.reason) : /^es demasiado largo/.test(hc.reason))) {
-      const fixed = repairCaptionLength(hooked.caption);
-      if (fixed && fixed !== hooked.caption && gate(fixed, input).ok) hooked.caption = fixed;
-    }
-  } catch (e) {}
+  // (CORRECTIVO-3: la lógica vive en fixHookedCaptionGate, reusada por
+  // el respaldo fail-closed de abajo; operaciones idénticas.)
+  fixHookedCaptionGate(hooked, input);
   // DEDUP-EXACTA (Juli, 2026-10-24): garantía de SALIDA — si el llamador
   // pasó los captions anteriores de la semana (input.prevCaptions), lo
   // que generateContent devuelve NUNCA es un duplicado exacto de uno de
@@ -2519,18 +2585,51 @@ async function generateContent(input, apiKey) {
       for (let t = 0; t < 2 && !recovered; t++) {
         try {
           const hookedAlt = applyPostyHook(templateGenerate(input), input);
-          if (!exactDupOf(hookedAlt.caption, input)) recovered = hookedAlt;
+          // (CORRECTIVO-3) Con lang 'en' el reemplazo también tiene
+          // que pasar la puerta EN tras el hook: un duplicado no se
+          // "resuelve" entregando un caption reprobado.
+          fixHookedCaptionGate(hookedAlt, input);
+          if (!exactDupOf(hookedAlt.caption, input) && (!en || gate(hookedAlt.caption, input).ok)) recovered = hookedAlt;
         } catch (e) {}
       }
     }
     if (recovered && !exactDupOf(recovered.caption, input)) return recovered;
     throw new Error('caption duplicado exacto en la misma semana (DEDUP): la regeneración no produjo un texto distinto');
   }
+  // (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) VERIFICACIÓN FINAL: con lang
+  // 'en', lo que generateContent devuelve pasa captionPassesEn o no
+  // sale. Si el caption final quedó fuera de la puerta (p. ej. el hook
+  // lo rompió y las correcciones no alcanzaron), el último recurso es
+  // la plantilla EN segura (gateada, con su hook y sus correcciones);
+  // si ni eso pasa, error honesto: el llamador cuenta el slot como
+  // fallido en vez de publicar un caption en el idioma equivocado.
+  if (en) {
+    const fc = gate(hooked.caption, input);
+    if (!fc.ok) {
+      let safe = null;
+      try {
+        const th = applyPostyHook(templateGenerate(input), input);
+        fixHookedCaptionGate(th, input);
+        if (gate(th.caption, input).ok && !exactDupOf(th.caption, input)) safe = th;
+      } catch (e) {}
+      if (safe) {
+        safe._anchored = belongAnchors.length ? belongCheck(safe).ok : true;
+        console.error(`[generate] el caption final no pasaba la puerta EN (${fc.reason}); sale la plantilla EN segura`);
+        return safe;
+      }
+      throw new Error(`el caption no pasó la puerta de idioma (EN) y no hubo plantilla segura: ${fc.reason}`);
+    }
+  }
   return hooked;
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock, casaLinea, propiaLinea, memoriaCliente }, n, apiKey) {
+async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock, casaLinea, propiaLinea, memoriaCliente, lang }, n, apiKey) {
+  // (CORRECTIVO-3) openaiCaptions recibe y respeta lang: con 'en', el
+  // system es ENERGY_SYSTEM_EN, las etiquetas fijas van en inglés y los
+  // extras viajan localizados (sin el reglamento en español). Sin lang
+  // o con 'es': el prompt histórico, byte a byte.
+  const en = lang === 'en';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     signal: AbortSignal.timeout(45000),
     method: 'POST',
@@ -2542,22 +2641,22 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: ENERGY_SYSTEM(n) + (captionExtras ? '\n' + captionExtras : '') },
+        { role: 'system', content: (en ? ENERGY_SYSTEM_EN(n) : ENERGY_SYSTEM(n)) + (captionExtras ? '\n' + localizedCaptionExtras(captionExtras, en) : '') },
         {
           role: 'user',
           content:
             businessContext({ business, category, description, dna, tone }) +
-            `\nTema del post: ${topic}${goalLine(goal)}${tipoLine(tipo)}` +
-            (feedback ? `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}` : '') +
+            (en ? `\nPost topic: ${topic}${goalLineEn(goal)}${tipoLineEn(tipo)}` : `\nTema del post: ${topic}${goalLine(goal)}${tipoLine(tipo)}`) +
+            (feedback ? (en ? `\nAdjustment the user asked for (OBEY it when regenerating): ${feedback}` : `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}`) : '') +
             (taste ? `\n${taste}` : '') +
-            (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
+            (performance ? (en ? `\nYour account's real performance:\n${performance}` : `\nRendimiento real de tu cuenta:\n${performance}`) : '') +
             (voice ? `\n${voice}` : '') +
-            (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
-            (memoriaCliente ? `\nMEMORIA DEL CLIENTE — lo que Posty aprendió de este cliente (decisiones, correcciones, qué le gustó y qué no; respetalo en el caption y no repitas lo que ya te corrigió):\n${memoriaCliente}` : '') +
+            (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? (en ? `\nClient style rules (ALWAYS OBEY them):\n${styleRules.map(r => `- ${r}`).join('\n')}` : `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}`) : '')) +
+            (memoriaCliente ? (en ? `\nCLIENT MEMORY — what Posty learned about this client (decisions, corrections, what they liked and what they did not; respect it in the caption and do not repeat what they already corrected):\n${memoriaCliente}` : `\nMEMORIA DEL CLIENTE — lo que Posty aprendió de este cliente (decisiones, correcciones, qué le gustó y qué no; respetalo en el caption y no repitas lo que ya te corrigió):\n${memoriaCliente}`) : '') +
             goldenLine(golden) +
             (casaLinea ? `\n${casaLinea}` : '') +
             (propiaLinea ? `\n${propiaLinea}` : '') +
-            `\nGenerá los ${n} captions y los hashtags.`,
+            (en ? `\nGenerate the ${n} captions and the hashtags.` : `\nGenerá los ${n} captions y los hashtags.`),
         },
       ],
       max_tokens: 1600,
@@ -2577,9 +2676,10 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
 
 async function generateCaptions(input, n, apiKey) {
   // (v959) La puerta sigue al idioma del contenido, igual que en
-  // generateContent. (El prompt de openaiCaptions sigue en español:
-  // superficie aparte, no este lote.)
+  // generateContent. (CORRECTIVO-3: el prompt de openaiCaptions ya
+  // recibe lang y se construye en el idioma destino.)
   const gate = captionGateFor(input);
+  const en = !!(input && input.lang === 'en');
   // DEDUP-EXACTA (Juli, 2026-10-24): los previos EXTERNOS que traiga el
   // llamador (input.prevCaptions — p. ej. los captions de la semana) se
   // FUSIONAN con los acumulados de esta tanda en cada chequeo: antes el
@@ -2648,6 +2748,19 @@ async function generateCaptions(input, n, apiKey) {
         } catch (e) {}
         return h;
       });
+      // (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Post-hook: con lang 'en',
+      // ningún caption de la tanda sale sin pasar captionPassesEn — si
+      // el hook lo dejó fuera de la puerta y la fusión no alcanzó, se
+      // reemplaza por la vía de plantilla EN gateada de generateContent
+      // (que a su vez lanza si no hay caption válido: estado honesto,
+      // nunca un caption en el idioma equivocado).
+      if (en) {
+        for (let i = 0; i < hooked.length; i++) {
+          if (gate(hooked[i].caption, { ...input, prevCaptions: extPrevs }).ok) continue;
+          const rep = await generateContent({ ...input, prevCaptions: [...extPrevs, ...hooked.slice(0, i).map(h => h.caption)], topic: `${input.topic} (variante ${i + 1})` }, null);
+          hooked[i] = { caption: rep.caption, hookId: rep.hookId || null };
+        }
+      }
       // DEDUP-EXACTA post-hook (Juli, 2026-10-24): el caption FINAL
       // (ya con el hook puesto) tampoco puede igualar a un previo
       // externo ni a otro de la misma tanda — se regenera una vez y,
@@ -2679,18 +2792,31 @@ async function generateCaptions(input, n, apiKey) {
   const seedBase = input.seedBase || 0;
   const captions = [];
   const overlays = [];
-  const ovFb = makeHeadline(input.topic, 5, 70, (input && input.category) || null).toUpperCase() || 'NOVEDAD';
+  // (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) La vía de plantillas de esta
+  // tanda también sigue al idioma: con lang 'en' los candidatos salen
+  // de templateCaptionEn (antes salían SIEMPRE de la plantilla ES y,
+  // como captionPassesEn los reprobaba todos, la tanda entregaba un
+  // caption en español logueando "sin seed válido").
+  const mkCand = (inp) => en
+    ? templateCaptionEn({ business: inp.business, topic: inp.topic, tipo: inp.tipo, seed: inp.seed, goal: inp.goal }).caption
+    : templateCaption(inp);
+  const ovFb = makeHeadline(input.topic, 5, 70, (input && input.category) || null).toUpperCase() || (en ? 'NEW' : 'NOVEDAD');
   for (let i = 0; i < n; i++) {
     // Puerta de calidad también en plantillas (ronda 2537): cada caption se
     // chequea y se reintenta con otra semilla si el gate lo voltea.
     let chosen = null, okAny = false, reason = '';
     for (const extra of [0, 7, 13]) {
-      const cand = templateCaption({ ...input, seed: seedBase + i * 20 + extra });
+      const cand = mkCand({ ...input, seed: seedBase + i * 20 + extra });
       const chk = gate(cand, { ...input, prevCaptions: [...extPrevs, ...captions] });
       if (!chosen) { chosen = cand; reason = chk.reason; }
       if (chk.ok) { chosen = cand; okAny = true; break; }
     }
-    if (!okAny) console.error('[plantilla] caption sin seed válido:', reason);
+    if (!okAny) {
+      // (CORRECTIVO-3) Con 'en' no se empuja el caption reprobado:
+      // error honesto, como el modo estricto. Con 'es': histórico.
+      if (en) throw new Error(`plantillas EN sin caption válido para la variante ${i + 1}: ${reason}`);
+      console.error('[plantilla] caption sin seed válido:', reason);
+    }
     captions.push(chosen); overlays.push(ovFb);
   }
   // DEDUP-EXACTA (Juli, 2026-10-24): la vía de plantillas tampoco
@@ -2705,7 +2831,7 @@ async function generateCaptions(input, n, apiKey) {
       if (key && seen.has(key)) {
         let fixed = null;
         for (let k = 0; k < 6 && !fixed; k++) {
-          const cand = templateCaption({ ...input, seed: seedBase + 5000 + i * 97 + k * 31 });
+          const cand = mkCand({ ...input, seed: seedBase + 5000 + i * 97 + k * 31 });
           const ck = captionBodyKey(cand);
           if (ck && !seen.has(ck) && gate(cand, { ...input, prevCaptions: [...extPrevs, ...captions.slice(0, i)] }).ok) fixed = cand;
         }
@@ -2715,7 +2841,7 @@ async function generateCaptions(input, n, apiKey) {
       seen.add(captionBodyKey(captions[i]));
     }
   }
-  const tags = [...nicheTags(input.category), ...GENERIC_TAGS]
+  const tags = [...nicheTags(input.category), ...(en ? GENERIC_TAGS_EN : GENERIC_TAGS)]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
   return { captions, overlays, hashtags: tags.join(' ') };

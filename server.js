@@ -262,11 +262,15 @@ catch (e) { console.error('[init] carousel no disponible:', e.message); }
 // Extras para el system prompt de captions de un usuario: PRIMERO el brief unificado
 // (contexto de quién es el cliente), después checklist anti-genérico + voz real.
 // Nunca lanza.
-function captionExtrasFor(uid) {
+// (CORRECTIVO-3) lang = idioma del CONTENIDO de la marca (contentLangOf):
+// con 'en', el checklist que viaja es el espejo en inglés y sin la línea
+// rioplatense — el reglamento en español dentro del prompt empujaba el
+// cuerpo del caption al español. Sin lang: histórico.
+function captionExtrasFor(uid, lang) {
   try {
     const parts = [];
     try { const bb = (typeof briefBlockFor === 'function' && briefBlockFor(db, uid)) || ''; if (bb) parts.push(bb); } catch (e) {}
-    const rest = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || '';
+    const rest = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid, lang)) || '';
     if (rest) parts.push(rest);
     // (v230) LÉXICO DEL CLIENTE (bloque lexicon del digest): sus
     // productos se nombran como ÉL los nombra — junto al Caption Style
@@ -12915,7 +12919,7 @@ function contentInputFor(uid, topic, tipo, seed, sales) {
     voice,
     seedBase: parseInt(seed, 10) || 0,
     golden: goldenExamples(uid), // "rueditas": posteos aprobados como few-shot ("así o parecido")
-    captionExtras: captionExtrasFor(uid), // checklist anti-genérico + voz real del cliente (Caption Style Lock)
+    captionExtras: captionExtrasFor(uid, contentLangOf(uid)), // checklist anti-genérico + voz real del cliente (Caption Style Lock); (CORRECTIVO-3) localizado al idioma del contenido
     anchors: digestAnchorsFor(uid), // (v229) FUNDAMENTO: anclas del digest para el chequeo de pertenencia en generateContent
     // 🧠 (v232) CEREBRO COMERCIAL: la intención de venta declarada de
     // la pieza, con su ángulo y su prueba — el prompt de captions la
@@ -36786,7 +36790,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v991';
+const BUILD_ID = '20261105-v992';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

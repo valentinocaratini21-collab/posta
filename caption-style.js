@@ -74,6 +74,42 @@ const CAPTION_CHECKLIST = [
   '26. EL FUNDAMENTO NO SE PUBLICA (LEAK-FUNDAMENTO): el brief interno del negocio ("Producto literal", "Objetivo del posteo", "Voz:", "Precios en posteos:", "Dónde lo encuentran") es materia prima para escribir, NUNCA texto del caption (id 555 real, cuenta 85, 2026-11-06: "…Pasá por el local y probalo hoy / Tal como pediste: Producto literal (escrito por el dueño): Café de especialidad Objetivo del posteo: compras Voz: cercano Precios en posteos: sí Dónde lo encu…" — el bloque pegado crudo y cortado a mitad de palabra por el tope de largo). Si tu borrador trae un rótulo del brief, borralo entero y escribí la frase con tus palabras: el cliente lee el posteo, no el brief. La puerta (captionPasses) rechaza "producto literal" y "objetivo del posteo" siempre. Tampoco son texto del caption las líneas de eco del motor: "En tus palabras: «X»" / "Tal como pediste: ..." (y en inglés "In your words:" / "As you asked:") — son notas internas que cierran el borrador y NUNCA se publican (14 captions reales 11-12/11 las llevaron pegadas, con marcadores basura como "locations" o "constancetenvik"): si tu borrador trae una, borrala entera; la voz del cliente va en el cuerpo, no como rótulo al final. La puerta rechaza esas líneas siempre.',
 ].join('\n');
 
+// (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Espejo en inglés estadounidense de
+// CAPTION_CHECKLIST: las mismas reglas anti-genérico SIN el reglamento en
+// español (nada de la orden de escribir en rioplatense ni de sus ejemplos):
+// para marcas cuyo contenido es en inglés (lang 'en'), inyectar el
+// reglamento ES le ordenaba al modelo escribir en español DENTRO de un
+// prompt en inglés (costura diagnosticada en Hungry Ghost/Veja: el cuerpo
+// salía en español con la puerta EN reprobándolo). Lo usa
+// captionPromptExtras(db, uid, 'en'); sin lang o con 'es', el histórico.
+const CAPTION_CHECKLIST_EN = [
+  'ANTI-GENERIC CHECKLIST (mandatory in EVERY caption you write, no exceptions):',
+  '1. ONE idea per post. Specific beats generic: name real products/services of the business (the ones in its profile and DNA). Never "our products", "the best", "top quality" without saying WHAT.',
+  '2. A concrete CTA, ALWAYS: one real, doable action ("message us on WhatsApp", "book your appointment", "stop by the shop"). Never an empty CTA ("don\'t miss out!", "check it out", "contact us") and never a bare "come see us": if you invite, say WHEN and HOW.',
+  '3. Hashtags: MAXIMUM 5, all relevant to the niche and the post (this overrides any other limit in this prompt). No filler: #love #instagood #photooftheday and other burned-out generics are banned. And ROTATE: never the same hashtag block in two back-to-back posts of the same client.',
+  '4. Never close with the same formula twice in a row: vary the final CTA (DM order, question, invitation to the shop) so it does not read like a template.',
+  '5. Banned crutch openings: never start with "Hey there!", "Welcome to..." or "Did you know...?" as an automatic formula.',
+  '6. The caption has to MATCH what the image shows: do not promise, describe or sell what is not in the photo/video.',
+  '7. Write EVERYTHING in American English: never Spanish words, Spanish verb forms, inverted punctuation marks or Rioplatense wording — the quality gate rejects any Spanish leak, always.',
+  '8. No SHOUTING: never use ALL CAPS for emphasis in the body ("YOUR photos", "IT IS READY"); if something deserves emphasis, the sentence says it, not the format. No asterisks for emphasis (*like this*): on Instagram they show literally and give away that an AI wrote it.',
+  '9. ROTATE your own devices across back-to-back posts of the same client: the emoji does not always sit in the same place (sometimes in the body, sometimes none); the closing device does not always end with the same words; never repeat the same idea-concept two posts in a row (if the previous one closed on the mechanism, this one takes it as known or closes on another idea). Never repeat the POSSESSIVE INVENTORY ("your X, your colors" / "your photos, your colors") in back-to-back posts: name ONE concrete thing of the business or describe the scene without listing possessives. And never repeat the FULL SKELETON of the mechanism paragraph (invitation + "tell us" + "send your photos" + "in minutes you have 5 posts" + "retouch over chat"): if the previous post already explained how it works, this one takes it as known or tells it with another structure. But rotate the FORM, not the MEANING: when varying, do not swap the action verb for an imprecise synonym (the posts are to look at/approve, never "to give feedback on") and never chain 3 imperatives in a row (it reads like a tutorial, not a person); and never open a paragraph with a disclaimer ("here is an invented example", "just so you get it"): the sample is woven into the sentence or goes at the end. If the synonym sounds off, go back to the simple word. Rotation is measured on the EXACT PHRASES and the IDEA, not only on the kind or position of the device: never repeat lexical anchors in back-to-back posts, and never close the mechanism with the same idea even if the words change. Moving a repeated phrase somewhere else is not rotating it. Humans do not repeat their own devices; repetition is the most visible AI signature.',
+  '10. The first line never stitches a FOREIGN HEADLINE: the opening topic is a short, concrete noun from the business ("the brunch", "the hair treatment"), never the headline of another post or a verb phrase ("What our users say...", "Tips to optimize...", "A day in the life of..."). If your opening names the business twice or carries a common word capitalized mid-sentence, it is spliced: rewrite it with a noun topic before delivering.',
+  '11. The BODY goes through the gate too: the crutch ban of item 5 applies to EVERY sentence, not only the first one (a crutch question opens NO sentence of the caption); no empty superlatives without a fact ("it deserves the best" without saying what, how much or when) and no burned phrases ("makes all the difference" without saying how); and within the SAME week no post opens with the same device as another: a "How many times has this happened to you...?"-style device is worth ONCE a week, not in four posts — vary the opening formula among posts of the same batch (scene, fact, statement, a different question).',
+  '12. The opening device counts in ANY position: the week\'s opening device (a "how many times have you...?", "have you ever wondered...?", "can you imagine...?" question) is worth once a week in ANY sentence of the caption, not only in the first line: do not hide it as the second sentence.',
+  '13. Never corporate brochure verbs: no "boost", "leverage" or "elevate" applied to the business, its account or its sales — no owner talks about their business like that, and the gate rejects empty corporate speak. If you want to say something will do better, say WHAT happens concretely: which post gets pushed, with what budget, for what date.',
+  '14. No EMPTY BINOMIALS: never pairs of abstract brochure nouns joined by "and" — "elegance and functionality", "quality and design", "style and comfort" — the gate rejects them always. An owner does not describe their product with two abstractions: they say the concrete thing that makes it good (the material, the size, the use, how long it lasts). Concrete pairs are fine ("tables and chairs", "cut and beard").',
+  '15. COMPLETE LISTS OR NONE: if you announce an enumeration ("the 3 mistakes...", "follow these ideas"), write EVERY item with its text on the same line — never an empty item ("...: 1." and jump to the CTA, or a caption closing on a bare "3."): the gate rejects it always. If they do not all fit, do not enumerate: tell the main idea in one sentence. And the topic after "after trying..." is always a concrete business noun, never a verb phrase or a command.',
+  '16. AFTER A FORMULA PREPOSITION NEVER GOES A COMMAND: if your opening is a formula ("The mistake almost everyone makes with...", "The secret ingredient of...", "It came for..."), what follows "with / of / for / about" is a lowercase noun of the business ("with the coffee", "of the house"), never a capitalized order: that is a splice — two sentences stitched — and the lint stops it. If the topic you want is a verb phrase, rewrite the whole opening as one sentence of your own, with no formula.',
+  '17. NO FRONTED FRAGMENTS: never open with a time adverb + dangling adjective ("In the morning strong, we serve..."): no human orders a sentence like that — it is the signature of a generator fronting a piece of the topic. Say the sentence in natural order ("To start the morning strong, we serve...", "In the morning, the coffee comes out...").',
+  '18. IF YOU ANNOUNCE A NUMBER, DELIVER THAT NUMBER: if you say "3 tips", "the 3 mistakes" or "5 steps", the caption carries EXACTLY that many numbered items — never just one under an announcement of three. If they do not all fit, do not announce the number: tell it in prose ("first..., then...") or write the full list.',
+  '19. AFTER "AFTER TRYING" GOES THE PRODUCT, NOT THE LABEL: if the opening is "What a customer told us after trying...", what follows is a concrete business noun ("the hair treatment", "the croissants"), never the generic label of another post capitalized with its sentence behind it — that is a splice: two texts stitched. A short proper name ("Café Aroma") or a lowercase topic pass clean.',
+  '20. NO EMPTY PROMISES: never "make your life easier" or "hassle-free"/"without complications" — they are template filler, not an advantage. If you want to say something is easy, state THE FACT: what gets done, by when, with what effort spared for the client.',
+  '21. THE PERIOD IS NOT PART OF THE NAME: if the profile stores the name with a trailing period ("Posty."), the name is "Posty": never write that period as if it were part of the name mid-sentence, and never use it to hide naming the business twice in the same opening — name it ONCE per opening. The period only closes a sentence; it never travels with the name inside one.',
+  '22. SWAPPING THE WORDS DOES NOT CHANGE THE CLICHÉ: "You don\'t want to miss this one" is exactly the same empty CTA as "Don\'t miss out" — if you want urgency, use the concrete fact (it ends today, only a few left, it comes out of the oven at a set time), never the cliché with another wording.',
+  '23. NO PREFABRICATED CONFESSION: never "To be honest with you:" as a preamble — the confession says nothing: go straight to the fact ("the secret is in the well-built quotes", "every cup comes from...") without announcing that you are about to be honest. The gate rejects the prefabricated confession always.',
+  '24. THE BRIEF IS NEVER PUBLISHED: the internal business brief (literal product, post goal, voice, prices in posts, where to find them) is raw material for writing, NEVER caption text. If your draft carries a brief label, delete it whole and write the sentence in your own words: the customer reads the post, not the brief. Neither are the engine\'s echo lines caption text — "In your words: ..." / "As you asked: ..." are internal notes that close a draft and are NEVER published: if your draft carries one, delete it whole; the customer\'s voice goes in the body, not as a label at the end. The gate rejects those lines always.',
+].join('\n');
+
 function isArgentineClient(db, userId) {
   try {
     const s = db.prepare('SELECT timezone FROM settings WHERE user_id = ?').get(userId) || {};
@@ -234,18 +270,24 @@ function captionStyleBlock(profile) {
 // Todo lo que se inyecta al system prompt de caption para un usuario:
 // SIEMPRE el checklist; el bloque de estilo solo si hay perfil analizado;
 // línea rioplatense dura si el timezone del cliente es argentino.
-function captionPromptExtras(db, userId) {
+// (CORRECTIVO-3) Con lang 'en' (el CONTENIDO de la marca es en inglés):
+// el checklist es el espejo EN y la línea rioplatense NO se agrega — el
+// reglamento en español dentro de un prompt en inglés era la masa que
+// empujaba al modelo a escribir el cuerpo en español. Sin lang o con
+// 'es': comportamiento histórico, byte a byte.
+function captionPromptExtras(db, userId, lang) {
+  const en = lang === 'en';
   try {
-    const parts = [CAPTION_CHECKLIST];
+    const parts = [en ? CAPTION_CHECKLIST_EN : CAPTION_CHECKLIST];
     let ar = false;
-    try { ar = isArgentineClient(db, userId); } catch (_) {}
+    if (!en) { try { ar = isArgentineClient(db, userId); } catch (_) {} }
     if (ar) parts.push('IDIOMA: el cliente es argentino — escribí TODO en rioplatense con voseo ("vos").');
     let block = '';
     try { block = captionStyleBlock(getCaptionStyle(db, userId)); } catch (_) {}
     if (block) parts.push(block);
     return parts.join('\n\n');
   } catch (_) {
-    return CAPTION_CHECKLIST;
+    return en ? CAPTION_CHECKLIST_EN : CAPTION_CHECKLIST;
   }
 }
 
@@ -256,4 +298,5 @@ module.exports = {
   captionPromptExtras,
   isArgentineClient,
   CAPTION_CHECKLIST,
+  CAPTION_CHECKLIST_EN,
 };
