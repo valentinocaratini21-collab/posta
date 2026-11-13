@@ -399,7 +399,7 @@ const PHOTO_STRONG_TEMAS = new Set([
   'dental', 'salud', 'tech', 'reparacion', 'autos', 'viaje', 'playa',
 ]);
 
-function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault, trialNoStock }) {
+function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault, trialNoStock, vendeProducto }) {
   // (v199) El mundo se resuelve por subrubro. (v235) Belleza sin subrubro:
   // con contexto de cliente/prueba (neutralDefault, digest presente) el
   // mundo es NEUTRO — el default pelo quedó solo para el harness legacy
@@ -408,6 +408,12 @@ function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault, trialNo
   // categoría.
   const key = subcat || (category === 'belleza' ? (neutralDefault ? 'belleza-neutro' : 'peluqueria') : category);
   const world = new Set(PHOTO_WORLD[key] || PHOTO_WORLD[category] || PHOTO_WORLD.otro);
+  // (LOTE POOL-REAL) Si el negocio VENDE PRODUCTO FÍSICO (el digest
+  // trae productos), 'producto' y 'calzado' son temas de su mundo
+  // aunque el rubro haya quedado genérico ('otro' no los incluía y
+  // las fotos de su propio calzado morían en el gate): el mundo sigue
+  // al negocio, no solo a la etiqueta de rubro.
+  if (vendeProducto) { world.add('producto'); world.add('calzado'); }
   const forb = new Set(AUDIENCE_FORBIDDEN_TEMAS[key] || AUDIENCE_FORBIDDEN_TEMAS[category] || []);
   if (topic && topic.tema) for (const c of (TEMA_CONFLICTS[topic.tema] || [])) forb.add(c);
   return { world, forb, isCafe: !!isCafe, trialNoStock: !!trialNoStock };
@@ -524,6 +530,41 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
     if (hit) return hit;
   }
   return null;
+}
+
+// (LOTE POOL-REAL · diagnóstico Veja #5, §2.1) ADMISIÓN DEL POOL WEB:
+// hasta este lote, buildDemoSpec filtraba del pool TODA foto web cuyos
+// temas derivados dieran [] — y los temas se derivan de alt/filename
+// con una tabla pensada en español. Una marca en inglés (alt «Model
+// Photo», filenames hasheados de CDN) perdía casi todas sus fotos
+// reales ANTES de cualquier elección: el pool quedaba en 1–2 y la foto
+// real nunca podía ser la imagen del posteo. Las fotos de extraPhotos
+// son del PROPIO SITIO del negocio (no stock, no feed ajeno): se
+// admiten por ser suyas si alguna señal las identifica — sus temas
+// derivados, el photo_map (la visión ya la clasificó como un producto
+// suyo) o su URL de página de producto (/products/<handle>). Los
+// temas quedan como señal de RANKING dentro de pickWebPhoto (gate,
+// rangos, match exacto), no como puerta de admisión.
+function urlEsDeProducto(url) {
+  if (!url) return false;
+  let p = String(url);
+  try { p = new URL(p).pathname; } catch (e) { /* la ruta cruda alcanza */ }
+  return /\/products?\//i.test(p);
+}
+function webPhotoAdmitida(w, digest) {
+  if (!w || typeof w.path !== 'string') return false;
+  if (Array.isArray(w.temas) && w.temas.length) return true;
+  if (w.url && digest && clientDigest.photoProductFor(digest, w.url)) return true;
+  return urlEsDeProducto(w.url);
+}
+// ¿El negocio vende producto físico según su fundamento? (productos
+// con nombre, nombrados o fotos ya clasificadas como producto).
+function digestVendeProducto(digest) {
+  if (!digest) return false;
+  if (Array.isArray(digest.productos) && digest.productos.length) return true;
+  if (Array.isArray(digest.productos_nombrados) && digest.productos_nombrados.length) return true;
+  if (digest.photo_map && digest.photo_map.entries && Object.keys(digest.photo_map.entries).length) return true;
+  return false;
 }
 
 // ¿Existe AL MENOS una foto (pool o curada) que pase el gate para el tema?
@@ -1766,11 +1807,20 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   // (v212) Fotos del SITIO WEB del negocio (extraPhotos: [{path, temas}]):
   // son fotos SUYAS — como las del álbum, no como las del feed (que nunca se
-  // republican) — y entran al pool pasando el MISMO gate foto↔tema: sin
-  // temas derivables, quedan afuera igual que un stock sin tags.
+  // republican). (LOTE POOL-REAL) La admisión ya NO es «temas o afuera»:
+  // entra toda foto suya identificable (temas, photo_map o URL de
+  // producto — ver webPhotoAdmitida); el gate foto↔tema sigue mandando
+  // al ELEGIR (pickWebPhoto), no al admitir.
   const webPool = (Array.isArray(extraPhotos) ? extraPhotos : [])
-    .filter((w) => w && typeof w.path === 'string' && Array.isArray(w.temas) && w.temas.length)
-    .map((w) => ({ ...w })); // copias: el spec anota (mapa) sin mutar al llamador
+    .filter((w) => webPhotoAdmitida(w, digest))
+    .map((w) => {
+      const c = { ...w, temas: Array.isArray(w.temas) ? w.temas.slice() : [] }; // copias: el spec anota (mapa) sin mutar al llamador
+      // La foto de una página de producto trae su tema aunque la
+      // derivación de origen no lo haya puesto (payloads de antes del
+      // vocabulario EN de web-extract): señal de ranking para el gate.
+      if (urlEsDeProducto(c.url) && !c.temas.includes('producto')) c.temas.push('producto');
+      return c;
+    });
   // (v230) MAPA FOTO→PRODUCTO: si el digest trae photo_map, cada foto de
   // la web queda anotada con el producto que la visión identificó en
   // ella (clave = su URL). pickWebPhoto usa esa anotación como rango 0.
@@ -1809,6 +1859,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // (v235) Belleza sin subrubro confirmado en contexto de digest: el
   // gate de fotos usa el mundo NEUTRO (ver photoGateCtx).
   const neutralDefault = !!(digest && !subcat);
+  // (LOTE POOL-REAL) El mundo del gate suma 'producto'/'calzado' si el
+  // fundamento dice que el negocio vende producto físico.
+  const vendeProducto = digestVendeProducto(digest);
   const TOPICS_SRC = en ? captions.DEMO_TOPICS_EN : captions.DEMO_TOPICS;
   const topicsBase = (subcat && TOPICS_SRC[subcat])
     ? TOPICS_SRC[subcat]
@@ -1920,7 +1973,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // entra igual y, sin foto real, sale como póster de marca. Sin
       // este bypass, una semana sin web (vía @) quedaría en 1 pieza.
       if (!isPoster && !trialNoStock) {
-        const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe, neutralDefault });
+        const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe, neutralDefault, vendeProducto });
         // Un tema entra si lo puede ilustrar el stock O una foto de su web.
         // (v230) También entra si el mapa foto→producto cubre una foto de
         // su web con EL producto del tema (aunque sus tags no matcheen).
@@ -1959,7 +2012,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
             const cand = digestTopics.find((dt) => dt && !inUse.has(dt.digest_anchor)
               && !(i > 0 && topicsConflict(topics[i - 1], dt))
               && !(i + 1 < topics.length && topicsConflict(dt, topics[i + 1]))
-              && (trialNoStock || topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe, neutralDefault }))));
+              && (trialNoStock || topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe, neutralDefault, vendeProducto }))));
             if (cand) {
               inUse.add(cand.digest_anchor);
               topics[i] = cand;
@@ -2004,7 +2057,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       .sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
     const usedWeb = new Set();
     for (const i of order) {
-      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault, trialNoStock });
+      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault, trialNoStock, vendeProducto });
       // (LOTE PRIMER-POSTEO-MEJOR · ideas 1-3) El primer posteo (wow)
       // elige entre DOS candidatos a nivel spec (foto real del producto
       // vs póster de marca) y el gate decide; nunca foto de tema. El
@@ -3514,6 +3567,9 @@ module.exports = {
   PHOTO_STRONG_TEMAS,
   temasPassGate,
   photoGateCtx,
+  urlEsDeProducto,
+  webPhotoAdmitida,
+  digestVendeProducto,
   photoPassesGate,
   pickPhotoGated,
   pickWebPhoto,

@@ -172,15 +172,16 @@ const TEMA_KEYWORDS = [
   [/skincare|\bfacial\b|serum|crema/, 'skincare'],
   [/cosmet|perfume|colonia/, 'cosmetica'],
   [/rostro|\bcara\b|retrato|portrait/, 'rostro'],
-  [/mujer|hombre|modelo\b/, 'retrato'],
+  [/mujer|hombre|modelo\b|\bmodel\b/, 'retrato'],
   [/equipo|\bteam\b|nosotros|\bstaff\b/, 'personas'],
   [/local|salon de|tienda|\bstore\b|\bshop\b|sucursal|fachada/, 'local'],
-  [/producto|\bpack\b|envase/, 'producto'],
+  [/producto|\bpack\b|envase|reloj|\bwatch\b|bolso|cartera|mochila|\bbag\b|backpack/, 'producto'],
   [/comida|plato|hamburguesa|burger|pizza|sushi|empanada|parrilla|helado/, 'comida'],
   [/\bcaf[eé]\b|coffee|latte|capuchino|espresso|medialuna|desayuno|merienda|brunch|pasteler|panader/, 'cafe'],
   [/cerveza|birra|trago|cocktail|vino|\bbar\b/, 'bar'],
-  [/moda|ropa|fashion|vestido|outfit|\blook\b|indumentaria/, 'moda'],
-  [/zapato|zapatilla|calzado|shoe|sneaker/, 'calzado'],
+  [/moda|ropa|fashion|vestido|outfit|\blook\b|indumentaria|\bdress\b|\bjacket\b|\bshirt\b|\bjeans\b|denim|\bhoodie\b|\bsweater\b/, 'moda'],
+  [/zapato|zapatilla|calzado|shoe|sneaker|\brunners?\b|\bboots?\b|\bsandals?\b|\bloafers?\b|\bheels?\b|footwear/, 'calzado'],
+  [/cuero|\bleather\b|\bcanvas\b|lona/, 'producto'],
   [/flor|ramo|bouquet/, 'flores'],
   [/hogar|living|sof[aá]|mueble|decor/, 'hogar'],
   [/cocina/, 'cocina'],
@@ -204,6 +205,17 @@ function temasFromText(text) {
     if (re.test(t) && !out.includes(tema)) out.push(tema);
   }
   return out;
+}
+// (LOTE POOL-REAL · diagnóstico Veja #5) La URL de la foto también
+// habla: en un e-commerce, la foto que vive bajo /products/<handle>
+// ES foto de producto aunque el alt sea pobre («Model Photo») y el
+// filename un hash de CDN sin palabras. El tema derivado es señal de
+// ranking para el gate foto↔tema; la ADMISIÓN al pool de la prueba de
+// las fotos del propio sitio la decide demo.js (webPhotoAdmitida).
+function temasFromUrl(url) {
+  let p = String(url || '');
+  try { p = new URL(p).pathname; } catch (e) { /* la ruta cruda alcanza */ }
+  return /\/products?\//i.test(p) ? ['producto'] : [];
 }
 
 // ---------- Extracción principal ----------
@@ -643,9 +655,19 @@ async function fetchBusinessSite(rawUrl) {
   };
   pushPhoto(meta(html, 'og:image'), meta(html, 'og:image:alt'));
   pushPhoto(meta(html, 'twitter:image'), '');
+  // (LOTE POOL-REAL) Las imágenes que el propio sitio declara en un
+  // JSON-LD de PRODUCTO son fotos de producto por declaración del
+  // negocio: sus URLs se recuerdan para derivarles el tema 'producto'
+  // en el paso de temas de abajo, aunque el alt venga vacío.
+  const productImgUrls = new Set();
   if (ld && ld.image) {
+    const ldTypes = Array.isArray(ld['@type']) ? ld['@type'].join(' ') : String(ld['@type'] || '');
     const ims = Array.isArray(ld.image) ? ld.image : [ld.image];
-    for (const im of ims) pushPhoto(typeof im === 'string' ? im : (im && im.url), '');
+    for (const im of ims) {
+      const u = typeof im === 'string' ? im : (im && im.url);
+      if (u && /product/i.test(ldTypes)) { try { productImgUrls.add(new URL(u, finalUrl).toString()); } catch (e) { /* sin URL válida no hay señal */ } }
+      pushPhoto(u, '');
+    }
   }
   const bodyNoScripts = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
   for (const m of bodyNoScripts.matchAll(/<img\b[^>]{1,1200}>/gi)) {
@@ -709,11 +731,17 @@ async function fetchBusinessSite(rawUrl) {
     siteLangRaw: siteLangRawFromHtml(html),
   };
   result.address = (result.facts && result.facts.address) || '';
-  // Temas por foto: gate-compatible (sin temas → el gate la deja afuera,
-  // igual que al stock sin tags — regla v196). Señales: alt/contexto +
-  // nombre de archivo (las rutas de uploads suelen nombrar el contenido).
+  // Temas por foto. Señales: alt/contexto + nombre de archivo (las
+  // rutas de uploads suelen nombrar el contenido) + la URL (página de
+  // producto) + la declaración del sitio (JSON-LD de producto). Para
+  // las fotos del PROPIO sitio los temas son señal de ranking, no
+  // puerta de admisión: la admisión al pool de la prueba la decide
+  // demo.js (LOTE POOL-REAL — una foto suya sin temas derivables ya
+  // no se pierde si el photo_map o su URL la identifican).
   for (const p of result.photos) {
     p.temas = temasFromText((p.alt || '') + ' ' + String(p.url).split('/').pop());
+    for (const t of temasFromUrl(p.url)) if (!p.temas.includes(t)) p.temas.push(t);
+    if (productImgUrls.has(p.url) && !p.temas.includes('producto')) p.temas.push('producto');
   }
   return result;
 }
@@ -777,6 +805,7 @@ module.exports = {
   fetchBusinessSite,
   localizeSitePhotos,
   temasFromText,
+  temasFromUrl,
   isPrivateIpLiteral,
   pickName,
   isNameLike,
