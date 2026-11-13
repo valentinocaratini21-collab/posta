@@ -2,6 +2,7 @@
 // Usa OpenAI si hay API key configurada, si no usa el motor de plantillas local
 // con voz argentina (voseo).
 const { trackUsage, markPhotoSent, photoHash } = require('./costs');
+const { detectTextLang, langCheck } = require('./lang-id'); // (CORRECTIVO-9) identificador de idioma positivo, determinístico
 const { casaTemas } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: pool de temas de la casa (fallback local)
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): chequeo de pertenencia + anclas
 const fundamentoLiteral = require('./fundamento-literal'); // LOTE FUNDAMENTO-LITERAL ×5 (3/11): vetos como puerta dura en generateIdeas
@@ -925,6 +926,22 @@ function captionPasses(caption, input) {
     const meta = low.match(/(^|\n)\s*(en tus palabras|tal como pediste)\s*:/);
     if (meta) return { ok: false, reason: `meta-línea: "${meta[2]}:" es una nota interna del motor, no texto del caption — la voz del cliente va en el cuerpo, nunca como rótulo al final` };
   }
+  // (LOTE CORRECTIVO-9 · IDIOMA POSITIVO) Espejo del chequeo EN, solo
+  // cuando el llamador declara el idioma de la marca (input.lang ===
+  // 'es': captionGateFor lo inyecta en todo el pipeline de generación
+  // y el lint al programar lo pasa explícito). Con lang declarado, la
+  // puerta ES también es POSITIVA: el texto tiene que SER español; un
+  // cuerpo en inglés o en un tercer idioma ya no pasa por no traer
+  // voseo ni frases quemadas. Sin lang declarado la puerta sigue como
+  // siempre: captionPasses también es la puerta de calidad genérica de
+  // llamadores sin idioma (gemela de historias, telemetría del chat),
+  // y ahí un chequeo positivo de ES rompería captions sanos en otro
+  // idioma — hacerlos conscientes del idioma es un lote aparte, no
+  // este.
+  if (input && input.lang === 'es') {
+    const lc = langCheck(c, 'es');
+    if (!lc.ok) return { ok: false, langFail: true, detected: lc.detected, reason: `idioma: el texto no está en español (detectado: ${lc.detected === 'en' ? 'inglés' : 'un tercer idioma'}) — la marca postea en español; la puerta es positiva: reescribí el caption entero en español` };
+  }
   if (c.trim().length < 40) return { ok: false, reason: 'es demasiado corto (menos de 40 caracteres)' };
   // LIMPIEZA (2026-10-18, Valentino: "posteos más limpios, sin tantas
   // palabras, como los del website"): topes DUROS de largo, bloques y
@@ -1672,6 +1689,20 @@ function captionPassesEn(caption, input) {
     if (low.includes(p)) return { ok: false, reason: `stock phrase "${p}"` };
   }
   if (SPANISH_LEAK_RE.test(c)) return { ok: false, reason: 'spanish leak: an English caption cannot carry Spanish wording or voseo' };
+  // (LOTE CORRECTIVO-9 · IDIOMA POSITIVO) La puerta deja de ser solo
+  // una lista negativa: no alcanza con que el texto NO sea español —
+  // tiene que SER inglés. Un cuerpo en un tercer idioma pasaba entero
+  // (Veja #5: el detalle publicado era el og:description en FRANCÉS de
+  // la propia web de la marca, y la puerta lo aprobó porque no contenía
+  // ningún token de SPANISH_LEAK_RE). El identificador (lang-id.js) es
+  // determinístico y solo reprocha con veredicto confiado: un texto
+  // corto o ambiguo no se frena por idioma (sin veredicto, sin falso
+  // positivo). langFail viaja en el resultado: el lint al programar lo
+  // usa para retener posteos de la prueba solo por idioma.
+  {
+    const lc = langCheck(c, 'en');
+    if (!lc.ok) return { ok: false, langFail: true, detected: lc.detected, reason: `wrong language: this caption is not in English (detected: ${lc.detected === 'es' ? 'Spanish' : 'a third language'}) — the brand posts in English; the gate is positive: rewrite the whole caption in English` };
+  }
   // META-LINE (Juli, 2026-11-12 — real ids 617/618/619/621/622/623/633/634/
   // 635, trials 11-12/11): the caption closes with an internal meta line —
   // "In your words: «X»" (trialVoiceEcho, demo.js) or "As you asked: ..."
@@ -2414,7 +2445,13 @@ function mergeHookBlock(caption) {
 // generateCaptions; los demás llamadores de captionPasses no tocan
 // captions de cliente y quedan como están.
 function captionGateFor(input) {
-  return input && input.lang === 'en' ? captionPassesEn : captionPasses;
+  // (CORRECTIVO-9) La puerta recibe SIEMPRE el idioma declarado: con
+  // 'en' la puerta EN (positiva siempre); si no, la puerta ES con
+  // lang 'es' inyectado, así el chequeo positivo de idioma corre en
+  // todo el pipeline (generateContent, generateCaptions, fixHooked).
+  const en = input && input.lang === 'en';
+  const door = en ? captionPassesEn : captionPasses;
+  return (caption, inp) => door(caption, { ...(inp || {}), lang: en ? 'en' : 'es' });
 }
 
 // (CORRECTIVO-3 · IDIOMA FAIL-CLOSED) Reglamento localizado en el punto
@@ -2538,8 +2575,16 @@ async function generateContent(input, apiKey) {
       // honesto. Un candidato que pasa la puerta pero no ancla sigue
       // saliendo marcado _anchored=false (diseño v229, intacto). Con
       // 'es', el comportamiento histórico no cambia.
-      if (en && !gate(best.caption, input).ok) {
-        console.error('[generate] ningún intento pasó la puerta EN y el mejor candidato también la reprueba: NO sale (fail-closed de idioma); cae a plantilla EN gateada o error honesto');
+      const bestChk = gate(best.caption, input);
+      // (CORRECTIVO-9) El fail-closed cubre AHORA también el idioma
+      // en 'es': un mejor candidato con veredicto de idioma contrario
+      // (langFail — p. ej. cuerpo en francés para una marca en
+      // español) NO se entrega en ningún idioma. Sin langFail, en 'es'
+      // el comportamiento histórico queda intacto: sale el mejor.
+      if ((en && !bestChk.ok) || bestChk.langFail) {
+        console.error(en
+          ? '[generate] ningún intento pasó la puerta EN y el mejor candidato también la reprueba: NO sale (fail-closed de idioma); cae a plantilla EN gateada o error honesto'
+          : `[generate] ningún intento pasó la puerta y el mejor candidato reprueba el IDIOMA (${bestChk.reason}): NO sale (fail-closed de idioma); cae a plantilla gateada o error honesto`);
       } else {
         out = best;
         console.error(`[generate] ningún intento pasó la puerta completa; sale el mejor candidato (puntaje ${bestScore}/7)`);
@@ -2618,6 +2663,29 @@ async function generateContent(input, apiKey) {
         return safe;
       }
       throw new Error(`el caption no pasó la puerta de idioma (EN) y no hubo plantilla segura: ${fc.reason}`);
+    }
+  }
+  // (CORRECTIVO-9) Verificación final ES, SOLO por idioma: si el
+  // caption final quedó con veredicto de idioma contrario (el hook lo
+  // armó sobre un cuerpo en inglés o en un tercer idioma), mismo
+  // último recurso que en EN — la plantilla ES segura — y si ni eso
+  // limpia el idioma, error honesto. Cualquier otro motivo de puerta
+  // en 'es' sigue como siempre (la entrega histórica no se toca).
+  if (!en) {
+    const fcEs = gate(hooked.caption, input);
+    if (fcEs.langFail) {
+      let safe = null;
+      try {
+        const th = applyPostyHook(templateGenerate(input), input);
+        fixHookedCaptionGate(th, input);
+        if (!gate(th.caption, input).langFail && !exactDupOf(th.caption, input)) safe = th;
+      } catch (e) {}
+      if (safe) {
+        safe._anchored = belongAnchors.length ? belongCheck(safe).ok : true;
+        console.error(`[generate] el caption final no pasaba la puerta de idioma ES (${fcEs.reason}); sale la plantilla ES segura`);
+        return safe;
+      }
+      throw new Error(`el caption no pasó la puerta de idioma (ES) y no hubo plantilla segura: ${fcEs.reason}`);
     }
   }
   return hooked;
@@ -2754,9 +2822,13 @@ async function generateCaptions(input, n, apiKey) {
       // reemplaza por la vía de plantilla EN gateada de generateContent
       // (que a su vez lanza si no hay caption válido: estado honesto,
       // nunca un caption en el idioma equivocado).
-      if (en) {
+      // (CORRECTIVO-9) En 'es' el reemplazo también corre, pero SOLO
+      // para captions con veredicto de idioma contrario (langFail):
+      // cualquier otro motivo sigue el comportamiento histórico.
+      if (en || hooked.some((h) => gate(h.caption, { ...input, prevCaptions: extPrevs }).langFail)) {
         for (let i = 0; i < hooked.length; i++) {
-          if (gate(hooked[i].caption, { ...input, prevCaptions: extPrevs }).ok) continue;
+          const chkI = gate(hooked[i].caption, { ...input, prevCaptions: extPrevs });
+          if (chkI.ok || (!en && !chkI.langFail)) continue;
           const rep = await generateContent({ ...input, prevCaptions: [...extPrevs, ...hooked.slice(0, i).map(h => h.caption)], topic: `${input.topic} (variante ${i + 1})` }, null);
           hooked[i] = { caption: rep.caption, hookId: rep.hookId || null };
         }
@@ -5930,4 +6002,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };

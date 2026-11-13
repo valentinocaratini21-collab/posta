@@ -28,6 +28,7 @@
  * ===================================================================== */
 const crypto = require('crypto');
 const rubroId = require('./rubro-id'); // (v235) clasificador especialista de rubro
+const { detectTextLang } = require('./lang-id'); // (CORRECTIVO-9) identificador de idioma positivo, determinístico
 const personalizacion = require('./personalizacion'); // (LOTE PERSONALIZACIÓN 6/11) voz + logo
 
 const DIGEST_VERSION = 1;
@@ -2260,6 +2261,15 @@ function deriveTopics(digest, opts) {
     if (salesBrain) {
       try { sales = salesBrain.trialTopicSales({ kind, digest_anchor: A }, digest, o.lang) || {}; } catch (e) { sales = {}; }
     }
+    // (CORRECTIVO-9 · red final del camino determinístico) El caption
+    // ya compuesto pasa el identificador positivo: si el veredicto es
+    // un idioma que no es el de la marca, el tema NO nace — la semana
+    // de la prueba se arma solo con captions que la puerta positiva
+    // acepta, con el mismo criterio que el camino de IA. Sin
+    // veredicto (caption corto/ambiguo) el tema sigue como siempre.
+    const capTxt = frame.caption(A);
+    const capLang = detectTextLang(capTxt);
+    if (capLang && capLang !== (en ? 'en' : 'es')) return null;
     const t = {
       kind,
       tag: frame.tag || '',
@@ -2267,7 +2277,7 @@ function deriveTopics(digest, opts) {
       headline: capWords(frame.headline(A), 6),
       subline: frame.subline ? capWords(frame.subline(A), 8) : '',
       cta: frame.cta || '',
-      caption: frame.caption(A),
+      caption: capTxt,
       _digest: 1,
       digest_anchor: A,
       intent: sales.intent || '',
@@ -2411,6 +2421,12 @@ function deriveTopics(digest, opts) {
     promoVig = so.promoVigentePara(digest, new Date());
   } catch (e) { promoVig = (digest.promos || [])[0] ? { titulo: String((digest.promos[0] || {}).titulo || ''), ends_at: null, fuente: 'dueno' } : null; }
   const promo = promoVig;
+  // (CORRECTIVO-9) El título de la promo es una frase minada (de su
+  // web o su ficha): si su idioma detectado no es el de la marca, el
+  // slot promo no nace sobre ese texto — cae a la novedad del ítem
+  // N.º 2, como cuando no hay promo vigente.
+  const promoTituloTxt = promo ? String(promo.titulo || promo).trim() : '';
+  const promoLangOk = !promoTituloTxt || minedPhraseOk(promoTituloTxt, en);
   const promoEndsTxt = (() => {
     if (!promoVig || !promoVig.ends_at) return '';
     const [y, m, d] = String(promoVig.ends_at).split('-').map(Number);
@@ -2438,7 +2454,7 @@ function deriveTopics(digest, opts) {
       });
       if (t) topics.push(t);
     }
-  } else if (promo && (promo.titulo || promo)) {
+  } else if (promo && (promo.titulo || promo) && promoLangOk) {
     const A = String(promo.titulo || promo).trim();
     const dnaMatch = (digest.promos || []).find((pr) => pr && norm(String(pr.titulo || pr.nombre || '')) === norm(A));
     const promoPrice = (dnaMatch && typeof dnaMatch === 'object') ? String(dnaMatch.precio || '').trim() : '';
@@ -2634,6 +2650,21 @@ function deriveTopics(digest, opts) {
 // propias palabras (diferencial, bio, temas del feed, onboarding) —
 // patrones de negación, nunca una lista fija. Sin evidencia de un
 // negativo, no se afirma ninguno (honestidad antes que bloqueo).
+// (LOTE CORRECTIVO-9 · IDIOMA POSITIVO) Una frase MINADA (el
+// diferencial de su web, una frase de su voz, el título de una promo)
+// solo se reusa DENTRO de un posteo si su idioma detectado ES el de
+// la marca. El caso Veja #5: el diferencial era el og:description en
+// francés de veja-store.com y entró palabra por palabra como detalle
+// del wow de una marca que postea en inglés — nadie comparaba el
+// idioma de la frase contra el del contenido. Sin veredicto (frase
+// corta o ambigua) la frase pasa: no se frena lo que no se puede
+// juzgar. El filtro vive en el CONSUMO (los derive), no en la
+// ingesta: el diferencial también alimenta prompts y negativos, donde
+// su idioma original es contexto legítimo.
+function minedPhraseOk(phrase, en) {
+  const lv = detectTextLang(phrase);
+  return !lv || lv === (en ? 'en' : 'es');
+}
 function firstSentence(s, max) {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
   if (!t) return '';
@@ -2748,7 +2779,11 @@ function degradedBrandWow(digest, opts) {
   const business = String((digest && digest.business) || '').trim();
   const biz = business || (en ? 'the house' : 'la casa');
   const difRaw = String(digest.diferencial || (digest.onboarding && digest.onboarding.diferencial) || '').trim();
-  const ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  let ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  // (CORRECTIVO-9) El ritual es la frase minada del diferencial: si su
+  // idioma no es el de la marca, no entra al caption — cae la línea
+  // honesta de la casa, como cuando no hay diferencial.
+  if (ritual && !minedPhraseOk(ritual, en)) ritual = '';
   const ritualTxt = ritual || (en ? 'made our way' : 'hecho a nuestra manera');
   const detail = ritual || (en ? 'Made our way.' : 'Hecho a nuestra manera.');
   const ctaLine = en ? `DM us and we'll walk you through how to start 📩` : `Escribinos por DM y te contamos cómo empezamos 📩`;
@@ -2891,7 +2926,13 @@ function deriveFirstPostWow(digest, opts) {
   // las cláusulas de negación (el «sin espresso» vive en los negativos,
   // no en el caption ni en el ritual).
   const difRaw = String(digest.diferencial || (digest.onboarding && digest.onboarding.diferencial) || '').trim();
-  const ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  let ritual = stripNegativeClauses(firstSentence(difRaw, 140));
+  // (CORRECTIVO-9) El ritual es la frase minada del diferencial (el
+  // og:description de su web, palabra por palabra): si su idioma
+  // detectado no es el de la marca, NO se reusa como detalle del
+  // posteo — el detalle cae al precio, a la frase de voz (también
+  // filtrada) o a la línea honesta, nunca al texto en otro idioma.
+  if (ritual && !minedPhraseOk(ritual, en)) ritual = '';
   const words = (s) => String(s || '').split(/\s+/).filter(Boolean).length;
   // Gancho (≤6 palabras, nombre de la estrella INTACTO). Sin artículo:
   // el género del producto no se conoce y «El Limpieza…» rompería.
@@ -2924,7 +2965,9 @@ function deriveFirstPostWow(digest, opts) {
     if (starMissing) detail = en ? 'Made our way.' : 'Hecho a nuestra manera.';
     else {
       const voiceLine = voicePhraseFor(digest, A);
-      if (voiceLine) { detail = voiceLine; if (!voiceUsed) voiceUsed = 'frase'; }
+      // (CORRECTIVO-9) La frase de voz también es una frase minada:
+      // mismo filtro de idioma que el diferencial.
+      if (voiceLine && minedPhraseOk(voiceLine, en)) { detail = voiceLine; if (!voiceUsed) voiceUsed = 'frase'; }
       else detail = en ? 'The house favorite, ready for you.' : 'El favorito de la casa, listo para vos.';
     }
   }

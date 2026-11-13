@@ -1550,7 +1550,10 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
     const caption = buildFinalCaption(t, { business, tone, goalLine: at.gl, voiceLine: at.vl });
     if (usedBodies.has(bodyKey(caption))) continue;
     const hashtags = demoHashtags(cat, country, tone, lang);
-    const gateInput = { business, dna: topicDna(t), prevCaptions: Array.isArray(prevCaptions) ? prevCaptions : [] };
+    // (CORRECTIVO-9) El gateInput declara el idioma: la puerta ES de
+    // este camino también queda positiva (sin lang, captionPasses no
+    // aplica el chequeo de idioma — ver generator.js).
+    const gateInput = { business, dna: topicDna(t), prevCaptions: Array.isArray(prevCaptions) ? prevCaptions : [], lang: en ? 'en' : 'es' };
     const check = en
       ? captionPassesEn(caption + '\n' + hashtags, gateInput)
       : captionPasses(caption + '\n' + hashtags, gateInput);

@@ -45,7 +45,7 @@ try {
   const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
-const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey, captionWeekClash } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionPassesEn, captionBodyKey, captionWeekClash } = require('./generator');
 const { isCasaHandle, casaIdeasBlock, casaCaptionBlock } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: línea editorial solo para la casa
 const { propiaLineaForClient } = require('./posty-cliente-linea'); // LOTE POSTY APRENDE CLIENTES: referencia propia por cliente, sin cruces
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
@@ -15502,8 +15502,21 @@ function scheduleLintForPost(uid, postId) {
         ORDER BY id DESC LIMIT 12`).all(uid, postId, post.week_key || '').map((r) => r.caption);
     } catch (e) {}
     let failReason = '';
-    const chk = captionPasses(caption, { business: prof.business_name || '', dna, ig_username: prof.ig_username || '', prevCaptions });
-    if (chk && !chk.ok) failReason = String(chk.reason || 'caption no pasa el gate');
+    let langFail = false;
+    // (LOTE CORRECTIVO-9 · IDIOMA POSITIVO) El lint corre la puerta
+    // del idioma DE LA MARCA (contentLangOf: el post_lang del digest
+    // o, si no, el idioma de la cuenta) — hasta acá corría SIEMPRE
+    // captionPasses, la puerta en español, sin importar la marca: un
+    // cuerpo en un tercer idioma la pasaba trivialmente (Veja #5:
+    // los posteos 650–652 nacieron con needs_review=0 con el detalle
+    // en francés). La puerta además ahora es positiva (lang-id.js):
+    // exige que el texto SEA el idioma de la marca, no solo que no
+    // parezca de otro. langFail marca el fallo como DE IDIOMA: abajo
+    // decide la retención de los posteos de la prueba.
+    const brandLang = contentLangOf(uid);
+    const gateFn = brandLang === 'en' ? captionPassesEn : captionPasses;
+    const chk = gateFn(caption, { business: prof.business_name || '', dna, ig_username: prof.ig_username || '', prevCaptions, lang: brandLang });
+    if (chk && !chk.ok) { failReason = String(chk.reason || 'caption no pasa el gate'); langFail = !!chk.langFail; }
     if (!failReason) {
       try {
         const lt = analysisEngine.lintTone(caption);
@@ -15520,6 +15533,20 @@ function scheduleLintForPost(uid, postId) {
       // Veja y Hungry Ghost). El veredicto se registra igual (el evento
       // y el log quedan: la señal no se pierde), pero SIN la marca que
       // los esconde: needs_review no se toca.
+      if (post.source === 'trial' && langFail) {
+        // (CORRECTIVO-9) Excepción de IDIOMA a la no-retención de la
+        // prueba: un caption que no está en el idioma de la marca no
+        // es un detalle fino de calidad — es exactamente el defecto
+        // que las corridas de Veja mostraron saliendo como válido
+        // (cuerpo en francés aprobado como «inglés»). Ese posteo SÍ
+        // se retiene (needs_review) para que no salga como si
+        // estuviera bien; los demás motivos de la prueba siguen el
+        // registro sin retención de correctivo-1.
+        db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postId);
+        evTrack(uid, 'schedule_lint_failed', { post_id: postId, reason: failReason.slice(0, 300), idioma: 1 });
+        console.log(`[schedule-lint] post ${postId} (user ${uid}): NO pasa el lint al programar — es de la PRUEBA pero el IDIOMA no es el de la marca: queda RETENIDO para revisión. Motivo: ${failReason}`);
+        return { ok: false, reason: failReason, trial: true, held: true, langFail: true };
+      }
       if (post.source === 'trial') {
         evTrack(uid, 'schedule_lint_failed', { post_id: postId, reason: failReason.slice(0, 300), trial_sin_retencion: 1 });
         console.log(`[schedule-lint] post ${postId} (user ${uid}): NO pasa el lint al programar — es de la PRUEBA: se registra pero NO se retiene. Motivo: ${failReason}`);
@@ -36992,7 +37019,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v999';
+const BUILD_ID = '20261105-v1000';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
