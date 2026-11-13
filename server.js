@@ -15335,12 +15335,43 @@ function scheduleLintForPosts(uid, ids) {
   for (const id of ids || []) scheduleLintForPost(uid, id);
 }
 
+// (LOTE CORRECTIVO-2 · APROBAR-FUNCIONA) ¿El posteo es de la prueba de
+// su dueño? Marcadores canónicos: source='trial' (importado de /prueba
+// por importTrialWeek) o el prefijo legacy de su imagen (mismo criterio
+// que el selector de borradores de la prueba y el backfill de db.js) —
+// o nació del flujo invitado: la cuenta ES invitada o conserva su
+// origen invitado (guest_ig queda en la fila tras la subida de cuenta)
+// y sigue en su fase de prueba (los posteos de ensure de un invitado no
+// llevan source='trial': este es su marcador). Para esos posteos, la
+// aprobación del dueño ES la revisión y levanta la marca (ver la rama
+// 'like' del PATCH y POST /approve). Posteos que no son de la prueba:
+// false siempre — nada cambia para ellos.
+function esPosteoDePruebaDelDueno(post) {
+  if (!post) return false;
+  if (String(post.source || '') === 'trial') return true;
+  if (String(post.image_path || '').startsWith('/media/trial-')) return true;
+  try {
+    const u = db.prepare('SELECT is_guest, guest_ig, plan_status FROM users WHERE id = ?').get(post.user_id);
+    if (!u) return false;
+    const origenInvitado = !!u.is_guest || !!String(u.guest_ig || '').trim();
+    const enPrueba = !!u.is_guest || String(u.plan_status || 'trial') === 'trial';
+    return origenInvitado && enPrueba;
+  } catch (e) { return false; }
+}
+
 app.patch('/api/posts/:id', requireAuth, (req, res) => {
   if (guestBackstop(req, res)) return;
   const { scheduled_at, caption, hashtags, image_path, action } = req.body || {};
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
-  if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
+  // (LOTE CORRECTIVO-2 · APROBAR-FUNCIONA) La acción de aprobar del
+  // dueño (action:'like' — la constancia de aprobación en modo piloto)
+  // sobre SU posteo de prueba no la frena la marca de revisión: la
+  // propia rama 'like' la levanta para ese posteo. Cualquier otra
+  // acción o edición sobre un posteo en revisión sigue frenada, y
+  // sobre posteos que no son de la prueba nada cambia.
+  const aprobarPrueba = action === 'like' && esPosteoDePruebaDelDueno(post);
+  if (post.needs_review && !aprobarPrueba) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
   // (Tanda feed 5) Acciones del detalle IG de la home: fijar/desfijar
   // (📌, tope 3 como Instagram) y las señales del dueño ♡/🔖. Viven
   // ANTES de la lógica de programación: no tocan fecha ni estado — un
@@ -15379,6 +15410,13 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
         else cmGusto.retirar(db, uid5, post.id, 'aprobada');
       }
     } catch (e) {}
+    // (LOTE CORRECTIVO-2 · APROBAR-FUNCIONA) Aprobar (like) un posteo
+    // de prueba propio que estaba en revisión: la aprobación del dueño
+    // levanta la marca de ESE posteo, para que el scheduler lo tome a
+    // su hora (su query de vencidos excluye needs_review=1).
+    if (aprobarPrueba && post.needs_review) {
+      try { db.prepare('UPDATE posts SET needs_review = 0 WHERE id = ?').run(post.id); } catch (e) {}
+    }
     return res.json(isLike5 ? { ok: true, owner_liked: on5 ? 1 : 0 } : { ok: true, owner_saved: on5 ? 1 : 0 });
   }
   let scheduledInfo = null; // la rama de programar lo completa: el cliente confirma la fecha al aceptar
@@ -16663,6 +16701,17 @@ app.post('/api/posts/:id/approve', approvalAuth('approve'), (req, res) => {
   const post = req.approvalPost;
   if (post.approval === 'rejected') {
     return res.status(409).json({ error: 'rejected', message: 'Este posteo fue rechazado: ya no se puede aprobar.' });
+  }
+  // (LOTE CORRECTIVO-2 · APROBAR-FUNCIONA) Aprobar un posteo de prueba
+  // propio levanta su marca de revisión: sin esto, el approve cambiaba
+  // el estado pero el posteo quedaba retenido por el scheduler e
+  // invisible en /api/posts igual. Va ANTES del retorno idempotente
+  // porque los importados de la prueba ya figuran 'approved' (el lint
+  // los marca DESPUÉS de programados): para ellos el approve tiene que
+  // poder ser solo el levantamiento de la marca. Posteos que no son de
+  // la prueba: sin cambios — la cola de revisión admin sigue mandando.
+  if (post.needs_review && esPosteoDePruebaDelDueno(post)) {
+    try { db.prepare('UPDATE posts SET needs_review = 0 WHERE id = ?').run(post.id); post.needs_review = 0; } catch (e) {}
   }
   if (post.approval === 'approved' || post.approval === 'auto') {
     return res.json({ ok: true, approval: post.approval }); // idempotente
@@ -36638,7 +36687,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v983';
+const BUILD_ID = '20261105-v984';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

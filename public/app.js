@@ -26071,6 +26071,16 @@ async function pzTemaAprobarHoy() {
   const tema = pzTemaActual();
   if (!tema || tema.kind !== 'hoy') return;
   const p = tema.post;
+  // (LOTE CORRECTIVO-2 · APROBAR-FUNCIONA) Rama de invitado de la
+  // superficie hermana (pzHoyAprobarUno, el «Dale, publicalo ✓» de la
+  // tarjeta de Inicio): si es invitado, aprobar va a la creación de
+  // cuenta con reintento automático al completarla — nunca contra la
+  // pared del servidor (guestBackstop → 402) ni con el error falso
+  // «no se pudo». La pared de cuenta no es una falla: es el paso.
+  if (typeof pzIsGuest === 'function' && pzIsGuest()) {
+    try { pzGuestAccountSheet(() => { try { pzTemaAprobarHoy(); } catch (e) {} }); } catch (e) {}
+    return;
+  }
   try {
     const mode = await f3ApprovalMode();
     if (!mode || mode.known === false) { chatSay(pzTemaT('no pude verificar el modo — probá de nuevo', "i could not check the mode — try again")); pzTemaReactivar(); return; }
@@ -26085,7 +26095,17 @@ async function pzTemaAprobarHoy() {
       chatSay(pzTemaT('no se pudo 😕 ', "it did not work 😕 ") + ((r && (r.message || r.error)) || pzTemaT('probá de nuevo', 'try again')));
       pzTemaReactivar();
     }
-  } catch (e) { chatSay(pzTemaT('no se pudo 😕 probá de nuevo', "it did not work 😕 try again")); pzTemaReactivar(); }
+  } catch (e) {
+    // (LOTE CORRECTIVO-2) Respaldo: si la pared de cuenta igual llegó
+    // (pzIsGuest no la vio), tampoco es «no se pudo»: la hoja de cuenta
+    // ya abrió (el wrapper la abre al 402) y acá queda registrado el
+    // reintento para cuando la cuenta exista.
+    if (e && (e.guest_account_required || (e.status === 402 && e.data && e.data.guest_account_required))) {
+      try { pzGuestAccountSheet(() => { try { pzTemaAprobarHoy(); } catch (e2) {} }); } catch (e2) {}
+      return;
+    }
+    chatSay(pzTemaT('no se pudo 😕 probá de nuevo', "it did not work 😕 try again")); pzTemaReactivar();
+  }
 }
 async function pzTemaGuardarLunes(rango, etiqueta) {
   const tema = pzTemaActual();
