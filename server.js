@@ -2458,7 +2458,14 @@ function trialFormatoDiagLog(ig, diag) {
     const fb = (d.fallback && typeof d.fallback === 'object')
       ? Object.keys(d.fallback).map((k) => `${k}:${d.fallback[k]}`).join(',')
       : '';
-    console.log(`[formato-marca] trial ig=${ig || ''} dominante=${d.dominante || 'null'} feed_posts=${d.feed_posts || 0} pool=${d.pool || 0} candidatos=${d.candidatos || 0} carruseles=${d.carruseles || 0} fallback={${fb}} promocion_fallida=${d.promocion_fallida || 0}`);
+    // (LOTE FORMATO-VENTANA · L4) El cálculo de formatos que produjo
+    // el dominante (ventana reciente: total de la ventana sobre
+    // total_feed leído) cierra la línea; sin digest.formatos la
+    // línea lo dice (sin-dato) en vez de callarlo.
+    const fz = (d.formatos && typeof d.formatos === 'object')
+      ? `dominante=${d.formatos.dominante || 'null'} ventana=${d.formatos.ventana || 0} total=${d.formatos.total || 0} total_feed=${d.formatos.total_feed || 0}`
+      : 'sin-dato';
+    console.log(`[formato-marca] trial ig=${ig || ''} dominante=${d.dominante || 'null'} feed_posts=${d.feed_posts || 0} pool=${d.pool || 0} candidatos=${d.candidatos || 0} carruseles=${d.carruseles || 0} fallback={${fb}} promocion_fallida=${d.promocion_fallida || 0} formatos={${fz}}`);
   } catch (e) { /* el diagnóstico nunca frena la prueba */ }
 }
 
@@ -37476,7 +37483,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1011';
+const BUILD_ID = '20261105-v1012';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

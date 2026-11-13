@@ -2527,6 +2527,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   const formatoDiagB = {
     dominante: formatoDomB,
     feed_posts: (digest && digest.formatos && Number.isFinite(digest.formatos.total)) ? digest.formatos.total : 0,
+    // (LOTE FORMATO-VENTANA · L4 del diagnóstico de la corrida #6) El
+    // cálculo de formatos del digest viaja EN el payload: dominante,
+    // conteos, total de la ventana reciente, total_feed y ventana.
+    // digest sin formatos (trialData no llegó) → null, registrado
+    // como ausencia y no como cero: es el dato que a la corrida #6 le
+    // faltó para distinguir «dominante foto» de «sin dato».
+    formatos: (digest && digest.formatos && typeof digest.formatos === 'object')
+      ? { ...digest.formatos, conteos: (digest.formatos.conteos && typeof digest.formatos.conteos === 'object') ? { ...digest.formatos.conteos } : digest.formatos.conteos }
+      : null,
     pool: webPool.length,
     candidatos: formatoCandidatosB,
     carruseles: formatoSpec ? formatoSpec.carrusel : 0,

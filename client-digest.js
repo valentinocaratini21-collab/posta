@@ -1233,21 +1233,48 @@ function formatoDePosteoLeido(p) {
   if (p.is_video || p.video_url) return 'reel';
   return null;
 }
+/* (LOTE FORMATO-VENTANA · L4 del diagnóstico de la corrida Veja #6)
+ * El dominante se computa sobre la VENTANA RECIENTE del feed — los
+ * últimos FORMATO_VENTANA posteos leídos — y no sobre el total
+ * histórico del embed: una marca carrusel-dominante en su conducta
+ * reciente quedaba «foto» porque el cálculo pesaba años de fotos
+ * (Veja: 51 posteos del embed → foto 33, mientras sus recents son
+ * 6/6 carrusel). La recencia sale de taken_at (el embed lo trae por
+ * posteo); si ningún posteo trae fecha, el orden del array ES el del
+ * embed (más reciente primero). La regla de dominancia no cambia
+ * (mínimo FORMATO_MIN_POSTS, el primero supera al segundo y duplica
+ * la mitad): se aplica DENTRO de la ventana. El resultado registra el
+ * cálculo completo — conteos y total DE LA VENTANA, más total_feed
+ * (todo lo clasificable leído) y ventana — para que el payload de la
+ * prueba lo muestre sin reconstruirlo (ver formato_diag en demo.js). */
+const FORMATO_VENTANA = 12;
 function formatosFromPosts(posts) {
-  const conteos = { carrusel: 0, foto: 0, reel: 0 };
-  let total = 0;
+  const leidos = [];
   for (const p of (Array.isArray(posts) ? posts : [])) {
     const f = formatoDePosteoLeido(p);
     if (!f) continue;
-    conteos[f]++; total++;
+    const ts = (p && Number.isFinite(p.taken_at) && p.taken_at > 0) ? p.taken_at : null;
+    leidos.push({ f, ts });
   }
+  const totalFeed = leidos.length;
+  // Recientes primero: con alguna fecha presente, taken_at manda
+  // (descendente; empate o sin fecha conserva la posición relativa
+  // tras los fechados — sort estable). Sin ninguna fecha, el orden
+  // servido ya es reciente→viejo y se respeta tal cual.
+  const recientes = leidos.slice();
+  if (recientes.some((x) => x.ts != null)) {
+    recientes.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  }
+  const conteos = { carrusel: 0, foto: 0, reel: 0 };
+  let total = 0;
+  for (const x of recientes.slice(0, FORMATO_VENTANA)) { conteos[x.f]++; total++; }
   let dominante = null;
   if (total >= FORMATO_MIN_POSTS) {
     const orden = Object.keys(conteos).sort((a, b) => conteos[b] - conteos[a]);
     const top = orden[0];
     if (conteos[top] > conteos[orden[1]] && conteos[top] * 2 >= total) dominante = top;
   }
-  return { dominante, conteos, total, fuente: 'feed' };
+  return { dominante, conteos, total, fuente: 'feed', ventana: FORMATO_VENTANA, total_feed: totalFeed };
 }
 /* El dominante que consumen los generadores: 'carrusel'|'reel'|'foto'
  * o null (sin dato / digest viejo). Nunca inventa: un bloque malformado
