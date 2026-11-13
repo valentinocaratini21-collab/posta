@@ -31977,7 +31977,22 @@ app.post('/api/guest/start', (req, res) => {
     let sched = null;
     try { sched = scheduleAllDrafts(g.userId); } catch (e) { console.error('[guest] schedule falló:', e.message); }
     const nSched = (sched && sched.scheduled) ? sched.scheduled.length : 0;
-    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang, business: String(payload.business || '').trim(), nPosts: nSched }); } catch (e) {}
+    // (LOTE CORRECTIVO-4) La bienvenida afirma «con tu producto real»
+    // solo con estrella validada o ancla de producto real en el digest
+    // recién sembrado; sin eso, la redacción neutra (guest-trial.js).
+    let welcomeProductoReal = false;
+    try {
+      const dgW = clientDigest.getDigest(db, g.userId);
+      if (dgW) {
+        const effW = clientDigest.effectiveStarOf(dgW);
+        if (effW && effW.item) welcomeProductoReal = true;
+        else {
+          const wowW = clientDigest.deriveFirstPostWow(dgW, { lang });
+          if (wowW && wowW.digest_anchor && !clientDigest.isGenericCategoryName(wowW.digest_anchor)) welcomeProductoReal = true;
+        }
+      }
+    } catch (e) {}
+    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang, business: String(payload.business || '').trim(), nPosts: nSched, productoReal: welcomeProductoReal }); } catch (e) {}
     if (!testMode && !allowlisted) {
       try { guestTrial.recordDevice(db, device, ip, g.userId); } catch (e) {}
     }
@@ -36790,7 +36805,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v992';
+const BUILD_ID = '20261105-v993';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

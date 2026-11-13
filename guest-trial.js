@@ -179,29 +179,38 @@ function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
 // importación trae como máximo 3, así que n >= 3 es siempre 3.)
 // (LOTE L10 · BIENVENIDA-IDEMPOTENTE · v955) Además: UNA sola
 // bienvenida por invitado — ver la guarda antes del INSERT.
-function welcomeGuestMessage(db, userId, { lang, business, nPosts }) {
+function welcomeGuestMessage(db, userId, { lang, business, nPosts, productoReal }) {
   const en = lang === 'en';
   const biz = String(business || '').trim();
   const paraBiz = biz ? (en ? ` for ${biz}` : ` para ${biz}`) : '';
   const n = Number(nPosts) || 0;
+  // (LOTE CORRECTIVO-4) «con tu producto real» SOLO con estrella o
+  // ancla de producto verificada — lo computa el llamador desde el
+  // digest sembrado (effectiveStarOf / ancla del wow). Antes la frase
+  // era hardcodeada con nPosts >= 1: con la estrella genérica («cafe»)
+  // la afirmación era falsa en sustancia. Sin verificación manda la
+  // redacción neutra, que no afirma producto.
+  const claim = productoReal
+    ? (en ? ' from your real product ✨' : ' con tu producto real ✨')
+    : ' ✨';
   const cola = en
     ? `\n\nif you want to change anything or approve it, tap anything and i'll ask you to create your account first (your feed stays exactly the same).`
     : `\n\nsi querés cambiar algo o aprobarlo, tocá lo que sea y te pido que crees tu cuenta primero (tu feed queda exactamente igual).`;
   let text;
   if (n >= 3) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ and the other two are too: all 3 are already in your week, one for each day of the trial 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ y los otros dos también: ya están los 3 en tu semana, uno para cada día de la prueba 👇`;
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz}${claim} and the other two are too: all 3 are already in your week, one for each day of the trial 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz}${claim} y los otros dos también: ya están los 3 en tu semana, uno para cada día de la prueba 👇`;
     text += cola;
   } else if (n === 2) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ and the second one too: both are already in your week 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ y el segundo también: ya están los 2 en tu semana 👇`;
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz}${claim} and the second one too: both are already in your week 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz}${claim} y el segundo también: ya están los 2 en tu semana 👇`;
     text += cola;
   } else if (n === 1) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz} from your real product ✨ take a look 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz} con tu producto real ✨ miralo 👇`;
+      ? `hi! i'm posty 💙 your first post is ready${paraBiz}${claim} take a look 👇`
+      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz}${claim} miralo 👇`;
     text += cola;
   } else {
     text = en

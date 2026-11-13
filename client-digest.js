@@ -305,7 +305,14 @@ function effectiveStarOf(digest) {
   }
   const inf = digest.inferred_star;
   if (inf && inf.item && inf.fuente === 'dueno') {
-    return { item: String(inf.item), source: 'dueno', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
+    // (LOTE CORRECTIVO-4) La confirmación guardada como inferida del
+    // dueño (Posty pregunta) pasa la MISMA validación que la
+    // declaración: sin calce con evidencia de nombre propio no manda
+    // — un genérico confirmado por error («cafe») cae a ventas o a la
+    // inferida, nunca corona. Era la vía por la que el demo guardaba
+    // la estrella sin pasar el filtro L3.
+    const matchedD = duenoStarEvidenceMatch(digest, inf.item);
+    if (matchedD) return { item: matchedD, source: 'dueno', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
   }
   const tn = tnBlockOf(digest);
   if (tn && tn.star && tn.star.name && (tn.star.units_30d || 0) > 0) {
@@ -322,7 +329,7 @@ function effectiveStarOf(digest) {
   // picker. (LOTE L3) La confirmada por el dueño YA no es ciega: se
   // validó arriba contra lo evidenciado; sin calce cae acá (inferida
   // o null) y nunca manda un genérico sin evidencia.
-  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item) && !isChromeDerivedName(inf.item)) {
+  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item) && !isChromeDerivedName(inf.item) && starNamedEvidenceOk(digest, inf.item)) {
     return { item: String(inf.item), source: 'inferred', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
   }
   return null;
@@ -367,7 +374,26 @@ function duenoStarEvidenceMatch(digest, starName) {
     const c = cleanOfferName(cand);
     if (!c) continue;
     if (isChromeDerivedName(c)) continue;
+    // (LOTE CORRECTIVO-4) Una CATEGORÍA jamás es evidencia de
+    // estrella: el agujero de Hungry Ghost era que el digest trajera
+    // «cafe» como ítem y la declaración genérica del dueño «calzara»
+    // contra él — la validación validaba un genérico porque la
+    // evidencia era genérica. Ítem de tipo/línea = tema, nunca
+    // evidencia. La excepción es la palabra de GÉNERO sola (pin D4
+    // v924: dueño «HOMME» con «HOMME» en productos manda): género no
+    // es categoría — es la etiqueta del ítem que el dueño nombró —
+    // y la inferida de género sigue rechazada en su rama.
+    if (isGenericCategoryName(c) && !isGenderOnlyName(c)) continue;
     if (oos.length && tnNameMatch(c, oos)) continue;
+    // (LOTE CORRECTIVO-4) Y el calce difuso exige evidencia de
+    // NOMBRE PROPIO (starNamedEvidenceOk): con productos_nombrados
+    // en el digest, el candidato tiene que ser un producto/modelo
+    // evidenciado (o un nombre real de su Tiendanube). Lo minado de
+    // prosa no valida una estrella. El calce EXACTO literal contra
+    // un ítem de productos/servicios no pasa por esta exigencia: es
+    // la palabra del dueño sobre un ítem que el digest ya trae como
+    // producto (la doctrina del pin D4).
+    if (norm(c) !== norm(s) && Array.isArray(digest.productos_nombrados) && !starNamedEvidenceOk(digest, c)) continue;
     if (sameItemName(c, s)) return c;
     const nc = norm(c);
     if (nc.length >= 2 && (ns.includes(' ' + nc + ' ') || (' ' + nc + ' ').includes(ns))) return c;
@@ -451,6 +477,17 @@ const OFFER_2P_VERBS = new Set(['aprende', 'aprendes', 'aprobas', 'aproba', 'des
  * real de Veja y la regla lo protege por nombre. */
 const OFFER_GENDER_NOUNS = new Set(['hombre', 'hombres', 'mujer', 'mujeres', 'homme', 'hommes', 'femme', 'femmes', 'man', 'men', 'woman', 'women', 'male', 'female', 'nino', 'ninos', 'nina', 'ninas', 'enfant', 'enfants', 'kid', 'kids', 'baby', 'babies', 'bebe', 'bebes', 'unisex', 'adulto', 'adultos', 'adult', 'adults']);
 const STAR_GENERIC_TYPE_NOUNS = new Set(['zapatilla', 'zapatillas', 'zapato', 'zapatos', 'calzado', 'sneaker', 'sneakers', 'tenis', 'bota', 'botas', 'sandalia', 'sandalias', 'shoe', 'shoes', 'boot', 'boots', 'sandal', 'sandals', 'perfume', 'perfumes', 'colonia', 'colonias', 'cologne', 'fragancia', 'fragancias', 'fragrance', 'fragrances', 'cafe', 'cafes', 'coffee', 'coffees', 'te', 'tea', 'ropa', 'indumentaria', 'clothing', 'apparel', 'vestido', 'vestidos', 'dress', 'dresses', 'camisa', 'camisas', 'shirt', 'shirts', 'remera', 'remeras', 'pantalon', 'pantalones', 'pants', 'jeans', 'bolso', 'bolsos', 'bolsa', 'bolsas', 'bag', 'bags', 'cartera', 'carteras', 'purse', 'mochila', 'mochilas', 'backpack', 'joya', 'joyas', 'jewelry', 'jewel', 'anillo', 'anillos', 'ring', 'rings', 'collar', 'collares', 'necklace', 'reloj', 'relojes', 'watch', 'watches', 'crema', 'cremas', 'cream', 'serum', 'maquillaje', 'makeup', 'labial', 'lipstick', 'esmalte', 'polish', 'shampoo', 'jabon', 'soap', 'vela', 'velas', 'candle', 'candles', 'flor', 'flores', 'flower', 'flowers', 'pan', 'bread', 'torta', 'pastel', 'cake', 'helado', 'pizza', 'cerveza', 'beer', 'vino', 'wine', 'chocolate', 'galleta', 'galletas', 'cookie', 'cookies']);
+/* (LOTE CORRECTIVO-4 · ESTRELLA-CON-NOMBRE — caso Veja 12/11)
+ * Palabras de LÍNEA/actividad y de proyecto: nombran la línea del
+ * negocio («Running» es la línea de running de Veja, no un modelo
+ * como Esplar/V-10/Campo) o su proyecto («proyecto»); jamás son
+ * estrella. Se suman al set de composición (isGenericCategoryName).
+ * La composición TODAS-las-palabras protege los nombres mixtos
+ * («Trail Glove» pasa: glove no es genérico). La puerta de fondo no
+ * es esta lista — estructuralmente porosa para líneas en otro idioma
+ * — sino la evidencia de nombre propio: extractNamedProducts /
+ * starNamedEvidenceOk (más abajo). */
+for (const _lw of ['running', 'training', 'racing', 'trail', 'performance', 'sport', 'sports', 'deporte', 'deportes', 'fitness', 'gym', 'yoga', 'pilates', 'cycling', 'ciclismo', 'swimming', 'natacion', 'proyecto', 'proyectos', 'project', 'projects', 'projet', 'projets', 'linea', 'line', 'coleccion', 'collection', 'pastry', 'pastries']) STAR_GENERIC_TYPE_NOUNS.add(_lw);
 const STAR_GENERIC_STOPWORDS = new Set(['de', 'la', 'el', 'los', 'las', 'para', 'por', 'a', 'the', 'for', 'pour', 'le', 'les', 'des', 'di', 'da', 'en', 'y', 'and', 'et', 'con', 'with', 'avec']);
 /* ¿El nombre es solo categoría (género y/o tipo genérico), sin ningún
  * nombre propio de modelo? La regla es TODAS las palabras de contenido:
@@ -471,6 +508,141 @@ function isGenderOnlyName(raw) {
   const words = norm(s).split(' ').filter(Boolean).filter((w) => !STAR_GENERIC_STOPWORDS.has(w));
   if (!words.length) return false;
   return words.every((w) => OFFER_GENDER_NOUNS.has(w));
+}
+/* (LOTE CORRECTIVO-4 · ESTRELLA-CON-NOMBRE) PRODUCTOS CON NOMBRE —
+ * la causa raíz de la estrella genérica (Hungry Ghost/Veja, 12/11):
+ * la extracción del digest solo levantaba ítems de nivel categoría
+ * (del sitio/servicios) y NINGÚN producto con nombre del feed:
+ * «Fresh Good Batch» estaba en las captions y no aparecía en ninguna
+ * salida; la validación calzaba entonces contra ese material flojo y
+ * «validaba» el genérico. Este extractor levanta candidatos a
+ * producto CON NOMBRE y su evidencia:
+ * · de las captions del feed: frases en Title Case (2–4 palabras),
+ *   nombres entre comillas, códigos de modelo (V-10) y palabras
+ *   capitalizadas a mitad de oración o repetidas (nombre propio);
+ * · de los ítems ya leídos con fuente fuerte (ADN del dueño, catálogo
+ *   web/PDF, link de bio, home): su nombre, si es nombre propio de
+ *   producto (no categoría, no cromo, no género).
+ * Lo minado de prosa (bio/form) NO es evidencia de nombre: no entra.
+ * El digest guarda la lista en productos_nombrados [{nombre, fuente,
+ * menciones}] y la estrella — venga del dueño, del digest o del
+ * demo — exige calzar con ella (starNamedEvidenceOk). */
+const NAMED_TOKEN_STOP = new Set(['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'setiembre', 'octubre', 'noviembre', 'diciembre', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'navidad', 'christmas', 'halloween', 'verano', 'invierno', 'primavera', 'otono', 'summer', 'winter', 'spring', 'autumn', 'fall', 'gracias', 'thanks', 'thank', 'hola', 'hello', 'feliz', 'happy', 'bienvenidos', 'bienvenidas', 'welcome']);
+/* ¿El nombre puede ser un producto CON NOMBRE? Nombre propio de
+ * producto/modelo: plausible como oferta, NO categoría (composición),
+ * NO cromo de sección, NO solo género, ≤4 palabras. «Tesora»,
+ * «Esplar», «V-10», «Mint Mojito», «Fresh Good Batch» pasan; «cafe»,
+ * «running», «proyecto» no. */
+function namedProductOk(raw) {
+  const s = cleanOfferName(raw);
+  if (!s) return '';
+  if (s.length < 3 || s.length > 48) return '';
+  if (s.split(/\s+/).filter(Boolean).length > 4) return '';
+  if (!isPlausibleOfferItem(s)) return '';
+  if (isGenericCategoryName(s) || isChromeDerivedName(s) || isGenderOnlyName(s)) return '';
+  return s;
+}
+function captionNamedCandidates(captions) {
+  const byNorm = new Map();
+  const add = (rawName, capIdx, strong) => {
+    const nombre = namedProductOk(rawName);
+    if (!nombre) return;
+    if (NAMED_TOKEN_STOP.has(norm(nombre).split(' ')[0])) return;
+    const k = norm(nombre);
+    let e = byNorm.get(k);
+    if (!e) { e = { nombre, caps: new Set(), strong: false }; byNorm.set(k, e); }
+    e.caps.add(capIdx);
+    if (strong) e.strong = true;
+  };
+  (captions || []).slice(0, 30).forEach((cap, ci) => {
+    const text = String(cap || '').replace(/https?:\/\/\S+/g, ' ').replace(/[#@][\w.]+/g, ' ');
+    for (const m of text.matchAll(/[«"“]([^»"”]{3,40})[»"”]/g)) add(m[1], ci, true);
+    for (const sent of text.split(/[.!?…\n]+/)) {
+      const toks = sent.split(/\s+/)
+        .map((t) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}-]+$/gu, ''))
+        .filter(Boolean);
+      const isCap = toks.map((t) => t.length >= 2 && /^[A-ZÁÉÍÓÚÑ]/.test(t));
+      const isConn = toks.map((t) => /^(de|la|el|los|las|the|of|&|con|y|and|·|-)$/i.test(t));
+      let i = 0;
+      while (i < toks.length) {
+        if (!isCap[i]) { i++; continue; }
+        let j = i;
+        const run = [toks[i]];
+        while (j + 1 < toks.length) {
+          if (isCap[j + 1]) { run.push(toks[j + 1]); j++; continue; }
+          if (isConn[j + 1] && j + 2 < toks.length && isCap[j + 2]) { run.push(toks[j + 1], toks[j + 2]); j += 2; continue; }
+          break;
+        }
+        const capCount = run.filter((t) => /^[A-ZÁÉÍÓÚÑ]/.test(t)).length;
+        const nombre = run.join(' ');
+        // Fuerte: frase de 2+ palabras capitalizadas, código de
+        // modelo (dígito/guion: V-10) o capitalizada a mitad de
+        // oración (nombre propio). Suelta al inicio de oración y una
+        // sola vez: puede ser cualquier apertura — no alcanza.
+        add(nombre, ci, capCount >= 2 || /\d/.test(nombre) || /-/.test(nombre) || i > 0);
+        i = j + 1;
+      }
+    }
+  });
+  const out = [];
+  for (const e of byNorm.values()) {
+    if (e.strong || e.caps.size >= 2) out.push({ nombre: e.nombre, menciones: e.caps.size });
+  }
+  return out;
+}
+function extractNamedProducts({ captions, items, business, handle } = {}) {
+  const caps = Array.isArray(captions) ? captions : [];
+  const mentionCount = (nombre) => {
+    const anchors = anchorsFromTexts([nombre]);
+    let n = 0;
+    for (const c of caps.slice(0, 20)) if (pieceAnchored(String(c || ''), anchors).ok) n++;
+    return n;
+  };
+  const out = [];
+  const seen = new Map();
+  const push = (nombre, fuente, menciones) => {
+    const k = norm(nombre);
+    const prev = seen.get(k);
+    if (prev) { if ((menciones || 0) > prev.menciones) prev.menciones = menciones || 0; return; }
+    const e = { nombre, fuente, menciones: menciones || 0 };
+    seen.set(k, e);
+    out.push(e);
+  };
+  for (const it of (items || [])) {
+    const nombre = namedProductOk(it && (it.nombre || it));
+    if (!nombre) continue;
+    if (business && sameItemName(nombre, business)) continue;
+    push(nombre, (it && it.fuente) || 'catalogo', mentionCount(nombre));
+  }
+  for (const cand of captionNamedCandidates(caps)) {
+    if (business && sameItemName(cand.nombre, business)) continue;
+    if (handle && norm(cand.nombre) === norm(handle)) continue;
+    push(cand.nombre, 'caption', Math.max(cand.menciones, mentionCount(cand.nombre)));
+  }
+  out.sort((a, b) => (b.menciones - a.menciones));
+  return out.slice(0, 12);
+}
+/* ¿La estrella tiene evidencia de NOMBRE PROPIO de producto?
+ * Principio (LOTE CORRECTIVO-4): una categoría o una línea NUNCA es
+ * estrella, aunque «aparezca» — la estrella calza con un producto o
+ * modelo evidenciado: la lista productos_nombrados del digest
+ * (captions/catálogo/ADN) o un nombre real de su Tiendanube.
+ * · Digest LEGADO (sin el campo): manda la composición de siempre
+ *   (genérico/cromo) — ningún fundamento viejo pierde su estrella
+ *   por no traer el campo.
+ * · Con el campo (aunque vacío): sin calce con un nombre evidenciado
+ *   no hay estrella — cae a null y el wow degrada honesto (L4). */
+function starNamedEvidenceOk(digest, name) {
+  const s = String(name || '').trim();
+  if (!s) return false;
+  if (isGenericCategoryName(s) || isChromeDerivedName(s)) return false;
+  if (!digest || !Array.isArray(digest.productos_nombrados)) return true;
+  const tn = tnBlockOf(digest);
+  if (tn) {
+    if (tn.star && tn.star.name && sameItemName(String(tn.star.name), s)) return true;
+    for (const t of (tn.top_sellers || [])) if (t && t.name && sameItemName(String(t.name), s)) return true;
+  }
+  return digest.productos_nombrados.some((x) => x && sameItemName(String(x.nombre || x), s));
 }
 /* (LOTE INGESTA — caso Veja/Byredo/Crumbl, 11/11) Nombre de SECCIÓN
  * del sitio (menú, pie, legal, ayuda), no un producto: un tema que
@@ -805,6 +977,12 @@ function emptyDigest() {
     // hash de anclas NO la cubre y el refresco la preserva por copia base.
     competitors: null,
     inferred_star: null, contradictions: [], question_candidates: [],
+    // (LOTE CORRECTIVO-4) Productos CON NOMBRE evidenciados
+    // [{nombre, fuente, menciones}]: minados de las captions del feed
+    // y de los ítems de fuente fuerte (extractNamedProducts). La
+    // estrella exige calzar con esta lista cuando el digest la trae
+    // (starNamedEvidenceOk); el hash de anclas NO la cubre.
+    productos_nombrados: [],
     // (2026-10-20) POSTY CONECTADO: bloques de conexiones externas de
     // SOLO LECTURA (hoy: connections.tiendanube, que escribe el sync de
     // server.js desde tiendanube.js). null = sin conexiones. El hash de
@@ -1053,10 +1231,44 @@ function buildFromParts(parts) {
       if (sameItemName(it.nombre, c.item)) it.precio = c.resolucion;
     }
   }
+  // (LOTE CORRECTIVO-4) PRODUCTOS CON NOMBRE: los candidatos con
+  // evidencia (captions del feed + ítems de fuente fuerte: ADN,
+  // catálogo, bio-link, home) viajan en su campo y los que SOLO viven
+  // en las captions SUMAN al pool de la inferida: un producto que la
+  // marca nombra en su feed («Fresh Good Batch») puede ser la
+  // estrella inferida aunque ninguna lista de ítems lo trajera.
+  d.productos_nombrados = extractNamedProducts({
+    captions: (p.feed && Array.isArray(p.feed.captions)) ? p.feed.captions : [],
+    items: [...dnaProds, ...catalogItems, ...bioItems, ...webItems, ...dnaServs],
+    business: d.business,
+    handle: (p.feed && (p.feed.handle || p.feed.username)) || '',
+  });
+  const namedExtraItems = d.productos_nombrados
+    .filter((x) => x.fuente === 'caption')
+    .filter((x) => ![...d.productos, ...d.servicios].some((it) => sameItemName(String((it && it.nombre) || it || ''), x.nombre)))
+    .map((x) => ({ nombre: x.nombre, fuente: 'caption' }));
+  // Los nombrados que solo viven en las captions también entran a la
+  // lista de productos (al final, con su fuente): son productos
+  // reales de la marca y los consumidores de la estrella (el wow, la
+  // rotación) buscan el ancla entre productos/servicios.
+  for (const nx of namedExtraItems) {
+    if (d.productos.length >= 12) break;
+    d.productos.push({ nombre: nx.nombre, fuente: 'caption' });
+  }
   // Producto estrella INFERIDO (frecuencia en su feed + prominencia en
   // su web + rendimiento medido): con evidencia, nunca adivinado.
+  // El pool va SIN duplicados: un ítem repetido (productos +
+  // nombrados de caption) empata consigo mismo en inferStar y la
+  // estrella sale nula aunque la evidencia sea clara.
+  const starPoolSeen = new Set();
+  const starPool = [...d.productos, ...d.servicios, ...namedExtraItems].filter((x) => {
+    const k = norm(String((x && x.nombre) || x || ''));
+    if (!k || starPoolSeen.has(k)) return false;
+    starPoolSeen.add(k);
+    return true;
+  });
   d.inferred_star = inferStar({
-    items: [...d.productos, ...d.servicios],
+    items: starPool,
     captions: p.feed && Array.isArray(p.feed.captions) ? p.feed.captions : [],
     orderNames: [...catalogItems, ...webItems, ...bioItems].map((x) => x.nombre),
     metrics: (p.starSignals && p.starSignals.metrics) || [],
@@ -1592,6 +1804,9 @@ function applyDeepBlocks(stored, fresh) {
   // fuerte. El bloque `dueno` entero sobrevive por la copia base de
   // arriba (el fresco nunca lo trae).
   if (fresh.inferred_star && !(out.inferred_star && out.inferred_star.fuente === 'dueno')) out.inferred_star = fresh.inferred_star;
+  // (LOTE CORRECTIVO-4) Los productos con nombre se re-minan en cada
+  // compilación fresca: la lista fresca manda cuando la trae.
+  if (Array.isArray(fresh.productos_nombrados)) out.productos_nombrados = fresh.productos_nombrados;
   // Las contradicciones se recalculan cuando hubo lectura fresca con
   // precios (aunque el resultado sea "ya no se contradicen": [] manda).
   if (fresh.catalog || fresh.bio_link) out.contradictions = fresh.contradictions || [];
@@ -1728,7 +1943,7 @@ function deriveTopics(digest, opts) {
   // inferred_star y sin esta guarda subiría igual a ítem N.º 1.
   // (LOTE INGESTA) Igual para la inferida que es cromo: «Customer
   // Services» como inferred_star no reordena nada.
-  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item) && !isChromeDerivedName(digest.inferred_star.item)) {
+  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item) && !isChromeDerivedName(digest.inferred_star.item) && starNamedEvidenceOk(digest, digest.inferred_star.item)) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);
@@ -2340,8 +2555,16 @@ function deriveFirstPostWow(digest, opts) {
     }
   } catch (e) {}
   if (!starItem && digest.dueno && digest.dueno.mas_vendido && !digest.inferred_star) {
-    const si = items.findIndex((x) => sameItemName(name(x), digest.dueno.mas_vendido));
-    if (si >= 0) starItem = items[si];
+    // (LOTE CORRECTIVO-4) El mas_vendido del dueño pasa la validación
+    // L3 como cualquier estrella (duenoStarEvidenceMatch endurecido):
+    // un genérico («cafe», «running») no corona el wow — sin calce
+    // validado sigue el degradado honesto de L4 (star_missing o
+    // invitación de marca), nunca el claim de estrella.
+    const mv = duenoStarEvidenceMatch(digest, digest.dueno.mas_vendido);
+    if (mv) {
+      const si = items.findIndex((x) => sameItemName(name(x), mv));
+      if (si >= 0) starItem = items[si];
+    }
   }
   let starMissing = false;
   if (!starItem) {
@@ -2492,7 +2715,7 @@ function scrubDigestItems(digest) {
     if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
     if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
     if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)) && !isChromeDerivedName(x && (x.titulo || x.nombre || x)) && !isVetoText(x && (x.titulo || x.nombre || x), d.onboarding));
-    if (d.inferred_star && d.inferred_star.item && (!isPlausibleOfferItem(d.inferred_star.item) || isChromeDerivedName(d.inferred_star.item))) d.inferred_star = null;
+    if (d.inferred_star && d.inferred_star.item && (!isPlausibleOfferItem(d.inferred_star.item) || isChromeDerivedName(d.inferred_star.item) || isGenericCategoryName(d.inferred_star.item))) d.inferred_star = null;
   } catch (e) { /* el scrub jamás rompe un guardado */ }
   return d;
 }
@@ -2560,7 +2783,7 @@ function dnaFragmentFromDigest(digest) {
   const first = (frag.productos || [])[0] || (frag.servicios || [])[0];
   // (v230) El estrella INFERIDO con confianza le gana al "primer ítem
   // de la lista": viene de su feed, su web y su rendimiento medidos.
-  const starInf = (digest.inferred_star && (digest.inferred_star.confidence || 0) >= 0.5 && isPlausibleOfferItem(digest.inferred_star.item)) ? digest.inferred_star.item : '';
+  const starInf = (digest.inferred_star && (digest.inferred_star.confidence || 0) >= 0.5 && isPlausibleOfferItem(digest.inferred_star.item) && !isGenericCategoryName(digest.inferred_star.item) && starNamedEvidenceOk(digest, digest.inferred_star.item)) ? digest.inferred_star.item : '';
   // (Posty conectado) La estrella por VENTAS reales (Tiendanube) pisa a
   // la inferida al sembrar el ADN: viene de la caja, no de los likes.
   const tnFrag = tnBlockOf(digest);
@@ -2590,6 +2813,8 @@ module.exports = {
   tnBlockOf, tnNameMatch, tnOutOfStockNames, tnQuietNames, effectiveStarOf,
   // (LOTE L3) Validación de la estrella del dueño contra lo evidenciado.
   duenoStarEvidenceMatch,
+  // (LOTE CORRECTIVO-4) Productos con nombre: extracción + evidencia.
+  extractNamedProducts, starNamedEvidenceOk,
   // (v231) Adopción de patrones: candado de números de promo
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
