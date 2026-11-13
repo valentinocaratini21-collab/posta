@@ -144,11 +144,19 @@ function cleanText(s) {
 }
 function meta(html, name) {
   // <meta name|property="..." content="..."> (cualquiera de los dos órdenes)
+  // (LOTE C10 META-COMILLAS) La captura del content respeta la comilla que
+  // DELIMITA el atributo: si abre con " captura hasta el " de cierre y los
+  // apóstrofos internos quedan adentro; si abre con ', hasta el ' de cierre
+  // y las comillas dobles internas quedan adentro. La clase anterior
+  // [^"\'] frenaba en el PRIMER apóstrofo y truncaba la descripción de
+  // cualquier sitio con elisiones o contracciones (d'Amazonie, don't,
+  // l'oreal): la descripción de Veja nacía cortada a 57 caracteres en la
+  // ingesta («…du caoutchouc d.», diagnóstico Veja #5 §2.4).
   const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  let m = html.match(new RegExp('<meta[^>]+(?:name|property)\\s*=\\s*["\']' + esc + '["\'][^>]*content\\s*=\\s*["\']([^"\']{1,400})["\']', 'i'));
-  if (m) return cleanText(m[1]);
-  m = html.match(new RegExp('<meta[^>]+content\\s*=\\s*["\']([^"\']{1,400})["\'][^>]*?(?:name|property)\\s*=\\s*["\']' + esc + '["\']', 'i'));
-  return m ? cleanText(m[1]) : '';
+  let m = html.match(new RegExp('<meta[^>]+(?:name|property)\\s*=\\s*["\']' + esc + '["\'][^>]*content\\s*=\\s*(?:"([^"]{1,400})"|\'([^\']{1,400})\')', 'i'));
+  if (m) return cleanText(m[1] || m[2]);
+  m = html.match(new RegExp('<meta[^>]+content\\s*=\\s*(?:"([^"]{1,400})"|\'([^\']{1,400})\')[^>]*?(?:name|property)\\s*=\\s*["\']' + esc + '["\']', 'i'));
+  return m ? cleanText(m[1] || m[2]) : '';
 }
 function norm(s) {
   return String(s || '').toLowerCase()
