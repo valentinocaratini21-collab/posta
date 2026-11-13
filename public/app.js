@@ -9838,7 +9838,9 @@ function pzAcceptAllWeekCands(list, isPilot) {
       const p = t.post;
       if (t.archivedExt) continue;
       if (String(p.status || '') !== 'scheduled') continue;
-      if (String(p.approval || 'pending') !== 'pending') continue;
+      // (LOTE APROBAR-AUTO) 'auto' cuenta como pendiente de decisión,
+      // igual que la ausencia del campo: Aceptar todo lo incluye.
+      if (String(p.approval || 'pending') !== 'pending' && String(p.approval || 'pending') !== 'auto') continue;
       if (isPilot === true && Number(p.owner_liked || 0) === 1) continue;
       out.push(t);
     }
@@ -14989,7 +14991,10 @@ function postCardHTML(p, opts) {
     : isV ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
     : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`;
   const capFull = String(p.caption || p.source_topic || 'Posteo');
-  const canApprove = String(p.approval) === 'pending' && String(p.status) === 'scheduled';
+  // (LOTE APROBAR-AUTO) 'auto' (el estado honesto de C12) también es
+  // decidible: pendiente o auto = hay algo que aprobar. El handler
+  // pcApprove ya deriva al invitado a la hoja de cuenta.
+  const canApprove = (String(p.approval) === 'pending' || String(p.approval) === 'auto') && String(p.status) === 'scheduled';
   const actions = isPub ? '' : `<div class="pcard-actions">
       ${isV ? '' : '<button type="button" data-pc-act="image">' + pzIc('image', 18) + ' Imagen</button>'}
       <button type="button" data-pc-act="skip">${pzIc('skip', 18)} Saltar</button>
@@ -23008,7 +23013,7 @@ function pzHoyTiraDetalleHTML(d, o) {
     const cuando = pzHoyCuandoCorto(p, tz, en);
     const st = String(p.status || '');
     const pill = (st === 'published' && pzIsPubReal(p)) ? (en ? 'Published' : 'Publicado')
-      : (st === 'scheduled' && String(p.approval || 'pending') === 'pending') ? pzHoyPillSalida(p, tz, en)
+      : (st === 'scheduled' && (String(p.approval || 'pending') === 'pending' || String(p.approval || 'pending') === 'auto')) ? pzHoyPillSalida(p, tz, en)
       : (st === 'draft') ? (en ? 'Draft · to review' : 'Borrador · para revisar')
       : cuando;
     const cuenta = (st === 'scheduled' && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
@@ -23210,7 +23215,9 @@ function pzHoyPendientes(todos, hoyKey, mananaKey, lunesKey, tz) {
         if (lunesKey && String(p.week_key || '') !== lunesKey) continue;
         resto.push(p);
       } else if (st === 'scheduled') {
-        if (String(p.approval || 'pending') !== 'pending') continue;
+        // (LOTE APROBAR-AUTO) 'auto' queda en la cola de pendientes,
+        // igual que la ausencia del campo (sin destello al cargar).
+        if (String(p.approval || 'pending') !== 'pending' && String(p.approval || 'pending') !== 'auto') continue;
         const k = pzHoyPostDiaKey(p, tz);
         if (k && hoyKey && k < hoyKey) continue;
         resto.push(p);
@@ -23223,7 +23230,7 @@ function pzHoyPendientes(todos, hoyKey, mananaKey, lunesKey, tz) {
       return (Number(a.id) || 0) - (Number(b.id) || 0);
     });
     out.resto = resto;
-    out.total = resto.length + ((out.cartita && String(out.cartita.status || '') === 'scheduled' && String(out.cartita.approval || 'pending') === 'pending') ? 1 : 0);
+    out.total = resto.length + ((out.cartita && String(out.cartita.status || '') === 'scheduled' && (String(out.cartita.approval || 'pending') === 'pending' || String(out.cartita.approval || 'pending') === 'auto')) ? 1 : 0);
   } catch (e) {}
   return out;
 }
@@ -23384,7 +23391,10 @@ function pzHoyCardHTML(p, o) {
     const cartita = !!(o && o.cartita);
     const prop = (o && o.prop) || null;
     const st = String((p && p.status) || '');
-    const pendiente = st === 'draft' || (st === 'scheduled' && String((p && p.approval) || 'pending') === 'pending');
+    // (LOTE APROBAR-AUTO) 'auto' es pendiente de decisión, igual que
+    // la ausencia del campo: la tarjeta muestra sus botones siempre,
+    // no solo en la primera pintura.
+    const pendiente = st === 'draft' || (st === 'scheduled' && (String((p && p.approval) || 'pending') === 'pending' || String((p && p.approval) || 'pending') === 'auto'));
     const fmt = String((p && p.media_type) || '') === 'video' ? '🎬 Reel'
       : String((p && p.media_type) || '') === 'carousel' ? '🖼️ Carrusel'
       : String((p && p.media_type) || '') === 'story' ? '📸 Historia' : '📸 Post';
@@ -24143,7 +24153,7 @@ async function inicioView() {
     }
   } catch (e) { insightHoy = ''; }
   const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
-    const hoyPendienteR1 = !!(hoyPostR1 && (String(hoyPostR1.status || '') === 'draft' || (String(hoyPostR1.status || '') === 'scheduled' && String(hoyPostR1.approval || 'pending') === 'pending')));
+    const hoyPendienteR1 = !!(hoyPostR1 && (String(hoyPostR1.status || '') === 'draft' || (String(hoyPostR1.status || '') === 'scheduled' && (String(hoyPostR1.approval || 'pending') === 'pending' || String(hoyPostR1.approval || 'pending') === 'auto'))));
     const tiraDiasR1 = pzHoyTiraDias(semR1, allPosts, hoyKeyR1, tz);
     PZ_HOY_TIRA_DIAS = tiraDiasR1;
     PZ_HOY_POST_ID = hoyPostR1 ? String(hoyPostR1.id) : '';
@@ -30227,7 +30237,10 @@ async function approvalPostView(id) {
   // píldora «Aprobado — sale a las…» y NADA que aceptar: el botón no
   // se renderiza. El menú ••• y el diálogo de Rechazar siguen para
   // programados (pendiente o aprobado) y borradores.
-  const canAccept = st === 'scheduled' && ap === 'pending' && !p.needs_review;
+  // (LOTE APROBAR-AUTO) 'auto' (C12) también se decide acá: es el
+  // programado del invitado que todavía nadie aprobó. La píldora no
+  // cambia («Sale solo a las …»); lo que nace es la acción.
+  const canAccept = st === 'scheduled' && (ap === 'pending' || ap === 'auto') && !p.needs_review;
   // (v931) Un posteo en revisión no se puede aceptar (el PATCH lo frena
   // con 403 in_review): se muestra el aviso y no el botón Aceptar.
   const apvInReview = !!p.needs_review;
@@ -30236,7 +30249,7 @@ async function approvalPostView(id) {
   // sin salida (ni Aceptar, ni Editar, ni Rechazar) y es a donde llevan
   // "Ver posteo" y las filas de la semana de Inicio.
   const isDraft = st === 'draft';
-  const canMenu = (st === 'scheduled' && (ap === 'pending' || ap === 'approved')) || isDraft;
+  const canMenu = (st === 'scheduled' && (ap === 'pending' || ap === 'approved' || ap === 'auto')) || isDraft;
   const isVideo = String(p.media_type || '') === 'video';
   // (LOTE 17) Carrusel prolijo: la vista mostraba solo la portada y el
   // «Deslizá» del caption no hacía nada; el borde claro de la foto al
@@ -30380,6 +30393,16 @@ function bindApprovalPost() {
   if (rt) rt.onclick = () => render();
   const acc = document.getElementById('apvAccept');
   if (acc) acc.onclick = async () => {
+    // (LOTE APROBAR-AUTO) Invitado: primero la hoja de cuenta y el
+    // reintento al crearla — el mismo patrón de pcApprove. Sin esto,
+    // el Aceptar del detalle (visible también para 'auto') caía solo
+    // en el 402 del wrapper: la hoja abría pero la aprobación no se
+    // completaba tras crear la cuenta.
+    if (typeof pzIsGuest === 'function' && pzIsGuest()) {
+      const accHTML = acc.innerHTML;
+      try { pzGuestAccountSheet(() => { acc.disabled = false; acc.innerHTML = accHTML; acc.click(); }); } catch (e) {}
+      return;
+    }
     acc.disabled = true; acc.textContent = 'Aprobando…';
     try {
       await api.post('/api/posts/' + encodeURIComponent(acc.dataset.apvid) + '/approve');
