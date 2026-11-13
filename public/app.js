@@ -6513,10 +6513,7 @@ function appShell(tab, content) {
   <div class="drawer-ov" id="drawerOv" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Menú">
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
-    <div class="side-posty" id="sidePosty" aria-label="Posty">
-      <span class="pz-mg"><img src="ai-avatar.png" alt="Posty" class="side-posty-ava"></span>
-      <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
-    </div>
+    <div class="side-posty" id="sidePosty" aria-label="Tu negocio"></div>
     <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
     <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>Ads</button>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">${pzIc('chat')}</span>Chat</button>
@@ -8474,15 +8471,50 @@ async function paintDrawerIdent() {
     <span class="drawer-ident-logo">${logoHtml}</span>
     <span class="drawer-ident-txt"><b>${esc(biz)}</b></span>`;
 }
-// Identidad de Posty para el sidebar fijo de escritorio (≥1024px).
-async function paintSidePosty() {
-  // El nombre se muestra TAL CUAL lo escribió el cliente (si pone mayúscula, va mayúscula).
-  // Sin nivel ni "Mi plan": el header queda limpio (el nivel vive en el avatar del chat,
-  // el plan solo en Ajustes).
+// (SIDEBAR-LOGO-CLIENTE · Valentino 12/11) Identidad del sidebar fijo de
+// escritorio (≥1024px): el LOGO DEL NEGOCIO, no la cara de Posty (hueco de
+// v933: la cabecera del perfil y del Feed ya lo hacían). Misma resolución
+// que homeHeadHTML y la cabecera del Feed (v933): foto de perfil del
+// fundamento (prof.pic) → logo subido (assetLogo) → casa
+// (@posty.communitymanager) → inicial neutra. El nombre se muestra TAL
+// CUAL lo escribió el cliente (si pone mayúscula, va mayúscula). Sin nivel
+// ni "Mi plan": el header queda limpio (el nivel vive en el avatar del
+// chat, el plan solo en Ajustes).
+async function paintSidePosty(profOverride) {
   try {
-    const nm = document.getElementById('sidePostyName');
-    const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
-    if (nm && biz) nm.textContent = biz;
+    const mount = document.getElementById('sidePosty');
+    if (!mount) return;
+    let prof = profOverride || null;
+    if (!prof) { try { prof = (typeof pzCurProfGet === 'function' ? pzCurProfGet() : null) || (typeof pzHomeProfGet === 'function' ? pzHomeProfGet() : null); } catch (e) {} }
+    const biz = String((typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name) || (prof && prof.name) || '').trim() || 'Mi negocio';
+    let picSrc = (prof && prof.pic) || '';
+    if (!picSrc) { try { const lg = (typeof assetLogo === 'function') ? assetLogo() : null; if (lg && lg.file_path) picSrc = lg.file_path; } catch (e) {} }
+    const username = String((prof && prof.username) || (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) || '').replace(/^@/, '').toLowerCase();
+    const isHouse = username === 'posty.communitymanager';
+    if (!picSrc && isHouse) picSrc = '/ai-avatar.png';
+    const initial = (biz.trim()[0] || 'M').toUpperCase();
+    const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
+    const fbBg = bc[0] || '#2793C8';
+    // La letra queda debajo de la foto: si la foto falla al cargar, el
+    // onerror quita la <img> y queda la inicial (igual que homeHeadHTML).
+    mount.innerHTML = `
+    <span class="side-posty-ava-wrap"><span class="side-posty-ava-fb" style="background:${esc(fbBg)}">${esc(initial)}</span>${picSrc ? `<img class="side-posty-ava" src="${esc(picSrc)}" alt="logo de ${esc(biz)}" onerror="this.remove()">` : ''}</span>
+    <span class="side-posty-txt"><b>${esc(biz)}</b></span>`;
+    // Si todavía no hay perfil cargado (carga directa en otro tab), lo
+    // pedimos una vez y repintamos al llegar — mismo patrón que
+    // paintDrawerIdent con /api/assets. Sin pic no hay nada que repintar.
+    if (!prof && !picSrc && !isHouse && typeof ME !== 'undefined' && ME && !window.__pzSidePostyProfPendiente) {
+      window.__pzSidePostyProfPendiente = true;
+      try {
+        const hp = await api.get('/api/home/profile').catch(() => null);
+        window.__pzSidePostyProfPendiente = false;
+        if (hp && hp.pic) {
+          try { if (typeof pzCurProfSet === 'function') pzCurProfSet(hp); } catch (e) {}
+          try { if (typeof pzHomeProfSet === 'function') pzHomeProfSet(hp); } catch (e) {}
+          try { paintSidePosty(hp); } catch (e) {}
+        }
+      } catch (e) { window.__pzSidePostyProfPendiente = false; }
+    }
   } catch (e) {}
 }
 // Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen

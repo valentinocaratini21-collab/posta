@@ -194,12 +194,13 @@ const escFn = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/
 
   /* ---------- E) Censo: ai-avatar.png solo donde corresponde ---------- */
   console.log('— E) censo: la cara de Posty solo como identidad de Posty —');
-  ok(cnt(app, /'\/ai-avatar\.png'/g) === 3, "ai-avatar.png x3 en app.js: 1 definición del agente + 2 fallbacks de la casa (homeHeadHTML y Feed)");
+  ok(cnt(app, /'\/ai-avatar\.png'/g) === 4, "ai-avatar.png x4 en app.js: 1 definición del agente + 3 fallbacks de la casa (homeHeadHTML, Feed y sidebar v956)");
   const avLines = app.split('\n').filter((l) => l.includes("'/ai-avatar.png'"));
-  ok(avLines.length === 3, 'censo: exactamente 3 líneas con la cara canónica', avLines.length + ' líneas');
+  ok(avLines.length === 4, 'censo: exactamente 4 líneas con la cara canónica', avLines.length + ' líneas');
   ok(avLines.some((l) => /a: '\/ai-avatar\.png'/.test(l)), 'censo: 1 es la definición del agente (Posty)');
   ok(avLines.some((l) => l.includes("if (!picSrc") && l.includes('posty.communitymanager')), 'censo: 1 es el fallback de la casa en homeHeadHTML');
   ok(avLines.some((l) => l.includes("if (!feedPic && feedIsHouse) feedPic = '/ai-avatar.png';")), 'censo: 1 es el fallback de la casa en el Feed (gobernado por feedIsHouse)');
+  ok(avLines.some((l) => l.includes("if (!picSrc && isHouse) picSrc = '/ai-avatar.png';")), 'censo: 1 es el fallback de la casa en el sidebar (gobernado por isHouse, v956)');
   ok(app.includes("const feedIsHouse = String((prof && prof.username) || '').replace(/^@/, '').toLowerCase() === 'posty.communitymanager';"), 'censo: feedIsHouse solo es true para la casa');
   const prueba = fs.readFileSync(path.join(ROOT, 'public', 'prueba.html'), 'utf8');
   ok(prueba.includes('<img src="/ai-avatar.png" alt="Posty">'), 'prueba.html: el héroe del formulario SIGUE con la cara de Posty (es la página de Posty, no el perfil del negocio)');
