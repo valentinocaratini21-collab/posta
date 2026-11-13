@@ -1824,6 +1824,17 @@ function lexSegments(text) {
   }
   return out;
 }
+/* (LOTE LÉXICO-INGLÉS · L7 del diagnóstico de la corrida Veja #6) El
+ * `dice` es un sintagma nominal: NUNCA puede terminar en palabra de
+ * función. El recorte histórico de la ventana usaba STOP, pensado para
+ * el español — el «in» inglés no estaba, y de un caption «The Atlas in
+ * hairy suede» nació el dice «Atlas in», que el gancho del wow convirtió
+ * en «Atlas in everyone's asking for» (posteo 654). Este set suma las
+ * palabras de función EN (preposiciones, artículo, conjunciones) a STOP
+ * SOLO para el recorte del borde derecho de la ventana; STOP no se toca
+ * (lo usan el minado de distintivas y otros caminos). */
+const LEX_TRAILING_FUNCTION = new Set([...STOP,
+  ...('in on at to of by an as into onto upon over under between among about per via and or nor but').split(' ')]);
 function buildLexicon({ texts, items }) {
   const segs = [];
   for (const t of (texts || [])) segs.push(...lexSegments(t));
@@ -1848,7 +1859,7 @@ function buildLexicon({ texts, items }) {
       let start = Math.min(...hits);
       if (start > 0 && /^(el|la|los|las|nuestro|nuestra|nuestros|nuestras|mi|su)$/.test(norms[start - 1])) start--;
       let end = Math.min(words.length, Math.max(...hits) + 2);
-      while (end > start + 1 && STOP.has(norms[end - 1])) end--;
+      while (end > start + 1 && LEX_TRAILING_FUNCTION.has(norms[end - 1])) end--;
       const candWords = words.slice(start, end);
       if (candWords.length < 1 || candWords.length > 4) return;
       const cand = candWords.join(' ');
@@ -2174,6 +2185,53 @@ function capWords(s, max) {
   for (const c of clauses) { const cw = c.split(' '); if (cw.length >= 2 && cw.length <= max) return c; }
   return w.slice(0, max).join(' ');
 }
+/* (LOTE LÉXICO-INGLÉS · L7 del diagnóstico de la corrida Veja #6) Los
+ * nombres minados conservan su artículo («The Salar») y las fórmulas EN
+ * que agregan posesivo o verbo («choosing your X well», «that's how we
+ * do X», «Book your X») lo duplicaban: «your the salar», «we do the
+ * salar» (posteos 655/656 de la corrida #6). Al embeber en ESAS
+ * posiciones el nombre va pelado; donde el artículo corresponde («3
+ * keys to the Salar») no se toca. Sin artículo inicial, es identidad. */
+function bareEnName(s) {
+  const t = String(s || '').trim();
+  const m = t.match(/^(the|a|an)\s+(.+)$/i);
+  return m ? m[2].trim() : t;
+}
+/* (LOTE LÉXICO-INGLÉS · L7) Lint determinístico de empalmes EN: la red
+ * sobre lo que las fórmulas y el minado producen, fail-closed como la
+ * puerta de idioma positivo (C9) — en deriveTopics el tema no nace y en
+ * el wow el gancho cae a su forma neutra. La familia sale de la
+ * evidencia de la corrida #6 (posteos 654–656): posesivo+artículo
+ * («your the»), artículo duplicado («the the»), preposición colgante
+ * ante «everyone's» («in everyone's asking for») y el nombre CON
+ * artículo embebido tras posesivo/verbo («do the salar» — sin el
+ * nombre, «do the» a secas no se puede juzgar: «do the right thing» es
+ * inglés válido). Devuelve true si el texto está ROTO. */
+const EN_SPLICE_FUNCTION_TAIL = new Set(['the', 'a', 'an', 'of', 'to', 'for', 'with', 'and', 'or', 'your', 'our', 'in', 'on', 'at', 'by', 'from']);
+function enSpliceLint(text, names) {
+  const c = String(text || '');
+  if (!c) return false;
+  if (/\b(your|our|their|my|his|her|its)\s+(the|a|an)\b/i.test(c)) return true;
+  if (/\b(the|a|an)\s+(the|a|an)\b/i.test(c)) return true;
+  if (/\b(in|on|at|of|to|for|with|from|by|about|into|upon)\s+everyone's\b/i.test(c)) return true;
+  const low = ` ${c.toLowerCase()} `;
+  for (const n of (names || [])) {
+    const nm = String(n || '').trim().toLowerCase();
+    if (!/^(the|a|an)\s+\S/.test(nm)) continue;
+    for (const frame of ['your ', 'our ', 'their ', 'my ', 'do ', 'does ', 'did ']) {
+      if (low.includes(` ${frame}${nm}`)) return true;
+    }
+  }
+  return false;
+}
+/* Quita las palabras de función del borde derecho de un nombre/frase
+ * («Atlas in» → «Atlas»): red para digests sembrados antes del fix del
+ * minado, cuyo `dice` guardado puede seguir trayendo el borde roto. */
+function trimFunctionTail(s) {
+  const w = String(s || '').trim().split(/\s+/).filter(Boolean);
+  while (w.length > 1 && EN_SPLICE_FUNCTION_TAIL.has(w[w.length - 1].toLowerCase().replace(/[^a-z']/g, ''))) w.pop();
+  return w.join(' ');
+}
 function deriveTopics(digest, opts) {
   const o = opts || {};
   // (v274 · MODO EN) Con lang 'en' los frames de texto salen en inglés US;
@@ -2297,11 +2355,17 @@ function deriveTopics(digest, opts) {
     const capTxt = frame.caption(A);
     const capLang = detectTextLang(capTxt);
     if (capLang && capLang !== (en ? 'en' : 'es')) return null;
+    const headTxt = capWords(frame.headline(A), 6);
+    // (LOTE LÉXICO-INGLÉS · L7) Segunda red del mismo choke point: un
+    // tema EN cuyo titular o caption renderizado trae un empalme del
+    // nombre minado («your the…», «in everyone's…», «do the…») NO nace
+    // — misma vara fail-closed que el idioma positivo de acá arriba.
+    if (en && enSpliceLint(`${headTxt}\n${capTxt}`, [A])) return null;
     const t = {
       kind,
       tag: frame.tag || '',
       tema: temaForText(A, category, (digest && digest.subcat) || ''),
-      headline: capWords(frame.headline(A), 6),
+      headline: headTxt,
       subline: frame.subline ? capWords(frame.subline(A), 8) : '',
       cta: frame.cta || '',
       caption: capTxt,
@@ -2564,7 +2628,7 @@ function deriveTopics(digest, opts) {
       headline: () => `3 keys to ${short.toLowerCase()}`,
       subline: () => 'What we check before choosing',
       cta: 'Save this tip',
-      caption: (x) => `3 keys to choosing your ${short.toLowerCase()} well 👇\n\nQuality, detail and the ${bizPh} standard: that's how we do ${x.toLowerCase()}.\n\nSave this post for when you need it 🔖`,
+      caption: (x) => `3 keys to choosing your ${bareEnName(short).toLowerCase()} well 👇\n\nQuality, detail and the ${bizPh} standard: that's how we do ${bareEnName(x).toLowerCase()}.\n\nSave this post for when you need it 🔖`,
     }) : mk('tip', A, {
       tag: 'TIP',
       headline: () => `3 claves de ${short.toLowerCase()}`,
@@ -2619,7 +2683,7 @@ function deriveTopics(digest, opts) {
     const A = name(bookItem);
     const t = en ? mk('reserva', A, {
       tag: 'BOOKINGS',
-      headline: (x) => `Book your ${capWords(x, 3).toLowerCase()}`,
+      headline: (x) => `Book your ${bareEnName(capWords(x, 3)).toLowerCase()}`,
       subline: () => "This week's spots go fast",
       cta: 'Book now',
       caption: (x) => `Booking open for ${x.toLowerCase()} at ${bizPh} 📩\n\nThis week's spots fill up fast.\n\nBook yours by DM 📩`,
@@ -2979,6 +3043,17 @@ function deriveFirstPostWow(digest, opts) {
     else headline = capWords(displayA, 6);
   }
   headline = capWords(headline, 6);
+  // (LOTE LÉXICO-INGLÉS · L7) El gancho «everyone's asking for» con un
+  // dice terminado en preposición («Atlas in») salía tal cual al titular
+  // (posteo 654). El minado ya no produce ese dice, pero un digest
+  // sembrado antes del fix lo puede seguir trayendo: si el titular
+  // renderizado trae el empalme, el gancho cae a la forma neutra con el
+  // nombre limpio de borde — el texto roto nunca sale.
+  if (en && enSpliceLint(headline, [A, displayA])) {
+    const cleanA = trimFunctionTail(displayA);
+    headline = capWords(serviceFamily ? `Book ${cleanA} today` : `Try ${cleanA} today`, 6);
+    if (enSpliceLint(headline, [A, cleanA])) headline = capWords(cleanA, 6);
+  }
   // Caption en voz humana, 3 bloques: estrella / detalle concreto /
   // CTA. El detalle es ritual + precio (lo que haya); sin ninguno, una
   // frase REAL de la marca (idea 5) en vez del genérico «favorito de la
@@ -3203,6 +3278,8 @@ module.exports = {
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
   lexDiceFor, voicePhraseFor,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
+  // (LOTE LÉXICO-INGLÉS · L7) Nombre pelado para fórmulas EN + lint de empalmes.
+  bareEnName, enSpliceLint,
   // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
   sanitizeBrandPresence, brandPresenceOf,
   questionCandidatesOf, applyDeepBlocks,

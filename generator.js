@@ -1753,6 +1753,19 @@ function captionPassesEn(caption, input) {
   const emojiTotal = (c.match(/\p{Extended_Pictographic}/gu) || []).length;
   if (emojiTotal > 4) return { ok: false, reason: `${emojiTotal} emojis (max 4)` };
   if (captionOpenIsGarbledEn(c)) return { ok: false, reason: 'spliced opening: a block opening stitches two fragments or leaves a dangling article — rewrite it as one clean sentence' };
+  // (LOTE LÉXICO-INGLÉS · L7 del diagnóstico de la corrida Veja #6,
+  // posteos 654–656) El anti-empalme de aperturas (v1007) mira la
+  // primera línea de cada bloque; el mismo empalme ADENTRO del cuerpo
+  // pasaba: posesivo+artículo («your the salar» fuera de la apertura),
+  // artículo duplicado y la preposición colgante ante «everyone's»
+  // («in everyone's asking for»). Estas secuencias no son inglés válido
+  // en ningún contexto ni en ninguna posición: se frenan en todo el
+  // texto. «do the» a secas NO se frena acá («do the right thing» es
+  // válido): ese empalme se corta en la fórmula del tip y en el lint
+  // con nombre de client-digest, donde el nombre sí se conoce.
+  if (/\b(your|our|their|my|his|her|its)\s+(the|a|an)\b/i.test(c)) return { ok: false, reason: 'spliced name: possessive + article ("your the …") is never valid English — the mined name carries its own article; embed the bare name after a possessive' };
+  if (/\b(the|a|an)\s+(the|a|an)\b/i.test(c)) return { ok: false, reason: 'spliced name: doubled article ("the the …") — rewrite the phrase as one clean noun phrase' };
+  if (/\b(in|on|at|of|to|for|with|from|by|about|into|upon)\s+everyone's\b/i.test(c)) return { ok: false, reason: 'spliced hook: dangling preposition before "everyone\'s" ("in everyone\'s asking for") — the name fragment was cut mid-phrase; rewrite the hook as one clean phrase' };
   if (hasPlaceholders(c)) return { ok: false, reason: 'contains placeholder/example text (like "XYZ")' };
   // DEDUP-EXACTA (Juli, 2026-10-24): same exact-duplicate gate as the
   // Spanish door — this door never looked at prevs before, so an exact
