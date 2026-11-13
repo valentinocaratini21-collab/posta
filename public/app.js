@@ -30122,6 +30122,10 @@ function apvPill(p, d, dOk) {
   if (st === 'published') return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
   if (st === 'failed') return '<span class="apv-pill apv-pill-warn">' + pzIc('alert', 12) + ' No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
   if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">' + pzIc('reject', 15) + ' Rechazado — no se publica</span>';
+  // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) Programado + 'auto' TODAVÍA
+  // no salió: el texto en pasado («Salió solo») afirmaba un hecho falso.
+  // Futuro honesto: sale solo a su hora, sin afirmar aprobación.
+  if (ap === 'auto' && st === 'scheduled') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + (dOk ? ` Sale solo a las ${esc(apvHM(d, tz))}` : ' Sale solo') + '</span>';
   if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + ' Salió solo (no lo viste a tiempo)</span>';
   if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
   if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;

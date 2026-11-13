@@ -2382,6 +2382,20 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   const posts = (out.posts || []).filter((p) => p && (p.image || p.video));
   if (!posts.length) return 0;
   if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
+  // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) La señal con la que nace
+  // el posteo importado: si el dueño es INVITADO, nadie aprobó nada
+  // todavía — la fila de post_signals lleva el estilo para el
+  // aprendizaje, pero su señal es la del SISTEMA ('auto', auto_signal=1:
+  // el mismo criterio que scheduler.js usa cuando un posteo sale solo),
+  // así ninguna métrica la cuenta como aprobación del cliente. Si el
+  // dueño ya es una cuenta registrada (alta/login que importa su
+  // semana), la importación conserva la señal histórica ('approved').
+  let trialSignal = 'approved';
+  let trialSignalAuto = 0;
+  try {
+    const gu = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
+    if (gu && gu.is_guest) { trialSignal = 'auto'; trialSignalAuto = 1; }
+  } catch (e) {}
   let n = 0;
   let idx = -1;
   for (const p of posts.slice(0, (opts && opts.limit) || 7)) {
@@ -2448,10 +2462,10 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
         'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
       ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths);
       try {
-        db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo)
-          VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?)
+        db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
+          VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?,?)
           ON CONFLICT(user_id, post_id) DO UPDATE SET style_code=excluded.style_code, tipo=excluded.tipo, updated_at=datetime('now')`)
-          .run(userId, Number(ins.lastInsertRowid), String(p.caption || ''), String(p.hashtags || ''), '', String(out.category || ''), 'approved', '', styleCode, String(dpost.kind || ''));
+          .run(userId, Number(ins.lastInsertRowid), String(p.caption || ''), String(p.hashtags || ''), '', String(out.category || ''), trialSignal, '', styleCode, String(dpost.kind || ''), trialSignalAuto);
       } catch (e) { console.error('[posta] importTrialWeek signal:', e.message); }
       // (v229) Trazabilidad de fundamento: el posteo importado guarda el
       // hash del digest de la prueba (y ':sin-ancla' si su titular+caption
@@ -17644,6 +17658,31 @@ function recordSignal(userId, post, signal) {
   } catch (e) { console.error('[posta] recordSignal:', e.message); }
 }
 
+// (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) Señal del SISTEMA: espejo
+// de recordSignal pero marcada como lo que es — client_signal='auto'
+// + auto_signal=1 (el criterio de scheduler.js cuando un posteo sale
+// solo). La fila queda para el aprendizaje de estilo, pero NINGUNA
+// métrica la cuenta como aprobación del cliente. Si el cliente señala
+// después a mano, recordSignal la pisa (auto_signal=0), como manda
+// FASE 5. Se usa cuando el embudo programa solo la semana de un
+// invitado: nadie aprobó nada.
+function recordAutoSignal(userId, post) {
+  try {
+    const tz = userTz(userId);
+    const prof = getProfile(userId) || {};
+    const wk = postWeekKey(post, tz);
+    db.prepare(`
+      INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
+      VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?,1)
+      ON CONFLICT(user_id, post_id) DO UPDATE SET
+        client_signal='auto', caption=excluded.caption, hashtags=excluded.hashtags,
+        scheduled_for=excluded.scheduled_for, rubro=excluded.rubro,
+        week_key=excluded.week_key, updated_at=datetime('now'),
+        style_code=excluded.style_code, tipo=excluded.tipo, auto_signal=1
+    `).run(userId, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', prof.category || '', 'auto', wk, post.style_code || '', post.tipo || '');
+  } catch (e) { console.error('[posta] recordAutoSignal:', e.message); }
+}
+
 // Señal manual sobre un posteo (👍/👎 en borradores, estrellitas 1-5 en "Ya salió")
 app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
   const { signal } = req.body || {};
@@ -19598,7 +19637,7 @@ function weekQuotaPools(uid) {
 // `apply(iso, d)` ejecuta el UPDATE propio de cada flujo. Horarios: feed y
 // reels a la best_hour del negocio, historias a STORY_HOUR; un posteo de
 // feed por día (las historias tienen su propio carril de días).
-function scheduleDraftsPerWeek(uid, drafts, apply) {
+function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
   const tz = userTz(uid);
   let bestHour = 19;
   try {
@@ -19714,7 +19753,17 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
     if (!iso) { waiting.push({ id: d.id, week_key: monday, reason: closedSet.size >= 7 ? 'closed_days' : 'no_slot' }); continue; }
     pools.consume(monday, poolKey);
     apply(iso, d);
-    try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
+    // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) La señal de programar:
+    // 'approved' SOLO cuando programar es la aprobación (el tap manual
+    // de «Programar mi semana» y el embudo de cuentas registradas —
+    // comportamiento histórico, default). Con opts.signal='auto' (el
+    // embudo programando SOLO la semana de un invitado) nadie aprobó
+    // nada: la señal es la del sistema (recordAutoSignal).
+    if (opts && opts.signal === 'auto') {
+      try { recordAutoSignal(uid, d); } catch (e) { /* no bloquea */ }
+    } else {
+      try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
+    }
     scheduled.push({ id: d.id, scheduled_at: iso, week_key: monday });
   }
   return { scheduled, waiting };
@@ -19782,8 +19831,18 @@ function scheduleAllDrafts(uid) {
   // FASE 1: auto_published=1 marca lo programado POR EL SISTEMA (sin tap
   // del usuario): así el aviso pre-publicación de 30 min lo cubre como
   // freno de emergencia en nivel 1, y el conteo de semanas limpias lo ve.
-  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0, auto_published=1 WHERE id=?`);
-  const { scheduled, waiting } = scheduleDraftsPerWeek(uid, ready, (iso, d) => upd.run(iso, d.id));
+  // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) El embudo programa solo:
+  // para una cuenta REGISTRADA el estampado sigue siendo el histórico
+  // (approval='approved' + approved_at); para un INVITADO nadie aprobó
+  // nada — el posteo queda 'auto' (salió solo, el valor honesto de
+  // db.js) y SIN approved_at. Publica igual: el scheduler trata 'auto'
+  // como publicación normal. auto_published=1 en ambos casos.
+  let sadEsInvitado = false;
+  try { const guS = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(uid); sadEsInvitado = !!(guS && guS.is_guest); } catch (e) {}
+  const upd = sadEsInvitado
+    ? db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='auto', error='', notified=0, auto_published=1 WHERE id=?`)
+    : db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0, auto_published=1 WHERE id=?`);
+  const { scheduled, waiting } = scheduleDraftsPerWeek(uid, ready, (iso, d) => upd.run(iso, d.id), { signal: sadEsInvitado ? 'auto' : 'approved' });
   scheduleLintForPosts(uid, scheduled.map((s) => s.id)); // (v198-A) lint al programar
   if (!scheduled.length) {
     const reason = waiting.some((w) => w.reason === 'plan_limit') ? 'plan_limit' : 'no_slots';
@@ -37063,7 +37122,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1001';
+const BUILD_ID = '20261105-v1004';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

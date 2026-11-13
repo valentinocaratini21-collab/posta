@@ -187,11 +187,16 @@ async function runRenderCases() {
   ok(html.includes('Rechazado'), 'cancelado: píldora Rechazado');
   ok(!html.includes('id="apvMenuBtn"'), 'cancelado: SIN menú');
 
-  // 7) Salió solo (auto): nada que decidir.
+  // 7) Programado + auto: nada que decidir. (LOTE C12 · ESTADOS
+  // HONESTOS DEL INVITADO — revierte el pin anterior a propósito: un
+  // posteo PROGRAMADO todavía no salió; la píldora en pasado «Salió
+  // solo» afirmaba un hecho falso, diag. Veja #5 §(c). Ahora futuro
+  // honesto: «Sale solo a las …».)
   CURRENT_POST = post({ approval: 'auto' });
   html = await approvalPostView(521);
   ok(!html.includes('id="apvAccept"'), 'auto: SIN Aceptar');
-  ok(html.includes('Salió solo'), 'auto: píldora Salió solo');
+  ok(html.includes('Sale solo a las 17:00'), 'auto: píldora Sale solo a las 17:00');
+  ok(!html.includes('Salió solo'), 'auto: NUNCA «Salió solo» para un programado');
 
   // 8) Posteo inexistente.
   CURRENT_POST = null;
