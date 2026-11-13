@@ -2805,6 +2805,11 @@ function pzGuestDeviceId() {
     return d;
   } catch (e) { return ''; }
 }
+// (LOTE C13 · ZONA-VISITANTE) La zona horaria del navegador del
+// invitado: viaja con set-ig para que la semana se programe en SU
+// zona (el server solo la aplica si la cuenta invitada todavía tiene
+// el default de plataforma; una zona ya capturada no se pisa).
+function pzBrowserTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
 // (ONBOARDING-SIMPLE · 11/11 · ACT.4) El @ del invitado, dado en el chat.
 // Flujo: prefill (¿existe el @? ¿qué vende?) -> generate (la semana desde
 // lo publicado, con la evidencia del prefill) -> set-ig (la semana pasa a
@@ -2917,9 +2922,9 @@ async function pzGuestSetIg(ig, brandLang) {
       pzGuestChatSay(en ? `i still don't know what you sell — tell me in your own words and i'll build your week around it 👇` : `todavía no sé qué vendés — decímelo con tus palabras y armo tu semana a medida 👇`);
       return;
     }
-    const sr = await api.post('/api/guest/set-ig', { ig, device });
+    const sr = await api.post('/api/guest/set-ig', { ig, device, tz: pzBrowserTz() });
     if (sr && sr.need_generate) {
-      const sr2 = await api.post('/api/guest/set-ig', { ig, device });
+      const sr2 = await api.post('/api/guest/set-ig', { ig, device, tz: pzBrowserTz() });
       if (!sr2 || !sr2.ok) throw new Error(String((sr2 && sr2.error) || 'set-ig'));
       pzGuestSetIgDone(sr2, en);
       return;
@@ -2964,7 +2969,7 @@ async function pzGuestSetIgStar(ig, estrella, brandLang) {
       pzGuestChatSay(en ? `i still can't see what you sell — tell me the one thing you sell the most, in your own words 👇` : `todavía no veo qué vendés — decime lo que más vendés, con tus palabras 👇`);
       return;
     }
-    const sr = await api.post('/api/guest/set-ig', { ig, device });
+    const sr = await api.post('/api/guest/set-ig', { ig, device, tz: pzBrowserTz() });
     if (!sr || !sr.ok) throw new Error(String((sr && sr.error) || 'set-ig'));
     pzGuestSetIgDone(sr, en);
   } catch (e) {

@@ -158,6 +158,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       return d;
     } catch (e) { return ''; }
   }
+  // (LOTE C13) La zona del navegador, sin pasos ni preguntas: viaja
+  // con el arranque de la prueba para que los horarios salgan en SU
+  // zona y no en la de Argentina.
+  function browserTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
   async function postJSON(url, body) {
     var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var j = await r.json().catch(function () { return {}; });
@@ -387,7 +391,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
       if (built === 'need_star' || built === 'need_lang' || !built) { btn.disabled = false; btn.textContent = 'Armar mi primer posteo'; return; }
       showStatus('Entrando a tu producto…');
-      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG });
+      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
         if (gs.status === 409 || (gs.j && (gs.j.trial_used || gs.j.device_used))) {
           showErrHtml(usedHtml((gs.j && gs.j.error) || 'Este negocio ya usó su única prueba gratis 💛'));

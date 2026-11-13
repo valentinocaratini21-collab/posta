@@ -31934,6 +31934,39 @@ function guestBackstop(req, res) {
 // y el poll la duplicaba como burbuja plana) · 'answer' (respuesta guionada;
 // solo evento del caso) · 'free' (texto libre; user + desvío + ACK). GET pollea el
 // hilo (after=<id>) para las respuestas de bamboo.
+// (LOTE C13 · ZONA-VISITANTE) La zona horaria del visitante se captura
+// al iniciar la prueba, sin pasos ni preguntas: el navegador la manda
+// en el body de los arranques del flujo invitado (guest/start,
+// set-ig, chat-onboarding), igual que ya manda el idioma — sale de
+// Intl.DateTimeFormat().resolvedOptions().timeZone. Se valida contra
+// Intl (una zona que no existe no se guarda) y se persiste en
+// settings.timezone SOLO de cuentas invitadas (is_guest=1) y SOLO si
+// la cuenta todavía tiene el default de plataforma: la primera
+// captura manda, una zona ya capturada o configurada no se pisa
+// jamás, y el upgrade a cuenta real conserva la capturada
+// (upgradeGuest no toca settings). Sin zona válida en el body, manda
+// el comportamiento de siempre (default America/Argentina/Buenos_Aires
+// de db.js). Diagnóstico Veja #5: los posteos de la prueba «a las
+// 19:00» quedaban en hora argentina (17:00 de Nueva York) porque
+// ningún paso capturaba la zona del visitante.
+const PZ_DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
+function browserTzOf(body) {
+  const tz = String((body && body.tz) || '').trim().slice(0, 64);
+  if (!tz || /\s/.test(tz)) return null;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz; }
+  catch (e) { return null; }
+}
+function applyGuestBrowserTz(userId, tz) {
+  if (!userId || !tz) return;
+  try {
+    const s = getSettings(userId);
+    const cur = (s && s.timezone) || '';
+    if (cur && cur !== PZ_DEFAULT_TZ) return;
+    db.prepare(`UPDATE settings SET timezone = ? WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND is_guest = 1)`)
+      .run(tz, userId, userId);
+  } catch (e) {}
+}
+
 app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (req, res) => {
   try {
     if (!trialLock || !guestTrial) return res.status(503).json({ ok: false, error: 'Servicio no disponible' });
@@ -31983,6 +32016,9 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
     } else {
       try { const r1 = db.prepare('SELECT trial_ends_at FROM users WHERE id = ?').get(uid); trialEnds = (r1 && r1.trial_ends_at) || 0; } catch (e) {}
     }
+    // (LOTE C13) El invitado nace acá (o se reusa): su zona es la del
+    // navegador que lo trajo, si su cuenta todavía tiene el default.
+    try { applyGuestBrowserTz(uid, browserTzOf(b)); } catch (e) {}
     // Conserje (una sola vez: setConcierge registra una acción de equipo
     // por llamada).
     try { if (supportCases && !supportCases.isConcierge(db, uid)) supportCases.setConcierge(db, uid, true, 'prueba-chat'); } catch (e) {}
@@ -32066,6 +32102,9 @@ app.post('/api/guest/start', (req, res) => {
     if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
     const body = req.body || {};
     const lang = (body.lang === 'en' || body.lang === 'es') ? body.lang : (req.headers['accept-language'] || '').toLowerCase().includes('en') ? 'en' : 'es';
+    // (LOTE C13) Zona del navegador que inicia la prueba (sin validar
+    // acá: browserTzOf devuelve null si no es una zona IANA real).
+    const tzK = browserTzOf(body);
     const igRaw = String(body.ig || '').trim().replace(/^@/, '').toLowerCase();
     const domRaw = String(body.domain || body.web || '').trim();
     const igK = trialLock.normalizeIg(igRaw);
@@ -32112,6 +32151,8 @@ app.post('/api/guest/start', (req, res) => {
         referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
         lang, ig: '', domain: '', device: device0,
       });
+      // (LOTE C13) El alta invitada nace con la zona del visitante.
+      try { applyGuestBrowserTz(g0.userId, tzK); } catch (e) {}
       if (!testMode0 && !allowlisted0) { try { guestTrial.recordDevice(db, device0, ip0, g0.userId); } catch (e) {} }
       track(null, 'guest_start', 'no-identity');
       return req.session.regenerate((err) => {
@@ -32188,6 +32229,9 @@ app.post('/api/guest/start', (req, res) => {
     if (reuseGuest) {
       try { db.prepare('UPDATE users SET guest_ig = ?, guest_domain = ? WHERE id = ? AND is_guest = 1').run(igK || '', domK || '', g.userId); } catch (e) {}
     }
+    // (LOTE C13) La zona del visitante se persiste ANTES de importar y
+    // programar: los 3 posteos salen a SU 19:00, no a la de Argentina.
+    try { applyGuestBrowserTz(g.userId, tzK); } catch (e) {}
     // Importar exactamente 3 posteos (misma maquinaria que el alta por
     // magic link, con límite 3 y sin los extras de stories/reels).
     const nImp = importTrialWeek(g.userId, igK, null, { limit: 3, cacheKey });
@@ -32328,6 +32372,10 @@ app.post('/api/guest/set-ig', requireAuth, async (req, res) => {
     if (v.need_generate) {
       return res.json({ ok: true, need_generate: true, ig: v.ig, changed: !!v.changed, cleared: v.cleared || 0 });
     }
+    // (LOTE C13) Última captura antes de importar y programar la
+    // semana del invitado sin identidad: la zona de SU navegador (si
+    // su cuenta todavía tiene el default de plataforma).
+    try { applyGuestBrowserTz(userId, browserTzOf(body)); } catch (e) {}
     // Semana cacheada para este @: importar (misma maquinaria que
     // guest/start, con límite 3 y sin los extras).
     const cacheKey = v.ig;
@@ -37122,7 +37170,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1004';
+const BUILD_ID = '20261105-v1005';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

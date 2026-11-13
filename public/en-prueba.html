@@ -158,6 +158,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       return d;
     } catch (e) { return ''; }
   }
+  // (LOTE C13) The browser's time zone, no steps and no questions: it
+  // travels with the trial start so times come out in YOUR zone, not
+  // Argentina's.
+  function browserTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
   async function postJSON(url, body) {
     var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var j = await r.json().catch(function () { return {}; });
@@ -389,7 +393,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
       if (built === 'need_star' || built === 'need_lang' || !built) { btn.disabled = false; btn.textContent = 'Build my first post'; return; }
       showStatus('Entering your product…');
-      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG });
+      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
         if (gs.status === 409 || (gs.j && (gs.j.trial_used || gs.j.device_used))) {
           showErrHtml(usedHtml((gs.j && gs.j.error) || 'This business already used its one free trial 💛'));
