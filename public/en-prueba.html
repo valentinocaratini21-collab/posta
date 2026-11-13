@@ -158,6 +158,38 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       return d;
     } catch (e) { return ''; }
   }
+  // (LOTE REANUDAR-TRAS-RECARGA) The trial SURVIVES a reload in the
+  // middle of building: until today all in-progress state lived in
+  // variables of this page and a refresh went back to the empty form,
+  // even though the server finished the generation anyway and saved
+  // the week in the cache/lock. Now the submit persists the
+  // in-progress intent and, on load, the page resumes it by itself
+  // through the SAME auto-start as ?ig= — the path that follows
+  // already resolves every sub-case untouched: gen-status polling if
+  // the generation is still in flight, 'done' from the cache/lock if
+  // it finished behind, regeneration if it died. The intent is cleared
+  // on a successful entry and on a DEFINITIVE used/locked: whatever
+  // the server already closed is never resumed in a loop. TTL: 24 h.
+  var PENDING_KEY = 'pz_trial_pending';
+  var PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+  function savePending(ig, web, star) {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({
+        ig: ig, web: web, star: String(star || '').slice(0, 60),
+        brandLang: brandLangChoice || '', ts: Date.now(),
+      }));
+    } catch (e) {}
+  }
+  function clearPending() { try { localStorage.removeItem(PENDING_KEY); } catch (e) {} }
+  function loadPending() {
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!p || !p.ig || !p.ts || Date.now() - Number(p.ts) > PENDING_TTL_MS) { clearPending(); return null; }
+      return p;
+    } catch (e) { return null; }
+  }
   // (LOTE C13) The browser's time zone, no steps and no questions: it
   // travels with the trial start so times come out in YOUR zone, not
   // Argentina's.
@@ -324,7 +356,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (outcome === true) return true;
     if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('I still don’t know what you sell — tell me above and I’ll build your week around it.'); return 'need_star'; }
     if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Your website is in another language and I can’t tell what language you post in — pick one below and I’ll build your week in that language.'); return 'need_lang'; }
-    if (outcomeUsed) { showErrHtml(usedHtml(outcomeErr || 'This business already used its one free trial 💛')); return false; }
+    if (outcomeUsed) { clearPending(); showErrHtml(usedHtml(outcomeErr || 'This business already used its one free trial 💛')); return false; }
     showErr(outcomeErr || "We couldn't build your first post. Try again.");
     return false;
   }
@@ -388,6 +420,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (!ig) { showErr('Tell us your Instagram @ 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
     if (!starWrap.hidden && !star) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
+    // (LOTE REANUDAR-TRAS-RECARGA) The in-progress intent is persisted
+    // BEFORE building: if this tab reloads or closes halfway, the next
+    // load resumes by itself with this same data.
+    savePending(ig, web, star);
     btn.disabled = true; btn.textContent = 'Building…';
     try {
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
@@ -396,6 +432,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
         if (gs.status === 409 || (gs.j && (gs.j.trial_used || gs.j.device_used))) {
+          clearPending();
           showErrHtml(usedHtml((gs.j && gs.j.error) || 'This business already used its one free trial 💛'));
         } else if (gs.status === 404) {
           showErr('Your week is not ready yet — try again in a minute.');
@@ -405,6 +442,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         btn.disabled = false; btn.textContent = 'Build my first post';
         return;
       }
+      clearPending();
       location.href = '/#/app/inicio';
     } catch (e) {
       showErr("We couldn't build your first post. Try again.");
@@ -420,7 +458,21 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (form.requestSubmit) form.requestSubmit();
     else form.dispatchEvent(new Event('submit'));
   } else {
-    igEl.focus();
+    // (LOTE REANUDAR-TRAS-RECARGA) With no ?ig=, a live in-progress
+    // intent resumes by itself: preload the fields and fire the SAME
+    // auto-start. With no intent (or an expired one), the page stays
+    // exactly as it always was.
+    var pend = loadPending();
+    if (pend) {
+      igEl.value = '@' + pend.ig;
+      if (pend.web) webEl.value = pend.web;
+      if (pend.star) starEl.value = pend.star;
+      if (pend.brandLang) brandLangChoice = pend.brandLang;
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event('submit'));
+    } else {
+      igEl.focus();
+    }
   }
 })();
 </script>

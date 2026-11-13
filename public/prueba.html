@@ -158,6 +158,37 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       return d;
     } catch (e) { return ''; }
   }
+  // (LOTE REANUDAR-TRAS-RECARGA) La prueba SOBREVIVE una recarga a mitad
+  // de armado: hasta hoy todo el estado en curso vivía en variables de
+  // esta página y un refresco volvía al formulario vacío, aunque el
+  // servidor terminaba la generación igual y guardaba la semana en el
+  // caché/candado. Ahora el submit persiste la intención en curso y, al
+  // cargar, la página la reanuda sola por el MISMO auto-arranque del
+  // ?ig= — el camino posterior ya resuelve cada sub-caso sin tocarlo:
+  // poleo de gen-status si la generación sigue en vuelo, 'done' desde
+  // el caché/candado si terminó detrás, regeneración si murió. La
+  // intención se borra al entrar OK y ante un used/locked DEFINITIVO:
+  // lo que el servidor ya cerró no se reanuda en bucle. Vigencia: 24 h.
+  var PENDING_KEY = 'pz_trial_pending';
+  var PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+  function savePending(ig, web, star) {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({
+        ig: ig, web: web, star: String(star || '').slice(0, 60),
+        brandLang: brandLangChoice || '', ts: Date.now(),
+      }));
+    } catch (e) {}
+  }
+  function clearPending() { try { localStorage.removeItem(PENDING_KEY); } catch (e) {} }
+  function loadPending() {
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      if (!raw) return null;
+      var p = JSON.parse(raw);
+      if (!p || !p.ig || !p.ts || Date.now() - Number(p.ts) > PENDING_TTL_MS) { clearPending(); return null; }
+      return p;
+    } catch (e) { return null; }
+  }
   // (LOTE C13) La zona del navegador, sin pasos ni preguntas: viaja
   // con el arranque de la prueba para que los horarios salgan en SU
   // zona y no en la de Argentina.
@@ -323,7 +354,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (outcome === true) return true;
     if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('Todavía no sé qué vendés — decímelo arriba y armo tu semana a medida.'); return 'need_star'; }
     if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Tu web está en otro idioma y no veo en qué idioma posteás — elegí uno acá abajo y armo tu semana en ese idioma.'); return 'need_lang'; }
-    if (outcomeUsed) { showErrHtml(usedHtml(outcomeErr || 'Este negocio ya usó su única prueba gratis 💛')); return false; }
+    if (outcomeUsed) { clearPending(); showErrHtml(usedHtml(outcomeErr || 'Este negocio ya usó su única prueba gratis 💛')); return false; }
     showErr(outcomeErr || 'No pudimos armar tu primer posteo. Probá de nuevo.');
     return false;
   }
@@ -386,6 +417,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (!ig) { showErr('Contanos tu @ de Instagram 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
     if (!starWrap.hidden && !star) { showErr('Contame qué es lo que más vendés 🙂'); starEl.focus(); return; }
+    // (LOTE REANUDAR-TRAS-RECARGA) La intención en curso se persiste
+    // ANTES de armar: si esta pestaña se recarga o se cierra a mitad de
+    // camino, la próxima carga reanuda sola con estos mismos datos.
+    savePending(ig, web, star);
     btn.disabled = true; btn.textContent = 'Armando…';
     try {
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
@@ -394,6 +429,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
         if (gs.status === 409 || (gs.j && (gs.j.trial_used || gs.j.device_used))) {
+          clearPending();
           showErrHtml(usedHtml((gs.j && gs.j.error) || 'Este negocio ya usó su única prueba gratis 💛'));
         } else if (gs.status === 404) {
           showErr('Tu semana todavía no está lista — probá de nuevo en un minuto.');
@@ -403,6 +439,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         btn.disabled = false; btn.textContent = 'Armar mi primer posteo';
         return;
       }
+      clearPending();
       location.href = '/#/app/inicio';
     } catch (e) {
       showErr('No pudimos armar tu primer posteo. Probá de nuevo.');
@@ -418,7 +455,21 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (form.requestSubmit) form.requestSubmit();
     else form.dispatchEvent(new Event('submit'));
   } else {
-    igEl.focus();
+    // (LOTE REANUDAR-TRAS-RECARGA) Sin ?ig=, una intención en curso
+    // vigente reanuda sola: precarga los campos y dispara el MISMO
+    // auto-arranque. Sin intención (o vencida), la página queda
+    // exactamente como siempre.
+    var pend = loadPending();
+    if (pend) {
+      igEl.value = '@' + pend.ig;
+      if (pend.web) webEl.value = pend.web;
+      if (pend.star) starEl.value = pend.star;
+      if (pend.brandLang) brandLangChoice = pend.brandLang;
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event('submit'));
+    } else {
+      igEl.focus();
+    }
   }
 })();
 </script>
