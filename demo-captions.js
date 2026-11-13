@@ -1479,6 +1479,26 @@ const SAFE_FALLBACK_CAPTIONS_EN = {
   reserva: 'Your spot this week at {BIZ} 📩\n\nBook it before it fills up.\n\nBook by DM 📩',
 };
 
+// (Juli, 2026-11-13 — LOTE MNO v1007, ítem (n): FALLBACK-VARIEDAD)
+// Segunda redacción por kind, ES y EN: el fallback deja de ser un
+// único texto para todas las marcas (ver resolveTrialCaption).
+const SAFE_FALLBACK_VARIANTS_ES = {
+  novedad: 'Llegó algo nuevo a {BIZ} ✨\n\nRecién sumado, listo para vos.\n\nPedilo hoy por DM 📩',
+  promo: 'Esta semana hay promo en {BIZ} 🎉\n\nSolo por estos días, para los que nos siguen.\n\nEscribinos por DM y te contamos todo 📩',
+  tip: 'Un tip de {BIZ} que sirve siempre 👇\n\nCorto, claro y para aplicar hoy.\n\nGuardá este post 🔖',
+  social: 'Gracias por elegirnos siempre ✨\n\n{BIZ} es trabajo de todos los días y gente que vuelve.\n\nPasá por el local hoy',
+  sorteo: 'Hay sorteo en {BIZ} 🎁\n\nUn minuto y ya estás participando.\n\nComentá QUIERO y listo 👇',
+  reserva: 'Reservá tu lugar en {BIZ} 📩\n\nLos de esta semana se ocupan rápido.\n\nEscribinos por DM y guardá el tuyo 📩',
+};
+const SAFE_FALLBACK_VARIANTS_EN = {
+  novedad: 'Fresh in at {BIZ} ✨\n\nJust landed and ready for you.\n\nDM us to get yours 📩',
+  promo: 'This week only at {BIZ} 🎉\n\nA deal for our followers, while it lasts.\n\nDM us and we will walk you through it 📩',
+  tip: 'A {BIZ} tip that always works 👇\n\nShort, clear and easy to use today.\n\nSave this post 🔖',
+  social: 'Thanks for choosing us, always ✨\n\n{BIZ} is daily work and people who come back.\n\nStop by the store today 📍',
+  sorteo: 'Giveaway time at {BIZ} 🎁\n\nOne minute and you are in.\n\nComment YES to enter 👇',
+  reserva: 'Book your spot at {BIZ} 📩\n\nThis week fills up fast.\n\nDM us to save yours 📩',
+};
+
 // (v348 · D1) ¿Dos anclas hablan del MISMO ítem del digest? Espejo
 // local de sameItemName (client-digest): igualdad normalizada o solape
 // alto de palabras distintivas. Sin esto, el préstamo de captions de
@@ -1564,6 +1584,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   }
   const kind = (list[idx] && list[idx].kind) || 'novedad';
   const fbTable = en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS;
+  const fbVar = en ? SAFE_FALLBACK_VARIANTS_EN : SAFE_FALLBACK_VARIANTS_ES;
   // (Juli, 2026-11-12 — LOTE META-LÍNEA v958, REVERSIÓN del LOTE
   // VOZ-PROPIA-EN-LA-PRUEBA en este camino): el fallback ya NO lleva la
   // línea de voz. El comentario anterior afirmaba que el eco "no puede
@@ -1575,17 +1596,34 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   // metatexto interno: no va dentro del caption en ningún camino. La voz
   // del cliente sigue viviendo donde corresponde — en el titular
   // (applyVoiceToTopics) y en el cuerpo — no como rótulo al final.
+  // (Juli, 2026-11-13 — LOTE MNO v1007, ítem (n) de M208.3:
+  // FALLBACK-VARIEDAD) Hasta hoy el fallback era UN texto por kind:
+  // cuando todas las plantillas de dos marcas distintas caían a la
+  // vez, las dos salían con el MISMO cuerpo cambiando solo el nombre
+  // (ids reales 622≈633 y 623≈635, BYREDO/VEJA, 12/11: «Something new
+  // at {BIZ}…» y «A tip from {BIZ}…» byte-idénticos). Ahora cada kind
+  // tiene una variante y el orden de intento se siembra con el nombre
+  // del negocio: dos marcas no comparten primer fallback, y dentro de
+  // la semana la rotación camina primarias y variantes sin repetir
+  // cuerpo (la dedupe de v348 sigue mandando).
+  const fbSeed = [...String(business || '')].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const fbTexts = (k) => {
+    const t = [fbTable[k], fbVar[k]].filter(Boolean);
+    return fbSeed % 2 ? [t[1] || t[0], t[0]] : t;
+  };
+  const fbOrder = [kind, 'social', 'novedad', 'tip', 'reserva', 'promo', 'sorteo']
+    .flatMap((k) => fbTexts(k).map((text) => ({ k, text })));
   let caption = buildFinalCaption(
-    { caption: fbTable[kind] || fbTable.novedad },
+    { caption: (fbOrder[0] && fbOrder[0].text) || fbTable.novedad },
     { business, tone, goalLine: '', voiceLine: '' }
   );
   // (v348 · D1) El fallback tampoco se duplica en la semana: si el
-  // cuerpo genérico de SU kind ya salió en otra pieza, rota al primer
-  // fallback genérico libre (siguen siendo textos de marca, sin ancla).
+  // cuerpo genérico elegido ya salió en otra pieza, rota al primer
+  // fallback libre de la lista sembrada (siguen siendo textos de
+  // marca, sin ancla).
   if (usedBodies.has(bodyKey(caption))) {
-    for (const k of [kind, 'social', 'novedad', 'tip', 'reserva', 'promo', 'sorteo']) {
-      if (!fbTable[k]) continue;
-      const alt = buildFinalCaption({ caption: fbTable[k] }, { business, tone, goalLine: '', voiceLine: '' });
+    for (const cand of fbOrder) {
+      const alt = buildFinalCaption({ caption: cand.text }, { business, tone, goalLine: '', voiceLine: '' });
       if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
     }
   }
@@ -1740,6 +1778,8 @@ module.exports = {
   buildFinalCaption,
   resolveTrialCaption,
   SAFE_FALLBACK_CAPTIONS,
+  SAFE_FALLBACK_VARIANTS_ES,
+  SAFE_FALLBACK_VARIANTS_EN,
   capHeadlineWords,
   assignTextModes,
   captionEndsWithCta,

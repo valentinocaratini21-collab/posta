@@ -1034,8 +1034,24 @@ function captionPasses(caption, input) {
       return { ok: false, reason: 'énfasis con asteriscos: *así* se ve literal en Instagram y delata que lo escribió una IA — el énfasis lo da la frase, no el formato' };
     }
     const noKeyword = c.replace(/\bcoment[áa]?\s+[A-ZÁÉÍÓÚÑÜ]{3,}/gi, ' ');
+    // GRITO-MARCA-ES (Juli, 2026-11-13 — LOTE MNO v1007, ítem (o) de
+    // M208.3; espejo de la puerta EN, que ya lo hace desde su lote y
+    // dejó asentado que la ES «tiene el mismo latente»): el nombre del
+    // negocio escrito en mayúsculas (VEJA, BYREDO) NO es grito — es la
+    // grafía de la marca. Sin enmascararlo, la puerta ES rechazaba
+    // cualquier caption limpio que nombrara a esas marcas (probado hoy
+    // contra los captions reales de BYREDO/VEJA de los trials 92/94:
+    // «grito: "BYREDO"», «grito: "VEJA"»), y el reintento empujaba a
+    // borrar el nombre de la marca del caption para pasar. Se enmascara
+    // SOLO el nombre exacto del negocio (input.business), igual que EN.
+    let noKeywordBiz = noKeyword;
+    const ownNameEs = String((input && input.business) || '').trim();
+    if (ownNameEs.length >= 3) {
+      const escEs = ownNameEs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      noKeywordBiz = noKeywordBiz.replace(new RegExp(escEs, 'gi'), 'biz');
+    }
     const ALLOW_CAPS = new Set(['IG', 'DM', 'OK', 'CTA', 'VIP']);
-    const capsWords = (noKeyword.match(/[A-ZÁÉÍÓÚÑÜ]{3,}/g) || []).filter(w => !ALLOW_CAPS.has(w));
+    const capsWords = (noKeywordBiz.match(/[A-ZÁÉÍÓÚÑÜ]{3,}/g) || []).filter(w => !ALLOW_CAPS.has(w));
     if (capsWords.length >= 1) {
       return { ok: false, reason: `grito: "${capsWords[0]}" en mayúsculas para énfasis en el cuerpo — el énfasis lo tiene que dar la frase, no el formato (ni una sola palabra)` };
     }
@@ -1656,7 +1672,12 @@ const GENERIC_OPENINGS_EN = [
   'welcome to', 'hello everyone', 'hey everyone', 'hey guys', 'in today\'s post', 'today we want to',
   'we are happy to', 'we\'re happy to', 'it is with great pleasure', 'look no further',
 ];
-const SPANISH_LEAK_RE = /(¡|¿|\b(escribinos|escribime|comentá|comenta(?!r)|reservá|reservalo|guardá|guardalo|pasá por|vení|mirá|sumate|anotate|aprovechá|pedilo|seguinos|contanos|probaste|negocio|turno gratis|peluquería|querés|tenés|podés)\b)/i;
+const SPANISH_LEAK_RE = /(¡|¿|\b(escribinos|escribime|comentá|comenta(?!r)|reservá|reservalo|guardá|guardalo|pasá por|pasá a|vení|mirá|sumate|anotate|aprovechá|pedilo|seguinos|contanos|probaste|negocio|turno gratis|peluquería|querés|tenés|podés|imaginás|fijate|probalo|quedate)\b)/i;
+// (Juli, 2026-11-13 — LOTE MNO v1007, ítem (m)): imaginás/fijate/probalo/
+// pasá a/quedate entran por el id real 644 (Hungry Ghost Coffee, publicado
+// 12/11): cuerpo en español rioplatense pegado a un gancho en inglés — su
+// texto traía «¿» y ya lo frenaba esta lista SI la puerta se consultaba;
+// la ampliación cubre los cuerpos mezclados que vengan sin signos.
 
 /* Anti-empalme EN: la apertura de cada bloque tiene que ser UNA frase.
  * Patrones: (a) la línea termina en palabra colgante (artículo/preposición);
@@ -1670,6 +1691,15 @@ function captionOpenIsGarbledEn(caption) {
     if (!first) continue;
     if (/^(the|a|an)\s+(from|to|of|for|with|in|on|at|by)\b/i.test(first)) return true;
     if (/\b(\w+)\s+\1\b/i.test(first)) return true;
+    // EMPALME-EN-POSESIVO (Juli, 2026-11-13 — LOTE MNO v1007, ítem (m)
+    // de M208.3; id real 656, semana regenerada de VEJA en la corrida
+    // #6): «3 keys to choosing your the salar well» — la fórmula EN del
+    // tip («choosing your {tema} well») recibió un tema CON ARTÍCULO
+    // («the salar», la estrella minada en minúscula) y la costura
+    // posesivo + artículo quedó adentro de la apertura. Esa secuencia
+    // (your/our/their/my + the/a/an) no es inglés válido en ningún
+    // contexto: es siempre un empalme de fórmula + tema-frase.
+    if (/\b(your|our|their|my)\s+(the|a|an)\b/i.test(first)) return true;
     // Palabra colgante: solo en el GANCHO (primer bloque) y solo si la
     // línea no cierra con puntuación — una oración completa que termina
     // en preposición ("…asking for.") es inglés válido, no un empalme.
