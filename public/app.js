@@ -30022,28 +30022,31 @@ function bindApp(tab) {
 function igConnect(next) {
   const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
   // Misma pestaña: /api/ig/go redirige vía 302 a Instagram (iOS no abre la app)
-  // y el callback vuelve solo a Posta. Si Instagram te deja varado en el feed
-  // (login + verificación que pierde el contexto OAuth), al volver a Posta
-  // aparece el banner "terminar de conectar" y lo completás con un toque
-  // (ya quedaste logueado en Instagram, el cartel de autorización sale directo).
+  // y el callback vuelve solo a Posta. Si el flujo vuelve sin completarse
+  // (el callback lo marca), aparece el banner "terminar de conectar" y lo
+  // reintentás con un toque.
   location.href = '/api/ig/go' + (nx ? '?next=' + encodeURIComponent(nx) : '');
 }
 /* ---------- banner "terminar de conectar Instagram" ---------- */
-// Si el usuario volvió a Posta sin completar el OAuth (Instagram lo dejó en el
-// feed), mostramos un banner superior por 15 min: un toque y termina.
+// (CORRECTIVO-6 · BANNER HONESTO) El banner solo aparece si el flujo de
+// Instagram VOLVIÓ sin completarse: PROFILE.ig_pending ahora es la marca
+// que deja el callback (igInterruptedAt), ya no el mero intento de abrir
+// el OAuth. Dura 15 min y un toque reintenta. La copia no afirma ninguna
+// sesión iniciada: no hay evidencia de eso.
 function renderIgResume() {
   const show = !!(PROFILE && PROFILE.ig_pending && !PROFILE.ig_connected);
   let b = document.getElementById('igResumeBanner');
   if (!show) { if (b) b.remove(); return; }
   if (b) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   b = document.createElement('div');
   b.id = 'igResumeBanner';
   b.innerHTML = `
   <div style="position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;justify-content:center;padding:10px 12px;pointer-events:none">
     <div style="pointer-events:auto;background:#0A1E33;color:#fff;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:560px;width:100%">
       <div style="font-size:26.5px;line-height:1">${pzIc('camera', 26)}</div>
-      <div style="flex:1;font-size:12.5px;line-height:1.45"><b>¡Casi terminás!</b><br>Se interrumpió la conexión (a veces Instagram pide un código y se corta). Tu sesión ya quedó iniciada: es un toque más.</div>
-      <button class="btn btn-primary" id="igResumeGo" style="white-space:nowrap;padding:12px 16px">Terminar de conectar</button>
+      <div style="flex:1;font-size:12.5px;line-height:1.45"><b>${en ? 'Almost there!' : '¡Casi terminás!'}</b><br>${en ? "Your Instagram connection didn't finish. One more tap and you can complete it." : 'La conexión con Instagram no se completó. Con un toque más la terminás.'}</div>
+      <button class="btn btn-primary" id="igResumeGo" style="white-space:nowrap;padding:12px 16px">${en ? 'Finish connecting' : 'Terminar de conectar'}</button>
     </div>
   </div>`;
   document.body.appendChild(b);

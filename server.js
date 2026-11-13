@@ -5802,14 +5802,21 @@ app.post('/api/trial/foto-vision', express.raw({ type: 'multipart/form-data', li
 });
 
 // ---------- Perfil del negocio ----------
+// (CORRECTIVO-6 · BANNER HONESTO) Ventana del banner de reanudación de
+// Instagram: 15 minutos, como siempre (el override por env es solo para tests).
+const IG_RESUME_WINDOW_MS = Number(process.env.PZ_IG_RESUME_WINDOW_MS) > 0 ? Number(process.env.PZ_IG_RESUME_WINDOW_MS) : 15 * 60 * 1000;
 app.get('/api/profile', requireAuth, (req, res) => {
   const p = getProfile(req.session.userId);
   // Página pública (v169): el slug existe desde la primera vez que se mira el perfil.
   try { p.page_slug = ensurePageSlug(req.session.userId); } catch (e) { /* no bloquear el perfil */ }
+  // (CORRECTIVO-6) ig_pending ya NO nace del intento (igAttemptAt): abrir el
+  // OAuth no prueba ninguna interrupción — el banner afirmaba una sesión
+  // iniciada sin evidencia. La señal es igInterruptedAt, que SOLO escribe
+  // /api/ig/callback cuando el flujo volvió sin completarse.
   let pending = false;
-  const at = req.session.igAttemptAt;
-  if (at && !p.ig_connected && Date.now() - at < 15 * 60 * 1000) pending = true;
-  else if (at) delete req.session.igAttemptAt; // conectado o vencido: limpiar
+  const iat = req.session.igInterruptedAt;
+  if (iat && !p.ig_connected && Date.now() - iat < IG_RESUME_WINDOW_MS) pending = true;
+  else if (iat) delete req.session.igInterruptedAt; // conectado o vencido: limpiar
   let bestHour = 19;
   try {
     const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(req.session.userId);
@@ -20815,10 +20822,12 @@ app.get('/api/ig/go', requireAuth, (req, res) => {
     const safe = String(r.error).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     return res.status(400).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>No se pudo iniciar la conexión</h2><p>${safe}</p><p><a href="/#/app/ajustes">\u2190 Volver a Posta</a></p></body></html>`);
   }
-  // Marca el intento: si Instagram deja al usuario varado en el feed (login +
-  // verificación que pierde el contexto OAuth), al volver a Posta mostramos el
-  // banner 'terminar de conectar' (ig_pending) por 15 minutos.
+  // Marca el intento (bookkeeping). (CORRECTIVO-6) El banner 'terminar de
+  // conectar' ya NO nace de este intento: abrir el OAuth no prueba que nada
+  // se haya cortado. La señal del banner es la vuelta sin completar que
+  // marca el callback (igInterruptedAt); un intento nuevo apaga la anterior.
   req.session.igAttemptAt = Date.now();
+  delete req.session.igInterruptedAt;
   res.redirect(r.url);
 });
 
@@ -20836,6 +20845,9 @@ app.get('/api/ig/callback', async (req, res) => {
     const msg = /access_denied|user_denied/i.test(error)
       ? 'Denegaste el acceso a Instagram. Probá de nuevo y tocá "Permitir".'
       : (error_description || error);
+    // (CORRECTIVO-6) El flujo VOLVIÓ sin completarse: esta es la señal real
+    // del banner de reanudación (antes bastaba haber abierto el OAuth).
+    if (req.session.userId) req.session.igInterruptedAt = Date.now();
     return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(msg)));
   }
   if (!req.session.userId || state !== req.session.igState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
@@ -20857,11 +20869,13 @@ app.get('/api/ig/callback', async (req, res) => {
     } catch (e) { console.error('[ig/callback] getIgProfile:', e.message); }
     // Solo las cuentas profesionales (Business/Creator) pueden publicar vía API
     if (/personal/i.test(accountType || '')) {
+      req.session.igInterruptedAt = Date.now(); // (CORRECTIVO-6) volvió sin completarse
       return res.redirect(withQs(igDest(), 'ig=personal'));
     }
     // Un Instagram = una sola cuenta ACTIVA a la vez en Posta
     const dupe = finalIgId ? db.prepare(`SELECT user_id FROM settings WHERE ig_user_id = ? AND user_id != ?`).get(finalIgId, req.session.userId) : null;
     if (dupe) {
+      req.session.igInterruptedAt = Date.now(); // (CORRECTIVO-6) volvió sin completarse
       return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya está vinculada a otra cuenta de Posta.')));
     }
     // Si el IG se usó antes en otra cuenta pero ya no está conectado a nadie
@@ -20921,8 +20935,10 @@ app.get('/api/ig/callback', async (req, res) => {
     track(req.session.userId, 'ig_connected');
     evTrack(req.session.userId, 'ig_connect', {});
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
+    delete req.session.igInterruptedAt; // (CORRECTIVO-6) conectado: la señal se apaga
     res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
   } catch (e) {
+    req.session.igInterruptedAt = Date.now(); // (CORRECTIVO-6) el canje falló: volvió sin completarse
     res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(e.message)));
   }
 });
@@ -36913,7 +36929,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v994';
+const BUILD_ID = '20261105-v995';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
