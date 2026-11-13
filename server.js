@@ -153,6 +153,25 @@ function contentLangOf(uid) {
     return u && u.lang === 'en' ? 'en' : 'es';
   } catch (e) { return 'es'; }
 }
+// (LOTE C11 · CHAT-PRUEBA-IDIOMA-MARCA) Idioma de la marca declarado por
+// el payload cacheado de la prueba: la MISMA fuente que applyTrialLang
+// lee (content_lang, o digest.post_lang dentro del payload). null si el
+// payload no trae señal: el llamador cae a su idioma de siempre.
+function trialPayloadBrandLang(payload) {
+  const cl = payload && (payload.content_lang || (payload.digest && payload.digest.post_lang));
+  return (cl === 'en' || cl === 'es') ? cl : null;
+}
+// (LOTE C11) Vista de un análisis con el idioma gobernado por la MARCA:
+// whyForPost elige sus textos por analysis.lang, y los análisis de la
+// prueba nacen con el idioma del VISITANTE (ctx.lang de los handlers de
+// generación) — el porqué de los posteos de la prueba quedaba en el
+// idioma de quien miraba, no en el de la marca (corrida Veja #5:
+// «Porque muestra…» para una marca que postea en inglés). Sin señal de
+// marca válida, el análisis pasa tal cual.
+function analysisForBrandLang(analysis, brandLang) {
+  if (!analysis || (brandLang !== 'en' && brandLang !== 'es')) return analysis;
+  return Object.assign({}, analysis, { lang: brandLang });
+}
 // Objeto detailed de generator.suggestReplyDetailed con el fundamento de
 // la cuenta (digest + horarios del ADN): si el cliente pregunta un dato
 // que NO está en el fundamento, devuelve needsHuman y la fila de la cola
@@ -15355,13 +15374,26 @@ app.get('/api/posts', requireAuth, (req, res) => {
       const uid = req.session.userId;
       const analysis = analysisEngine.latestAnalysis(db, uid);
       const digest = clientDigest.getDigest(db, uid);
+      // (LOTE C11 · CHAT-PRUEBA-IDIOMA-MARCA) Los posteos de la prueba
+      // se importan SIN strategy_why: su porqué nace ACÁ. Para el
+      // invitado, ese porqué se gobierna por el idioma de la MARCA
+      // (contentLangOf: digest.post_lang sembrado por la prueba), no
+      // por el del análisis persistido — que nace en español / idioma
+      // de sesión y dejaba el «Porque muestra…» en cuentas en inglés
+      // (corrida Veja #5). Cuentas registradas: sin cambios.
+      let guestAcct = false;
+      try { const gu = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(uid); guestAcct = !!(gu && gu.is_guest); } catch (e) {}
+      const guestWhyLang = guestAcct ? contentLangOf(uid) : null;
       const upd = db.prepare('UPDATE posts SET strategy_why = ? WHERE id = ? AND user_id = ?');
       for (const r of missing.slice(0, 30)) {
+        const whyAnalysis = (guestAcct && r.source === 'trial')
+          ? analysisForBrandLang(analysis || {}, guestWhyLang)
+          : analysis;
         const why = analysisEngine.whyForPost({
           tipo: r.tipo || '', formato: r.media_type || '',
           salesIntent: r.sales_intent || '', intent: r.intent || '',
           porque: '', topic: r.source_topic || '',
-        }, analysis, digest);
+        }, whyAnalysis, digest);
         if (why) { upd.run(why, r.id, uid); r.strategy_why = why; }
       }
     }
@@ -32151,7 +32183,14 @@ app.post('/api/guest/start', (req, res) => {
         }
       }
     } catch (e) {}
-    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang, business: String(payload.business || '').trim(), nPosts: nSched, productoReal: welcomeProductoReal }); } catch (e) {}
+    // (LOTE C11 · CHAT-PRUEBA-IDIOMA-MARCA) La bienvenida del chat de la
+    // prueba habla el idioma de la MARCA (payload de trial_cache: la
+    // fuente que applyTrialLang ya lee), no el del visitante: con UI en
+    // español salía la bienvenida con voseo para una marca en inglés
+    // (corrida Veja #5). Sin señal de marca en el payload, manda el
+    // idioma del visitante, como hasta ahora.
+    const welcomeLang = trialPayloadBrandLang(payload) || lang;
+    try { guestTrial.welcomeGuestMessage(db, g.userId, { lang: welcomeLang, business: String(payload.business || '').trim(), nPosts: nSched, productoReal: welcomeProductoReal }); } catch (e) {}
     if (!testMode && !allowlisted) {
       try { guestTrial.recordDevice(db, device, ip, g.userId); } catch (e) {}
     }
@@ -32260,7 +32299,12 @@ app.post('/api/guest/set-ig', requireAuth, async (req, res) => {
     } catch (e) {}
     let sched = null;
     try { sched = scheduleAllDrafts(userId); } catch (e) { console.error('[guest] set-ig schedule falló:', e.message); }
-    const reply = en
+    // (LOTE C11 · CHAT-PRUEBA-IDIOMA-MARCA) El mensaje del chat que
+    // confirma la semana habla el idioma de la MARCA (payload en mano),
+    // no el de la cuenta del invitado (que nace con el idioma del
+    // visitante). Los errores de la respuesta siguen con `en` (cromo
+    // para quien opera la prueba). Sin señal de marca, como hasta ahora.
+    const reply = (trialPayloadBrandLang(payload) || lang) === 'en'
       ? `done! i just built your week for @${v.ig} from what you already post — it's in your feed, take a look 👇`
       : `¡listo! ya armé tu semana para @${v.ig} con lo que ya publicás — está en tu feed, mirala 👇`;
     try { db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(userId, reply); } catch (e) {}
@@ -33407,7 +33451,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         posts.forEach((p, i) => {
           if (!p || p.why) return;
           const sp = spList[i];
-          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysisJson, trialDigest, { sinMuestra: !(sp && sp.photo_product) });
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(trialAnalysisJson, contentLang), trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
         });
       }
@@ -34229,7 +34273,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               try {
                 for (const p of cachedOut.posts) {
                   if (!p || p.why) continue;
-                  const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, cachedOut.analysis, cachedOut.digest || null);
+                  const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(cachedOut.analysis, trialPayloadBrandLang(cachedOut)), cachedOut.digest || null);
                   if (w) p.why = w;
                 }
               } catch (e) { /* best-effort */ }
@@ -35137,7 +35181,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         posts.forEach((p, i) => {
           if (!p || p.why) return;
           const sp = specPosts[i];
-          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysis, trialDigest, { sinMuestra: !(sp && sp.photo_product) });
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(trialAnalysis, contentLangS), trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
         });
       }
@@ -37019,7 +37063,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1000';
+const BUILD_ID = '20261105-v1001';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
