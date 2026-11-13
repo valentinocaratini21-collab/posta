@@ -19078,43 +19078,73 @@ function igDismissKey() {
   const id = (ME && (ME.id || ME.email)) || 'anon';
   return 'posta_ig_dismissed_' + id;
 }
+// (LOTE L8-POPUP-POST-WOW · v954) El dismiss del popup vence a las 24 h:
+// la prueba dura 3 días y el popup tiene que poder reaparecer al día
+// siguiente. Se guarda el timestamp del dismiss; un valor viejo sin
+// timestamp (el '1' de antes) se trata como vencido, nunca como permanente.
+const IG_DISMISS_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
+function igPopupDismissed() {
+  try {
+    const raw = localStorage.getItem(igDismissKey());
+    if (!raw) return false;
+    const ts = Number(raw);
+    if (!isFinite(ts) || ts <= 0) return false; // legado '1': vencido
+    return (Date.now() - ts) < IG_DISMISS_TTL_MS;
+  } catch (e) { return false; }
+}
+function igPopupDismiss() {
+  try { localStorage.setItem(igDismissKey(), String(Date.now())); } catch (e) {}
+}
+// (LOTE L8 · v954) Subtítulo post-wow del popup (LOTE POST-WOW v929):
+// el primer posteo en su perfil real es el momento de conversión; el CTA
+// lleva la fecha límite REAL del posteo de hoy (de su scheduled_at, nunca
+// inventada). Sin posteo programado hoy, copia genérica de siempre.
+// Devuelve {sub, en} cuando hay wow (invitado en Inicio con posteo de hoy
+// programado) o null si no. Vive fuera de maybeShowIgPopup para que el
+// gate ig_pending pueda decidir con el wow ANTES de construir el overlay.
+function igPopupWow(tab) {
+  try {
+    const enPop = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    if (tab === 'inicio' && typeof pzIsGuest === 'function' && pzIsGuest()) {
+      const hp = (typeof PZ_HOY_POSTS !== 'undefined' && typeof PZ_HOY_POST_ID !== 'undefined' && PZ_HOY_POST_ID) ? PZ_HOY_POSTS[String(PZ_HOY_POST_ID)] : null;
+      if (hp && hp.scheduled_at && String(hp.status || '') === 'scheduled') {
+        const tzPop = (typeof pcTz === 'function') ? pcTz() : undefined;
+        let dPop = null;
+        if (typeof pcParseDate === 'function') dPop = pcParseDate(hp.scheduled_at);
+        if (!dPop || isNaN(dPop)) dPop = new Date(String(hp.scheduled_at).replace(' ', 'T'));
+        if (dPop && !isNaN(dPop)) {
+          const relPop = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(dPop, tzPop, enPop) : '';
+          const hhPop = (typeof pzHoyHoraCorta === 'function') ? pzHoyHoraCorta(hp.scheduled_at, tzPop, enPop) : '';
+          if (hhPop) {
+            let cuandoPop = '';
+            if (relPop === 'hoy' || relPop === 'today') cuandoPop = (enPop ? 'today at ' : 'hoy a las ') + hhPop;
+            else if (relPop === 'mañana' || relPop === 'tomorrow') cuandoPop = (enPop ? 'tomorrow at ' : 'mañana a las ') + hhPop;
+            else if (typeof pzHoyCuandoCorto === 'function') { const cPop = pzHoyCuandoCorto(hp, tzPop, enPop); if (cPop) cuandoPop = cPop; }
+            if (cuandoPop) return { sub: enPop ? `This post goes out ${cuandoPop} on your profile` : `Este posteo sale ${cuandoPop} en tu perfil`, en: enPop };
+          }
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
+}
 function maybeShowIgPopup(tab) {
   try {
     if (!ME || !PROFILE) return;
     if (PROFILE.ig_connected) return;
     if (document.getElementById('igFirstOverlay')) return;
-    let dismissed = null;
-    try { dismissed = localStorage.getItem(igDismissKey()); } catch (e) {}
-    if (dismissed) return;
+    if (igPopupDismissed()) return;
+    // (LOTE L8 · v954) El banner ig_pending ya NO mata el popup post-wow:
+    // después del wow el popup aparece aunque el banner esté visible. Sin
+    // wow, el banner sigue cubriendo (exclusión mutua de antes intacta).
+    const wow = igPopupWow(tab);
+    if (!wow && PROFILE.ig_pending) return;
     // (LOTE POST-WOW v929 · veredicto Valentino: empujar la conexión FUERTE
     // como próximo paso después del wow, nunca como puerta antes. El primer
     // posteo en su perfil real es el momento de conversión: el CTA lleva
     // la fecha límite REAL del posteo de hoy (de su scheduled_at, nunca
     // inventada). Sin posteo programado hoy, copia genérica de siempre.
-    let wowSub = null, wowEn = false;
-    try {
-      const enPop = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-      if (tab === 'inicio' && typeof pzIsGuest === 'function' && pzIsGuest()) {
-        const hp = (typeof PZ_HOY_POSTS !== 'undefined' && typeof PZ_HOY_POST_ID !== 'undefined' && PZ_HOY_POST_ID) ? PZ_HOY_POSTS[String(PZ_HOY_POST_ID)] : null;
-        if (hp && hp.scheduled_at && String(hp.status || '') === 'scheduled') {
-          const tzPop = (typeof pcTz === 'function') ? pcTz() : undefined;
-          let dPop = null;
-          if (typeof pcParseDate === 'function') dPop = pcParseDate(hp.scheduled_at);
-          if (!dPop || isNaN(dPop)) dPop = new Date(String(hp.scheduled_at).replace(' ', 'T'));
-          if (dPop && !isNaN(dPop)) {
-            const relPop = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(dPop, tzPop, enPop) : '';
-            const hhPop = (typeof pzHoyHoraCorta === 'function') ? pzHoyHoraCorta(hp.scheduled_at, tzPop, enPop) : '';
-            if (hhPop) {
-              let cuandoPop = '';
-              if (relPop === 'hoy' || relPop === 'today') cuandoPop = (enPop ? 'today at ' : 'hoy a las ') + hhPop;
-              else if (relPop === 'mañana' || relPop === 'tomorrow') cuandoPop = (enPop ? 'tomorrow at ' : 'mañana a las ') + hhPop;
-              else if (typeof pzHoyCuandoCorto === 'function') { const cPop = pzHoyCuandoCorto(hp, tzPop, enPop); if (cPop) cuandoPop = cPop; }
-              if (cuandoPop) { wowSub = enPop ? `This post goes out ${cuandoPop} on your profile` : `Este posteo sale ${cuandoPop} en tu perfil`; wowEn = enPop; }
-            }
-          }
-        }
-      }
-    } catch (e) { wowSub = null; wowEn = false; }
+    const wowSub = wow ? wow.sub : null, wowEn = wow ? wow.en : false;
     const ov = document.createElement('div');
     ov.id = 'igFirstOverlay';
     ov.className = 'pz-exp-overlay';
@@ -19156,7 +19186,7 @@ function maybeShowIgPopup(tab) {
     const skip = ov.querySelector('#igFirstSkip');
     if (skip) skip.onclick = (e) => {
       e.preventDefault();
-      try { localStorage.setItem(igDismissKey(), '1'); } catch (e2) {}
+      igPopupDismiss();
       ov.remove();
     };
   } catch (e) {}
@@ -19652,7 +19682,7 @@ function pzPrefetchKick() {
   try { if (tab === 'schedule') maybePostPayWelcome(); } catch (e) {}
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
-  if (!(PROFILE && PROFILE.ig_pending)) maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso)
+  maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso; el gate ig_pending vive adentro: el wow lo atraviesa)
   // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan).
   // En nativo (tiendas): sin modal de ventas → aviso neutro inline, sin CTA de pago.
   try {
