@@ -24723,6 +24723,40 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
   if (!b64) throw new Error('OpenAI no devolvió imagen');
   return b64;
 }
+// (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Genera la imagen del
+// primer posteo cuando no hay foto real (0 posteos en IG, sin fotos en
+// la web, sin foto de perfil). Cadena de motores del demo (Nano →
+// gpt-image, SIN referencias) + QA visual con UN reintento, igual que
+// las piezas ilustradas. Devuelve {b64, engine, qa} o null. Nunca
+// lanza: sin clave, tope alcanzado o cualquier fallo, el póster queda.
+// La estrella viaja SOLO en el prompt que arma demo.js (confirmada por
+// L3): acá no se inventa ninguna.
+async function generateNoPhotoFirstPostImage({ prompt, topicText, apiKey, geminiKey } = {}) {
+  const key = String(apiKey || process.env.OPENAI_API_KEY || '').trim();
+  const gKey = String(geminiKey || process.env.GEMINI_API_KEY || '').trim();
+  if (!key && !gKey) return null;
+  try { if (!costs.demoAiCapOk()) return null; } catch (e) { return null; }
+  const genGpt = (p) => genConceptImage(key, p, [], null, null, 'demo-ai-image', 'high');
+  let gen = null;
+  try { gen = await demoAi.generateDemoPieceImage({ prompt, refs: [], geminiKey: gKey, genGpt, refNote: null }); } catch (e) { gen = null; }
+  if (!gen || !gen.b64) return null;
+  let qaInfo = { passed: true, retried: false };
+  try {
+    const qaRes = await demoAi.qaDemoPiece({ b64: gen.b64, topicText: topicText || '', treatment: null, apiKey: key });
+    if (qaRes) {
+      qaInfo = { passed: qaRes.passed, retried: false };
+      if (!qaRes.passed && costs.demoAiCapOk()) {
+        const gen2 = await demoAi.generateDemoPieceImage({ prompt: prompt + '\n\n' + demoAi.qaRetryDirective(qaRes), refs: [], geminiKey: gKey, genGpt, refNote: null }).catch(() => null);
+        if (gen2) {
+          const qa2 = await demoAi.qaDemoPiece({ b64: gen2.b64, topicText: topicText || '', treatment: null, apiKey: key }).catch(() => null);
+          if (!qa2 || qa2.score >= qaRes.score) { gen = gen2; qaInfo = { passed: qa2 ? qa2.passed : qaRes.passed, retried: true }; }
+          else qaInfo = { passed: qaRes.passed, retried: true };
+        } else qaInfo = { passed: qaRes.passed, retried: true };
+      }
+    }
+  } catch (e) { /* el QA nunca rompe: la pieza sigue su curso */ }
+  return { b64: gen.b64, engine: gen.engine || null, qa: qaInfo };
+}
 // Devuelve SOLO el prompt expandido para un concepto. Útil para previsualizar
 // el brief antes de gastar una generación de imagen.
 app.post('/api/image-brief', requireAuth, async (req, res) => {
@@ -33833,7 +33867,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (LOTE L6) Medallón del perfil: la descarga arrancó en segundo plano
     // arriba; a esta altura ya está (o no llega: póster tipográfico).
     profilePicPath = await raceMs(profilePicPathP, 2000);
-    const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
+    const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual, generateImage: (a) => generateNoPhotoFirstPostImage({ prompt: a.prompt, topicText: a.topicText }) });
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -35398,6 +35432,95 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           }
         }
       }
+      if (demoSpendBefore != null) {
+        demoAiInfo.cost_usd = Math.round(Math.max(0, costs.demoAiSpendTodayUsd() - demoSpendBefore) * 100) / 100;
+      }
+    }
+
+    // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Sin foto real para el
+    // primer posteo — 0 posteos en IG, sin fotos en la web, sin foto de
+    // perfil (spec.photos[0] == null) — la imagen SE GENERA con el
+    // modelo (prompt de marca, sin referencias), en vez de dejar el
+    // póster tipográfico. Misma arquitectura que las piezas ilustradas:
+    // el póster ya se emitió como 'post' 0 (el primer posteo aparece en
+    // <30 s, sin timeout falso del watchdog de L6) y la pieza generada
+    // lo REEMPLAZA por el mismo evento 'post' 0; el payload final y la
+    // caché quedan con la imagen generada. La generación tarda más que
+    // el camino rápido: es la EXCEPCIÓN a la regla <30 s (el póster
+    // sale a tiempo; la imagen generada llega después). Un póster CON
+    // foto de perfil ya muestra la marca: no se genera. Si el modelo
+    // no está disponible o falla, el póster queda y se avisa con un
+    // status honesto. No toca: foto-real-primero, idioma/estrella
+    // (L1–L4), popup (L8), chat, Ads, conserje. No marca la prueba
+    // como usada: es el mismo intento de generación.
+    if (demo.firstPostNeedsGeneratedImage(spec) && posts[0] && posts[0].type === 'image' && !posts[0].ai && demoApiKey && costs.demoAiCapOk()) {
+      send('status', { step: 'imagen-generada', text: lang === 'en' ? "Your brand had no photos: I'm creating your first post's image…" : 'Tu marca no tenía fotos: estoy creando la imagen de tu primer posteo…' });
+      const genKeepalive = setInterval(() => {
+        send('status', { step: 'imagen-generada', text: lang === 'en' ? "I'm creating your first post's image…" : 'Estoy creando la imagen de tu primer posteo…' });
+      }, 20000);
+      if (genKeepalive.unref) genKeepalive.unref();
+      try {
+        const noPhotoPrompt = demo.buildNoPhotoBrandPrompt({ business, category: effCategory, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: estiloPaletteNames, description: bioText, star: (trialDigest && trialDigest.producto_estrella) || null });
+        const noPhotoTopic = [specPosts[0] && specPosts[0].headline, specPosts[0] && specPosts[0].subline].filter(Boolean).join(' ');
+        const makeNoPhotoPiece = async (i) => {
+          const gen = await generateNoPhotoFirstPostImage({ prompt: noPhotoPrompt, topicText: noPhotoTopic, apiKey: demoApiKey, geminiKey });
+          if (!gen) return null;
+          pieceEngines[i] = gen.engine;
+          let buf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: specPosts[i].text_mode === 'clean' ? '' : (made[i].headline || ''), gradeHex: accent, workDir: runDir, index: i, headlineScale: 1, inkHex: null, zone: 'top' });
+          let textInfo = { passed: true, zone: 'top', retried: false };
+          const textQa = buf ? await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: demoApiKey }) : null;
+          if (textQa) textInfo.passed = textQa.passed;
+          if (buf && textQa && !textQa.passed && costs.demoAiCapOk()) {
+            const bufClean = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: '', gradeHex: accent, workDir: runDir, index: i, headlineScale: 1, inkHex: null }).catch(() => null);
+            if (bufClean) { buf = bufClean; textInfo = { passed: true, zone: 'none', retried: true }; }
+            else textInfo = { passed: false, zone: 'top', retried: true };
+          }
+          pieceQa[i] = { ...(gen.qa || { passed: true, retried: false }), text: textInfo };
+          return buf;
+        };
+        const { replaced: noPhotoReplaced } = await demoAi.replacePiecesWithAi({
+          indexes: [0],
+          capOk: () => costs.demoAiCapOk(),
+          makePiece: makeNoPhotoPiece,
+          onPiece: async (i, buf) => {
+            bufs[i] = buf;
+            try { fs.writeFileSync(path.join(runDir, `post-${i}.jpg`), buf); } catch (e) {}
+            posts[i] = {
+              type: 'image',
+              image: 'data:image/jpeg;base64,' + buf.toString('base64'),
+              caption: made[i].caption,
+              hashtags: made[i].hashtags,
+              headline: made[i].headline,
+              style: specPosts[i].style,
+              style_name: specPosts[i].style_name,
+              text_mode: specPosts[i].text_mode || 'text',
+              ai: true,
+              engine: pieceEngines[i] || null,
+              qa: pieceQa[i] || null,
+            };
+            if (specPosts[i]) specPosts[i].photo_source = 'ai-generated';
+            const _prN = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
+            posts[i].prompt_simple = _prN.prompt_simple; posts[i].prompt_detalle = _prN.prompt_detalle;
+            send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
+          },
+        });
+        if (noPhotoReplaced.size > 0) {
+          demoAiInfo.used = true;
+          demoAiInfo.pieces = (demoAiInfo.pieces || 0) + noPhotoReplaced.size;
+          demoAiInfo.engines = posts.map((_, i) => pieceEngines[i] || (demoAiInfo.engines && demoAiInfo.engines[i]) || null);
+          demoAiInfo.qa = posts.map((_, i) => pieceQa[i] || (demoAiInfo.qa && demoAiInfo.qa[i]) || null);
+          demoAiInfo.text_modes = specPosts.map((sp) => sp.text_mode || 'text');
+          demoAiInfo.no_photo_generated = true;
+        } else {
+          send('status', { step: 'imagen-generada', text: lang === 'en' ? "I couldn't create the image: your first post stays with your brand's design…" : 'No se pudo crear la imagen: tu primer posteo queda con el diseño de tu marca…' });
+        }
+      } catch (e) {
+        console.error('[posta] imagen-generada-sin-foto: falló, queda el póster:', e.message);
+      } finally {
+        clearInterval(genKeepalive);
+      }
+      // El costo de esta generación llega después del cómputo de arriba:
+      // se vuelve a medir para que demo_ai.cost_usd la incluya.
       if (demoSpendBefore != null) {
         demoAiInfo.cost_usd = Math.round(Math.max(0, costs.demoAiSpendTodayUsd() - demoSpendBefore) * 100) / 100;
       }
@@ -37549,7 +37672,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1014';
+const BUILD_ID = '20261105-v1015';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

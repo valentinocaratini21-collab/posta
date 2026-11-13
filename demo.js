@@ -1592,7 +1592,11 @@ function firstPostGate(c) {
   if (!star) { failures.push('sin-estrella'); score -= 40; }
   else if (clientDigest.isGenericCategoryName(star) || clientDigest.isChromeDerivedName(star)) { failures.push('estrella-generica'); score -= 40; }
   const ps = (c && c.photo_source) || '';
-  if (ps !== 'real-product-brand' && ps !== 'real-product' && ps !== 'brand-poster') { failures.push('foto-tema'); score -= 40; }
+  // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) 'ai-generated' es una
+  // escena de marca generada con el modelo (prompt con marca+paleta y
+  // QA visual del brief): nunca foto de tema ni stock. El logo no se
+  // regenera (regla 2): la escena no lleva logo ni texto.
+  if (ps !== 'real-product-brand' && ps !== 'real-product' && ps !== 'brand-poster' && ps !== 'ai-generated') { failures.push('foto-tema'); score -= 40; }
   const logoOk = !!((c && c.brand_visible)) || ps === 'brand-poster';
   if (!logoOk) { failures.push('sin-logo'); score -= 40; }
   if (c && c.voice_used) score += 10;
@@ -1603,6 +1607,71 @@ function firstPostGate(c) {
   let correction = null;
   if (!pass && (failures.includes('sin-logo') || failures.includes('foto-tema'))) correction = 'use-poster';
   return { pass, score: Math.max(0, score), failures, correction };
+}
+
+// (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Cuando el primer posteo
+// no tiene NINGUNA foto real — 0 posteos en IG, sin fotos en la web,
+// sin foto de perfil — la imagen SE GENERA con el modelo, en vez de
+// dejar un póster tipográfico sin producto. El prompt lleva la marca
+// (nombre, rubro, identidad, paleta) y NUNCA un logo: el logo real no
+// se regenera (lo deforma, regla 2); la imagen es la ESCENA del negocio
+// en su paleta, sin texto ni logos, y el titular lo compone el código
+// después. La estrella viaja SOLO si está confirmada (digest.
+// producto_estrella validado por L3): sin estrella confirmada el prompt
+// no inventa ningún modelo/producto — la escena es genérica del rubro
+// (wow degradado L4: invitación de marca, sin estrella inventada).
+function buildNoPhotoBrandPrompt({ business, category, subcat, paletteHex, paletteNames, description, star } = {}) {
+  const name = String(business || '').trim() || 'this business';
+  const cat = String(category || 'otro').trim();
+  const sub = String(subcat || '').trim();
+  const pal = (Array.isArray(paletteHex) ? paletteHex : []).filter(Boolean).slice(0, 3);
+  const palNames = (Array.isArray(paletteNames) ? paletteNames : []).filter(Boolean).slice(0, 3);
+  const desc = String(description || '').trim().slice(0, 200);
+  const starName = String(star || '').trim();
+  const lines = [
+    `Photorealistic scene for the Instagram post of "${name}", a ${cat}${sub ? ` (${sub})` : ''} business.`,
+  ];
+  if (desc) lines.push(`About the business: ${desc}`);
+  if (starName) lines.push(`Hero product: ${starName} — show it clearly as the protagonist of the scene, true to a real ${cat} business.`);
+  else lines.push(`Show a welcoming, true-to-life ${cat} scene — the product and the atmosphere of a real ${cat} business, with no specific product name.`);
+  if (pal.length) lines.push(`Brand palette (use these colors in the scene): ${pal.join(', ')}${palNames.length ? ` (${palNames.join(', ')})` : ''}.`);
+  lines.push('Vertical 4:5 photograph, natural light, no text, no words, no letters, no logos, no watermarks, no people, no faces.');
+  return lines.join('\n');
+}
+
+// ¿El primer posteo necesita imagen generada? Sí cuando el slot 0 NO
+// tiene foto real del producto: (a) el spec no trae ninguna foto
+// (photos[0] == null: ni web ni perfil), o (b) ENMIENDA DE DISPARADOR
+// (aterrizaje v1015, auditoría .diag-veja7 + orden de Valentino
+// 13/11): el GANADOR del slot 0 fue el póster de marca
+// (specPosts[0].photo_source === 'brand-poster') — haya o no foto de
+// perfil. La premisa original del lote («un póster con foto de perfil
+// ya muestra la marca: no se genera») quedó REVOCADA: ese póster es
+// la placa con el logo que no enamora; el rescate generado dispara
+// también ahí y la placa deja de ser una salida posible del slot 0.
+function firstPostNeedsGeneratedImage(spec) {
+  if (!spec || !Array.isArray(spec.photos) || !spec.photos.length) return false;
+  if (spec.photos[0] == null) return true;
+  const p0 = Array.isArray(spec.specPosts) ? spec.specPosts[0] : null;
+  return !!p0 && p0.photo_source === 'brand-poster';
+}
+
+// Genera la imagen del primer posteo cuando no hay foto real.
+// generateImage es inyectado por el server ({prompt, topicText} =>
+// {b64, engine, qa} | null): demo.js no conoce claves ni proveedores.
+// Devuelve {b64, engine, qa, prompt} o null (sin generador, sin clave,
+// fallo del modelo o timeout: el póster queda, como hoy — la prueba
+// nunca se rompe por este paso). Nunca inventa estrella: el prompt
+// lleva solo la estrella confirmada.
+async function generateFirstPostImageIfNeeded({ spec, business, category, subcat, paletteHex, paletteNames, description, star, generateImage, topicText, timeoutMs } = {}) {
+  if (!firstPostNeedsGeneratedImage(spec)) return null;
+  if (typeof generateImage !== 'function') return null;
+  const prompt = buildNoPhotoBrandPrompt({ business, category, subcat, paletteHex, paletteNames, description, star });
+  try {
+    const gen = await raceMsLocal(generateImage({ prompt, topicText: topicText || '' }), timeoutMs || 120000);
+    if (!gen || !gen.b64) return null;
+    return { b64: gen.b64, engine: gen.engine || null, qa: gen.qa || null, prompt };
+  } catch (e) { return null; }
 }
 
 // pickFirstPostCandidates: los DOS candidatos del primer posteo, a nivel
@@ -2733,7 +2802,7 @@ function dataUrlDeArchivo(p) {
   } catch (e) { return null; }
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null, renderTimeoutMs = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null, renderTimeoutMs = null, generateImage = null }) {  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Presupuesto duro del
   // render+video: si expira, el primer posteo sale con la foto real.
   const t0 = Date.now();
@@ -2759,6 +2828,15 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   const withPhotos = specPosts.map((p) => (
     (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
   ));
+  // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Sin foto real para el
+  // primer posteo, la imagen se genera con el modelo (inyectado por el
+  // server: demo.js no conoce claves ni proveedores). Arranca EN
+  // PARALELO al render para no sumar su latencia al camino rápido; si
+  // no está disponible, el póster queda como hoy. No marca la prueba
+  // como usada: es el mismo intento de generación, no uno nuevo.
+  const genFirstPromise = (typeof generateImage === 'function' && firstPostNeedsGeneratedImage(spec))
+    ? generateFirstPostImageIfNeeded({ spec, business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: (digest && digest.producto_estrella) || null, generateImage, topicText: (topics[0] ? [topics[0].headline, topics[0].subline].filter(Boolean).join(' ') : '') })
+    : Promise.resolve(null);
   const { bufs, runDir, timedOut } = await renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, () => {}, renderBudget);
   // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Si el render expiró, cada
   // pieza sin JPG sale con su FOTO REAL (sin componer): el primer
@@ -2775,6 +2853,23 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   });
   const firstReal = filledBufs.find((b) => b && b.length) || null;
   const finalBufs = filledBufs.map((b) => (b && b.length ? b : firstReal));
+  // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) La imagen generada
+  // reemplaza al póster del slot 0 (mismo bypass que las piezas IA del
+  // stream: la escena la genera el modelo y el titular lo compone el
+  // código, no el modelo). El JPG también pisa runDir/post-0.jpg para
+  // que el video-tour la recorra. Va ANTES del throw: sin foto real y
+  // sin generación, el throw de siempre sigue mandando.
+  let generatedFirstInfo = null;
+  const generatedFirst = await genFirstPromise.catch(() => null);
+  if (generatedFirst && generatedFirst.b64) {
+    const compBuf = await demoAi.compositeDemoPiece({ b64: generatedFirst.b64, headline: specPosts[0] && specPosts[0].text_mode === 'clean' ? '' : (specPosts[0] && specPosts[0].headline ? specPosts[0].headline : ''), gradeHex: accent, workDir: runDir, index: 0 }).catch(() => null);
+    if (compBuf) {
+      finalBufs[0] = compBuf;
+      try { fs.writeFileSync(path.join(runDir, 'post-0.jpg'), compBuf); } catch (e) {}
+      if (specPosts[0]) specPosts[0].photo_source = 'ai-generated';
+      generatedFirstInfo = { engine: generatedFirst.engine || null, qa: generatedFirst.qa || null };
+    }
+  }
   if (finalBufs.some((b) => !b)) throw new Error('Render expiró sin foto real para el fallback');
   try {
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
@@ -2844,8 +2939,8 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
         promocionFallidaB++;
       }
       return (i === videoIdx && videoB64)
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}) }
-        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null };
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(specPosts[i].muestra_neutra ? { muestra_neutra: true } : {}), ...(i === 0 && generatedFirstInfo ? { ai: true, engine: generatedFirstInfo.engine, qa: generatedFirstInfo.qa } : {}) }
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode, estilo_visual: (specPosts[i] && specPosts[i].estilo_visual) || null, ...(i === 0 && generatedFirstInfo ? { ai: true, engine: generatedFirstInfo.engine, qa: generatedFirstInfo.qa } : {}) };
     });
     // (LOTE B) El diagnóstico de formato del spec, completado con las
     // promociones fallidas de este armado, sale como campo propio: la
@@ -3678,6 +3773,9 @@ module.exports = {
   // (LOTE PRIMER-POSTEO-MEJOR · 5 mejoras + regla <30 s) Gate, candidatos,
   // reintento en segundo plano y presupuesto duro de generación.
   textLangOf, firstPostGate, pickFirstPostCandidates, scheduleFirstPostRetry,
+  // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Prompt de marca, predicado
+  // sin-foto-real y generador del primer posteo (inyectado por el server).
+  buildNoPhotoBrandPrompt, firstPostNeedsGeneratedImage, generateFirstPostImageIfNeeded,
   FIRST_POST_RENDER_BUDGET_MS, FIRST_POST_VIDEO_BUDGET_MS, FIRST_POST_RETRY_BUDGET_MS,
   raceMsLocal,
   applyVoiceToTopics,
