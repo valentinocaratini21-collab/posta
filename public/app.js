@@ -9534,6 +9534,11 @@ async function pzBoostRecPintar() {
 async function chatLoadHistory() {
   try {
     const r = await api.get('/api/ideas/chat');
+    // (LOTE TEXTO-COHERENCIA · L6) El servidor manda, SOLO para el
+    // invitado, el idioma de la MARCA que gobierna las líneas fijas
+    // del chat (fixed_lang): se guarda para que el texto de error del
+    // envío salga en ese idioma y no en el del visitante.
+    try { window.__pzFixedLang = (r && r.fixed_lang) || null; } catch (e) {}
     if (r && Array.isArray(r.messages) && r.messages.length) {
       CHAT = r.messages
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text && String(m.text).trim() !== '…')
@@ -12157,12 +12162,17 @@ async function chatExchange({ text, display, extra, pushed }) {
     // (LOTE C · CASO 1) El error también es una burbuja del chat, no solo
     // una línea chica bajo el input: si no se pudo responder, se dice acá.
     const boxNow = $('#chatBox') || box;
-    const errText = 'no pude responder, probá de nuevo en un rato 🙏';
+    // (LOTE TEXTO-COHERENCIA · L6) Este ES el fallback de error que el
+    // invitado ve (su POST lo frena la hoja de cuenta): sale en el
+    // idioma de la MARCA (window.__pzFixedLang, del GET del chat);
+    // sin esa señal, español como siempre.
+    const errEn = (typeof window !== 'undefined' && window.__pzFixedLang === 'en');
+    const errText = errEn ? "i couldn't answer, try again in a bit 🙏" : 'no pude responder, probá de nuevo en un rato 🙏';
     const ets = Date.now();
     CHAT.push({ role: 'assistant', text: errText, ts: ets });
     if (boxNow) chatAppendMsg(boxNow, chatMsgHtml('assistant', errText, ets), ets);
     const mNow = $('#chatMsg') || m;
-    if (mNow) mNow.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
+    if (mNow) mNow.innerHTML = `<div class="err">${esc(e.message || (errEn ? "couldn't answer" : 'No pudimos responder'))}</div>`;
     chatScroll(true);
   } finally {
     postyWorking(false);

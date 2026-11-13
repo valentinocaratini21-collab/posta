@@ -172,6 +172,22 @@ function analysisForBrandLang(analysis, brandLang) {
   if (!analysis || (brandLang !== 'en' && brandLang !== 'es')) return analysis;
   return Object.assign({}, analysis, { lang: brandLang });
 }
+// (LOTE TEXTO-COHERENCIA · L6) Idioma de MARCA para las LÍNEAS FIJAS
+// del chat de un INVITADO: contentLangOf (la infraestructura de C11,
+// digest.post_lang sembrado por la prueba, con su fallback al idioma
+// de la cuenta). Devuelve null si la cuenta NO es invitada: las
+// cuentas registradas no cambian (cada superficie conserva su selector
+// histórico). Las líneas fijas del chat (la pregunta del posteo de hoy
+// y los fallbacks del POST) se elegían por el idioma del VISITANTE o
+// quedaban en español fijo — la bienvenida ya salía en el idioma de la
+// marca y la línea siguiente no (corrida Veja #6).
+function chatGuestBrandLang(uid) {
+  try {
+    const u = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(uid);
+    if (u && u.is_guest) return contentLangOf(uid);
+  } catch (e) {}
+  return null;
+}
 // Objeto detailed de generator.suggestReplyDetailed con el fundamento de
 // la cuenta (digest + horarios del ADN): si el cliente pregunta un dato
 // que NO está en el fundamento, devuelve needsHuman y la fila de la cola
@@ -2584,9 +2600,14 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
           if (mm) { rgP = String(mm.nombre || ''); rgProc = String(mm.procedencia || 'cliente'); } else rgSin = 1;
         }
       } catch (e) {}
+      // (LOTE TEXTO-COHERENCIA · L5) El posteo nace con el porqué que
+      // la generación YA computó para esta pieza (con su ancla propia
+      // y su guarda de muestra): antes el INSERT lo descartaba y el
+      // porqué renacía en el backfill de GET /api/posts, sin ancla de
+      // la pieza y sin guarda — la fuente del desync de la corrida #6.
       const ins = db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths);
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths, String(p.why || '').slice(0, 500));
       try {
         db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
           VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?,?)
@@ -7134,6 +7155,14 @@ app.post('/api/ideas/chat', async (req, res) => {
   if (guestBackstop(req, res)) return;
   const { messages, photos, library, drafts, audio, anchor_post_id, photoPaths, libraryPaths } = req.body || {};
   const uidChat = req.session.userId;
+  // (LOTE TEXTO-COHERENCIA · L6) Las líneas FIJAS de este handler
+  // (saludo, acuses, fallbacks de error) quedaban en español fijo para
+  // todos: para el INVITADO salen en el idioma de la MARCA
+  // (chatGuestBrandLang → contentLangOf, la infraestructura de C11);
+  // para el registrado, español como hoy (FT devuelve siempre el ES
+  // si la cuenta no es invitada o la marca es ES).
+  const guestBrandLang = chatGuestBrandLang(uidChat);
+  const FT = (es, enS) => (guestBrandLang === 'en' ? enS : es);
   const chatReply = chatReplyFromBody(db, uidChat, req.body); // (LOTE VIDEO-EDICION-AVISOS · responder deslizando)
   // (LOTE CHAT-678 · 7) Las fotos que llegaron con este turno se guardan
   // con el mensaje del usuario (photos_json) en TODOS los caminos que lo
@@ -7147,7 +7176,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   try { conciergeMode = supportCases.isConcierge(db, uidChat); } catch (e) { conciergeMode = false; }
 
   if (!Array.isArray(messages) || !messages.length) {
-    if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
+    if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: FT('Contanos tu idea', 'Tell me your idea') });
   }
   const clean = (Array.isArray(messages) ? messages : [])
     .slice(-20)
@@ -7158,7 +7187,7 @@ app.post('/api/ideas/chat', async (req, res) => {
   let vozPost = null; // VOZ DEL DUENO: borrador del dia (se adjunta al res.json final)
   if (typeof audio === 'string' && audio.startsWith('data:audio/')) {
     const akey = (getSettings(req.session.userId).openai_key || process.env.OPENAI_API_KEY || '');
-    const noAudio = { reply: 'no pude escuchar tu audio 🙏 me lo escribís en una línea?', idea: null };
+    const noAudio = { reply: FT('no pude escuchar tu audio 🙏 me lo escribís en una línea?', "i couldn't hear your audio 🙏 can you write it in one line?"), idea: null };
     if (!akey) return res.json(noAudio);
     let heard = '';
     try { heard = await transcribeAudio(audio, akey, langOfUser(uidChat)); } catch (e) { console.error('[chat] whisper:', e.message); }
@@ -7171,7 +7200,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     // Nunca rompe el flujo normal: cualquier error deja vozPost en null.
     try { vozPost = await armarBorradorVozChat(uidChat, heard, audio, Array.isArray(photoPaths) ? photoPaths : []); } catch (e) { console.error('[voz-dueno] chat:', e.message); vozPost = null; }
   }
-  if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  if (!clean.length) return res.status(400).json({ error: FT('Contanos tu idea', 'Tell me your idea') });
   // (SACAR-ACUSE-FIJO · v916 · 11/11 · veto Valentino: respuesta inmediata)
   // La puerta de supervisión YA NO retiene el chat: el acuse fijo está
   // vetado y el cerebro responde en el acto. El módulo supervision-chat.js
@@ -7521,7 +7550,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     ); } catch (e) {
       console.error('[chat] IA caída (modo estricto):', e.message);
-      return res.json({ reply: 'uy, se me cortó la conexión un segundo 😅 probá de nuevo en un ratito.', idea: null });
+      return res.json({ reply: FT('uy, se me cortó la conexión un segundo 😅 probá de nuevo en un ratito.', 'oops, my connection dropped for a second 😅 try again in a moment.'), idea: null });
     }
     if (out && typeof out.reply === 'string') out.reply = chatStripOpen(out.reply);
     // (CHAT-COHERENCIA) Guarda: la respuesta NUNCA puede hablar de fotos que el
@@ -7537,7 +7566,7 @@ app.post('/api/ideas/chat', async (req, res) => {
       if (pzChatClaimsSentPhotos(out.reply) && !cleanPhotos.length && !pzChatPhotoRef(lastUserText) && !recentPhoto) {
         console.error('[chat-coherencia] guard: respuesta con fotos sin foto en el turno; último mensaje:', JSON.stringify(lastUserText.slice(0, 120)));
         if (pzIsPureGreeting(lastUserText)) {
-          out = { reply: 'hola! 😄 con qué te ayudo hoy?', idea: null };
+          out = { reply: FT('hola! 😄 con qué te ayudo hoy?', 'hi! 😄 what can i help you with today?'), idea: null };
           out.edits = []; out.dna = null; out.rule = null; out.inspo = null;
         } else {
           let regen = null;
@@ -7550,7 +7579,7 @@ app.post('/api/ideas/chat', async (req, res) => {
           if (regen && typeof regen.reply === 'string') regen.reply = chatStripOpen(regen.reply);
           if (regen && regen.reply && !pzChatClaimsSentPhotos(regen.reply)) out = regen;
           else {
-            out = { reply: 'dale 😄 ¿me contás un poco más y lo armamos?', idea: null };
+            out = { reply: FT('dale 😄 ¿me contás un poco más y lo armamos?', "sure 😄 tell me a bit more and we'll build it?"), idea: null };
             out.edits = []; out.dna = null; out.rule = null; out.inspo = null;
           }
         }
@@ -8245,7 +8274,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
-    res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
+    res.status(500).json({ error: FT('Uh, me trabé un segundo 😅 Dame otro intento que esta sale', 'Uh, I got stuck for a second 😅 Give me another try, this one will work') });
   }
 });
 
@@ -12577,7 +12606,7 @@ app.get('/api/ideas/chat', (req, res) => {
         try { const _r = db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(uid, _ask); _mid = _r.lastInsertRowid || 0; } catch (e) {}
         try { msgs.push({ id: _mid, role: 'assistant', text: _ask, created_at: new Date().toISOString() }); } catch (e) {}
         db.prepare('UPDATE users SET posty_welcomed = 1 WHERE id = ?').run(uid);
-        return res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome: null, first_pick: null, welcome_regen: false, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+        return res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome: null, first_pick: null, welcome_regen: false, fixed_lang: chatGuestBrandLang(uid), taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
       }
       const _cn = ((w.client_name || '').trim().split(/\s+/)[0]) || '';
       const draftSel = 'id, image_path, caption, COALESCE(client_photo, 0) AS client_photo FROM posts WHERE user_id = ? AND status = \'draft\'';
@@ -12632,7 +12661,12 @@ app.get('/api/ideas/chat', (req, res) => {
     const post = pzHoyPost(db, uid, tz, new Date());
     if (post && post.image_path && abreA && Date.now() >= new Date(abreA).getTime()) {
       todayPost = { id: post.id, image_path: post.image_path, caption: post.caption || '', status: post.status || '', media_type: post.media_type || 'image', redo_left: (post.redo_left === null || post.redo_left === undefined) ? null : Number(post.redo_left) };
-      const en = langOfUser(uid) === 'en';
+      // (LOTE TEXTO-COHERENCIA · L6) La pregunta del posteo de hoy se
+      // elegía por el idioma del VISITANTE (langOfUser): para el
+      // invitado manda el de la MARCA (chatGuestBrandLang →
+      // contentLangOf), como el resto de las superficies de C11.
+      // Registrado: langOfUser, como hoy.
+      const en = (chatGuestBrandLang(uid) || langOfUser(uid)) === 'en';
       let yaHoy = false;
       try {
         const cand = db.prepare(`SELECT text, created_at FROM chat_messages WHERE user_id = ? AND role = 'assistant' AND created_at >= datetime('now', '-2 days') ORDER BY id DESC LIMIT 100`).all(uid);
@@ -12646,7 +12680,13 @@ app.get('/api/ideas/chat', (req, res) => {
       }
     }
   } catch (e) { console.error('[chat] posteo-hoy:', e.message); }
-  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen, today_post: todayPost, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
+  // (LOTE TEXTO-COHERENCIA · L6) fixed_lang: SOLO para el invitado, el
+  // idioma de la MARCA que gobierna las líneas fijas del chat — el
+  // cliente lo guarda y con eso elige hasta el texto de error del
+  // envío (app.js), que es el fallback que el invitado realmente ve
+  // (su POST está frenado por la hoja de cuenta: guestBackstop).
+  // Registrado: null, el cliente conserva su comportamiento de hoy.
+  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen, today_post: todayPost, fixed_lang: chatGuestBrandLang(uid), taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)) });
 });
 
 // ---------- 💬 CHAT-MEJORAS · reacciones / fijar / editar / borrar / buscar ----------
@@ -15637,11 +15677,20 @@ app.get('/api/posts', requireAuth, (req, res) => {
         const whyAnalysis = (guestAcct && r.source === 'trial')
           ? analysisForBrandLang(analysis || {}, guestWhyLang)
           : analysis;
+        // (LOTE TEXTO-COHERENCIA · L5) El backfill llamaba a whyForPost
+        // SIN la guarda sinMuestra que la generación sí pasa: un posteo
+        // de la prueba — cuya foto↔producto nunca se persistió — recibía
+        // el claim «muestra <la estrella del digest>» aunque su imagen
+        // fuera un póster sin producto (corrida Veja #6). Para posteos
+        // de la prueba la guarda es fail-closed (sin evidencia de la
+        // pieza, no se afirma); el resto conserva el comportamiento
+        // histórico. El ancla propia viaja en topic (source_topic),
+        // que whyForPost ahora sí lee.
         const why = analysisEngine.whyForPost({
           tipo: r.tipo || '', formato: r.media_type || '',
           salesIntent: r.sales_intent || '', intent: r.intent || '',
           porque: '', topic: r.source_topic || '',
-        }, whyAnalysis, digest);
+        }, whyAnalysis, digest, { sinMuestra: r.source === 'trial' });
         if (why) { upd.run(why, r.id, uid); r.strategy_why = why; }
       }
     }
@@ -32508,6 +32557,12 @@ app.post('/api/guest/start', (req, res) => {
     // (LOTE CORRECTIVO-4) La bienvenida afirma «con tu producto real»
     // solo con estrella validada o ancla de producto real en el digest
     // recién sembrado; sin eso, la redacción neutra (guest-trial.js).
+    // (LOTE TEXTO-COHERENCIA · L8) Eso no alcanza: el claim mira el
+    // FUNDAMENTO y la corrida #6 lo afirmó con las 3 piezas en póster.
+    // Ahora además exige que alguna pieza ENTREGADA haya salido con
+    // foto real de producto (photo_source del spec en el payload:
+    // 'real-product' / 'real-product-brand'); semana toda-póster →
+    // redacción neutra, aunque el digest tenga estrella.
     let welcomeProductoReal = false;
     try {
       const dgW = clientDigest.getDigest(db, g.userId);
@@ -32518,6 +32573,11 @@ app.post('/api/guest/start', (req, res) => {
           const wowW = clientDigest.deriveFirstPostWow(dgW, { lang });
           if (wowW && wowW.digest_anchor && !clientDigest.isGenericCategoryName(wowW.digest_anchor)) welcomeProductoReal = true;
         }
+      }
+      if (welcomeProductoReal) {
+        const delivered = (payload && payload.design && Array.isArray(payload.design.posts)) ? payload.design.posts.slice(0, 3) : [];
+        const anyRealProduct = delivered.some((sp) => sp && (sp.photo_source === 'real-product' || sp.photo_source === 'real-product-brand'));
+        if (!anyRealProduct) welcomeProductoReal = false;
       }
     } catch (e) {}
     // (LOTE C11 · CHAT-PRUEBA-IDIOMA-MARCA) La bienvenida del chat de la
@@ -33832,7 +33892,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         posts.forEach((p, i) => {
           if (!p || p.why) return;
           const sp = spList[i];
-          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(trialAnalysisJson, contentLang), trialDigest, { sinMuestra: !(sp && sp.photo_product) });
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '', anchor: (sp && sp.photo_product) || '' }, analysisForBrandLang(trialAnalysisJson, contentLang), trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
         });
       }
@@ -34657,7 +34717,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               try {
                 for (const p of cachedOut.posts) {
                   if (!p || p.why) continue;
-                  const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(cachedOut.analysis, trialPayloadBrandLang(cachedOut)), cachedOut.digest || null);
+                  // (LOTE TEXTO-COHERENCIA · L5) Este llamado nació SIN
+                  // la guarda sinMuestra: los posteos del payload no
+                  // traen su foto↔producto (photo_product vive en el
+                  // spec, no en el payload), así que acá no se puede
+                  // afirmar «muestra X» — fail-closed como en la
+                  // generación sin spec.
+                  const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(cachedOut.analysis, trialPayloadBrandLang(cachedOut)), cachedOut.digest || null, { sinMuestra: true });
                   if (w) p.why = w;
                 }
               } catch (e) { /* best-effort */ }
@@ -35598,7 +35664,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         posts.forEach((p, i) => {
           if (!p || p.why) return;
           const sp = specPosts[i];
-          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(trialAnalysis, contentLangS), trialDigest, { sinMuestra: !(sp && sp.photo_product) });
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '', anchor: (sp && sp.photo_product) || '' }, analysisForBrandLang(trialAnalysis, contentLangS), trialDigest, { sinMuestra: !(sp && sp.photo_product) });
           if (w) p.why = w;
         });
       }
@@ -37483,7 +37549,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1012';
+const BUILD_ID = '20261105-v1013';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

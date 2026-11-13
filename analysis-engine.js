@@ -568,7 +568,16 @@ function whyForPost(post, analysis, digest, opts) {
   if (fk && byKey[fk] && byKey[fk].decision) candidates.push(byKey[fk].decision);
   if (tipo === 'promo' && byKey.ritmo && byKey.ritmo.decision) candidates.push(byKey.ritmo.decision);
   const d = digest || {};
-  const anchor = ((d.productos || [])[0] && (d.productos[0].nombre || d.productos[0])) ||
+  // (LOTE TEXTO-COHERENCIA · L5) El ancla del «muestra X» es la del
+  // POSTEO, no la del fundamento: el llamador la pasa como post.anchor
+  // (la pieza: su foto↔producto del mapa, su digest_anchor o su
+  // source_topic). Antes el ancla era siempre digest.productos[0] — el
+  // más mencionado — y el porqué salía idéntico para toda la semana y
+  // ajeno a cada pieza (corrida Veja #6: el posteo del Atlas decía
+  // «muestra Salar»). Sin ancla propia, cae a la del digest como antes.
+  const ownAnchor = String(post.anchor || post.digest_anchor || post.photo_product || post.source_topic || post.topic || '').trim();
+  const anchor = ownAnchor ||
+    ((d.productos || [])[0] && (d.productos[0].nombre || d.productos[0])) ||
     ((d.servicios || [])[0] && (d.servicios[0].nombre || d.servicios[0])) || null;
   // (LOTE PRUEBA-PRODUCTO-REAL · sinMuestra) «Porque muestra X» solo
   // si la pieza REALMENTE muestra X (foto↔producto del mapa). Una pieza
