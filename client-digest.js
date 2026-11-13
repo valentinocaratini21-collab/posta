@@ -251,13 +251,23 @@ function anchorsFromTexts(list) {
   for (const t of (list || [])) d.productos.push({ nombre: String(t || '') });
   return anchorsOf(d);
 }
-function pieceAnchored(text, anchors) {
+function pieceAnchored(text, anchors, opts) {
   if (!Array.isArray(anchors) || !anchors.length) return { ok: false, anchor: null, reason: 'sin_anclas' };
   const t = norm(text);
   if (!t) return { ok: false, anchor: null, reason: 'sin_texto' };
   const words = textWordSet(text);
+  // (LOTE CORRECTIVO-8 · ESTRELLA-CON-EVIDENCIA) Modo strictPhrase:
+  // para CONTAR MENCIONES como evidencia, una ancla de 2+ palabras
+  // exige la FRASE COMPLETA en el texto crudo — una sola palabra
+  // suelta («model»/«photo» en las líneas de créditos) no es una
+  // mención del producto. El modo por defecto (pertenencia de piezas:
+  // generador/demo/reel, con apodos del léxico y segmentos del
+  // diferencial) conserva su contrato histórico frase-O-palabra.
+  const strict = !!(opts && opts.strictPhrase);
   for (const a of anchors) {
-    if (a.phrase && a.phrase.split(' ').length >= 2 && t.includes(a.phrase)) return { ok: true, anchor: a.text };
+    const multiWord = !!(a.phrase && a.phrase.split(' ').length >= 2);
+    if (multiWord && t.includes(a.phrase)) return { ok: true, anchor: a.text };
+    if (strict && multiWord) continue;
     for (const w of (a.words || [])) {
       for (const f of wordForms(w)) if (words.has(f)) return { ok: true, anchor: a.text };
     }
@@ -329,7 +339,7 @@ function effectiveStarOf(digest) {
   // picker. (LOTE L3) La confirmada por el dueño YA no es ciega: se
   // validó arriba contra lo evidenciado; sin calce cae acá (inferida
   // o null) y nunca manda un genérico sin evidencia.
-  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item) && !isChromeDerivedName(inf.item) && starNamedEvidenceOk(digest, inf.item)) {
+  if (inf && inf.item && (inf.confidence || 0) >= 0.5 && !isGenericCategoryName(inf.item) && !isChromeDerivedName(inf.item) && !isCreditRoleName(inf.item) && starNamedEvidenceOk(digest, inf.item)) {
     return { item: String(inf.item), source: 'inferred', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
   }
   return null;
@@ -528,6 +538,73 @@ function isGenderOnlyName(raw) {
  * menciones}] y la estrella — venga del dueño, del digest o del
  * demo — exige calzar con ella (starNamedEvidenceOk). */
 const NAMED_TOKEN_STOP = new Set(['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'setiembre', 'octubre', 'noviembre', 'diciembre', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'navidad', 'christmas', 'halloween', 'verano', 'invierno', 'primavera', 'otono', 'summer', 'winter', 'spring', 'autumn', 'fall', 'gracias', 'thanks', 'thank', 'hola', 'hello', 'feliz', 'happy', 'bienvenidos', 'bienvenidas', 'welcome']);
+/* (LOTE CORRECTIVO-8 · ESTRELLA-CON-EVIDENCIA — la puerta circular,
+ * Veja #5, 13/11) RÓTULOS DE ROL DE CRÉDITOS: las captions cierran con
+ * líneas de créditos («Model: @x Photo: @y», «Ph:», «Foto:») y el
+ * minero, al pelar las menciones, dejaba los rótulos adyacentes como
+ * un «producto» («Model Photo», coronado estrella con la puerta de
+ * correctivo-4 validando contra la lista del propio minero). Un
+ * rótulo de rol NUNCA es nombre de producto: ni solo («Model»,
+ * «Foto») ni combinado («Model Photo», «Photo Credits»). Un nombre
+ * con alguna palabra que NO es rótulo pasa («Model 3»: el 3 no es
+ * rótulo; «Model Bakery»: bakery no es rótulo). */
+const CREDIT_ROLE_LABELS = new Set(['model', 'models', 'modelo', 'modelos',
+  'photo', 'photos', 'foto', 'fotos', 'photographer', 'photographers',
+  'fotografo', 'fotografos', 'fotografa', 'fotografas', 'photography',
+  'fotografia', 'ph', 'video', 'videos', 'videographer', 'styling',
+  'stylist', 'estilismo', 'makeup', 'maquillaje', 'mua', 'hair',
+  'credits', 'creditos', 'credito', 'wardrobe', 'vestuario',
+  'production', 'produccion', 'direction', 'direccion', 'camera', 'camara']);
+function isCreditRoleName(raw) {
+  const words = norm(raw).split(' ').filter((w) => w && !STAR_GENERIC_STOPWORDS.has(w));
+  if (!words.length) return false;
+  return words.every((w) => CREDIT_ROLE_LABELS.has(w));
+}
+/* Pela los BLOQUES DE CRÉDITOS de una caption antes de minar: todo lo
+ * que sigue a un rótulo de rol con «:» en una línea es crédito, no
+ * contenido de la marca («…Brasil Photos: @…», «Model: @x Photo: @y»).
+ * Lo que precede al primer rótulo en la línea se conserva. */
+const CREDIT_LABEL_RE = new RegExp('\\b(' + [...CREDIT_ROLE_LABELS].join('|') + ')\\s*:', 'i');
+function stripCaptionCredits(text) {
+  return String(text || '').split('\n').map((line) => {
+    const m = CREDIT_LABEL_RE.exec(line);
+    return m ? line.slice(0, m.index) : line;
+  }).join('\n');
+}
+/* ¿La FRASE COMPLETA del nombre está en el texto crudo? (borde de
+ * palabra sobre el texto normalizado: las menciones @… del crudo
+ * quedan como tokens y rompen la contigüidad — «Model Photo» no
+ * existe como frase en ningún crudo de Veja.) */
+function phraseInRawText(nombre, text) {
+  const p = norm(nombre);
+  if (!p) return false;
+  return (' ' + norm(text) + ' ').includes(' ' + p + ' ');
+}
+/* ¿El nombre es SUJETO de alguna oración del crudo? La marca lo
+ * presenta como sujeto («The Salar, where…», «Meet The Atlas in
+ * hairy suede.»): la frase abre la oración, con artículo inicial o
+ * tras un verbo de presentación de una lista cerrada. Es la señal
+ * editorial que distingue un modelo real de un fragmento minado. */
+const SUBJECT_INTRO_VERBS = new Set(['meet', 'discover', 'presenting', 'introducing',
+  'try', 'shop', 'get', 'conoce', 'descubri', 'proba', 'mira', 'presentamos', 'llega']);
+const LEADING_ARTICLE_RE = /^(the|a|an|el|la|los|las|un|una) /;
+function phraseSubjectInCaption(nombre, caption) {
+  const target = norm(nombre);
+  if (!target) return false;
+  for (const sent of String(caption || '').split(/[.!?…\n]+/)) {
+    const ns = norm(sent);
+    if (!ns) continue;
+    if (ns === target || ns.startsWith(target + ' ')) return true;
+    const noArt = ns.replace(LEADING_ARTICLE_RE, '');
+    if (noArt === target || noArt.startsWith(target + ' ')) return true;
+    const first = noArt.split(' ')[0];
+    if (SUBJECT_INTRO_VERBS.has(first)) {
+      const rest = noArt.slice(first.length + 1).replace(LEADING_ARTICLE_RE, '');
+      if (rest === target || rest.startsWith(target + ' ')) return true;
+    }
+  }
+  return false;
+}
 /* ¿El nombre puede ser un producto CON NOMBRE? Nombre propio de
  * producto/modelo: plausible como oferta, NO categoría (composición),
  * NO cromo de sección, NO solo género, ≤4 palabras. «Tesora»,
@@ -540,6 +617,10 @@ function namedProductOk(raw) {
   if (s.split(/\s+/).filter(Boolean).length > 4) return '';
   if (!isPlausibleOfferItem(s)) return '';
   if (isGenericCategoryName(s) || isChromeDerivedName(s) || isGenderOnlyName(s)) return '';
+  // (LOTE CORRECTIVO-8) Un rótulo de rol de créditos no es producto,
+  // ni solo ni combinado («Model Photo»): la admisión lo veta acá,
+  // para candidatos de caption y para ítems por igual.
+  if (isCreditRoleName(s)) return '';
   return s;
 }
 function captionNamedCandidates(captions) {
@@ -555,7 +636,10 @@ function captionNamedCandidates(captions) {
     if (strong) e.strong = true;
   };
   (captions || []).slice(0, 30).forEach((cap, ci) => {
-    const text = String(cap || '').replace(/https?:\/\/\S+/g, ' ').replace(/[#@][\w.]+/g, ' ');
+    // (LOTE CORRECTIVO-8) Los créditos se pelan ANTES de minar (y
+    // antes de pelar las menciones): «Model: @x Photo: @y» ya no
+    // puede dejar los rótulos adyacentes como candidato.
+    const text = stripCaptionCredits(String(cap || '')).replace(/https?:\/\/\S+/g, ' ').replace(/[#@][\w.]+/g, ' ');
     for (const m of text.matchAll(/[«"“]([^»"”]{3,40})[»"”]/g)) add(m[1], ci, true);
     for (const sent of text.split(/[.!?…\n]+/)) {
       const toks = sent.split(/\s+/)
@@ -579,7 +663,17 @@ function captionNamedCandidates(captions) {
         // modelo (dígito/guion: V-10) o capitalizada a mitad de
         // oración (nombre propio). Suelta al inicio de oración y una
         // sola vez: puede ser cualquier apertura — no alcanza.
-        add(nombre, ci, capCount >= 2 || /\d/.test(nombre) || /-/.test(nombre) || i > 0);
+        const strong = capCount >= 2 || /\d/.test(nombre) || /-/.test(nombre) || i > 0;
+        add(nombre, ci, strong);
+        // (LOTE CORRECTIVO-8) Si la corrida abre con un verbo de
+        // presentación («Meet The Atlas in hairy suede»), el nombre
+        // del producto es la corrida SIN el verbo: candidato propio.
+        // Era la vía del tip roto «meet the atlas» (la apertura de
+        // la caption minada como si fuera el producto).
+        const runToks = nombre.split(' ');
+        if (runToks.length >= 2 && SUBJECT_INTRO_VERBS.has(norm(runToks[0]))) {
+          add(runToks.slice(1).join(' '), ci, strong);
+        }
         i = j + 1;
       }
     }
@@ -590,21 +684,47 @@ function captionNamedCandidates(captions) {
   }
   return out;
 }
+/* (LOTE CORRECTIVO-8) Fuentes que son superficie externa del
+ * negocio (su tienda, su web, su link de bio): la clase 'catalogo'. */
+const NAMED_STRONG_FUENTES = new Set(['web', 'web-catalog', 'bio-link', 'catalogo', 'pdf', 'home']);
 function extractNamedProducts({ captions, items, business, handle } = {}) {
   const caps = Array.isArray(captions) ? captions : [];
+  // (LOTE CORRECTIVO-8) La mención que cuenta como evidencia es la
+  // FRASE COMPLETA en el texto crudo (pieceAnchored estricto): una
+  // palabra suelta ya no suma menciones a ningún candidato.
   const mentionCount = (nombre) => {
     const anchors = anchorsFromTexts([nombre]);
     let n = 0;
-    for (const c of caps.slice(0, 20)) if (pieceAnchored(String(c || ''), anchors).ok) n++;
+    for (const c of caps.slice(0, 20)) if (pieceAnchored(String(c || ''), anchors, { strictPhrase: true }).ok) n++;
     return n;
+  };
+  /* Clases de evidencia INDEPENDIENTES del candidato (la
+   * corroboración cruzada de la puerta nueva): 'sujeto' (frase-sujeto
+   * en el crudo), 'repetida' (frase completa en 2+ captions),
+   * 'frase' (frase completa en 1+), 'catalogo' (superficie externa),
+   * 'dueno' (su ADN). 'frase' sola nunca corrobora: es la señal que
+   * el artefacto de créditos simulaba con palabras sueltas. */
+  const clasesFor = (nombre, fuente) => {
+    const cl = [];
+    const m = mentionCount(nombre);
+    if (m >= 1) cl.push('frase');
+    if (m >= 2) cl.push('repetida');
+    if (caps.slice(0, 20).some((c) => phraseSubjectInCaption(nombre, String(c || '')))) cl.push('sujeto');
+    if (fuente === 'dna') cl.push('dueno');
+    else if (NAMED_STRONG_FUENTES.has(fuente)) cl.push('catalogo');
+    return cl;
   };
   const out = [];
   const seen = new Map();
-  const push = (nombre, fuente, menciones) => {
+  const push = (nombre, fuente, menciones, clases) => {
     const k = norm(nombre);
     const prev = seen.get(k);
-    if (prev) { if ((menciones || 0) > prev.menciones) prev.menciones = menciones || 0; return; }
-    const e = { nombre, fuente, menciones: menciones || 0 };
+    if (prev) {
+      if ((menciones || 0) > prev.menciones) prev.menciones = menciones || 0;
+      if (Array.isArray(clases)) for (const c of clases) if (!prev.clases.includes(c)) prev.clases.push(c);
+      return;
+    }
+    const e = { nombre, fuente, menciones: menciones || 0, clases: Array.isArray(clases) ? [...clases] : [] };
     seen.set(k, e);
     out.push(e);
   };
@@ -612,37 +732,84 @@ function extractNamedProducts({ captions, items, business, handle } = {}) {
     const nombre = namedProductOk(it && (it.nombre || it));
     if (!nombre) continue;
     if (business && sameItemName(nombre, business)) continue;
-    push(nombre, (it && it.fuente) || 'catalogo', mentionCount(nombre));
+    const fuente = (it && it.fuente) || 'catalogo';
+    push(nombre, fuente, mentionCount(nombre), clasesFor(nombre, fuente));
   }
   for (const cand of captionNamedCandidates(caps)) {
     if (business && sameItemName(cand.nombre, business)) continue;
     if (handle && norm(cand.nombre) === norm(handle)) continue;
-    push(cand.nombre, 'caption', Math.max(cand.menciones, mentionCount(cand.nombre)));
+    push(cand.nombre, 'caption', Math.max(cand.menciones, mentionCount(cand.nombre)), clasesFor(cand.nombre, 'caption'));
   }
   out.sort((a, b) => (b.menciones - a.menciones));
   return out.slice(0, 12);
+}
+/* (LOTE CORRECTIVO-8) ¿Una entrada de productos_nombrados está
+ * CORROBORADA? La puerta de correctivo-4 validaba la estrella contra
+ * la lista que produjo el propio minero: circular — el artefacto
+ * «Model Photo» era el ítem N.º 1 de su propia evidencia. Ahora una
+ * entrada nacida SOLO de las captions necesita DOS señales
+ * independientes entre {sujeto, repetida, catalogo, dueno}, donde
+ * 'catalogo'/'dueno' con la frase presente en el feed ('frase')
+ * suman la segunda señal (dos superficies que coinciden). 'frase'
+ * sola — la señal que los créditos simulaban — nunca corrobora.
+ * · Entrada con respaldo de fuente fuerte (fuente ≠ 'caption'):
+ *   corrobora como siempre (es la superficie externa misma).
+ * · Entrada legada sin `clases` (digest guardado antes de este
+ *   lote): manda la fuente — la de caption sola era justamente la
+ *   lista circular y no corrobora. */
+function namedEntryCorroborated(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  if (!Array.isArray(entry.clases)) return entry.fuente !== 'caption';
+  const c = new Set(entry.clases);
+  let n = 0;
+  if (c.has('sujeto')) n++;
+  if (c.has('repetida')) n++;
+  if (c.has('catalogo')) n++;
+  if (c.has('dueno')) n++;
+  if ((c.has('catalogo') || c.has('dueno')) && c.has('frase')) n++;
+  return n >= 2;
+}
+/* La misma evidencia para CUALQUIER ítem que un posteo afirme como
+ * producto (no solo la estrella): un ítem del digest que calza con
+ * una entrada de productos_nombrados nacida solo de captions exige
+ * la corroboración de esa entrada; el resto de los ítems (fuente
+ * fuerte, o sin entrada porque no son «nombrados») pasa como hoy. */
+function namedItemCorroborated(digest, name) {
+  if (!digest || !Array.isArray(digest.productos_nombrados)) return true;
+  const matches = digest.productos_nombrados.filter((x) => x && sameItemName(String(x.nombre || x), String(name || '')));
+  if (!matches.length) return true;
+  return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e));
 }
 /* ¿La estrella tiene evidencia de NOMBRE PROPIO de producto?
  * Principio (LOTE CORRECTIVO-4): una categoría o una línea NUNCA es
  * estrella, aunque «aparezca» — la estrella calza con un producto o
  * modelo evidenciado: la lista productos_nombrados del digest
  * (captions/catálogo/ADN) o un nombre real de su Tiendanube.
+ * (LOTE CORRECTIVO-8) Y la evidencia de captions ya no se valida a
+ * sí misma: la entrada que solo vive en las captions necesita
+ * corroboración cruzada (namedEntryCorroborated) — sin ella no hay
+ * estrella, cae a null y el wow degrada honesto (L4). La marca
+ * explícita del dueño (duenoStarEvidenceMatch, calce exacto) y las
+ * ventas reales de Tiendanube quedan como siempre: son fuentes
+ * ajenas al minero.
  * · Digest LEGADO (sin el campo): manda la composición de siempre
- *   (genérico/cromo) — ningún fundamento viejo pierde su estrella
- *   por no traer el campo.
- * · Con el campo (aunque vacío): sin calce con un nombre evidenciado
- *   no hay estrella — cae a null y el wow degrada honesto (L4). */
+ *   (genérico/cromo/rol) — ningún fundamento viejo pierde su
+ *   estrella por no traer el campo.
+ * · Con el campo (aunque vacío): sin calce corroborado no hay
+ *   estrella. */
 function starNamedEvidenceOk(digest, name) {
   const s = String(name || '').trim();
   if (!s) return false;
-  if (isGenericCategoryName(s) || isChromeDerivedName(s)) return false;
+  if (isGenericCategoryName(s) || isChromeDerivedName(s) || isCreditRoleName(s)) return false;
   if (!digest || !Array.isArray(digest.productos_nombrados)) return true;
   const tn = tnBlockOf(digest);
   if (tn) {
     if (tn.star && tn.star.name && sameItemName(String(tn.star.name), s)) return true;
     for (const t of (tn.top_sellers || [])) if (t && t.name && sameItemName(String(t.name), s)) return true;
   }
-  return digest.productos_nombrados.some((x) => x && sameItemName(String(x.nombre || x), s));
+  const matches = digest.productos_nombrados.filter((x) => x && sameItemName(String(x.nombre || x), s));
+  if (!matches.length) return false;
+  return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e));
 }
 /* (LOTE INGESTA — caso Veja/Byredo/Crumbl, 11/11) Nombre de SECCIÓN
  * del sitio (menú, pie, legal, ayuda), no un producto: un tema que
@@ -1552,13 +1719,16 @@ function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
   // (LOTE INGESTA) Igual para un nombre de sección del sitio: un tema
   // que viene del cromo («Customer Services», «Dirty Soda Value Menu»)
   // nunca es estrella, aunque encabece el catálogo.
-  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)) && !isChromeDerivedName(String(x.nombre || x)));
+  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)) && !isChromeDerivedName(String(x.nombre || x)) && !isCreditRoleName(String(x.nombre || x)));
   if (!list.length) return null;
   const caps = (captions || []).slice(0, 20);
   const scored = list.map((it) => {
     const nombre = String(it.nombre || it);
     const anchors = anchorsFromTexts([nombre]);
-    const hit = (text) => pieceAnchored(text, anchors).ok;
+    // (LOTE CORRECTIVO-8) La frecuencia que puntúa es mención de
+    // FRASE COMPLETA en el crudo: una palabra suelta del nombre en
+    // una línea de créditos ya no infla el puntaje de nadie.
+    const hit = (text) => pieceAnchored(text, anchors, { strictPhrase: true }).ok;
     let score = 0;
     const evidence = [];
     let mentions = 0;
@@ -2003,11 +2173,22 @@ function deriveTopics(digest, opts) {
   // del fix (el cromo ya no entra en la ingesta nueva, pero un digest
   // viejo lo trae). El tipo genérico sigue valiendo como TEMA (v924);
   // el cromo ni siquiera eso: no es contenido del negocio.
-  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)));
+  // (LOTE CORRECTIVO-8) Ídem para un rótulo de rol de créditos
+  // («Model», «Model Photo») en un digest sembrado antes del fix.
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)) && !isCreditRoleName(name(x)));
   // (Posty conectado) Lo que su Tiendanube marca SIN STOCK no entra a la
   // rotación de temas: ninguna pieza nace sobre un producto agotado.
   const oosNames = tnOutOfStockNames(digest);
   if (oosNames.length) items = items.filter((x) => !tnNameMatch(name(x), oosNames));
+  // (LOTE CORRECTIVO-8) La evidencia de nombre vale para CUALQUIER
+  // ítem que un topic afirme como producto — slot 1, slot 2, tip y
+  // reserva — no solo para la estrella: el ítem que SOLO vive en las
+  // captions (entrada de productos_nombrados con fuente 'caption')
+  // necesita su corroboración cruzada para anclar; sin ella, el
+  // topic no nace sobre ese nombre (la semana sigue con los ítems
+  // evidenciados y los temas del feed). Era el hueco por el que el
+  // slot 2 salió «Model» y el tip «Meet The Atlas» en Veja #5.
+  items = items.filter((x) => namedItemCorroborated(digest, name(x)));
   // (v230) El producto estrella INFERIDO (con confianza ≥0,5) abre la
   // rotación: la novedad de la semana es él. La confirmación del dueño
   // llega por el loop de preguntas (question_candidates).
@@ -2056,7 +2237,7 @@ function deriveTopics(digest, opts) {
   // inferred_star y sin esta guarda subiría igual a ítem N.º 1.
   // (LOTE INGESTA) Igual para la inferida que es cromo: «Customer
   // Services» como inferred_star no reordena nada.
-  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item) && !isChromeDerivedName(digest.inferred_star.item) && starNamedEvidenceOk(digest, digest.inferred_star.item)) {
+  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5 && !isGenericCategoryName(digest.inferred_star.item) && !isChromeDerivedName(digest.inferred_star.item) && !isCreditRoleName(digest.inferred_star.item) && starNamedEvidenceOk(digest, digest.inferred_star.item)) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);
@@ -2641,7 +2822,10 @@ function deriveFirstPostWow(digest, opts) {
   let items = [...(digest.productos || []), ...(digest.servicios || [])].filter((x) => x && (x.nombre || x));
   // (LOTE INGESTA) Igual que en deriveTopics: un nombre de sección del
   // sitio no ancla el primer posteo (el más visible de la semana).
-  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)));
+  // (LOTE CORRECTIVO-8) Ni un rótulo de rol de créditos, en un digest
+  // sembrado antes del fix: el degradado honesto de L4 (ancla neutra
+  // sin claims) se reserva a productos reales, nunca a un artefacto.
+  items = items.filter((x) => !isVetoText(name(x), digest.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)) && !isCreditRoleName(name(x)));
   const oosNames = tnOutOfStockNames(digest);
   if (oosNames.length) items = items.filter((x) => !tnNameMatch(name(x), oosNames));
   if (!items.length) return null;
@@ -2825,10 +3009,10 @@ function scrubDigestItems(digest) {
     // (LOTE INGESTA) Al guardar, un digest ya envenenado se limpia de
     // cromo: un rótulo de menú/pie no queda como producto/servicio/
     // promo ni como estrella inferida para la próxima semana.
-    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
-    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
-    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)) && !isChromeDerivedName(x && (x.titulo || x.nombre || x)) && !isVetoText(x && (x.titulo || x.nombre || x), d.onboarding));
-    if (d.inferred_star && d.inferred_star.item && (!isPlausibleOfferItem(d.inferred_star.item) || isChromeDerivedName(d.inferred_star.item) || isGenericCategoryName(d.inferred_star.item))) d.inferred_star = null;
+    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isCreditRoleName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
+    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x) && !isChromeDerivedName(x && (x.nombre || x)) && !isCreditRoleName(x && (x.nombre || x)) && !isVetoText(x && (x.nombre || x), d.onboarding));
+    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)) && !isChromeDerivedName(x && (x.titulo || x.nombre || x)) && !isCreditRoleName(x && (x.titulo || x.nombre || x)) && !isVetoText(x && (x.titulo || x.nombre || x), d.onboarding));
+    if (d.inferred_star && d.inferred_star.item && (!isPlausibleOfferItem(d.inferred_star.item) || isChromeDerivedName(d.inferred_star.item) || isGenericCategoryName(d.inferred_star.item) || isCreditRoleName(d.inferred_star.item))) d.inferred_star = null;
   } catch (e) { /* el scrub jamás rompe un guardado */ }
   return d;
 }
@@ -2930,6 +3114,8 @@ module.exports = {
   duenoStarEvidenceMatch,
   // (LOTE CORRECTIVO-4) Productos con nombre: extracción + evidencia.
   extractNamedProducts, starNamedEvidenceOk,
+  // (LOTE CORRECTIVO-8) Rótulos de rol de créditos + corroboración.
+  isCreditRoleName, namedItemCorroborated,
   // (v231) Adopción de patrones: candado de números de promo
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
