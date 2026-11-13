@@ -32497,8 +32497,29 @@ app.post('/api/guest/start', (req, res) => {
       // con este @/dominio. El candado de 90 días sigue bloqueando la
       // RE-generación (trialLockGate), no la entrada.
       const consumed = trialLock.findConsumedUsed ? trialLock.findConsumedUsed(db, igK, domK) : null;
-      if (consumed) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
       const entered = guestTrial.findGuestByIdentity ? guestTrial.findGuestByIdentity(db, igK, domK) : null;
+      if (consumed) {
+        // (LOTE EXHIBICIÓN-PRUEBA-RECIÉN-ENTREGADA · REANUDACIÓN) El
+        // consumo es del invitado que este mismo flujo creó y la sesión
+        // es suya: no es un segundo uso, es la misma entrega volviendo a
+        // entrar. Se reanuda con éxito idempotente, sin re-importar (la
+        // semana ya está en su cuenta; importTrialWeek devolvería 0 y
+        // el handler lo leería como error). Sin sesión dueña, o con la
+        // identidad resolviendo a otro, el 409 sigue intacto.
+        const ownGuest = !!(entered && consumed.user_id
+          && Number(consumed.user_id) === Number(entered.id)
+          && req.session && Number(req.session.userId) === Number(entered.id));
+        if (!ownGuest) return res.status(409).json({ error: trialUsedMessage(lang), trial_used: true });
+        let nPostsR = 0;
+        try { const rN = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(entered.id); nPostsR = (rN && rN.n) || 0; } catch (e) {}
+        let trialEndsR = 0;
+        try { const rT = db.prepare('SELECT trial_ends_at FROM users WHERE id = ?').get(entered.id); trialEndsR = (rT && rT.trial_ends_at) || 0; } catch (e) {}
+        return req.session.regenerate((err) => {
+          if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
+          req.session.userId = entered.id;
+          res.json({ ok: true, user_id: entered.id, trial_ends_at: trialEndsR, posts: nPostsR, resumed: true });
+        });
+      }
       // (LOTE PRUEBA-CHAT · 6/11) Reuso del invitado del chat: si el
       // visitante ya entró al conserje desde el chat del onboarding, su
       // fila invitada existe con 0 posteos todavía — se REUSA (la semana
@@ -33437,8 +33458,18 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const gate = trialLockGate(fields, null, false);
     if (gate) {
       // (LOTE PRUEBA-ENTRADA-DIRECTA) Prueba ya usada para siempre: no
-      // hay snapshot ni generación nueva — solo el camino a entrar/pagar.
+      // hay generación nueva — solo el snapshot del candado (si quedó)
+      // o el camino a entrar/pagar.
       if (gate.usedForever) {
+        // (LOTE EXHIBICIÓN-PRUEBA-RECIÉN-ENTREGADA) Si la entrega dejó
+        // candado con la semana, esa semana ES de este negocio y puede
+        // ser de ESTE MISMO flujo (recién entregada): se sirve el
+        // snapshot como la semana, igual que /api/trial/week. «Ya usó»
+        // queda solo para el consumo SIN snapshot (filas viejas
+        // pre-entrega o sin candado).
+        const lockU = trialLock.findLock(db, gate.igK, gate.domK);
+        const snapU = lockU && trialLockServePayload(lockU);
+        if (snapU) return res.json(snapU);
         return res.status(409).json({
           error: trialUsedMessage(lang),
           trial_used: true,
@@ -34550,6 +34581,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     if (gate) {
       // (LOTE PRUEBA-ENTRADA-DIRECTA) Prueba ya usada para siempre.
       if (gate.usedForever) {
+        // (LOTE EXHIBICIÓN-PRUEBA-RECIÉN-ENTREGADA) Si la entrega dejó
+        // candado con la semana, esa semana ES de este negocio y puede
+        // ser de ESTE MISMO flujo (recién entregada): se sirve el
+        // snapshot como 'done', igual que /api/trial/week. «Ya usó»
+        // queda solo para el consumo SIN snapshot (filas viejas
+        // pre-entrega o sin candado).
+        const lockU = trialLock.findLock(db, gate.igK, gate.domK);
+        const snapU = lockU && trialLockServePayload(lockU);
+        if (snapU) { send('done', { out: snapU }); return finish(); }
         send('used', { trial_used: true, message: trialUsedMessage(lang) });
         return finish();
       }
@@ -37672,7 +37712,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1015';
+const BUILD_ID = '20261105-v1016';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
