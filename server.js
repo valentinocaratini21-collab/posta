@@ -9900,6 +9900,101 @@ app.post('/api/admin/posts/:id/edit-caption', requireAdminToken, (req, res) => {
   res.json({ ok: true, id: post.id, user_id: post.user_id, status: post.status, scheduled_at: post.scheduled_at, caption: nuevo, cambiado: cambiaria, ya_correcto: !cambiaria });
 });
 
+// POST /api/admin/posts/:id/schedule?token=ADMIN_TOKEN  body {scheduled_at}
+// (LOTE ADMIN-PROGRAMAR-IMAGEN · emergencia tira pastelería 13/11) Fija la
+// fecha/hora de un posteo en BORRADOR (o ya programado con otra fecha: lo
+// mueve). Ni la app ni los admin actuales podían: el video de la tira quedó
+// asignado a un martes por el flujo de subida y frenado sin vía de moverlo
+// al sábado. La escritura ESPEJA el flujo normal de programación (manual
+// «Programar mi semana» y PATCH /api/posts/:id): status='scheduled',
+// scheduled_at en ISO UTC completo (el formato de zonedWallToUtc, con el
+// que el scheduler compara contra new Date().toISOString()), error='',
+// notified=0 (se re-arma el aviso de aprobación) y user_stopped=0
+// (programar es intención nueva, como en el PATCH). La week_key se
+// re-deriva del nuevo instante (mondayKeyOf(ymdInTz(...)), la misma regla
+// de postWeekKey) para que el posteo quede en la semana de su fecha.
+// needs_review NO se toca: si el posteo está retenido, lo sigue estando
+// (el scheduler lo retiene igual) y se reporta en la respuesta.
+// Rechaza: publicados, publicando, cancelados/descartados, ids
+// inexistentes, fechas inválidas o ya pasadas.
+app.post('/api/admin/posts/:id/schedule', requireAdminToken, (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const raw = body.scheduled_at === undefined ? '' : String(body.scheduled_at);
+  if (!raw) return res.status(400).json({ ok: false, error: 'falta scheduled_at' });
+  const ms = Date.parse(raw);
+  if (!isFinite(ms)) return res.status(400).json({ ok: false, motivo: 'fecha_invalida', error: 'scheduled_at no es una fecha válida: ' + raw });
+  if (ms <= Date.now()) return res.status(400).json({ ok: false, motivo: 'fecha_pasada', error: 'scheduled_at ya pasó: ' + raw });
+  const iso = new Date(ms).toISOString();
+  const post = db.prepare(`SELECT id, user_id, status, scheduled_at, week_key, needs_review FROM posts WHERE id = ?`).get(id);
+  if (!post) return res.status(404).json({ ok: false, error: 'no_existe' });
+  if (post.status !== 'draft' && post.status !== 'scheduled') {
+    const motivo = post.status === 'published' ? 'ya_publicado'
+      : post.status === 'publishing' ? 'publicando'
+      : (post.status === 'cancelled' || post.status === 'dismissed') ? 'cancelado'
+      : 'no_programable';
+    return res.status(400).json({ ok: false, motivo, error: 'este posteo no se puede programar (status: ' + post.status + ')' });
+  }
+  let weekKey = post.week_key || '';
+  try {
+    const ymd = ymdInTz(iso, userTz(post.user_id));
+    const wk = ymd ? mondayKeyOf(ymd) : '';
+    if (wk) weekKey = wk;
+  } catch (e) { /* sin re-derivación: queda la week_key que traía */ }
+  const movido = post.status === 'scheduled' && post.scheduled_at !== iso;
+  db.prepare(`UPDATE posts SET scheduled_at = ?, status = 'scheduled', error = '', notified = 0, user_stopped = 0, week_key = ? WHERE id = ?`)
+    .run(iso, weekKey, post.id);
+  console.log(`[admin] schedule: post ${post.id} (usuario ${post.user_id}) ${post.status} ${post.scheduled_at || 'sin fecha'} → scheduled ${iso}`);
+  res.json({ ok: true, id: post.id, user_id: post.user_id, status: 'scheduled', scheduled_at: iso, week_key: weekKey, needs_review: post.needs_review ? 1 : 0, movido, ya_programado: post.status === 'scheduled' && !movido });
+});
+
+// POST /api/admin/posts/:id/set-image?token=ADMIN_TOKEN  body {from_post_id}
+// (LOTE ADMIN-PROGRAMAR-IMAGEN · emergencia tira pastelería 13/11) Copia la
+// imagen/medios de OTRO posteo del MISMO usuario sobre este: image_path,
+// media_type, carousel_paths y cover_path — los cuatro campos con los que
+// la app muestra y el scheduler publica un posteo (una foto, un video con
+// su portada o un carrusel viajan completos). Ni la app (el editor solo
+// ofrece fotos ya enviadas y al enviar crea un posteo nuevo) ni los admin
+// actuales podían reemplazar la imagen de un posteo ya armado: la foto
+// correcta de la tira quedó en un posteo donante frenado y el posteo del
+// día con la imagen vieja. El destino puede ser borrador o programado (el
+// caso de uso); publicado/publicando/cancelado se rechazan. No toca
+// caption, hashtags, status ni scheduled_at del destino ni NADA del
+// origen. Idempotente: copiar dos veces deja el mismo estado.
+app.post('/api/admin/posts/:id/set-image', requireAdminToken, (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const fromId = Number(body.from_post_id) || 0;
+  if (!fromId) return res.status(400).json({ ok: false, error: 'falta from_post_id' });
+  if (fromId === id) return res.status(400).json({ ok: false, motivo: 'mismo_posteo', error: 'from_post_id es el mismo posteo' });
+  const dest = db.prepare(`SELECT id, user_id, status, scheduled_at, image_path, media_type, carousel_paths, cover_path FROM posts WHERE id = ?`).get(id);
+  if (!dest) return res.status(404).json({ ok: false, error: 'no_existe' });
+  const src = db.prepare(`SELECT id, user_id, image_path, media_type, carousel_paths, cover_path FROM posts WHERE id = ?`).get(fromId);
+  if (!src) return res.status(404).json({ ok: false, error: 'origen_no_existe' });
+  if (src.user_id !== dest.user_id) return res.status(400).json({ ok: false, motivo: 'otro_usuario', error: 'el posteo origen es de otro usuario' });
+  if (dest.status === 'published' || dest.status === 'publishing' || dest.status === 'cancelled' || dest.status === 'dismissed') {
+    const motivo = dest.status === 'published' ? 'ya_publicado' : dest.status === 'publishing' ? 'publicando' : 'cancelado';
+    return res.status(400).json({ ok: false, motivo, error: 'el posteo destino no admite cambiar la imagen (status: ' + dest.status + ')' });
+  }
+  if (!src.image_path) return res.status(400).json({ ok: false, motivo: 'origen_sin_imagen', error: 'el posteo origen no tiene imagen' });
+  const media = {
+    image_path: src.image_path,
+    media_type: src.media_type || 'image',
+    carousel_paths: src.carousel_paths || '',
+    cover_path: src.cover_path || '',
+  };
+  const cambiado = dest.image_path !== media.image_path || (dest.media_type || 'image') !== media.media_type
+    || (dest.carousel_paths || '') !== media.carousel_paths || (dest.cover_path || '') !== media.cover_path;
+  if (cambiado) {
+    db.prepare(`UPDATE posts SET image_path = ?, media_type = ?, carousel_paths = ?, cover_path = ? WHERE id = ?`)
+      .run(media.image_path, media.media_type, media.carousel_paths, media.cover_path, dest.id);
+    console.log(`[admin] set-image: post ${dest.id} (usuario ${dest.user_id}) imagen ← post ${src.id} (${media.media_type}: ${media.image_path})`);
+  }
+  res.json({ ok: true, id: dest.id, user_id: dest.user_id, status: dest.status, scheduled_at: dest.scheduled_at, from_post_id: src.id, ...media, cambiado });
+});
+
 // POST /api/admin/review/:id/reject?token=ADMIN_TOKEN  body {note}
 // Rechaza con nota: alimenta el aprendizaje (señal + style_rule), borra el
 // borrador y regenera uno con otro enfoque en segundo plano.
@@ -37170,7 +37265,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1007';
+const BUILD_ID = '20261105-v1008';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
