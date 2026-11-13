@@ -154,24 +154,32 @@ console.log('— Parte 3: buildDemoSpec de la prueba (EN, trial) —');
     // ancha de ESTE lote se aserta en la Parte 2 (5/6 en el pool) y las
     // demás fotos quedan disponibles como láminas/ranking, no como
     // héroes sin verificar. Sin C7 (árbol del builder) eran ≥2.
-    ok(distintas.size === 1 && distintas.has('/media/web-a1.jpg'),
-      `la semana usa como héroe la única foto con marca verificada del fixture (fue ${distintas.size}: ${[...distintas].join(', ')})`);
-    // RE-PIN DEL PREPARADOR (misma composición): a3 está clasificada en
-    // el photo_map como Esplar pero SIN marca verificada — con C7 en
-    // vivo eso no habilita la entrega como héroe (la clasificación no es
-    // el veredicto de presencia) y el slot cae al póster de marca, igual
-    // que el residual de Campo pineado abajo.
-    ok(spec.photos[1] === '/media/profile-veja.jpg',
-      `la pieza anclada a Esplar (photo_map sin marca verificada) no se entrega como héroe con C7 en vivo: póster (fue ${spec.photos[1]})`);
+    // RE-PIN LOTE C-FOLD (diagnóstico Veja #5 §5, lote C): los héroes
+    // ya no son solo «marca verificada» — la elegibilidad suma la vía
+    // «es el producto» (photo_map). a1 entra por marca (photo_map con
+    // marca) y a3 por ancla de producto (Esplar, sin marca verificada).
+    ok(distintas.size === 2 && distintas.has('/media/web-a1.jpg') && distintas.has('/media/web-a3.jpg'),
+      `la semana usa como héroes la foto con marca verificada y la anclada al producto (fold) (fue ${distintas.size}: ${[...distintas].join(', ')})`);
+    // RE-PIN LOTE C-FOLD (reemplaza el re-pin C7 de este caso): a3 está
+    // clasificada en el photo_map como Esplar SIN marca verificada —
+    // con C7 solo, eso no habilitaba la entrega; con el fold, «es el
+    // producto de ESTA pieza» sí: la pieza anclada a Esplar (slot 2 en
+    // la derivación actual de temas; el pin C7 miraba el slot 1, que
+    // es la pieza del V-10 Leather) entrega su foto real como héroe.
+    ok(spec.photos[2] === '/media/web-a3.jpg',
+      `la pieza anclada a Esplar entrega su foto (photo_map) como héroe por el fold (fue ${spec.photos[2]})`);
     // PIN DEL RESIDUAL (fuera del alcance de A, registrado en STATUS):
     // la pieza de Campo — su foto (a5) está ADMITIDA en el pool por URL
     // y viaja como lámina de carrusel, pero sin entrada en el photo_map
-    // el match foto↔producto de pickWebPhoto no la puede elegir como
-    // portada (exige mapa o match exacto de tema, §2.2 del diagnóstico).
-    // Si un lote futuro cierra ese match, este pin salta y obliga a
-    // actualizar la suite.
-    ok(spec.photos[2] === '/media/profile-veja.jpg',
-      'PIN residual: la pieza sin photo_map sigue a póster como portada (su foto entra como lámina, no como héroe)');
+    // no hay ancla de producto: ni C7 ni el fold la habilitan como
+    // portada (el fold exige productHit, que nace del mapa) y el match
+    // exacto de tema no la rescata (§2.2 del diagnóstico). El pin se
+    // expresa sin slot fijo: a5 nunca es portada de la semana; el slot
+    // 2 que el pin viejo miraba resultó ser la pieza de Esplar (lo
+    // prueba el fold entregando a3 ahí). Si un lote futuro cierra el
+    // match sin mapa, este pin salta y obliga a actualizar la suite.
+    ok(!spec.photos.includes('/media/web-a5.jpg'),
+      'PIN residual: la pieza sin photo_map (Campo, a5) nunca es portada (su foto entra como lámina, no como héroe)');
     ok(spec.formato && spec.formato.dominante === 'carrusel' && spec.formato.carrusel >= 1,
       `con el pool sano hay ≥1 carrusel importable (formato=${JSON.stringify(spec.formato)})`);
   } else {

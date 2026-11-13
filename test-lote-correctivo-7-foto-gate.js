@@ -155,13 +155,23 @@ function gateSpec(digest, photos, demoMod) {
 }
 const fotosUsadas = (spec) => (spec.specPosts || []).map((p) => p.photo);
 function seccionDemo() {
-  // (a) Foto real SIN marca ofrecida → no se entrega; cae al póster.
+  // (a) Foto real SIN marca ofrecida → no se entrega POR LA VÍA MARCA;
+  // cae al póster. (RE-PIN LOTE C-FOLD, diagnóstico Veja #5 §5: la vía
+  // «es el producto» — photo_map — se suma a la elegibilidad; ver A1.)
   const specA = gateSpec(gateDigest({ [U.cup]: { marca: false }, [U.local]: { marca: false } }), [PHOTOS.cup, PHOTOS.local]);
-  ok('A1 (a) la foto sin marca NO se entrega en ninguna pieza', !fotosUsadas(specA).includes(PHOTOS.cup.path) && !fotosUsadas(specA).includes(PHOTOS.local.path), fotosUsadas(specA));
+  // RE-PIN C-FOLD: cup está ANCLADA a Tesora en el photo_map de este
+  // fixture — con el fold, «es el producto» la hace elegible aunque el
+  // veredicto de presencia sea false, y se entrega en la semana. La
+  // foto SIN ancla (local: sin marca y sin producto) sigue fail-closed.
+  ok('A1 (a) la foto sin marca NI ancla (local) no se entrega; la anclada al producto (cup) SÍ, por el fold', !fotosUsadas(specA).includes(PHOTOS.local.path) && fotosUsadas(specA).includes(PHOTOS.cup.path), fotosUsadas(specA));
   ok('A2 (a) el slot 0 cae al camino de siempre sin foto válida: póster de marca', specA.specPosts[0].photo_source === 'brand-poster' && specA.specPosts[0].photo === '/media/perfil.jpg', specA.specPosts[0]);
   // (d) Visión no disponible (sin veredictos en el fundamento) → no-pase honesto.
   const specD = gateSpec(gateDigest(null), [PHOTOS.cup, PHOTOS.local]);
-  ok('D1 (d) sin verificar = no-pase: la foto tampoco se entrega', !fotosUsadas(specD).includes(PHOTOS.cup.path) && !fotosUsadas(specD).includes(PHOTOS.local.path), fotosUsadas(specD));
+  // RE-PIN C-FOLD: «sin verificar = no-pase» sigue mandando en la VÍA
+  // MARCA (local, sin ancla ni veredicto, no se entrega); la foto
+  // anclada al producto por el photo_map (cup) no depende del
+  // veredicto: la vía producto la entrega igual (diagnóstico §5).
+  ok('D1 (d) sin verificar: la sin ancla no se entrega; la anclada al producto sí (vía producto del fold)', !fotosUsadas(specD).includes(PHOTOS.local.path) && fotosUsadas(specD).includes(PHOTOS.cup.path), fotosUsadas(specD));
   ok('D2 (d) el slot 0 también cae al póster', specD.specPosts[0].photo_source === 'brand-poster', specD.specPosts[0] && specD.specPosts[0].photo_source);
   // (b) Foto real CON marca verificada → se entrega, como real-product-brand.
   const specB = gateSpec(gateDigest({ [U.bag]: { marca: true } }), [PHOTOS.bag]);
@@ -183,7 +193,10 @@ function seccionDemo() {
   // (c) Dos candidatas: la sin marca va PRIMERA en la lista; gana la con marca.
   const specC = gateSpec(gateDigest({ [U.cup]: { marca: false }, [U.bag]: { marca: true } }), [PHOTOS.cup, PHOTOS.bag]);
   ok('C1 (c) se elige la foto CON marca aunque la sin marca llegó primero', specC.specPosts[0].photo === PHOTOS.bag.path, specC.specPosts[0] && specC.specPosts[0].photo);
-  ok('C2 (c) la sin marca no se usa en ninguna otra pieza', !fotosUsadas(specC).includes(PHOTOS.cup.path), fotosUsadas(specC));
+  // RE-PIN C-FOLD: cup no tiene marca pero ES el producto (photo_map):
+  // con el fold puede ilustrar otra pieza de la semana; lo que el
+  // caso (c) garantiza — el slot 0 es la foto CON marca (C1) — queda.
+  ok('C2 (c) la sin marca pero anclada al producto SÍ se usa en otra pieza (fold); el wow sigue siendo la de marca', fotosUsadas(specC).includes(PHOTOS.cup.path), fotosUsadas(specC));
   // (e) Caché: con los veredictos en el fundamento, armar el spec dos
   // veces (y que lo consuman 5 piezas) no llama a la visión ni una vez.
   const origFetch = globalThis.fetch;

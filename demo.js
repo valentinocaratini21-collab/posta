@@ -503,7 +503,7 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
   // póster de marca. Con maxTier: 1 el loop se corta tras el rango 1.
   const maxTier = (opts && Number.isInteger(opts.maxTier)) ? opts.maxTier : 3;
   for (let ti = 0; ti < tiers.length && ti <= maxTier; ti++) {
-    const hit = webPool.find((w) => {
+    const passes = (w) => {
       if (used.has(w.path)) return false;
       // (CORRECTIVO-7 · GATE DE MARCA EN LA PRUEBA) En la prueba, una
       // foto real solo se entrega como imagen de una pieza si la visión
@@ -518,7 +518,20 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
       // mismo — no sale «porque es la que hay»; el slot cae al camino
       // de siempre para «sin foto real válida» (póster de marca).
       // Fuera de la prueba (trialNoStock falso) el selector no cambia.
-      if (ctx && ctx.trialNoStock && w.marca_verdict !== true && w.marca_visible !== true) return false;
+      // (LOTE C-FOLD · diagnóstico Veja #5 imagen/formato §5, lote C)
+      // TERCERA VÍA DE ELEGIBILIDAD: «esta foto ES el producto». Si el
+      // photo_map identificó ESTA foto como EL producto del tema de la
+      // pieza (productHit: su ancla, con el match estricto de nombre
+      // de C8), la foto es elegible aunque el pase de presencia no vea
+      // logo legible: un packshot del producto real ES la marca en la
+      // escena en el sentido de la regla 1 — el producto es del
+      // negocio y vino de su sitio. La vía es POR TEMA (la foto tiene
+      // que ser el producto de ESTA pieza, no «un producto cualquiera
+      // del pool») y el veredicto de presencia NO se toca:
+      // classifyBrandPresence sigue mandando donde manda (la
+      // preferencia de albumRefsForPiece queda intacta) y una foto
+      // sin marca y sin ancla de producto sigue fail-closed al póster.
+      if (ctx && ctx.trialNoStock && w.marca_verdict !== true && w.marca_visible !== true && !productHit(w)) return false;
       // El rescate es del PRODUCTO (la visión lo identificó como EL
       // producto), no del índice del rango: una foto del producto
       // cuyos tags no alcanzan el mundo se rescata en cualquier rango —
@@ -526,7 +539,20 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
       const gateOk = temasPassGate(w.temas, ctx)
         || (productHit(w) && !(w.temas || []).some((x) => ctx.forb.has(x)));
       return gateOk && tiers[ti](w);
-    });
+    };
+    // (LOTE C-FOLD · preferencia de C7 preservada) El pliegue SUMA
+    // elegibilidad, no reordena ganadores: dentro del mismo rango, una
+    // foto con marca VERIFICADA le sigue ganando a una que solo trae el
+    // ancla de producto, aunque haya llegado primero en el pool (el
+    // caso (c) de la suite de C7). Sin esa pasada, la foto sin
+    // verificar le robaba el rango a la verificada y el wow caía al
+    // póster por puntaje — el fold empeoraba lo que venía a arreglar.
+    // La pasada es solo de la prueba: fuera de ella, orden histórico.
+    let hit = null;
+    if (ctx && ctx.trialNoStock) {
+      hit = webPool.find((w) => passes(w) && (w.marca_verdict === true || w.marca_visible === true));
+    }
+    if (!hit) hit = webPool.find(passes);
     if (hit) return hit;
   }
   return null;
