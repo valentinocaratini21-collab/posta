@@ -333,7 +333,17 @@ function itemView(db, c, fecha, opts) {
       const d = new Date(String(post.scheduled_at).replace(' ', 'T'));
       const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
       const hh = new Intl.DateTimeFormat('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
-      cuando = dias[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + ' · ' + hh;
+      // (LOTE CONSERJE-REVISAR-COMPLETO) La etiqueta ENTERA vive en la
+      // zona de la cuenta: el día y la fecha salen de dayKeyInTz — la
+      // misma llave con la que el tablero agrupa el posteo — y no del
+      // reloj del proceso (UTC), que podía contradecir la fecha del
+      // propio tablero mientras la hora sí era la de la cuenta.
+      const key = dayKeyInTz(d, tz);
+      const km = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key || '');
+      if (km) {
+        const wd = new Date(Date.UTC(+km[1], +km[2] - 1, +km[3])).getUTCDay();
+        cuando = dias[wd] + ' ' + Number(km[3]) + '/' + Number(km[2]) + ' · ' + hh;
+      }
     } catch (e) { cuando = ''; }
   }
   return {

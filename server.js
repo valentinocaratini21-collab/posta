@@ -12195,6 +12195,11 @@ app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) =>
 app.get('/api/admin/support/conserje/revision', requireAdminToken, (req, res) => {
   try {
     const r = conserjeRevision.colaRevision(db, { fecha: req.query.fecha, absImageUrl, posterUrlFor: posterUrlDePosteo });
+    // (LOTE CONSERJE-REVISAR-COMPLETO) Los pedidos por audio que
+    // esperan revisión viajan con el tablero: el conserje muestra el
+    // conteo desde la carga, sin abrir cada sección. La fuente es la
+    // misma que lista cada sección (conteosPedidos).
+    try { r.pedidos_pendientes = supportCases.conteosPedidos(db); } catch (e) { /* sin conteo: el front no muestra señal */ }
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
@@ -18183,7 +18188,12 @@ app.get('/api/admin/support/conserje/pedidos-subir', requireAdminToken, (req, re
     if (['pendiente_revision', 'aprobado', 'armado', 'descartado'].includes(estado)) { where.push('estado = ?'); args.push(estado); }
     if (uidF) { where.push('user_id = ?'); args.push(uidF); }
     const rows = db.prepare(`SELECT * FROM subir_pedidos_voz ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ?`).all(...args, limit);
-    res.json({ ok: true, pedidos: rows.map(subirPedidoPublico) });
+    // (LOTE CONSERJE-REVISAR-COMPLETO) El conteo de pendientes viaja
+    // con la lista (misma tabla y mismo filtro de cliente; el filtro
+    // de estado de la vista no lo toca): el front refresca la señal
+    // de la sección desde su propia fuente.
+    const pendRow = db.prepare(`SELECT COUNT(*) AS c FROM subir_pedidos_voz WHERE estado = 'pendiente_revision'${uidF ? ' AND user_id = ?' : ''}`).get(...(uidF ? [uidF] : []));
+    res.json({ ok: true, pedidos: rows.map(subirPedidoPublico), pendientes: Number((pendRow || {}).c) || 0 });
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.post('/api/admin/support/conserje/pedidos-subir/:id/aprobar', requireAdminToken, async (req, res) => {
@@ -43183,7 +43193,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1088';
+const BUILD_ID = '20261105-v1089';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

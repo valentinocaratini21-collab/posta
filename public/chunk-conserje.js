@@ -14,7 +14,7 @@
 // capa extra del dueño: nunca publica por sí sola y nunca veta el ritual
 // del cliente de las 9:00. La ficha de cada cliente está en su detalle,
 // ahí mismo donde se decide.
-var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0 };
+var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0, conteos: null, eventos: null };
 // (v849) Deep link de la push de cambio de posteo: #/app/conserje?user=<uid>
 // abre el detalle de ese cliente. Parser puro: 0 si no hay ?user= válido.
 // Un uid que no está en la revisión de esa noche no abre nada (fail-soft:
@@ -436,6 +436,38 @@ function conserjeDetalleHTML(it, d) {
     + sig;
 }
 
+// (LOTE CONSERJE-REVISAR-COMPLETO) Señal de pendientes: el conteo de
+// pedidos por audio esperando revisión se ve desde la carga del
+// conserje, en el encabezado de cada sección, sin abrirla. Una sola
+// fuente de verdad por número: el payload de la revisión trae
+// pedidos_pendientes (conteosPedidos del servidor, la misma base que
+// lista cada sección) y cada sección, al pintarse con su lista ya
+// cargada, refresca su número desde esa misma lista.
+function conserjeBadgePendientesHTML(id, n) {
+  const num = Number(n) || 0;
+  return '<span class="pill" id="' + id + '" style="background:#B3261E;color:#fff;margin:0 0 0 8px' + (num ? '' : ';display:none') + '">' + num + ' pendiente' + (num === 1 ? '' : 's') + '</span>';
+}
+function conserjeConteosPintar() {
+  try {
+    const c = conserjeEstado.conteos || {};
+    const set = (id, n) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const num = Number(n) || 0;
+      el.textContent = num + ' pendiente' + (num === 1 ? '' : 's');
+      el.style.display = num ? '' : 'none';
+    };
+    set('cjBadgeVoz', c.voz);
+    set('cjBadgeSubir', c.subir);
+  } catch (e) { /* sin DOM (vm): la señal se pinta al renderizar */ }
+}
+function conserjeConteoSeccionActualizar(clave, n) {
+  const c = conserjeEstado.conteos || {};
+  c[clave] = Number(n) || 0;
+  conserjeEstado.conteos = c;
+  conserjeConteosPintar();
+}
+
 function conserjeRender() {
   const card = $('#conserjeCard');
   if (!card) return;
@@ -499,7 +531,7 @@ function conserjeRender() {
   }
   // (LOTE CONSERJE-PEDIDOS-VOZ) Sección propia, fuera de la revisión de
   // la noche: los pedidos por voz de los clientes con lo que salió.
-  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🎙 Pedidos por voz · cambios a un posteo</div>'
+  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🎙 Pedidos por voz · cambios a un posteo' + conserjeBadgePendientesHTML('cjBadgeVoz', (conserjeEstado.conteos || {}).voz) + '</div>'
     + '<div class="card" style="padding:14px">'
     + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">El pedido específico por voz no se hace en el momento: queda <b>pendiente de revisión</b>. Acá se ve qué pidió el cliente y qué entendió Posty; al aprobar, el pedido queda listo para armarlo al día siguiente — descartar lo cierra sin construir nada. Sin la interpretación de Posty no se aprueba: aprobar a ciegas no. El audio no se guarda: lo que se lee es la transcripción, tal cual la usó Posty.</div>'
     + '<div style="font-size:13px;color:var(--mut);line-height:1.5;margin-top:6px">Ojo: esta lista es la de la tira (cambios sobre un posteo que ya existe, o sobre la semana). Los pedidos desde el tab Subir, con material nuevo y una nota de voz, también se guardan y quedan en revisión: se ven en la sección «📤 Pedidos desde Subir», acá abajo.</div>'
@@ -509,16 +541,25 @@ function conserjeRender() {
   // nacen en el tab Subir (material nuevo + nota de voz específica).
   // Sección propia, sin mezclar con la de la tira: acá el cliente pide
   // un posteo NUEVO, no un cambio sobre uno que ya existe.
-  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">📤 Pedidos desde Subir · posteo nuevo</div>'
+  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">📤 Pedidos desde Subir · posteo nuevo' + conserjeBadgePendientesHTML('cjBadgeSubir', (conserjeEstado.conteos || {}).subir) + '</div>'
     + '<div class="card" style="padding:14px">'
     + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">El cliente subió material nuevo desde el tab Subir con una nota de voz pidiendo algo puntual. El pedido queda <b>pendiente de revisión</b>: al aprobar, Posty arma el posteo para el día siguiente, a la hora de siempre del cliente; al descartar, se cierra sin construir nada. Sin aprobación no se arma nada, nunca. El audio no se guarda: lo que se lee es la transcripción, tal cual la dictó el cliente.</div>'
     + '<button class="btn btn-secondary" data-cj="pedidos-subir" style="margin-top:10px">' + (conserjeEstado.pedidosSubir ? 'Actualizar los pedidos' : 'Ver los pedidos') + '</button>'
     + '<div id="cjPedidosSubir" style="margin-top:12px"></div></div>';
+  // (LOTE CONSERJE-REVISAR-COMPLETO) La línea de tiempo del equipo:
+  // todo lo que soporte hizo (respuestas, reprogramaciones, rehaceres)
+  // con su cliente y su cuándo, de solo lectura, en el mismo conserje.
+  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🗂 Eventos del equipo</div>'
+    + '<div class="card" style="padding:14px">'
+    + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">Todo lo que el equipo hizo en soporte, en orden: qué pasó, sobre qué cliente o posteo y cuándo. Es el registro real (support_team_log); esta vista solo lo lee, no cambia nada.</div>'
+    + '<button class="btn btn-secondary" data-cj="eventos" style="margin-top:10px">' + (conserjeEstado.eventos ? 'Actualizar los eventos' : 'Ver los eventos') + '</button>'
+    + '<div id="cjEventos" style="margin-top:12px"></div></div>';
   html += '<style>@media (min-width:720px){.cj-lista{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cj-lista .card{margin:0}}</style>';
   card.innerHTML = html;
   conserjeCapAjustar();
   conserjePedidosVozPintar();
   conserjePedidosSubirPintar();
+  conserjeEventosPintar();
 }
 
 // ---------- 🎙 Pedidos por voz (LOTE CONSERJE-PEDIDOS-VOZ) ----------
@@ -659,6 +700,13 @@ function conserjePedidosVozHTML() {
 }
 
 function conserjePedidosVozPintar() {
+  // (LOTE CONSERJE-REVISAR-COMPLETO) Cada pintado refresca la señal
+  // de la sección desde su propia lista: el conteo nunca diverge de
+  // lo que la sección muestra.
+  try {
+    const d = conserjeEstado.pedidosVoz;
+    if (d && d.pedidos) conserjeConteoSeccionActualizar('voz', d.pedidos.filter((x) => ((x.revision || {}).estado || 'pendiente') === 'pendiente').length);
+  } catch (e) {}
   try {
     const box = $('#cjPedidosVoz');
     if (box && conserjeEstado.pedidosVoz) box.innerHTML = conserjePedidosVozHTML();
@@ -672,6 +720,8 @@ async function conserjePedidosVozCargar() {
     const d = await adminApi('support/conserje/pedidos-voz', 'GET');
     if (!d || !d.ok) throw new Error('sin datos');
     conserjeEstado.pedidosVoz = d;
+    // El servidor cuenta los pendientes desde esta misma lista.
+    if (typeof d.pendientes === 'number') conserjeConteoSeccionActualizar('voz', d.pendientes);
     conserjePedidosVozPintar();
     const btn = document.querySelector('[data-cj="pedidos-voz"]');
     if (btn) btn.textContent = 'Actualizar los pedidos';
@@ -815,6 +865,12 @@ function conserjePedidosSubirHTML() {
 }
 
 function conserjePedidosSubirPintar() {
+  // (LOTE CONSERJE-REVISAR-COMPLETO) Ídem pedidos por voz: la señal
+  // de la sección se refresca desde su propia lista al pintar.
+  try {
+    const d = conserjeEstado.pedidosSubir;
+    if (d && d.pedidos) conserjeConteoSeccionActualizar('subir', d.pedidos.filter((x) => x.estado === 'pendiente_revision').length);
+  } catch (e) {}
   try {
     const box = $('#cjPedidosSubir');
     if (box && conserjeEstado.pedidosSubir) box.innerHTML = conserjePedidosSubirHTML();
@@ -828,6 +884,8 @@ async function conserjePedidosSubirCargar() {
     const d = await adminApi('support/conserje/pedidos-subir', 'GET');
     if (!d || !d.ok) throw new Error('sin datos');
     conserjeEstado.pedidosSubir = d;
+    // El servidor cuenta los pendientes desde esta misma tabla.
+    if (typeof d.pendientes === 'number') conserjeConteoSeccionActualizar('subir', d.pendientes);
     conserjePedidosSubirPintar();
     const btn = document.querySelector('[data-cj="pedidos-subir"]');
     if (btn) btn.textContent = 'Actualizar los pedidos';
@@ -879,6 +937,47 @@ async function conserjePedidoSubirDecidir(t) {
   }
 }
 
+// ---------- 🗂 Eventos del equipo (LOTE CONSERJE-REVISAR-COMPLETO) ----------
+// Lee GET support/team-log: el registro support_team_log tal cual lo
+// escribe cada acción del equipo. Cada fila ya trae del servidor la
+// etiqueta legible de la acción, el negocio del cliente y el cuándo
+// en la zona de la cuenta. Solo lectura: sin botones de acción.
+function conserjeEventoItemHTML(e) {
+  const quien = e.business_name
+    ? esc(e.business_name) + (e.ig_username ? ' <span style="font-weight:600;color:var(--mut)">@' + esc(e.ig_username) + '</span>' : '')
+    : (e.user_id ? 'Cliente ' + esc(String(e.user_id)) : 'General');
+  const ref = e.post_id ? ' · posteo #' + esc(String(e.post_id)) : (e.case_id ? ' · caso #' + esc(String(e.case_id)) : '');
+  return '<div style="padding:10px 0;border-bottom:1px solid var(--line)">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:13.5px">' + esc(e.etiqueta || e.action || '') + '</div><div style="font-size:12px;color:var(--mut);white-space:nowrap">' + esc(e.cuando || String(e.created_at || '').slice(0, 16)) + '</div></div>'
+    + '<div style="font-size:12.5px;color:var(--mut);margin-top:2px">' + quien + ref + (e.actor ? ' · ' + esc(e.actor) : '') + '</div>'
+    + (e.detalle ? '<div style="font-size:13px;line-height:1.5;margin-top:4px">' + esc(e.detalle) + '</div>' : '')
+    + '</div>';
+}
+function conserjeEventosHTML() {
+  const d = conserjeEstado.eventos;
+  if (!d) return '';
+  if (!d.log || !d.log.length) return '<div class="d">Todavía no hay eventos registrados.</div>';
+  return d.log.map(conserjeEventoItemHTML).join('');
+}
+function conserjeEventosPintar() {
+  try {
+    const box = $('#cjEventos');
+    if (box && conserjeEstado.eventos) box.innerHTML = conserjeEventosHTML();
+  } catch (e) { /* sin DOM (vm): la sección se pinta al cargar */ }
+}
+async function conserjeEventosCargar() {
+  const box = $('#cjEventos');
+  if (box) box.innerHTML = '<div class="d">⏳ Cargando los eventos…</div>';
+  try {
+    const d = await adminApi('support/team-log?limit=50', 'GET');
+    if (!d || !d.ok) throw new Error('sin datos');
+    conserjeEstado.eventos = d;
+    conserjeEventosPintar();
+    const btn = document.querySelector('[data-cj="eventos"]');
+    if (btn) btn.textContent = 'Actualizar los eventos';
+  } catch (e) { if (box) box.innerHTML = '<div class="d">No se pudieron cargar los eventos. Probá de nuevo.</div>'; }
+}
+
 async function conserjeCargar() {
   const card = $('#conserjeCard');
   if (card) card.innerHTML = '<div class="d">⏳ Cargando…</div>';
@@ -889,6 +988,10 @@ async function conserjeCargar() {
   try {
     const d = await adminApi('support/conserje/revision', 'GET');
     conserjeEstado.datos = d;
+    // (LOTE CONSERJE-REVISAR-COMPLETO) El conteo de pendientes de
+    // pedidos por audio viaja con la revisión: queda en el estado y
+    // los encabezados de sección lo muestran desde esta misma carga.
+    if (d && d.pedidos_pendientes) conserjeEstado.conteos = d.pedidos_pendientes;
     conserjeRender();
   } catch (e) {
     if (e && e.adminAuthFailed) return;
@@ -1024,6 +1127,7 @@ async function bindConserje() {
       return;
     }
     if (acc === 'pedidos-voz') { await conserjePedidosVozCargar(); return; }
+    if (acc === 'eventos') { await conserjeEventosCargar(); return; }
     if (acc === 'pedido-ver') {
       const pidVoz = t.getAttribute('data-id');
       conserjeEstado.pedidoAbierto = String(conserjeEstado.pedidoAbierto || '') === String(pidVoz) ? 0 : pidVoz;

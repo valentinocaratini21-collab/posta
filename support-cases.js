@@ -292,11 +292,35 @@ function teamLog(db, opts) {
   if (o.userId) { where.push('user_id = ?'); params.push(Number(o.userId)); }
   if (o.postId) { where.push('post_id = ?'); params.push(Number(o.postId)); }
   if (o.caseId) { where.push('case_id = ?'); params.push(Number(o.caseId)); }
-  const sql = `SELECT * FROM support_team_log
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    ORDER BY id DESC LIMIT ?`;
+  // (LOTE CONSERJE-REVISAR-COMPLETO) La superficie de eventos del
+  // conserje lee estas filas tal cual: el negocio del cliente viaja
+  // con la fila (LEFT JOIN a profiles; si el join no está disponible
+  // se cae a la lectura plana de siempre). Los campos crudos no
+  // cambian para los consumidores históricos.
+  const wsql = where.map((w) => 'l.' + w).join(' AND ');
+  const sql = `SELECT l.*, p.business_name AS business_name, p.ig_username AS ig_username
+    FROM support_team_log l LEFT JOIN profiles p ON p.user_id = l.user_id
+    ${wsql ? 'WHERE ' + wsql : ''}
+    ORDER BY l.id DESC LIMIT ?`;
   params.push(Math.min(Math.max(Number(o.limit) || 50, 1), 200));
-  return safe(() => db.prepare(sql).all(...params), []);
+  let rows = safe(() => db.prepare(sql).all(...params), null);
+  if (!rows) {
+    const plain = `SELECT * FROM support_team_log
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ORDER BY id DESC LIMIT ?`;
+    rows = safe(() => db.prepare(plain).all(...params), []);
+  }
+  return rows.map((r) => {
+    let cuando = String(r.created_at || '');
+    try {
+      const d = new Date(String(r.created_at || '').replace(' ', 'T') + 'Z');
+      if (!isNaN(d)) {
+        const tz = r.user_id ? accountTz(db, Number(r.user_id)) : DEFAULT_TZ;
+        cuando = new Intl.DateTimeFormat('es', { timeZone: tz, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+      }
+    } catch (e) { /* sin formato: queda el crudo UTC */ }
+    return { ...r, etiqueta: ACTION_LABELS[r.action] || r.action || '', cuando };
+  });
 }
 
 // ---------- Detectores (alertas que abren casos solas) ----------
@@ -1509,7 +1533,37 @@ function voiceRequests(db, opts) {
       posteo,
     };
   });
-  return { ok: true, pedidos, total: pedidos.length };
+  // (LOTE CONSERJE-REVISAR-COMPLETO) El conteo de pendientes sale de
+  // ESTA lista (misma fuente que pinta la sección): el front lo usa
+  // para refrescar la señal de la sección al cargarla o decidir.
+  return { ok: true, pedidos, total: pedidos.length,
+    pendientes: pedidos.filter((p) => p.revision && p.revision.estado === 'pendiente').length };
+}
+
+// (LOTE CONSERJE-REVISAR-COMPLETO) Los conteos de pedidos por audio
+// que esperan revisión, para que el conserje los muestre desde la
+// carga (viajan con el payload de la revisión de la noche). Cada
+// número sale de la MISMA fuente que lista su sección:
+// · voz — la misma base y el mismo tope que voiceRequests (las 60
+//   notas más recientes de hilo post/semana); pendiente = sin fila en
+//   support_voz_pedidos o con estado 'pendiente' (idéntico criterio
+//   al de la lista: sin fila, la revisión nace pendiente).
+// · subir — las filas de subir_pedidos_voz en 'pendiente_revision',
+//   el estado que la sección de Subir lista como esperando.
+function conteosPedidos(db) {
+  ensureSchema(db);
+  const rows = safe(() => db.prepare(
+    `SELECT id FROM chat_messages WHERE role = 'user' AND hilo IN ('post', 'semana')
+      ORDER BY id DESC LIMIT 60`).all(), []);
+  let voz = 0;
+  for (const r of rows) {
+    const rev = safe(() => db.prepare(
+      'SELECT estado FROM support_voz_pedidos WHERE message_id = ?').get(Number(r.id)), null);
+    if (!rev || !rev.estado || String(rev.estado) === 'pendiente') voz++;
+  }
+  const subirRow = safe(() => db.prepare(
+    `SELECT COUNT(*) AS c FROM subir_pedidos_voz WHERE estado = 'pendiente_revision'`).get(), null);
+  return { voz, subir: Number((subirRow || {}).c) || 0 };
 }
 
 // La puerta de aprobación del pedido específico por voz: pendiente →
@@ -1551,7 +1605,7 @@ module.exports = {
   scanAlerts, refreshCaseStates, buildJourney, buildOverview, luzFor, accountTz,
   reschedulePost, redoPost, replyAsPosty,
   isConcierge, setConcierge, divertToConcierge, conciergeClients, pendingConcierge,
-  morningFor, confirmMorning, logOperatorAction, buildOwnerPanel, voiceRequests, decideVoiceRequest,
+  morningFor, confirmMorning, logOperatorAction, buildOwnerPanel, voiceRequests, decideVoiceRequest, conteosPedidos,
   ACTION_LABELS,
   CASE_TYPES, FUNNEL_STEPS,
 };
