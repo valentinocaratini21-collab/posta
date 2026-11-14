@@ -36892,7 +36892,174 @@ app.get('/api/trial/gen-status', (req, res) => {
   } catch (e) { /* sin caché: se genera igual */ }
   res.json({ ok: true, ig, cached, generating: trialGenIsInflight(ig) });
 });
-app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
+// (LOTE IMAGEN-PRUEBA-TEMPRANA) Web con la que corrió la última
+// generación temprana por @: solo en memoria, 30 min. Si el envío trae
+// otra web, la semana temprana no se sirve (se regenera con la web nueva).
+// Sin registro, la caché se sirve como hoy.
+const trialGenEarlyWeb = new Map(); // igKey -> { web, at }
+const TRIAL_GEN_EARLY_TTL_MS = 30 * 60 * 1000;
+function trialGenEarlyWebSet(igKey, webDomain) {
+  if (!igKey) return;
+  trialGenEarlyWeb.set(igKey, { web: String(webDomain || ''), at: Date.now() });
+}
+function trialGenEarlyWebClear(igKey) { if (igKey) trialGenEarlyWeb.delete(igKey); }
+function trialGenEarlyWebMismatch(igKey, webDomain) {
+  const e = igKey && trialGenEarlyWeb.get(igKey);
+  if (!e) return false;
+  if (Date.now() - e.at > TRIAL_GEN_EARLY_TTL_MS) { trialGenEarlyWeb.delete(igKey); return false; }
+  return String(e.web || '') !== String(webDomain || '');
+}
+// Dominio normalizado de la web del formulario (la misma normalización
+// que usa el candado para el dominio): '' si no hay web.
+function trialWebDomain(webRaw) {
+  try {
+    if (trialLock && trialLock.normalizeDomain) return trialLock.normalizeDomain(webRaw || '');
+  } catch (e) {}
+  return String(webRaw || '').trim().toLowerCase();
+}
+// (LOTE IMAGEN-PRUEBA-TEMPRANA) La semana cacheada por @ solo se sirve
+// si es de ESTE negocio y rubro (trialCacheMatches) Y si no es el
+// resultado de una generación temprana con otra web: el disparo temprano
+// corre con la web que había en el formulario en ese momento; si el
+// usuario la cambió antes de enviar, la semana temprana queda vieja y se
+// regenera con la web nueva (la fila vieja se borra acá mismo). Sin
+// registro temprano, la caché se sirve como hoy. Devuelve el payload o
+// null; nunca lanza.
+function trialCacheServe(igKey, business, category, lang, webDomain) {
+  try {
+    const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
+    if (!hit) return null;
+    if (Date.now() - hit.created_at >= 72 * 3600 * 1000) {
+      db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      return null;
+    }
+    let probe = null;
+    try { probe = JSON.parse(hit.payload); } catch (e) { /* payload roto */ }
+    if (!probe || !trialCacheMatches(probe, business, category, lang)) {
+      if (probe) console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
+      db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      return null;
+    }
+    if (trialGenEarlyWebMismatch(igKey, webDomain)) {
+      console.log(`[posta] trial_cache: la semana temprana de @${igKey} es de otra web — regenerando`);
+      db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      return null;
+    }
+    return probe;
+  } catch (e) { return null; }
+}
+// (LOTE IMAGEN-PRUEBA-TEMPRANA) Esperar a que termine una generación en
+// curso para este @ (temprana o de otra pestaña) en vez de duplicarla.
+// Devuelve true si al salir ya no hay nada en vuelo (lista o fallida),
+// false si se acabó el tiempo. Nunca lanza.
+async function trialGenWaitReady(igKey, maxMs) {
+  const t0 = Date.now();
+  for (;;) {
+    if (!trialGenIsInflight(igKey)) return true;
+    if (Date.now() - t0 > maxMs) return false;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+// ---------- Prueba en 1 campo: disparo temprano de la generación ----------
+// (LOTE IMAGEN-PRUEBA-TEMPRANA) En cuanto el @ está puesto y validado en
+// /prueba, el front dispara acá la generación de la imagen del primer
+// posteo, en paralelo con el resto del onboarding — cuando el usuario
+// llega a verla, ya está lista. La generación es LA MISMA que
+// /api/trial/generate (se invoca su handler en proceso, con los mismos
+// campos): escribe trial_cache + candado de 90 días como una generación
+// normal y NO marca la prueba como usada (eso solo pasa en la entrega,
+// v921) ni crea posteos (los crea el import al entrar). El endpoint
+// responde al instante ({started:true}) y el trabajo sigue en segundo
+// plano; si falla, el flujo normal sigue exactamente igual (el envío
+// regenera). Idempotente: un segundo disparo para el mismo @ es no-op
+// (generating:true) y una semana ya guardada es no-op (cached:true).
+// Anti-abuso: la generación interna pasa por los mismos topes del
+// handler (20/hora por IP, 5/día por IP, candado 90 días); este endpoint
+// solo valida la evidencia (sin producto evidenciado no arranca nada).
+app.post('/api/trial/pregenerate', express.json({ limit: '16kb' }), async (req, res) => {
+  const body = (req && req.body) || {};
+  const ig = String(body.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  if (!ig) return res.status(400).json({ ok: false, error: 'falta ig' });
+  const igKey = ig.toLowerCase();
+  const business = String(body.business || '').trim().slice(0, 60);
+  const category = String(body.category || '').trim();
+  const lang = String(body.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
+  const webRaw = String(body.web || '').trim().slice(0, 300);
+  const webDomain = trialWebDomain(webRaw);
+  const detRaw = body.productos_detectados;
+  let det = [];
+  if (Array.isArray(detRaw)) det = detRaw.map((p) => String((p && (p.nombre || p)) || '').trim()).filter(Boolean);
+  else if (typeof detRaw === 'string' && detRaw) { try { det = JSON.parse(detRaw).map((p) => String((p && (p.nombre || p)) || '').trim()).filter(Boolean); } catch (e) { det = []; } }
+  const rubroDet = String(body.rubro_detectado || '').trim();
+  const star = String(body.producto_estrella || '').trim().slice(0, 60);
+  const mix = String(body.producto_mix || '').trim();
+  const brandLang = String(body.brand_lang || '').trim().toLowerCase();
+  const estiloRaw = body.estilo || null;
+  if (!business || !demo.CATEGORIES.includes(category)) return res.status(400).json({ ok: false, error: 'falta negocio o rubro' });
+  // Sin evidencia no hay nada que generar: es el mismo 400 falta_producto
+  // del generate (el front vuelve a pedir la estrella con un toque).
+  // El rubro 'otro' NO cuenta como evidencia (igual que el rubroOk del
+  // envío: sin productos y con rubro 'otro', el envío pide la estrella).
+  const rubroOk = rubroDet && rubroDet.toLowerCase() !== 'otro';
+  const evidenced = (mix === 'libre' && !!star) || det.length > 0 || (mix === 'todo' && rubroOk);
+  if (!evidenced) return res.status(400).json({ ok: false, error: 'falta producto', falta_producto: true });
+  // Idempotencia: ya genera otro flujo, o la semana ya está guardada.
+  if (trialGenIsInflight(igKey)) return res.json({ ok: true, generating: true });
+  try {
+    const served = trialCacheServe(igKey, business, category, lang, webDomain);
+    if (served) return res.json({ ok: true, cached: true });
+  } catch (e) { /* sin caché: se genera igual */ }
+  // Los campos, en el mismo orden y con los mismos nombres que el envío
+  // de /prueba a /api/trial/generate: la generación interna es idéntica.
+  const fields = {
+    business, ig, category,
+    country: 'AR', tone: 'vos', lang,
+    producto_mix: mix || 'todo',
+    web: webRaw,
+  };
+  if (brandLang) fields.brand_lang = brandLang;
+  // (adaptación del preparador sobre el vivo) El estilo del prefill se
+  // reenvía como en el envío (pieza C1 de ETIQUETA-Y-TEXTO): sin esto la
+  // generación temprana correría sin la señal de texto del feed que el
+  // envío sí manda y la garantía registraría una señal ausente evitable.
+  if (estiloRaw) { try { fields.estilo = typeof estiloRaw === 'string' ? estiloRaw : JSON.stringify(estiloRaw); } catch (e) {} }
+  if (det.length) fields.productos_detectados = JSON.stringify(det);
+  if (rubroDet) fields.rubro_detectado = rubroDet;
+  if (star) fields.producto_estrella = star;
+  const boundary = 'posta-pregen-' + Date.now().toString(36) + '-' + crypto.randomBytes(6).toString('hex');
+  const parts = [];
+  for (const [k, v] of Object.entries(fields)) {
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${String(v)}\r\n`, 'utf8'));
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`, 'utf8'));
+  const rawBody = Buffer.concat(parts);
+  const realIp = demo.clientIp(req);
+  const fakeReq = {
+    _trialEarly: true, // (LOTE IMAGEN-PRUEBA-TEMPRANA) Esta invocación ES el
+    // trabajo temprano: su join no debe esperarse a sí mismo (ver abajo).
+    body: rawBody,
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}`, 'x-forwarded-for': realIp },
+    query: (req.query && req.query.test_key) ? { test_key: req.query.test_key } : {},
+    ip: realIp,
+    socket: { remoteAddress: realIp },
+  };
+  let settledOut = null;
+  const fakeRes = {
+    status(code) { this._code = code; return this; },
+    json(obj) { settledOut = obj || null; return this; },
+  };
+  // Se marca en vuelo ANTES de invocar (cierra la carrera entre dos
+  // disparos seguidos); el finally del handler lo borra en cada salida.
+  trialGenMarkStart(igKey);
+  trialGenEarlyWebSet(igKey, webDomain);
+  trialGenerateHandler(fakeReq, fakeRes).catch(() => {}).finally(() => {
+    trialGenMarkDone(igKey);
+    if (!settledOut || !settledOut.ok) trialGenEarlyWebClear(igKey);
+  });
+  return res.json({ ok: true, started: true });
+});
+async function trialGenerateHandler(req, res) {
   let fields, file;
   try {
     ({ fields, file } = demo.parseMultipart(req, req.body));
@@ -36958,14 +37125,23 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
           trial_used: true,
         });
       }
-      const snap = trialLockServePayload(gate.lock);
+      // (LOTE IMAGEN-PRUEBA-TEMPRANA) Si la semana del candado es de una
+      // generación temprana con OTRA web (el usuario la cambió después
+      // del disparo), el snapshot queda viejo: no se sirve y no se
+      // devuelve el 409 — se sigue al flujo normal, que descarta la
+      // caché vieja y regenera con la web nueva. Sin registro temprano
+      // reciente no hay mismatch y el candado se sirve como siempre.
+      const earlyWebMismatch = trialGenEarlyWebMismatch(ig.toLowerCase(), trialWebDomain(webRaw));
+      const snap = earlyWebMismatch ? null : trialLockServePayload(gate.lock);
       if (snap) return res.json(snap);
-      return res.status(409).json({
-        error: trialLock.lockMessage(gate.lock, lang),
-        trial_locked: true,
-        generated_at: gate.lock.generated_at,
-        unlock_at: gate.lock.unlock_at,
-      });
+      if (!earlyWebMismatch) {
+        return res.status(409).json({
+          error: trialLock.lockMessage(gate.lock, lang),
+          trial_locked: true,
+          generated_at: gate.lock.generated_at,
+          unlock_at: gate.lock.unlock_at,
+        });
+      }
     }
   }
 
@@ -37123,28 +37299,45 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // se la mostramos al instante sin regenerar (no gasta IA ni espera).
   // PERO solo si esa semana es de ESTE negocio y rubro: si el @ se usó antes
   // para otro negocio, la semana vieja NO se sirve (se regenera).
+  // (LOTE IMAGEN-PRUEBA-TEMPRANA) La lectura + el calce viven en
+  // trialCacheServe (incluido el descarte de la semana temprana de otra web).
   if (!testMode && igKey) {
     try {
-      const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
-      if (hit && Date.now() - hit.created_at < 72 * 3600 * 1000) {
-        let cachedOut = null;
-        try {
-          const probe = JSON.parse(hit.payload);
-          if (trialCacheMatches(probe, business, category, lang)) cachedOut = probe;
-          else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
-        } catch (e) { /* payload roto: se regenera */ }
-        if (cachedOut) {
-          cachedOut.cached = true;
-          cachedOut.spots_left = spotsLeft();
-          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
-          track(null, 'prueba_done', igKey + '|cached');
-          return res.json(cachedOut);
-        }
+      const cachedOut = trialCacheServe(igKey, business, category, lang, trialWebDomain(webRaw));
+      if (cachedOut) {
+        cachedOut.cached = true;
+        cachedOut.spots_left = spotsLeft();
+        cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
+        track(null, 'prueba_done', igKey + '|cached');
+        return res.json(cachedOut);
       }
-      if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
     } catch (e) { /* si falla el cache, se genera igual */ }
   }
+  // (LOTE IMAGEN-PRUEBA-TEMPRANA) Si una generación temprana (o de otra
+  // pestaña) ya está en curso para este @, se espera a que termine en vez
+  // de duplicar el trabajo: la semana queda en trial_cache y se sirve
+  // desde ahí. Tope 180 s (el mismo del poleo del front de L6); si expira
+  // o la generación falló, se sigue con la generación normal. Nunca
+  // consume un intento antes de saber si la semana ya está.
+  // (LOTE IMAGEN-PRUEBA-TEMPRANA) La invocación temprana (req._trialEarly)
+  // NO espera: la marca en vuelo es la de su propio trabajo (la puso
+  // pregenerate antes de invocarla); esperarla sería esperarse a sí misma
+  // 180 s. Un envío real nunca lleva el flag y se une como siempre.
+  if (!testMode && igKey && trialGenIsInflight(igKey) && !req._trialEarly) {
+    const _joined = await trialGenWaitReady(igKey, 180000);
+    if (_joined) {
+      const _cachedOut = trialCacheServe(igKey, business, category, lang, trialWebDomain(webRaw));
+      if (_cachedOut) {
+        _cachedOut.cached = true;
+        _cachedOut.spots_left = spotsLeft();
+        _cachedOut.week = buildTrialWeek((_cachedOut.posts || []).length, _cachedOut.lang);
+        track(null, 'prueba_done', igKey + '|cached|joined');
+        return res.json(_cachedOut);
+      }
+    }
+  }
+
   // (El candado 90 días se chequea TEMPRANO, apenas parseado el form —
   // ver más arriba en este mismo endpoint.)
   // Anti-spam honesto: 5 pruebas por día por IP. El intento se RESERVA al
@@ -37721,7 +37914,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       try { fs.unlinkSync(photoPath); } catch (_) {}
     }
   }
-});
+}
+
+app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit: '6mb' }), trialGenerateHandler);
 
 // ---------- Prueba en 1 campo: prefill por @ de Instagram ----------
 // Con solo el @ completamos nombre + rubro (+ colores y foto si se puede).
@@ -38221,15 +38416,23 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         send('used', { trial_used: true, message: trialUsedMessage(lang) });
         return finish();
       }
-      const snap = trialLockServePayload(gate.lock);
+      // (LOTE IMAGEN-PRUEBA-TEMPRANA) Misma regla que el clásico: si la
+      // semana del candado es de una generación temprana con otra web, el
+      // snapshot queda viejo y se sigue al flujo normal (la caché lo
+      // descarta y se regenera con la web nueva) en vez de servirlo o
+      // devolver 'locked'.
+      const earlyWebMismatch = trialGenEarlyWebMismatch(ig.toLowerCase(), trialWebDomain(webRaw));
+      const snap = earlyWebMismatch ? null : trialLockServePayload(gate.lock);
       if (snap) { send('done', { out: snap }); return finish(); }
-      send('locked', {
-        trial_locked: true,
-        generated_at: gate.lock.generated_at,
-        unlock_at: gate.lock.unlock_at,
-        message: trialLock.lockMessage(gate.lock, lang),
-      });
-      return finish();
+      if (!earlyWebMismatch) {
+        send('locked', {
+          trial_locked: true,
+          generated_at: gate.lock.generated_at,
+          unlock_at: gate.lock.unlock_at,
+          message: trialLock.lockMessage(gate.lock, lang),
+        });
+        return finish();
+      }
     }
   }
 
@@ -38386,64 +38589,73 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   const ip = demo.clientIp(req);
   const testMode = trialTestMode(req);
   const igKey = ig.toLowerCase();
+  // (LOTE IMAGEN-PRUEBA-TEMPRANA) Servir la semana cacheada por este
+  // stream: la lectura + el calce viven en trialCacheServe (misma regla
+  // que el clásico, incluido el descarte de la semana temprana de otra
+  // web); el enriquecimiento es el de la rama de caché de siempre.
+  // Devuelve true si sirvió (y cerró el stream).
+  const serveCachedStream = async () => {
+    const cachedOut = trialCacheServe(igKey, business, category, lang, trialWebDomain(webRaw));
+    if (!cachedOut) return false;
+    // (v210) Las semanas cacheadas anteriores a la auditoría no la
+    // traen: si el análisis del @ llega rápido (la misma lectura que
+    // alimenta la proyección, ya en vuelo), viaja en este payload.
+    if (!cachedOut.audit && trialProfilePromise) {
+      await Promise.race([trialProfilePromise, new Promise((r) => setTimeout(() => r(null), 2500))]).catch(() => null);
+      if (trialAudit) cachedOut.audit = trialAudit;
+      // (2026-10-19) Semanas cacheadas sin análisis: si los datos del @
+      // llegaron en la ventana, el análisis viaja también en este payload.
+      if (!cachedOut.analysis && trialData) {
+        try {
+          const coldC = !trialData.ok || analysisEngine.isColdStart({ hasIg: true, profile: trialData.profile, posts: trialData.posts || [] });
+          cachedOut.analysis = analysisEngine.gateForPlan(coldC
+            ? analysisEngine.analyzeColdStart({ business: { name: business, category, ig_username: ig }, digest: cachedOut.digest || null, peers: [], reviews: null, ctx: { plan: 'trial', lang } })
+            : analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: { plan: 'trial', lang } }), 'trial');
+        } catch (e) { /* best-effort */ }
+      }
+      if (cachedOut.analysis && Array.isArray(cachedOut.posts)) {
+        try {
+          for (const p of cachedOut.posts) {
+            if (!p || p.why) continue;
+            // (LOTE TEXTO-COHERENCIA · L5) Este llamado nació SIN
+            // la guarda sinMuestra: los posteos del payload no traen
+            // su foto↔producto (photo_product vive en el spec, no en
+            // el payload), así que acá no se puede afirmar «muestra X»
+            // — fail-closed como en la generación sin spec.
+            const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(cachedOut.analysis, trialPayloadBrandLang(cachedOut)), cachedOut.digest || null, { sinMuestra: true });
+            if (w) p.why = w;
+          }
+        } catch (e) { /* best-effort */ }
+      }
+    }
+    if (cachedOut.diagnosis) send('diagnosis', cachedOut.diagnosis);
+    cachedOut.cached = true;
+    cachedOut.spots_left = spotsLeft();
+    cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
+    track(null, 'prueba_done', igKey + '|cached');
+    send('done', { out: cachedOut });
+    finish();
+    return true;
+  };
   // Cache por @ 72h: hit → done directo, sin regenerar.
   // Igual que /api/trial/generate: solo vale si la semana es de ESTE negocio.
   if (!testMode && igKey) {
     try {
-      const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
-      if (hit && Date.now() - hit.created_at < 72 * 3600 * 1000) {
-        let cachedOut = null;
-        try {
-          const probe = JSON.parse(hit.payload);
-          if (trialCacheMatches(probe, business, category, lang)) cachedOut = probe;
-          else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
-        } catch (e) { /* payload roto: se regenera */ }
-        if (cachedOut) {
-          // (v210) Las semanas cacheadas anteriores a la auditoría no la
-          // traen: si el análisis del @ llega rápido (la misma lectura que
-          // alimenta la proyección, ya en vuelo), viaja en este payload.
-          if (!cachedOut.audit && trialProfilePromise) {
-            await Promise.race([trialProfilePromise, new Promise((r) => setTimeout(() => r(null), 2500))]).catch(() => null);
-            if (trialAudit) cachedOut.audit = trialAudit;
-            // (2026-10-19) Semanas cacheadas sin análisis: si los datos del @
-            // llegaron en la ventana, el análisis viaja también en este payload.
-            if (!cachedOut.analysis && trialData) {
-              try {
-                const coldC = !trialData.ok || analysisEngine.isColdStart({ hasIg: true, profile: trialData.profile, posts: trialData.posts || [] });
-                cachedOut.analysis = analysisEngine.gateForPlan(coldC
-                  ? analysisEngine.analyzeColdStart({ business: { name: business, category, ig_username: ig }, digest: cachedOut.digest || null, peers: [], reviews: null, ctx: { plan: 'trial', lang } })
-                  : analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: { plan: 'trial', lang } }), 'trial');
-              } catch (e) { /* best-effort */ }
-            }
-            if (cachedOut.analysis && Array.isArray(cachedOut.posts)) {
-              try {
-                for (const p of cachedOut.posts) {
-                  if (!p || p.why) continue;
-                  // (LOTE TEXTO-COHERENCIA · L5) Este llamado nació SIN
-                  // la guarda sinMuestra: los posteos del payload no
-                  // traen su foto↔producto (photo_product vive en el
-                  // spec, no en el payload), así que acá no se puede
-                  // afirmar «muestra X» — fail-closed como en la
-                  // generación sin spec.
-                  const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, analysisForBrandLang(cachedOut.analysis, trialPayloadBrandLang(cachedOut)), cachedOut.digest || null, { sinMuestra: true });
-                  if (w) p.why = w;
-                }
-              } catch (e) { /* best-effort */ }
-            }
-          }
-          if (cachedOut.diagnosis) send('diagnosis', cachedOut.diagnosis);
-          cachedOut.cached = true;
-          cachedOut.spots_left = spotsLeft();
-          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
-          track(null, 'prueba_done', igKey + '|cached');
-          send('done', { out: cachedOut });
-          return finish();
-        }
-      }
-      if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      if (await serveCachedStream()) return;
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
     } catch (e) { /* si falla el cache, se genera igual */ }
   }
+  // (LOTE IMAGEN-PRUEBA-TEMPRANA) Si una generación temprana (o de otra
+  // pestaña) ya está en curso para este @, se espera a que termine en vez
+  // de duplicar el trabajo (mismo tope de 180 s que el clásico); si
+  // expira o la generación falló, se sigue con la generación normal.
+  if (!testMode && igKey && trialGenIsInflight(igKey)) {
+    const _joined = await trialGenWaitReady(igKey, 180000);
+    if (_joined) {
+      if (await serveCachedStream()) return;
+    }
+  }
+
   // (El candado 90 días se chequea TEMPRANO, apenas parseado el form —
   // ver más arriba en este mismo endpoint.)
   // Anti-spam honesto: igual que /api/trial/generate (reserva atómica +
@@ -41827,7 +42039,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1072';
+const BUILD_ID = '20261105-v1073';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

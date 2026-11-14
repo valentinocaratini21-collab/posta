@@ -759,6 +759,54 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       btn.disabled = false; btn.textContent = 'Armar mi primer posteo';
     }
   });
+  // (LOTE IMAGEN-PRUEBA-TEMPRANA) En cuanto el @ está puesto y validado,
+  // se dispara en segundo plano la generación de la imagen del primer
+  // posteo, en paralelo con el resto del onboarding: cuando el usuario
+  // llega a verla, ya está lista. Un solo disparo por pareja (@, web) en
+  // esta visita; si falla o no hay evidencia, el flujo normal sigue
+  // exactamente igual (el envío genera como hoy).
+  let pregeneratedFor = '';
+  async function maybePregenerate(fromWeb) {
+    try {
+      const ig = cleanIg(igEl.value);
+      const web = cleanWeb(webEl.value);
+      if (!ig) return;
+      // En el blur del @, sin web todavía no se dispara: la web se escribe
+      // después y la generación temprana con web vacía armaría la semana
+      // sin la foto real del producto. En el blur de la web sí: dejarla
+      // vacía es una decisión (sin web), no un campo sin llenar.
+      if (!web && !fromWeb) return;
+      if (pregeneratedFor === ig + '|' + web) return;
+      const pf = await postJSON('/api/trial/prefill' + TEST_KEY_QS, { ig: ig, lang: LANG });
+      if (!pf.ok || !pf.j || !pf.j.ok) return;
+      const det = (Array.isArray(pf.j.productos) ? pf.j.productos : []).map(function (p) {
+        return String((p && (p.nombre || p)) || '').trim();
+      }).filter(Boolean);
+      const rubroDet = String(pf.j.category || '').trim();
+      const rubroOk = !!(rubroDet && rubroDet.toLowerCase() !== 'otro');
+      // Los campos son EXACTAMENTE los que mandaría el envío (buildFirstPost):
+      // mix 'libre' solo si el usuario ya escribió la estrella; si no,
+      // 'todo' con los productos detectados o el rubro. Sin estrella
+      // escrita, sin productos y sin rubro válido no hay nada que generar
+      // (el envío pediría la estrella con un toque).
+      const starInput = String(starEl.value || '').trim();
+      if (!starInput && !det.length && !rubroOk) return;
+      const body = { business: String(pf.j.name || '').trim() || ig, ig: ig, category: rubroDet || 'otro', lang: LANG, producto_mix: starInput ? 'libre' : 'todo', web: web };
+      if (starInput) body.producto_estrella = starInput.slice(0, 60);
+      if (!starInput && det.length) body.productos_detectados = det;
+      if (!starInput && !det.length && rubroOk) body.rubro_detectado = rubroDet;
+      if (brandLangChoice) body.brand_lang = brandLangChoice;
+      // (ETIQUETA-Y-TEXTO en el vivo) El estilo del prefill se reenvía
+      // como en el envío: sin la firma, la generación temprana correría
+      // sin la señal de texto del feed que el envío sí manda.
+      if (pf.j && pf.j.style) body.estilo = pf.j.style;
+      await fetch('/api/trial/pregenerate' + TEST_KEY_QS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      pregeneratedFor = ig + '|' + web;
+    } catch (e) { /* el disparo temprano nunca rompe el flujo */ }
+  }
+  igEl.addEventListener('blur', function () { maybePregenerate(false); });
+  webEl.addEventListener('blur', function () { maybePregenerate(true); });
+
   // (LOTE L2) Un toque por idioma, y el formulario se reenvía solo
   // con brand_lang: el resto de los datos ya está en el formulario.
   $('fLangEn').addEventListener('click', function () { brandLangChoice = 'en'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
