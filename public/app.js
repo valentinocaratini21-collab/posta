@@ -5016,6 +5016,7 @@ function landingView(cfg) {
       <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
     </div>
     <a class="lp-entrar" href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
+    <a class="nav-cta" href="/prueba">Probá 3 días gratis</a>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
