@@ -36910,6 +36910,13 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
     const text = String(b.text || '').trim().slice(0, 2000);
     if (!text) return res.status(400).json({ ok: false, error: 'texto_vacio' });
     if (!text) return res.status(400).json({ ok: false, error: 'texto_vacio' });
+    // (LOTE DESVÍO-INVITADO-FOTOS) Las fotos que llegan con el texto libre
+    // viajan con el mensaje (photos_json), con el MISMO contrato que el
+    // desvío del registrado (photoPaths → userPhotos en /api/ideas/chat):
+    // solo rutas /media/ reales, tope 10. Sin esto el mensaje del invitado
+    // nacía con el INSERT plano de abajo y el conserje nunca veía la foto
+    // de su pedido.
+    const guestPhotos = (Array.isArray(b.photoPaths) ? b.photoPaths : []).filter(p => typeof p === 'string' && p.startsWith('/media/')).slice(0, 10);
     let casoId = 0;
     let reply = '';
     try {
@@ -36919,11 +36926,14 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
     // Sin desvío no hay respuesta honesta que dar: el acuse fijo está
     // vetado (v916) y no se inventa otro texto de espera.
     if (!reply) return res.status(500).json({ ok: false, error: 'No pudimos abrir el chat todavía.' });
-    // INSERT user + respuesta (INSERT directo: no resetea el pendiente, el
+    // INSERT user + respuesta (no resetea el pendiente, el
     // cron avisa a bamboo porque hay un user sin respuesta real del operador).
+    // El mensaje del usuario va por chatInsertUser, el mismo helper del
+    // registrado: con fotos guarda photos_json; sin fotos la fila queda
+    // como siempre (reply_to/reply_text en sus defaults).
     let msgId = 0;
     try {
-      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', text);
+      chatInsertUser(db, uid, text, null, guestPhotos.length ? JSON.stringify(guestPhotos) : undefined);
       const r = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
       msgId = r.lastInsertRowid || 0;
     } catch (e) {}
@@ -43193,7 +43203,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1089';
+const BUILD_ID = '20261105-v1090';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
