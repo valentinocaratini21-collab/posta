@@ -317,6 +317,15 @@ function itemView(db, c, fecha, opts) {
   const decision = revisionDe(db, c.id, fecha);
   const caso = casoConserjeAbierto(db, c.id);
   const att = post ? necesitaAtencion(post, { casoAbierto: caso }) : { atento: false, motivo: '' };
+  // (LOTE CONSERJE-FOTO-VIDEO) El póster del posteo de video: la
+  // tarjeta pinta el póster, jamás el .mp4 en un <img>. Lo resuelve el
+  // servidor (opts.posterUrlFor: cover guardado o frame extraído y
+  // persistido); sin esa costura, el cover_path guardado alcanza.
+  let posterUrl = '';
+  if (post && ['video', 'reel', 'reels'].indexOf(String(post.media_type || '').toLowerCase()) >= 0) {
+    if (typeof o.posterUrlFor === 'function') { try { posterUrl = o.posterUrlFor(c.id, post) || ''; } catch (e) { posterUrl = ''; } }
+    if (!posterUrl && post.cover_path) posterUrl = abs ? abs(c.id, post.cover_path) : String(post.cover_path);
+  }
   const sig = siguientePosteo(db, c.id, fecha, tz);
   let cuando = '';
   if (post && post.scheduled_at) {
@@ -340,6 +349,7 @@ function itemView(db, c, fecha, opts) {
       titulo: tituloDe(post),
       caption: String(post.caption || ''),
       image_url: abs ? abs(c.id, post.image_path) : String(post.image_path || ''),
+      poster_url: posterUrl,
       tiene_foto: !!String(post.image_path || '').trim(),
       media_type: post.media_type || 'image',
       tipo: post.tipo || '',

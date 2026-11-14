@@ -82,9 +82,26 @@ function conserjeEtapaDot(etapa) {
     + esc(label) + '</span>';
 }
 
+// (LOTE CONSERJE-FOTO-VIDEO) Un posteo de video se muestra por su
+// póster (poster_url del payload), con su marca ▶; sin póster, un
+// marcador de video visible y honesto. Nunca un <img> con el .mp4
+// (el bloque oscuro con ícono roto de la captura del 14/11) ni un
+// hueco oculto en silencio.
+function conserjeEsVideo(tipo) { return ['video', 'reel', 'reels'].indexOf(String(tipo || '').toLowerCase()) >= 0; }
+function conserjeBadgeVideoHTML() {
+  return '<span style="position:absolute;top:5px;left:5px;background:rgba(10,30,51,.75);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px">▶</span>';
+}
+
 function conserjeFotoHTML(it, grande) {
-  const url = it && it.post && it.post.image_url ? it.post.image_url : '';
+  const post = (it && it.post) || null;
   const h = grande ? 240 : 180;
+  if (post && conserjeEsVideo(post.media_type)) {
+    if (post.poster_url) {
+      return '<div style="position:relative;border-radius:14px;overflow:hidden;background:#0A1E33"><img src="' + esc(post.poster_url) + '" alt="" data-cj-img style="width:100%;height:' + h + 'px;object-fit:cover;display:block;cursor:zoom-in">' + conserjeBadgeVideoHTML() + '</div>';
+    }
+    return '<div style="border-radius:14px;background:#0A1E33;display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;height:' + h + 'px;color:#fff;font-size:15px;font-weight:800"><span style="font-size:26px">▶</span>Video</div>';
+  }
+  const url = post && post.image_url ? post.image_url : '';
   if (url) {
     // (v951) data-cj-img: el click abre la imagen en grande en el mismo
     // lugar (el handler de la tarjeta la atiende antes que data-cj="ver").
@@ -99,7 +116,14 @@ function conserjeFotoHTML(it, grande) {
 // detrás. La lista también la usa desde v906; conserjeFotoHTML queda sin
 // uso (se conserva: la suite v887 A7 afirma que existe intacta).
 function conserjeMiniFotoHTML(it) {
-  const url = it && it.post && it.post.image_url ? it.post.image_url : '';
+  const post = (it && it.post) || null;
+  if (post && conserjeEsVideo(post.media_type)) {
+    if (post.poster_url) {
+      return '<div style="position:relative;width:96px;height:96px;flex:none;border-radius:12px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center"><img src="' + esc(post.poster_url) + '" alt="" data-cj-img style="width:96px;height:96px;object-fit:contain;display:block;cursor:zoom-in">' + conserjeBadgeVideoHTML() + '</div>';
+    }
+    return '<div style="width:96px;height:96px;flex:none;border-radius:12px;background:#0A1E33;display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800"><span style="font-size:19px">▶</span>Video</div>';
+  }
+  const url = post && post.image_url ? post.image_url : '';
   if (url) {
     // (v951) data-cj-img: el click abre la imagen en grande en el mismo lugar.
     return '<div style="width:96px;height:96px;flex:none;border-radius:12px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center"><img src="' + esc(url) + '" alt="" data-cj-img style="width:96px;height:96px;object-fit:contain;display:block;cursor:zoom-in"></div>';
@@ -148,9 +172,15 @@ function conserjeFeedTileHTML(t, inicial) {
   const chip = esRev
     ? '<span style="position:absolute;bottom:6px;left:6px;background:#FEC14D;color:#0A1E33;font-size:11px;font-weight:800;border-radius:8px;padding:2px 7px">En revisión</span>' : '';
   const ring = esRev ? 'outline:3px solid #FEC14D;outline-offset:-3px;' : '';
-  const foto = (t && t.img)
-    ? '<img src="' + esc(t.img) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
-    : '<div style="width:100%;height:100%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800">' + esc(inicial || '?') + '</div>';
+  // (LOTE CONSERJE-FOTO-VIDEO) La celda de un posteo de video pinta su
+  // póster (poster_url); su img es el .mp4 y jamás va a un <img>. Las
+  // celdas de IG ya traen una imagen real en img, también para video.
+  const esPostVideo = !!(t && t.kind === 'post' && conserjeEsVideo(tipo));
+  const foto = (t && t.poster_url)
+    ? '<img src="' + esc(t.poster_url) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
+    : (t && t.img && !esPostVideo)
+      ? '<img src="' + esc(t.img) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
+      : '<div style="width:100%;height:100%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800">' + esc(inicial || '?') + '</div>';
   return '<div style="position:relative;aspect-ratio:1/1;overflow:hidden;background:#0A1E33;' + ring + '">' + foto + badge + pin + chip + '</div>';
 }
 
@@ -500,6 +530,25 @@ function conserjePedidoEstadoLabel(status) {
   return m[String(status || '')] || String(status || '');
 }
 
+// (LOTE CONSERJE-FOTO-VIDEO) El visual del posteo resultante en el
+// detalle lado a lado: foto → la foto; video → su póster VISIBLE con
+// la marca ▶; video sin póster → marcador honesto. Acá vivía el
+// onerror que ocultaba la imagen en silencio: el revisor no veía
+// nada y no sabía que faltaba.
+function conserjePedidoMediaHTML(po) {
+  if (!po) return '';
+  if (conserjeEsVideo(po.media_type)) {
+    if (po.poster_url) {
+      return '<div style="position:relative;border-radius:10px;overflow:hidden;background:#0A1E33;margin-bottom:8px"><img src="' + esc(po.poster_url) + '" alt="" style="width:100%;height:200px;object-fit:contain;display:block">' + conserjeBadgeVideoHTML() + '</div>';
+    }
+    return '<div style="border-radius:10px;background:#0A1E33;margin-bottom:8px;height:120px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:800">▶ Video · sin portada</div>';
+  }
+  if (po.image_url) {
+    return '<div style="border-radius:10px;overflow:hidden;background:#0A1E33;margin-bottom:8px"><img src="' + esc(po.image_url) + '" alt="" style="width:100%;height:200px;object-fit:contain;display:block"></div>';
+  }
+  return '';
+}
+
 function conserjePedidoDetalleHTML(p) {
   const izq = '<div style="flex:1;min-width:240px;background:#E8F4FB;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
     + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">Lo que pidió</div>'
@@ -525,7 +574,7 @@ function conserjePedidoDetalleHTML(p) {
       : (po.scheduled_at ? 'Programado · ' + esc(String(po.scheduled_at).slice(0, 16)) : 'Sin fecha');
     der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
       + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
-      + (po.image_url ? '<div style="border-radius:10px;overflow:hidden;background:#0A1E33;margin-bottom:8px"><img src="' + esc(po.image_url) + '" alt="" style="width:100%;height:200px;object-fit:contain;display:block" onerror="this.style.display=\'none\'"></div>' : '')
+      + conserjePedidoMediaHTML(po)
       + '<div><span class="pill" style="background:#2793C8;color:#fff;margin:0">' + esc(conserjePedidoEstadoLabel(po.status)) + '</span> <span style="font-size:12.5px;color:var(--mut)">' + fecha + '</span></div>'
       + (po.caption ? '<div style="font-size:13.5px;line-height:1.5;margin-top:6px">' + esc(po.caption) + '</div>' : '')
       + (po.tiene_anterior ? '<div style="font-size:12.5px;color:var(--mut);margin-top:6px">Tiene una imagen anterior guardada (se puede volver).</div>' : '')
@@ -684,13 +733,18 @@ function conserjePedidoSubirDetalleHTML(pe) {
   let der;
   if (pe.estado === 'armado' && pe.post) {
     const po = pe.post;
-    const postUrl = conserjePedidoSubirUrl(po.image_path);
+    // (LOTE CONSERJE-FOTO-VIDEO) El posteo armado se muestra como en
+    // el detalle de pedidos por voz: si es video, su póster (el
+    // image_path crudo es el .mp4 y jamás va a un <img>).
+    const poMedia = conserjeEsVideo(po.media_type)
+      ? { media_type: po.media_type, poster_url: po.poster_url || '', image_url: '' }
+      : { media_type: po.media_type, poster_url: '', image_url: conserjePedidoSubirUrl(po.image_path) };
     const fecha = po.status === 'published'
       ? 'Publicado' + (po.published_at ? ' · ' + esc(String(po.published_at).slice(0, 16)) : '')
       : (po.scheduled_at ? 'Programado · ' + esc(String(po.scheduled_at).slice(0, 16)) : 'Sin fecha');
     der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
       + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
-      + (postUrl ? '<div style="border-radius:10px;overflow:hidden;background:#0A1E33;margin-bottom:8px"><img src="' + esc(postUrl) + '" alt="" style="width:100%;height:200px;object-fit:contain;display:block" onerror="this.style.display=\'none\'"></div>' : '')
+      + conserjePedidoMediaHTML(poMedia)
       + '<div><span class="pill" style="background:#2793C8;color:#fff;margin:0">' + esc(conserjePedidoEstadoLabel(po.status)) + '</span> <span style="font-size:12.5px;color:var(--mut)">' + fecha + '</span></div>'
       + (po.caption ? '<div style="font-size:13.5px;line-height:1.5;margin-top:6px">' + esc(po.caption) + '</div>' : '')
       + '</div>';

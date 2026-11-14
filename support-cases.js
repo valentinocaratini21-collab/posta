@@ -1462,10 +1462,25 @@ function voiceRequests(db, opts) {
         `SELECT id, status, media_type, caption, image_path, prev_image_path, scheduled_at, published_at
            FROM posts WHERE id = ? AND user_id = ?`).get(pid, uid), null);
       if (p) {
+        // (LOTE CONSERJE-FOTO-VIDEO) El póster del posteo de video
+        // para el detalle lado a lado: cover guardado (leído aparte y
+        // fail-soft, para no tocar la consulta principal) o el que
+        // resuelve el servidor con opts.posterUrlFor. Sin póster, el
+        // front pinta su marcador de video — nunca el .mp4 en un <img>
+        // ni un hueco oculto en silencio.
+        let posterUrl = '';
+        if (['video', 'reel', 'reels'].indexOf(String(p.media_type || '').toLowerCase()) >= 0) {
+          if (typeof o.posterUrlFor === 'function') { try { posterUrl = o.posterUrlFor(uid, p) || ''; } catch (e) { posterUrl = ''; } }
+          if (!posterUrl) {
+            const cv = safe(() => db.prepare('SELECT cover_path FROM posts WHERE id = ?').get(pid), null);
+            if (cv && cv.cover_path) posterUrl = safe(() => abs(uid, cv.cover_path), '') || '';
+          }
+        }
         posteo = {
           id: p.id, status: p.status || '', media_type: p.media_type || 'image',
           caption: p.caption || '', scheduled_at: p.scheduled_at || null, published_at: p.published_at || null,
           image_url: p.image_path ? (safe(() => abs(uid, p.image_path), null) || '') : '',
+          poster_url: posterUrl,
           tiene_anterior: !!String(p.prev_image_path || ''),
         };
       }

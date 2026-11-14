@@ -3069,9 +3069,17 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
           creaImp = JSON.stringify({ v: 1, origen: 'prueba', rol: dc.rol, estrella: dc.estrella || '', escena_key: dc.escena_key || '', prompt_hash: creatividad.promptHashDe(dpost.image_prompt || '') });
         }
       } catch (e) { /* sin plan en el spec: el posteo nace como siempre */ }
+      // (LOTE CONSERJE-FOTO-VIDEO) El video de la prueba nace con su
+      // póster: el frame se extrae UNA vez, acá, del archivo recién
+      // escrito, y queda en cover_path — las superficies pintan el
+      // póster, jamás el .mp4 en un <img>. Fail-soft: sin frame, el
+      // posteo nace como siempre y la vía perezosa del conserje lo
+      // reintenta al mostrarlo.
+      let coverImp = '';
+      if (mediaType === 'video') { try { coverImp = extraerCoverDeVideoSync(name) || ''; } catch (e) { coverImp = ''; } }
       const ins = db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why, creatividad) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths, String(p.why || '').slice(0, 500), creaImp);
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why, creatividad, cover_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths, String(p.why || '').slice(0, 500), creaImp, coverImp);
       try {
         db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
           VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?,?)
@@ -3171,6 +3179,10 @@ function crearPosteoRescateTardio(userId, out, idx) {
     if (!buf.length || buf.length > 15 * 1024 * 1024) return null;
     const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
     fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+    // (LOTE CONSERJE-FOTO-VIDEO) Espejo de importTrialWeek: la pieza
+    // de video rescatada también nace con su póster en cover_path.
+    let coverRes = '';
+    if (isVideo) { try { coverRes = extraerCoverDeVideoSync(name) || ''; } catch (e) { coverRes = ''; } }
     let trialSignal = 'approved';
     let trialSignalAuto = 0;
     try {
@@ -3189,8 +3201,8 @@ function crearPosteoRescateTardio(userId, out, idx) {
       }
     } catch (e) {}
     const ins = db.prepare(
-      'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-    ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, '', String(p.why || '').slice(0, 500));
+      'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why, cover_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, '', String(p.why || '').slice(0, 500), coverRes);
     const postId = Number(ins.lastInsertRowid);
     try {
       db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
@@ -11692,6 +11704,65 @@ function absImageUrl(uid, imagePath) {
   return p;
 }
 
+// ---------- (LOTE CONSERJE-FOTO-VIDEO) El póster de los videos ----------
+// Un posteo de video guarda el .mp4 en image_path: cualquier superficie
+// que lo pinte con <img> muestra un bloque roto (la captura del
+// conserje del 14/11: 5 de 7 tarjetas oscuras, todas video). La regla
+// del lote: el video se muestra SIEMPRE por su póster — cover_path si
+// existe; si no existe, el frame se extrae una sola vez (al nacer el
+// video en la importación de la prueba, o perezosamente la primera vez
+// que una superficie del conserje lo pide, persistiendo cover_path) y
+// de ahí en más el póster es un archivo más de /media. El nombre
+// derivado es determinístico (<stem>-cover.jpg, la convención de
+// reel-engine) para que el nacimiento y la vía perezosa coincidan.
+const PZ_VIDEO_TIPOS = ['video', 'reel', 'reels'];
+function pzEsTipoVideo(t) { return PZ_VIDEO_TIPOS.indexOf(String(t || '').toLowerCase()) >= 0; }
+const _posterFalloCache = new Set();
+function extraerCoverDeVideoSync(videoName) {
+  try {
+    const name = path.basename(String(videoName || ''));
+    if (!name || !/\.(mp4|mov|webm|m4v)$/i.test(name)) return '';
+    const coverName = name.replace(/\.[a-z0-9]+$/i, '') + '-cover.jpg';
+    const outAbs = path.join(MEDIA_DIR, coverName);
+    if (fs.existsSync(outAbs)) return '/media/' + coverName;
+    const abs = path.join(MEDIA_DIR, name);
+    if (!fs.existsSync(abs)) return '';
+    const { execFileSync } = require('child_process');
+    for (const ss of ['0.5', '0']) {
+      try { execFileSync('ffmpeg', ['-y', '-v', 'error', '-ss', ss, '-i', abs, '-frames:v', '1', '-q:v', '4', outAbs], { timeout: 20000 }); } catch (e) {}
+      if (fs.existsSync(outAbs)) return '/media/' + coverName;
+    }
+    return '';
+  } catch (e) { return ''; }
+}
+// El cover_path del posteo: el guardado, o el que se extrae y persiste
+// en este acto. Fail-soft total: sin póster devuelve '' y la superficie
+// pinta su marcador honesto (nunca el .mp4 en un <img>). Los fallos se
+// cachean por proceso para no reintentar ffmpeg en cada carga.
+function asegurarCoverDeVideo(post) {
+  try {
+    if (!post || !pzEsTipoVideo(post.media_type)) return '';
+    const ya = String(post.cover_path || '');
+    if (ya) return ya;
+    const ip = String(post.image_path || '');
+    if (!ip.startsWith('/media/')) return '';
+    if (post.id && _posterFalloCache.has(post.id)) return '';
+    const cover = extraerCoverDeVideoSync(path.basename(ip));
+    if (!cover) { if (post.id) _posterFalloCache.add(post.id); return ''; }
+    try { db.prepare('UPDATE posts SET cover_path = ? WHERE id = ?').run(cover, post.id); post.cover_path = cover; } catch (e) {}
+    return cover;
+  } catch (e) { return ''; }
+}
+// La URL absoluta del póster para los payloads del conserje ('' si el
+// posteo no es video o si el póster no se pudo obtener).
+function posterUrlDePosteo(uid, post) {
+  try {
+    if (!post || !pzEsTipoVideo(post.media_type)) return '';
+    const cover = asegurarCoverDeVideo(post);
+    return cover ? absImageUrl(uid, cover) : '';
+  } catch (e) { return ''; }
+}
+
 // GET /api/admin/review-queue?token=ADMIN_TOKEN
 // Cola de borradores pendientes de revisión (los más viejos primero).
 app.get('/api/admin/review-queue', requireAdminToken, (req, res) => {
@@ -12009,7 +12080,7 @@ app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
 // enviado sea lo correcto. Solo lee chat_messages (hilo post/semana) y
 // posts: no escribe nada.
 app.get('/api/admin/support/conserje/pedidos-voz', requireAdminToken, (req, res) => {
-  try { res.json(supportCases.voiceRequests(db, { limit: req.query.limit || 60, userId: req.query.user_id || 0, absImageUrl })); }
+  try { res.json(supportCases.voiceRequests(db, { limit: req.query.limit || 60, userId: req.query.user_id || 0, absImageUrl, posterUrlFor: posterUrlDePosteo })); }
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 // La puerta de aprobación del pedido por voz: aprobar lo deja listo
@@ -12123,7 +12194,7 @@ app.post('/api/admin/support/:userId/conserje', requireAdminToken, (req, res) =>
 // 'pedir' solo registra; la pipeline de la mañana genera el reemplazo.
 app.get('/api/admin/support/conserje/revision', requireAdminToken, (req, res) => {
   try {
-    const r = conserjeRevision.colaRevision(db, { fecha: req.query.fecha, absImageUrl });
+    const r = conserjeRevision.colaRevision(db, { fecha: req.query.fecha, absImageUrl, posterUrlFor: posterUrlDePosteo });
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
@@ -12158,7 +12229,7 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
     const snap = homeSnapshotGet(uid);
     if (!snap || !snap.payload) return res.json({ ok: true, disponible: false, motivo: 'sin_feed' });
     const prof = snap.payload;
-    const rows = db.prepare(`SELECT id, image_path, media_type, status, scheduled_at, published_at, created_at, pinned, pinned_at, ig_permalink, ig_state
+    const rows = db.prepare(`SELECT id, image_path, media_type, cover_path, status, scheduled_at, published_at, created_at, pinned, pinned_at, ig_permalink, ig_state
       FROM posts WHERE user_id = ? AND status IN ('published','scheduled','draft')`).all(uid);
     const tiles = [];
     const pubShortcodes = new Set();
@@ -12176,6 +12247,9 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
         : (p.scheduled_at ? conserjeFeedMs(p.scheduled_at) : conserjeFeedMs(p.created_at));
       tiles.push({
         kind: 'post', post_id: p.id, img: absImageUrl(uid, p.image_path),
+        // (LOTE CONSERJE-FOTO-VIDEO) El póster del video: la grilla
+        // espejo lo pinta a él, jamás el .mp4 en un <img>.
+        poster_url: posterUrlDePosteo(uid, p),
         media_type: p.media_type || 'image', status: p.status,
         es_revision: postId > 0 && p.id === postId,
         pinned: !!p.pinned, pinned_at: p.pinned_at || '', key,
@@ -12211,6 +12285,7 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
       revision_encontrada: ordenadas.some((t) => t.es_revision),
       tiles: ordenadas.map((t) => ({
         kind: t.kind, post_id: t.post_id, img: t.img, media_type: t.media_type,
+        poster_url: t.poster_url || '',
         status: t.status, es_revision: t.es_revision, pinned: t.pinned,
       })),
     });
@@ -18095,7 +18170,7 @@ function subirPedidoPublico(p) {
   try { const prof = db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(p.user_id); out.business_name = (prof && prof.business_name) || ''; out.ig_username = (prof && prof.ig_username) || ''; } catch (e) { out.business_name = ''; out.ig_username = ''; }
   try { const a = db.prepare('SELECT file_path FROM assets WHERE id = ?').get(p.asset_id); if (a) out.asset_path = a.file_path || ''; } catch (e) {}
   if (p.post_id) {
-    try { const post = db.prepare('SELECT id, status, scheduled_at, image_path, media_type, caption FROM posts WHERE id = ?').get(p.post_id); if (post) out.post = post; } catch (e) {}
+    try { const post = db.prepare('SELECT id, status, scheduled_at, image_path, media_type, cover_path, caption FROM posts WHERE id = ?').get(p.post_id); if (post) { post.poster_url = posterUrlDePosteo(p.user_id, post); out.post = post; } } catch (e) {}
   }
   return out;
 }
@@ -43108,7 +43183,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1086';
+const BUILD_ID = '20261105-v1087';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
