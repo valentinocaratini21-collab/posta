@@ -26857,7 +26857,7 @@ function pzVozSemanaHTML() {
 }
 function pzVozMsgHTML(m) {
   if (m.role === 'user') return `<div class="pz-voz-msg u"><span class="pz-voz-msg-ic">${pzIc('mic', 12)}</span><span>${esc(m.text)}</span></div>`;
-  return `<div class="pz-voz-msg a"><img class="pz-voz-face" src="/posty-logo.png" alt=""><span>${esc(m.text)}</span></div>`;
+  return `<div class="pz-voz-msg a"><img class="pz-voz-face" src="/ai-avatar.png" alt=""><span>${esc(m.text)}</span></div>`;
 }
 function pzVozHiloPintar(strip, msgs) {
   const hilo = strip.querySelector('[data-pz-voz-hilo]');
