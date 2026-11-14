@@ -6360,7 +6360,8 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir h1{font-size:26px;font-weight:900;letter-spacing:-.4px;color:#0A1E33}
 .pz-subir .sub{font-size:13.5px;font-weight:600;color:#47617A;margin-top:2px}
 .pz-subir .todo{margin-top:15px;width:100%;display:flex;gap:13px;align-items:center;text-align:left;background:linear-gradient(180deg,#FFE082,#FEC14D);border:none;border-radius:20px;padding:14px 15px;box-shadow:0 10px 20px rgba(254,193,77,.48),inset 0 1.5px 1px rgba(255,255,255,.75),inset 0 -3px 5px rgba(150,100,0,.20);cursor:pointer;font-family:inherit}
-.pz-subir .todo img{width:52px;height:52px;flex:none;border-radius:50%;box-shadow:0 4px 8px rgba(120,80,0,.30)}
+.pz-subir .todo[hidden]{display:none}
+.pz-subir .todo img{width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover;box-shadow:0 4px 8px rgba(120,80,0,.30)}
 .pz-subir .todo b{font-size:16px;font-weight:900;display:block;letter-spacing:-.2px;color:#0A1E33}
 .pz-subir .todo i{font-style:normal;font-size:12.5px;font-weight:700;color:#664A00;line-height:1.4;display:block;margin-top:2px}
 .pz-subir .zona{margin-top:13px;border:2px dashed #A9C6D8;border-radius:20px;padding:18px 12px 14px;text-align:center;background:linear-gradient(180deg,#F4FAFD,#EDF6FB);box-shadow:inset 0 2px 6px rgba(39,147,200,.08);cursor:pointer}
@@ -6376,7 +6377,7 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .up .tag{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.6px;color:#47617A;background:#EAF1F6;border-radius:999px;padding:4px 9px}
 .pz-subir .preg-card{margin-top:15px;background:linear-gradient(180deg,#FFFFFF,#FBFCF7);border:1px solid #EDF1F4;border-radius:20px;box-shadow:0 10px 20px rgba(10,30,51,.07),inset 0 1px 0 #fff;padding:14px 14px 6px}
 .pz-subir .kick{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:800;letter-spacing:1.2px;color:#B98A00;margin-bottom:6px}
-.pz-subir .kick img{width:24px;height:24px;border-radius:50%;box-shadow:0 2px 4px rgba(120,80,0,.3)}
+.pz-subir .kick img{width:24px;height:24px;border-radius:50%;object-fit:cover;box-shadow:0 2px 4px rgba(120,80,0,.3)}
 .pz-subir .q{padding:9px 0 11px;border-top:1px solid #EFF3F6}
 .pz-subir .q:first-of-type{border-top:none}
 .pz-subir .q p{font-size:14.5px;font-weight:800;margin-bottom:8px;color:#0A1E33}
@@ -6385,6 +6386,7 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .chip.on{background:linear-gradient(180deg,#35A2DB,#1E82BE);border-color:#1B76AC;color:#fff;box-shadow:0 5px 10px rgba(39,147,200,.38),inset 0 1px 1px rgba(255,255,255,.45),inset 0 -2px 3px rgba(0,60,100,.25);font-weight:800}
 .pz-subir .q textarea{width:100%;margin-top:9px;border:1.5px solid #E0E9EF;border-radius:14px;padding:10px 12px;font-family:inherit;font-size:14px;color:#0A1E33;background:#fff;resize:vertical}
 .pz-subir .voz-op{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px dashed #C8D4DC;border-radius:20px;padding:12px 14px;margin-top:14px}
+.pz-subir .voz-op .voz-op-txt{flex:1}
 .pz-subir .voz-op .mic-s{width:42px;height:42px;flex:none;border-radius:50%;background:linear-gradient(180deg,#FFD35C,#F2B63D);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 12px rgba(254,193,77,.45),inset 0 2px 2px rgba(255,255,255,.7);color:#0A1E33;cursor:pointer;touch-action:none}
 .pz-subir .voz-op .vq{font-size:14.5px;font-weight:800;color:#0A1E33}
 .pz-subir .voz-op .vs{font-size:12px;font-weight:600;color:#8B9AA8;margin-top:1px}
@@ -6393,7 +6395,7 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir-err{margin-top:12px;background:#FDECEC;color:#A12622;border-radius:14px;padding:10px 12px;font-size:13px;font-weight:700}
 .pz-subir .recibo{background:#fff;border-radius:26px;border:1px solid #EDF1F4;box-shadow:0 16px 30px rgba(10,30,51,.09);padding:18px 16px 16px;margin-top:16px}
 .pz-subir .r-head{display:flex;align-items:center;gap:10px;margin-bottom:13px}
-.pz-subir .r-head img{width:38px;height:38px;border-radius:50%}
+.pz-subir .r-head img{width:38px;height:38px;border-radius:50%;object-fit:cover}
 .pz-subir .r-head .t{font-size:17px;font-weight:800;color:#0A1E33}
 .pz-subir .r-head .s{font-size:12.5px;font-weight:600;color:#8B9AA8}
 .pz-subir .item{display:flex;gap:11px;align-items:center;background:linear-gradient(180deg,#FDFBF6,#FFFFFF);border:1.5px solid #F1E7CE;border-radius:18px;padding:10px 12px;margin-bottom:9px}

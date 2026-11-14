@@ -839,6 +839,10 @@ function pzBackHTML(tab) {
   // cabecera (y la grilla el suyo): el círculo fijo se superponía al
   // título «Billetera» de la tarjeta al hacer scroll. Sin segundo control.
   if (tab === 'ads') return '';
+  // (LOTE SUBIR-CABECERA · 13/11) Subir y Ajustes son destinos de la
+  // barra inferior, como Inicio y Ads: sin atrás fijo. La flecha queda
+  // solo en pantallas apiladas/detalle, nunca en destinos de pestaña.
+  if (tab === 'subir' || tab === 'ajustes') return '';
   // (LOTE REDISEÑO R0 · 8/11) El encabezado común del shell vive arriba
   // a la izquierda (avatar + saludo): el círculo fijo (top:10px,
   // left:10px) caía ENCIMA del avatar en Análisis y Estrategia y le
@@ -850,6 +854,8 @@ function pzBackHTML(tab) {
 }
 function pzBackMtopHTML(tab) {
   if (tab === 'inicio') return '';
+  // (LOTE SUBIR-CABECERA · 13/11) Destinos de la barra inferior: sin atrás.
+  if (tab === 'ads' || tab === 'subir' || tab === 'ajustes') return '';
   // (LOTE CHATPANTALLA) El chat tiene su propio atrás en la cabecera: sin segundo control.
   if (tab === 'chat') return '';
   // (LOTE 17) Igual que pzBackHTML: post y dogfood tienen su propio atrás.
@@ -867,6 +873,8 @@ function pzBackDesktopHTML(tab) {
   // (LOTE ADS-SOLO-PUBLICADOS) Igual que pzBackHTML: en Ads manda su
   // propio atrás (el fijo tapaba «Billetera»).
   if (tab === 'ads') return '';
+  // (LOTE SUBIR-CABECERA · 13/11) Destinos de la barra inferior: sin atrás.
+  if (tab === 'subir' || tab === 'ajustes') return '';
   return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
 function bbHace(ts) {
@@ -26255,16 +26263,19 @@ async function subirView() {
   PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = ''; PZ_SUBIR.todo = false; PZ_SUBIR.busy = false;
   PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
   const chips = (q, opts) => `<div class="chips">${opts.map(o => `<button type="button" class="chip${o.on ? ' on' : ''}" data-subir-q="${q}" data-subir-v="${o.v}">${o.on ? '✓ ' : ''}${o.t}</button>`).join('')}</div>`;
+  // (LOTE SUBIR-SIMPLE · 13/11) Un solo camino de entrada de material: el «+» abre
+  // el único input (foto y video, sin capture: el selector ofrece galería y
+  // cámara). La tarjeta «encargate de todo» nace oculta y aparece recién con
+  // material en la bandeja, junto al material y antes de las preguntas.
   const inner = `<div class="pz-subir">
     <h1>${en ? 'Upload' : 'Subir'}</h1>
     <div class="sub">${en ? 'Photos and videos of your business.' : 'Fotos y videos de tu negocio.'}</div>
-    <button type="button" class="todo" id="pzSubirTodo"><img src="/posty-logo.png" alt=""><span><b>${en ? 'Posty, take care of everything' : 'Posty, encargate de todo'}</b><i>${en ? 'One tap and done: Posty picks the day, improves it and writes the caption. The questions below are only if you want to decide something yourself.' : 'Un toque y listo: Posty elige el día, lo mejora y escribe el caption. Las preguntas de abajo son solo si querés decidir vos algo.'}</i></span></button>
-    <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload a photo or a video' : 'Tocá para subir una foto o un video'}</p><div class="fuentes"><button type="button" class="fbtn" id="pzSubirGal">${en ? 'From your gallery' : 'De tu galería'}</button><button type="button" class="fbtn" id="pzSubirCam">${en ? 'Take a photo' : 'Sacar una foto'}</button></div></div>
+    <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload a photo or a video' : 'Tocá para subir una foto o un video'}</p></div>
     <input type="file" id="pzSubirFile" accept="image/*,video/*" hidden>
-    <input type="file" id="pzSubirFileCam" accept="image/*" capture="environment" hidden>
     <div id="pzSubirUp"></div>
+    <button type="button" class="todo" id="pzSubirTodo" hidden><img src="/ai-avatar.png" alt=""><span><b>${en ? 'Posty, take care of everything' : 'Posty, encargate de todo'}</b><i>${en ? 'One tap and done: Posty picks the day, improves it and writes the caption.' : 'Un toque y listo: Posty elige el día, lo mejora y escribe el caption.'} <span id="pzSubirTodoPreg" hidden>${en ? 'The questions below are only if you want to decide something yourself.' : 'Las preguntas de abajo son solo si querés decidir vos algo.'}</span></i></span></button>
     <div class="preg-card" id="pzSubirPreg" hidden>
-      <div class="kick"><img src="/posty-logo.png" alt=""> ${en ? 'POSTY ASKS YOU — ONE TAP EACH' : 'POSTY TE PREGUNTA — UN TOQUE CADA UNA'}</div>
+      <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'POSTY ASKS YOU — ONE TAP EACH' : 'POSTY TE PREGUNTA — UN TOQUE CADA UNA'}</div>
       <div class="q"><p>${en ? 'When do we post it?' : '¿Cuándo lo subimos?'}</p>${chips('cuando', [{ v: 'posty', t: en ? 'Let Posty pick the day' : 'Que Posty elija el día', on: 1 }, { v: 'semana', t: en ? 'This week' : 'Esta semana' }, { v: 'guardar', t: en ? 'Just save it' : 'Solo guardarlo' }])}</div>
       <div class="q"><p>${en ? 'Is it a promo?' : '¿Es una promo?'}</p>${chips('promo', [{ v: 'no', t: 'No', on: 1 }, { v: 'desc', t: en ? '% off' : '% de descuento' }, { v: '2x1', t: '2x1' }, { v: 'envio', t: en ? 'Free shipping' : 'Envío gratis' }])}</div>
       <div class="q"><p>${en ? 'Shall we improve it?' : '¿Lo mejoramos?'}</p>${chips('mejora', [{ v: 'si', t: en ? 'Yes, improve it' : 'Sí, mejoralo', on: 1 }, { v: 'no', t: en ? 'As it is' : 'Así como está' }])}</div>
@@ -26272,15 +26283,20 @@ async function subirView() {
       <div class="q" id="pzSubirQVideo" hidden><p>${en ? "It's a video: subtitles and polish?" : 'Si es un video: ¿subtítulos y mejora?'}</p>${chips('subs', [{ v: 'si', t: en ? 'Yes, do it' : 'Sí, hacelo', on: 1 }, { v: 'no', t: en ? 'No need' : 'No hace falta' }])}</div>
     </div>
     <section class="pz-voz voz-op" data-pz-voz="extra" id="pzSubirVozOp" hidden>
-      <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
       <div class="voz-op-txt"><div class="vq">${en ? 'Anything else?' : '¿Algo más?'}</div><div class="vs" data-subir-voz-txt>${en ? 'If you want, tell Posty with a voice note.' : 'Si querés, contale a Posty con una nota de voz.'}</div></div>
+      <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
       <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
     </section>
     <button type="button" class="listo" id="pzSubirListo" hidden>${en ? 'Done' : 'Listo'}</button>
     <div class="pz-subir-err" id="pzSubirErr" hidden></div>
     <div id="pzSubirRecibos"></div>
   </div>`;
-  return appShell('subir', inner);
+  // (LOTE SUBIR-CABECERA · 13/11) La vista devuelve SOLO su contenido,
+  // como todas las demás: el router envuelve UNA vez con appShell al
+  // pintar (root.innerHTML = appShell(tab, content)). Antes esta vista
+  // se envolvía a sí misma y la pestaña Subir salía con el shell
+  // duplicado: dos cabeceras «Posty.» y dos barras inferiores.
+  return inner;
 }
 function pzSubirErr(msg) {
   const el = document.getElementById('pzSubirErr');
@@ -26303,7 +26319,11 @@ async function pzSubirUpload(file) {
     PZ_SUBIR.thumb = d.thumb || d.path || '';
     const up = document.getElementById('pzSubirUp');
     if (up) up.innerHTML = `<div class="up">${PZ_SUBIR.thumb ? `<img src="${esc(PZ_SUBIR.thumb)}" alt="">` : ''}<div><div class="n">${en ? 'Just uploaded' : 'Recién subido'}</div><div class="e">✓ ${en ? 'Saved in your material' : 'Guardado en tu material'}</div></div><div class="tag">${PZ_SUBIR.kind === 'video' ? 'VIDEO' : 'FOTO'}</div></div>`;
+    const todoCard = document.getElementById('pzSubirTodo'); if (todoCard) todoCard.hidden = false;
     const preg = document.getElementById('pzSubirPreg'); if (preg) preg.hidden = false;
+    // (LOTE SUBIR-CABECERA · 13/11) La tarjeta dorada anuncia las
+    // preguntas recién cuando existen (con la pieza ya subida).
+    const todoPreg = document.getElementById('pzSubirTodoPreg'); if (todoPreg) todoPreg.hidden = false;
     const qv = document.getElementById('pzSubirQVideo'); if (qv) qv.hidden = PZ_SUBIR.kind !== 'video';
     const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = false;
     const listo = document.getElementById('pzSubirListo'); if (listo) listo.hidden = false;
@@ -26321,7 +26341,7 @@ function pzSubirReciboPintar(r) {
   if (!card) {
     card = document.createElement('div');
     card.className = 'recibo';
-    card.innerHTML = `<div class="r-head"><img src="/posty-logo.png" alt=""><div><div class="t">${en ? 'Done, I have it' : 'Listo, ya lo tengo'}</div><div class="s">${en ? 'This is what I will do:' : 'Esto es lo que voy a hacer:'}</div></div></div><div class="r-items"></div>`;
+    card.innerHTML = `<div class="r-head"><img src="/ai-avatar.png" alt=""><div><div class="t">${en ? 'Done, I have it' : 'Listo, ya lo tengo'}</div><div class="s">${en ? 'This is what I will do:' : 'Esto es lo que voy a hacer:'}</div></div></div><div class="r-items"></div>`;
     cont.appendChild(card);
   }
   const que = r.kind === 'video' ? (en ? 'The video' : 'El video') : (en ? 'The photo' : 'La foto');
@@ -26363,7 +26383,11 @@ async function pzSubirResolver(todoMode) {
     // El formulario queda listo para otro ítem; el recibo acumula.
     PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = '';
     const up = document.getElementById('pzSubirUp'); if (up) up.innerHTML = '';
+    const todoCard = document.getElementById('pzSubirTodo'); if (todoCard) todoCard.hidden = true;
     const preg = document.getElementById('pzSubirPreg'); if (preg) preg.hidden = true;
+    // (LOTE SUBIR-CABECERA · 13/11) Sin preguntas a la vista, la tarjeta
+    // dorada vuelve a no anunciarlas (el formulario queda para otro ítem).
+    const todoPreg2 = document.getElementById('pzSubirTodoPreg'); if (todoPreg2) todoPreg2.hidden = true;
     const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = true;
     if (listo) listo.hidden = true;
     try { cardScrollRecibo(); } catch (e) {}
@@ -26378,22 +26402,16 @@ function cardScrollRecibo() {
   if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 function bindSubir() {
-  const pick = (cam) => { const inp = document.getElementById(cam ? 'pzSubirFileCam' : 'pzSubirFile'); if (inp) { inp.value = ''; inp.click(); } };
-  const gal = document.getElementById('pzSubirGal');
-  const cam = document.getElementById('pzSubirCam');
+  const pick = () => { const inp = document.getElementById('pzSubirFile'); if (inp) { inp.value = ''; inp.click(); } };
   const zona = document.getElementById('pzSubirZona');
-  if (gal) gal.onclick = (e) => { e.stopPropagation(); pick(false); };
-  if (cam) cam.onclick = (e) => { e.stopPropagation(); pick(true); };
-  if (zona) zona.onclick = () => pick(false);
+  if (zona) zona.onclick = () => pick();
   const f1 = document.getElementById('pzSubirFile');
-  const f2 = document.getElementById('pzSubirFileCam');
   if (f1) f1.onchange = () => pzSubirUpload(f1.files && f1.files[0]);
-  if (f2) f2.onchange = () => pzSubirUpload(f2.files && f2.files[0]);
   const todo = document.getElementById('pzSubirTodo');
   if (todo) todo.onclick = () => {
     if (PZ_SUBIR.asset) { pzSubirResolver(true); return; }
     PZ_SUBIR.todo = true;
-    pick(false);
+    pick();
   };
   document.querySelectorAll('[data-subir-q]').forEach(btn => {
     btn.onclick = () => {
