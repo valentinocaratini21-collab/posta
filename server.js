@@ -35724,7 +35724,8 @@ function isGuestSession(req) {
   } catch (e) { return false; }
 }
 
-app.post('/api/guest/start', (req, res) => {
+app.post('/api/guest/start', async (req, res) => {
+  let unlockGuestStart = null;
   try {
     if (!trialLock || !guestTrial) return res.status(503).json({ error: 'Servicio no disponible' });
     const body = req.body || {};
@@ -35787,6 +35788,20 @@ app.post('/api/guest/start', (req, res) => {
         req.session.userId = g0.userId;
         res.json({ ok: true, user_id: g0.userId, trial_ends_at: g0.trialEnds, posts: 0, needs_ig: true });
       });
+    }
+    // (LOTE L11 · CANDADO-INVITADO) Desde acá hasta la respuesta, la
+    // sección es crítica POR NEGOCIO: chequeos de «ya entró / ya tiene
+    // posteos» + creación/reuso del invitado + import de la semana +
+    // registro de entrega. Con el candado por @ (guest-start-lock.js),
+    // dos llamadas concurrentes para el mismo negocio se serializan:
+    // la segunda espera a la primera y corre sus chequeos contra el
+    // estado final (invitado con posteos → las guardas de siempre), sin
+    // importar dos veces. La espera tiene tope de 30 s y la liberación
+    // va en el finally de este handler: un fallo a mitad de camino
+    // tampoco deja el candado tomado. Una sola llamada no cambia en
+    // nada su comportamiento.
+    if (guestStartLock) {
+      try { unlockGuestStart = await guestStartLock.acquire(igK ? ('ig:' + igK) : ('web:' + domK), 30000); } catch (e) { unlockGuestStart = null; }
     }
     const testMode = trialTestMode(req);
     const allowlisted = trialLock.isAllowlisted(db, igK, domK);
@@ -35965,6 +35980,11 @@ app.post('/api/guest/start', (req, res) => {
   } catch (e) {
     console.error('[guest] start falló:', e);
     res.status(500).json({ error: 'No pudimos abrir tu feed todavía.' });
+  } finally {
+    // (LOTE L11) El candado se libera SIEMPRE al salir del handler —
+    // éxito, guardas (409/404) o error — para que la llamada siguiente
+    // del mismo negocio nunca quede esperando un candado muerto.
+    if (unlockGuestStart) { try { unlockGuestStart(); } catch (e) {} }
   }
 });
 
@@ -36132,6 +36152,8 @@ try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] t
 // El esquema vive en el módulo y se asegura en el arranque (idempotente).
 let guestTrial = null;
 try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catch (e) { console.error('[init] guest-trial no disponible:', e.message); }
+let guestStartLock = null;
+try { guestStartLock = require('./guest-start-lock'); } catch (e) { console.error('[init] guest-start-lock no disponible:', e.message); }
 // (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
 let guestSetIgMod = null;
 try { guestSetIgMod = require('./guest-set-ig'); } catch (e) { console.error('[init] guest-set-ig no disponible:', e.message); }
@@ -41668,7 +41690,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1063';
+const BUILD_ID = '20261105-v1064';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
