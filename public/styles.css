@@ -55,6 +55,11 @@ button{font-family:inherit}
 .nav-links{display:flex;gap:28px;align-items:center;font-size:13px;color:var(--mut)}
 .nav-links a{font-weight:600;transition:color .15s}
 .nav-links a:hover{color:var(--txt)}
+/* Botón de prueba del header (lote BOTÓN-PRUEBA-HEADER): el ÚNICO con relleno
+   de la barra; queda fuera de .nav-links a propósito — en móvil la barra
+   esconde los links pero el botón sigue visible, sin menú hamburguesa. */
+.nav-cta{display:inline-flex;align-items:center;flex:none;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:14px;line-height:1;padding:11px 18px;border-radius:999px;white-space:nowrap;transition:filter .15s ease,transform .15s ease}
+.nav-cta:hover{filter:brightness(1.05)}
 /* Anclas bajo header sticky (fix de familia 2026-10-24): cada destino de ancla de la landing
    aterriza con aire bajo la nav (alto medido: 73px desktop / 65px mobile, +17px de aire).
    Va con scroll-margin en los destinos y NO con scroll-padding en html porque esta misma
@@ -630,6 +635,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
   .logo{font-size:20px}
   .nav-landing .nav-links{display:none}
   .nav-landing .lp-entrar{display:inline-flex;align-items:center;margin-left:auto;font-weight:800;font-size:14.5px;color:#2793C8;padding:8px 16px;border:2px solid #2793C8;border-radius:999px}
+  .nav-landing .nav-cta{font-size:13.5px;padding:10px 14px}
   .nav-landing .hamburger{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:44px;height:44px;background:none;border:none;cursor:pointer;padding:11px}
   .nav-landing .hamburger span{display:block;width:22px;height:2.5px;border-radius:3px;background:var(--txt)}
   .nav-landing .mobile-menu{display:none;flex-direction:column;padding:8px 20px 20px;background:#FFFFFF;border-top:1px solid var(--line)}
