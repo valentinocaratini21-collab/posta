@@ -418,6 +418,7 @@ const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest');
+const creatividad = require('./creatividad'); // (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) secuencia de roles + anti-repetición con registro
 const studyRestudy = require('./study-restudy'); // ESTUDIO-PROFUNDO · M6 RE-ESTUDIO SEMANAL (7/11): diff semanal del fundamento + «qué cambió»
 const personalizacion = require('./personalizacion'); // LOTE PERSONALIZACIÓN DE POSTEOS (6/11)
 const onboardingProducts = require('./onboarding-products'); // Onboarding un clic: productos detectados + foto por producto (determinístico, USD 0) // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
@@ -2907,9 +2908,20 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
       // y su guarda de muestra): antes el INSERT lo descartaba y el
       // porqué renacía en el backfill de GET /api/posts, sin ancla de
       // la pieza y sin guarda — la fuente del desync de la corrida #6.
+      // (LOTE CREATIVIDAD-COMO-SISTEMA) El plan creativo con el que
+      // nació la pieza en la prueba (rol de la secuencia, estrella,
+      // escena — buildDemoSpec) viaja a la cuenta: queda estampado en
+      // posts.creatividad con la huella de su prompt.
+      let creaImp = '';
+      try {
+        const dc = dpost && dpost.creatividad;
+        if (dc && dc.rol) {
+          creaImp = JSON.stringify({ v: 1, origen: 'prueba', rol: dc.rol, estrella: dc.estrella || '', escena_key: dc.escena_key || '', prompt_hash: creatividad.promptHashDe(dpost.image_prompt || '') });
+        }
+      } catch (e) { /* sin plan en el spec: el posteo nace como siempre */ }
       const ins = db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths, String(p.why || '').slice(0, 500));
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why, creatividad) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths, String(p.why || '').slice(0, 500), creaImp);
       try {
         db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
           VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?,?)
@@ -3664,6 +3676,35 @@ function weekTextModeFor(uid, weekKey, kind, selfId) {
 // (mismo camino que regenerar un borrador: contenido + imagen de concepto).
 // Un borrador NO consume cupo (el cupo cuenta programados/publicados): si la
 // semana está llena queda en espera como borrador, nunca rompe el cupo.
+// 🎨 (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) Metadata del plan
+// creativo de un posteo nacido de una idea: rol + estrella (la de la
+// idea o la del producto del fundamento que la respalda), huella del
+// prompt real con el que se generó la imagen y el veredicto de la
+// comparación contra el posteo ANTERIOR de la cuenta. El choque se
+// registra (metadata + log); nunca frena la creación.
+function creaMetaDeIdea(uid, idea, estrellaPost, promptTxt) {
+  try {
+    const c = (idea && idea._creatividad) || {};
+    let anterior = null;
+    try {
+      const ult = db.prepare(`SELECT id, rg_producto, source_topic, image_prompt, creatividad FROM posts WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(uid);
+      anterior = creatividad.huellaDesdePost(ult);
+    } catch (e) { /* sin anterior legible: metadata sin comparación */ }
+    const actual = { estrella: estrellaPost || c.estrella || '', rol: c.rol || '', prompt: promptTxt || '' };
+    const cmp = anterior ? creatividad.compararConAnterior(actual, anterior) : null;
+    if (cmp && !cmp.ok) console.log(`[creatividad] usuario ${uid}: el posteo nuevo choca con el anterior (${cmp.choques.join(', ')}) — queda registrado`);
+    return JSON.stringify({
+      v: 1, origen: 'idea',
+      rol: actual.rol, estrella: actual.estrella, escena_key: '',
+      prompt_hash: creatividad.promptHashDe(actual.prompt),
+      anterior_post_id: anterior ? anterior.post_id : null,
+      choques: cmp ? cmp.choques : [], similitud: cmp ? cmp.similitud : null,
+      ...(c.estrella_rotada ? { estrella_rotada: true, estrella_anterior: c.estrella_anterior || '' } : {}),
+      ...(c.sin_alternativa ? { sin_alternativa: true } : {}),
+    });
+  } catch (e) { return ''; }
+}
+
 async function makeIdeaDraft(uid, idea) {
   // (v236) FRESCURA: una idea vencida NO se hace, aunque la llamen
   // directo (el endpoint o el admin pasan por acá): su efeméride ya
@@ -3741,12 +3782,13 @@ async function makeIdeaDraft(uid, idea) {
       return { ok: false, reason: 'no_carousel' };
     }
     const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 6);
-    const rc = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia)
-      VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    const creaMetaC = creaMetaDeIdea(uid, idea, (rgMatch ? rgMatch.nombre : ''), promptForMedia(gen.coverPath));
+    const rc = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia, creatividad)
+      VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(uid, gen.coverPath, gen.caption, hashtags, JSON.stringify(paths), String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
         tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || gen.needsReview || rgSinProducto) ? 1 : 0,
         'carousel', '', '', '', String((content && content.hookId) || ''), promptForMedia(gen.coverPath),
-        (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''));
+        (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''), creaMetaC);
     stampPostDigest(rc.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
     try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(rc.lastInsertRowid, idea.id); } catch (e) {}
     try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
@@ -3785,13 +3827,14 @@ async function makeIdeaDraft(uid, idea) {
     }
   }
   if (!imagePath) return { ok: false, reason: 'no_image' };
-  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia)
-    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  const creaMetaI = creaMetaDeIdea(uid, idea, (rgMatch ? rgMatch.nombre : ''), promptForMedia(imagePath));
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rg_producto, rg_procedencia, creatividad)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
       tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || characterBlocksDelivery(genOut) || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || rgSinProducto) ? 1 : 0,
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath),
-      (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''));
+      (rgMatch ? rgMatch.nombre : ''), (rgMatch ? (rgMatch.procedencia || '') : ''), creaMetaI);
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(r.lastInsertRowid, idea.id); } catch (e) {}
   try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
@@ -18978,7 +19021,37 @@ function ideaDiariaSintetica(uid, hoy) {
     } catch (e) { /* formato sin dato: manda la rotación */ }
     const star = clientDigest.effectiveStarOf(dg);
     if (star && star.item) {
-      return { title: String(star.item), brief: '', why: '', source: srcFor[tipo], format, angle_key: 'diaria-' + tipo };
+      // 🎨 (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) ANTI-REPETICIÓN DE
+      // ESTRELLA: hasta este lote, con estrella validada el posteo de
+      // hoy vendía LA MISMA estrella que el de ayer y que el de mañana
+      // (la rotación era solo de tipo). Si el último posteo de la
+      // cuenta ya vendió esta estrella y el fundamento nombra OTRO
+      // producto/servicio real, hoy se promociona ESE (Valentino:
+      // «cada posteo tiene que ser distinto al anterior, promocionando
+      // otra cosa»). La estrella validada sigue abriendo el ciclo:
+      // solo se rota cuando el anterior ya la llevó. Sin otro nombre
+      // real, se entrega la misma (fail-honesto, queda marcado en la
+      // metadata que estampa makeIdeaDraft vía _creatividad).
+      let estrellaHoy = String(star.item);
+      let creaDiaria = { rol: creatividad.rolDesdeTipo(tipo, true), estrella: estrellaHoy };
+      try {
+        const ult = db.prepare(`SELECT id, rg_producto, source_topic, creatividad FROM posts WHERE user_id = ? AND COALESCE(source, '') != 'express' ORDER BY id DESC LIMIT 1`).get(uid);
+        const huella = creatividad.huellaDesdePost(ult);
+        if (huella && huella.estrella && creatividad.normNombre(huella.estrella) === creatividad.normNombre(estrellaHoy)) {
+          const estrellas = creatividad.estrellasDeDigest(dg, estrellaHoy);
+          const otra = estrellas.find((e) => creatividad.normNombre(e) !== creatividad.normNombre(estrellaHoy));
+          if (otra) {
+            creaDiaria = { rol: creatividad.rolDesdeTipo(tipo, false), estrella: otra, estrella_rotada: true, estrella_anterior: estrellaHoy, anterior_post_id: ult.id };
+            estrellaHoy = otra;
+          } else {
+            creaDiaria.sin_alternativa = true;
+            creaDiaria.anterior_post_id = ult.id;
+          }
+        }
+      } catch (e) { /* sin lectura del anterior: la idea sale como siempre */ }
+      const tStar = { title: estrellaHoy, brief: '', why: '', source: srcFor[tipo], format, angle_key: 'diaria-' + tipo };
+      tStar._creatividad = creaDiaria;
+      return tStar;
     }
     let topics = [];
     try { topics = clientDigest.deriveTopics(dg, { lang, count: 5 }) || []; } catch (e) { topics = []; }
@@ -18986,13 +19059,14 @@ function ideaDiariaSintetica(uid, hoy) {
     if (pick && pick.digest_anchor) {
       const t = { title: String(pick.digest_anchor), brief: '', why: '', source: srcFor[tipo], format, angle_key: 'diaria-' + tipo };
       if (pick.intent || pick.angle || pick.proof) t._sales = { intent: pick.intent || '', angle: pick.angle || '', proof: pick.proof || '' };
+      t._creatividad = { rol: creatividad.rolDesdeTipo(tipo, false), estrella: String(pick.digest_anchor) };
       return t;
     }
     // Sin estrella ni temas: wow neutro (L4). El nombre del negocio es
     // dato real (del digest); sin ni siquiera eso, no hay idea.
     const biz = String((dg && dg.business) || '').trim();
     if (!biz) return null;
-    return { title: biz, brief: '', why: '', source: 'winner', format, angle_key: 'diaria-neutra' };
+    return { title: biz, brief: '', why: '', source: 'winner', format, angle_key: 'diaria-neutra', _creatividad: { rol: 'comunidad', estrella: '' } };
   } catch (e) { return null; }
 }
 async function ensureTodayPost(uid, tz, now) {
@@ -21076,6 +21150,36 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       const nEst = aplicarEstrategiaAPicks(db, uid, weekKey, picks, existing);
       if (nEst) console.log(`[pipeline:${tag}] usuario ${uid}: estrategia de la semana — ${nEst} porqués del plan (semana ${weekKey})`);
     } catch (e) { console.error(`[pipeline:${tag}] estrategia falló:`, e.message); }
+    // 🎨 (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) PLAN DE SECUENCIA DE
+    // LA SEMANA: el orden de la semana deja de ser el orden en que
+    // salieron las ideas — cada posición (las que ya existen + las de
+    // esta tanda, en su orden final) lleva el ROL que le toca en la
+    // secuencia estratégica (héroe → detrás de escena → prueba social
+    // → lugar → oferta → tip → comunidad), la ESTRELLA que promociona
+    // (rotada: ningún posteo repite la del anterior) y la ESCENA que
+    // alimenta el brief de imagen. Los roles sin material honesto se
+    // saltan y quedan registrados: una oferta sin promo real del
+    // digest NO se inventa. El plan viaja en pick._creatividad, manda
+    // la escena del conceptShot y se estampa en posts.creatividad al
+    // crear cada posteo (stampCreatividad, más abajo).
+    try {
+      const dgC = (() => { try { return digestForUser(uid); } catch (e) { return null; } })();
+      const ctxC = creatividad.ctxDesdeDigest(dgC);
+      let starC = null;
+      try { starC = dgC ? clientDigest.effectiveStarOf(dgC) : null; } catch (e) { starC = null; }
+      if (starC && starC.evidence && starC.evidence.length) ctxC.tienePrueba = true;
+      const estrellasC = creatividad.estrellasDeDigest(dgC, starC && starC.item);
+      const planC = creatividad.planSecuencia(existing + deficit, ctxC);
+      creatividad.asignarEstrellas(planC.pasos, estrellasC);
+      picks.forEach((pk, ix) => {
+        const paso = planC.pasos[existing + ix];
+        if (!pk || !paso) return;
+        const prevEsc = ix > 0 && picks[ix - 1] && picks[ix - 1]._creatividad ? picks[ix - 1]._creatividad.escena_key : '';
+        const esc = creatividad.escenarioPara(paso.rol, `${weekKey}:${existing + ix}`, prevEsc);
+        pk._creatividad = { rol: paso.rol, estrella: paso.estrella || '', escena_key: esc.key, escena: esc.texto, ...(paso.sin_estrella_por_repeticion ? { sin_alternativa: true } : {}) };
+      });
+      console.log(`[pipeline:${tag}] usuario ${uid}: creatividad — secuencia ${planC.pasos.slice(existing, existing + deficit).map((p) => p.rol).join(' → ')}${planC.saltados.length ? ` (roles saltados sin material honesto: ${planC.saltados.join(', ')})` : ''}`);
+    } catch (e) { console.error(`[pipeline:${tag}] creatividad (plan de secuencia) falló:`, e.message); }
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle, rg_producto, rg_procedencia) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
@@ -21163,6 +21267,33 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         if (extra && extra.motivoCalidad) {
           try { cmCalidad.registrar(db, postId, uid, extra.motivoCalidad); db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postId); } catch (e) {}
         }
+      } catch (e) { /* el registro nunca frena la creación */ }
+    }
+    // 🎨 (v1002) Estampa del plan creativo en el posteo creado: rol,
+    // estrella, escena, huella del prompt real y el veredicto de la
+    // comparación contra el posteo anterior de la cuenta (por id: el
+    // último creado antes que este, de esta corrida o de antes). El
+    // choque se registra; la semana nunca se frena por esto.
+    function stampCreatividad(postId, idea, promptTxt) {
+      try {
+        if (!postId || !idea || !idea._creatividad) return;
+        const c = idea._creatividad;
+        let anterior = null;
+        try {
+          const prevRow = db.prepare(`SELECT id, rg_producto, source_topic, image_prompt, creatividad FROM posts WHERE user_id = ? AND id < ? ORDER BY id DESC LIMIT 1`).get(uid, postId);
+          anterior = creatividad.huellaDesdePost(prevRow);
+        } catch (e) { /* sin anterior legible: metadata sin comparación */ }
+        const estrellaPost = (idea._rgProducto ? idea._rgProducto.nombre : '') || c.estrella || '';
+        const cmp = anterior ? creatividad.compararConAnterior({ estrella: estrellaPost, rol: c.rol, prompt: promptTxt || '' }, anterior) : null;
+        const meta = {
+          v: 1, origen: 'semana', rol: c.rol, estrella: estrellaPost, escena_key: c.escena_key || '',
+          prompt_hash: creatividad.promptHashDe(promptTxt || ''),
+          anterior_post_id: anterior ? anterior.post_id : null,
+          choques: cmp ? cmp.choques : [], similitud: cmp ? cmp.similitud : null,
+          ...(c.sin_alternativa ? { sin_alternativa: true } : {}),
+        };
+        db.prepare('UPDATE posts SET creatividad = ? WHERE id = ?').run(JSON.stringify(meta), postId);
+        if (cmp && !cmp.ok) console.log(`[creatividad] usuario ${uid} post ${postId}: choque con el anterior (${cmp.choques.join(', ')}) — registrado, la semana no se frena`);
       } catch (e) { /* el registro nunca frena la creación */ }
     }
     // Director de semana: cada posteo cumple un ROL DE ESCENA distinto para
@@ -21424,7 +21555,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try {
             imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, refRoles: refRolesForRefs, apiKey: key,
-              style: preStyleCode, usedStyles, usedFamilies, styleOut, resultOut: genOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
+              style: preStyleCode, usedStyles, usedFamilies, styleOut, resultOut: genOut, productRef, sceneRole: (idea._creatividad && idea._creatividad.escena) || nextSceneRole(), gridNote: idea._gridNote || '',
             });
           } catch (e) {
             if (!firstImgError) firstImgError = String((e && e.message) || e).slice(0, 300);
@@ -21512,12 +21643,13 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               claimed--;
               continue;
             }
+            stampCreatividad(pendingId, idea, promptForMedia(imagePath));
             // (v239) QA de personaje: identidad no garantizada ⇒ revisión.
             if (characterBlocksDelivery(genOut)) { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
             if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
           } else {
             const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea._estrategiaPorque || idea.porque || '').slice(0, 500), weekKey, ((characterBlocksDelivery(genOut) || (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') || idea._rgSinProducto) ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle, (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
-            if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(insInfo.lastInsertRowid, idea, caption, { motivoCalidad }); }
+            if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(insInfo.lastInsertRowid, idea, caption, { motivoCalidad }); stampCreatividad(insInfo.lastInsertRowid, idea, promptForMedia(imagePath)); }
           }
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
@@ -21533,7 +21665,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                 'carousel', `carousel automático (${carouselReason[i] || 'estrategia'} · ${paths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle,
                 (idea._rgProducto ? idea._rgProducto.nombre : ''), (idea._rgProducto ? idea._rgProducto.procedencia : ''));
-            if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(carInfo.lastInsertRowid, idea, carouselGen && carouselGen.caption, { motivoCalidad, tipo: 'carousel' }); }
+            if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); cmRegistrarPosteo(carInfo.lastInsertRowid, idea, carouselGen && carouselGen.caption, { motivoCalidad, tipo: 'carousel' }); stampCreatividad(carInfo.lastInsertRowid, idea, promptForMedia(carouselGen.coverPath)); }
             // DEDUP-EXACTA: el caption del carousel (distinto del
             // chequeado arriba) también entra al acumulador.
             if (carouselGen && carouselGen.caption) runPrevCaptions.push(carouselGen.caption);
@@ -38709,7 +38841,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 category,
                 paletteHex: [accent, btn].filter(Boolean),
                 visualStyle,
-                sceneRole: demoAi.SCENE_ROLES[i % demoAi.SCENE_ROLES.length],
+                // (v1002) La escena la manda el PLAN creativo de la
+                // pieza (rol de la secuencia de la semana); sin plan,
+                // la rotación histórica de escenas del demo.
+                sceneRole: (sp.creatividad && sp.creatividad.escena) || demoAi.SCENE_ROLES[i % demoAi.SCENE_ROLES.length],
                 stylePreset: styleObj,
               }, demoApiKey, 'demo-ai-brief');
               // v205: DIRECCIÓN DE ARTE completa del estilo nombrado —
@@ -41357,7 +41492,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1057';
+const BUILD_ID = '20261105-v1058';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

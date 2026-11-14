@@ -16,6 +16,7 @@ const costs = require('./costs'); // (LOTE JUICIO-FINAL) tope de gasto de IA de 
 const captions = require('./demo-captions');
 const draftMod = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft sobre el spec
 const clientDigest = require('./client-digest');
+const creatividad = require('./creatividad'); // (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) plan de secuencia de la semana
 const studyOffer = require('./study-offer'); // (M3 FICHA-OFERTA) puerta de fecha en la generación
 const personalizacion = require('./personalizacion'); // (LOTE VOZ-PROPIA) marcadores de voz del digest
 const rubroId = require('./rubro-id'); // (v235) subrubros canónicos del clasificador
@@ -3067,6 +3068,45 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     voiceLine = personalizacion.lineaVoz(voiceMarkers, lang);
   } catch (e) { voiceMarkers = []; voiceLine = ''; }
   try { topics = applyVoiceToTopics(topics, voiceMarkers); } catch (e) { /* la voz nunca frena la prueba */ }
+  // 🎨 (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) PLAN DE SECUENCIA de
+  // la semana de prueba: cada posición lleva su ROL de la rotación
+  // estratégica (héroe → detrás → prueba social → lugar → oferta →
+  // tip → comunidad, saltando los roles sin material honesto: una
+  // oferta sin promo real del digest NO se inventa), su ESCENA
+  // concreta para el brief de imagen y su ESTRELLA registrada. La
+  // estrella que el cliente ve la sigue mandando el tema (su
+  // digest_anchor, ya rotado por enforceTopicRotation); el plan la
+  // registra y, si el tema no trae ancla y el rol es de producto,
+  // aporta la que le toca por rotación. Solo la ventana principal
+  // (topicOffset 0): las ventanas extra de grilla no son la semana.
+  let creaDemo = [];
+  if (topicOffset === 0) {
+    try {
+      const ctxD = creatividad.ctxDesdeDigest(digest);
+      let starD = null;
+      try { starD = digest ? clientDigest.effectiveStarOf(digest) : null; } catch (e) { starD = null; }
+      if (starD && starD.evidence && starD.evidence.length) ctxD.tienePrueba = true;
+      const planD = creatividad.planSecuencia(topics.length, ctxD);
+      const estrellasD = creatividad.estrellasDeDigest(digest, starD && starD.item);
+      creatividad.asignarEstrellas(planD.pasos, estrellasD);
+      for (let i = 0; i < planD.pasos.length; i++) {
+        const paso = planD.pasos[i];
+        let rol = paso.rol;
+        // Ajuste honesto al tema real: el rol 'oferta' solo queda si
+        // el tema de esa posición ES promo; si no, la posición cae a
+        // 'tip' (la secuencia no miente sobre la pieza que sale).
+        if (rol === 'oferta' && (!topics[i] || topics[i].kind !== 'promo')) rol = 'tip';
+        const esc = creatividad.escenarioPara(rol, `demo:${String(business || '')}:${i}`, i > 0 ? creaDemo[i - 1].escena_key : '');
+        creaDemo.push({
+          rol,
+          estrella: (topics[i] && topics[i].digest_anchor) || paso.estrella || '',
+          escena_key: esc.key,
+          escena: esc.texto,
+          ...(planD.saltados.length ? { roles_saltados: planD.saltados } : {}),
+        });
+      }
+    } catch (e) { creaDemo = []; }
+  }
   const specPosts = topics.map((t, i) => {
     let headline = t.headline;
     let subline = t.subline;
@@ -3134,6 +3174,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // el spec y lo consume la ruta de imagen; trialPostPrompt lo
       // muestra en el detalle.
       image_prompt: t.image_prompt || undefined,
+      // (v1002) El plan creativo de la posición: rol de la secuencia,
+      // estrella registrada y escena. La ruta IA de la prueba usa la
+      // escena como sceneRole del brief; la importación a la cuenta
+      // (importTrialWeek) lo estampa en posts.creatividad.
+      creatividad: creaDemo[i] || undefined,
     };
   });
   // (LOTE L4) Estrella null: el primer posteo es un wow degradado

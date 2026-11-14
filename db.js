@@ -187,6 +187,11 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN style_code TEXT DEFAULT ''`); } catc
 // respalda cada borrador + su procedencia, para la línea visible y la
 // puerta de revisión. Columnas nuevas, sin tocar datos viejos.
 try { db.exec(`ALTER TABLE posts ADD COLUMN rg_producto TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE CREATIVIDAD-COMO-SISTEMA · v1002) Metadata del plan creativo
+// de la pieza (JSON): rol en la secuencia de la semana, estrella que
+// promociona, escena, huella del prompt (hash) y el veredicto de la
+// comparación contra el posteo anterior de la cuenta.
+try { db.exec(`ALTER TABLE posts ADD COLUMN creatividad TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN rg_procedencia TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
