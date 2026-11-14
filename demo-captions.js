@@ -1701,6 +1701,45 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   return { caption, hashtags: demoHashtags(cat, country, tone, lang, subcat), topicIndex: idx, ok: true, fallback: true };
 }
 
+// (LOTE JUICIO-FINAL) EL CAPTION SEGURO, EXPUESTO SOLO: el mismo
+// fallback de último recurso de resolveTrialCaption (tablas SAFE_
+// FALLBACK + variantes, orden sembrado por el nombre del negocio,
+// dedupe de cuerpos contra prevCaptions, freno de novedad sin
+// evidencia), callable sin pasar por la escalera de temas. Lo usa la
+// salida «caption» del juicio final: cuando el pase reprueba SOLO el
+// caption de una pieza cuya imagen pasa, el caption se reemplaza por
+// este texto pre-verificado de la casa y los hashtags se regeneran
+// con demoHashtags del rubro propio — nunca se improvisa un caption
+// nuevo a mano alzada. El llamador decide los hashtags (conoce el
+// rubro/subrubro); acá solo sale el cuerpo.
+function safeFallbackCaption({ kind, business, tone, lang, prevCaptions } = {}) {
+  const en = lang === 'en';
+  const k = kind || 'novedad';
+  const fbTable = en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS;
+  const fbVar = en ? SAFE_FALLBACK_VARIANTS_EN : SAFE_FALLBACK_VARIANTS_ES;
+  const bodyKey = (c) => anchorNorm348(c);
+  const usedBodies = new Set((Array.isArray(prevCaptions) ? prevCaptions : []).map(bodyKey).filter(Boolean));
+  const fbSeed = [...String(business || '')].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const fbTexts = (kk) => {
+    const t = [fbTable[kk], fbVar[kk]].filter(Boolean);
+    return fbSeed % 2 ? [t[1] || t[0], t[0]] : t;
+  };
+  const fbOrder = [k, 'social', 'novedad', 'tip', 'reserva', 'promo', 'sorteo']
+    .flatMap((kk) => fbTexts(kk).map((text) => ({ k: kk, text })));
+  let caption = buildFinalCaption(
+    { caption: (fbOrder[0] && fbOrder[0].text) || fbTable.novedad },
+    { business, tone, goalLine: '', voiceLine: '' }
+  );
+  if (usedBodies.has(bodyKey(caption))) {
+    for (const cand of fbOrder) {
+      const alt = buildFinalCaption({ caption: cand.text }, { business, tone, goalLine: '', voiceLine: '' });
+      if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
+    }
+  }
+  caption = frenarNovedadSinEvidencia(caption, null, { kind: k }, en, business, tone);
+  return { caption, kind: (fbOrder[0] && fbOrder[0].k) || k };
+}
+
 // ---------- Reglas de pieza v209: helpers compartidos ----------
 
 // Cap DURO de palabras para titulares (regla 2): nunca más de `max`
@@ -1848,6 +1887,7 @@ module.exports = {
   topicDna,
   buildFinalCaption,
   resolveTrialCaption,
+  safeFallbackCaption,
   SAFE_FALLBACK_CAPTIONS,
   SAFE_FALLBACK_VARIANTS_ES,
   SAFE_FALLBACK_VARIANTS_EN,

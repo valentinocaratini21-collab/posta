@@ -12,6 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const https = require('https');
 const db = require('./db');
+const costs = require('./costs'); // (LOTE JUICIO-FINAL) tope de gasto de IA de la prueba (demoAiCapOk)
 const captions = require('./demo-captions');
 const draftMod = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft sobre el spec
 const clientDigest = require('./client-digest');
@@ -2113,6 +2114,263 @@ async function scheduleFirstPostRetry(o) {
   } catch (e) {
     return { applied: false, reason: 'error' };
   }
+}
+
+// (LOTE JUICIO-FINAL) EL PASE DE JUICIO SOBRE LA PIEZA TERMINADA —
+// la vara de Valentino del 14/11: que Posty mire la pieza terminada y
+// la juzgue entera contra el feed de la marca antes de mostrarla, como
+// se hace a mano. Corre sobre los posteos YA ensamblados de la semana
+// de prueba (imagen final compuesta + caption), una pasada de visión
+// por pieza (demoAi.juicioFinalPieza), y aplica el veredicto con las
+// salidas que la cadena ya tiene — nunca frena la semana ni declara
+// nada al cliente:
+//   · motivos de texto (texto-no-encaja / titular-tapa) → la pieza se
+//     RECOMPONE sin texto por la vía limpia del propio renderer
+//     (paraRender: spec 'clean' = foto limpia, sin titular ni pill).
+//   · motivos de foto (cromo-ajeno / estrella-ausente / marca-no-
+//     visible / no-vende-producto) → la pieza cae al PRÓXIMO CANDIDATO
+//     del pool de fotos web admitidas por el foto_gate que la semana
+//     no usó, re-renderizada con el mismo tratamiento.
+//   · motivos de caption (caption-voz / caption-roto) → el caption se
+//     reemplaza por el caption seguro de la casa (safeFallbackCaption)
+//     y los hashtags se regeneran del rubro propio.
+//   · reparada, la pieza se juzga UNA vez más; si tampoco pasa (o no
+//     hay salida aplicable), el slot queda en ARMADO HONESTO
+//     (post.armando) y la cadena de rescate de fondo lo completa por
+//     el camino generado — el estado que la semana ya usa, jamás una
+//     declaración de incompleta.
+// COSTO: tope declarado — JUICIO_FINAL_TOPE_POR_PIEZA pasadas por
+// slot (la original + una tras la reparación) y un techo absoluto por
+// semana; cada pasada consulta además el tope de gasto de IA de la
+// prueba (costs.demoAiCapOk, o el capOk inyectado por la ruta, el
+// patrón de replacePiecesWithAi). Si el tope no da, la pieza sigue su
+// camino SIN pase y el motivo queda registrado ('sin-pase') — nunca
+// un freno silencioso ni un cargo fuera de tope.
+// REGISTRO: cada veredicto queda en post.juicio (viaja con la pieza en
+// el payload, como post.qa/post.engine) y en el registro de la semana
+// que devuelve esta función (las rutas lo guardan como
+// out.juicio_final, auditable como foto_gate / primer_posteo):
+// motivo, modo de feed usado y salida tomada, por pieza.
+// ALCANCE: solo la PRUEBA. Las piezas de video no se juzgan en este
+// lote (su «imagen» es el tour de los diseños de la semana) y las de
+// carrusel se juzgan por su portada, con salidas reducidas (caption o
+// armado). Las piezas generadas por IA (post.ai) no se re-renderizan
+// acá: sus salidas son caption o armado/rescate. El registrado queda
+// declarado como paso siguiente, no construido.
+const JUICIO_FINAL_TOPE_POR_PIEZA = 2;
+const JUICIO_FINAL_TOPE_SEMANA_MAX = 14;
+
+async function aplicarJuicioFinalTrial(o) {
+  const posts = (o && Array.isArray(o.posts)) ? o.posts : [];
+  const specPosts = (o && Array.isArray(o.specPosts)) ? o.specPosts : [];
+  const digest = (o && o.digest) || null;
+  const spec = (o && o.spec) || {};
+  const registro = [];
+  const cambiados = [];
+  const capOk = (o && typeof o.capOk === 'function') ? o.capOk
+    : () => { try { return costs.demoAiCapOk(); } catch (e) { return false; } };
+  const apiKey = (o && o.apiKey) || '';
+  const tf = (digest && digest.texto_feed) || spec.texto_feed || null;
+  const feedModo = (tf && tf.modo) || 'sin-senal';
+
+  const esJuzgable = (p) => !!p && !p.armando && (
+    (p.type === 'image' && typeof p.image === 'string' && p.image) ||
+    (p.type === 'carousel' && Array.isArray(p.images) && p.images.length >= 2)
+  );
+  const juzgables = posts.filter(esJuzgable).length;
+  const topeSemana = Math.min(JUICIO_FINAL_TOPE_POR_PIEZA * juzgables, JUICIO_FINAL_TOPE_SEMANA_MAX);
+  let pasadasSemana = 0;
+
+  // La estrella/insignia que la pieza tiene que vender: primero el
+  // producto que el mapa vio en SU foto, después la estrella del
+  // fundamento, después la insignia derivada.
+  const estrellaDe = (i) => {
+    const sp = specPosts[i] || {};
+    if (sp.photo_product) return String(sp.photo_product);
+    if (digest && digest.producto_estrella) return String(digest.producto_estrella);
+    try {
+      const ins = clientDigest.insigniaOf(digest);
+      if (ins && ins.frase) return String(ins.frase);
+    } catch (e) { /* sin insignia legible: el pase juzga contra el negocio */ }
+    return '';
+  };
+
+  // Una pasada de visión, gateada por el tope semanal declarado y por
+  // el tope de gasto. Devuelve { v, bloqueo, llamada }.
+  const juzgar = async (b64, captionTexto, ctx) => {
+    if (pasadasSemana >= topeSemana) return { v: null, bloqueo: 'tope-semana', llamada: false };
+    if (!apiKey) return { v: null, bloqueo: 'sin-clave', llamada: false };
+    if (!capOk()) return { v: null, bloqueo: 'tope-gasto', llamada: false };
+    pasadasSemana++;
+    const v = await demoAi.juicioFinalPieza({ b64, caption: captionTexto, ctx, apiKey, fetchImpl: (o && o.fetchImpl) || undefined });
+    if (!v) return { v: null, bloqueo: 'sin-veredicto', llamada: true };
+    return { v, bloqueo: null, llamada: true };
+  };
+
+  // Re-render de UNA pieza por la vía del renderer (el mismo
+  // renderSpecPngs del armado y del reintento del primer posteo).
+  const renderPieza = async (sp) => {
+    try {
+      let spR = sp;
+      if (sp && sp.photo && typeof sp.photo === 'object' && sp.photo.userPhoto && o.photoPath) {
+        spR = { ...sp, photo: o.photoPath };
+      }
+      const r = await renderSpecPngs([spR], { accent: o.accent, btn: o.btn });
+      const buf = (r && Array.isArray(r.bufs) && r.bufs[0] && r.bufs[0].length) ? r.bufs[0] : null;
+      if (r && r.runDir) { try { fs.rmSync(r.runDir, { recursive: true, force: true }); } catch (e) {} }
+      return buf;
+    } catch (e) { return null; }
+  };
+
+  // Próximo candidato del pool: foto web ADMITIDA por el foto_gate que
+  // ninguna pieza de la semana usa, con su archivo en disco. Primero
+  // las que el mapa identificó como el MISMO producto de la pieza.
+  const fotoCandidata = (sp) => {
+    try {
+      const fgFotos = (spec && spec.foto_gate && Array.isArray(spec.foto_gate.fotos)) ? spec.foto_gate.fotos : [];
+      const admPorUrl = new Map(fgFotos.filter((f) => f && f.url && f.admitida).map((f) => [f.url, f]));
+      if (!admPorUrl.size) return null;
+      const usadas = new Set();
+      specPosts.forEach((s) => { if (s && typeof s.photo === 'string') usadas.add(s.photo); });
+      const cands = [];
+      for (const raw of (Array.isArray(o.extraPhotos) ? o.extraPhotos : [])) {
+        if (!raw || typeof raw.path !== 'string' || !raw.url) continue;
+        if (usadas.has(raw.path)) continue;
+        const fg = admPorUrl.get(raw.url);
+        if (!fg) continue;
+        if (!fs.existsSync(raw.path)) continue;
+        cands.push({ path: raw.path, producto: fg.producto || null });
+      }
+      if (!cands.length) return null;
+      const want = sp && sp.photo_product ? String(sp.photo_product) : '';
+      cands.sort((a, b) => ((b.producto && b.producto === want) ? 1 : 0) - ((a.producto && a.producto === want) ? 1 : 0));
+      return cands[0];
+    } catch (e) { return null; }
+  };
+
+  const aArmado = (post) => {
+    post.image = null;
+    if (post.type === 'carousel') { post.type = 'image'; delete post.images; }
+    post.armando = true;
+  };
+
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i];
+    if (!post || post.armando) continue;
+    if (!esJuzgable(post)) {
+      const rec = { i, pasa: null, motivos: [], feed_modo: feedModo, salida: 'sin-pase', motivo: post.type === 'video' ? 'pieza-video' : 'sin-imagen', pasadas: 0 };
+      registro.push(rec);
+      post.juicio = { pasa: null, motivos: [], feed_modo: feedModo, salida: 'sin-pase', motivo: rec.motivo };
+      continue;
+    }
+    const sp = specPosts[i] || {};
+    const imgData = post.type === 'carousel' ? post.images[0] : post.image;
+    const mm = /^data:image\/[a-z]+;base64,([\s\S]+)$/.exec(String(imgData || ''));
+    if (!mm) {
+      registro.push({ i, pasa: null, motivos: [], feed_modo: feedModo, salida: 'sin-pase', motivo: 'imagen-ilegible', pasadas: 0 });
+      post.juicio = { pasa: null, motivos: [], feed_modo: feedModo, salida: 'sin-pase', motivo: 'imagen-ilegible' };
+      continue;
+    }
+    const b64 = mm[1];
+    const ctx = { business: o.business || '', rubro: o.category || '', estrella: estrellaDe(i), feed_modo: feedModo, lang: o.lang || '' };
+    const capTexto = () => String(post.caption || '') + (post.hashtags ? '\n' + String(post.hashtags) : '');
+    const rec = { i, pasa: null, motivos: [], feed_modo: feedModo, salida: 'sin-pase', pasadas: 0 };
+
+    const j1 = await juzgar(b64, capTexto(), ctx);
+    if (j1.llamada) rec.pasadas++;
+    if (!j1.v) {
+      rec.motivo = j1.bloqueo;
+      registro.push(rec);
+      post.juicio = { pasa: null, motivos: [], feed_modo: feedModo, salida: 'sin-pase', motivo: j1.bloqueo };
+      continue;
+    }
+    if (j1.v.pasa) {
+      rec.pasa = true;
+      rec.salida = 'directa';
+      rec.detalle = j1.v.detalle || '';
+      registro.push(rec);
+      post.juicio = { pasa: true, motivos: [], feed_modo: feedModo, salida: 'directa' };
+      continue;
+    }
+
+    // NO PASA: una sola reparación, por el motivo dominante (foto >
+    // texto > caption), y un solo re-juicio. Sin salida aplicable o
+    // con re-juicio reprobado, el slot cae al armado honesto.
+    rec.motivos = j1.v.motivos.slice();
+    const M = new Set(j1.v.motivos);
+    const esCarrusel = post.type === 'carousel';
+    const esAi = !!post.ai || sp.photo_source === 'ai-generated';
+    const esFotoReal = typeof sp.photo_source === 'string' && sp.photo_source.indexOf('real-') === 0;
+    let salida = null;
+    let nuevaB64 = null;
+
+    if (!esCarrusel && !esAi && esFotoReal
+      && (M.has('cromo-ajeno') || M.has('estrella-ausente') || M.has('marca-no-visible') || M.has('no-vende-producto'))) {
+      const cand = fotoCandidata(sp);
+      if (cand) {
+        const buf = await renderPieza({ ...sp, photo: cand.path });
+        if (buf) { nuevaB64 = buf.toString('base64'); salida = 'foto-candidato'; }
+      }
+    }
+    if (!salida && !esCarrusel && !esAi
+      && (M.has('texto-no-encaja') || M.has('titular-tapa'))
+      && (post.text_mode === 'text' || sp.text_mode === 'text')) {
+      const buf = await renderPieza({ ...sp, text_mode: 'clean' });
+      if (buf) { nuevaB64 = buf.toString('base64'); salida = 'recompuesta-sin-texto'; }
+    }
+    if (!salida && (M.has('caption-voz') || M.has('caption-roto'))) {
+      try {
+        const prev = posts.filter((p, j) => j !== i && p && p.caption).map((p) => p.caption);
+        const fb = captions.safeFallbackCaption({ kind: sp.kind, business: o.business, tone: o.tone, lang: o.lang, prevCaptions: prev });
+        if (fb && fb.caption && fb.caption !== post.caption) {
+          post.caption = fb.caption;
+          try { post.hashtags = captions.demoHashtags(o.category, o.country, o.tone, o.lang, o.subcat); } catch (e) { /* hashtags: quedan los de la pieza */ }
+          salida = 'caption-seguro';
+        }
+      } catch (e) { /* sin caption seguro: cae al armado */ }
+    }
+
+    if (salida) {
+      if (nuevaB64) {
+        post.image = 'data:image/jpeg;base64,' + nuevaB64;
+        if (salida === 'recompuesta-sin-texto') { post.text_mode = 'clean'; post.headline = ''; }
+      }
+      if (!cambiados.includes(i)) cambiados.push(i);
+      const j2 = await juzgar(nuevaB64 || b64, capTexto(), ctx);
+      if (j2.llamada) rec.pasadas++;
+      if (!j2.v) {
+        // Reparada pero sin re-juicio posible (tope): la reparación
+        // es determinística (saca el elemento reprobado o usa el
+        // caption pre-verificado) — la pieza reparada sigue su camino
+        // y el hueco de juicio queda registrado, nunca silencioso.
+        rec.pasa = null;
+        rec.motivo = j2.bloqueo;
+        rec.salida = salida + '-sin-rejuicio';
+        post.juicio = { pasa: null, motivos: rec.motivos, feed_modo: feedModo, salida: rec.salida, motivo: j2.bloqueo };
+      } else if (j2.v.pasa) {
+        rec.pasa = true;
+        rec.salida = salida;
+        rec.detalle = j2.v.detalle || '';
+        post.juicio = { pasa: true, motivos: rec.motivos, feed_modo: feedModo, salida };
+      } else {
+        rec.pasa = false;
+        rec.motivos_1 = rec.motivos;
+        rec.motivos = j2.v.motivos.slice();
+        aArmado(post);
+        rec.salida = 'armado-rescate';
+        post.juicio = { pasa: false, motivos: rec.motivos, feed_modo: feedModo, salida: 'armado-rescate' };
+      }
+    } else {
+      rec.pasa = false;
+      aArmado(post);
+      rec.salida = 'armado-rescate';
+      if (!cambiados.includes(i)) cambiados.push(i);
+      post.juicio = { pasa: false, motivos: rec.motivos, feed_modo: feedModo, salida: 'armado-rescate' };
+    }
+    registro.push(rec);
+  }
+
+  return { registro, cambiados, pasadas: pasadasSemana, tope_semana: topeSemana, feed_modo: feedModo };
 }
 
 // (LOTE VOZ-PROPIA-EN-LA-PRUEBA · 7/11) La voz del cliente en la semana
@@ -4595,6 +4853,9 @@ module.exports = {
   trialVideoAperturaInfo,
   DEMO_TOPICS: captions.DEMO_TOPICS,
   resolveTrialCaption: captions.resolveTrialCaption,
+  // (LOTE JUICIO-FINAL) El pase de juicio sobre la pieza terminada de
+  // la prueba: veredicto por pieza + salidas de la cadena + registro.
+  aplicarJuicioFinalTrial,
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.
   trialVoiceEcho,
   // (LOTE IDIOMA-POSTEO-MARCA · v922) Idioma en que postea la marca (IG, respaldo web).

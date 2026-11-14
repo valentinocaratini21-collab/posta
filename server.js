@@ -36724,6 +36724,28 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (LOTE PRIMER-POSTEO-MEJOR · regla <30 s) Si el render expiró, las
     // ideas no esperan al LLM: se sirve lo que haya a los 5 s.
     const ideasForOut = genTimedOut ? ((await raceMs(ideasPromise, 5000)) || []) : (await ideasPromise);
+    // (LOTE JUICIO-FINAL) EL PASE DE JUICIO SOBRE LA PIEZA TERMINADA:
+    // con los posteos ya finales (imagen compuesta + caption), cada
+    // pieza se mira y se juzga entera contra el feed de la marca antes
+    // de que la semana se guarde y se muestre; la que no pasa sale por
+    // las salidas de la cadena (recompuesta sin texto / próximo
+    // candidato / caption seguro / armado honesto, que el rescate de
+    // fondo de abajo completa). El registro viaja en el payload.
+    let juicioFinalReg = null;
+    try {
+      const jf = await demo.aplicarJuicioFinalTrial({
+        posts,
+        specPosts: (spec && (spec.specPosts || spec.posts)) || [],
+        digest: trialDigest,
+        spec,
+        business, category: effCategory, country: effCountry, tone,
+        lang: contentLang, subcat: (spec && spec.subcat) || '',
+        accent, btn, photoPath, extraPhotos: webExtraPhotos,
+        apiKey: process.env.OPENAI_API_KEY || '',
+        capOk: () => costs.demoAiCapOk(),
+      });
+      juicioFinalReg = jf.registro;
+    } catch (e) { /* el juicio nunca frena la prueba */ }
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
@@ -36739,6 +36761,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
       primer_posteo: (spec && spec.primer_posteo) || null, // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) veredicto del gate de mostrar del slot 0: auditable desde el payload
+      juicio_final: juicioFinalReg, // (LOTE JUICIO-FINAL) veredicto del pase de juicio por pieza (motivo, modo de feed, salida): auditable desde el payload
       rescate_semana: (spec && spec.rescate_semana) || [], // (ADDENDUM 6A) registro del rescate de semana entera
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
@@ -38918,6 +38941,38 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // la tanda ya terminó casi siempre; si no, `out.ideas` queda vacío
     // como cuando la llamada al LLM falla hoy.
     const ideas = (await raceMs(ideasPromiseS, 5000)) || [];
+    // (LOTE JUICIO-FINAL) EL PASE DE JUICIO SOBRE LA PIEZA TERMINADA:
+    // corre ACÁ, con TODOS los reemplazos ya aplicados y ANTES del
+    // veredicto final del slot 0 y de guardar la semana, para que ese
+    // registro describa la pieza que efectivamente se entrega. Cada
+    // pieza se mira y se juzga entera contra el feed de la marca; la
+    // que no pasa sale por las salidas de la cadena (recompuesta sin
+    // texto / próximo candidato / caption seguro / armado honesto,
+    // que el rescate de fondo completa sobre la caché). Las piezas
+    // que el pase cambia se re-emiten con el mismo evento 'post' de
+    // los demás reemplazos (vitrina = entrega).
+    let juicioFinalRegS = null;
+    try {
+      const jfS = await demo.aplicarJuicioFinalTrial({
+        posts,
+        specPosts,
+        digest: trialDigest,
+        spec,
+        business, category: effCategory, country: effCountry, tone,
+        lang: contentLangS, subcat: spec.subcat || '',
+        accent, btn, photoPath, extraPhotos: webExtraPhotos,
+        apiKey: demoApiKey || '',
+        capOk: () => costs.demoAiCapOk(),
+      });
+      juicioFinalRegS = jfS.registro;
+      if (Array.isArray(jfS.cambiados)) {
+        for (const ci of jfS.cambiados) {
+          if (posts[ci] && week[ci]) {
+            try { send('post', { index: ci, day: week[ci].day, date: week[ci].date, hour: week[ci].hour, post: posts[ci] }); } catch (e) {}
+          }
+        }
+      }
+    } catch (e) { /* el juicio nunca frena la prueba */ }
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 2) VEREDICTO SOBRE LA
     // PIEZA FINAL DEL SLOT 0: el registro que el gate computó sobre
     // el SPEC no puede seguir diciendo «pasa» si un reemplazo
@@ -38992,6 +39047,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
       primer_posteo: ppRecS || null, // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) veredicto del gate de mostrar del slot 0, completado por la cadena de rescate
+      juicio_final: juicioFinalRegS, // (LOTE JUICIO-FINAL) veredicto del pase de juicio por pieza (motivo, modo de feed, salida): auditable desde el payload
       rescate_semana: rescateSemanaS, // (ADDENDUM 6A) registro del rescate de semana entera
       precio_gate: precioGateS.length ? { piezas: precioGateS } : null, // (ADDENDUM 3B) cortes de la puerta de precios, por pieza
       feed_kind: feedKind,
@@ -40901,7 +40957,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1052';
+const BUILD_ID = '20261105-v1053';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

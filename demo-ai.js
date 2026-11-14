@@ -1143,6 +1143,138 @@ async function qaTrialWowFinal({ b64, feedMode, apiKey, fetchImpl } = {}) {
   }
 }
 
+// ---------- 3b) JUICIO FINAL DE LA PIEZA (LOTE JUICIO-FINAL) ----------
+// (Vara de Valentino, 14/11 05:02: «Quiero que Posty sea igual de bueno
+// que vos haciendo posteos y entendiendo el producto».) Lo que el
+// trabajo a mano hace y el software no hacía: MIRAR la pieza terminada
+// — la imagen final compuesta que se va a mostrar, con su caption — y
+// juzgarla ENTERA contra el feed de la marca antes de mostrarla, con
+// veredicto cerrado de pasa / no-pasa. Hasta este lote ninguna capa
+// miraba la imagen final de una pieza de foto real (diagnosis
+// etiqueta-tienda §3: los gates deciden por metadatos del spec y el
+// render dibuja sin que nadie lo mire). Este pase es ESA mirada: una
+// sola llamada de visión por pieza final, con la vara vigente
+// enumerada en el prompt (no un gusto libre del modelo) y motivos de
+// una lista cerrada. NO extiende qaComposedText (que solo pregunta si
+// el titular tapa, y es la superficie del lote hermano etiqueta-y-
+// texto): este juicio es de la pieza entera, imagen + caption.
+// Fail-open como el resto del QA de la casa: null = sin veredicto
+// (red/caída/respuesta ilegible) y la pieza sigue su curso con el
+// motivo registrado por el llamador — nunca un freno silencioso.
+const JUICIO_FINAL_MOTIVOS = [
+  'estrella-ausente',   // la estrella esperada no es la protagonista, u otro producto ocupa la pieza
+  'marca-no-visible',   // la marca real no se reconoce, o un logo/texto de marca se ve redibujado/inventado
+  'cromo-ajeno',        // cromo de tienda/web horneado: insignias de listado, botones de compra, banners de campaña
+  'texto-no-encaja',    // el texto superpuesto no pertenece al lenguaje del feed de la marca (modo de la señal)
+  'titular-tapa',       // el titular superpuesto (o su barra) tapa el producto, una cara o los ojos
+  'caption-voz',        // el caption no suena a la marca: idioma, hashtags de otro rubro, relleno genérico
+  'caption-roto',       // el caption arranca a mitad de frase, truncado o roto
+  'no-vende-producto',  // la pieza no vende un producto/servicio concreto y nombrado del negocio
+];
+
+const JUICIO_FINAL_SYSTEM = [
+  'You are the final quality judge of a finished Instagram post for a real local business, inside a community-manager product.',
+  'You see the FINAL image exactly as it would be shown to the business owner, and you read its caption. Judge the WHOLE piece against the brand\'s own feed and product — strictly, the way a demanding owner would.',
+  'Return ONLY a JSON object: {"pasa": true|false, "motivos": ["<code>", ...], "detalle": "<short reason, max 20 words>"}. No markdown, no prose outside the JSON.',
+  '"motivos" may ONLY contain these codes (list every one that applies; it must be empty when "pasa" is true):',
+  '- "estrella-ausente": the expected product/star named in the user message is not the clear hero of the image, or a different product takes its place.',
+  '- "marca-no-visible": the business\'s REAL brand is not recognizably present (its actual logo, name or packaging in the scene), or a logo/brand text looks redrawn, warped, misspelled or invented by an image generator.',
+  '- "cromo-ajeno": the image carries store/web chrome that is not the product or its packaging: listing badges (NEW, SALE, % OFF, BEST SELLER, SOLD OUT and their family, in any language), drawn buy buttons (SHOP NOW, BUY, COMPRAR), or website campaign banners/copy used as if they were a photo. Text printed ON the product or its packaging is NOT chrome.',
+  '- "texto-no-encaja": text composited OVER the photo (a headline, a pill, a banner added on top) does not belong to the language of this brand\'s feed. Above all: when the feed text mode given is "limpio" (the feed is clean photography with no overlaid headlines), ANY big composited headline or listing-style pill over the photo fails with this code. When the mode is "sin-senal", do NOT use this code for style alone.',
+  '- "titular-tapa": an overlaid headline (or its colored bar) covers the product, a face or eyes.',
+  '- "caption-voz": the caption does not sound like this brand: it is not written in the brand language given, its hashtags belong to a different trade/vertical, or it is generic filler that could belong to any business, or it claims things the image does not support.',
+  '- "caption-roto": the caption starts mid-sentence, truncated or ungrammatical — its first line reads like a broken fragment.',
+  '- "no-vende-producto": the piece does not sell a specific, named product or service of this business (a vague mood piece, an unrelated stock scene, or a graphic poster with no real product).',
+  'Judge ONLY what you can see in the image and read in the caption. Text printed on the product or its packaging is legitimate and never a defect.',
+  'A piece PASSES when: the real product is the hero, the real brand is recognizable in the scene, there is no foreign chrome, any overlaid text fits the feed text mode and covers nothing important, and the caption speaks in the brand\'s voice and language selling that product.',
+].join(' ');
+
+function parseJuicioFinalContent(content) {
+  let txt = String((content && content.trim()) || '');
+  if (!txt) return null;
+  txt = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let j = null;
+  try { j = JSON.parse(txt); } catch (e) {
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (m) { try { j = JSON.parse(m[0]); } catch (e2) { /* cae a null */ } }
+  }
+  if (!j || typeof j !== 'object') return null;
+  if (typeof j.pasa !== 'boolean') return null;
+  const motivos = (Array.isArray(j.motivos) ? j.motivos : [])
+    .map((x) => String(x || '').trim())
+    .filter((x) => JUICIO_FINAL_MOTIVOS.includes(x));
+  // Un no-pasa sin motivo de la lista cerrada no es un veredicto
+  // accionable (el llamador no sabría qué salida tomar): se descarta.
+  if (!j.pasa && !motivos.length) return null;
+  return { pasa: j.pasa, motivos: j.pasa ? [] : [...new Set(motivos)], detalle: String(j.detalle || '').slice(0, 200) };
+}
+
+// juicioFinalPieza({ b64, caption, ctx, apiKey, fetchImpl })
+// ctx = { business, rubro, estrella, feed_modo, lang } — el contexto
+// mínimo de juicio: qué producto tiene que protagonizar la pieza, el
+// modo de texto del feed de la marca (la señal texto_feed cuando
+// existe; 'sin-senal' cuando no) y el idioma en que postea la marca.
+async function juicioFinalPieza({ b64, caption, ctx, apiKey, fetchImpl } = {}) {
+  try {
+    if (!b64 || !apiKey) return null;
+    const doFetch = fetchImpl || fetch;
+    const c = ctx || {};
+    const userText = [
+      `Business: ${String(c.business || '').trim() || '(unknown)'} (trade: ${String(c.rubro || '').trim() || 'unknown'})`,
+      `Expected star of this piece: ${String(c.estrella || '').trim() || 'the signature product or service of this business — judge that a real product of THIS business is the hero'}`,
+      `Feed text mode: ${String(c.feed_modo || 'sin-senal')} ("limpio" = the feed is clean photography with no overlaid headlines; "con-texto" = the feed itself designs text over its images; "mixto" = some of both; "sin-senal" = unknown)`,
+      `Brand language: ${String(c.lang || '').trim() || 'unknown'} (the caption must be written in it)`,
+      'Caption:',
+      '"""',
+      String(caption || ''),
+      '"""',
+      'Judge the finished piece. Answer with the JSON only.',
+    ].join('\n');
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        max_tokens: 300,
+        messages: [
+          { role: 'system', content: JUICIO_FINAL_SYSTEM },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: userText },
+              // Detalle HIGH, a diferencia del QA de composición (que
+              // juzga geometría): este pase tiene que LEER la pieza —
+              // la etiqueta del producto, una píldora, el texto de un
+              // banner. Verificado en la integración del lote: a
+              // detalle low, la foto limpia del 677 reprobaba por
+              // ilegible; a high pasa, y el 676/678 siguen reprobando
+              // por sus motivos reales.
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' } },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r || !r.ok) return null;
+    const j = await r.json().catch(() => null);
+    if (!fetchImpl && j && j.usage) {
+      try {
+        costs.logApiCost({
+          feature: 'demo-juicio-final', model: 'gpt-4o-mini',
+          inTokens: (j.usage.prompt_tokens | 0) || 0,
+          outTokens: (j.usage.completion_tokens | 0) || 0,
+        });
+      } catch (e) { /* medir nunca rompe */ }
+    }
+    const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return parseJuicioFinalContent(content);
+  } catch (e) {
+    return null;
+  }
+}
+
 // ---------- 4) Composite del titular + JPEG final ----------
 // La IA genera la escena LIMPIA (sin texto); el titular lo compone el
 // código con composite-headline.py — el mismo del pipeline real — y la
@@ -1336,6 +1468,11 @@ module.exports = {
   qaTrialWowFinal,
   parseTrialWowQaContent,
   QA_WOW_FINAL_SYSTEM,
+  // (LOTE JUICIO-FINAL) El pase de juicio sobre la pieza terminada.
+  juicioFinalPieza,
+  parseJuicioFinalContent,
+  JUICIO_FINAL_MOTIVOS,
+  JUICIO_FINAL_SYSTEM,
   // (ADDENDUM · LOTE PRIMER-POSTEO-PERFECTO) QA del logo integrado en
   // la imagen generada del rescate del primer posteo.
   qaGeneratedLogo,
