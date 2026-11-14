@@ -18517,8 +18517,11 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
 // (POST /api/admin/posts/:id/edit-caption): misma semántica — SOLO
 // cambia el caption; nunca toca status, scheduled_at, hashtags,
 // image_path ni needs_review; esa vía no corre el lint de programación
-// ni la puerta de duplicados (en esta base ninguna de las dos existe
-// para la edición de un programado) y no escribe versiones. Las dos
+// y no escribe versiones. La puerta de duplicados SÍ corre desde
+// CHEQUEO-DUPLICADOS-CAPTIONS (follow-up de este lote): si el caption
+// nuevo repite el de OTRO posteo programado de la misma cuenta (o uno
+// publicado en los últimos 7 días), la edición se frena con
+// 409 caption_duplicado y el caption queda como estaba. Las dos
 // diferencias con el admin: el posteo tiene que ser del usuario de la
 // sesión (otro dueño → 404) y rige el corte de invitado
 // (guestBackstop, el mismo del PATCH). Para borradores, el detalle usa
@@ -18545,6 +18548,17 @@ app.post('/api/posts/:id/edit-caption', requireAuth, express.json(), (req, res) 
   }
   const actual = post.caption || '';
   const cambiaria = actual !== nuevo;
+  if (cambiaria) {
+    // CHEQUEO-DUPLICADOS-CAPTIONS (follow-up DETALLE-POSTEO v1021): el
+    // caption nuevo no puede repetir el de OTRO posteo programado de la
+    // misma cuenta ni uno publicado en los últimos 7 días — la misma
+    // puerta que frena al programar, ahora también al editar.
+    const dupEdit = captionDuplicadoProgramadoDe(post.user_id, nuevo, post.id);
+    if (dupEdit) {
+      console.log(`[chequeo-duplicados] edit-caption post ${post.id} (user ${post.user_id}): caption duplicado del post ${dupEdit.id} — no se edita`);
+      return res.status(409).json({ ok: false, error: 'caption_duplicado', duplicado_de: dupEdit.id, message: 'Ese texto ya lo tiene otro posteo programado. Cambiá el texto y probá de nuevo.' });
+    }
+  }
   if (cambiaria) {
     db.prepare(`UPDATE posts SET caption = ? WHERE id = ?`).run(nuevo, post.id);
     console.log(`[detalle] edit-caption: post ${post.id} (usuario ${post.user_id}, sale ${post.scheduled_at || 'sin fecha'}) caption ${actual.length}→${nuevo.length} chars`);
@@ -22507,6 +22521,28 @@ function weekQuotaPools(uid) {
 // `apply(iso, d)` ejecuta el UPDATE propio de cada flujo. Horarios: feed y
 // reels a la best_hour del negocio, historias a STORY_HOUR; un posteo de
 // feed por día (las historias tienen su propio carril de días).
+// CHEQUEO-DUPLICADOS-CAPTIONS (Valentino 12/11 14:26 — el duplicado real 589=571,
+// Portrait Coffee cuenta 87, se programó porque ningún chequeo al programar miraba
+// más allá del week_key: el lint solo ve la misma week_key y 571 la tiene vacía).
+// Antes de programar un caption para una cuenta, se compara contra los captions YA
+// PROGRAMADOS de ESA cuenta y los PUBLICADOS en los últimos 7 días. Normalización =
+// captionBodyKey (generator.js, la misma que DEDUP-7D usa al generar): minúsculas,
+// sin tildes, sin puntuación ni emojis, espacios colapsados — dos captions que solo
+// difieren en eso SON el mismo. Entre cuentas distintas no se compara nada: cada
+// cuenta es su propio universo. Devuelve el posteo contra el que choca, o null.
+// Fail-open: si la lectura falla, no frena nada (como el re-chequeo de ideas).
+function captionDuplicadoProgramadoDe(uid, caption, excludeId) {
+  try {
+    const key = captionBodyKey(caption);
+    if (!key) return null;
+    const rows = db.prepare(`SELECT id, caption FROM posts WHERE user_id = ? AND id != ? AND COALESCE(caption, '') != ''
+      AND ((status = 'scheduled' AND scheduled_at IS NOT NULL)
+        OR (status = 'published' AND published_at > datetime('now', '-7 days')))
+      ORDER BY id DESC LIMIT 100`).all(uid, excludeId || 0);
+    for (const r of rows) { if (captionBodyKey(r.caption) === key) return r; }
+    return null;
+  } catch (e) { return null; }
+}
 function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
   const tz = userTz(uid);
   let bestHour = 19;
@@ -22578,6 +22614,16 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
     let monday = curMonday;
     if (typeof d.week_key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.week_key)) monday = mondayKeyOf(d.week_key);
     if (monday < curMonday) monday = curMonday;
+    // CHEQUEO-DUPLICADOS-CAPTIONS: si el caption ya está programado para esta
+    // cuenta (o se publicó en los últimos 7 días), NO se programa: queda en
+    // 'draft' sin consumir cupo ni día, y el lugar lo ocupa el siguiente
+    // borrador (el loop sigue). El log dice contra qué posteo choca.
+    const dup = captionDuplicadoProgramadoDe(uid, d.caption, d.id);
+    if (dup) {
+      console.log(`[chequeo-duplicados] post ${d.id} (user ${uid}): caption duplicado del post ${dup.id} — no se programa (caption: "${String(d.caption || '').slice(0, 80)}")`);
+      waiting.push({ id: d.id, week_key: monday, reason: 'caption_duplicado', duplicado_de: dup.id });
+      continue;
+    }
     const poolKey = quotaPoolKey(d);
     if (pools.leftFor(monday, poolKey) <= 0) {
       waiting.push({ id: d.id, week_key: monday, reason: 'plan_limit' });
@@ -22761,7 +22807,8 @@ function scheduleAllDrafts(uid) {
   const { scheduled, waiting } = scheduleDraftsPerWeek(uid, ready, (iso, d) => upd.run(iso, d.id), { signal: sadEsInvitado ? 'auto' : 'approved' });
   scheduleLintForPosts(uid, scheduled.map((s) => s.id)); // (v198-A) lint al programar
   if (!scheduled.length) {
-    const reason = waiting.some((w) => w.reason === 'plan_limit') ? 'plan_limit' : 'no_slots';
+    const reason = waiting.some((w) => w.reason === 'plan_limit') ? 'plan_limit'
+      : (waiting.length && waiting.every((w) => w.reason === 'caption_duplicado')) ? 'caption_duplicado' : 'no_slots';
     return { ok: false, reason, scheduled: [], waiting, gateFailed };
   }
   return { ok: true, scheduled, waiting, gateFailed };
@@ -22856,6 +22903,11 @@ app.post('/api/posts/schedule-all', requireAuth, async (req, res) => {
       const qx = quotaForWeek(uid, d0.media_type, w0.week_key);
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qx.limit, used: qx.used, plan_name: qx.plan_name, week_key: w0.week_key, waiting,
         message: `Llegaste al límite de tu plan ${qx.plan_name} (${qx.limit} ${quotaUnitName(d0.media_type)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+    }
+    // CHEQUEO-DUPLICADOS-CAPTIONS: si NADA se programó porque todo era
+    // duplicado, el error lo dice (no 'no_slots': días libres había).
+    if (waiting.every((w) => w.reason === 'caption_duplicado')) {
+      return res.status(400).json({ error: 'caption_duplicado', waiting, message: 'Estos posteos repiten el texto de otro posteo ya programado o publicado en los últimos 7 días, así que no se programaron. Cambiá el texto y probá de nuevo.' });
     }
     return res.status(400).json({ error: 'no_slots', waiting, message: 'No encontramos días libres en la semana de tus posteos para programarlos.' });
   }
@@ -41690,7 +41742,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1064';
+const BUILD_ID = '20261105-v1065';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
