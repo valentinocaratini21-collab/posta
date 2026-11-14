@@ -14123,7 +14123,7 @@ async function chatView() {
     weekNoDna = !!(er && er.reason === 'no_dna' && !nDrafts && !nSched);
     if ((er && (er.generating || er.trial_arming)) || posts.some(p => !p.image_path && p.status === 'draft')) {
       // Refrescar en 8s para mostrar las tarjetas cuando aparezcan.
-      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 8000);
+      pzScheduleRender(8000); // (LOTE L7) por el guardian: un solo timer pendiente a la vez
     }
   } catch (e) {}
   // (LOTE C · CHAT-NUEVO) El chat va PRIMERO: encabezado propio con cara +
@@ -20953,7 +20953,7 @@ async function scheduleView() {
     weekGenerating = !!(er && (er.generating || er.trial_arming));
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
     if ((er && (er.generating || er.trial_arming)) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
-      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 8000);
+      pzScheduleRender(8000); // (LOTE L7) por el guardian: un solo timer pendiente a la vez
     }
   } catch (e) {}
   // LOTE VELOCIDAD: cuota, first-redo y dogfood son independientes:
@@ -24888,7 +24888,7 @@ async function inicioView() {
     weekGenerating = !!(er && (er.generating || er.trial_arming));
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
     if ((er && (er.generating || er.trial_arming)) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
-      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/inicio')) render(); } catch (e) {} }, 8000);
+      pzScheduleRender(8000); // (LOTE L7) por el guardian: un solo timer pendiente a la vez
     }
   } catch (e) {}
   // LOTE VELOCIDAD: cuota, perfil y nivel son independientes: un solo
@@ -31971,6 +31971,58 @@ async function doLogout() {
   location.hash = '#/login';
   render();
 }
+// (LOTE L7 · LOOP-ARMANDO-INICIO) El loop «armando» de 5 s x 24 vivia en
+// bindChatView, pero esa funcion NO se llama en v942 (tampoco en v932):
+// el loop era codigo muerto y ni en el chat corria. La tarjeta
+// .hs-generating se pinta en Inicio y en el chat, y el refresh vivo de
+// 8 s de las vistas solo dispara cuando el ensure dice generating o hay
+// un borrador sin imagen — con el import ya hecho pero los posteos
+// invisibles (needs_review=1), la tarjeta queda en «armando» sin que
+// nada refresque. Este helper revive el loop con el mismo tope
+// (24 x 5 s, contador en sessionStorage) y corre en Inicio y en el
+// chat cuando la tarjeta esta pintada.
+// Un solo temporizador de re-render pendiente a la vez (PZ_RENDER_T):
+// sin esto, el loop de 5 s y los timers de 8 s de las vistas se
+// multiplican entre si (cada render agenda dos timers y cada timer
+// dispara un render). Los tres sitios de 8 s pasan por el mismo
+// guardian; el primero que agenda gana y el otro difiere al proximo
+// render. El contador hs_gen_retry solo avanza cuando el loop de 5 s
+// agenda de verdad, asi que el tope sigue siendo 24 refreshes.
+// El callback re-renderiza en cualquier tab de la app (#/app/...): si
+// el usuario navego de Inicio al chat (o viceversa) mientras el timer
+// estaba pendiente, el render igual ocurre y el loop sigue en la tab
+// nueva — con el gate por tab propio, el loop se quedaba parado tras
+// navegar.
+var PZ_RENDER_T = null;
+function pzScheduleRender(delayMs) {
+  try {
+    if (PZ_RENDER_T) return false;
+    PZ_RENDER_T = setTimeout(() => {
+      PZ_RENDER_T = null;
+      try { if ((location.hash || '').startsWith('#/app/')) render(); } catch (e) {}
+    }, delayMs);
+    return true;
+  } catch (e) { return false; }
+}
+function pzHsGenLoop() {
+  try {
+    const hash = (location.hash || '');
+    const onTab = hash.startsWith('#/app/chat') || hash.startsWith('#/app/inicio');
+    if (!onTab || !document.querySelector('.hs-generating, .hs-completing, .igmock-pending')) {
+      try { sessionStorage.removeItem('hs_gen_retry'); } catch (e) {}
+      return;
+    }
+    let n = 0;
+    try { n = Number(sessionStorage.getItem('hs_gen_retry') || 0); } catch (e) {}
+    if (n < 24) {
+      if (pzScheduleRender(5000)) {
+        try { sessionStorage.setItem('hs_gen_retry', String(n + 1)); } catch (e) {}
+      }
+    } else {
+      try { sessionStorage.removeItem('hs_gen_retry'); } catch (e) {}
+    }
+  } catch (e) {}
+}
 function bindApp(tab) {
   // (LOTE CHATTEXTO) Cada render asegura la rotación del placeholder
   // (cubre Inicio/Schedule, que no pasan por bindChatView): solo los
@@ -32027,6 +32079,10 @@ function bindApp(tab) {
   if (tab === 'ajustes' && typeof bindSettings === 'function') bindSettings(); // el chunk ya lo cargó render()
   if (tab === 'ajustes' && typeof gzAjustesFill === 'function') gzAjustesFill(); // PASE DE APP: bloques Gesty en Ajustes
   try { f3Init(tab); } catch (e) {}
+  // (LOTE L7) Loop «armando» tambien en Inicio: revive el loop de 5 s x 24
+  // (vivia muerto en bindChatView) con el mismo tope; corre en Inicio y en
+  // el chat cuando la tarjeta esta pintada. Un solo timer pendiente a la vez.
+  try { pzHsGenLoop(); } catch (e) {}
 }
 
 
