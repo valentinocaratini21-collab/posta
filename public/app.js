@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1091';
+const PZ_BUILD = '20261105-v1092';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27439,6 +27439,16 @@ function pzSubirHoyNota(motivo, en) {
   if (motivo === 'ocupado') return en ? 'Today already has one of your posts — this one goes on the next available day.' : 'Hoy ya tiene un posteo tuyo — este va el próximo día posible.';
   return en ? 'There was no room today — this one goes on the next available day.' : 'Hoy no había lugar — este va el próximo día posible.';
 }
+// (LOTE DETECTOR-SUBTÍTULOS-SUBIDOS) El aviso de los subtítulos
+// quemados del video subido: el recibo dice qué se encontró y qué se
+// hizo. 'ok' no imprime nada (un video sano no suma ruido); el resto
+// es siempre la verdad, incluida la que no pudimos resolver solos.
+function pzSubirSubsQuemadosNota(estado, en) {
+  if (estado === 'corregido') return en ? 'I checked the subtitles burned into your video: the lines overlapped, so I fixed them. Your original stays saved in case you want it back.' : 'Revisé los subtítulos que venían en tu video: las líneas se pisaban, así que los corregí. Tu original queda guardado por si querés volver.';
+  if (estado === 'defecto_sin_corregir') return en ? 'I checked the subtitles burned into your video and the lines overlap. I could not fix them on my own, so I left it in review — your video stays exactly as you uploaded it.' : 'Revisé los subtítulos que venían en tu video y las líneas se pisan. No pude corregirlos solo, así que lo dejé en revisión: tu video quedó tal cual lo subiste.';
+  if (estado === 'no_verificado') return en ? 'I could not verify the subtitles burned into your video, so I left it in review. Your video stays exactly as you uploaded it.' : 'No pude verificar los subtítulos que venían en tu video, así que lo dejé en revisión. Tu video quedó tal cual lo subiste.';
+  return '';
+}
 function pzSubirReciboPintar(r) {
   const en = pzVozEn();
   const cont = document.getElementById('pzSubirRecibos');
@@ -27475,6 +27485,7 @@ function pzSubirReciboPintar(r) {
     + (r.desplazado ? `<div class="r-note">${en ? 'I moved Posty\'s post from that day to ' : 'Moví el posteo de Posty de ese día al '}${esc(r.desplazado.dia_label || '')}${r.desplazado.hora ? ' · ' + esc(r.desplazado.hora) : ''}${en ? ': one post per day.' : ': un posteo por día.'}</div>` : '')
     + (r.semana_siguiente ? `<div class="r-note">${en ? 'This week was already full: it goes out next week.' : 'Esta semana ya estaba completa: sale la semana que viene.'}</div>` : '')
     + (r.hoy_motivo ? `<div class="r-note">${esc(pzSubirHoyNota(r.hoy_motivo, en))}</div>` : '')
+    + (r.subs_quemados && r.subs_quemados.estado && r.subs_quemados.estado !== 'ok' ? `<div class="r-note">${esc(pzSubirSubsQuemadosNota(r.subs_quemados.estado, en))}</div>` : '')
     + (r.sin_dia ? `<div class="r-note">${en ? 'There were no free days: it stays in your material.' : 'No había días libres: quedó en tu material.'}</div>` : '')
     + (r.modo === 'pedido_revision' ? `<div class="r-note">${en ? 'Tomorrow it lands in your grid at your usual time — nothing goes out today.' : 'Mañana entra en tu grilla a tu hora de siempre — hoy no sale nada.'}</div>` : '')
     + (r.modo === 'pedido_revision' && r.duda && r.pedido_id ? `<div class="r-duda" data-pz-duda="${r.pedido_id}"><div class="r-note" style="margin-top:6px">${esc(pzSubirDudaTexto(r.duda, en))}</div><div class="chips">${(Array.isArray(r.duda.opciones) ? r.duda.opciones : []).map((o) => `<button type="button" class="chip" data-pz-duda-op="${esc(o)}">${esc(o)}</button>`).join('')}<button type="button" class="chip" data-pz-duda-op="otra">${en ? "It's something else" : 'Es otra cosa'}</button></div></div>` : '')

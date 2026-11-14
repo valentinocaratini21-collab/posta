@@ -17819,6 +17819,58 @@ async function subirAplicarSubtitulos(uid, postId) {
   } catch (e) { console.error('[subir-subtitulos]', e.message); return false; }
 }
 
+// ================= LOTE DETECTOR-SUBTÍTULOS-SUBIDOS =================
+// Orden de Valentino (14/11): si un cliente sube un video con los
+// subtítulos QUEMADOS mal (líneas pisadas, el caso 681), Posty lo
+// verifica, le AVISA en el recibo y lo CORRIGE solo. Corre sobre la
+// media FINAL del posteo creado desde Subir (que desde
+// VIDEO-SUBIDO-INTACTO es el archivo del cliente byte a byte), DESPUÉS
+// del paso explícito de subtítulos si el cliente lo pidió. Estados:
+//   ok / sin_texto → el video queda intacto, sin aviso (no se declara
+//     nada que no se haya verificado: ambos estados exigen veredicto
+//     de visión sobre los frames).
+//   no_verificado → fail-closed: intacto + needs_review (conserje) +
+//     aviso honesto. Nunca «está bien» sin verificar.
+//   defecto → corrección por re-dibujo de las zonas (detector-
+//     subtitulos.js), re-verificada ANTES de reemplazar; si queda
+//     limpia, reemplaza con la anterior en prev_image_path
+//     (recuperable a un toque, como subirAplicarSubtitulos); si no se
+//     puede garantizar limpia → intacto + revisión + aviso honesto.
+// El detector jamás frena la subida: cualquier error interno cae en
+// no_verificado con revisión, y el recibo dice la verdad.
+async function subirDetectorSubtitulosQuemados(uid, postId) {
+  const aRevision = () => { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postId); } catch (e) {} };
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || String(post.media_type || '') !== 'video' || !post.image_path) return null;
+    const abs = path.join(MEDIA_DIR, path.basename(String(post.image_path)));
+    if (!fs.existsSync(abs)) { aRevision(); return { estado: 'no_verificado', motivo: 'sin_archivo' }; }
+    const det = require('./detector-subtitulos');
+    const key = openaiKeyFor(uid);
+    const r = await det.detectar({ videoAbs: abs, key });
+    if (r.estado === 'ok' || r.estado === 'sin_texto') return { estado: 'ok' };
+    if (r.estado !== 'defecto') { aRevision(); return { estado: 'no_verificado', motivo: r.motivo || '' }; }
+    const tag = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const outName = `subtitulos-corregidos-${tag}.mp4`;
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const cor = await det.corregir({ videoAbs: abs, segmentos: r.segmentos, outAbs, info: r.info });
+    if (!cor.ok) { try { fs.unlinkSync(outAbs); } catch (e) {} aRevision(); return { estado: 'defecto_sin_corregir', motivo: cor.motivo || '' }; }
+    const ver = await det.detectar({ videoAbs: outAbs, key });
+    if (ver.estado !== 'ok' && ver.estado !== 'sin_texto') {
+      try { fs.unlinkSync(outAbs); } catch (e) {}
+      aRevision();
+      return { estado: 'defecto_sin_corregir', motivo: 'reverificacion_' + (ver.estado || '') };
+    }
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run('/media/' + outName, String(post.image_path || ''), postId);
+    console.log(`[detector-subtitulos] usuario ${uid}: posteo ${postId} — subtítulos quemados pisados, corregidos y re-verificados ✓`);
+    return { estado: 'corregido' };
+  } catch (e) {
+    console.error('[detector-subtitulos]', e.message);
+    aRevision();
+    return { estado: 'no_verificado', motivo: 'error' };
+  }
+}
+
 // ================= LOTE PEDIDO-VOZ-REVISION =================
 // Los pedidos ESPECÍFICOS por nota de voz en el tab Subir NO se arman
 // en el momento (decisión de Valentino, 13/11): nacen en revisión, el
@@ -17979,7 +18031,7 @@ async function armarPedidoSubir(ped) {
   if (!asset) return { ok: false, error: 'material_inexistente' };
   const kind = asset.kind === 'video' ? 'video' : 'foto';
   const ya = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND foto_asset_id = ? AND source = 'subir'`).get(uid, asset.id);
-  if (ya) return { ok: true, post_id: ya.id, scheduled_at: ya.scheduled_at, camino: 'ya_existia', desplazado: null, mejora_aplicada: false, subs_aplicados: false, dia: ymdInTz(ya.scheduled_at, userTz(uid)), hora: armarSlotLabel(uid, ya.scheduled_at).hora };
+  if (ya) return { ok: true, post_id: ya.id, scheduled_at: ya.scheduled_at, camino: 'ya_existia', desplazado: null, mejora_aplicada: false, subs_aplicados: false, subs_quemados: null, dia: ymdInTz(ya.scheduled_at, userTz(uid)), hora: armarSlotLabel(uid, ya.scheduled_at).hora };
   let resp = {};
   try { resp = JSON.parse(String(ped.respuestas || '{}')) || {}; } catch (e) { resp = {}; }
   let caption = '', hashtags = '';
@@ -18047,13 +18099,17 @@ async function armarPedidoSubir(ped) {
   if (kind === 'video' && String(resp.subs || 'si') === 'si') {
     subsOk = await subirAplicarSubtitulos(uid, postId);
   }
+  // (LOTE DETECTOR-SUBTÍTULOS-SUBIDOS) Verificación de los subtítulos
+  // quemados del video subido, sobre la media final del posteo.
+  let subsQuemados = null;
+  if (kind === 'video') subsQuemados = await subirDetectorSubtitulosQuemados(uid, postId);
   try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
   const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(postId);
   const isoFinal = postRow && postRow.scheduled_at ? postRow.scheduled_at : plan.iso;
   const diaFinal = ymdInTz(isoFinal, tz);
   const camino = desplazado ? 'desplazo_posty' : (diaFinal === manana ? 'directo' : 'siguiente_libre');
   const slF = armarSlotLabel(uid, isoFinal);
-  return { ok: true, post_id: postId, scheduled_at: isoFinal, dia: diaFinal, hora: slF.hora, camino, desplazado, mejora_aplicada: mejoraOk, subs_aplicados: subsOk };
+  return { ok: true, post_id: postId, scheduled_at: isoFinal, dia: diaFinal, hora: slF.hora, camino, desplazado, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, subs_quemados: subsQuemados };
 }
 
 // El resolvedor del tab Subir: recibe el material ya subido (asset) y
@@ -18185,6 +18241,10 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     if (kind === 'video' && String(b.subs || 'si') === 'si') {
       subsOk = await subirAplicarSubtitulos(uid, postId);
     }
+    // (LOTE DETECTOR-SUBTÍTULOS-SUBIDOS) Verificación de los
+    // subtítulos quemados del video subido, sobre la media final.
+    let subsQuemados = null;
+    if (kind === 'video') subsQuemados = await subirDetectorSubtitulosQuemados(uid, postId);
     try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
     const sl = armarSlotLabel(uid, plan.iso);
     const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(postId);
@@ -18197,7 +18257,7 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     // el desplazamiento y su reubicación si hiciera falta): el recibo
     // dice «Hoy» solo si el posteo quedó hoy de verdad.
     const esHoyFin = !!(postRow && postRow.scheduled_at) && ymdInTz(postRow.scheduled_at, userTz(uid)) === tzToday(userTz(uid));
-    return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, desplazado, semana_siguiente: !!plan.semana_siguiente, es_hoy: esHoyFin, hoy_motivo: plan.hoy_motivo || '' });
+    return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, subs_quemados: subsQuemados, desplazado, semana_siguiente: !!plan.semana_siguiente, es_hoy: esHoyFin, hoy_motivo: plan.hoy_motivo || '' });
   } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
 });
 
@@ -18288,7 +18348,7 @@ app.post('/api/admin/support/conserje/pedidos-subir/:id/aprobar', requireAdminTo
       db.prepare('UPDATE subir_pedidos_voz SET error = ? WHERE id = ?').run(String(r.error || 'armado_fallido'), ped.id);
       return res.status(502).json({ ok: false, error: r.error || 'armado_fallido', pedido: subirPedidoPublico(subirPedidoRow(ped.id)) });
     }
-    const armado = { scheduled_at: r.scheduled_at, dia: r.dia, hora: r.hora, camino: r.camino, desplazado_post_id: r.desplazado ? r.desplazado.post_id : null, mejora_aplicada: !!r.mejora_aplicada, subs_aplicados: !!r.subs_aplicados };
+    const armado = { scheduled_at: r.scheduled_at, dia: r.dia, hora: r.hora, camino: r.camino, desplazado_post_id: r.desplazado ? r.desplazado.post_id : null, mejora_aplicada: !!r.mejora_aplicada, subs_aplicados: !!r.subs_aplicados, subs_quemados: r.subs_quemados ? r.subs_quemados.estado : null };
     db.prepare(`UPDATE subir_pedidos_voz SET estado = 'armado', post_id = ?, armado = ?, error = '' WHERE id = ?`).run(r.post_id, JSON.stringify(armado), ped.id);
     res.json({ ok: true, pedido: subirPedidoPublico(subirPedidoRow(ped.id)) });
   } catch (e) { console.error('[pedidos-subir-aprobar]', e.message); res.status(500).json({ ok: false, error: 'no_se_pudo_aprobar' }); }
@@ -43317,7 +43377,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1091';
+const BUILD_ID = '20261105-v1092';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
