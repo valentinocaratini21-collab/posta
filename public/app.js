@@ -24571,6 +24571,7 @@ async function inicioView() {
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, '')}
   ${hoySegHTML}
+  <div id="pzTemaInicio"></div>
   ${hoyAprobarHTML}
   ${pzConserjeHoyHTML()}
   <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
@@ -26783,6 +26784,78 @@ async function pzTemaGuardarLunesDesdeHoy(rango, btn) {
   } catch (e) {
     try { box.querySelectorAll('[data-lunes-rango]').forEach((b) => { b.disabled = false; b.classList.remove('on'); }); } catch (e2) {}
     try { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', 'i could not save it 😕 try again')); } catch (e2) {}
+  }
+}
+/* ===== LOTE PREGUNTA-A-INICIO · LA PREGUNTA DE LOS LUNES EN INICIO =====
+   La pila de temas (pzTemaInit/pzTemaCargar) se monta solo dentro de
+   #pzChatFull, y la ruta del chat quedó solo para el invitado: el
+   registrado rebota a Inicio (router, tab 'chat') y la pregunta de los
+   lunes — el único tema de la pila sin otra superficie viva para él —
+   quedaba sin puerta. Acá vive en Inicio, arriba del contenido del
+   día, con la MISMA tarjeta, los MISMOS rangos y el MISMO endpoint
+   (POST /api/weekly-consultas) que la tarjeta del chat: cambia la
+   superficie, no la pregunta. El invitado NO la recibe (en la prueba
+   no hay semana de consultas: el mismo gate pzIsGuest() que la pila)
+   ni el espejo «ver como visitante». Sin chat nuevo: una tarjeta con
+   toques, y al responder colapsa a la línea de confirmación. */
+async function pzTemaInicioInit() {
+  const slot = document.getElementById('pzTemaInicio');
+  if (!slot || slot.dataset.temaInit) return;
+  try { if (typeof pzIsGuest === 'function' && pzIsGuest()) return; } catch (e) {}
+  try { if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return; } catch (e) {}
+  slot.dataset.temaInit = '1';
+  let consultas = null;
+  try { consultas = await api.get('/api/weekly-consultas'); } catch (e) { consultas = null; }
+  // La misma condición de nacimiento que en pzTemaCargar: la semana
+  // sigue sin respuesta (rango == null) y no se dejó para después en
+  // esta sesión. Respondida o sin semana, Inicio no muestra nada.
+  if (!consultas || consultas.rango != null || !consultas.week_key) return;
+  if (PZ_TEMA_DESPUES['lunes:' + consultas.week_key]) return;
+  slot.innerHTML = '<div class="pz-tema">'
+    + '<b>' + esc(pzTemaT('La pregunta de los lunes', "Monday's question")) + '</b>'
+    + '<span>' + esc(pzTemaT('Solo esto: cuántas consultas entraron esta semana. Una respuesta y queda anotado.', 'Just this: how many inquiries came in this week. One answer and it is saved.')) + '</span>'
+    + pzTemaQuickHTML([
+      { id: 'lunes-0', text: pzTemaT('Sin consultas', 'No inquiries') },
+      { id: 'lunes-1-5', text: pzTemaT('1 a 5', '1 to 5') },
+      { id: 'lunes-6-15', text: pzTemaT('6 a 15', '6 to 15') },
+      { id: 'lunes-15+', text: pzTemaT('Más de 15 🎉', 'More than 15 🎉') },
+    ])
+    + '</div>';
+  try {
+    slot.querySelectorAll('[data-tema-op]').forEach((b) => {
+      if (b.dataset.temaBound) return; b.dataset.temaBound = '1';
+      b.onclick = () => { try { pzTemaInicioElegir(b.dataset.temaOp, b); } catch (e) {} };
+    });
+  } catch (e) {}
+}
+async function pzTemaInicioElegir(op, btn) {
+  const RANGOS = { 'lunes-0': '0', 'lunes-1-5': '1-5', 'lunes-6-15': '6-15', 'lunes-15+': '15+' };
+  const rango = RANGOS[op];
+  if (!rango) return;
+  const slot = document.getElementById('pzTemaInicio');
+  if (!slot) return;
+  // Anti doble-toque, como pzTemaElegir; si el guardado falla, los
+  // botones se reactivan y el error va en la línea de la tarjeta (el
+  // equivalente sin chat de pzTemaReactivar + chatSay de error).
+  try { slot.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = true; if (b === btn) b.classList.add('picked'); }); } catch (e) {}
+  try {
+    const r = await api.post('/api/weekly-consultas', { rango });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    const ack = rango === '0' ? pzTemaT('Anotado: semana sin consultas.', 'Noted: a week with no inquiries.')
+      : rango === '1-5' ? pzTemaT('Anotado: 1 a 5 consultas.', 'Noted: 1 to 5 inquiries.')
+      : rango === '6-15' ? pzTemaT('Anotado: 6 a 15 consultas 🎉', 'Noted: 6 to 15 inquiries 🎉')
+      : pzTemaT('Anotado: más de 15 🎉 semana récord.', 'Noted: more than 15 🎉 record week.');
+    // Espejo del guardado desde el mensaje del día: si la pila del
+    // chat tuviera el tema cargado, sale de su lista también.
+    try {
+      if (PZ_TEMA && Array.isArray(PZ_TEMA.temas)) {
+        PZ_TEMA.temas = PZ_TEMA.temas.filter((x) => !(x && x.kind === 'lunes'));
+      }
+    } catch (e) {}
+    slot.innerHTML = pzTemaMiniHTML(pzTemaT('La pregunta de los lunes', "Monday's question"), ack);
+  } catch (e) {
+    try { slot.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = false; b.classList.remove('picked'); }); } catch (e2) {}
+    try { const s = slot.querySelector('.pz-tema > span'); if (s) s.textContent = pzTemaT('no pude guardarlo 😕 probá de nuevo', 'i could not save it 😕 try again'); } catch (e2) {}
   }
 }
 function pzTemaPintar() {
@@ -30377,6 +30450,10 @@ function bindInicio() {
   // (LOTE REDISEÑO R1 · HOY) Segmentador, mensaje→chat, tarjetas por
   // aprobar, hoja de subida, entrada al conserje.
   try { pzHoyBind(document.getElementById('inicioView')); } catch (e) {}
+  // (LOTE PREGUNTA-A-INICIO) La pregunta de los lunes en Inicio: la pila
+  // de temas vive solo en la vista de chat (ruta del invitado); el
+  // registrado entra por Inicio y la pregunta quedaba sin puerta.
+  try { pzTemaInicioInit(); } catch (e) {}
   // Bloque de respaldo (sin piezas todavía): flechas del carrusel, el
   // mismo cableado que hace bindSchedule en su vista.
   const wl = document.querySelector('#inicioView #hsWeekList');
