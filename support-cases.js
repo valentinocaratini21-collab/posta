@@ -818,6 +818,43 @@ function buildOverview(db, opts) {
   };
 }
 
+// (LOTE FRENO-DIA-MARCADO) Espejo de los frenos por DÍA de server.js
+// (day_stops, tabla creada en db.js; este ensure perezoso es el respaldo
+// para contextos que usan el módulo sin pasar por el boot completo —
+// mismo patrón que conserje-revision.js). El rehacer de SOPORTE sobre
+// un posteo PROGRAMADO escribe el stop del día con origen
+// 'soporte_rehacer': hasta este lote ese freno anulaba la fecha sin
+// dejar marca y el relleno automático (ensure del día) trataba el
+// hueco como un día libre e imponía un reemplazo (incidente 673 y
+// replay del 14/11: video 653 frenado 13:08, reemplazo genérico 679
+// generado 13:53 para las 19:00). INSERT OR IGNORE: si el día ya tiene
+// un stop (del dueño o del conserje), su origen NO se pisa — la marca
+// existente ya frena el día y su atribución es la que vale. Devuelve el
+// origen del stop vigente tras la llamada (null si el día no quedó
+// frenado): el stop se levanta por los mismos gestos deliberados del
+// dueño que levantan cualquier stop (los lectores y borradores de
+// server.js operan por (user_id, day_key), sin mirar el origen).
+function ensureDayStopsTableS(db) {
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS day_stops (
+      user_id INTEGER NOT NULL,
+      day_key TEXT NOT NULL,
+      post_id INTEGER,
+      origen TEXT NOT NULL DEFAULT 'dueno_pausa',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, day_key)
+    )`);
+  } catch (e) { /* sin tabla: el rehacer sigue con su marca por posteo */ }
+}
+function dayStopSetS(db, uid, dayKey, postId) {
+  if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(dayKey || ''))) return null;
+  ensureDayStopsTableS(db);
+  safe(() => db.prepare(`INSERT OR IGNORE INTO day_stops (user_id, day_key, post_id, origen)
+    VALUES (?, ?, ?, 'soporte_rehacer')`).run(uid, dayKey, postId || null), null);
+  const row = safe(() => db.prepare('SELECT origen FROM day_stops WHERE user_id = ? AND day_key = ?').get(uid, dayKey), null);
+  return (row && row.origen) || null;
+}
+
 // ---------- Acciones del equipo (CONTROL) ----------
 // Todas escriben en support_team_log. Ninguna publica: reprogramar y
 // rehacer solo mueven posteos entre programado/borrador; responder solo
@@ -888,9 +925,28 @@ function redoPost(db, postId, opts) {
   }
   // Programado: vuelve a borrador sin fecha, pendiente de aprobación.
   if (post.status === 'scheduled') {
+    // (LOTE FRENO-DIA-MARCADO) El día se captura ANTES de anular la
+    // fecha y queda frenado en day_stops con origen 'soporte_rehacer'
+    // — el mismo gesto que la pausa del dueño dentro de la app (PATCH
+    // action='unschedule' en server.js), que era el único freno que
+    // marcaba el día: el de soporte dejaba el hueco libre y el ensure
+    // imponía un reemplazo el mismo día (incidente 673; 14/11: video
+    // 653 frenado por soporte 13:08 y a las 13:53 el ensure ya había
+    // generado el reemplazo genérico 679 para las 19:00). Las
+    // historias tienen su propio carril: no frenan el día del feed
+    // (misma regla que la pausa del dueño). El stop NO bloquea al
+    // dueño: se levanta con sus gestos deliberados de siempre sobre
+    // ese día (programar, Subir, aceptar, «Que Posty lo arme»…).
+    const tSch = toMs(post.scheduled_at);
+    const diaFrenado = Number.isFinite(tSch) ? dayKeyInTz(new Date(tSch), accountTz(db, post.user_id)) : null;
     db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'pending', error = '' WHERE id = ?`).run(post.id);
-    log('Posteo #' + post.id + ' volvió a borrador para rehacerlo' + (note ? ' — ' + note : ''));
-    return { ok: true, modo: 'borrador', post_id: post.id };
+    const origenStop = (diaFrenado && post.media_type !== 'story')
+      ? dayStopSetS(db, post.user_id, diaFrenado, post.id) : null;
+    const diaMarcado = origenStop ? diaFrenado : null;
+    log('Posteo #' + post.id + ' volvió a borrador para rehacerlo'
+      + (diaMarcado ? ' — día ' + diaMarcado + ' frenado en day_stops (origen ' + origenStop + ')' : '')
+      + (note ? ' — ' + note : ''));
+    return { ok: true, modo: 'borrador', post_id: post.id, dia_marcado: diaMarcado };
   }
   return { ok: false, error: 'no_rehacer' };
 }

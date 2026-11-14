@@ -67,7 +67,9 @@ CREATE INDEX IF NOT EXISTS idx_posts_due ON posts(status, scheduled_at);
 // (ensure del día, embudo semanal) lo trataba como un día libre más y
 // imponía un reemplazo (incidente 649→673; resurgimiento del 586).
 // Sin ALTERs: la tabla nace completa en este CREATE, pegado al de posts.
-// origen: 'dueno_pausa' | 'conserje_no_sale'. Sin TTL: el registro es
+// origen: 'dueno_pausa' | 'conserje_no_sale' | 'soporte_rehacer' (el
+// freno de soporte/admin sobre un programado también marca el día —
+// LOTE FRENO-DIA-MARCADO, incidente 679). Sin TTL: el registro es
 // por día y un stop de un día pasado es inerte (los lectores solo
 // consultan el día que están por llenar).
 db.exec(`

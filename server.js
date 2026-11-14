@@ -11908,7 +11908,9 @@ app.post('/api/admin/support/posts/:id/rehacer', requireAdminToken, (req, res) =
   const r = supportCases.redoPost(db, req.params.id, { actor: 'equipo', note: (req.body || {}).note,
     regen: (uid, wk, topic) => regenerateOneDraft(uid, wk, topic) });
   if (!r.ok) return res.status(r.error === 'no_existe' ? 404 : 400).json({ ok: false, error: r.error });
-  res.json({ ok: true, modo: r.modo, post_id: r.post_id });
+  // (LOTE FRENO-DIA-MARCADO) dia_marcado: el día que el freno de
+  // soporte dejó frenado en day_stops (null si no aplicó).
+  res.json({ ok: true, modo: r.modo, post_id: r.post_id, dia_marcado: r.dia_marcado || null });
 });
 app.post('/api/admin/support/:userId/chat', requireAdminToken, (req, res) => {
   if (!/^\d+$/.test(String(req.params.userId || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
@@ -23379,8 +23381,12 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
 // el ensure creó un reemplazo el mismo minuto de la pausa (incidente
 // 649→673, 13/11) y el embudo semanal re-agendó un «no sale» del
 // conserje en el primer día libre (caso 586). Escritores: el PATCH
-// action='unschedule' (captura el día ANTES de anular la fecha) y el
-// 'no_sale' del conserje (conserje-revision.js tiene el espejo).
+// action='unschedule' (captura el día ANTES de anular la fecha), el
+// 'no_sale' del conserje (conserje-revision.js tiene el espejo) y el
+// rehacer de SOPORTE sobre un posteo programado (support-cases.js
+// tiene su espejo, origen 'soporte_rehacer' — LOTE FRENO-DIA-MARCADO:
+// el freno de soporte también vacía el día a propósito; sin marca, el
+// ensure imponía un reemplazo, incidente 679 del 14/11).
 // Lectores: ensureTodayPost, scheduleDraftsPerWeek (los días frenados
 // son días ocupados), programarHoy (defensa en profundidad) y el
 // desplazamiento por cadencia de Subir. El stop de un día se borra SOLO
@@ -42634,7 +42640,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1078';
+const BUILD_ID = '20261105-v1079';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
