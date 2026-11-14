@@ -130,7 +130,14 @@ async function resolvePageId(igUserId) {
 // Crea campaña + conjunto + creativo + anuncio. Devuelve los ids de Meta.
 // `spendCents` = presupuesto TOTAL en centavos de la moneda de la cuenta
 // (el llamador convierte según getAccountCurrency; acá va directo).
-async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days = 7, country = 'AR', ctx = null }) {
+// (LOTE ADS-ESTRATÉGICOS) Parámetros opcionales de estrategia, con los
+// defaults EXACTOS del comportamiento histórico: sin ellos, la llamada
+// es idéntica a la de siempre (OUTCOME_ENGAGEMENT + POST_ENGAGEMENT +
+// país 18-65). `targeting` completo reemplaza al targeting por país;
+// `destinationType` (p. ej. INSTAGRAM_DIRECT) solo se envía si viene.
+// (Composición sobre v1048: el parámetro `ctx` del riel del cliente
+// se conserva intacto, al final de los históricos.)
+async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days = 7, country = 'AR', ctx = null, objective = 'OUTCOME_ENGAGEMENT', optimizationGoal = 'POST_ENGAGEMENT', destinationType = null, targeting = null }) {
   // (LOTE CONEXIÓN-PÁGINA) Con ctx, la pauta corre en la cuenta del
   // CLIENTE con su SUAT: no exige la configuración de Posty y el
   // creativo puede ir sin object_id (la guía oficial de cuentas de IG
@@ -148,23 +155,26 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
 
   // 1. Campaña (pausada hasta tener todo listo)
   const camp = await g(`${A}/campaigns`, { method: 'POST', ctx: gctx, params: {
-    name, objective: 'OUTCOME_ENGAGEMENT', status: 'PAUSED', special_ad_categories: [],
+    name, objective: objective || 'OUTCOME_ENGAGEMENT', status: 'PAUSED', special_ad_categories: [],
   }});
 
-  // 2. Conjunto de anuncios: presupuesto total en `days` días, país del negocio, 18-65+
+  // 2. Conjunto de anuncios: presupuesto total en `days` días. Sin
+  // targeting explícito: país del negocio, 18-65+ (como siempre).
   const now = Date.now();
   const start = new Date(now + 30 * 60000).toISOString();
   const end = new Date(now + days * 86400000).toISOString();
-  const adset = await g(`${A}/adsets`, { method: 'POST', ctx: gctx, params: {
+  const adsetParams = {
     name: `${name} · conjunto`,
     campaign_id: camp.id,
     lifetime_budget: Math.round(spendCents),
     billing_event: 'IMPRESSIONS',
-    optimization_goal: 'POST_ENGAGEMENT',
+    optimization_goal: optimizationGoal || 'POST_ENGAGEMENT',
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    targeting: { geo_locations: { countries: [country] }, age_min: 18, age_max: 65 },
+    targeting: targeting || { geo_locations: { countries: [country] }, age_min: 18, age_max: 65 },
     start_time: start, end_time: end, status: 'PAUSED',
-  }});
+  };
+  if (destinationType) adsetParams.destination_type = destinationType;
+  const adset = await g(`${A}/adsets`, { method: 'POST', ctx: gctx, params: adsetParams });
 
   // 3. Creativo desde el posteo existente (doc: "Use Posts as Instagram Ads")
   const creativeParams = {
@@ -295,12 +305,16 @@ async function resolvePageIdWithToken(igUserId, token) {
   return hit.id;
 }
 
-// Métricas de una campaña: gasto, alcance, impresiones, clics.
+// Métricas de una campaña: gasto, alcance, impresiones, clics y
+// (LOTE ADS-ESTRATÉGICOS) conversaciones iniciadas — la acción real
+// que Meta cuenta para los objetivos de mensajes
+// (onsite_conversion.messaging_conversation_started_*). Sin esa
+// acción en la respuesta, conversaciones = 0 (dato real, no estimado).
 async function getBoostStats(campaignId) {
   if (!adsConfigured() || !campaignId) return null;
   // El endpoint de insights usa query params; se arma manual:
   const q = new URLSearchParams({
-    fields: 'spend,reach,impressions,clicks',
+    fields: 'spend,reach,impressions,clicks,actions',
     'filtering[0][field]': 'campaign.id',
     'filtering[0][operator]': 'IN',
     'filtering[0][value]': JSON.stringify([String(campaignId)]),
@@ -310,11 +324,17 @@ async function getBoostStats(campaignId) {
   const data = await res.json().catch(() => ({}));
   const row = data && data.data && data.data[0];
   if (!row) return null;
+  let conversaciones = 0;
+  if (Array.isArray(row.actions)) {
+    const conv = row.actions.find((a) => a && /^onsite_conversion\.messaging_conversation_started/.test(String(a.action_type || '')));
+    if (conv) conversaciones = Number(conv.value || 0) || 0;
+  }
   return {
     spend_cents: Math.round(Number(row.spend || 0) * 100),
     reach: Number(row.reach || 0),
     impressions: Number(row.impressions || 0),
     clicks: Number(row.clicks || 0),
+    conversaciones,
   };
 }
 
@@ -334,4 +354,69 @@ async function checkAdsPermission() {
   }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, checkClientAdsAccess, resolvePageIdWithToken };
+// ── (LOTE ADS-ESTRATÉGICOS) Resolución de targeting ───────────────
+// Los ids de intereses NUNCA se escriben a mano (se vencen y Meta poda
+// la taxonomía): se resuelven contra la Targeting Search API en el
+// momento de crear. Igual para la geolocalización (adgeolocation) y
+// para la audiencia parecida (una lookalike que YA exista en la
+// cuenta). Todo fallo devuelve null: el llamador omite y declara.
+
+// Nombre de interés → { id, name } real de Meta. Caché en memoria por
+// nombre (el catálogo de rubros es chico y los nombres se repiten).
+const _interestCache = new Map();
+async function searchInterestId(name) {
+  const q = String(name || '').trim();
+  if (!q || !adsConfigured()) return null;
+  const key = q.toLowerCase();
+  if (_interestCache.has(key)) return _interestCache.get(key);
+  let out = null;
+  try {
+    const d = await g('/search', { params: { type: 'adinterest', q, limit: '25' } });
+    const rows = Array.isArray(d && d.data) ? d.data : [];
+    const exact = rows.find((r) => r && r.id && String(r.name || '').trim().toLowerCase() === key);
+    const hit = exact || rows.find((r) => r && r.id);
+    if (hit) out = { id: String(hit.id), name: String(hit.name || q) };
+  } catch (e) { out = null; }
+  _interestCache.set(key, out);
+  return out;
+}
+
+// Texto de ciudad → { key, name, latitude, longitude } de Meta
+// (adgeolocation, solo ciudades). latitude/longitude vienen en la
+// respuesta cuando Meta los tiene; si no, el llamador usa la key.
+async function searchGeo(query, country) {
+  const q = String(query || '').trim();
+  if (!q || !adsConfigured()) return null;
+  try {
+    const d = await g('/search', { params: {
+      type: 'adgeolocation', q, location_types: JSON.stringify(['city']),
+      ...(country ? { country_code: String(country).toUpperCase() } : {}), limit: '5',
+    }});
+    const rows = Array.isArray(d && d.data) ? d.data : [];
+    const hit = rows.find((r) => r && r.key) || null;
+    if (!hit) return null;
+    const lat = Number(hit.latitude), lng = Number(hit.longitude);
+    return {
+      key: String(hit.key),
+      name: String(hit.name || q),
+      latitude: Number.isFinite(lat) ? lat : null,
+      longitude: Number.isFinite(lng) ? lng : null,
+    };
+  } catch (e) { return null; }
+}
+
+// Primera audiencia LOOKALIKE que ya exista en la cuenta publicitaria.
+// Crear una lookalike exige una audiencia origen poblada: no se crea
+// en el momento del impulso — si no hay ninguna, devuelve null y el
+// impulso corre sin parecidos, declarado en su registro.
+async function findLookalikeAudienceId() {
+  if (!adsConfigured()) return null;
+  try {
+    const d = await g(`${act()}/customaudiences`, { params: { fields: 'id,name,subtype', limit: '100' } });
+    const rows = Array.isArray(d && d.data) ? d.data : [];
+    const hit = rows.find((r) => r && r.id && String(r.subtype || '').toUpperCase() === 'LOOKALIKE');
+    return hit ? String(hit.id) : null;
+  } catch (e) { return null; }
+}
+
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId };

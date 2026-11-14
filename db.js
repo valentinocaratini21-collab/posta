@@ -606,6 +606,25 @@ db.exec(`CREATE TABLE IF NOT EXISTS ad_boosts (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   started_at TEXT
 )`);
+// (LOTE ADS-ESTRATÉGICOS) El objetivo del negocio (pregunta 2 del
+// onboarding) y la audiencia elegida, persistidos con el impulso: la
+// medición los lee de acá. Y las últimas stats por objetivo (clics y
+// conversaciones que devolvió Meta), junto a las que ya existían.
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN objetivo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN audiencia_json TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_clicks INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_conversaciones INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Estado mínimo de la tarea
+// «otra gente»: una fila por usuario con el resumen del anuncio y, si
+// el cliente ya contó en el chat a quién busca, el chip traducido que
+// espera su toque en la tarjeta de audiencia. Se borra al aceptar o
+// descartar el chip (o al agotarse la descripción sin mapeo).
+db.exec(`CREATE TABLE IF NOT EXISTS ads_otra_gente (
+  user_id INTEGER PRIMARY KEY,
+  resumen TEXT DEFAULT '',
+  chip_json TEXT DEFAULT '',
+  creado TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 db.exec(`CREATE TABLE IF NOT EXISTS ad_transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

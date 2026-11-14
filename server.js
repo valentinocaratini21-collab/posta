@@ -491,6 +491,7 @@ const adsBilletera = require('./ads-billetera');
 // aparte con la tarjeta guardada, solo con la campaña corriendo. La
 // costura es adsFee.cobrarFeeCampanaCorriendo (ver ads-fee.js).
 const adsFee = require('./ads-fee');
+const adsAudiencia = require('./ads-audiencia'); // (LOTE ADS-ESTRATÉGICOS) objetivo + audiencia desde el fundamento
 // === FEE-IMPULSAR require (fin) ===
 const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
 
@@ -7584,6 +7585,51 @@ app.post('/api/ideas/chat', async (req, res) => {
       return res.json({ reply, idea: null });
     }
   }
+  // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Si el cliente abrió el
+  // chat desde el chip «+ otra gente» de la tarjeta de audiencia,
+  // dejó una tarea abierta: ESTE mensaje (texto, o la transcripción
+  // de su nota de voz que ya corrió más arriba) es la descripción de
+  // la gente que busca. Se traduce contra el vocabulario cerrado de
+  // su rubro y el resultado queda como chip pendiente en su tarjeta
+  // — el targeting no cambia hasta que lo acepta ahí. Sin mapeo: se
+  // dice honestamente y se propone el más cercano; nada se ignora en
+  // silencio. La tarea se consume con la primera descripción (con
+  // chip guardado deja de interceptar: mensajes siguientes del chat
+  // siguen el flujo normal).
+  {
+    let ogRow = null;
+    try { ogRow = adsOtraGenteGet(uidChat); } catch (e) { ogRow = null; }
+    if (ogRow && !ogRow.chip) {
+      const descAds = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+      if (descAds.trim()) {
+        try {
+          const propAds = adsAudiencia.propuestaDesdeFundamento(fundamentoAdsDe(uidChat));
+          const tr = adsAudiencia.traducirDescripcion(descAds, propAds);
+          const enAds = langOfUser(uidChat) === 'en';
+          let replyAds = '';
+          if (tr.chip) {
+            adsOtraGenteSet(uidChat, ogRow.resumen, tr.chip);
+            replyAds = enAds
+              ? `got it 💡 i turned that into this: «${tr.chip.etiqueta}». i left it as a chip on the ad card: go back there and tap it to add it (or just leave it, and nothing changes).`
+              : `listo 💡 lo traduje a esto: «${tr.chip.etiqueta}». te lo dejé como chip en la tarjeta del anuncio: volvé ahí y sumalo con un toque (o dejalo, y no cambia nada).`;
+          } else if (tr.cercano) {
+            adsOtraGenteSet(uidChat, ogRow.resumen, tr.cercano);
+            replyAds = enAds
+              ? `that exact thing can't be filtered on Meta 🙏 the closest filter that does exist is «${tr.cercano.etiqueta}»: i left it as a chip on the ad card in case it works for you.`
+              : `eso tal cual no se puede filtrar en Meta 🙏 lo más cercano que sí existe es «${tr.cercano.etiqueta}»: te lo dejé como chip en la tarjeta del anuncio por si te sirve.`;
+          } else {
+            adsOtraGenteClear(uidChat);
+            replyAds = enAds
+              ? `i can't filter that on Meta 🙏 tell me what they're into, how old they are, or whether they're women or men, and i'll build it with what does exist.`
+              : 'eso no lo puedo filtrar en Meta 🙏 contame qué les gusta, qué edad tienen o si son mujeres u hombres, y lo armo con lo que sí existe.';
+          }
+          chatInsertUser(db, uidChat, descAds, chatReply, JSON.stringify(userPhotos));
+          pzChatSaveReply(db, uidChat, replyAds);
+          return res.json({ reply: replyAds, idea: null });
+        } catch (e) { console.error('[ads-otragente] intercepción:', e.message); }
+      }
+    }
+  }
   // 🧠 MEMORIA DE GUSTOS (v392): dos atajos sin IA, antes del modelo.
   // (a) Si hay una PROPUESTA de gusto abierta y el mensaje es un «sí» o
   //     un «no» pelado, es su respuesta: se aprende (o no) y se acusa.
@@ -12382,6 +12428,110 @@ function feeImpulsoTrasActivacion(uid, datos) {
 // saldo + impulso USD: el saldo en pesos NO bloquea — queda como crédito
 // en pesos y el cobro va DIRECTO con la tarjeta guardada de Stripe, sin
 // tocar la billetera (después de crear el anuncio, mismo orden).
+// (LOTE ADS-ESTRATÉGICOS) El fundamento aplanado que alimenta la
+// propuesta de audiencia: la respuesta de la pregunta 2 del onboarding
+// un clic vive en digest.onboarding.cta; las de respaldo, en el
+// onboarding registrado (dueno.meta) y en el goal del perfil. El rubro
+// es el del perfil; la ciudad, la que el estudio leyó del negocio
+// (digest.ciudad) o el «dónde» declarado en la prueba.
+function fundamentoAdsDe(uid) {
+  let digest = null;
+  try { digest = clientDigest.getStoredDigest(db, uid); } catch (e) { digest = null; }
+  let profile = null;
+  try { profile = db.prepare('SELECT business_name, category, goal FROM profiles WHERE user_id = ?').get(uid); } catch (e) { profile = null; }
+  const ob = (digest && digest.onboarding && typeof digest.onboarding === 'object') ? digest.onboarding : {};
+  const dueno = (digest && digest.dueno && typeof digest.dueno === 'object') ? digest.dueno : {};
+  let lang = 'es';
+  try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (u && u.lang === 'en') lang = 'en'; } catch (e) {}
+  return {
+    cta: ob.cta || '',
+    meta: dueno.meta || '',
+    goalTexto: (profile && profile.goal) || '',
+    categoria: (profile && profile.category) || (digest && digest.categoria) || 'otro',
+    audienciaTexto: ob.audiencia || '',
+    clienteIdeal: dueno.cliente || '',
+    ciudad: (digest && digest.ciudad) || '',
+    donde: ob.donde || '',
+    pais: adCountry(uid),
+    lang,
+  };
+}
+
+// (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Persistencia mínima de la
+// tarea: una fila por usuario en ads_otra_gente. El chip «+ otra
+// gente» de la tarjeta abre esta tarea (resumen del anuncio); el
+// primer mensaje del chat con la tarea abierta ES la descripción y
+// la intercepción del chat la traduce y guarda el chip acá; la
+// tarjeta lo lee por GET audiencia (propuesta.pendiente) y lo cierra
+// con aceptar/descartar. Nada de esto toca el targeting hasta que el
+// cliente acepta el chip en la tarjeta.
+function adsOtraGenteGet(uid) {
+  try {
+    const r = db.prepare('SELECT resumen, chip_json FROM ads_otra_gente WHERE user_id = ?').get(uid);
+    if (!r) return null;
+    let chip = null;
+    try { chip = r.chip_json ? JSON.parse(r.chip_json) : null; } catch (e) { chip = null; }
+    return { resumen: r.resumen || '', chip };
+  } catch (e) { return null; }
+}
+function adsOtraGenteSet(uid, resumen, chip) {
+  try {
+    db.prepare(`INSERT INTO ads_otra_gente (user_id, resumen, chip_json) VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET resumen = excluded.resumen, chip_json = excluded.chip_json, creado = datetime('now')`)
+      .run(uid, String(resumen || '').slice(0, 300), chip ? JSON.stringify(chip) : '');
+  } catch (e) {}
+}
+function adsOtraGenteClear(uid) {
+  try { db.prepare('DELETE FROM ads_otra_gente WHERE user_id = ?').run(uid); } catch (e) {}
+}
+
+// (LOTE ADS-ESTRATÉGICOS) La propuesta de audiencia para la tarjeta
+// del cliente: objetivo desde el fundamento + audiencia en lenguaje
+// humano con sus opciones prefijadas. Solo lectura: nada se crea ni
+// se gasta acá; la elección viaja en el POST de impulsar y el servidor
+// la valida contra ESTA propuesta.
+app.get('/api/ads/billetera/audiencia', requireAuth, (req, res) => {
+  try {
+    const propuesta = adsAudiencia.propuestaDesdeFundamento(fundamentoAdsDe(req.session.userId));
+    // Chip «otra gente» traducido en el chat, esperando su toque.
+    const og = adsOtraGenteGet(req.session.userId);
+    if (og && og.chip) propuesta.pendiente = { chip: og.chip };
+    res.json({ ok: true, propuesta });
+  } catch (e) { res.status(500).json({ ok: false, motivo: 'sin_propuesta' }); }
+});
+
+// (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) El chip «+ otra gente» abre
+// el chat CON EL TEMA PUESTO: esta llamada deja la tarea abierta
+// (resumen del anuncio) y siembra el mensaje de Posty que pide
+// exactamente eso — el chat nunca abre genérico desde la tarjeta.
+// El mensaje sembrado queda en el historial como respuesta de Posty
+// (mismo mecanismo que «toca para activar» de los horarios).
+app.post('/api/ads/billetera/audiencia/tema', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const resumen = String((req.body && req.body.resumen) || '').slice(0, 300);
+    adsOtraGenteSet(uid, resumen, null);
+    const en = langOfUser(uid) === 'en';
+    const mensaje = en
+      ? "let's find them 🎯 send me a voice note telling me who you want this ad to reach: what they're into, how old they are, whatever you know. i'll turn it into real filters and leave it as a chip on the ad card, so you can add it with one tap."
+      : 'dale, busquemos a esa gente 🎯 mandame un audio contándome a quién querés llegar con este anuncio: qué les gusta, qué edad tienen, lo que sepas. lo traduzco a los filtros reales y te lo dejo como un chip en la tarjeta del anuncio, para que lo sumes con un toque.';
+    // El mensaje lo siembra el cliente con chatSay (persiste por el
+    // log del chat, el mecanismo de la casa): acá solo se devuelve.
+    res.json({ ok: true, mensaje });
+  } catch (e) { res.status(500).json({ ok: false }); }
+});
+
+// (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) La decisión se cierra en la
+// tarjeta: aceptar o descartar el chip borra la tarea. (Si lo acepta,
+// el filtro ya quedó aplicado en su audiencia y viaja validado en el
+// POST del impulso como cualquier otra edición de chips.)
+app.post('/api/ads/billetera/audiencia/pendiente', requireAuth, (req, res) => {
+  try {
+    adsOtraGenteClear(req.session.userId);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false }); }
+});
+
 app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -12400,6 +12550,35 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     const montoUSD = Number(req.body.montoUSD);
     if (esARS ? !adsBilletera.validarPresupuestoARS(montoARS) : !adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
     if (!posteoIdReq && !igMediaIdReq) return res.status(400).json({ ok: false, motivo: 'sin_posteo' });
+    // (LOTE ADS-ESTRATÉGICOS) Objetivo + audiencia desde el fundamento.
+    // Si el cliente editó la audiencia en su tarjeta, se valida contra
+    // las opciones prefijadas de la propuesta ACÁ, antes de cualquier
+    // llamada externa o gasto: un valor fuera de las opciones frena
+    // con 400, sin anuncio y sin débito. Sin edición, manda la
+    // propuesta tal cual salió del fundamento. La resolución a ids
+    // reales de Meta ocurre adentro de crearAnuncio (recién cuando el
+    // anuncio se crea: primero Meta, después el cobro — el orden no
+    // cambia).
+    const propuestaAds = adsAudiencia.propuestaDesdeFundamento(fundamentoAdsDe(uid));
+    let audienciaElegida = null;
+    if (req.body && req.body.audiencia != null) {
+      const val = adsAudiencia.validarAudiencia(req.body.audiencia, propuestaAds);
+      if (!val.ok) return res.status(400).json({ ok: false, motivo: 'audiencia_invalida' });
+      audienciaElegida = val.audiencia;
+    }
+    const audienciaFinal = audienciaElegida || propuestaAds.audiencia;
+    const mapeoAds = adsAudiencia.mapeoMeta(propuestaAds.objetivo);
+    let resueltoAds = null;
+    const audienciaJsonDe = () => {
+      try {
+        return JSON.stringify({
+          objetivo: propuestaAds.objetivo, objetivo_fuente: propuestaAds.objetivo_fuente,
+          editada: !!audienciaElegida, audiencia: audienciaFinal,
+          resuelto: resueltoAds,
+          mapeo: { objective: mapeoAds.campaignObjective, optimization_goal: mapeoAds.optimizationGoal, destination_type: mapeoAds.destinationType },
+        });
+      } catch (e) { return ''; }
+    };
     // (v846) Impulsar un reciente de IG sin fila local: se adopta (se
     // verifica que el medio sea del usuario y se crea la fila) y el
     // flujo sigue igual con el id adoptado.
@@ -12471,12 +12650,25 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       if (previo) {
         return res.json({ ok: true, ya_creado: true, anuncioId: previo.meta_campaign_id || null, posteoId, montoUSD, dias: 7, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
       }
+      // (LOTE ADS-ESTRATÉGICOS · composición sobre el riel del cliente
+      // de v1048) La misma traducción a targeting real que el camino de
+      // la billetera: la audiencia elegida se resuelve recién cuando el
+      // anuncio se crea, y si la resolución entera falla el anuncio sale
+      // con el targeting histórico (la estrategia nunca es un nuevo
+      // punto de fallo del gasto).
+      let targetingAds = null;
+      try {
+        const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds);
+        targetingAds = rt.targeting; resueltoAds = rt.resuelto;
+      } catch (e) { targetingAds = null; resueltoAds = null; }
       let cr = null;
       try {
         cr = await metaAds.createBoost({
           name: `Posty · Impulso u${uid} · p${posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
           spendCents: pautaCents, days: 7, country: adCountry(uid),
+          objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
+          destinationType: mapeoAds.destinationType, targeting: targetingAds,
           ctx: { token: gate.suat, adAccountId: gate.adAccountId },
         });
       } catch (e) { cr = null; }
@@ -12487,16 +12679,16 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // active/pending).
         try {
           db.prepare(`INSERT INTO ad_boosts
-            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
-            VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?)`)
-            .run(uid, posteoId, cand.ig_media_id, pautaCents, 'creación fallida en la cuenta del cliente (riel cliente)');
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error, objetivo, audiencia_json)
+            VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?,?,?)`)
+            .run(uid, posteoId, cand.ig_media_id, pautaCents, 'creación fallida en la cuenta del cliente (riel cliente)', propuestaAds.objetivo || '', audienciaJsonDe());
         } catch (e) {}
         return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
       }
       db.prepare(`INSERT INTO ad_boosts
-        (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
-        VALUES (?,?,?,?,0,?,'USD','active',?,?,?,'engagement',7)`)
-        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '');
+        (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
+        VALUES (?,?,?,?,0,?,'USD','active',?,?,?,'engagement',7,?,?)`)
+        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '', propuestaAds.objetivo || '', audienciaJsonDe());
       try { track(uid, 'ad_boost_usd', String(pautaCents)); } catch (e) {}
       try { track(uid, 'ad_boost_riel_cliente', String(pautaCents)); } catch (e) {}
       // La costura del fee: 10% del presupuesto ÍNTEGRO de la campaña
@@ -12533,10 +12725,23 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         } catch (e) { return null; }
       },
       crearAnuncio: async (a) => {
+        // (LOTE ADS-ESTRATÉGICOS) La audiencia elegida se traduce al
+        // targeting real de Meta (ids de intereses y geo resueltos por
+        // la Targeting Search API; lo que no resuelve se omite y queda
+        // en el registro del impulso). Si la resolución entera falla,
+        // el anuncio sale con el targeting histórico: la estrategia
+        // nunca es un nuevo punto de fallo del gasto.
+        let targetingAds = null;
+        try {
+          const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds);
+          targetingAds = rt.targeting; resueltoAds = rt.resuelto;
+        } catch (e) { targetingAds = null; resueltoAds = null; }
         const cr = await metaAds.createBoost({
           name: `Posty · Billetera u${uid} · p${a.posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
           spendCents: a.spendCents, days: 7, country: adCountry(uid),
+          objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
+          destinationType: mapeoAds.destinationType, targeting: targetingAds,
           ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null,
         });
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
@@ -12568,9 +12773,9 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         const feeRec = esARS ? (Number(rec.feeCents) || 0) : 0;
         if (rec.tipo === 'exito') {
           db.prepare(`INSERT INTO ad_boosts
-            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
-            VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
+            VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', propuestaAds.objetivo || '', audienciaJsonDe());
           try { track(uid, esARS ? 'ad_boost_ars' : 'ad_boost_usd', String(budgetRec)); } catch (e) {}
           // (LOTE FEE-IMPULSAR) La costura del fee de gestión, en el
           // punto exacto: la campaña ya quedó registrada activa con
@@ -12587,9 +12792,9 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
           db.prepare(`INSERT INTO ad_boosts
-            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error)
-            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`);
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`, propuestaAds.objetivo || '', audienciaJsonDe());
         }
       },
     });
@@ -13014,14 +13219,20 @@ app.get('/api/ads/boosts', requireAuth, async (req, res) => {
       try {
         const s = await metaAds.getBoostStats(b.meta_campaign_id);
         if (s) {
-          db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, stats_updated_at=datetime('now') WHERE id=?`)
-            .run(s.spend_cents, s.reach, s.impressions, b.id);
+          db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, stats_updated_at=datetime('now') WHERE id=?`)
+            .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0), b.id);
           b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
+          b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0);
+          b.stats_updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
         }
       } catch (e) { /* no bloquea el historial */ }
     }
   }
-  res.json({ ok: true, boosts: boosts.map(b => ({ ...b })) });
+  // (LOTE ADS-ESTRATÉGICOS) El resultado que se le muestra al cliente
+  // es el de SU objetivo (conversaciones si el objetivo es de mensajes,
+  // clics en los demás), leído de lo persistido — nunca una conversión
+  // inventada. Sin stats leídas todavía, resultado = null.
+  res.json({ ok: true, boosts: boosts.map(b => ({ ...b, resultado: adsAudiencia.resultadoDe(b) })) });
 });
 
 // Admin: pautas pendientes de activación manual (equipo Posta)
@@ -40957,7 +41168,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1053';
+const BUILD_ID = '20261105-v1054';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

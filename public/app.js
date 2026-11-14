@@ -12096,6 +12096,12 @@ async function chatExchange({ text, display, extra, pushed }) {
       chatAppendMsg(boxNow, chatMsgHtml('assistant', noReply, nts), nts);
       chatScroll(true);
     }
+    // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Si el cliente venía del
+    // chip «+ otra gente» de la tarjeta de audiencia, este turno era
+    // su descripción: el servidor la tradujo y pudo haber dejado el
+    // chip guardado — se trae y queda esperando su toque en la
+    // tarjeta (la decisión se cierra ahí, no en el chat).
+    try { if (typeof PZ_ADS_OG_ESPERA !== 'undefined' && PZ_ADS_OG_ESPERA) pzAdsAudienciaRefrescarPendiente(); } catch (e) {}
     // (LOTE v847) El servidor creó un trabajo (imagen pedida sin bloque): el
     // estado nace en el hilo en el acto y el poller lo sigue hasta que cae la
     // imagen en su lugar. Sin doble burbuja si ya se pintó por otro camino.
@@ -17760,6 +17766,15 @@ function pzAdsHistorialHTML(boosts) {
     const fFin = hasta(b); if (fFin) det.push((en ? 'until ' : 'hasta ') + fFin);
     if (alcance > 0) det.push((en ? 'Reach ' : 'Alcance ') + alcance.toLocaleString(loc));
     if (gastado > 0) det.push((en ? 'Spent $' : 'Gastado $') + gastado.toLocaleString(loc));
+    // (LOTE ADS-ESTRATÉGICOS) El resultado según el objetivo del
+    // impulso: conversaciones si era de mensajes, clics si no. Viene
+    // del servidor (lo que Meta devolvió); sin medición, no se pinta.
+    if (b.resultado && b.resultado.tipo) {
+      const rv = Number(b.resultado.valor || 0);
+      det.push(b.resultado.tipo === 'conversaciones'
+        ? (en ? rv + ' conversations started' : rv + ' conversaciones iniciadas')
+        : (en ? rv + ' clicks' : rv + ' clics'));
+    }
     return `<div class="pz-ads-hist-row"><div class="pz-ads-hist-top"><span>${esc(montoTxt)} · ${dias} ${esc(en ? 'days' : 'días')}</span>${estadoTxt(b)}</div><div class="pz-ads-hist-det">${esc(det.join(' · '))}</div></div>`;
   }).join('') + (list.length > 5 ? `<p class="pz-ads-note">${esc(en ? 'Showing the 5 most recent.' : 'Mostramos los 5 más recientes.')}</p>` : '');
 }
@@ -18004,7 +18019,7 @@ function pzAdsHTML() {
       ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
       : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p><p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`;
     const bigBtn = ya ? '' : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mSel}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(totalSel))}</button>`;
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   }
   const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
   return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${recHTML}${histHTML}`;
@@ -18017,6 +18032,9 @@ function pzAdsPintar() {
   // Pay: se re-monta acá (reusa el intent del mismo monto si sigue fresco).
   try { pzAdsApplePayMontar(); } catch (e) {}
 }
+  // (LOTE ADS-ESTRATÉGICOS) El repintado también destruye la tarjeta
+  // de audiencia si estaba abierta: se re-pinta.
+  try { pzAdsAudienciaRepintar(); } catch (e) {}
 
 async function pzAdsRefrescar() {
   try {
@@ -18051,6 +18069,9 @@ async function pzAdsImpulsar(monto, btn) {
   if (j && j.ok) {
     try { await pzAdsRefrescar(); } catch (e) {}
   } else if (!j) {
+  } else if (j && j.motivo === 'audiencia_pendiente') {
+    // (LOTE ADS-ESTRATÉGICOS) La tarjeta de audiencia quedó abierta:
+    // no es un error, no se pinta motivo.
     // Red de seguridad: si pzBoostConfirmar explotó antes de responder
     // (j null), la tarjeta no queda muda: motivo genérico inline.
     try { const msgEl = document.getElementById('pzAdsRecMsg'); if (msgEl && !msgEl.textContent) msgEl.textContent = pzBoostMotivo('', m); } catch (e) {}
@@ -18821,8 +18842,12 @@ function pzBoostPintarBoost() {
       <button type="button" class="pz-boost-3d3-otro" onclick="pzBoostPickOpen()">↻ ${esc(gzT('Elegir otro posteo', 'Choose another post'))}</button>
     </div>
     ${warn}${notaConv}${cargar}
+    <div id="pzAdsAudienciaSheet"></div>
     <p class="pz-boost-msg" id="pzBoostMsg"></p>
   </div>`;
+  // (LOTE ADS-ESTRATÉGICOS) Si la tarjeta de audiencia estaba abierta,
+  // el repintado de la hoja la borró: se re-pinta en su contenedor.
+  try { pzAdsAudienciaRepintar(); } catch (e) {}
 }
 
 function pzBoostPintarExito(p, monto) {
@@ -19007,6 +19032,244 @@ async function pzBoostCargar(btn) {
 // desde la tarjeta del tab Ads — los mensajes van inline a #pzAdsRecMsg
 // (nunca a la hoja) y el éxito NO pinta en la hoja (la tarjeta se
 // re-pinta sola con pzAdsRefrescar). La hoja sigue con enTarjeta=false.
+// ── (LOTE ADS-ESTRATÉGICOS) Tarjeta de audiencia ──────────────────
+// Antes de gastar, el cliente VE a quién le va a llegar el anuncio —
+// en lenguaje humano, desde su fundamento — y lo acepta con un toque
+// («Sale así») o lo edita tocando chips de opciones prefijadas. Sin
+// formularios, sin texto libre, sin salir a Meta. La tarjeta es un
+// paso previo a pzBoostConfirmar: TODOS los caminos que gastan pasan
+// por pzBoostConfirmar, así que el gate vive ahí adentro; la tarjeta
+// se pinta en la hoja si está abierta o en la tarjeta del tab Ads.
+// La propuesta la arma el servidor (GET /api/ads/billetera/audiencia)
+// y la elección viaja en el POST: el servidor la valida contra las
+// mismas opciones. Si la propuesta no carga, el impulso sigue sin
+// edición: el servidor aplica su propuesta por defecto (la estrategia
+// no depende de que esta tarjeta haya cargado).
+const PZ_AUD_CHIP = 'display:inline-block;padding:7px 12px;margin:0 6px 6px 0;border-radius:999px;border:1.5px solid #C7D8E6;background:#fff;color:#0A1E33;font-size:13.5px;font-weight:700;cursor:pointer';
+const PZ_AUD_CHIP_SEL = 'display:inline-block;padding:7px 12px;margin:0 6px 6px 0;border-radius:999px;border:1.5px solid #2793C8;background:#2793C8;color:#fff;font-size:13.5px;font-weight:800;cursor:pointer';
+
+function pzAdsAudienciaKey(p, monto) {
+  if (!p) return '';
+  return pzBoostKey(p) + '|' + (Number(monto) || 0) + '|' + (pzBoostEsMP() ? 'ARS' : 'USD');
+}
+
+function pzAdsAudienciaTexto(sel) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const prop = (pzBoostState && pzBoostState.audienciaProp) || {};
+  const geo = prop.geo || {};
+  const a = sel || {};
+  const gen = a.genero === 'mujeres' ? (en ? 'Women' : 'Mujeres')
+    : a.genero === 'hombres' ? (en ? 'Men' : 'Hombres') : (en ? 'Everyone' : 'Todos');
+  const partes = [`${gen} ${a.edad_min}–${a.edad_max}`];
+  if (geo.ciudad) partes.push(en ? `within ${a.radio_km} km of your spot in ${geo.ciudad}` : `a ${a.radio_km} km de tu local en ${geo.ciudad}`);
+  else partes.push(en ? 'all over the country' : 'en todo el país');
+  const activos = (a.intereses || []).filter((i) => i && i.activo).map((i) => i.nombre);
+  if (activos.length) partes.push((en ? 'into ' : 'les gusta ') + activos.slice(0, 3).join(', ') + (activos.length > 3 ? '…' : ''));
+  if (a.parecidos) partes.push(en ? 'similar to your followers' : 'parecido a tus seguidores');
+  return partes.join(' · ');
+}
+
+function pzAdsAudienciaHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = pzBoostState || {};
+  const prop = s.audienciaProp || {};
+  const sel = s.audienciaSel || prop.audiencia || {};
+  const op = prop.opciones || { radios: [2, 5, 10], edades: [[18, 65]], generos: ['todos', 'mujeres', 'hombres'] };
+  const chip = (on, onclick, label) => `<button type="button" style="${on ? PZ_AUD_CHIP_SEL : PZ_AUD_CHIP}" onclick="${onclick}">${esc(label)}</button>`;
+  const grupo = (titulo, chips) => `<div style="margin:10px 0 2px"><div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:#47617A;margin-bottom:6px">${esc(titulo)}</div><div>${chips}</div></div>`;
+  const radios = (op.radios || []).map((r) => chip(Number(sel.radio_km) === Number(r), `pzAdsAudienciaRadio(${Number(r)})`, (en ? 'Within ' : 'A ') + r + ' km')).join('');
+  const edades = (op.edades || []).map((e, i) => chip(Number(sel.edad_min) === Number(e[0]) && Number(sel.edad_max) === Number(e[1]), `pzAdsAudienciaEdad(${i})`, `${e[0]}–${e[1]}`)).join('');
+  const genLbl = { todos: en ? 'Everyone' : 'Todos', mujeres: en ? 'Women' : 'Mujeres', hombres: en ? 'Men' : 'Hombres' };
+  const generos = (op.generos || []).map((g) => chip(sel.genero === g, `pzAdsAudienciaGenero('${g}')`, genLbl[g] || g)).join('');
+  const intereses = (sel.intereses || []).map((it, i) => chip(!!it.activo, `pzAdsAudienciaInteres(${i})`, it.nombre)).join('');
+  const parecidos = chip(!!sel.parecidos, 'pzAdsAudienciaParecidos(true)', en ? 'Yes · similar to my followers' : 'Sí · parecido a mis seguidores')
+    + chip(!sel.parecidos, 'pzAdsAudienciaParecidos(false)', en ? 'No' : 'No');
+  // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Al final de los chips, la
+  // puerta para lo que no está en la lista: abre el chat con el tema
+  // puesto. Si del chat ya volvió un chip traducido, se muestra acá
+  // esperando su toque (★) con su descarte (✕): la decisión se cierra
+  // en la tarjeta, nunca en el chat.
+  const extraPend = s.chipExtra || (prop.pendiente && prop.pendiente.chip) || null;
+  const extraHTML = (extraPend
+    ? `<button type="button" style="${PZ_AUD_CHIP_SEL}border-style:dashed" onclick="pzAdsAudienciaAceptarExtra()">★ ${esc(extraPend.etiqueta || '')}</button><button type="button" style="${PZ_AUD_CHIP}" onclick="pzAdsAudienciaDescartarExtra()" aria-label="${esc(en ? 'Discard' : 'Descartar')}">✕</button><div style="font-size:12px;color:#47617A;margin:2px 0 6px">${esc(en ? 'From what you told Posty in the chat — tap the ★ chip to add it to your audience.' : 'Salió de lo que le contaste a Posty en el chat: tocá el chip ★ para sumarlo a tu audiencia.')}</div>`
+    : '')
+    + `<button type="button" style="${PZ_AUD_CHIP}" onclick="pzAdsAudienciaOtraGente()">+ ${esc(en ? 'Other people' : 'Otra gente')}</button>`;
+  const sinCiudad = !(prop.geo && prop.geo.ciudad);
+  return `<div style="border:1.5px solid #BFE0F2;background:#F2F9FD;border-radius:16px;padding:14px;margin:12px 0">
+    <div style="font-weight:800;font-size:15.5px">${esc(en ? 'Who will see your ad?' : '¿A quién le llega tu anuncio?')}</div>
+    <p style="margin:6px 0 2px;font-size:14.5px;line-height:1.45"><b>${esc(pzAdsAudienciaTexto(sel))}</b></p>
+    <p style="margin:2px 0 0;font-size:13px;color:#47617A">${esc((en ? 'Goal: ' : 'Objetivo: ') + (prop.objetivo_label || ''))}</p>
+    ${grupo(en ? 'DISTANCE FROM YOUR SPOT' : 'DISTANCIA A TU LOCAL', radios)}
+    ${sinCiudad ? `<p style="margin:2px 0 0;font-size:12.5px;color:#8A6D00">${esc(en ? 'We don’t have your city yet, so the distance applies around your city center once Posty knows it; until then the ad runs nationwide.' : 'Todavía no tenemos tu ciudad: la distancia se aplica cuando Posty la sepa; mientras tanto el anuncio sale en todo el país.')}</p>` : ''}
+    ${grupo(en ? 'AGES' : 'EDADES', edades)}
+    ${grupo(en ? 'WHO' : 'QUIÉNES', generos)}
+    ${intereses ? grupo(en ? 'THEY LIKE' : 'LES GUSTA', intereses) : ''}
+    ${grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
+    ${grupo(en ? 'SOMEONE ELSE?' : '¿OTRA GENTE?', extraHTML)}
+    <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Go with this 🚀' : 'Sale así 🚀')}</button>
+    <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Go with this”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».')}</p>
+  </div>`;
+}
+
+function pzAdsAudienciaPintar() {
+  const box = document.getElementById('pzAdsAudienciaSheet') || document.getElementById('pzAdsAudiencia');
+  if (!box) return false;
+  box.innerHTML = pzAdsAudienciaHTML();
+  try { if (box.id === 'pzAdsAudiencia' && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  return true;
+}
+
+// Muestra el paso de audiencia. Devuelve true si la tarjeta quedó
+// pintada (el gasto espera al «Sale así»); false si la propuesta no
+// cargó o no hay dónde pintarla (el impulso sigue sin edición).
+async function pzAdsAudienciaMostrar() {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  try {
+    if (!s.audienciaProp) {
+      const j = await api.get('/api/ads/billetera/audiencia');
+      if (!j || !j.ok || !j.propuesta || !j.propuesta.audiencia) return false;
+      s.audienciaProp = j.propuesta;
+      if (!s.audienciaSel) s.audienciaSel = JSON.parse(JSON.stringify(j.propuesta.audiencia));
+      // Chip «otra gente» que el servidor ya tenía guardado (el
+      // cliente volvió a la tarjeta sin pasar por el hook del chat).
+      if (!s.chipExtra && j.propuesta.pendiente && j.propuesta.pendiente.chip) s.chipExtra = j.propuesta.pendiente.chip;
+    }
+    s.audienciaVisible = true;
+    return pzAdsAudienciaPintar();
+  } catch (e) { return false; }
+}
+
+// Repinta la tarjeta si estaba visible y un repintado de la hoja o
+// del tab la borró del DOM.
+function pzAdsAudienciaRepintar() {
+  const s = pzBoostState || {};
+  if (!s.audienciaVisible || !s.audienciaProp) return;
+  const sheet = document.getElementById('pzAdsAudienciaSheet');
+  const tab = document.getElementById('pzAdsAudiencia');
+  if ((sheet && !sheet.innerHTML) || (tab && !tab.innerHTML)) pzAdsAudienciaPintar();
+}
+
+function pzAdsAudienciaMutar(fn) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  if (!s.audienciaSel && s.audienciaProp) s.audienciaSel = JSON.parse(JSON.stringify(s.audienciaProp.audiencia));
+  if (!s.audienciaSel) return;
+  fn(s.audienciaSel);
+  pzAdsAudienciaPintar();
+}
+function pzAdsAudienciaRadio(km) { pzAdsAudienciaMutar((a) => { a.radio_km = Number(km); }); }
+function pzAdsAudienciaEdad(i) {
+  const op = ((pzBoostState || {}).audienciaProp || {}).opciones || {};
+  const e = (op.edades || [])[Number(i)];
+  if (!e) return;
+  pzAdsAudienciaMutar((a) => { a.edad_min = Number(e[0]); a.edad_max = Number(e[1]); });
+}
+function pzAdsAudienciaGenero(g) { pzAdsAudienciaMutar((a) => { a.genero = String(g); }); }
+function pzAdsAudienciaInteres(i) { pzAdsAudienciaMutar((a) => { const it = (a.intereses || [])[Number(i)]; if (it) it.activo = !it.activo; }); }
+function pzAdsAudienciaParecidos(b) { pzAdsAudienciaMutar((a) => { a.parecidos = !!b; }); }
+
+// «Sale así»: la audiencia queda confirmada para este posteo + monto
+// y el gasto corre por el camino de siempre (pzBoostConfirmar).
+async function pzAdsAudienciaSale(btn) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const p = s.selPost || null;
+  const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
+  s.audienciaKey = pzAdsAudienciaKey(p, monto);
+  s.audienciaVisible = false;
+  const j = await pzBoostConfirmar(btn);
+  if (j && j.ok) {
+    try { if (document.getElementById('pzAdsRoot')) await pzAdsRefrescar(); } catch (e) {}
+  } else if (j && j.motivo && j.motivo !== 'audiencia_pendiente') {
+    const m = document.getElementById('pzAdsRecMsg');
+    if (m) m.textContent = pzBoostMotivo(j.motivo, monto, j.cobroId);
+  }
+  return j;
+}
+
+// (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) El cliente espera que un
+// turno del chat le traiga el chip traducido: lo marca
+// pzAdsAudienciaOtraGente y lo consume el hook de chatExchange.
+let PZ_ADS_OG_ESPERA = false;
+
+// Chip «+ Otra gente»: lo que no está en la lista se pide en el chat,
+// pero el chat abre CON EL TEMA PUESTO — nunca genérico. El servidor
+// deja la tarea abierta (endpoint tema) y devuelve el mensaje con el
+// que Posty habla primero; el anuncio queda resumido y visible como
+// burbuja de Posty (chatSay persiste por el log del chat). El cliente
+// responde por audio o texto; el servidor traduce contra el
+// vocabulario cerrado y el chip vuelve a ESTA tarjeta.
+async function pzAdsAudienciaOtraGente() {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const prop = s.audienciaProp || {};
+  const sel = s.audienciaSel || prop.audiencia || {};
+  const p = s.selPost || {};
+  const tituloPost = String(p.text || p.caption || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
+  const resumen = (en ? 'For this ad' : 'Para este anuncio')
+    + (tituloPost ? `: «${tituloPost}»` : '')
+    + ' · $' + monto
+    + ' · ' + pzAdsAudienciaTexto(sel);
+  let mensaje = '';
+  try { const j = await api.post('/api/ads/billetera/audiencia/tema', { resumen }); if (j && j.mensaje) mensaje = j.mensaje; } catch (e) {}
+  PZ_ADS_OG_ESPERA = true;
+  try { location.hash = '#/app/chat'; } catch (e) {}
+  try { chatSay('📣 ' + resumen); } catch (e) {}
+  if (mensaje) { try { chatSay(mensaje); } catch (e) {} }
+}
+
+// Trae la propuesta fresca tras un turno del chat con la tarea
+// abierta: si el servidor guardó el chip traducido, queda en la
+// tarjeta (y la confirmación anterior se invalida: la audiencia
+// ofrecida cambió).
+async function pzAdsAudienciaRefrescarPendiente() {
+  try {
+    const j = await api.get('/api/ads/billetera/audiencia');
+    if (!j || !j.ok || !j.propuesta) return;
+    const s = pzBoostState || (pzBoostState = pzBoostNewState());
+    const chipN = (j.propuesta.pendiente && j.propuesta.pendiente.chip) || null;
+    if (s.audienciaProp) s.audienciaProp = j.propuesta;
+    if (chipN && (!s.chipExtra || s.chipExtra.etiqueta !== chipN.etiqueta)) {
+      s.chipExtra = chipN;
+      s.audienciaKey = '';
+      PZ_ADS_OG_ESPERA = false;
+      try { pzAdsAudienciaRepintar(); } catch (e) {}
+    }
+  } catch (e) {}
+}
+
+// Aceptar el chip extra: aplica SOLO el filtro que el servidor
+// tradujo (un interés de la lista, un rango prefijado, un género o un
+// radio — el POST del impulso lo vuelve a validar contra las
+// opciones) y cierra la tarea en el servidor. La decisión se cierra
+// acá, en la tarjeta; el «Sale así» se pide de nuevo porque la
+// audiencia cambió.
+function pzAdsAudienciaAceptarExtra() {
+  const s = pzBoostState || {};
+  const chip = s.chipExtra || ((s.audienciaProp || {}).pendiente || {}).chip || null;
+  if (!chip || !chip.filtro) return;
+  if (!s.audienciaSel && s.audienciaProp) s.audienciaSel = JSON.parse(JSON.stringify(s.audienciaProp.audiencia));
+  const a = s.audienciaSel;
+  if (!a) return;
+  const f = chip.filtro;
+  if (f.tipo === 'interes') (a.intereses || []).forEach((it) => { if (it.nombre === f.nombre) it.activo = true; });
+  else if (f.tipo === 'genero') a.genero = String(f.valor);
+  else if (f.tipo === 'edad') { a.edad_min = Number(f.edad_min); a.edad_max = Number(f.edad_max); }
+  else if (f.tipo === 'radio') a.radio_km = Number(f.radio_km);
+  else return;
+  s.chipExtra = null;
+  if (s.audienciaProp) s.audienciaProp.pendiente = null;
+  s.audienciaKey = '';
+  try { api.post('/api/ads/billetera/audiencia/pendiente', { accion: 'aceptar' }).catch(() => {}); } catch (e) {}
+  pzAdsAudienciaPintar();
+}
+
+function pzAdsAudienciaDescartarExtra() {
+  const s = pzBoostState || {};
+  s.chipExtra = null;
+  if (s.audienciaProp) s.audienciaProp.pendiente = null;
+  try { api.post('/api/ads/billetera/audiencia/pendiente', { accion: 'descartar' }).catch(() => {}); } catch (e) {}
+  pzAdsAudienciaPintar();
+}
 async function pzBoostConfirmar(btn, enTarjeta) {
   const s = pzBoostState || {};
   const p = s.selPost || null;
@@ -19014,6 +19277,18 @@ async function pzBoostConfirmar(btn, enTarjeta) {
   const msgEl = document.getElementById(enTarjeta ? 'pzAdsRecMsg' : 'pzBoostMsg');
   const decir = (t) => { if (msgEl) msgEl.textContent = t; };
   if (!p || (!p.post_id && !p.ig_media_id)) { decir(pzBoostMotivo('sin_posteo', monto)); return null; }
+  // (LOTE ADS-ESTRATÉGICOS) Paso de audiencia: antes de gastar, el
+  // cliente ve la tarjeta y dice «Sale así». La confirmación vale para
+  // este posteo + monto; si cambia la selección, se muestra de nuevo.
+  // Si la tarjeta no se pudo mostrar (propuesta caída), se sigue sin
+  // edición y el servidor aplica su propuesta por defecto.
+  const audKey = pzAdsAudienciaKey(p, monto);
+  if (audKey && (!s.audienciaKey || s.audienciaKey !== audKey)) {
+    if (btn) btn.disabled = true;
+    const mostrada = await pzAdsAudienciaMostrar();
+    if (btn) btn.disabled = false;
+    if (mostrada) return { ok: false, motivo: 'audiencia_pendiente' };
+  }
   if (btn) btn.disabled = true;
   let j = null;
   // (v846) El reciente sin fila se impulsa por ig_media_id: el servidor
@@ -19021,6 +19296,10 @@ async function pzBoostConfirmar(btn, enTarjeta) {
   // (LOTE RIEL-SUSCRIPCION v878) En MP el impulso se pide en pesos.
   const railMP = pzBoostEsMP();
   const body = (p.solo_ig && p.ig_media_id) ? { igMediaId: String(p.ig_media_id), ...(railMP ? { montoARS: monto } : { montoUSD: monto }) } : { posteoId: Number(p.post_id), ...(railMP ? { montoARS: monto } : { montoUSD: monto }) };
+  // (LOTE ADS-ESTRATÉGICOS) La audiencia que el cliente vio (y editó)
+  // viaja en el POST: el servidor la valida contra las opciones de la
+  // propuesta antes de gastar.
+  if (s.audienciaSel) body.audiencia = s.audienciaSel;
   try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
   if (j && j.ok) {
