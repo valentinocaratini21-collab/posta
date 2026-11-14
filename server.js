@@ -38399,6 +38399,27 @@ async function trialGenerateHandler(req, res) {
       });
       juicioFinalReg = jf.registro;
     } catch (e) { /* el juicio nunca frena la prueba */ }
+    // (LOTE CONTINUIDAD-DE-SERIE) EL PASE DE SERIE: con las piezas
+    // ya juzgadas una por una, la SEMANA se mira como serie contra
+    // el patrón de ESE feed (su señal de texto, sus formatos
+    // recientes, las estrellas que nombra): la pieza que abandona
+    // el sistema que la serie mantiene se rehace por los caminos
+    // del juicio o cae al armado honesto, y lo que no tiene
+    // rehacer posible queda registrado. Determinístico, sin IA.
+    let continuidadSerieReg = null;
+    try {
+      const cs = await demo.aplicarContinuidadSerieTrial({
+        posts,
+        specPosts: (spec && (spec.specPosts || spec.posts)) || [],
+        digest: trialDigest,
+        spec,
+        business, category: effCategory, country: effCountry, tone,
+        lang: contentLang, subcat: (spec && spec.subcat) || '',
+        accent, btn, photoPath, extraPhotos: webExtraPhotos,
+        feedRecents: trialFeedRecentsFromEmbed(_embedPostsVoz),
+      });
+      continuidadSerieReg = { perfil: cs.perfil, registro: cs.registro, serie: cs.serie };
+    } catch (e) { /* la continuidad nunca frena la prueba */ }
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
@@ -38416,6 +38437,7 @@ async function trialGenerateHandler(req, res) {
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
       primer_posteo: (spec && spec.primer_posteo) || null, // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) veredicto del gate de mostrar del slot 0: auditable desde el payload
       juicio_final: juicioFinalReg, // (LOTE JUICIO-FINAL) veredicto del pase de juicio por pieza (motivo, modo de feed, salida): auditable desde el payload
+      continuidad_serie: continuidadSerieReg, // (LOTE CONTINUIDAD-DE-SERIE) perfil de continuidad de la semana + veredictos del pase de serie: auditable desde el payload
       rescate_semana: (spec && spec.rescate_semana) || [], // (ADDENDUM 6A) registro del rescate de semana entera
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
       espejo: fundamentoLiteral.espejoFromFields(fields), // (FUNDAMENTO-LITERAL · pieza 1) espejo aprobado: siembra la cuenta al registrarse
@@ -40655,6 +40677,34 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         }
       }
     } catch (e) { /* el juicio nunca frena la prueba */ }
+    // (LOTE CONTINUIDAD-DE-SERIE) EL PASE DE SERIE: corre tras el
+    // juicio por pieza y ANTES del veredicto final del slot 0, para
+    // que ese registro describa la pieza que efectivamente se
+    // entrega. La semana se mira como serie contra el patrón de ESE
+    // feed; la pieza que abandona el sistema se rehace por los
+    // caminos del juicio o cae al armado honesto, y las cambiadas
+    // se re-emiten con el mismo evento 'post' (vitrina = entrega).
+    let continuidadRegS = null;
+    try {
+      const csS = await demo.aplicarContinuidadSerieTrial({
+        posts,
+        specPosts,
+        digest: trialDigest,
+        spec,
+        business, category: effCategory, country: effCountry, tone,
+        lang: contentLangS, subcat: spec.subcat || '',
+        accent, btn, photoPath, extraPhotos: webExtraPhotos,
+        feedRecents: trialFeedRecentsFromEmbed(trialData && trialData.posts),
+      });
+      continuidadRegS = { perfil: csS.perfil, registro: csS.registro, serie: csS.serie };
+      if (Array.isArray(csS.cambiados)) {
+        for (const ci of csS.cambiados) {
+          if (posts[ci] && week[ci]) {
+            try { send('post', { index: ci, day: week[ci].day, date: week[ci].date, hour: week[ci].hour, post: posts[ci] }); } catch (e) {}
+          }
+        }
+      }
+    } catch (e) { /* la continuidad nunca frena la prueba */ }
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 2) VEREDICTO SOBRE LA
     // PIEZA FINAL DEL SLOT 0: el registro que el gate computó sobre
     // el SPEC no puede seguir diciendo «pasa» si un reemplazo
@@ -40731,6 +40781,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
       primer_posteo: ppRecS || null, // (LOTE PRIMER-POSTEO-PERFECTO · pieza 6) veredicto del gate de mostrar del slot 0, completado por la cadena de rescate
       juicio_final: juicioFinalRegS, // (LOTE JUICIO-FINAL) veredicto del pase de juicio por pieza (motivo, modo de feed, salida): auditable desde el payload
+      continuidad_serie: continuidadRegS, // (LOTE CONTINUIDAD-DE-SERIE) perfil de continuidad de la semana + veredictos del pase de serie: auditable desde el payload
       rescate_semana: rescateSemanaS, // (ADDENDUM 6A) registro del rescate de semana entera
       precio_gate: precioGateS.length ? { piezas: precioGateS } : null, // (ADDENDUM 3B) cortes de la puerta de precios, por pieza
       feed_kind: feedKind,
@@ -42640,7 +42691,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1080';
+const BUILD_ID = '20261105-v1081';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

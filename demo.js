@@ -2374,6 +2374,360 @@ async function aplicarJuicioFinalTrial(o) {
   return { registro, cambiados, pasadas: pasadasSemana, tope_semana: topeSemana, feed_modo: feedModo };
 }
 
+// (LOTE CONTINUIDAD-DE-SERIE) EL PASE DE SERIE SOBRE LA SEMANA
+// TERMINADA — la observación de Valentino del 14/11 13:37: el posteo
+// de las medialunas del feed propio salió SIN el texto dentro de la
+// imagen «como veníamos haciendo», y su regla quedó: «si se viene
+// manteniendo algo, mantenerlo». El juicio final (v1053) mira cada
+// pieza SOLA contra el feed; nadie miraba la SEMANA como serie. Este
+// pase corre DESPUÉS del juicio, sobre las piezas ya finales, y arma
+// el PERFIL DE CONTINUIDAD de la serie con rasgos observables:
+//   · el sistema de texto dentro de la imagen por pieza (con-texto /
+//     sin-texto, del text_mode final entregado),
+//   · la estrella que cada pieza vende (el producto que el mapa vio
+//     en su foto; si no, la registrada en su plan creativo),
+//   · el ritmo de formatos de la serie (foto / video / carrusel),
+//   · el sello disponible de la semana (el logo del digest) y el
+//     origen de cada pieza — registrado, SIN veredicto en este lote:
+//     en la prueba no hay un sistema de sello uniforme que mantener
+//     (el logo se compone solo sobre las piezas generadas, con su
+//     propia QA fail-closed de v1056/v1057); inventar la regla
+//     condenaría por diseño.
+// El patrón contra el que se juzga es el de ESE feed — la señal
+// texto_feed del digest, el estilo visual declarado de la semana y
+// los formatos de sus posteos recientes — nunca una plantilla
+// global: el feed propio de Posty tiene su sistema y el de un
+// cliente, el suyo.
+// VEREDICTOS (lista cerrada CONTINUIDAD_SERIE_MOTIVOS):
+//   · sistema-de-texto-roto: el sistema que la serie tiene que
+//     mantener (el estilo 'banda'/'limpia' declarado manda; si no,
+//     la costumbre del feed: limpio = ninguna pieza con texto;
+//     con-texto/mixto = la cantidad que copia el ratio del feed) y
+//     una pieza lo abandona. Salidas por el camino vigente del
+//     juicio: la que sobra se RECOMPONE sin texto y la que falta se
+//     RECOMPONE con su titular, por el mismo renderer; la generada
+//     o el carrusel caen al armado honesto. Una pieza a la que el
+//     juicio le sacó el texto a propósito (su salida
+//     'recompuesta-sin-texto') NUNCA se re-viste en este pase: si
+//     el déficit no se puede reparar sin ella, queda registrado.
+//   · estrella-repetida: dos o más piezas venden la MISMA estrella
+//     por nombre habiendo estrellas nombradas del digest sin usar
+//     para cubrir el exceso (si el negocio tiene una sola, la
+//     repetición es su verdad y no se condena; si el catálogo
+//     nombrado no alcanza para la semana, tampoco). Salida: la
+//     pieza repetida (nunca la primera aparición, que es el wow)
+//     cae a la próxima foto admitida sin usar cuyo producto es un
+//     nombre NUEVO para la serie; sin candidato, armado honesto.
+//   · ritmo-roto: el feed es de video (la mitad o más de sus
+//     recientes, con al menos 4) y la serie entregada no trae ni
+//     video ni carrusel, o la serie trae dos videos. Sin salida
+//     segura dentro de este pase (convertir una pieza en video no
+//     es un camino vigente): el motivo queda REGISTRADO en la
+//     serie, que es lo que la regla exige cuando no hay rehacer.
+// DETERMINÍSTICO: el pase no llama IA — lee los rasgos que el
+// armado ya conoce de la pieza final, así que no suma costo ni
+// pasadas de visión. Tras una reparación, el perfil se re-computa
+// (gratis) y confirma; si la pieza reparada sigue rompiendo o el
+// render no salió, cae al armado honesto, que el rescate de fondo
+// completa. NUNCA declara la semana incompleta y nunca frena la
+// prueba: cualquier error del pase deja la semana como estaba (las
+// rutas lo llaman en try/catch, como al juicio).
+// REGISTRO: post.continuidad por pieza (viaja con la pieza, como
+// post.juicio) y el registro completo + el perfil en el payload
+// (out.continuidad_serie), auditable como juicio_final.
+// ALCANCE: solo la PRUEBA, como el juicio. El registrado, después.
+const CONTINUIDAD_SERIE_MOTIVOS = ['sistema-de-texto-roto', 'estrella-repetida', 'ritmo-roto'];
+const CONTINUIDAD_SERIE_TOPE_POR_PIEZA = 1;
+
+function continuidadNormNombre(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function continuidadMismoNombre(a, b) {
+  if (!a || !b) return false;
+  if (continuidadNormNombre(a) === continuidadNormNombre(b)) return true;
+  try { return !!clientDigest.sameItemName(a, b); } catch (e) { return false; }
+}
+
+// El perfil de continuidad de la serie: rasgos observables por
+// pieza + el patrón del feed contra el que se juzgan. Pura (salvo
+// el mapa de estrellas reemplazadas que el pase pasa al reparar):
+// los tests la fijan sin renderizar nada.
+function perfilContinuidadSerie(posts, specPosts, digest, feedRecents, estrellasReemplazadas) {
+  const ps = Array.isArray(posts) ? posts : [];
+  const sps = Array.isArray(specPosts) ? specPosts : [];
+  const tf = (digest && digest.texto_feed) || null;
+  const feedModo = (tf && tf.modo) || 'sin-senal';
+  const feedRatio = (tf && typeof tf.ratio === 'number') ? tf.ratio : null;
+  let estilo = null;
+  for (const sp of sps) { if (sp && sp.estilo_visual) { estilo = sp.estilo_visual; break; } }
+  const estrellaDePieza = (i) => {
+    if (estrellasReemplazadas && estrellasReemplazadas.has(i)) return String(estrellasReemplazadas.get(i) || '');
+    const sp = sps[i] || {};
+    if (sp.photo_product) return String(sp.photo_product);
+    if (sp.creatividad && sp.creatividad.estrella) return String(sp.creatividad.estrella);
+    return '';
+  };
+  const piezas = ps.map((p, i) => {
+    const sp = sps[i] || {};
+    if (!p || p.armando) return { i, formato: 'armando', texto: 'armando', estrella: estrellaDePieza(i), origen: (p && p.ai) ? 'generada' : 'foto' };
+    const formato = p.type === 'video' ? 'video' : p.type === 'carousel' ? 'carousel' : 'image';
+    const tm = p.text_mode || sp.text_mode || null;
+    const texto = formato === 'video' ? 'video' : (tm === 'clean' ? 'sin-texto' : 'con-texto');
+    return { i, formato, texto, estrella: estrellaDePieza(i), origen: p.ai ? 'generada' : (sp.poster ? 'poster' : 'foto') };
+  });
+  // Texto: las comparables son las piezas imagen/carrusel entregadas
+  // (el video lleva su texto en movimiento: otro dominio, v1077).
+  const comparables = piezas.filter((z) => z.formato === 'image' || z.formato === 'carousel');
+  const conTexto = comparables.filter((z) => z.texto === 'con-texto').length;
+  let esperadas = null;
+  if (estilo === 'banda') esperadas = comparables.length;
+  else if (estilo === 'limpia') esperadas = 0;
+  else if (feedModo === 'limpio') esperadas = 0;
+  else if (feedModo === 'con-texto') esperadas = Math.round((feedRatio != null ? feedRatio : 0.5) * comparables.length);
+  else if (feedModo === 'mixto') esperadas = Math.round((feedRatio != null ? feedRatio : 0.3) * comparables.length);
+  if (esperadas != null) esperadas = Math.max(0, Math.min(comparables.length, esperadas));
+  // Estrellas: grupos por nombre + las alternativas del digest que
+  // la serie no usó (la materia prima para juzgar la repetición).
+  const grupos = [];
+  piezas.forEach((z) => {
+    if (!z.estrella || z.formato === 'armando') return;
+    const g = grupos.find((x) => continuidadMismoNombre(x.nombre, z.estrella));
+    if (g) g.indices.push(z.i); else grupos.push({ nombre: z.estrella, indices: [z.i] });
+  });
+  let estrellasDigest = [];
+  try { estrellasDigest = creatividad.estrellasDeDigest(digest, (digest && digest.producto_estrella) || null); } catch (e) { estrellasDigest = []; }
+  const alternativas = estrellasDigest.filter((n) => !grupos.some((g) => continuidadMismoNombre(g.nombre, n)));
+  // Ritmo: formatos entregados vs. los recientes del feed.
+  const entregados = piezas.filter((z) => z.formato !== 'armando');
+  const videosSerie = entregados.filter((z) => z.formato === 'video').length;
+  const carruselesSerie = entregados.filter((z) => z.formato === 'carousel').length;
+  const recents = Array.isArray(feedRecents) ? feedRecents : [];
+  const recVideos = recents.filter((r) => r && r.type === 'video').length;
+  const feedRatioVideo = recents.length >= 4 ? Math.round((recVideos / recents.length) * 100) / 100 : null;
+  return {
+    feed_modo: feedModo,
+    feed_ratio: feedRatio,
+    estilo_visual: estilo,
+    piezas,
+    texto: { comparables: comparables.map((z) => z.i), con_texto: conTexto, esperadas },
+    estrellas: {
+      grupos: grupos.map((g) => ({ nombre: g.nombre, indices: g.indices.slice() })),
+      alternativas,
+      del_digest: estrellasDigest,
+    },
+    ritmo: {
+      serie: entregados.map((z) => z.formato),
+      videos: videosSerie,
+      carruseles: carruselesSerie,
+      feed_n: recents.length,
+      feed_ratio_video: feedRatioVideo,
+    },
+    sello: {
+      logo_disponible: !!((digest && (digest.logo_file || (digest.logo && digest.logo.file) || digest.logo_url))),
+      por_pieza: piezas.map((z) => z.origen),
+    },
+  };
+}
+
+// Las fallas de serie que un perfil sostiene, por pieza + la nota
+// de ritmo de la serie entera. Pura: el pase la corre antes de
+// reparar y otra vez después, para confirmar la reparación.
+function fallasContinuidadSerie(perfil, posts) {
+  const fallas = new Map();
+  const agregar = (i, motivo, accion, estrella) => {
+    const f = fallas.get(i) || { motivos: [], accion: null, estrella: '' };
+    if (!f.motivos.includes(motivo)) f.motivos.push(motivo);
+    // Prioridad de salida (la del juicio): la foto manda sobre el texto.
+    if (accion === 'foto-candidato' || !f.accion) { f.accion = accion; if (estrella) f.estrella = estrella; }
+    fallas.set(i, f);
+  };
+  const notas = [];
+  // — Sistema de texto —
+  const S = (perfil.texto && perfil.texto.comparables) || [];
+  const esp = perfil.texto ? perfil.texto.esperadas : null;
+  if (esp != null && S.length >= 2) {
+    const deficit = esp - perfil.texto.con_texto;
+    if (deficit > 0) {
+      const limpias = S
+        .filter((i) => perfil.piezas[i] && perfil.piezas[i].texto === 'sin-texto')
+        .filter((i) => !(posts[i] && posts[i].juicio && posts[i].juicio.salida === 'recompuesta-sin-texto'))
+        .sort((a, b) => b - a);
+      limpias.slice(0, deficit).forEach((i) => agregar(i, 'sistema-de-texto-roto', 'con-texto'));
+      if (limpias.length < deficit) notas.push({ motivo: 'sistema-de-texto-roto', salida: 'registrado', detalle: 'deficit-sin-salida' });
+    } else if (deficit < 0 && esp === 0) {
+      // Exceso solo condena contra un sistema limpio declarado
+      // (feed limpio o estilo limpia): con ratio > 0, las piezas
+      // con texto son el diseño, no la ruptura.
+      S.filter((i) => perfil.piezas[i] && perfil.piezas[i].texto === 'con-texto')
+        .forEach((i) => agregar(i, 'sistema-de-texto-roto', 'sin-texto'));
+    }
+  }
+  // — Estrella repetida —
+  const gruposRep = (perfil.estrellas.grupos || []).filter((g) => g.indices.length >= 2);
+  const exceso = gruposRep.reduce((a, g) => a + g.indices.length - 1, 0);
+  if (exceso > 0 && (perfil.estrellas.alternativas || []).length >= exceso) {
+    for (const g of gruposRep) g.indices.slice(1).forEach((i) => agregar(i, 'estrella-repetida', 'foto-candidato', g.nombre));
+  }
+  // — Ritmo (de la serie, no de una pieza) —
+  const motivosSerie = [];
+  const r = perfil.ritmo || {};
+  if (r.videos >= 2) motivosSerie.push('ritmo-roto');
+  else if (r.feed_ratio_video != null && r.feed_ratio_video >= 0.5 && r.videos === 0 && r.carruseles === 0 && (r.serie || []).length >= 2) motivosSerie.push('ritmo-roto');
+  return { fallas, motivosSerie, notas };
+}
+
+async function aplicarContinuidadSerieTrial(o) {
+  const posts = (o && Array.isArray(o.posts)) ? o.posts : [];
+  const specPosts = (o && Array.isArray(o.specPosts)) ? o.specPosts : [];
+  const digest = (o && o.digest) || null;
+  const spec = (o && o.spec) || {};
+  const feedRecents = (o && Array.isArray(o.feedRecents)) ? o.feedRecents : [];
+  const registro = [];
+  const cambiados = [];
+  const reemplazadas = new Map();
+  const perfilDe = () => perfilContinuidadSerie(posts, specPosts, digest, feedRecents, reemplazadas);
+  let perfil = perfilDe();
+
+  // Re-render de UNA pieza por la vía del renderer (el mismo
+  // renderSpecPngs del armado y del juicio).
+  const renderPieza = async (sp) => {
+    try {
+      let spR = sp;
+      if (sp && sp.photo && typeof sp.photo === 'object' && sp.photo.userPhoto && o.photoPath) {
+        spR = { ...sp, photo: o.photoPath };
+      }
+      const r = await renderSpecPngs([spR], { accent: o.accent, btn: o.btn });
+      const buf = (r && Array.isArray(r.bufs) && r.bufs[0] && r.bufs[0].length) ? r.bufs[0] : null;
+      if (r && r.runDir) { try { fs.rmSync(r.runDir, { recursive: true, force: true }); } catch (e) {} }
+      return buf;
+    } catch (e) { return null; }
+  };
+
+  // Próxima foto ADMITIDA por el foto_gate que la semana no usa y
+  // cuyo producto es un nombre NUEVO para la serie (no repite la
+  // estrella rota ni ninguna otra de las que ya salen). Primero las
+  // que el digest nombra y la serie no usó.
+  const fotoCandidataNueva = (preferidas) => {
+    try {
+      const fgFotos = (spec && spec.foto_gate && Array.isArray(spec.foto_gate.fotos)) ? spec.foto_gate.fotos : [];
+      const admPorUrl = new Map(fgFotos.filter((f) => f && f.url && f.admitida).map((f) => [f.url, f]));
+      if (!admPorUrl.size) return null;
+      const usadas = new Set();
+      specPosts.forEach((s) => { if (s && typeof s.photo === 'string') usadas.add(s.photo); });
+      const nombresSerie = new Set();
+      perfil.piezas.forEach((z) => { if (z.estrella) nombresSerie.add(continuidadNormNombre(z.estrella)); });
+      reemplazadas.forEach((v) => { if (v) nombresSerie.add(continuidadNormNombre(v)); });
+      const cands = [];
+      for (const raw of (Array.isArray(o.extraPhotos) ? o.extraPhotos : [])) {
+        if (!raw || typeof raw.path !== 'string' || !raw.url) continue;
+        if (usadas.has(raw.path)) continue;
+        const fg = admPorUrl.get(raw.url);
+        if (!fg || !fg.producto) continue;
+        if (nombresSerie.has(continuidadNormNombre(fg.producto))) continue;
+        if (!fs.existsSync(raw.path)) continue;
+        cands.push({ path: raw.path, producto: fg.producto });
+      }
+      if (!cands.length) return null;
+      const pref = Array.isArray(preferidas) ? preferidas : [];
+      cands.sort((a, b) => ((pref.some((n) => continuidadMismoNombre(n, b.producto))) ? 1 : 0) - ((pref.some((n) => continuidadMismoNombre(n, a.producto))) ? 1 : 0));
+      return cands[0];
+    } catch (e) { return null; }
+  };
+
+  const aArmado = (post) => {
+    post.image = null;
+    if (post.type === 'carousel') { post.type = 'image'; delete post.images; }
+    post.armando = true;
+  };
+
+  const { fallas, motivosSerie, notas } = fallasContinuidadSerie(perfil, posts);
+  const recs = new Map();
+
+  for (const [i, falla] of fallas) {
+    const post = posts[i];
+    const sp = specPosts[i] || {};
+    if (!post || post.armando) continue;
+    const esCarrusel = post.type === 'carousel';
+    const esAi = !!post.ai || sp.photo_source === 'ai-generated';
+    let salida = null;
+    let intento = null;
+    if (falla.accion === 'foto-candidato' && !esAi && post.type !== 'video') {
+      intento = 'foto-candidato';
+      const cand = fotoCandidataNueva(perfil.estrellas.alternativas);
+      if (cand) {
+        const buf = await renderPieza({ ...sp, photo: cand.path });
+        if (buf) {
+          post.image = 'data:image/jpeg;base64,' + buf.toString('base64');
+          reemplazadas.set(i, cand.producto);
+          salida = 'foto-candidato';
+        }
+      }
+    } else if (falla.accion === 'con-texto' && !esCarrusel && !esAi) {
+      intento = 'recompuesta-con-texto';
+      const buf = await renderPieza({ ...sp, text_mode: 'text' });
+      if (buf) {
+        post.image = 'data:image/jpeg;base64,' + buf.toString('base64');
+        post.text_mode = 'text';
+        salida = 'recompuesta-con-texto';
+      }
+    } else if (falla.accion === 'sin-texto' && !esCarrusel && !esAi) {
+      intento = 'recompuesta-sin-texto';
+      const buf = await renderPieza({ ...sp, text_mode: 'clean' });
+      if (buf) {
+        post.image = 'data:image/jpeg;base64,' + buf.toString('base64');
+        post.text_mode = 'clean';
+        post.headline = '';
+        salida = 'recompuesta-sin-texto';
+      }
+    }
+    if (!salida) {
+      aArmado(post);
+      salida = 'armado-rescate';
+    }
+    if (!cambiados.includes(i)) cambiados.push(i);
+    recs.set(i, { i, pasa: null, motivos: falla.motivos.slice(), salida, intento, pasadas: CONTINUIDAD_SERIE_TOPE_POR_PIEZA });
+  }
+
+  // Confirmación determinística: el perfil se re-computa con las
+  // reparaciones aplicadas; la pieza reparada que SIGUE rompiendo
+  // cae al armado honesto (si no cayó ya).
+  if (fallas.size) {
+    perfil = perfilDe();
+    const otra = fallasContinuidadSerie(perfil, posts);
+    for (const [i, rec] of recs) {
+      const post = posts[i];
+      if (otra.fallas.has(i) && rec.salida !== 'armado-rescate') {
+        aArmado(post);
+        rec.salida = 'armado-rescate';
+        rec.detalle = 'reparada-sigue-rompiendo';
+      }
+      rec.pasa = rec.salida === 'armado-rescate' ? false : !otra.fallas.has(i);
+    }
+  }
+
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i];
+    if (!post) continue;
+    let rec = recs.get(i);
+    if (!rec) {
+      if (post.armando) rec = { i, pasa: null, motivos: [], salida: 'sin-pase', motivo: 'en-armado', pasadas: 0 };
+      else if (post.type === 'video') rec = { i, pasa: null, motivos: [], salida: 'sin-pase', motivo: 'pieza-video', pasadas: 0 };
+      else rec = { i, pasa: true, motivos: [], salida: 'directa', pasadas: 0 };
+    }
+    registro.push(rec);
+    post.continuidad = { pasa: rec.pasa, motivos: rec.motivos, salida: rec.salida };
+  }
+
+  const serie = {
+    pasa: motivosSerie.length === 0,
+    motivos: motivosSerie,
+    salida: motivosSerie.length ? 'registrado' : 'directa',
+    notas,
+  };
+  return { registro, cambiados, perfil, serie };
+}
+
+
 // (LOTE VOZ-PROPIA-EN-LA-PRUEBA · 7/11) La voz del cliente en la semana
 // de la prueba: sus frases reales que se repiten (digest.voz_marcadores,
 // extraídas de SUS captions + sus respuestas por
@@ -4917,6 +5271,12 @@ module.exports = {
   // (LOTE JUICIO-FINAL) El pase de juicio sobre la pieza terminada de
   // la prueba: veredicto por pieza + salidas de la cadena + registro.
   aplicarJuicioFinalTrial,
+  // (LOTE CONTINUIDAD-DE-SERIE) El pase de serie sobre la semana
+  // terminada: perfil de continuidad + veredictos + salidas.
+  aplicarContinuidadSerieTrial,
+  perfilContinuidadSerie,
+  fallasContinuidadSerie,
+  CONTINUIDAD_SERIE_MOTIVOS,
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.
   trialVoiceEcho,
   // (LOTE IDIOMA-POSTEO-MARCA · v922) Idioma en que postea la marca (IG, respaldo web).
