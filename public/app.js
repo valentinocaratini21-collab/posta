@@ -1014,7 +1014,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}${tabBtn('ajustes', '#/app/ajustes', gzT('Ajustes', 'Settings'))}</nav>
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}</nav><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -6476,7 +6476,11 @@ function mzTabsHTML(tab) {
     : tab === 'subir' ? 'subir'
     : tab === 'ajustes' ? 'ajustes' : '';
   const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${t('subir', 'subir', '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3l5 5h-3.5v7h-3V8H7zM5 19h14v2.5H5z"/></svg>', gzT('Subir', 'Upload'))}${t('ajustes', 'ajustes', pzIc('gear'), gzT('Ajustes', 'Settings'))}</nav>`;
+  // (LOTE SIN-TAB-AJUSTES · 13/11) Ajustes sale de la barra inferior:
+  // ya se entra desde la ruedita del encabezado (pzShellHeadHTML). La
+  // vista y la ruta #/app/ajustes quedan intactas; en Ajustes ninguna
+  // pestaña queda resaltada (el mapeo `on` ya no tiene botón que case).
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${t('subir', 'subir', '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3l5 5h-3.5v7h-3V8H7zM5 19h14v2.5H5z"/></svg>', gzT('Subir', 'Upload'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */

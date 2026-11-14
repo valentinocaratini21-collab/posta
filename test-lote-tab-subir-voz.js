@@ -66,8 +66,8 @@ function extractFn(src, name) {
 
   t('A1 BUILD v1017 (re-estampado en aterrizaje)', srv.includes("const BUILD_ID = '20261105-v1017';"));
   const mz = extractFn(app, 'mzTabsHTML') || '';
-  t('A2 barra mz: Subir + Ajustes, sin Chat', has(mz, "'subir', 'subir'") && has(mz, "'ajustes', 'ajustes'") && !has(mz, "'chat', 'chat'"), mz.slice(0, 160));
-  t('A3 barra bb: tabBtn subir + ajustes, sin tabBtn chat', has(app, "tabBtn('subir', '#/app/subir'") && has(app, "tabBtn('ajustes', '#/app/ajustes'") && !has(app, "tabBtn('chat'"));
+  t('A2 barra mz: Subir, sin Chat ni Ajustes (Ajustes salió de la barra — LOTE SIN-TAB-AJUSTES)', has(mz, "'subir', 'subir'") && !has(mz, "'ajustes', 'ajustes'") && !has(mz, "'chat', 'chat'"), mz.slice(0, 160));
+  t('A3 barra bb: tabBtn subir, sin tabBtn chat ni ajustes (LOTE SIN-TAB-AJUSTES)', has(app, "tabBtn('subir', '#/app/subir'") && !has(app, "tabBtn('ajustes'") && !has(app, "tabBtn('chat'"));
   t('A4 router: subir existe y chat redirige al registrado', has(app, "tab === 'subir'") && has(app, "content = await subirView()") && /tab === 'chat'\) \{ if \(!\(typeof pzIsGuest/.test(app));
   t('A5 el link «Ver el posteo completo» del héroe no existe (clase eliminada del bundle)', !has(app, 'pz-hoy-hero-link'));
   t('A6 frase exacta de la tira', has(app, '<b>Mantené apretado</b> y decime si necesitás un cambio en este posteo'));
@@ -121,7 +121,7 @@ function extractFn(src, name) {
   t('B0 extracción VM de las funciones del lote', okLoad);
 
   const mz = vm.runInContext("mzTabsHTML('subir')", sandbox);
-  t('B1 barra mz renderizada: Subir activa + Ajustes, sin Chat', has(mz, 'Subir') && has(mz, 'Ajustes') && !has(mz, 'Chat'), mz.slice(0, 200));
+  t('B1 barra mz renderizada: Subir activa, sin Chat ni Ajustes (Ajustes salió de la barra — LOTE SIN-TAB-AJUSTES)', has(mz, 'Subir') && !has(mz, 'Ajustes') && !has(mz, 'Chat'), mz.slice(0, 200));
 
   const lane = (s) => vm.runInContext(`pzVozLane(${JSON.stringify(s)})`, sandbox);
   t('B2 carril rehacer: «rehacé la foto» / «cambiá la foto por otra»', lane('rehacé la foto, no me gusta') === 'restyle' && lane('cambiá la foto por otra') === 'restyle');
