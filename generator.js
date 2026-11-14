@@ -5432,7 +5432,18 @@ function parseChatActionBlocks(text) {
 // not_rejectable | when_past | redo_empty | qa_bandeja.
 function chatReceiptLines(r) {
   const lines = [];
-  const q = (t) => `"${String(t || 'posteo').slice(0, 40)}"`;
+  // (REHACER-ANCLADO · pieza 4) El título citado se acorta por diseño a
+  // ~40 caracteres, pero NUNCA a mitad de palabra ni sin avisar: corta en
+  // el último espacio y cierra con «…». El corte seco a 40 fue el texto
+  // "truncado" del incidente del 13/11 («editado: "Así queda un posteo
+  // de pastelería cuando"» — 40 exactos, a mitad de la frase).
+  const q = (t) => {
+    const s = String(t || 'posteo');
+    if (s.length <= 40) return `"${s}"`;
+    const cut = s.slice(0, 40);
+    const sp = cut.lastIndexOf(' ');
+    return `"${(sp >= 12 ? cut.slice(0, sp) : cut).trimEnd()}…"`;
+  };
   const joinTitles = (arr) => {
     const a = (Array.isArray(arr) ? arr : []).filter(Boolean);
     if (!a.length) return '';
@@ -5487,6 +5498,8 @@ function chatReceiptLines(r) {
       case 'when_past': return `ojo: ${q(it.title)} no lo reprogramé porque la fecha ya pasó`;
       case 'redo_empty': return `ojo: ${q(it.title)} ya no tiene rehaces de imagen, la imagen quedó igual`;
       case 'qa_bandeja': return `ojo: la imagen nueva de ${q(it.title)} quedó en revisión, la actual sigue vigente`;
+      case 'regen_sin_cambio': return `ojo: no pude aplicar el cambio a la foto de ${q(it.title)} — quedó la foto original`;
+      case 'regen_no_verificada': return `ojo: la imagen nueva de ${q(it.title)} no quedó como pediste (o no la pude verificar) — dejé la imagen como estaba`;
       case 'character_review': return `ojo: el protagonista de ${q(it.title)} no quedó igual al de siempre, lo dejé en revisión para que lo veas`;
       case 'photo_failed': return `ojo: no pude usar esa foto en ${q(it.title)}, quedó la anterior`;
       case 'create_failed': return `ojo: no pude crear ${q(it.title)} — probá de nuevo o mandame una foto`;

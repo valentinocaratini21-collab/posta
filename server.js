@@ -7023,7 +7023,9 @@ async function pzTrabajoChatImagenRun(jobId) {
       if (postId) {
         const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
         if (post && (post.status === 'draft' || post.status === 'scheduled')) {
-          db.prepare('UPDATE posts SET image_path = ?, needs_review = 1 WHERE id = ?').run(String(newPath), postId);
+          // (REHACER-ANCLADO · pieza 3) Todo reemplazo sobre un posteo
+          // existente guarda la imagen previa: volver es un toque.
+          db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, needs_review = 1 WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
         } else postId = null;
       }
       if (!postId) {
@@ -7040,7 +7042,9 @@ async function pzTrabajoChatImagenRun(jobId) {
     if (postId) {
       const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
       if (post && (post.status === 'draft' || post.status === 'scheduled')) {
-        db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), postId);
+        // (REHACER-ANCLADO · pieza 3) Reemplazo sobre posteo existente:
+        // la imagen previa queda guardada (volver a un toque).
+        db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
       } else postId = null; // publicado u otro estado: no se toca, se crea borrador nuevo
     }
     if (!postId) {
@@ -7081,6 +7085,104 @@ async function pzTrabajoChatImagenRun(jobId) {
     else if (/Sin clave de OpenAI/i.test(msg)) settleFallo('sin_clave');
     else { console.error('[trabajo] run:', msg); settleFallo('fallo'); }
   }
+}
+// ── REHACER-ANCLADO (incidente 13/11 18:17, posteo 649) ─────────────────
+// La nota de voz «sacá el avatar de Posty de arriba a la izquierda, en la
+// imagen» no matcheó el detector de la tira (pzVozLane) y corrió por el
+// cerebro: el bloque ```edit cambió el caption y la Palanca 7 regeneró la
+// imagen con refs: [] — la foto actual NO viajó — y el concept-shot sin
+// ancla devolvió la cara de Posty como imagen entera, que reemplazó a la
+// foto SIN verificación contra el pedido y SIN guardar prev_image_path.
+// Estas tres piezas cierran ese carril (edit de la Palanca 7 y rehacer
+// en el lugar comparten pzRegenParaPost):
+// Detector determinístico: ¿el pedido del cliente es SOBRE la foto (un
+// cambio EN la imagen), o es de texto/concepto? Solo lo primero ancla.
+function pzChatPedidoSobreFoto(text) {
+  const t = ' ' + String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
+  if (!/(foto|imagen|photo|picture|image|avatar|logo|fondo|background)/.test(t)) return false;
+  return /(sac|saq|quit|borr|elimin|remov|mov|acomod|correg|corrij|cambi|mejor|rehac|edit|arregl|agreg|tap|cubr|recort|centr|ampli|achic|agrand|escond|ocult|pon|zoom)/.test(t);
+}
+// Verificación del resultado ANTES de reemplazar (pieza 2): visión
+// compara la foto ORIGINAL contra el RESULTADO con el pedido literal.
+// FAIL-CLOSED: sin clave, sin archivos, error de red o cualquier punto
+// en duda ⇒ ok:false y la imagen vigente NO se toca.
+async function verificarRehacerAnclado({ uid, basePath, resultPath, pedido }) {
+  try {
+    const key = openaiKeyFor(uid);
+    if (!key) return { ok: false, motivo: 'sin_clave' };
+    const abs = (p) => { const s = String(p || ''); return s.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(s)) : null; };
+    const aBase = abs(basePath), aRes = abs(resultPath);
+    if (!aBase || !aRes || !fs.existsSync(aBase) || !fs.existsSync(aRes)) return { ok: false, motivo: 'sin_archivo' };
+    const img = (a) => {
+      const mime = /\.png$/i.test(a) ? 'image/png' : /\.webp$/i.test(a) ? 'image/webp' : 'image/jpeg';
+      return { type: 'image_url', image_url: { url: `data:${mime};base64,${fs.readFileSync(a).toString('base64')}` } };
+    };
+    const prompt = 'Te muestro DOS imágenes: la PRIMERA es la foto actual de un posteo y la SEGUNDA es una versión editada de esa foto. '
+      + `El cliente pidió este cambio sobre SU foto: «${String(pedido || '').slice(0, 300)}». `
+      + 'Respondé SOLO con JSON: {"producto_sigue": true|false, "misma_escena": true|false, "pedido_cumplido": true|false, "motivo": "<breve>"} '
+      + '— producto_sigue: el producto o tema principal de la primera foto sigue presente y reconocible en la segunda. '
+      + '— misma_escena: la segunda DERIVA de la primera (misma escena y composición, editada); no es una imagen nueva sin relación ni un personaje solo. '
+      + '— pedido_cumplido: el cambio pedido se aplicó de verdad en la segunda. '
+      + 'Si dudás en algún punto, respondé false en ese punto.';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 200, temperature: 0,
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, img(aBase), img(aRes)] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    try { costs.trackUsage({ feature: 'vision-rehacer', userId: uid, model: 'gpt-4o-mini', json: j }); } catch (e) {}
+    const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return { ok: false, motivo: 'sin_veredicto' };
+    let v = null;
+    try { v = JSON.parse(m[0]); } catch (e) { v = null; }
+    if (!v) return { ok: false, motivo: 'sin_veredicto' };
+    const ok = v.producto_sigue === true && v.misma_escena === true && v.pedido_cumplido === true;
+    return { ok, motivo: ok ? 'verificado' : String(v.motivo || 'no_cumple').slice(0, 120) };
+  } catch (e) { return { ok: false, motivo: 'error' }; }
+}
+// Regeneración para un posteo EXISTENTE pedida en el turno (pieza 1+2).
+// Si el pedido es SOBRE la foto y el posteo tiene foto vigente, la
+// generación es una EDICIÓN ANCLADA: la foto actual viaja como
+// referencia obligatoria (modo restyle, como /photo-restyle) con la
+// instrucción literal del cliente, y el resultado solo vuelve si la
+// verificación lo aprueba — si la fidelidad del pipeline cayó al
+// fallback (devolvió la foto original compuesta) el cambio no se
+// aplicó y se reporta 'regen_sin_cambio'; si la verificación no
+// aprueba, 'regen_no_verificada'. Sin foto vigente o con pedido de
+// concepto/texto, corre la generación de concepto de siempre (refs: []).
+async function pzRegenParaPost({ uid, postId, capForImg, tipoForImg, pedido }) {
+  const gate = {};
+  const headline = makeHeadline(String(capForImg).split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(String(capForImg), 5, 70, rubroOf(uid));
+  const row = db.prepare('SELECT image_path FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+  const baseImg = String((row && row.image_path) || '');
+  const baseAbs = baseImg.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(baseImg)) : null;
+  const anclada = pzChatPedidoSobreFoto(pedido) && !!baseAbs && fs.existsSync(baseAbs);
+  if (!anclada) {
+    const newPath = await conceptShotGenerateQueued({ uid, idea: String(capForImg), tipo: tipoForImg || '', headline, refs: [], resultOut: gate });
+    return { newPath, gate, issue: null, anclada: false };
+  }
+  const newPath = await conceptShotGenerateQueued({
+    uid, idea: String(capForImg), tipo: tipoForImg || '', headline,
+    refs: [baseImg], refRoles: ['restyle'], restyle: true,
+    extraPrompt: 'EDICIÓN SOBRE LA FOTO ACTUAL DEL POSTEO — la referencia marcada restyle ES esa foto y la pieza DEBE derivar de ella: '
+      + `aplicá SOLO el cambio que pidió el cliente: «${String(pedido || '').slice(0, 300)}». `
+      + 'Todo lo demás queda exactamente igual: mismo producto, misma escena, misma composición, mismos colores. '
+      + 'NO generes una escena nueva, NO reemplaces el producto por otro ni por un personaje, NO cambies el encuadre.',
+    resultOut: gate,
+  });
+  if (!newPath) return { newPath: null, gate, issue: null, anclada: true };
+  if (gate.fidelity === 'fallback') return { newPath: null, gate, issue: 'regen_sin_cambio', anclada: true };
+  const ver = await verificarRehacerAnclado({ uid, basePath: baseImg, resultPath: String(newPath), pedido });
+  if (!ver.ok) {
+    console.log(`[rehacer-anclado] post ${postId}: verificación no aprobada (${ver.motivo}) — la imagen vigente no se toca`);
+    return { newPath: null, gate, issue: 'regen_no_verificada', anclada: true };
+  }
+  return { newPath, gate, issue: null, anclada: true };
 }
 // Red anti-silencio: corre DESPUÉS de aplicar los bloques, ANTES del res.json.
 // Si el cliente pidió la imagen explícita y el turno no produjo ninguna, el
@@ -7669,7 +7771,16 @@ app.post('/api/ideas/chat', async (req, res) => {
     const learnedLines = [];
     // (v849) Posteos cambiados en este turno: el dueño recibe una push por turno.
     const cambioPostIds = [];
-    const chatTitle = (p) => String((p && p.caption) || 'posteo').split('\n')[0].slice(0, 40);
+    // (REHACER-ANCLADO · pieza 4) Mismo corte por diseño que el del
+    // recibo: ~40 caracteres, en el último espacio y con «…» — nunca a
+    // mitad de palabra (los títulos alimentan el recibo verificado).
+    const chatTitle = (p) => {
+      const s = String((p && p.caption) || 'posteo').split('\n')[0];
+      if (s.length <= 40) return s;
+      const cut = s.slice(0, 40);
+      const sp = cut.lastIndexOf(' ');
+      return (sp >= 12 ? cut.slice(0, sp) : cut).trimEnd() + '…';
+    };
     if (Array.isArray(out.edits) && out.edits.length) {
       // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
       // regenera vía concept-shot para acompañar. Solo se salta si el usuario pidió
@@ -7758,14 +7869,20 @@ app.post('/api/ideas/chat', async (req, res) => {
           const postIdForRedo = post.id;
           regenJobs.push((async () => {
             try {
-              const headline = makeHeadline(capForImg.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(capForImg, 5, 70, rubroOf(uid));
-              const redoGate = {};
-              const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [], resultOut: redoGate });
+              // (REHACER-ANCLADO) La generación pasa por la vía común:
+              // si el pedido es SOBRE la foto, va ANCLADA a la foto
+              // actual y VERIFICADA contra el pedido antes de volver;
+              // si la verificación frena, no hay reemplazo ni festejo
+              // (queda la línea honesta del recibo vía editIssues).
+              const rr = await pzRegenParaPost({ uid, postId: postIdForRedo, capForImg, tipoForImg, pedido: lastUserMsg });
+              if (rr.issue) { editIssues.push({ kind: rr.issue, title: chatTitle({ caption: capForImg }) }); return false; }
+              const newPath = rr.newPath;
+              const redoGate = rr.gate;
               if (newPath) {
                 // (QA gate 2026-10-26) En bandeja la imagen nueva NO reemplaza a la vigente: queda la vieja y el posteo va a revisión (sin consumir el redo).
                 if (redoGate.qaGate && redoGate.qaGate.outcome === 'bandeja') {
                   try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postIdForRedo); console.log(`[chat-edit] post ${postIdForRedo}: QA gate agotado — se conserva la imagen vigente + needs_review`); } catch (e) {}
-                  editIssues.push({ kind: 'qa_bandeja', title: String(capForImg).split('\n')[0].slice(0, 40) });
+                  editIssues.push({ kind: 'qa_bandeja', title: chatTitle({ caption: capForImg }) });
                   return false;
                 }
                 // (AVATAR-POSTY) Protagonista no garantizado: igual que
@@ -7773,13 +7890,17 @@ app.post('/api/ideas/chat', async (req, res) => {
                 // el posteo va a revisión y NO se consume el redo.
                 if (characterBlocksDelivery(redoGate)) {
                   try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postIdForRedo); console.log(`[chat-edit] post ${postIdForRedo}: protagonista no garantizado — se conserva la imagen vigente + needs_review`); } catch (e) {}
-                  editIssues.push({ kind: 'character_review', title: String(capForImg).split('\n')[0].slice(0, 40) });
+                  editIssues.push({ kind: 'character_review', title: chatTitle({ caption: capForImg }) });
                   return false;
                 }
                 // Punto de compromiso (6A): imagen nueva entregada.
-                const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(postIdForRedo, uid);
+                // (REHACER-ANCLADO · pieza 3) El reemplazo guarda la
+                // imagen previa en prev_image_path: volver es un toque
+                // (el botón de la tira lee esa columna), como en
+                // /photo-restyle.
+                const cur = db.prepare('SELECT redo_left, media_type, image_path FROM posts WHERE id = ? AND user_id = ?').get(postIdForRedo, uid);
                 if (redoLeftOf(cur) !== null && !consumeRedo(uid, postIdForRedo)) return false;
-                db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), postIdForRedo);
+                db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(newPath), String((cur && cur.image_path) || ''), postIdForRedo);
                 return true;
               }
             } catch (e) {
@@ -8065,6 +8186,9 @@ app.post('/api/ideas/chat', async (req, res) => {
     let redoneApplied = null;
     if (Array.isArray(out.redos) && out.redos.length) {
       const redone = [];
+      // (REHACER-ANCLADO) El pedido literal del turno: decide si la
+      // imagen del rehacer va anclada a la foto vigente (pzRegenParaPost).
+      const redoPedidoTxt = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
       for (const rb of out.redos) {
         if (!(rb.draft >= 1 && rb.draft <= cleanDrafts.length)) continue;
         const target = cleanDrafts[rb.draft - 1];
@@ -8083,9 +8207,15 @@ app.post('/api/ideas/chat', async (req, res) => {
           if (media === 'image') {
             try {
               const capForImg = String(rb.caption !== undefined ? rb.caption : post.caption);
-              const headline = makeHeadline(capForImg.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(capForImg, 5, 70, rubroOf(uid));
-              const gate = {};
-              const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: post.tipo || '', headline, refs: [], resultOut: gate });
+              // (REHACER-ANCLADO) La copia nace con la foto del original:
+              // si el pedido es sobre la foto, su imagen se genera
+              // ANCLADA a esa foto y verificada (pzRegenParaPost, con el
+              // original como base); si la verificación frena, la copia
+              // conserva la foto del original y queda la línea honesta.
+              const rr = await pzRegenParaPost({ uid, postId: post.id, capForImg, tipoForImg: post.tipo || '', pedido: redoPedidoTxt });
+              if (rr.issue) editIssues.push({ kind: rr.issue, title: chatTitle(post) });
+              const newPath = rr.newPath;
+              const gate = rr.gate;
               if (newPath) {
                 if (gate.qaGate && gate.qaGate.outcome === 'bandeja') {
                   db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(copyId);
@@ -8097,7 +8227,7 @@ app.post('/api/ideas/chat', async (req, res) => {
                   editIssues.push({ kind: 'character_review', title: chatTitle(post) });
                 } else {
                   const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(copyId, uid);
-                  if (redoLeftOf(cur) === null || consumeRedo(uid, copyId)) { db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), copyId); copyImageDone = true; }
+                  if (redoLeftOf(cur) === null || consumeRedo(uid, copyId)) { db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(newPath), String(post.image_path || ''), copyId); copyImageDone = true; }
                 }
               }
             } catch (e) { console.error('[chat-redo] copia:', e.message); }
@@ -8143,9 +8273,14 @@ app.post('/api/ideas/chat', async (req, res) => {
           } else {
             try {
               const capForImg = String(newCaption);
-              const headline = makeHeadline(capForImg.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(capForImg, 5, 70, rubroOf(uid));
-              const gate = {};
-              const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: post.tipo || '', headline, refs: [], resultOut: gate });
+              // (REHACER-ANCLADO) Mismo cierre que la Palanca 7: si el
+              // pedido es sobre la foto, la imagen nueva nace ANCLADA a
+              // la vigente y solo reemplaza si la verificación aprueba;
+              // el reemplazo guarda prev_image_path (volver a un toque).
+              const rr = await pzRegenParaPost({ uid, postId: post.id, capForImg, tipoForImg: post.tipo || '', pedido: redoPedidoTxt });
+              if (rr.issue) editIssues.push({ kind: rr.issue, title: chatTitle(post) });
+              const newPath = rr.newPath;
+              const gate = rr.gate;
               if (newPath) {
                 if (gate.qaGate && gate.qaGate.outcome === 'bandeja') {
                   db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id);
@@ -8156,8 +8291,8 @@ app.post('/api/ideas/chat', async (req, res) => {
                   db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id);
                   editIssues.push({ kind: 'character_review', title: chatTitle(post) });
                 } else {
-                  const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
-                  if (redoLeftOf(cur) === null || consumeRedo(uid, post.id)) { db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id); imageDone = true; }
+                  const cur = db.prepare('SELECT redo_left, media_type, image_path FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
+                  if (redoLeftOf(cur) === null || consumeRedo(uid, post.id)) { db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(newPath), String((cur && cur.image_path) || ''), post.id); imageDone = true; }
                 }
               }
             } catch (e) { console.error('[chat-redo] imagen:', e.message); }
@@ -15063,10 +15198,13 @@ app.get('/api/chat/hilo', requireAuth, (req, res) => {
     const uid = req.session.userId;
     const pid = parseInt(req.query.post_id, 10) || 0;
     if (pid) {
-      const post = db.prepare('SELECT id, prev_image_path FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+      const post = db.prepare('SELECT id, prev_image_path, image_path FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
       if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
       const rows = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? AND post_id = ? AND hilo = 'post' ORDER BY id ASC LIMIT 200`).all(uid, pid);
-      return res.json({ ok: true, messages: rows, prev_image_path: String(post.prev_image_path || '') });
+      // (REHACER-ANCLADO · pieza 3) image_path viaja también: tras un
+      // rehacer del carril del cerebro, la tira repinta la foto nueva y
+      // ofrece «Volver a la imagen anterior» en el mismo hilo.
+      return res.json({ ok: true, messages: rows, prev_image_path: String(post.prev_image_path || ''), image_path: String(post.image_path || '') });
     }
     if (String(req.query.semana || '') === '1') {
       const rows = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? AND post_id = 0 AND hilo = 'semana' ORDER BY id ASC LIMIT 200`).all(uid);
@@ -38594,7 +38732,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1022';
+const BUILD_ID = '20261105-v1023';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

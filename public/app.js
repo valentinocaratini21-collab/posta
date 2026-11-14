@@ -26048,6 +26048,20 @@ async function pzVozEnviar(strip, text) {
     const body = { messages, photos: [], library: [], libraryPaths: [], drafts: [], photoPaths: [] };
     if (pid) body.anchor_post_id = pid;
     const r = await api.post('/api/ideas/chat', body);
+    // (REHACER-ANCLADO · pieza 3) Si el cerebro rehízo la imagen de
+    // este posteo, la tira repinta la foto nueva y ofrece «Volver a
+    // la imagen anterior» — el carril directo ya lo hacía; este
+    // carril (el del incidente del 649) no pintaba ninguno de los dos.
+    if (pid && r && r.edit && Number(r.edit.imageRegen) > 0) {
+      try {
+        const hj = await api.get('/api/chat/hilo?post_id=' + encodeURIComponent(pid));
+        if (hj && hj.ok && hj.image_path) {
+          const cur = document.querySelector('[data-pzvozfoto="' + pid + '"] img');
+          pzVozPintarFoto(pid, cur);
+          pzVozVolverPintar(strip, pid);
+        }
+      } catch (e) {}
+    }
     const reply = String((r && (r.reply || r.text)) || '').trim() || (en ? 'Done ✓' : 'Listo ✓');
     await pzVozCerrar(strip, key, text, reply);
   } catch (e) {
