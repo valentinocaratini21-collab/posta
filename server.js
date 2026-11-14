@@ -2669,15 +2669,20 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
       console.log(`[formato-marca] trial import ig=${ig} degradado total: dominante=carrusel importados=${n} carruseles=0 (evento trial_formato_degradado)`);
     }
   } catch (e) { /* el registro nunca frena la importación */ }
-  // (LOTE TARTINE-FRENOS · P1) INCOMPLETUD VISIBLE: si la semana
-  // importada quedó con piezas en armado, el hueco queda registrado
-  // como evento consultable (nunca más una semana incompleta en
-  // silencio: la corrida Tartine entregó 2 de 3 sin que nadie lo
-  // registrara). El rescate de fondo crea los posteos faltantes en
-  // esta misma cuenta cuando las piezas pasan la vara.
+  // (LOTE TARTINE-FRENOS · P1, corregido por LOTE SEMANA-NUNCA-
+  // INCOMPLETA) LA SEMANA NUNCA SE DECLARA INCOMPLETA (Valentino
+  // 13/11: «no se puede declarar incompleta / eso no puede
+  // suceder»): si la importación cierra con piezas todavía en
+  // armado, eso no es un resultado ni un estado para el cliente —
+  // es trabajo en curso. Queda solo un registro interno de
+  // diagnóstico del equipo (trial_import_en_armado; ninguna
+  // superficie del cliente lo lee) y el rescate de fondo — que
+  // re-arma sus pasadas hasta completar la semana — crea los
+  // posteos faltantes en esta misma cuenta cuando las piezas
+  // pasan la vara.
   if (faltantesImp.length) {
-    try { evTrack(userId, 'trial_import_incompleta', { ig, faltantes: faltantesImp, total: postsAllImp.length, importados: n }); } catch (e) {}
-    console.log(`[posta] importTrialWeek ig=${ig} user=${userId}: semana INCOMPLETA visible — faltan los índices ${faltantesImp.join(',')} de ${postsAllImp.length} (evento trial_import_incompleta)`);
+    try { evTrack(userId, 'trial_import_en_armado', { ig, en_armado: faltantesImp, total: postsAllImp.length, importados: n }); } catch (e) {}
+    console.log(`[posta] importTrialWeek ig=${ig} user=${userId}: la semana sigue en armado — faltan los índices ${faltantesImp.join(',')} de ${postsAllImp.length} y el rescate de fondo los crea al pasar la vara (evento trial_import_en_armado)`);
   }
   return n;
 }
@@ -25495,6 +25500,25 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
   }
   return null;
 }
+// (LOTE SEMANA-NUNCA-INCOMPLETA) Cadena de pasadas del rescate de
+// semana: cada cadena tiene un token; una invocación fresca (desde
+// las rutas de generación) abre cadena nueva e invalida los timers
+// de la anterior, y cada pasada re-programada solo corre si su
+// token sigue vigente (nunca dos cadenas peleando por la misma
+// semana). Bornes del re-arme: SEMANA_REARME_MAX_PASADAS pasadas
+// por cadena, espaciadas SEMANA_REARME_DELAY_MS; el gasto de cada
+// intento sigue gateado por el tope vigente (costs.demoAiCapOk
+// dentro de rescuePieceWithSeal) — el re-arme no abre gasto nuevo.
+const SEMANA_REARME_MAX_PASADAS = 6;
+const SEMANA_REARME_DELAY_MS = 60 * 1000;
+const semanaRearmeTokens = new Map(); // cacheKey -> token vigente
+function semanaRearmeToken(cacheKey, nueva) {
+  if (nueva || !semanaRearmeTokens.has(cacheKey)) semanaRearmeTokens.set(cacheKey, (semanaRearmeTokens.get(cacheKey) || 0) + 1);
+  return semanaRearmeTokens.get(cacheKey);
+}
+function semanaRearmeVigente(cacheKey, token) {
+  return semanaRearmeTokens.get(cacheKey) === token;
+}
 // (LOTE PRIMER-POSTEO-PERFECTO · pieza 2 + addendum 6A) EL RESCATE DE
 // FONDO DE LA SEMANA: espejo del contrato de scheduleFirstPostRetry —
 // trabaja sobre trial_cache reemplazando cada pieza en armado por la
@@ -25503,11 +25527,17 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
 // trabajando. (LOTE TARTINE-FRENOS · P1) Si la semana YA se importó,
 // el rescate no aborta: al cerrar CREA los posteos de las piezas
 // completadas en la cuenta dueña (crearPosteoRescateTardio) y los
-// agenda; lo que sigue en armado queda registrado como incompletud
-// visible. Nunca tira.
+// agenda. (LOTE SEMANA-NUNCA-INCOMPLETA) Lo que sigue en armado NO
+// se declara incompleto en ninguna superficie: la semana queda en
+// armado honesto y el re-arme de pasadas (al final de esta función)
+// mantiene la cadena trabajando hasta completarla. Nunca tira.
 async function scheduleWeekRescue(o) {
   try {
     if (!o || !o.cacheKey || !Array.isArray(o.pieces) || !o.pieces.length) return { applied: false, reason: 'sin-datos' };
+    // (LOTE SEMANA-NUNCA-INCOMPLETA) Token de ESTA cadena de pasadas:
+    // la invocación fresca (sin intento, desde las rutas) abre cadena
+    // nueva; las re-programadas heredan el token vigente.
+    const tokenCadena = semanaRearmeToken(o.cacheKey, o.intento == null);
     const readCache = () => {
       try {
         const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(o.cacheKey);
@@ -25565,10 +25595,17 @@ async function scheduleWeekRescue(o) {
     } finally {
       try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
     }
-    // (LOTE TARTINE-FRENOS · P7) Sin archivo de logo, las piezas que
-    // siguen en armado quedan con su MOTIVO registrado en el payload
-    // (frenadas, no «en curso»): el freno es visible, no una anotación
-    // con veredicto de éxito.
+    // (LOTE TARTINE-FRENOS · P7, corregido por LOTE SEMANA-NUNCA-
+    // INCOMPLETA) Sin archivo de logo, las piezas que siguen en
+    // armado quedan con su MOTIVO registrado en el payload y SIGUEN
+    // EN ARMADO (cadena 'en-rescate', estado 'en-armado'): el motivo
+    // es diagnóstico interno del equipo, jamás un estado final
+    // «frenada» — la semana no se declara incompleta en ninguna
+    // superficie y el re-arme de pasadas (abajo) sigue trabajando
+    // hasta completarla. El veredicto del gate del slot 0 se registra
+    // tal cual (fail-closed: sin logo no se muestra); si una pasada
+    // posterior completa la pieza, el loop principal lo pisa con
+    // pasa:true, como siempre.
     if (!o.logoPath) {
       try {
         const fin7 = readCache();
@@ -25579,7 +25616,7 @@ async function scheduleWeekRescue(o) {
             if (fin7.posts[idx7] && fin7.posts[idx7].armando === true) {
               if (Array.isArray(fin7.rescate_semana)) {
                 const ent7 = fin7.rescate_semana.find((x) => x && x.idx === idx7);
-                if (ent7) { ent7.estado = 'frenada'; ent7.motivo = 'sin-archivo-de-logo'; toco7 = true; }
+                if (ent7) { ent7.cadena = 'en-rescate'; ent7.estado = 'en-armado'; ent7.motivo = 'sin-archivo-de-logo'; toco7 = true; }
               }
               if (idx7 === 0 && fin7.primer_posteo) {
                 if (fin7.primer_posteo.logo) fin7.primer_posteo.logo.estado = 'sin-archivo';
@@ -25600,8 +25637,10 @@ async function scheduleWeekRescue(o) {
     // cuando el embudo lo permite; si la agenda lo mueve, el cambio
     // QUEDA DICHO en el payload (dia_spec vs dia_real) y en el evento
     // trial_rescate_importado — nada se re-fecha en silencio. Las
-    // piezas que siguen en armado dejan su incompletud registrada
-    // (trial_semana_incompleta) en vez de un hueco mudo.
+    // piezas que siguen en armado NO dejan ninguna declaración: la
+    // semana sigue en armado honesto y el re-arme de pasadas (al
+    // final de esta función) mantiene la cadena trabajando hasta
+    // completarla (LOTE SEMANA-NUNCA-INCOMPLETA).
     try {
       if (importedYa || imported()) {
         const ownerRow = o.digestHash ? db.prepare('SELECT user_id FROM posts WHERE digest_hash LIKE ? ORDER BY id ASC LIMIT 1').get(String(o.digestHash) + '%') : null;
@@ -25635,13 +25674,51 @@ async function scheduleWeekRescue(o) {
             }
             const pendientesP = o.pieces.map((pc) => pc.idx | 0).filter((ix) => finP.posts[ix] && finP.posts[ix].armando === true);
             if (pendientesP.length) {
-              try { evTrack(ownerId, 'trial_semana_incompleta', { ig: o.cacheKey, pendientes: pendientesP }); } catch (e) {}
-              console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: semana importada INCOMPLETA visible — pendientes ${pendientesP.join(',')} (evento trial_semana_incompleta)`);
+              // (LOTE SEMANA-NUNCA-INCOMPLETA) Registro interno de
+              // diagnóstico del equipo — la semana SIGUE EN ARMADO,
+              // no «incompleta»: el re-arme de abajo programa la
+              // pasada siguiente y la cadena sigue hasta completarla.
+              // Ninguna superficie del cliente lee este evento.
+              try { evTrack(ownerId, 'trial_rescate_en_armado', { ig: o.cacheKey, pendientes: pendientesP, intento: (o.intento | 0) }); } catch (e) {}
+              console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: la semana importada sigue en armado — pendientes ${pendientesP.join(',')}; el rescate continúa (evento trial_rescate_en_armado)`);
             }
           }
         }
       }
     } catch (e) { console.error('[posta] scheduleWeekRescue completado tardío:', e.message); }
+    // (LOTE SEMANA-NUNCA-INCOMPLETA) RE-ARME DE PASADAS: si quedan
+    // piezas en armado, la cadena NO se asienta con una semana
+    // parcial como resultado final — programa la pasada siguiente y
+    // sigue trabajando hasta completarla (la misma vara de
+    // perfección antes que velocidad del primer posteo). Bornes: la
+    // cadena corta en SEMANA_REARME_MAX_PASADAS pasadas y cada
+    // intento de cada pasada sigue gateado por el tope de gasto
+    // vigente (costs.demoAiCapOk dentro de rescuePieceWithSeal).
+    // Sin logoPath la pasada no gasta nada (el rescate frena antes
+    // de generar): el logo se RE-RESUELVE del digest fresco en cada
+    // pasada, por si el archivo aparece (refresco del fundamento).
+    // Si las pasadas de esta cadena se agotan, la semana queda en
+    // armado honesto — nunca «incompleta» — y una generación nueva
+    // abre otra cadena; el log es el registro del equipo.
+    try {
+      const finR = readCache();
+      if (finR && Array.isArray(finR.posts)) {
+        const pendR = o.pieces.filter((pc) => finR.posts[pc.idx | 0] && finR.posts[pc.idx | 0].armando === true);
+        if (!pendR.length) {
+          semanaRearmeToken(o.cacheKey, true); // semana completa: la cadena se cierra
+        } else if ((o.intento | 0) + 1 <= SEMANA_REARME_MAX_PASADAS) {
+          const logoR = trialLogoAbsPath(finR.digest) || o.logoPath || null;
+          const intentoR = (o.intento | 0) + 1;
+          const timerR = setTimeout(() => {
+            if (!semanaRearmeVigente(o.cacheKey, tokenCadena)) return; // manda una cadena más nueva
+            scheduleWeekRescue({ ...o, pieces: pendR, logoPath: logoR, intento: intentoR }).catch(() => {});
+          }, SEMANA_REARME_DELAY_MS);
+          if (timerR && typeof timerR.unref === 'function') timerR.unref();
+        } else {
+          console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: pasadas de esta cadena agotadas (${SEMANA_REARME_MAX_PASADAS}) — la semana sigue en armado, pendientes ${pendR.map((p) => p.idx | 0).join(',')}`);
+        }
+      }
+    } catch (e) { /* el re-arme jamás frena el rescate */ }
     return { applied: applied > 0, reason: applied ? 'ok' : 'sin-reemplazos', piezas: applied };
   } catch (e) {
     return { applied: false, reason: 'error' };
@@ -39038,7 +39115,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1025';
+const BUILD_ID = '20261105-v1026';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -2,9 +2,12 @@
 // LOTE TARTINE-FRENOS — el arreglo del diagnóstico de la corrida
 // Tartine (13/11, posteos 671/672): convertir la maquinaria de la
 // prueba de REGISTRO en FRENO (spec P1–P8 de .diag-tartine):
-//   P1 semana completa o incompletud honesta y visible (el rescate de
-//      fondo crea los posteos faltantes en la cuenta; días del spec o
-//      el cambio registrado) · P2 el contador cuenta entregables ·
+//   P1 la semana se completa (el rescate de fondo crea los posteos
+//      faltantes en la cuenta; días del spec o el cambio registrado)
+//      — desde el LOTE SEMANA-NUNCA-INCOMPLETA: NUNCA se declara
+//      incompleta (corrección de Valentino 13/11); lo que sigue en
+//      armado queda en armado y la cadena sigue trabajando ·
+//   P2 el contador cuenta entregables ·
 //   P3 revelado honesto (héroe provisorio = foto real) · P4 insignia
 //      con cuarta fuente (temas_feed) y degradación por VALIDEZ del
 //      ancla · P5 clase «rótulo del sitio» en la ingesta · P6 el tour
@@ -109,7 +112,7 @@ seccion('C · P7 gate: sin-archivo-de-logo fail-closed');
   // Servidor: la cadena con sello (stream + fondo) es fail-closed.
   ok(SERVER.includes('if (!logoPath) return null;'), 'C11 rescuePieceWithSeal es fail-closed sin logoPath, antes de generar');
   ok(SERVER.includes('if (!trialLogoAbsPath(trialDigest)) return null;'), 'C12 la cadena IA del stream tampoco reemplaza sin archivo de logo');
-  ok(SERVER.includes("ent7.motivo = 'sin-archivo-de-logo'"), 'C13 el rescate de fondo registra el motivo en el payload (frenada visible)');
+  ok(SERVER.includes("ent7.motivo = 'sin-archivo-de-logo'"), 'C13 el rescate de fondo registra el motivo en el payload (RE-PIN de rótulo · LOTE SEMANA-NUNCA-INCOMPLETA: la pieza sigue EN ARMADO — cadena en-rescate, estado en-armado — nunca «frenada»)');
 }
 
 /* ── D · P6 — el tour sin placas ───────────────────────────────── */
@@ -152,7 +155,7 @@ seccion('E · P8 hashtags de panadería y novedad con evidencia');
   eq(typeof captions.novedadConEvidencia === 'function' && captions.novedadConEvidencia({ kind: 'novedad' }), false, 'E9 el kind solo no es evidencia');
 }
 
-/* ── F · P1 — semana completa o incompletud visible ────────────── */
+/* ── F · P1 — la semana se completa (nunca se declara incompleta) ─ */
 seccion('F · P1 rescate que completa + registros');
 {
   const cuerpoRescate = SERVER.slice(SERVER.indexOf('async function scheduleWeekRescue'), SERVER.indexOf('async function scheduleWeekRescue') + 14000);
@@ -160,10 +163,10 @@ seccion('F · P1 rescate que completa + registros');
   ok(cuerpoRescate.includes('crearPosteoRescateTardio(ownerId, finP, idxP)'), 'F2 al cerrar, el rescate CREA los posteos faltantes en la cuenta dueña');
   ok(cuerpoRescate.includes('trial_rescate_importado'), 'F3 la creación tardía se registra como evento');
   ok(cuerpoRescate.includes('dia_spec') && cuerpoRescate.includes('dia_real'), 'F4 el día del spec y el día real quedan registrados (el cambio se dice)');
-  ok(cuerpoRescate.includes('trial_semana_incompleta'), 'F5 lo que sigue en armado queda registrado como incompletud visible');
+  ok(cuerpoRescate.includes('trial_rescate_en_armado') && !cuerpoRescate.includes('trial_semana_incompleta') && cuerpoRescate.includes('SEMANA_REARME_MAX_PASADAS'), 'F5 RE-PIN (LOTE SEMANA-NUNCA-INCOMPLETA): lo que sigue en armado NO se declara incompleto — queda en armado, el rescate re-arma pasadas y la cadena sigue hasta completar');
   ok(cuerpoRescate.includes('esGuestP ? 3 : 7'), 'F6 la ventana de creación tardía respeta el tipo de cuenta (invitado 3 · registrado 7)');
   eq(typeof SERVER === 'string' && SERVER.includes('function crearPosteoRescateTardio(userId, out, idx)'), true, 'F7 el helper de creación tardía existe (espejo del insert de importTrialWeek)');
-  ok(SERVER.includes("evTrack(userId, 'trial_import_incompleta'"), 'F8 la importación registra sus faltantes (trial_import_incompleta)');
+  ok(SERVER.includes("evTrack(userId, 'trial_import_en_armado'") && !SERVER.includes('trial_import_incompleta'), 'F8 RE-PIN (LOTE SEMANA-NUNCA-INCOMPLETA): la importación registra las piezas en armado como trabajo en curso (trial_import_en_armado), nunca como semana incompleta');
   ok(SERVER.includes('faltantesImp'), 'F9 importTrialWeek computa los índices faltantes en vez de filtrarlos en silencio');
 }
 
