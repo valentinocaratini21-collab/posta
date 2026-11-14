@@ -15931,6 +15931,325 @@ app.post('/api/admin/support/conserje/pedidos-subir/:id/descartar', requireAdmin
   } catch (e) { res.status(500).json({ ok: false, error: 'no_se_pudo_descartar' }); }
 });
 
+
+// ================= LOTE EVENTO + PEDIDO DE CERO (extensión de Subir) =================
+// Decisión de Valentino 13/11 15:33 (hilo del bar con DJ), como
+// extensión del tab Subir: (1) EVENTO CON FECHA — el día se elige en
+// un calendario de un toque; el nombre se LEE del flyer y el cliente
+// lo confirma con un toque, o se tipea en el único campo corto del
+// flujo (un nombre propio no se toca ni se inventa). (2) PEDIDO DE
+// CERO — la idea entra libre (voz o texto) y Posty devuelve lo que
+// entendió para confirmar/corregir con toques; lo no entendido se
+// pregunta, jamás se inventa, y sin dato confirmado no hay posteo.
+// (3) LA CARA APORTADA ENTRA COMO FOTO: el flyer se compone ALREDEDOR
+// de la foto real (evento-compose.py: píxeles intactos + texto de
+// programa). PUERTA DURA: ningún camino de este bloque manda la foto
+// de una persona a un modelo de imagen (ni como referencia ni para
+// redibujarla); la visión se usa SOLO para LEER el nombre de un flyer
+// (OCR), y lo leído igual lo confirma el cliente con un toque.
+// (4) Sin foto alguna, el flyer sale con fotos reales del negocio +
+// nombre y fecha como diseño. (5) El posteo ocupa el único lugar de
+// su día: el de Posty se mueve (subirPlanFecha + subirMoverPost) y el
+// recibo lo dice; el día tomado por material DEL CLIENTE no se pisa
+// ni se desplaza — se le pide otro día.
+const subirEvento = require('./subir-evento');
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS subir_pedidos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL DEFAULT 'evento',
+    estado TEXT NOT NULL DEFAULT 'posteado',
+    nombre TEXT NOT NULL DEFAULT '',
+    fecha TEXT NOT NULL DEFAULT '',
+    quien TEXT NOT NULL DEFAULT '',
+    que TEXT NOT NULL DEFAULT '',
+    asset_flyer_id INTEGER,
+    asset_cara_id INTEGER,
+    post_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+} catch (e) { console.error('[subir-evento] tabla', e.message); }
+
+function subirEventoAbs(filePath) {
+  if (!filePath) return null;
+  const abs = path.join(MEDIA_DIR, path.basename(String(filePath)));
+  return fs.existsSync(abs) ? abs : null;
+}
+function subirEventoFotosNegocio(uid, excluir) {
+  const ex = new Set((excluir || []).map(Number));
+  const out = [];
+  try {
+    const rows = db.prepare(`SELECT id, file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid);
+    for (const r of rows) {
+      if (ex.has(Number(r.id))) continue;
+      const abs = subirEventoAbs(r.file_path);
+      if (abs) out.push(abs);
+      if (out.length >= 3) break;
+    }
+  } catch (e) {}
+  return out;
+}
+function subirEventoNegocio(uid) {
+  try { const p = getProfile(uid); return String((p && p.business_name) || '').trim(); } catch (e) { return ''; }
+}
+function subirEventoPaleta(uid) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    const pal = (dg && Array.isArray(dg.paleta)) ? dg.paleta.map((c) => (c && c.hex) || '').filter(Boolean) : [];
+    return pal.slice(0, 3);
+  } catch (e) { return []; }
+}
+// Compone el flyer del evento (PIL, sin IA): foto de la persona como
+// elemento fotográfico + fotos reales del negocio de fondo + nombre,
+// fecha y quién como tipografía de programa. Devuelve '/media/...'
+// o null (el posteo no se crea sin imagen: nada de éxito falso).
+function subirEventoComponer(uid, datos, caraAbs) {
+  return new Promise((resolve) => {
+    try {
+      const { execFile } = require('child_process');
+      const excluir = [datos.caraAssetId || 0, datos.flyerAssetId || 0].filter(Boolean);
+      const spec = {
+        out: path.join(MEDIA_DIR, `evento-${uid}-${crypto.randomBytes(4).toString('hex')}.jpg`),
+        w: 1080, h: 1350,
+        titulo: subirEvento.titularPara(datos),
+        fecha: datos.fecha ? modoEvento.fechaLinda(datos.fecha) : '',
+        quien: datos.quien || '',
+        negocio: subirEventoNegocio(uid),
+        fotoPersona: caraAbs || null,
+        fotosNegocio: subirEventoFotosNegocio(uid, excluir),
+        paleta: subirEventoPaleta(uid),
+      };
+      const specFile = path.join(MEDIA_DIR, `.evento-spec-${crypto.randomBytes(4).toString('hex')}.json`);
+      fs.writeFileSync(specFile, JSON.stringify(spec));
+      execFile('python3', [path.join(__dirname, 'evento-compose.py'), specFile], { timeout: 90000 }, (err, stdout) => {
+        try { fs.unlinkSync(specFile); } catch (e) {}
+        if (err) { console.error('[subir-evento] compose', err.message); return resolve(null); }
+        try {
+          const j = JSON.parse(String(stdout).trim().split('\n').pop());
+          if (!j.ok || !j.out || !fs.existsSync(j.out)) return resolve(null);
+          resolve('/media/' + path.basename(j.out));
+        } catch (e) { resolve(null); }
+      });
+    } catch (e) { console.error('[subir-evento] compose', e.message); resolve(null); }
+  });
+}
+// Plan de cadencia para UNA FECHA EXACTA (la del evento): la fecha la
+// manda el cliente. Libre → entra. Tomada por un posteo de Posty → el
+// plan lo mueve al primer día libre posterior (misma semana primero;
+// si no hay, el primer libre posterior: el posteo de Posty se mueve
+// igual y el recibo lo dice). Tomada por material DEL CLIENTE (o un
+// fijado, o uno ya vencido) → no se pisa: error 'dia_tuyo'. El día de
+// cierre del negocio NO frena el evento (el evento es ese día, como
+// en el modo flyer); sí frena los destinos del desplazamiento.
+function subirPlanFecha(uid, fechaYmd) {
+  const tz = userTz(uid);
+  const todayK = tzToday(tz);
+  const closed = closedDaysOf(uid);
+  if (!fechaYmd || !modoEvento.parseFecha(fechaYmd)) return { ok: false, error: 'fecha_invalida' };
+  if (fechaYmd <= todayK) return { ok: false, error: 'fecha_pasada' };
+  const hhmm = subirPlannerWall(uid).hhmm;
+  const iso = zonedWallToUtc(fechaYmd + ' ' + hhmm, tz);
+  if (!iso) return { ok: false, error: 'fecha_invalida' };
+  const taken = subirTakenMap(uid);
+  const occ = taken.get(fechaYmd);
+  if (!occ) return { ok: true, iso, mover: null };
+  if (subirEsDeCliente(occ) || occ.pinned) return { ok: false, error: 'dia_tuyo' };
+  const occMs = Date.parse(String(occ.scheduled_at || '').replace(' ', 'T') + (String(occ.scheduled_at || '').endsWith('Z') ? '' : 'Z'));
+  if (!occMs || occMs <= Date.now()) return { ok: false, error: 'dia_tuyo' };
+  let dest = null;
+  const sun = shiftDays(mondayKeyOf(fechaYmd), 6);
+  for (let d = shiftDays(fechaYmd, 1); d <= sun && !dest; d = shiftDays(d, 1)) {
+    if (d < todayK || closed.has(weekdayOfYmd(d)) || taken.has(d)) continue;
+    dest = d;
+  }
+  for (let d = shiftDays(fechaYmd, 1); d <= shiftDays(fechaYmd, 60) && !dest; d = shiftDays(d, 1)) {
+    if (closed.has(weekdayOfYmd(d)) || taken.has(d)) continue;
+    dest = d;
+  }
+  if (!dest) return { ok: false, error: 'sin_destino' };
+  return { ok: true, iso, mover: { post_id: occ.id, dest_ymd: dest } };
+}
+// Crea el posteo del evento con los datos YA CONFIRMADOS (lo usan el
+// flujo de evento y el de cero). Compone el flyer, inserta el posteo
+// (espejo del resolvedor de Subir: source 'subir', marca «Nuevo»,
+// posición en la grilla por scheduled_at), recién ahí ejecuta el
+// desplazamiento y registra el pedido. Sin imagen o sin plan: error
+// honesto y ningún efecto lateral.
+async function subirEventoCrearPost(uid, datos) {
+  const v = subirEvento.validarDatos(datos);
+  if (!v.ok) return { ok: false, status: 400, error: v.error === 'sin_titular' ? 'Falta el nombre del evento — confirmalo y lo armo' : 'Esa fecha no sirve — elegí un día que viene' , codigo: v.error };
+  const plan = subirPlanFecha(uid, v.fecha);
+  if (!plan.ok) {
+    if (plan.error === 'dia_tuyo') return { ok: false, status: 409, error: 'Ese día ya tiene un posteo tuyo — elegí otro día para el evento', codigo: plan.error };
+    if (plan.error === 'fecha_pasada') return { ok: false, status: 400, error: 'Ese día ya pasó — elegí un día que viene', codigo: plan.error };
+    return { ok: false, status: 400, error: 'No pude ubicar el evento ese día — probá con otro', codigo: plan.error };
+  }
+  const caraAsset = datos.caraAssetId ? sftAssetPropio(uid, datos.caraAssetId) : null;
+  const caraAbs = caraAsset && caraAsset.kind !== 'video' ? subirEventoAbs(caraAsset.file_path) : null;
+  const imagePath = await subirEventoComponer(uid, { ...datos, fecha: v.fecha }, caraAbs);
+  if (!imagePath) return { ok: false, status: 500, error: 'No pude armar el flyer — probá de nuevo', codigo: 'sin_imagen' };
+  const negocio = subirEventoNegocio(uid);
+  const caption = subirEvento.captionEvento({ ...datos, fechaISO: v.fecha }, negocio);
+  const info = db.prepare(`INSERT INTO posts (user_id, caption, hashtags, image_path, media_type, status, scheduled_at, client_photo, foto_asset_id, source, week_key, subir_nuevo, created_at) VALUES (?,?,?,?,?, 'draft', ?, 1, ?, 'subir', ?, 1, datetime('now'))`)
+    .run(uid, caption, '', imagePath, 'image', plan.iso, caraAsset ? caraAsset.id : null, mondayKeyOf(v.fecha));
+  const postId = Number(info.lastInsertRowid);
+  let desplazado = null;
+  if (plan.mover) {
+    const movIso = subirMoverPost(uid, plan.mover.post_id, plan.mover.dest_ymd);
+    if (movIso) {
+      const slD = armarSlotLabel(uid, movIso);
+      desplazado = { post_id: plan.mover.post_id, dia_label: slD.dia_label, hora: slD.hora };
+    } else {
+      const libre = subirPlanDia(uid, 'foto', 'posty');
+      if (libre && !libre.mover) db.prepare('UPDATE posts SET scheduled_at = ?, week_key = ? WHERE id = ?').run(libre.iso, mondayKeyOf(ymdInTz(libre.iso, userTz(uid))), postId);
+    }
+  }
+  try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', datos.flyerAssetId || datos.caraAssetId || 0); } catch (e) {}
+  const ped = db.prepare(`INSERT INTO subir_pedidos (user_id, tipo, estado, nombre, fecha, quien, que, asset_flyer_id, asset_cara_id, post_id) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+    .run(uid, datos.tipo || 'evento', 'posteado', datos.nombre || '', v.fecha, datos.quien || '', datos.que || '', datos.flyerAssetId || null, caraAsset ? caraAsset.id : null, postId);
+  const sl = armarSlotLabel(uid, plan.iso);
+  const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(postId);
+  const slF = postRow && postRow.scheduled_at ? armarSlotLabel(uid, postRow.scheduled_at) : sl;
+  return { ok: true, post_id: postId, pedido_id: Number(ped.lastInsertRowid), image_path: imagePath, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, desplazado, nombre: subirEvento.titularPara(datos), fecha: v.fecha, fecha_label: modoEvento.fechaLinda(v.fecha) };
+}
+
+// Lee el NOMBRE del evento de un flyer ya subido (visión como OCR:
+// solo lee texto impreso, jamás genera ni redibuja). Lo leído NO se
+// usa solo: el cliente lo confirma con un toque en la app. Sin clave
+// o sin lectura clara → nombre null y la app ofrece el campo corto.
+app.post('/api/subir/evento/leer-nombre', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const asset = sftAssetPropio(uid, parseInt((req.body || {}).asset_id, 10) || 0);
+    if (!asset || asset.kind === 'video') return res.status(404).json({ ok: false, error: 'Ese material ya no está' });
+    const abs = subirEventoAbs(asset.file_path);
+    if (!abs) return res.status(404).json({ ok: false, error: 'Ese material ya no está' });
+    const settings = getSettings(uid);
+    const apiKey = (settings && settings.openai_key) || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.json({ ok: true, nombre: null, sin_motor: true });
+    const ext = (abs.split('.').pop() || 'jpg').toLowerCase();
+    const ct = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    const dataUrl = `data:${ct};base64,` + fs.readFileSync(abs).toString('base64');
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 20000);
+    let nombre = null;
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', max_tokens: 48, temperature: 0,
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: 'Este es el flyer de un evento. Devolvé SOLO el nombre del evento o fiesta tal como está escrito en el flyer, sin comillas ni explicación. Si no se lee un nombre con claridad, devolvé exactamente: NADA' },
+            { type: 'image_url', image_url: { url: dataUrl, detail: 'low' } },
+          ] }],
+        }),
+      });
+      const data = await r.json().catch(() => null);
+      const txt = String((((data || {}).choices || [])[0] || {}).message?.content || '').trim().replace(/^["«“]|["»”]$/g, '').trim();
+      if (txt && !/^nada$/i.test(txt)) nombre = txt.slice(0, 60);
+      try { costs.trackUsage(data && data.usage, 'subir-evento-leer', uid); } catch (e) {}
+    } catch (e) { nombre = null; }
+    clearTimeout(to);
+    return res.json({ ok: true, nombre });
+  } catch (e) { console.error('[subir-evento-leer]', e.message); return res.status(500).json({ ok: false, error: 'No pude leer el flyer' }); }
+});
+
+// Crea el posteo de un EVENTO CON FECHA (nombre confirmado + fecha
+// del calendario + foto de la persona opcional ya subida).
+app.post('/api/subir/evento/crear', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const flyerAsset = b.asset_id ? sftAssetPropio(uid, parseInt(b.asset_id, 10) || 0) : null;
+    const datos = {
+      tipo: 'evento',
+      nombre: String(b.nombre || '').trim().slice(0, 60),
+      fecha: String(b.fecha || '').trim(),
+      quien: String(b.quien || '').trim().slice(0, 48),
+      que: String(b.que || '').trim().slice(0, 40),
+      caraAssetId: parseInt(b.cara_asset_id, 10) || 0,
+      flyerAssetId: flyerAsset ? flyerAsset.id : 0,
+    };
+    if (!datos.nombre) return res.status(400).json({ ok: false, error: 'Falta el nombre del evento — confirmalo y lo armo', codigo: 'sin_titular' });
+    const r = await subirEventoCrearPost(uid, datos);
+    if (!r.ok) return res.status(r.status || 400).json({ ok: false, error: r.error, codigo: r.codigo });
+    return res.json(r);
+  } catch (e) { console.error('[subir-evento-crear]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo crear el posteo del evento' }); }
+});
+
+// PEDIDO DE CERO, paso 1: Posty devuelve lo que entendió de la frase.
+// Nada se crea acá: la creación exige los datos confirmados, que
+// vuelven por /api/subir/cero/crear.
+app.post('/api/subir/cero/entender', requireAuth, (req, res) => {
+  try {
+    const idea = String((req.body || {}).idea || '').trim().slice(0, 400);
+    if (!idea) return res.status(400).json({ ok: false, error: 'Contame la idea en una frase' });
+    const tz = userTz(req.session.userId);
+    const ent = subirEvento.parseIdea(idea, tzToday(tz));
+    return res.json({ ok: true, entendido: ent });
+  } catch (e) { console.error('[subir-cero-entender]', e.message); return res.status(500).json({ ok: false, error: 'No pude entender la idea — probá de nuevo' }); }
+});
+
+// PEDIDO DE CERO, paso 2: con los datos CONFIRMADOS por el cliente
+// (quién · qué día · qué es) se crea el posteo. Un dato sin confirmar
+// o inválido frena acá: no se construye sobre datos sin confirmar.
+app.post('/api/subir/cero/crear', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const datos = {
+      tipo: 'cero',
+      nombre: String(b.nombre || '').trim().slice(0, 60),
+      fecha: String(b.fecha || '').trim(),
+      quien: String(b.quien || '').trim().slice(0, 48),
+      que: String(b.que || '').trim().slice(0, 40),
+      caraAssetId: parseInt(b.cara_asset_id, 10) || 0,
+      flyerAssetId: 0,
+    };
+    if (!datos.fecha) return res.status(400).json({ ok: false, error: 'Falta el día — elegilo en el calendario', codigo: 'fecha_ausente' });
+    if (!datos.que && !datos.nombre) return res.status(400).json({ ok: false, error: 'Falta qué es — confirmá el tipo de evento', codigo: 'sin_titular' });
+    const r = await subirEventoCrearPost(uid, datos);
+    if (!r.ok) return res.status(r.status || 400).json({ ok: false, error: r.error, codigo: r.codigo });
+    return res.json(r);
+  } catch (e) { console.error('[subir-cero-crear]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo crear el posteo' }); }
+});
+
+// LA FOTO QUE LLEGA DESPUÉS: se suma al MISMO posteo de evento (por
+// pedido_id o por post_id). Si el posteo ya existe, el flyer se
+// recompone alrededor de la foto y la imagen se actualiza EN EL LUGAR
+// (la anterior queda en prev_image_path: volver es un toque, como en
+// todo el paquete). Si el pedido todavía no tenía posteo, lo crea.
+app.post('/api/subir/evento/sumar-cara', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const asset = sftAssetPropio(uid, parseInt(b.asset_id, 10) || 0);
+    if (!asset) return res.status(404).json({ ok: false, error: 'Esa foto ya no está — subila de nuevo' });
+    if (asset.kind === 'video') return res.status(400).json({ ok: false, error: 'La foto de la persona tiene que ser una foto, no un video' });
+    let ped = null;
+    if (b.pedido_id) ped = db.prepare('SELECT * FROM subir_pedidos WHERE id = ? AND user_id = ?').get(parseInt(b.pedido_id, 10) || 0, uid);
+    if (!ped && b.post_id) ped = db.prepare('SELECT * FROM subir_pedidos WHERE post_id = ? AND user_id = ?').get(parseInt(b.post_id, 10) || 0, uid);
+    if (!ped) return res.status(404).json({ ok: false, error: 'No encontré ese pedido de evento' });
+    const datos = { tipo: ped.tipo, nombre: ped.nombre || '', fecha: ped.fecha || '', quien: ped.quien || '', que: ped.que || '', caraAssetId: asset.id, flyerAssetId: ped.asset_flyer_id || 0 };
+    if (ped.post_id) {
+      const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(ped.post_id, uid);
+      if (!post) return res.status(404).json({ ok: false, error: 'Ese posteo ya no está' });
+      if (post.status === 'published') return res.status(409).json({ ok: false, error: 'Ese posteo ya salió — la foto no se puede sumar ahora' });
+      const caraAbs = subirEventoAbs(asset.file_path);
+      const imagePath = await subirEventoComponer(uid, datos, caraAbs);
+      if (!imagePath) return res.status(500).json({ ok: false, error: 'No pude recomponer el flyer — probá de nuevo' });
+      db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(imagePath, String(post.image_path || ''), post.id);
+      db.prepare(`UPDATE subir_pedidos SET asset_cara_id = ?, updated_at = datetime('now') WHERE id = ?`).run(asset.id, ped.id);
+      return res.json({ ok: true, post_id: post.id, pedido_id: ped.id, image_path: imagePath, actualizada: true });
+    }
+    const r = await subirEventoCrearPost(uid, datos);
+    if (!r.ok) return res.status(r.status || 400).json({ ok: false, error: r.error, codigo: r.codigo });
+    return res.json({ ...r, actualizada: false });
+  } catch (e) { console.error('[subir-evento-sumar-cara]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo sumar la foto' }); }
+});
+
 // GET /api/posts/dias-libres — (LOTE CHAT-CLICKS · punto 2) días libres
 // para mover un posteo desde el chat (píldoras, sin salir del chat).
 app.get('/api/posts/dias-libres', requireAuth, (req, res) => {
@@ -39774,7 +40093,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1044';
+const BUILD_ID = '20261105-v1045';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

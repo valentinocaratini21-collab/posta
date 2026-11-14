@@ -26144,7 +26144,7 @@ async function pzVozEnhance(root) {
   for (const strip of strips) {
     strip.setAttribute('data-pz-voz-on', '1');
     const key = strip.getAttribute('data-pz-voz');
-    if (key === 'extra') continue;
+    if (key === 'extra' || key === 'cero') continue;
     try {
       const r = key === 'semana' ? await api.get('/api/chat/hilo?semana=1') : await api.get('/api/chat/hilo?post_id=' + encodeURIComponent(key));
       if (r && r.ok) pzVozHiloPintar(strip, Array.isArray(r.messages) ? r.messages : []);
@@ -26273,6 +26273,16 @@ async function pzVozCerrar(strip, key, userText, asstText) {
 async function pzVozEnviar(strip, text) {
   const key = strip.getAttribute('data-pz-voz');
   const en = pzVozEn();
+  if (key === 'cero') {
+    // (LOTE EVENTO-CERO) La idea dictada del pedido de cero: se vuelca
+    // en la puerta de la idea; el cliente la lee y la manda con
+    // «Contale a Posty». Nada se crea desde un audio sin confirmación.
+    const taCero = document.getElementById('pzCeroIdea');
+    if (taCero) taCero.value = text;
+    PZ_CERO.idea = text;
+    pzVozEstado(strip, '');
+    return;
+  }
   if (key === 'extra') {
     // La nota opcional del tab Subir: no se envía sola — viaja como
     // dato extra con el «Listo». Ningún paso del flujo depende de ella.
@@ -26415,6 +26425,8 @@ async function subirView() {
   const en = pzVozEn();
   PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = ''; PZ_SUBIR.todo = false; PZ_SUBIR.busy = false;
   PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
+  PZ_EVENTO.es = false; PZ_EVENTO.nombre = ''; PZ_EVENTO.nombreOk = false; PZ_EVENTO.leido = ''; PZ_EVENTO.fecha = ''; PZ_EVENTO.caraAsset = 0; PZ_EVENTO.caraThumb = ''; PZ_EVENTO.postId = 0; PZ_EVENTO.pedidoId = 0; PZ_EVENTO.busy = false;
+  PZ_CERO.idea = ''; PZ_CERO.ent = null; PZ_CERO.conf = { quien: false, fecha: false, que: false }; PZ_CERO.datos = { nombre: '', quien: '', fecha: '', que: '' }; PZ_CERO.caraAsset = 0; PZ_CERO.caraThumb = ''; PZ_CERO.postId = 0; PZ_CERO.pedidoId = 0; PZ_CERO.busy = false;
   const chips = (q, opts) => `<div class="chips">${opts.map(o => `<button type="button" class="chip${o.on ? ' on' : ''}" data-subir-q="${q}" data-subir-v="${o.v}">${o.on ? '✓ ' : ''}${o.t}</button>`).join('')}</div>`;
   // (LOTE SUBIR-SIMPLE · 13/11) Un solo camino de entrada de material: el «+» abre
   // el único input (foto y video, sin capture: el selector ofrece galería y
@@ -26426,6 +26438,38 @@ async function subirView() {
     <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload a photo or a video' : 'Tocá para subir una foto o un video'}</p></div>
     <input type="file" id="pzSubirFile" accept="image/*,video/*" hidden>
     <div id="pzSubirUp"></div>
+    <div class="preg-card pz-ev" id="pzEvCard">
+      <div class="kick"><img src="/posty-logo.png" alt=""> ${en ? 'DO YOU HAVE A SPECIAL DATE?' : '¿TENÉS UNA FECHA ESPECIAL?'}</div>
+      <div class="q"><p>${en ? 'Is it an event with a date?' : '¿Es un evento con fecha?'}</p><div class="chips"><button type="button" class="chip" data-ev-es="si">${en ? 'Yes, it is an event' : 'Sí, es un evento'}</button><button type="button" class="chip on" data-ev-es="no">✓ No</button></div></div>
+      <div id="pzEvPanel" hidden>
+        <div class="q"><p>${en ? "What's the event called?" : '¿Cómo se llama el evento?'}</p>
+          <div id="pzEvLeido" hidden><div class="pz-ev-leido-txt">${en ? 'I read from your flyer:' : 'Del flyer leí:'} <b id="pzEvLeidoNom"></b></div><div class="chips"><button type="button" class="chip" id="pzEvLeidoOk">✓ ${en ? "That's it" : 'Es ese'}</button><button type="button" class="chip" id="pzEvLeidoNo">${en ? "I'll write it" : 'Lo escribo yo'}</button></div></div>
+          <input type="text" id="pzEvNombre" maxlength="60" placeholder="${en ? 'Name of the event' : 'Nombre del evento'}" hidden>
+          <button type="button" class="fbtn pz-ev-leer" id="pzEvLeer" hidden>${en ? 'Read the name from my flyer' : 'Leer el nombre de mi flyer'}</button>
+          <div class="pz-ev-nota">${en ? 'If you uploaded the flyer, Posty reads the name and you confirm it with one tap. If not, write it here — it is the only thing typed in the whole app: a proper name cannot be tapped or invented.' : 'Si subiste el flyer, Posty lee el nombre y lo confirmás con un toque. Si no, escribilo acá: es lo único que se tipea en toda la app — un nombre propio no se puede tocar ni inventar.'}</div>
+        </div>
+        <div class="q"><p>${en ? 'What day is it?' : '¿Qué día es?'}</p><div class="pz-ev-cal" id="pzEvCal"></div><div class="pz-ev-sel" id="pzEvSel"></div></div>
+        <div class="q"><p>${en ? "Add the person's photo if you want" : 'Sumá la foto de la persona si querés'} <span class="pz-ev-nota">${en ? '— e.g. the DJ. The photo goes in as a photo, as it is: Posty builds the flyer around it. It is never redrawn or AI-generated.' : '— ej. el DJ. La foto entra tal cual, como foto: Posty arma el flyer alrededor. Nunca se redibuja ni se genera con IA.'}</span></p>
+          <button type="button" class="fbtn" id="pzEvCaraBtn">${en ? "Add the person's photo" : 'Sumar la foto de la persona'}</button>
+          <input type="file" id="pzEvCaraFile" accept="image/*" hidden>
+          <div id="pzEvCaraUp"></div>
+        </div>
+        <button type="button" class="listo" id="pzEvCrear">${en ? 'Build the event post' : 'Armar el posteo del evento'}</button>
+        <div class="pz-subir-err" id="pzEvErr" hidden></div>
+      </div>
+    </div>
+    <div class="preg-card pz-cero" id="pzCeroCard">
+      <div class="kick"><img src="/posty-logo.png" alt=""> ${en ? 'BUILD IT FROM SCRATCH?' : '¿LO ARMAMOS DE CERO?'}</div>
+      <p class="pz-cero-t">${en ? 'Tell me an idea in one line — by voice or in writing — and Posty shows you what it understood so you can confirm it. Nothing is built on unconfirmed data.' : 'Contame una idea en una frase — por voz o escrita — y Posty te devuelve lo que entendió para que lo confirmes. Nada se arma con datos sin confirmar.'}</p>
+      <textarea id="pzCeroIdea" rows="2" maxlength="400" placeholder="${en ? 'E.g.: DJ Martín plays at the bar on Friday' : 'Ej.: el viernes toca DJ Martín en el bar'}"></textarea>
+      <section class="pz-voz pz-cero-voz" data-pz-voz="cero">
+        <div class="pz-voz-bar"><span class="pz-voz-hint">${en ? 'Or say it: <b>hold down</b> and tell me the idea' : 'O decila: <b>mantené apretado</b> y contame la idea'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>
+        <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
+      </section>
+      <button type="button" class="listo" id="pzCeroEnviar">${en ? 'Tell Posty' : 'Contale a Posty'}</button>
+      <div class="pz-subir-err" id="pzCeroErr" hidden></div>
+      <div id="pzCeroConf"></div>
+    </div>
     <button type="button" class="todo" id="pzSubirTodo" hidden><img src="/ai-avatar.png" alt=""><span><b>${en ? 'Posty, take care of everything' : 'Posty, encargate de todo'}</b><i>${en ? 'One tap and done: Posty picks the day, improves it and writes the caption.' : 'Un toque y listo: Posty elige el día, lo mejora y escribe el caption.'} <span id="pzSubirTodoPreg" hidden>${en ? 'The questions below are only if you want to decide something yourself.' : 'Las preguntas de abajo son solo si querés decidir vos algo.'}</span></i></span></button>
     <div class="preg-card" id="pzSubirPreg" hidden>
       <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'POSTY ASKS YOU — ONE TAP EACH' : 'POSTY TE PREGUNTA — UN TOQUE CADA UNA'}</div>
@@ -26481,6 +26525,7 @@ async function pzSubirUpload(file) {
     const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = false;
     const listo = document.getElementById('pzSubirListo'); if (listo) listo.hidden = false;
     if (PZ_SUBIR.todo) { PZ_SUBIR.todo = false; pzSubirResolver(true); }
+    try { pzEvSyncFlyer(); } catch (e) {}
   } catch (e) {
     pzSubirErr(en ? "It couldn't be uploaded — try again" : 'No se pudo subir — probá de nuevo');
   }
@@ -26588,7 +26633,331 @@ function bindSubir() {
   });
   const listo = document.getElementById('pzSubirListo');
   if (listo) listo.onclick = () => pzSubirResolver(false);
+  bindEventoCero();
 }
+
+
+/* ---------- LOTE EVENTO + PEDIDO DE CERO (extensión de Subir) ----------
+   Evento con fecha: calendario de un toque + nombre leído del flyer
+   (confirmado con un toque) o tipeado en el ÚNICO campo corto del
+   flujo. Pedido de cero: la idea entra libre (voz o texto) y Posty
+   devuelve lo entendido para confirmar/corregir con toques — sin
+   dato confirmado no se crea nada. La foto de una persona aportada
+   entra como foto: el flyer se compone alrededor, jamás se redibuja. */
+const PZ_EVENTO = { es: false, nombre: '', nombreOk: false, leido: '', fecha: '', caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
+const PZ_CERO = { idea: '', ent: null, conf: { quien: false, fecha: false, que: false }, datos: { nombre: '', quien: '', fecha: '', que: '' }, caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
+function pzEvFechaLinda(ymd) {
+  try {
+    const p = String(ymd || '').split('-').map(Number);
+    const d = new Date(p[0], p[1] - 1, p[2]);
+    return new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  } catch (e) { return String(ymd || ''); }
+}
+function pzEvCalPintar(el, selYmd, target) {
+  if (!el) return;
+  const en = pzVozEn();
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  let html = '';
+  let lastMes = '';
+  for (let i = 1; i <= 42; i++) {
+    const d = new Date(hoy.getTime()); d.setDate(d.getDate() + i);
+    const mes = new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { month: 'long', year: 'numeric' }).format(d);
+    if (mes !== lastMes) { html += `<div class="pz-ev-mes">${esc(mes)}</div>`; lastMes = mes; }
+    const ymd = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const ds = new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { weekday: 'short' }).format(d).replace('.', '');
+    html += `<button type="button" class="pz-ev-dia${ymd === selYmd ? ' on' : ''}" data-cal-dia="${ymd}" data-cal-target="${target}"><span>${esc(ds)}</span><b>${d.getDate()}</b></button>`;
+  }
+  el.innerHTML = html;
+}
+function pzEvErr(msg) {
+  const el = document.getElementById('pzEvErr');
+  if (!el) return;
+  if (!msg) { el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false; el.textContent = msg;
+}
+function pzCeroErr(msg) {
+  const el = document.getElementById('pzCeroErr');
+  if (!el) return;
+  if (!msg) { el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false; el.textContent = msg;
+}
+function pzEvReciboPintar(r, caraPendiente) {
+  const en = pzVozEn();
+  const cont = document.getElementById('pzSubirRecibos');
+  if (!cont) return;
+  let card = cont.querySelector('.recibo');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'recibo';
+    card.innerHTML = `<div class="r-head"><img src="/posty-logo.png" alt=""><div><div class="t">${en ? 'Done, I have it' : 'Listo, ya lo tengo'}</div><div class="s">${en ? 'This is what I will do:' : 'Esto es lo que voy a hacer:'}</div></div></div><div class="r-items"></div>`;
+    cont.appendChild(card);
+  }
+  const items = card.querySelector('.r-items');
+  const div = document.createElement('div');
+  const dl = String(r.dia_label || '');
+  div.innerHTML = `<div class="item"><div><div class="q">🎉 ${esc(r.nombre || (en ? 'Your event' : 'Tu evento'))}</div><div class="w">✓ ${en ? 'Goes out' : 'Se postea el'} ${esc(dl)}${r.hora ? ' · ' + esc(r.hora) : ''}</div></div></div>`
+    + (r.desplazado ? `<div class="r-note">${en ? 'I moved Posty\'s post from that day to ' : 'Moví el posteo de Posty de ese día al '}${esc(r.desplazado.dia_label || '')}${r.desplazado.hora ? ' · ' + esc(r.desplazado.hora) : ''}${en ? ': one post per day.' : ': un posteo por día.'}</div>` : '')
+    + (caraPendiente ? `<div class="r-note">${en ? 'You can still add the person\'s photo: the flyer is rebuilt around it, as a photo.' : 'Todavía podés sumar la foto de la persona: el flyer se rearma alrededor de la foto.'}</div>` : '')
+    + `<button type="button" class="ver" data-ev-ver="${r.post_id}">${en ? 'See it in your week' : 'Verlo en tu semana'}</button>`;
+  items.appendChild(div);
+  const ver = div.querySelector('[data-ev-ver]');
+  if (ver) ver.onclick = () => { try { sessionStorage.setItem('pz_ver_grilla', String(r.post_id)); } catch (e) {} location.hash = '#/app/inicio'; };
+  try { cardScrollRecibo(); } catch (e) {}
+}
+async function pzEvSubirArchivo(file) {
+  const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d || !d.ok || !d.id) throw new Error((d && d.error) || 'upload');
+  return d;
+}
+function pzEvSyncFlyer() {
+  const leer = document.getElementById('pzEvLeer');
+  if (leer) leer.hidden = !(PZ_SUBIR.asset && PZ_SUBIR.kind === 'foto');
+}
+async function pzEvLeerNombre() {
+  const en = pzVozEn();
+  if (!PZ_SUBIR.asset) return;
+  const btn = document.getElementById('pzEvLeer');
+  if (btn) { btn.disabled = true; btn.textContent = en ? 'Reading…' : 'Leyendo…'; }
+  try {
+    const r = await api.post('/api/subir/evento/leer-nombre', { asset_id: PZ_SUBIR.asset });
+    if (r && r.nombre) {
+      PZ_EVENTO.leido = r.nombre;
+      const box = document.getElementById('pzEvLeido');
+      const nom = document.getElementById('pzEvLeidoNom');
+      if (nom) nom.textContent = r.nombre;
+      if (box) box.hidden = false;
+    } else {
+      const inp = document.getElementById('pzEvNombre');
+      if (inp) inp.hidden = false;
+    }
+  } catch (e) {
+    const inp = document.getElementById('pzEvNombre');
+    if (inp) inp.hidden = false;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = en ? 'Read the name from my flyer' : 'Leer el nombre de mi flyer'; }
+}
+async function pzEvCaraElegida(file, destino) {
+  const en = pzVozEn();
+  if (!file) return;
+  try {
+    const d = await pzEvSubirArchivo(file);
+    if (d.kind === 'video') { (destino === 'cero' ? pzCeroErr : pzEvErr)(en ? 'The person\'s photo has to be a photo, not a video' : 'La foto de la persona tiene que ser una foto, no un video'); return; }
+    const st = destino === 'cero' ? PZ_CERO : PZ_EVENTO;
+    // Si el posteo ya existe, la foto se suma a ESE posteo (el flyer
+    // se recompone en el lugar); si no, viaja con la creación.
+    if (st.postId) {
+      const r = await api.post('/api/subir/evento/sumar-cara', { post_id: st.postId, pedido_id: st.pedidoId || undefined, asset_id: d.id });
+      if (!r || !r.ok) throw new Error((r && r.error) || 'sumar');
+      st.caraAsset = d.id;
+      const up = document.getElementById(destino === 'cero' ? 'pzCeroCaraUp' : 'pzEvCaraUp');
+      if (up) up.innerHTML = `<div class="up"><img src="${esc(d.thumb || d.path || '')}" alt=""><div><div class="n">${en ? 'Photo added to the post' : 'Foto sumada al posteo'}</div><div class="e">✓ ${en ? 'The flyer was rebuilt around the photo' : 'El flyer se rearmó alrededor de la foto'}</div></div></div>`;
+    } else {
+      st.caraAsset = d.id; st.caraThumb = d.thumb || d.path || '';
+      const up = document.getElementById(destino === 'cero' ? 'pzCeroCaraUp' : 'pzEvCaraUp');
+      if (up) up.innerHTML = `<div class="up"><img src="${esc(st.caraThumb)}" alt=""><div><div class="n">${en ? 'The person\'s photo' : 'La foto de la persona'}</div><div class="e">✓ ${en ? 'Goes in as a photo, as it is' : 'Entra como foto, tal cual'}</div></div></div>`;
+    }
+  } catch (e) {
+    (destino === 'cero' ? pzCeroErr : pzEvErr)(String((e && e.message) || (en ? "It couldn't be added — try again" : 'No se pudo sumar — probá de nuevo')));
+  }
+}
+async function pzEvCrear() {
+  const en = pzVozEn();
+  if (PZ_EVENTO.busy) return;
+  pzEvErr('');
+  const inp = document.getElementById('pzEvNombre');
+  if (!PZ_EVENTO.nombreOk) {
+    const v = inp && !inp.hidden ? String(inp.value || '').trim() : '';
+    if (v) PZ_EVENTO.nombre = v;
+  }
+  if (!PZ_EVENTO.nombre) { pzEvErr(en ? 'The event needs its name — confirm the one I read or write it in the field' : 'Falta el nombre del evento — confirmá el que leí o escribilo en el campo'); if (inp) inp.hidden = false; return; }
+  if (!PZ_EVENTO.fecha) { pzEvErr(en ? 'Pick the day on the calendar' : 'Elegí el día en el calendario'); return; }
+  const btn = document.getElementById('pzEvCrear');
+  PZ_EVENTO.busy = true;
+  if (btn) { btn.disabled = true; btn.textContent = en ? 'Posty is on it…' : 'Posty está en eso…'; }
+  try {
+    const r = await api.post('/api/subir/evento/crear', {
+      asset_id: (PZ_SUBIR.asset && PZ_SUBIR.kind === 'foto') ? PZ_SUBIR.asset : undefined,
+      nombre: PZ_EVENTO.nombre, fecha: PZ_EVENTO.fecha,
+      cara_asset_id: PZ_EVENTO.caraAsset || undefined,
+    });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'crear');
+    PZ_EVENTO.postId = r.post_id; PZ_EVENTO.pedidoId = r.pedido_id;
+    pzEvReciboPintar(r, !PZ_EVENTO.caraAsset);
+  } catch (e) {
+    pzEvErr(String((e && e.message) || (en ? "It couldn't be done — try again" : 'No se pudo — probá de nuevo')));
+  }
+  PZ_EVENTO.busy = false;
+  if (btn) { btn.disabled = false; btn.textContent = en ? 'Build the event post' : 'Armar el posteo del evento'; }
+}
+async function pzCeroEntender() {
+  const en = pzVozEn();
+  const ta = document.getElementById('pzCeroIdea');
+  const idea = String((ta && ta.value) || PZ_CERO.idea || '').trim();
+  if (!idea) { pzCeroErr(en ? 'Tell me the idea in one line — by voice or in writing' : 'Contame la idea en una frase — por voz o escrita'); return; }
+  pzCeroErr('');
+  PZ_CERO.idea = idea;
+  const btn = document.getElementById('pzCeroEnviar');
+  if (btn) { btn.disabled = true; btn.textContent = en ? 'Listening…' : 'Escuchando…'; }
+  try {
+    const r = await api.post('/api/subir/cero/entender', { idea });
+    if (!r || !r.ok || !r.entendido) throw new Error((r && r.error) || 'entender');
+    const e = r.entendido;
+    PZ_CERO.ent = e;
+    PZ_CERO.datos = { nombre: e.nombre || '', quien: e.quien || '', fecha: e.fechaISO || '', que: e.que || '' };
+    PZ_CERO.conf = { quien: false, fecha: false, que: false };
+    PZ_CERO.postId = 0; PZ_CERO.pedidoId = 0;
+    pzCeroConfPintar();
+  } catch (e) {
+    pzCeroErr(String((e && e.message) || (en ? "I couldn't get that — try again" : 'No pude entenderla — probá de nuevo')));
+  }
+  if (btn) { btn.disabled = false; btn.textContent = en ? 'Tell Posty' : 'Contale a Posty'; }
+}
+function pzCeroFilaDato(campo, label, valor, confirmado, extraHtml) {
+  const en = pzVozEn();
+  const val = valor ? esc(valor) : `<span class="pz-cero-falta">${en ? 'I don\'t know yet' : 'Todavía no lo sé'}</span>`;
+  let acciones = '';
+  if (confirmado) acciones = `<span class="pz-cero-ok">✓ ${en ? 'Confirmed' : 'Confirmado'}</span>`;
+  else if (valor) acciones = `<button type="button" class="chip on" data-cero-ok="${campo}">✓ ${en ? 'That\'s right' : 'Es así'}</button><button type="button" class="chip" data-cero-cambiar="${campo}">${en ? 'Change' : 'Cambiar'}</button>`;
+  return `<div class="pz-cero-fila"><div class="pz-cero-dato"><b>${esc(label)}:</b> ${val}</div><div class="chips">${acciones}</div>${extraHtml || ''}</div>`;
+}
+function pzCeroConfPintar() {
+  const en = pzVozEn();
+  const cont = document.getElementById('pzCeroConf');
+  if (!cont || !PZ_CERO.ent) return;
+  const d = PZ_CERO.datos, c = PZ_CERO.conf;
+  const tipos = ['DJ set', 'Fiesta', 'Show en vivo', 'Clase', 'Degustación', 'Feria', 'Karaoke', 'Cumpleaños', 'Aniversario', 'Inauguración', 'Evento'];
+  let html = `<div class="pz-cero-conf-t">${en ? 'This is what I understood — confirm it with one tap each:' : 'Esto es lo que entendí — confirmalo con un toque cada uno:'}</div>`;
+  // Quién: con valor se confirma/cambia; sin valor se puede confirmar
+  // «sin invitado» (un evento sin quién es válido) o agregarlo a la frase.
+  html += pzCeroFilaDato('quien', en ? 'Who' : 'Quién', d.quien, c.quien,
+    (!d.quien && !c.quien) ? `<div class="chips"><button type="button" class="chip" data-cero-ok="quien">${en ? 'No special guest' : 'Sin invitado especial'}</button></div><div class="pz-ev-nota">${en ? 'Or add the name to the line above and tell me again.' : 'O agregá el nombre en la frase de arriba y volvé a contarme.'}</div>` : '');
+  // Fecha: sin valor no hay posteo — el calendario ES la pregunta.
+  html += pzCeroFilaDato('fecha', en ? 'Day' : 'Día', d.fecha ? pzEvFechaLinda(d.fecha) : '', c.fecha,
+    (!c.fecha) ? `<div class="pz-ev-cal" data-cero-cal></div>` : '');
+  // Qué: sin valor, los tipos son las opciones de un toque.
+  html += pzCeroFilaDato('que', en ? 'What it is' : 'Qué es', d.que, c.que,
+    (!c.que) ? `<div class="chips">${tipos.map(tp => `<button type="button" class="chip${d.que === tp ? ' on' : ''}" data-cero-tipo="${esc(tp)}">${esc(tp)}</button>`).join('')}</div>` : '');
+  const listoDatos = c.fecha && c.que;
+  html += `<div class="q"><p>${en ? 'The person\'s photo (optional)' : 'La foto de la persona (si querés)'} <span class="pz-ev-nota">${en ? 'It goes in as a photo, as it is — the flyer is built around it, never redrawn.' : 'Entra como foto, tal cual: el flyer se arma alrededor. Nunca se redibuja.'}</span></p>
+    <button type="button" class="fbtn" id="pzCeroCaraBtn">${en ? 'Add the photo' : 'Sumar la foto'}</button>
+    <input type="file" id="pzCeroCaraFile" accept="image/*" hidden>
+    <div id="pzCeroCaraUp">${PZ_CERO.caraThumb ? `<div class="up"><img src="${esc(PZ_CERO.caraThumb)}" alt=""><div><div class="n">${en ? 'The person\'s photo' : 'La foto de la persona'}</div><div class="e">✓ ${en ? 'Goes in as a photo' : 'Entra como foto'}</div></div></div>` : ''}</div></div>`;
+  html += `<button type="button" class="listo" id="pzCeroCrear" ${listoDatos ? '' : 'disabled'}>${en ? 'Build the post' : 'Armar el posteo'}</button>`
+    + (listoDatos ? '' : `<div class="pz-ev-nota">${en ? 'Confirm the day and what it is and I build it.' : 'Confirmá el día y qué es, y lo armo.'}</div>`);
+  cont.innerHTML = html;
+  const cal = cont.querySelector('[data-cero-cal]');
+  if (cal) pzEvCalPintar(cal, d.fecha, 'cero');
+  cont.querySelectorAll('[data-cero-ok]').forEach(b => b.onclick = () => { PZ_CERO.conf[b.getAttribute('data-cero-ok')] = true; pzCeroConfPintar(); });
+  cont.querySelectorAll('[data-cero-cambiar]').forEach(b => b.onclick = () => {
+    const campo = b.getAttribute('data-cero-cambiar');
+    if (campo === 'fecha') { PZ_CERO.conf.fecha = false; pzCeroConfPintar(); }
+    if (campo === 'que') { PZ_CERO.conf.que = false; PZ_CERO.datos.que = ''; pzCeroConfPintar(); }
+    if (campo === 'quien') { const ta = document.getElementById('pzCeroIdea'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+  });
+  cont.querySelectorAll('[data-cero-tipo]').forEach(b => b.onclick = () => { PZ_CERO.datos.que = b.getAttribute('data-cero-tipo'); PZ_CERO.conf.que = true; pzCeroConfPintar(); });
+  const cbtn = document.getElementById('pzCeroCaraBtn');
+  const cfile = document.getElementById('pzCeroCaraFile');
+  if (cbtn && cfile) { cbtn.onclick = () => { cfile.value = ''; cfile.click(); }; cfile.onchange = () => pzEvCaraElegida(cfile.files && cfile.files[0], 'cero'); }
+  const crear = document.getElementById('pzCeroCrear');
+  if (crear) crear.onclick = () => pzCeroCrear();
+}
+async function pzCeroCrear() {
+  const en = pzVozEn();
+  if (PZ_CERO.busy || PZ_CERO.postId) return;
+  if (!(PZ_CERO.conf.fecha && PZ_CERO.conf.que)) { pzCeroErr(en ? 'Confirm the day and what it is first' : 'Primero confirmá el día y qué es'); return; }
+  pzCeroErr('');
+  const btn = document.getElementById('pzCeroCrear');
+  PZ_CERO.busy = true;
+  if (btn) { btn.disabled = true; btn.textContent = en ? 'Posty is on it…' : 'Posty está en eso…'; }
+  try {
+    const r = await api.post('/api/subir/cero/crear', {
+      nombre: PZ_CERO.datos.nombre || undefined,
+      quien: PZ_CERO.datos.quien || undefined,
+      fecha: PZ_CERO.datos.fecha,
+      que: PZ_CERO.datos.que,
+      cara_asset_id: PZ_CERO.caraAsset || undefined,
+    });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'crear');
+    PZ_CERO.postId = r.post_id; PZ_CERO.pedidoId = r.pedido_id;
+    pzEvReciboPintar(r, !PZ_CERO.caraAsset);
+    if (btn) btn.textContent = en ? 'Built ✓' : 'Armado ✓';
+  } catch (e) {
+    pzCeroErr(String((e && e.message) || (en ? "It couldn't be done — try again" : 'No se pudo — probá de nuevo')));
+    if (btn) { btn.disabled = false; btn.textContent = en ? 'Build the post' : 'Armar el posteo'; }
+  }
+  PZ_CERO.busy = false;
+}
+let PZ_EV_CAL_WIRED = false;
+function pzEvCalDelegar() {
+  // Un solo listener global para los días de AMBOS calendarios (el de
+  // evento y el de la confirmación de cero se repintan seguido: atar
+  // botones tras cada pintado es frágil; delegar, no).
+  if (PZ_EV_CAL_WIRED) return;
+  PZ_EV_CAL_WIRED = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cal-dia]');
+    if (!b) return;
+    const ymd = b.getAttribute('data-cal-dia');
+    if (b.getAttribute('data-cal-target') === 'evento') {
+      PZ_EVENTO.fecha = ymd;
+      pzEvCalPintar(document.getElementById('pzEvCal'), ymd, 'evento');
+      const sel = document.getElementById('pzEvSel');
+      if (sel) sel.textContent = '✓ ' + pzEvFechaLinda(ymd);
+    } else {
+      PZ_CERO.datos.fecha = ymd; PZ_CERO.conf.fecha = true;
+      pzCeroConfPintar();
+    }
+  });
+}
+function bindEventoCero() {
+  const en = pzVozEn();
+  pzEvCalDelegar();
+  // Calendario inicial del evento (el de cero se pinta en su confirmación).
+  pzEvCalPintar(document.getElementById('pzEvCal'), '', 'evento');
+  document.querySelectorAll('[data-ev-es]').forEach(b => {
+    b.onclick = () => {
+      const v = b.getAttribute('data-ev-es');
+      PZ_EVENTO.es = v === 'si';
+      document.querySelectorAll('[data-ev-es]').forEach(x => {
+        const on = x === b;
+        x.classList.toggle('on', on);
+        x.textContent = (on ? '✓ ' : '') + x.textContent.replace(/^✓\s*/, '');
+      });
+      const panel = document.getElementById('pzEvPanel');
+      if (panel) panel.hidden = !PZ_EVENTO.es;
+      if (PZ_EVENTO.es) {
+        pzEvSyncFlyer();
+        // Con flyer ya subido, el nombre se lee solo: el cliente solo
+        // lo confirma con un toque (o lo escribe si la lectura falla).
+        if (PZ_SUBIR.asset && PZ_SUBIR.kind === 'foto' && !PZ_EVENTO.leido) pzEvLeerNombre();
+      }
+    };
+  });
+  const leer = document.getElementById('pzEvLeer');
+  if (leer) leer.onclick = () => pzEvLeerNombre();
+  const leidoOk = document.getElementById('pzEvLeidoOk');
+  if (leidoOk) leidoOk.onclick = () => {
+    PZ_EVENTO.nombre = PZ_EVENTO.leido; PZ_EVENTO.nombreOk = true;
+    const box = document.getElementById('pzEvLeido');
+    if (box) box.innerHTML = `<div class="pz-ev-leido-txt">✓ ${en ? 'Name:' : 'Nombre:'} <b>${esc(PZ_EVENTO.nombre)}</b></div>`;
+  };
+  const leidoNo = document.getElementById('pzEvLeidoNo');
+  if (leidoNo) leidoNo.onclick = () => {
+    const inp = document.getElementById('pzEvNombre');
+    if (inp) { inp.hidden = false; inp.focus(); }
+  };
+  const nomInp = document.getElementById('pzEvNombre');
+  if (nomInp) nomInp.addEventListener('input', () => { PZ_EVENTO.nombreOk = false; });
+  const caraBtn = document.getElementById('pzEvCaraBtn');
+  const caraFile = document.getElementById('pzEvCaraFile');
+  if (caraBtn && caraFile) { caraBtn.onclick = () => { caraFile.value = ''; caraFile.click(); }; caraFile.onchange = () => pzEvCaraElegida(caraFile.files && caraFile.files[0], 'evento'); }
+  const crear = document.getElementById('pzEvCrear');
+  if (crear) crear.onclick = () => pzEvCrear();
+  const enviar = document.getElementById('pzCeroEnviar');
+  if (enviar) enviar.onclick = () => pzCeroEntender();
+}
+
 
 function chatFullView() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');

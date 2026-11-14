@@ -6426,3 +6426,29 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 /* ---------- Grilla: marca «Nuevo» de Subir ---------- */
 .hf-nuevo-badge{position:absolute;top:6px;left:6px;z-index:3;background:#FEC14D;color:#0A1E33;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;box-shadow:0 2px 8px rgba(10,30,51,.25);pointer-events:none;white-space:nowrap}
 .hf-hoy-badge + .hf-nuevo-badge{top:26px}
+
+/* ---------- LOTE EVENTO + PEDIDO DE CERO: evento con fecha + pedido
+   de cero en el tab Subir. Tarjetas en el lenguaje visual de la
+   preg-card (glass, chips, botón listo) + calendario de un toque. */
+.pz-ev-nota { display: block; font-size: 12px; line-height: 1.45; opacity: .72; margin-top: 6px; }
+.pz-ev-leido-txt { font-size: 15px; margin: 2px 0 8px; }
+.pz-ev #pzEvNombre { width: 100%; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .10); color: inherit; border-radius: 12px; padding: 11px 13px; font: inherit; font-size: 16px; margin: 4px 0 2px; }
+.pz-ev-leer { margin-top: 8px; }
+.pz-ev-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 4px; }
+.pz-ev-mes { grid-column: 1 / -1; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: capitalize; opacity: .75; margin-top: 6px; }
+.pz-ev-mes:first-child { margin-top: 0; }
+.pz-ev-dia { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 7px 0 6px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .07); color: inherit; font: inherit; cursor: pointer; }
+.pz-ev-dia span { font-size: 10px; opacity: .7; text-transform: capitalize; }
+.pz-ev-dia b { font-size: 15px; line-height: 1.15; }
+.pz-ev-dia.on { background: #FEC14D; border-color: #FEC14D; color: #0A1E33; }
+.pz-ev-dia.on span { opacity: .8; }
+.pz-ev-sel { font-size: 13px; font-weight: 600; margin-top: 8px; }
+.pz-cero-t { font-size: 14px; line-height: 1.5; margin: 2px 0 10px; }
+.pz-cero #pzCeroIdea { width: 100%; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .10); color: inherit; border-radius: 12px; padding: 11px 13px; font: inherit; font-size: 16px; resize: vertical; }
+.pz-cero-voz { margin: 10px 0 4px; }
+.pz-cero-conf-t { font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
+.pz-cero-fila { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, .14); }
+.pz-cero-dato { font-size: 15px; margin-bottom: 6px; }
+.pz-cero-falta { opacity: .65; font-style: italic; }
+.pz-cero-ok { font-size: 13px; font-weight: 700; opacity: .85; }
+.pz-cero-conf-t ~ .listo, #pzCeroCrear { margin-top: 14px; }
