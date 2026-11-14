@@ -10416,13 +10416,9 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
       ${noVoiceTxt ? '' : `<p class="pz-voice-hint">${gzT('Todo se responde tocando o hablando.', 'Everything is answered by tapping or talking.')}</p>`}
     </div>
-    <div class="pz-nota-row" id="pzNotaRow">
-      <button type="button" class="btn btn-soft btn-sm" id="pzNotaBtn">📝 ${gzT('Dejar una nota a Posty', 'Leave a note for Posty')}</button>
-      <div id="pzNotaForm" hidden>
-        <input id="pzNotaInput" maxlength="500" autocomplete="off" placeholder="${gzT('ej: esta semana no postees de eso, el lunes cierro', 'e.g. no posts about that this week, closed on Monday')}">
-        <button type="button" class="btn btn-primary btn-sm" id="pzNotaSave">${gzT('Guardar nota', 'Save note')}</button>
-      </div>
-    </div>
+    <!-- (LOTE NOTA-VOZ-ÚNICA-PUERTA · Valentino 13/11 20:55) La fila de la
+    nota de texto libre salió de la tarjeta: la única puerta hacia Posty es
+    la nota de voz anclada (desde un posteo o desde Subir). -->
     <div id="chatMsg"></div>
     <div id="mcFaltan"></div>
   </div>`;
@@ -10463,48 +10459,11 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode, mainScr, sheetCh
     } catch (err) {}
   });
 })();
-// (LOTE CHAT-678 · 8) Nota a Posty: delegado global, una sola vez (el chat
-// se re-renderiza; el botón y el formulario viven en chatCardHTML). Se
-// busca dentro de la misma tarjeta del botón, como la camarita.
-(function pzNotaDelegar() {
-  if (window.__pzNotaDelegado) return;
-  window.__pzNotaDelegado = true;
-  document.addEventListener('click', (e) => {
-    const t = e.target && e.target.closest ? e.target.closest('#pzNotaBtn') : null;
-    if (t) {
-      try {
-        const card = (t.closest && t.closest('#chatCard')) || document;
-        const f = (card.querySelector ? card.querySelector('#pzNotaForm') : null) || document.getElementById('pzNotaForm');
-        if (!f) return;
-        const show = f.hasAttribute('hidden');
-        if (show) f.removeAttribute('hidden'); else f.setAttribute('hidden', '');
-        if (show) { const inp = (card.querySelector ? card.querySelector('#pzNotaInput') : null) || document.getElementById('pzNotaInput'); if (inp) inp.focus(); }
-      } catch (err) {}
-      return;
-    }
-    const s = e.target && e.target.closest ? e.target.closest('#pzNotaSave') : null;
-    if (s) pzNotaGuardar(s);
-  });
-})();
-async function pzNotaGuardar(btnEl) {
-  const card = (btnEl && btnEl.closest && btnEl.closest('#chatCard')) || document;
-  const inp = (card.querySelector ? card.querySelector('#pzNotaInput') : null) || document.getElementById('pzNotaInput');
-  const texto = (inp && inp.value || '').trim();
-  if (texto.length < 4) { try { toast('✏️ Escribí la nota en una línea para guardarla'); } catch (e) {} return; }
-  const btn = (card.querySelector ? card.querySelector('#pzNotaSave') : null) || document.getElementById('pzNotaSave');
-  if (btn) btn.disabled = true;
-  try {
-    const r = await api.post('/api/chat/nota', { texto });
-    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
-    if (inp) inp.value = '';
-    const f = (card.querySelector ? card.querySelector('#pzNotaForm') : null) || document.getElementById('pzNotaForm');
-    if (f) f.setAttribute('hidden', '');
-    try { if (typeof chatLoadHistory === 'function') await chatLoadHistory(); } catch (e) {}
-    try { chatScroll(true); } catch (e) {}
-  } catch (e) {
-    try { toast('😅 No pude guardar la nota, probá de nuevo'); } catch (e2) {}
-  } finally { if (btn) btn.disabled = false; }
-}
+// (LOTE NOTA-VOZ-ÚNICA-PUERTA · Valentino 13/11 20:55) El delegado y el
+// guardado de la nota de texto (del lote CHAT-678 · 8) salieron junto con
+// el campo: era el único llamador del cliente del endpoint de la nota; el
+// camino de texto queda cerrado del lado cliente y el endpoint queda sin
+// llamadores en la app (los flujos de voz no lo usan).
 
 function renderVozPostCard(vo) {
   if (!vo || !vo.id) return;
@@ -26638,8 +26597,13 @@ async function pzTemaCargar() {
     }
   } catch (e) {}
   // (2) La pregunta de los lunes: solo si esta semana sigue sin respuesta.
+  // (LOTE NOTA-VOZ-ÚNICA-PUERTA) El invitado NO la recibe: en la prueba no
+  // hay semana de consultas que reportar (en la corrida de Blind Barber
+  // apareció un viernes dentro de una prueba). Para el registrado el
+  // cuándo no cambia: queda pendiente toda la semana hasta responderla.
   try {
-    if (consultas && consultas.rango == null && consultas.week_key && !PZ_TEMA_DESPUES['lunes:' + consultas.week_key]) {
+    const esInvitado = (typeof pzIsGuest === 'function') && pzIsGuest();
+    if (!esInvitado && consultas && consultas.rango == null && consultas.week_key && !PZ_TEMA_DESPUES['lunes:' + consultas.week_key]) {
       temas.push({ kind: 'lunes', week_key: consultas.week_key });
     }
   } catch (e) {}

@@ -66,8 +66,13 @@ check('1v cliente: picker permite varias fotos (multiple, tope 10)', app.include
 check('1w cliente: boton Compartir en el chat en el detalle del posteo', app.includes('apvShareChat') && app.includes('Compartir en el chat'));
 check('1x cliente: pzCompartirPosteoChat llama al endpoint y ancla el posteo', app.includes("api.post('/api/chat/compartir-posteo'") && app.includes('pzHablarDePosteo(post)'));
 check('1y cliente: clic en la tarjeta del chat abre el posteo (pzChatPostcardBind)', app.includes('pzChatPostcardBind') && app.includes("location.hash = '#/app/post/' + encodeURIComponent(b.dataset.postId)"));
-check('1z cliente: nota a Posty en el chat (boton + form + guardar)', app.includes('pzNotaBtn') && app.includes('pzNotaForm') && app.includes('pzNotaInput') && app.includes('pzNotaGuardar'));
-check('1aa cliente: pzNotaGuardar llama a /api/chat/nota y recarga el historial', app.includes("api.post('/api/chat/nota'") && app.includes('await chatLoadHistory()'));
+// (RE-PIN · LOTE NOTA-VOZ-ÚNICA-PUERTA · Valentino 13/11 20:55: «esto no
+// deberia aparecer mas») La nota de texto libre salió del cliente: la
+// única puerta hacia Posty es la nota de voz anclada. 1z/1aa pasan a
+// pinear la AUSENCIA (eran presencia del campo abolido). El endpoint del
+// server NO se tocó: 1g/1k/1l/1m y la sección funcional siguen vigentes.
+check('1z cliente: la nota de texto ya NO existe en el chat (sin boton, sin form, sin guardar)', !app.includes('pzNotaBtn') && !app.includes('pzNotaForm') && !app.includes('pzNotaInput') && !app.includes('pzNotaGuardar'));
+check('1aa cliente: el cliente ya NO llama a /api/chat/nota (camino de texto cerrado del lado cliente)', !app.includes("api.post('/api/chat/nota'"));
 check('1ab CSS: postcard, photogrid y nota-row', css.includes('.pz-chat-postcard') && css.includes('.pz-chat-photogrid') && css.includes('.pz-nota-row'));
 check('1ac la 9 NO se construye: no hay endpoint ni funcion de Posty respondiendo con nota de voz', !srv.includes('/api/chat/responder-voz') && !app.includes('pzResponderVoz') && !app.includes('postyVoiceReply'));
 check('1ad flujo de confirmacion intacto (aprobar en sitio + programar no se tocan)', app.includes('pzAprobarEnSitio') && srv.includes('/api/subir-foto/programar'));
