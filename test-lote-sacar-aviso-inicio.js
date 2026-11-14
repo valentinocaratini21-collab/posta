@@ -6,6 +6,11 @@
 // (yaSalio, pendientes, semana armada, haySemana, sin semana) quedan
 // intactas, igual que el héroe (v897), la tarjeta del posteo, la frase del
 // chat (pzSftChatDecir) y los pushes de 30 min y al salir (servidor).
+// RE-PIN 13/11 · lote TARJETA-REVISIÓN v1031: el pin B3 afirmaba la rama de pendientes
+// («pide revisar») de pzHoySpeechHTML; esa rama era la tarjeta «Tenés N posteos para
+// revisar» que Valentino ordenó eliminar entera (13/11 19:43), así que B3 se re-pinea
+// para afirmar el NUEVO comportamiento: sin hoyPost y con needOK>0 el saludo no
+// muestra nada. El resto de la suite no se toca.
 // Uso: node test-lote-sacar-aviso-inicio.js (desde el scratch; corre contra
 // release/ si existe, si no contra work/). Sale 0 si todo pasa.
 'use strict';
@@ -131,7 +136,7 @@ function speechOpts(over) {
   const sDraft = String(pzHoySpeechHTML(speechOpts({ hoyPost: postHoy({ status: 'draft' }) })));
   t('B2: esBorrador sigue vacío (solo la tarjeta, como en v879)', sDraft === '');
   const sPend = String(pzHoySpeechHTML(speechOpts({ hoyPost: null, pendientes: 2, needOK: 2 })));
-  t('B3: rama pendientes intacta (sin hoyPost): pide revisar', sPend.includes('2 posteos para revisar') && sPend.includes('miralo'), sPend.slice(0, 300));
+  t('B3: rama pendientes (sin hoyPost): SIN aviso — el saludo no muestra nada (re-pin TARJETA-REVISIÓN v1031)', sPend === '' && !sPend.includes('para revisar'), sPend.slice(0, 300));
   const sSem = String(pzHoySpeechHTML(speechOpts({ hoyPost: null, pendientes: 2, needOK: 0 })));
   t('B4: semana armada (needOK 0) intacta: «Tu semana ya está armada» + aviso 30 min de cada uno', sSem.includes('Tu semana ya está armada') && sSem.includes('Te aviso 30 min antes de cada uno'), sSem.slice(0, 300));
   const sSemAp = String(pzHoySpeechHTML(speechOpts({ hoyPost: null, pendientes: 0, haySemana: true })));

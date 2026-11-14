@@ -10,6 +10,14 @@
 // lista (#/app/schedule, «Revisá tu semana»), no al chat. Un borrador
 // en revisión (needs_review=1) nunca llega al conteo: GET /api/posts lo
 // filtra y PATCH lo rechaza con 403 in_review.
+// RE-PIN 13/11 · lote TARJETA-REVISIÓN v1031 (orden Valentino 19:43 «eliminar eso. No sirve para nada»):
+// la tarjeta «Tenés N posteos para revisar» salió ENTERA de Inicio (ES+EN, en la rama sin-posteo-hoy
+// y el sufijo del estado «ya salió»). Esta suite nació en v939 para ese banner: sus pins del banner
+// se re-pinearon para afirmar la AUSENCIA (cadenas en 0, sin atributo ni cableado, saludo vacío en
+// needOK>0) y sus pins de era al BUILD v1031 / app.js?v=705 / styles?v=20261280. Lo que la suite
+// sigue custodiando: el conteo pzHoyRevisionContar (queda, alimenta el needOK del saludo) y la
+// garantía de que el aviso no vuelve. Los destinos del saludo en needOK=0/sin-semana se re-pinearon
+// también a los vigentes desde SIN-CHAT-REUBICACIÓN (v1025): semana y armar, no chat.
 // Node puro: estáticos + VM (app.js) + boot real con siembra en SQLite.
 // Uso: DATA_DIR temporal + NODE_PATH=/home/hatch/workspace/posta/node_modules node test-lote-banner-revision.js
 const fs = require('fs');
@@ -53,15 +61,15 @@ function extractFn(src, name) {
 
 (async () => {
   // ---------- 1. Estampado (provisional: el preparador re-numera) ----------
-  t(srv.includes("const BUILD_ID = '20261105-v939';"), 'server: BUILD v891');
-  t(cnt(srv, '20261105-v939') === 1, 'server: BUILD v891 ×1');
-  t(!srv.includes('20261105-v938'), 'server: sin restos de v938');
-  t(idxES.includes('/app.js?v=649'), 'index ES: app.js?v=649');
-  t(cnt(idxES, 'app.js?v=649') === 1, 'index ES: app.js?v=649 ×1');
-  t(idxES.includes('/styles.css?v=20261270'), 'index ES: styles?v=20261270 sin cambio (el lote no toca styles.css)');
-  t(idxEN.includes('/styles.css?v=20261270'), 'index EN: styles?v=20261270 (mismo valor que ES)');
+  t(srv.includes("const BUILD_ID = '20261105-v1031';"), 'server: BUILD v1031 (re-pin TARJETA-REVISIÓN)');
+  t(cnt(srv, '20261105-v1031') === 1, 'server: BUILD v1031 ×1');
+  t(!srv.includes('20261105-v1029'), 'server: sin restos de v1029 (re-pin v1031)');
+  t(idxES.includes('/app.js?v=705'), 'index ES: app.js?v=705 (re-pin v1031)');
+  t(cnt(idxES, 'app.js?v=705') === 1, 'index ES: app.js?v=705 ×1');
+  t(idxES.includes('/styles.css?v=20261280'), 'index ES: styles?v=20261280 sin cambio (el lote no toca styles.css; re-pin de era)');
+  t(idxEN.includes('/styles.css?v=20261280'), 'index EN: styles?v=20261280 (mismo valor que ES)');
   t(!idxEN.includes('/app.js?v='), 'index EN: no carga app.js (landing)');
-  t(!app.includes('20261105-v938') && !idxES.includes('v=648'), 'sin restos de v938 (?v=648)');
+  t(!app.includes('20261105-v1029') && !idxES.includes('v=703'), 'sin restos de v1029 (?v=703) (re-pin v1031)');
 
   // ---------- 2. Estáticos: el contrato conteo == lista ----------
   // La lista es #/app/schedule: reviewCardHTML lista los borradores con
@@ -73,8 +81,8 @@ function extractFn(src, name) {
   t(app.includes("bbGo('#/app/schedule')") || app.includes("location.hash = '#/app/schedule'"), 'pzHoyBind: el botón de revisión lleva a #/app/schedule');
   // El botón del banner: cuando hay algo para revisar lleva a la lista,
   // no al chat.
-  t(app.includes('data-pz-hoy-revision="1"'), 'banner: existe data-pz-hoy-revision');
-  t(app.includes("root.querySelectorAll('[data-pz-hoy-revision]')"), 'pzHoyBind: cablea data-pz-hoy-revision');
+  t(!app.includes('data-pz-hoy-revision'), 'banner: NO existe data-pz-hoy-revision (tarjeta removida — TARJETA-REVISIÓN v1031)');
+  t(!app.includes("querySelectorAll('[data-pz-hoy-revision]')"), 'pzHoyBind: NO cablea data-pz-hoy-revision (removido v1031)');
   t(cnt(app, 'function pzHoyRevisionContar(') === 1, 'M78: pzHoyRevisionContar definida ×1');
   t(app.includes('pzHoyRevisionContar(allPosts, hoyKeyR1, tz, modoR1.manual)'), 'M78: el caller usa pzHoyRevisionContar');
   // El borrador bloqueado no se cuenta: GET /api/posts lo filtra y PATCH
@@ -136,8 +144,8 @@ function extractFn(src, name) {
   // «los ves en tu feed» que queda es la del caso needOK=0 (autopilot,
   // programados que salen solos y sí se ven en la tira con su día).
   const revLines = speechSrc.split('\n').filter((l) => l.includes('para revisar') || l.includes('to review'));
-  t(revLines.length > 0 && revLines.every((l) => !l.includes('feed')), 'banner: el texto de revisión ya no dice «en tu feed»', revLines.join(' | ').slice(0, 300));
-  t(speechSrc.includes('en tu revisión') && speechSrc.includes('in your review'), 'banner: el texto dice «en tu revisión» (ES/EN)');
+  t(revLines.length === 0, 'banner: pzHoySpeechHTML no contiene NINGÚN texto de la tarjeta («para revisar»/«to review» = 0 — removida v1031)', revLines.join(' | ').slice(0, 300));
+  t(!speechSrc.includes('en tu revisión') && !speechSrc.includes('in your review'), 'banner: sin «en tu revisión»/«in your review» en la fuente (v1031)');
   const speechCtx = {
     esc: (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     pzIsPubReal: (p) => !!(p && String(p.status || '') === 'published' && String(p.ig_media_id || '').indexOf('demo_') !== 0),
@@ -147,21 +155,19 @@ function extractFn(src, name) {
   vm.runInContext(speechSrc + '\nthis.__s = { pzHoySpeechHTML };', speechCtx);
   const speech = speechCtx.__s.pzHoySpeechHTML;
   let h = speech({ hoyPost: null, pendientes: 2, haySemana: true, en: false, tz: TZ, manual: false, needOK: 2, schedSolo: 0 });
-  t(h.includes('data-pz-hoy-revision="1"'), 'banner needOK=2: el botón lleva a la lista (data-pz-hoy-revision)');
-  t(!h.includes('data-pz-hoy-chat'), 'banner needOK=2: el botón NO lleva al chat');
-  t(h.includes('2 posteos para revisar') && h.includes('en tu revisión'), 'banner needOK=2: texto «2 posteos para revisar en tu revisión»');
-  t(!h.includes('«Dale»') && h.includes('aceptá'), 'banner needOK=2: dice «aceptá», no «dale Dale» (la lista tiene Aceptar)');
+  t(h === '', 'banner needOK=2: el saludo NO muestra nada (sin cuerpo no hay burbuja — la tarjeta salió entera, v1031)', h.slice(0, 200));
+  t(!h.includes('data-pz-hoy-revision') && !h.includes('para revisar'), 'banner needOK=2: sin botón ni texto de revisión (v1031)');
   h = speech({ hoyPost: null, pendientes: 1, haySemana: true, en: false, tz: TZ, manual: true, needOK: 1, schedSolo: 0 });
-  t(h.includes('1 posteo para revisar') && h.includes('data-pz-hoy-revision="1"'), 'banner needOK=1: singular + botón a la lista');
+  t(h === '', 'banner needOK=1: el saludo NO muestra nada (el singular también salió, v1031)', h.slice(0, 200));
   h = speech({ hoyPost: null, pendientes: 0, haySemana: true, en: false, tz: TZ, manual: false, needOK: 0, schedSolo: 0 });
-  t(h.includes('data-pz-hoy-chat') && !h.includes('data-pz-hoy-revision'), 'banner needOK=0 (semana aprobada): el botón sigue al chat');
+  t(h.includes('data-pz-hoy-semana') && !h.includes('data-pz-hoy-revision'), 'banner needOK=0 (semana aprobada): el botón lleva a la semana (re-pin SIN-CHAT v1025 + TARJETA-REVISIÓN v1031)');
   t(h.includes('Tu semana ya está aprobada'), 'banner needOK=0: texto de semana aprobada');
   h = speech({ hoyPost: null, pendientes: 0, haySemana: false, en: false, tz: TZ, manual: false, needOK: 0, schedSolo: 0 });
-  t(h.includes('data-pz-hoy-chat') && h.includes('¿Armamos tu semana?'), 'banner sin semana: invita al chat');
+  t(h.includes('data-pz-hoy-armar') && h.includes('¿Armamos tu semana?'), 'banner sin semana: «Que Posty lo arme» (re-pin SIN-CHAT v1025)');
   h = speech({ hoyPost: { id: 610, status: 'published', published_at: '2026-11-11T19:00:00Z' }, pendientes: 2, haySemana: true, en: false, tz: TZ, manual: false, needOK: 2, schedSolo: 0 });
-  t(h.includes('data-pz-hoy-revision="1"') && h.includes('en tu revisión'), 'banner hoy publicado + needOK=2: también lleva a la lista');
+  t(h.includes('El de hoy ya salió') && !h.includes('para revisar') && !h.includes('data-pz-hoy-revision'), 'banner hoy publicado + needOK=2: solo «El de hoy ya salió», sin el sufijo de revisión (removido v1031)', h.slice(0, 200));
   h = speech({ hoyPost: null, pendientes: 2, haySemana: true, en: true, tz: TZ, manual: false, needOK: 2, schedSolo: 0 });
-  t(h.includes('in your review') && !h.includes('in your feed') && h.includes('data-pz-hoy-revision="1"'), 'banner EN needOK=2: «in your review» + botón a la lista');
+  t(h === '', 'banner EN needOK=2: el saludo NO muestra nada (v1031)', h.slice(0, 200));
 
   // ---------- 5. Boot real + filtro needs_review en vivo ----------
   const BOOT = fs.mkdtempSync(path.join(TMPBASE, '.tmp-boot-'));
@@ -187,17 +193,17 @@ function extractFn(src, name) {
     } catch (e) { /* aún no levanta */ }
     if (!version) await sleep(500);
   }
-  t(version && version.build === '20261105-v939', 'boot: /api/version = v891', JSON.stringify(version));
+  t(version && version.build === '20261105-v1031', 'boot: /api/version = v1031 (re-pin)', JSON.stringify(version));
   if (version) {
     let ok5 = 0;
     for (let i = 0; i < 5; i++) {
-      try { const r = await fetch(`http://127.0.0.1:${PORT}/api/version`); const j = await r.json(); if (j && j.build === '20261105-v939') ok5++; } catch (e) {}
+      try { const r = await fetch(`http://127.0.0.1:${PORT}/api/version`); const j = await r.json(); if (j && j.build === '20261105-v1031') ok5++; } catch (e) {}
     }
     t(ok5 === 5, 'boot: /api/version 5/5', ok5 + '/5');
     const idx = await (await fetch(`http://127.0.0.1:${PORT}/`)).text();
-    t(idx.includes('/app.js?v=649') && idx.includes('/styles.css?v=20261270'), 'boot: el index servido trae ?v=649 y styles?v=20261270');
-    const bundle = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=649`)).text();
-    t(bundle.includes('function pzHoyRevisionContar(') && bundle.includes('data-pz-hoy-revision'), 'boot: el bundle trae la función nueva y el botón a la lista');
+    t(idx.includes('/app.js?v=705') && idx.includes('/styles.css?v=20261280'), 'boot: el index servido trae ?v=705 y styles?v=20261280 (re-pin v1031)');
+    const bundle = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=705`)).text();
+    t(bundle.includes('function pzHoyRevisionContar(') && !bundle.includes('data-pz-hoy-revision') && !bundle.includes('posteos para revisar'), 'boot: el bundle trae pzHoyRevisionContar (el conteo queda) y NINGUNA cadena de la tarjeta (v1031)');
     // Usuario de prueba + siembra: un borrador visible, uno bloqueado
     // (needs_review=1) y un programado pendiente.
     const reg = await fetch(`http://127.0.0.1:${PORT}/api/auth/register`, {

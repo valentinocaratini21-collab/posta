@@ -23276,9 +23276,13 @@ function pzHoyPendientes(todos, hoyKey, mananaKey, lunesKey, tz) {
   return out;
 }
 
-// (BANNER-REVISION · 12/11) Una sola fuente de verdad del conteo del
-// banner «Tenés N posteos para revisar»: EXACTAMENTE los posteos que la
-// lista a la que lleva el botón muestra con acción visible.
+// (BANNER-REVISION · 12/11 · rol actualizado por LOTE TARJETA-REVISIÓN
+// 13/11) Una sola fuente de verdad del conteo de needOK: EXACTAMENTE
+// los posteos que la lista de revisión muestra con acción visible.
+// La tarjeta de Inicio que mostraba este número salió entera (orden
+// Valentino 13/11 19:43); el conteo sigue porque el saludo de Hoy lo
+// usa para NO afirmar que los posteos salen solos cuando hay posteos
+// esperando tu OK.
 // · drafts: TODOS los borradores de /api/posts (cualquier semana) — la
 //   tarjeta «Revisá tu semana» de #/app/schedule los lista a todos con
 //   Aceptar / Editar / No me gusta / Publicar ahora.
@@ -23819,13 +23823,9 @@ function pzHoySpeechHTML(o) {
     const saleSolo = st === 'scheduled' && (!manual || ap === 'approved' || ap === 'auto');
     if (yaSalio) {
       const hhPub = pzHoyHoraCorta(hoyPost.published_at || hoyPost.scheduled_at, tz, en);
-      const pendTxt = needOK > 0
-        ? (en ? (needOK === 1 ? ` You've got 1 post to review in your review list.` : ` You've got ${needOK} posts to review in your review list.`)
-              : (needOK === 1 ? ` Tenés 1 posteo para revisar en tu revisión.` : ` Tenés ${needOK} posteos para revisar en tu revisión.`))
-        : '';
       cuerpo = en
-        ? `Today's post is already out${hhPub ? ' — it went out at ' + esc(hhPub) : ''}. Take a look at your feed.${pendTxt}`
-        : `El de hoy ya salió${hhPub ? ' — salió a las ' + esc(hhPub) : ''}. Miralo en tu feed.${pendTxt}`;
+        ? `Today's post is already out${hhPub ? ' — it went out at ' + esc(hhPub) : ''}. Take a look at your feed.`
+        : `El de hoy ya salió${hhPub ? ' — salió a las ' + esc(hhPub) : ''}. Miralo en tu feed.`;
     } else if (esBorrador) {
       // (v879 · corrección Valentino 10/11 10:04: la tarjeta «Por aprobar»
       // ya muestra la hora, la cuenta en vivo y los botones — el texto
@@ -23847,19 +23847,15 @@ function pzHoySpeechHTML(o) {
       cuerpo = '';
     }
   } else if (pendientes > 0) {
-    // needOK = los que no salen sin tu OK (el número que se muestra).
-    // Si no hay ninguno (autopilot, solo programados pendientes),
-    // todos salen solos a su hora.
+    // needOK = los que no salen sin tu OK. (LOTE TARJETA-REVISIÓN ·
+    // orden Valentino 13/11 19:43) La tarjeta de aviso de revisión de
+    // Inicio salió ENTERA: con needOK > 0 el saludo no muestra ningún
+    // aviso (sin cuerpo no hay burbuja, como en borrador y manual
+    // pendiente desde v879) — la revisión sigue viva en su lista, sin
+    // tarjeta en Inicio. Si no hay ninguno (autopilot, solo
+    // programados pendientes), todos salen solos a su hora.
     if (needOK > 0) {
-      const extraSolo = schedSolo ? (en ? ' The ones already scheduled go out on their own.' : ' Los que ya están programados salen solos a su hora.') : '';
-      const manualTxt = manual ? (en ? ' You approve each one.' : ' Vos aprobás cada uno.') : '';
-      cuerpo = en
-        ? (needOK === 1
-          ? `You've got 1 post to review — check it in your review list and accept it if you like it.${manualTxt}${extraSolo}`
-          : `You've got ${needOK} posts to review — check them in your review list and accept the ones you like.${manualTxt}${extraSolo}`)
-        : (needOK === 1
-          ? `Tenés 1 posteo para revisar — miralo en tu revisión y aceptalo si te gusta.${manualTxt}${extraSolo}`
-          : `Tenés ${needOK} posteos para revisar — miralos en tu revisión y aceptá los que te gusten.${manualTxt}${extraSolo}`);
+      cuerpo = '';
     } else {
       cuerpo = en
         ? `Your week is all set — the posts go out on their own, on time, and you can see them in your feed. I'll let you know 30 min before each one in case you want to stop it.`
@@ -23876,11 +23872,10 @@ function pzHoySpeechHTML(o) {
   }
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
-  // el encabezado). (BANNER-REVISION · 12/11) Si el banner habla de
-  // posteos para revisar (needOK > 0), el botón lleva a LA LISTA
-  // (#/app/schedule, «Revisá tu semana»), no al chat: el número tiene
-  // que abrir lo que cuenta. Sin nada para revisar, el botón sigue
-  // abriendo el chat.
+  // el encabezado). (LOTE TARJETA-REVISIÓN · orden Valentino 13/11
+  // 19:43) El destino a la lista de revisión del BANNER-REVISION ·
+  // 12/11 salió con la tarjeta: needOK ya no cambia el destino de la
+  // burbuja — manda la lógica de abajo (invitado / armar / semana).
   // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Eso último ya no corre para el
   // REGISTRADO: sin semana la burbuja dispara «Que Posty lo arme»
   // (data-pz-hoy-armar → ensure) y en los estados informativos lleva a
@@ -23895,8 +23890,7 @@ function pzHoySpeechHTML(o) {
   // hoja del ritual).
   if (!cuerpo) return '';
   const esInvSpeech = (typeof pzIsGuest === 'function' && pzIsGuest());
-  const destAttr = needOK > 0 ? 'data-pz-hoy-revision="1"'
-    : esInvSpeech ? 'data-pz-hoy-chat="1"'
+  const destAttr = esInvSpeech ? 'data-pz-hoy-chat="1"'
     : destArmar ? 'data-pz-hoy-armar="1"'
     : 'data-pz-hoy-semana="1"';
   return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" ${destAttr}><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
@@ -24055,9 +24049,9 @@ function pzHoyBind(root) {
   if (!root) return;
   root.querySelectorAll('[data-pz-hoy-view]').forEach((b) => { b.onclick = () => pzHoySetView(b.getAttribute('data-pz-hoy-view')); });
   root.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
-  // (BANNER-REVISION · 12/11) El banner de revisión lleva a LA LISTA
-  // (#/app/schedule, «Revisá tu semana»), no al chat.
-  root.querySelectorAll('[data-pz-hoy-revision]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/schedule'); else location.hash = '#/app/schedule'; } catch (e) {} }; });
+  // (LOTE TARJETA-REVISIÓN · 13/11) El cableado del botón que llevaba
+  // a la lista de revisión salió con la tarjeta: ninguna superficie
+  // de Inicio lo rinde. La lista de revisión sigue viva en su ruta.
   // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Caminos vivos del registrado:
   // «Que Posty lo arme» (ensure), «Subir algo mío» (tab Subir) y la
   // burbuja informativa → la semana. El data-pz-hoy-chat de arriba
@@ -24358,14 +24352,14 @@ async function inicioView() {
   // que el resto programado pendiente.)
   let modoR1 = { manual: false, known: false };
   try { modoR1 = await f3ApprovalMode(); } catch (e) { modoR1 = { manual: false, known: false }; }
-  // (BANNER-REVISION · 12/11) El conteo del banner es EXACTAMENTE lo
+  // (BANNER-REVISION · 12/11) El conteo de needOK es EXACTAMENTE lo
   // que la lista de revisión muestra con acción: todos los borradores
   // (cualquier semana — la tarjeta «Revisá tu semana» los lista a
   // todos) + programados pendientes en manual. Antes contaba solo los
   // borradores de esta semana y el botón llevaba al chat, así que el
   // número no correspondía a nada visible ni accionable (los 2 del
   // 11/11: 591 y 584). pzHoyPendientes sigue (el saludo y la tira la
-  // usan); el conteo del banner es pzHoyRevisionContar.
+  // usan); el conteo de needOK es pzHoyRevisionContar.
   const revR1 = (!HF_VISITOR) ? pzHoyRevisionContar(allPosts, hoyKeyR1, tz, modoR1.manual) : { needOK: 0, schedSolo: 0, drafts: [], schedPend: [] };
   // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · VERDAD) Los posteos
   // en revisión (needs_review=1) NO llegan en /api/posts, así que el
@@ -24374,8 +24368,9 @@ async function inicioView() {
   // y Hungry Ghost). /api/review-status cuenta los del dueño en
   // revisión (borradores y programados retenidos): son conjuntos
   // disjuntos de los de revR1 (que solo ve needs_review=0), así que se
-  // SUMAN al needOK — si hay algo en revisión, el saludo lo dice y la
-  // semana no se declara aprobada.
+  // SUMAN al needOK — si hay algo en revisión, la semana no se
+  // declara aprobada (desde el LOTE TARJETA-REVISIÓN el saludo no
+  // muestra el aviso en Inicio: en ese estado no dice nada).
   let revOcultaR1 = 0;
   if (!HF_VISITOR) { try { const rsRevR1 = await api.get('/api/review-status'); revOcultaR1 = (rsRevR1 && Number(rsRevR1.pending)) || 0; } catch (e) { revOcultaR1 = 0; } }
   const needOKR1 = revR1.needOK + revOcultaR1;
