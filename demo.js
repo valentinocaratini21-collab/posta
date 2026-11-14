@@ -2588,6 +2588,22 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       }
     }
   }
+  // (LOTE LOGO-INTEGRADO) RESCATE: si la ingesta integró el logo real
+  // en la escena de esta foto y el chequeo de presencia lo verificó
+  // (digest.logo_integrado, status 'integrada'), el pool usa la foto
+  // EDITADA y la marca cuenta como visible — es la misma foto, con el
+  // negocio adentro. Sin 'integrada' no se toca nada: la foto sigue el
+  // comportamiento vigente (con el correctivo-7, el gate la frena).
+  if (digest && digest.logo_integrado && digest.logo_integrado.entries) {
+    for (const w of webPool) {
+      const li = w.url ? clientDigest.logoIntegradoOf(digest, w.url) : null;
+      if (li && li.status === 'integrada' && li.path) {
+        w.path = li.path;
+        w.marca_visible = true;
+        w.logo_integrado = true;
+      }
+    }
+  }
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
   // los ÁNGULOS, no la categoría. bioText = la bio real del perfil (v192):
   // la semana hereda los temas de SU línea, no solo los del formulario.

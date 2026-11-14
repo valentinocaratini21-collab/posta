@@ -1552,6 +1552,9 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // (CORRECTIVO-7) Veredictos de presencia de marca de las fotos de
       // la prueba: quedan cacheados en el fundamento (brand_presence).
       brandPresence: (deep && deep.brandPresence) || null,
+      // (LOTE LOGO-INTEGRADO) El registro de rescate de fotos sin marca
+      // (intento de integración del logo real + veredicto de presencia).
+      logoIntegracion: (deep && deep.logoIntegracion) || null,
       webCopy: webData ? String(webData.description || '') : '',
       // (LOTE PERSONALIZACIÓN · ítem 3) Las palabras del dueño (respuestas
       // de la prueba) también alimentan los marcadores de voz.
@@ -1789,6 +1792,110 @@ async function trialBrandPresence(webPhotos, itemNames, business) {
     const r = await trialBrandPresenceJob(webPhotos, itemNames, business).promise;
     return r ? r.verdicts : null;
   } catch (e) { return null; }
+}
+// (LOTE LOGO-INTEGRADO) RESCATE DE LA FOTO REAL SIN MARCA — la pieza
+// mayor que el correctivo-7 dejó afuera a propósito: el 7 FRENA la foto
+// real que no muestra el negocio; este paso intenta RESCATARLA antes
+// integrando el LOGO REAL del negocio en una superficie natural de la
+// escena (pared, vidriera, packaging), siguiendo perspectiva, luz y
+// sombra de la foto. Reglas duras (lecciones de Philz): el logo es el
+// ARCHIVO REAL — jamás regenerado ni redibujado por el modelo —; pegar
+// plano como sticker NO vale; nunca banda ni sello en una esquina.
+// Transporte honesto: el único editor de la casa que recibe VARIAS
+// imágenes es Nano (Gemini); gpt-image (images/edits) carga UNA, así
+// que el logo no puede viajar junto a la foto por esa vía — por eso el
+// intento corre SOLO con la vía multirreferencia (genGpt: null a
+// propósito: editar sin que el modelo haya visto el logo sería
+// redibujarlo) y sin clave Gemini el intento se declara no viable y NO
+// se entrega nada editado. Después del intento manda el chequeo de
+// presencia (deepRead.classifyBrandPresence, el mismo del foto-gate):
+// marca verificada → la foto editada entra al pool (digest.logo_
+// integrado); si no, el comportamiento vigente (con el 7: póster).
+// UN intento por foto: el registro en el digest ES la caché (una clave
+// presente no se reintenta jamás) y el tope por ingesta acota el costo.
+// El intento corre en la INGESTA (nunca en el render): el primer posteo
+// conserva su camino rápido y el render no paga ni edición ni visión.
+const LOGO_INT_MAX = 2; // intentos por corrida de ingesta (costo)
+const LOGO_INT_TIMEOUT_MS = 30000; // por intento: si el editor no vuelve, no hay rescate
+const LOGO_INT_REF_NOTE = 'Image 1 is the client\'s REAL photo — it is the scene and it must stay the scene. Image 2 is the client\'s REAL logo artwork — the exact artwork to place into the scene, unaltered.';
+const LOGO_INT_PROMPT = [
+  'Edit the real photo in Image 1 so the business\'s logo appears INSIDE the scene.',
+  'The logo artwork is Image 2: use that EXACT artwork — never redraw it, never retype its letters, never invent a different logo.',
+  'Place it on a natural surface that already exists in the photo (a wall, a storefront window, a sign board, the product\'s own packaging), following that surface\'s perspective, and match the photo\'s light, shadow and grain so it looks physically there, with breathing room around it.',
+  'It must read as part of the place: never a sticker pasted on top, never a flat overlay, never a watermark or stamp in a corner, never a band across the image.',
+  'Keep every person, product and detail of the original photo exactly as it is. Only add the logo to the surface.',
+].join(' ');
+async function trialLogoIntegracion(webPhotos, photoEntries, opts = {}) {
+  try {
+    if (!Array.isArray(webPhotos) || !webPhotos.length) return null;
+    const apiKey = opts.apiKey != null ? opts.apiKey : (process.env.OPENAI_API_KEY || '');
+    const geminiKey = opts.geminiKey != null ? opts.geminiKey : (process.env.GEMINI_API_KEY || '');
+    if (!apiKey || !geminiKey) {
+      console.log('[logo-integrado] sin transporte viable para el logo real (falta la clave de visión o la del editor multirreferencia) — no se intenta, manda el comportamiento vigente');
+      return null;
+    }
+    const capOk = typeof opts.capOk === 'function' ? opts.capOk() : costs.demoAiCapOk();
+    if (!capOk) return null;
+    const previo = (opts.previo && typeof opts.previo === 'object') ? opts.previo : {};
+    // (FUSIÓN DEL PREPARADOR sobre v1055) La candidatura respeta
+    // también el veredicto de presencia del correctivo-7 cuando el
+    // llamador lo pasa (opts.brandPresence): una foto que la visión
+    // YA verificó con el negocio en la escena no se intenta — sería
+    // pagar una edición para reemplazar una foto real ya válida por
+    // una editada. Sin ese mapa, manda la candidatura del lote
+    // (photo_map), como se construyó.
+    const candidates = webPhotos
+      .filter((w) => w && w.url && w.path && !previo[w.url]
+        && !(photoEntries && photoEntries[w.url] && photoEntries[w.url].marca === true)
+        && !(opts.brandPresence && opts.brandPresence[w.url] && opts.brandPresence[w.url].marca === true))
+      .slice(0, LOGO_INT_MAX);
+    if (!candidates.length) return null;
+    // El logo REAL: el archivo local si el llamador ya lo bajó (en
+    // /api/trial/generate es el logo-trial-<ig> de logoTrialPromise);
+    // si no, se baja de la URL del fundamento (foto de perfil de IG).
+    let logoAbs = '';
+    if (opts.logoFile) {
+      const p = path.join(MEDIA_DIR, path.basename(String(opts.logoFile)));
+      try { if (fs.existsSync(p) && fs.statSync(p).isFile()) logoAbs = p; } catch (e) {}
+    }
+    if (!logoAbs && opts.logoUrl) {
+      const got = await logoPaletaYArchivo(String(opts.logoUrl), 'logo-trial-int').catch(() => null);
+      if (got && got.file) logoAbs = path.join(MEDIA_DIR, got.file);
+    }
+    if (!logoAbs) {
+      console.log('[logo-integrado] sin logo real disponible — no hay intento (caso e)');
+      return null;
+    }
+    const editor = typeof opts.editor === 'function' ? opts.editor : ((args) => demoAi.generateDemoPieceImage(args));
+    const vision = typeof opts.vision === 'function' ? opts.vision : ((args) => deepRead.classifyBrandPresence(args));
+    const entries = {};
+    for (const w of candidates) {
+      const attempt = (async () => {
+        const gen = await editor({ prompt: LOGO_INT_PROMPT, refs: [w.path, logoAbs], geminiKey, genGpt: null, refNote: LOGO_INT_REF_NOTE });
+        // Solo vale la vía multirreferencia: si el b64 no vino de Nano,
+        // el logo no viajó y la «integración» sería un logo redibujado.
+        if (!gen || !gen.b64 || gen.engine !== 'nano') return { status: 'sin-edicion' };
+        const name = `logo-int-${crypto.createHash('sha1').update(String(w.url)).digest('hex').slice(0, 12)}.jpg`;
+        const abs = path.join(MEDIA_DIR, name);
+        fs.writeFileSync(abs, Buffer.from(gen.b64, 'base64'));
+        const verdicts = await vision({ photos: [{ key: w.url, path: abs }], business: opts.business || '', apiKey });
+        const v = verdicts && verdicts[w.url];
+        if (v && v.marca === true) return { status: 'integrada', path: abs, engine: gen.engine };
+        return { status: 'sin-marca' };
+      })();
+      const raced = await Promise.race([
+        attempt,
+        new Promise((r) => setTimeout(() => r({ status: 'sin-edicion', timeout: true }), LOGO_INT_TIMEOUT_MS)),
+      ]).catch(() => ({ status: 'sin-edicion' }));
+      entries[w.url] = {
+        status: raced.status,
+        ...(raced.path ? { path: raced.path, engine: raced.engine } : {}),
+        at: Date.now(),
+      };
+      console.log(`[logo-integrado] ${opts.business || 'prueba'}: foto ${path.basename(String(w.path))} → ${raced.status}${raced.timeout ? ' (timeout)' : ''}`);
+    }
+    return Object.keys(entries).length ? { entries } : null;
+  } catch (e) { console.error('[logo-integrado] falló:', e.message); return null; }
 }
 /* (LOTE ETIQUETA-Y-TEXTO · pieza C1) LA SEÑAL DE TEXTO DEL FEED,
  * GARANTIZADA EN EL ARMADO DE LA PRUEBA. La traza del corte de la
@@ -36638,6 +36745,14 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       }
       const brandPresence = presenceResFull ? presenceResFull.verdicts : null;
       deep = { catalog, photoEntries, brandPresence };
+      // (LOTE LOGO-INTEGRADO) Rescate de las fotos reales sin marca:
+      // UN intento de integración del logo real por foto, acá en la
+      // ingesta (el logo baja por la misma promesa del sello de la
+      // prueba; si no llega en 3 s, el helper lo resuelve por URL).
+      try {
+        const logoGotInt = await Promise.race([logoTrialPromise, new Promise((r) => setTimeout(() => r(null), 3000))]);
+        deep.logoIntegracion = await trialLogoIntegracion(webExtraPhotos, photoEntries, { business, logoUrl: igPic, logoFile: (logoGotInt && logoGotInt.file) || '', brandPresence });
+      } catch (e) { console.error('[logo-integrado] generate:', e.message); }
       trialGateInfo = {
         presencia: {
           estado: !webExtraPhotos.length ? 'sin_fotos'
@@ -38038,6 +38153,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
       const brandPresence = presenceResFull ? presenceResFull.verdicts : null;
       deep = { catalog, bioLink, photoEntries, brandPresence };
+      // (LOTE LOGO-INTEGRADO) Rescate de las fotos reales sin marca,
+      // igual que en /api/trial/generate: en la ingesta, cacheado en
+      // el fundamento, nunca en el render.
+      try {
+        deep.logoIntegracion = await trialLogoIntegracion(webExtraPhotos, photoEntries, { business, logoUrl: (trialProfile && trialProfile.pic) || igPic || '', brandPresence });
+      } catch (e) { console.error('[logo-integrado] stream:', e.message); }
       trialGateInfo = {
         presencia: {
           estado: !webExtraPhotos.length ? 'sin_fotos'
@@ -41170,7 +41291,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1055';
+const BUILD_ID = '20261105-v1056';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -41861,4 +41982,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
+module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };

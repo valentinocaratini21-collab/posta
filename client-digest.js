@@ -1290,6 +1290,16 @@ function emptyDigest() {
     // trazabilidad de v229 no se invalida: el hash sigue siendo el de
     // productos/servicios/promos/temas/protagonista/ciudad/diferencial).
     catalog: null, bio_link: null, lexicon: null, photo_map: null,
+    // (LOTE LOGO-INTEGRADO) Rescate de fotos reales sin marca: la
+    // ingesta intentó UNA vez por foto integrar el logo real en la
+    // escena (edición multirreferencia) y el chequeo de presencia
+    // juzgó el resultado. { entries: { [urlFoto]: { status, path?,
+    // engine?, at } }, at } — status 'integrada' = la foto editada
+    // (path absoluto en el volumen de media) SÍ muestra el negocio;
+    // 'sin-marca' / 'sin-edicion' = el intento corrió y no rescató:
+    // la foto sigue el comportamiento vigente. La presencia de una
+    // clave en entries ES el registro del intento (no se reintenta).
+    logo_integrado: null,
     // (ESTUDIO-PROFUNDO · M5 COMPETENCIA) La competencia del estudio:
     // fundamento.competitors (ver study-competitors.js: esquema y contrato
     // para el lote semanal de tendencias). null = todavía no estudiada. El
@@ -1736,6 +1746,13 @@ function buildFromParts(parts) {
     d.brand_presence = { entries: sanitizeBrandPresence(p.brandPresence), at: now };
     if (!Object.keys(d.brand_presence.entries).length) d.brand_presence = null;
   }
+  // (LOTE LOGO-INTEGRADO) El registro de intentos de integración del
+  // logo en fotos reales (lo calcula la ingesta de la prueba y viaja
+  // en deep.logoIntegracion): se adopta saneado; sin registro, null.
+  if (p.logoIntegracion && p.logoIntegracion.entries) {
+    const li = sanitizeLogoIntegrado(p.logoIntegracion.entries);
+    if (Object.keys(li).length) d.logo_integrado = { entries: li, at: now };
+  }
   // (M3 FICHA-OFERTA) La ficha del estudio viaja tal cual (el módulo
   // study-offer es dueño de su forma): espacio de nombres propio dentro
   // del fundamento, sin reescribir nada de lo anterior.
@@ -2150,6 +2167,34 @@ function photoProductFor(digest, key) {
   const e = digest.photo_map.entries[String(key)];
   return e && e.item ? e.item : null;
 }
+// (LOTE LOGO-INTEGRADO) Saneado del registro de integración del logo:
+// clave = URL de la foto original (≤300); status cerrado; el path de la
+// foto editada solo viaja con status 'integrada' (≤400, mismo volumen
+// de media: el fundamento vive server-side). Tope 20 fotos.
+const LOGO_INT_STATUS = new Set(['integrada', 'sin-marca', 'sin-edicion']);
+function sanitizeLogoIntegrado(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (!v || typeof v !== 'object' || !LOGO_INT_STATUS.has(v.status)) continue;
+    const e = { status: v.status };
+    if (v.status === 'integrada') {
+      const p = String(v.path || '').trim();
+      if (!p) continue;
+      e.path = p.slice(0, 400);
+      if (v.engine) e.engine = String(v.engine).slice(0, 20);
+    }
+    const at = Number(v.at);
+    if (Number.isFinite(at) && at > 0) e.at = at;
+    out[String(k).slice(0, 300)] = e;
+    if (Object.keys(out).length >= 20) break;
+  }
+  return out;
+}
+// La entrada del registro de integración para una foto (o null).
+function logoIntegradoOf(digest, key) {
+  if (!digest || !digest.logo_integrado || !digest.logo_integrado.entries || !key) return null;
+  return digest.logo_integrado.entries[String(key)] || null;
+}
 // (v907) ¿La foto muestra LA MARCA del negocio dentro de la escena
 // (logo, packaging con marca, letrero)? Lo dice la visión al clasificar
 // la foto (classifyDigestPhotos → photo_map.entries[].marca).
@@ -2426,6 +2471,13 @@ function applyDeepBlocks(stored, fresh) {
   if (fresh.brand_presence && fresh.brand_presence.entries && Object.keys(fresh.brand_presence.entries).length) {
     const mergedPresence = { ...((out.brand_presence && out.brand_presence.entries) || {}), ...fresh.brand_presence.entries };
     out.brand_presence = { entries: mergedPresence, at: fresh.brand_presence.at || new Date().toISOString() };
+  }
+  // (LOTE LOGO-INTEGRADO) El registro de integración se fusiona por
+  // clave como photo_map (el fresco pisa; el resto sobrevive): un
+  // intento registrado nunca se pierde ni se repite por un refresco.
+  if (fresh.logo_integrado && fresh.logo_integrado.entries && Object.keys(fresh.logo_integrado.entries).length) {
+    const mergedInt = { ...((out.logo_integrado && out.logo_integrado.entries) || {}), ...fresh.logo_integrado.entries };
+    out.logo_integrado = { entries: mergedInt, at: fresh.logo_integrado.at || new Date().toISOString() };
   }
   // (LOTE PERSONALIZACIÓN · ítems 1 y 3) La voz se re-mina de los captions
   // y el logo se re-lee de la foto de perfil: solo reemplazan si la
@@ -4136,7 +4188,7 @@ module.exports = {
   isChromeDerivedName,
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
   lexDiceFor, voicePhraseFor,
-  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible,
+  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible, sanitizeLogoIntegrado, logoIntegradoOf,
   // (LOTE LÉXICO-INGLÉS · L7) Nombre pelado para fórmulas EN + lint de empalmes.
   bareEnName, enSpliceLint,
   // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) La clase subordinante
