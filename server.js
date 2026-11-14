@@ -18433,6 +18433,18 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
         try { notifyOwnerPostChange({ uid: req.session.userId, post, pedido: String(caption ?? '').split('\n')[0] }).catch(() => {}); } catch (e) { console.error('[owner-notify] patch:', e.message); }
       }
     }
+    // (MICRO-AJUSTES-API · ítem B) Freno de duplicados en la programación
+    // puntual: el mismo chequeo que ya corre en scheduleDraftsPerWeek y en
+    // la vía edit-caption (el mismo helper, vivo desde v1065
+    // CHEQUEO-DUPLICADOS-CAPTIONS). Si el caption efectivo ya está
+    // programado para esta cuenta (o se publicó en los últimos 7 días), el
+    // PATCH NO programa a ciegas: responde el conflicto y no toca la fila.
+    const capEfectivoPatch = caption !== undefined ? caption : post.caption;
+    const dupPuntual = captionDuplicadoProgramadoDe(req.session.userId, capEfectivoPatch, post.id);
+    if (dupPuntual) {
+      console.log(`[chequeo-duplicados] PATCH post ${post.id} (user ${req.session.userId}): caption duplicado del post ${dupPuntual.id} — no se programa (caption: "${String(capEfectivoPatch || '').slice(0, 80)}")`);
+      return res.status(409).json({ error: 'caption_duplicado', duplicado_de: dupPuntual.id, message: 'Este posteo repite el texto de otro posteo ya programado o publicado en los últimos 7 días, así que no se programó. Cambiá el texto y probá de nuevo.' });
+    }
     // Programar SÍ consume cupo (las publicaciones son el límite del plan) —
     // contra la semana DEL POSTEO (fix 2026-10-18): con la semana actual
     // llena, aceptar un borrador de la semana que viene funcionaba mal
@@ -41742,7 +41754,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1065';
+const BUILD_ID = '20261105-v1066';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
