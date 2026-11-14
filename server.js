@@ -7888,6 +7888,11 @@ function pzTrabajoCambioFalloAmable(kind, en) {
     regen_sin_cambio: ['el cambio no se aplicó sobre tu foto y dejé la actual', 'the change didn\'t apply over your photo and I left the current one'],
     regen_no_verificada: ['la pieza nueva no pasó la verificación contra tu pedido y dejé la actual', 'the new piece didn\'t pass the check against your request and I left the current one'],
     video_no_verificado: ['el video nuevo no pasó la verificación de subtítulos y dejé el actual — tocá reintentar', 'the new video didn\'t pass the subtitle check and I left the current one — tap retry'],
+    cambio_solo_foto: ['ese posteo es un video: el texto adentro de la imagen es un cambio de foto — en un video el texto va en sus textos quemados; pedime rehacer el video con ese texto y lo hago desde ahí', 'that post is a video: putting text inside the image is a photo change — in a video the text lives in its burned-in texts; ask me to redo the video with that text and I\'ll do it from there'],
+    sin_caption: ['ese posteo no tiene ningún texto para poner adentro — decime qué texto querés que diga y lo pongo en el momento', 'that post has no text to put inside — tell me what you want it to say and I\'ll put it right away'],
+    ya_tiene_texto: ['ese posteo ya tiene un texto adentro de la imagen y no tengo la foto limpia para rehacerlo — si subís la foto sin texto desde Subir, lo armo de nuevo', 'that post already has a text inside the image and I don\'t have the clean photo to redo it — upload the photo without text from Upload and I\'ll build it again'],
+    sin_texto_puesto: ['ese posteo no tiene ningún texto puesto por mí adentro de la imagen — si la foto trae letras, son parte de la foto misma', 'that post has no text put inside the image by me — if the photo shows letters, they are part of the photo itself'],
+    sin_version_limpia: ['no tengo una versión de esa imagen sin el texto para volver — si subís la foto original desde Subir, la dejo limpia', 'I don\'t have a version of that image without the text to go back to — upload the original photo from Upload and I\'ll leave it clean'],
     fallo: ['no pude hacer el cambio — tocá reintentar y lo hago de nuevo', 'I couldn\'t make the change — tap retry and I\'ll do it again'],
   };
   const par = M[kind] || M.fallo;
@@ -8036,18 +8041,32 @@ function pzChatCambioCrearTrabajo({ uid, post, pedido, hilo }) {
     const media = String(post.media_type || 'image');
     if (media !== 'image' && media !== 'video') return { impossible: 'medio_no_soportado' };
     if (post.status !== 'draft' && post.status !== 'scheduled') return { impossible: 'ya_salio' };
-    const ruta = pzChatCambioRuta(post, pedido);
-    if (ruta === 'foto') {
-      if (!String(post.image_path || '')) return { impossible: 'sin_fuente' };
-      const rl = redoLeftOf(post);
-      if (rl !== null && rl <= 0) return { impossible: 'sin_rehaces' };
+    // (LOTE TEXTO-EN-IMAGEN) El pedido se CLASIFICA en un tipo del
+    // catálogo en este mismo turno: si un tipo específico lo reclama,
+    // SU factible decide la imposibilidad (sin pasar por las rutas
+    // del rehacer) y el trabajo nace con su cambio_tipo; si no, manda
+    // el carril histórico de siempre (ruta texto/foto/video).
+    const tipoCambio = pzCambioTipoDePedido(post, pedido);
+    const defTipo = PZ_CAMBIO_TIPOS[tipoCambio] || PZ_CAMBIO_TIPOS.rehacer;
+    if (typeof defTipo.factible === 'function') {
+      const imp = defTipo.factible({ uid, post, pedido });
+      if (imp) return { impossible: imp };
     }
-    if (ruta === 'video' && !pzRecetaDePost(post)) return { impossible: 'sin_receta' };
-    if (!ruta) return { impossible: 'medio_no_soportado' };
+    let estimado = defTipo.estimado || 60;
+    if (tipoCambio === 'rehacer') {
+      const ruta = pzChatCambioRuta(post, pedido);
+      if (ruta === 'foto') {
+        if (!String(post.image_path || '')) return { impossible: 'sin_fuente' };
+        const rl = redoLeftOf(post);
+        if (rl !== null && rl <= 0) return { impossible: 'sin_rehaces' };
+      }
+      if (ruta === 'video' && !pzRecetaDePost(post)) return { impossible: 'sin_receta' };
+      if (!ruta) return { impossible: 'medio_no_soportado' };
+      estimado = ruta === 'video' ? 120 : ruta === 'foto' ? 60 : 45;
+    }
     const en = langOfUser(uid) === 'en';
-    const estimado = ruta === 'video' ? 120 : ruta === 'foto' ? 60 : 45;
-    const ins = db.prepare(`INSERT INTO trabajos (user_id, tipo, estado, post_id, titulo, caption, estimado_seg, hilo) VALUES (?,?,?,?,?,?,?,?)`)
-      .run(uid, 'chat_cambio', 'creando', Number(post.id), pzPostTitulo(post), String(pedido || '').slice(0, 2000), estimado, hilo === 'post' ? 'post' : '');
+    const ins = db.prepare(`INSERT INTO trabajos (user_id, tipo, estado, post_id, titulo, caption, estimado_seg, hilo, cambio_tipo) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(uid, 'chat_cambio', 'creando', Number(post.id), pzPostTitulo(post), String(pedido || '').slice(0, 2000), estimado, hilo === 'post' ? 'post' : '', tipoCambio);
     const jobId = Number(ins.lastInsertRowid);
     // El marcador es el de v847 ([creando-imagen:ID]): es el que el
     // cliente ya sabe rendir como burbuja viva con poller — sin UI
@@ -8108,6 +8127,33 @@ async function pzTrabajoChatCambioRun(jobId) {
     if (post.status !== 'draft' && post.status !== 'scheduled') { settleFallo('ya_salio'); return; }
     const ruta = pzChatCambioRuta(post, pedido);
     const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo_agotado')), 3 * 60 * 1000));
+    // (LOTE TEXTO-EN-IMAGEN) Despacho por catálogo: un trabajo con
+    // cambio_tipo específico corre SU ejecutor (que devuelve la pieza
+    // ya verificada) y el reemplazo es el de siempre — versión
+    // anterior guardada, prev_image_path y, si el tipo lo trae, el
+    // overlay_text nuevo. El rehacer genérico (cambio_tipo '' o
+    // 'rehacer') sigue por las rutas históricas de abajo, intactas.
+    const tipoCambio = String(job.cambio_tipo || 'rehacer');
+    const defTipoRun = PZ_CAMBIO_TIPOS[tipoCambio];
+    if (defTipoRun && typeof defTipoRun.ejecutar === 'function') {
+      const workT = (async () => defTipoRun.ejecutar({ uid, post, pedido, job }))();
+      const rT = await Promise.race([workT, timeoutP]);
+      if (rT.issue) { settleFallo(rT.issue); return; }
+      guardarVersion(post);
+      if (rT.overlayText !== undefined) {
+        db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, overlay_text = ? WHERE id = ?').run(String(rT.newPath), String(post.image_path || ''), String(rT.overlayText || ''), post.id);
+      } else {
+        db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(rT.newPath), String(post.image_path || ''), post.id);
+      }
+      let finalTxt = tipoCambio === 'sin_texto'
+        ? (en ? 'Done: I took the text out of your post\'s image 👇' : 'Listo: saqué el texto de adentro de la imagen de tu posteo 👇')
+        : (en ? 'Done: I put the text inside your post\'s image 👇' : 'Listo: puse el texto adentro de la imagen de tu posteo 👇');
+      if (rT.derivado && rT.titular) finalTxt += en ? `\nThe full text doesn't fit as a headline, so I used the short headline "${rT.titular}".` : `\nEl texto entero no entra como titular: usé el titular corto «${rT.titular}».`;
+      if (rT.sistema === 'sobrio') finalTxt += en ? '\nYour feed doesn\'t usually carry text on its images, so I kept it sober, on the bottom band.' : '\nTu feed no suele llevar texto en las imágenes: lo puse sobrio, en la banda de abajo.';
+      finalTxt += ` [foto:${rT.newPath}]`;
+      if (settleLista(finalTxt)) await avisar(pzPostTitulo(post));
+      return;
+    }
     if (ruta === 'texto') {
       const work = (async () => {
         const key = openaiKeyFor(uid);
@@ -8185,7 +8231,7 @@ function pzChatCambioSiFalta({ uid, clean, out, anchorId, anyWork, savedReplyId,
     if (out && Array.isArray(out.options) && out.options.length) return null;
     const lastUser = (Array.isArray(clean) ? clean : []).filter(m => m && m.role === 'user').pop();
     const lastText = lastUser ? String(lastUser.text || '') : '';
-    if (!pzChatPedidoDeCambio(lastText)) return null;
+    if (!pzChatPedidoDeCambio(lastText) && !pzCambioTipoEspecificoDe(lastText)) return null;
     // Resolver el posteo SOLO con evidencia explícita (ancla de la
     // tile o cita que matchea un posteo): sin evidencia no se inventa.
     let post = null;
@@ -8240,6 +8286,345 @@ function pzChatCambioSiFalta({ uid, clean, out, anchorId, anyWork, savedReplyId,
     return null;
   } catch (e) { console.error('[chat-cambio] net:', e.message); return null; }
 }
+
+// ── CATÁLOGO DE TIPOS DE CAMBIO (LOTE TEXTO-EN-IMAGEN) ──────────────
+// Orden directa de Valentino (14/11 13:42): «Si solo pido el tipo de
+// cambios a Posty, tiene que ser capaz de hacerlo y entenderlo rápido
+// y hacerlo rápido. Por ejemplo, decirle poné el caption adentro de
+// la imagen». Hasta este lote el carril conocía UN solo cambio (el
+// rehacer genérico de PEDIDO-CHAT-SE-EJECUTA, con sus rutas texto/
+// foto/video): un pedido de un TIPO concreto dependía de que el
+// cerebro lo tradujera a un bloque, y tipos como «el caption adentro
+// de la imagen» no tenían ejecutor. Este bloque convierte el carril
+// en un CATÁLOGO: todo pedido de cambio sobre un posteo se CLASIFICA
+// en un tipo en el mismo turno, por detectores determinísticos (sin
+// depender del cerebro), y el tipo manda — su factible decide la
+// imposibilidad honesta ANTES de crear el trabajo y su ejecutar
+// corre dentro del trabajo durable chat_cambio, con el estado
+// visible y el resultado en el mismo hilo (el riel de v1077).
+// CÓMO SE SUMA UN TIPO NUEVO:
+//   1. Un detector puro pzCambioDetect<tipo>(texto) → bool: frases
+//      ES/EN que disparan el tipo, con sus falsos positivos y
+//      negativos declarados en su comentario.
+//   2. Un factible ({uid, post, pedido}) → kind de imposibilidad o
+//      null. Los kinds viven en pzTrabajoCambioFalloAmable (texto
+//      honesto ES/EN con el camino real cuando hay uno; nunca una
+//      promesa).
+//   3. Un ejecutar ({uid, post, pedido, job}) →
+//      { newPath, overlayText?, titular?, derivado?, sistema? } o
+//      { issue: kind }. El ejecutor NO escribe el posteo: el
+//      reemplazo (post_versions + prev_image_path + UPDATE) lo hace
+//      el runner del trabajo, como en las rutas históricas.
+//   4. Registrarlo en PZ_CAMBIO_TIPOS ANTES de 'rehacer': el orden
+//      del mapa ES el orden de clasificación (los tipos específicos
+//      primero, el genérico como default) y sumarle casos a la suite.
+// El tipo histórico 'rehacer' no trae funciones a propósito: su
+// factible y su ejecutar SON el carril de siempre (las rutas texto/
+// foto/video dentro de pzChatCambioCrearTrabajo y
+// pzTrabajoChatCambioRun, byte-funcionales); el catálogo lo registra
+// como el default al que cae todo pedido que ningún detector
+// específico reclama. La red anti-promesa y el consumidor del
+// conserje consultan ESTE catálogo vía pzCambioTipoDePedido — ningún
+// otro lugar decide tipos.
+function pzCambioNormTexto(text) {
+  return ' ' + String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') + ' ';
+}
+// Detector del tipo texto_en_imagen: el pedido de METER un texto
+// (el caption del posteo o uno dictado) ADENTRO de la imagen/foto.
+// Familias: verbo de poner + texto + nexo + imagen («poné el caption
+// adentro de la imagen», «meté el texto en la foto», «put the text
+// inside the photo») · texto + adentro/dentro + imagen sin verbo
+// («el caption adentro de la imagen») · caption/titular + en + imagen
+// («el caption en la imagen»). Falsos negativos aceptados: pedidos
+// sin nexo espacial («poné el caption» a secas — lo agarra el
+// rehacer de texto/foto de siempre) y «el texto en la imagen» sin
+// verbo ni «adentro» (ambiguo con «el texto que está en la imagen»:
+// no se reclama). Falso positivo aceptado: «quiero el texto en la
+// imagen» y familia — es exactamente el pedido del tipo.
+function pzCambioDetectTextoEnImagen(text) {
+  const t = pzCambioNormTexto(text);
+  const TX = '(caption|texto|text|titulo|titular|frase|leyenda|headline)';
+  const IM = '(imagen|foto|image|photo|picture)';
+  const ART = '(el|la|los|las|un|una|este|esta|ese|esa|mi|the|this|my)';
+  if (new RegExp('(pone|pon|mete|metele|agrega|agregale|escribi|escribile|inclui|suma|sumale|hace|quiero|necesito|put|add|place|write|embed)\\w*\\s+(' + ART + '\\s+)?' + TX + '\\b[\\s\\S]{0,28}?(adentro|dentro|inside|into|en|in|sobre|on|onto)\\s+(de\\s+)?(la\\s+|una\\s+|the\\s+)?' + IM + '\\b').test(t)) return true;
+  if (new RegExp(TX + '\\s+(adentro|dentro|inside|into)\\s+(de\\s+)?(la\\s+|una\\s+|the\\s+)?' + IM + '\\b').test(t)) return true;
+  if (new RegExp('(caption|titulo|titular|headline)\\s+(en|in\\s+the)\\s+(la\\s+|una\\s+|the\\s+)?' + IM + '\\b').test(t)) return true;
+  // Familia dictado: un texto ENTRE COMILLAS que va adentro de la
+  // imagen («poné "Abierto todos los días" adentro de la imagen»):
+  // no nombra caption/texto, pero el destino espacial + las comillas
+  // lo hacen inequívoco; el dictado lo extrae pzTextoDictadoEnPedido.
+  if (/["«“][^"»”]{2,140}["»”][\s\S]{0,40}?(adentro|dentro|inside|into)\s+(de\s+)?(la\s+|una\s+|the\s+)?(imagen|foto|image|photo|picture)\b/.test(t)) return true;
+  return false;
+}
+// Detector del tipo inverso (sin_texto): SACAR el texto de adentro
+// de la imagen. Familias: verbo de sacar + texto + de/desde + imagen
+// («sacá el texto de la imagen», «remove the text from the image») ·
+// «sin texto» nombrando la imagen («dejalo sin texto», «la foto sin
+// texto») · «el texto fuera». Límite declarado: sin nombrar la
+// imagen no se reclama («borrá el texto» solo sigue siendo, como
+// hoy, un cambio de caption). «sacá el logo de la foto» NO es este
+// tipo (el logo no es un texto puesto por el sistema): sigue siendo
+// rehacer de foto.
+function pzCambioDetectSinTexto(text) {
+  const t = pzCambioNormTexto(text);
+  const TX = '(texto|text|titulo|titular|caption|letras|letra|headline)';
+  const IM = '(imagen|foto|image|photo|picture)';
+  if (new RegExp('(saca|quita|quitale|borra|borrale|elimina|eliminale|remove|take)\\w*\\s+(el\\s+|la\\s+|los\\s+|las\\s+|the\\s+)?' + TX + '\\b[\\s\\S]{0,24}?(de|del|desde|from|off)\\s+(la\\s+|una\\s+|the\\s+)?' + IM + '\\b').test(t)) return true;
+  if (/(sin\s+texto|sin\s+titulo|sin\s+titular|no\s+text\b)/.test(t) && new RegExp('\\b' + IM + '\\b').test(t)) return true;
+  if (new RegExp(TX + '\\s+(fuera|afuera)\\b').test(t)) return true;
+  return false;
+}
+// El clasificador del catálogo: primer tipo cuyo detector reclama el
+// pedido (el mapa ordena: específicos primero). Sin reclamo → el
+// tipo histórico 'rehacer'. Lo consultan la red anti-promesa (para
+// saber si el turno es un pedido de un tipo conocido aunque
+// pzChatPedidoDeCambio no lo nombre) y pzChatCambioCrearTrabajo (que
+// lo usan también el bloque redo y el consumidor del conserje).
+function pzCambioTipoDePedido(post, pedido) {
+  const ids = Object.keys(PZ_CAMBIO_TIPOS);
+  for (const id of ids) {
+    const d = PZ_CAMBIO_TIPOS[id];
+    if (d && typeof d.detectar === 'function' && d.detectar(pedido)) return id;
+  }
+  return 'rehacer';
+}
+// ¿El texto es un pedido de un tipo ESPECÍFICO (no el rehacer
+// genérico)? Lo usa la red como disparador alternativo.
+function pzCambioTipoEspecificoDe(text) {
+  const id = pzCambioTipoDePedido(null, text);
+  return id === 'rehacer' ? null : id;
+}
+// El texto dictado en el pedido, si lo hay: entre comillas («...»,
+// "...", '...') o tras «que diga/dice». Sin dictado, el ejecutor usa
+// el caption del posteo.
+function pzTextoDictadoEnPedido(pedido) {
+  const s = String(pedido || '');
+  const m = s.match(/[«"“]([^»"”]{2,140})[»"”]/) || s.match(/'([^']{2,140})'/);
+  if (m && m[1].trim()) return m[1].trim();
+  const m2 = s.match(/que\s+(?:diga|dice|dijera)\s+([^.,\n]{2,140})/i);
+  if (m2 && m2[1].trim()) return m2[1].trim();
+  return '';
+}
+// La señal texto_feed del dueño (el sistema de texto que SU feed
+// viene manteniendo), desde el digest del cliente: la misma fuente
+// que leen la generación semanal y la pieza única. null = sin señal.
+function pzTextoFeedDe(uid) {
+  try {
+    const dg = clientDigest.getDigest(db, uid);
+    return (dg && dg.texto_feed && typeof dg.texto_feed === 'object') ? dg.texto_feed : null;
+  } catch (e) { return null; }
+}
+// Compone el titular sobre la foto con el MISMO script del pipeline
+// de piezas (composite-headline.py: tipografía de diseño, auto-fit,
+// zona top|bottom, escala del feed) y lo deja como JPEG en /media
+// CONSERVANDO el tamaño de la foto original (el pipeline demo
+// convierte a 1080×1350 porque sus piezas nacen en ese formato; un
+// posteo existente no se re-encuadra). Devuelve '/media/...' o null.
+async function pzComponerTitularEnFoto({ postId, srcAbs, titular, zona, scale }) {
+  try {
+    const { execFile } = require('child_process');
+    const run = (file, args, timeout) => new Promise((resolve) => {
+      execFile(file, args, { timeout }, (err) => resolve(!err));
+    });
+    const script = path.join(__dirname, 'composite-headline.py');
+    const stamp = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    const tmpPng = path.join(MEDIA_DIR, `.tmp-texto-${stamp}.png`);
+    const outName = `texto-en-imagen-${postId}-${stamp}.jpg`;
+    const outAbs = path.join(MEDIA_DIR, outName);
+    const args = [script, '--in', srcAbs, '--headline', String(titular || ''), '--out', tmpPng, '--zone', zona === 'bottom' ? 'bottom' : 'top'];
+    if (scale && Number(scale) > 1) args.push('--scale', String(Number(scale)));
+    const okC = await run('python3', args, 30000);
+    if (!okC || !fs.existsSync(tmpPng)) { try { fs.unlinkSync(tmpPng); } catch (e) {} return null; }
+    const conv = 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nim.save(sys.argv[2], "JPEG", quality=92)\n';
+    const okJ = await run('python3', ['-c', conv, tmpPng, outAbs], 20000);
+    try { fs.unlinkSync(tmpPng); } catch (e) {}
+    if (!okJ || !fs.existsSync(outAbs)) return null;
+    return '/media/' + outName;
+  } catch (e) { console.error('[texto-en-imagen] componer:', e.message); return null; }
+}
+// QA visual del texto compuesto ANTES de reemplazar (la vara: la
+// pieza final se mira entera). Una sola llamada de visión con los
+// cuatro criterios del tipo — titular LEGIBLE y exacto, en BANDA
+// (superior o inferior, nunca el medio), sin TAPAR el sujeto, la
+// cara ni el logo de la foto, y como ÚNICO texto compuesto (el del
+// producto/packaging no cuenta). FAIL-CLOSED, como
+// verificarRehacerAnclado: sin clave, sin archivo o veredicto dudoso
+// ⇒ ok:false y la imagen vigente no se toca.
+async function verificarTextoEnImagen({ uid, resultPath, titular, zona }) {
+  try {
+    const key = openaiKeyFor(uid);
+    if (!key) return { ok: false, motivo: 'sin_clave' };
+    const s = String(resultPath || '');
+    const abs = s.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(s)) : null;
+    if (!abs || !fs.existsSync(abs)) return { ok: false, motivo: 'sin_archivo' };
+    const mime = /\.png$/i.test(abs) ? 'image/png' : /\.webp$/i.test(abs) ? 'image/webp' : 'image/jpeg';
+    const prompt = 'Te muestro la imagen FINAL de un posteo: una foto con un titular compuesto por el sistema. '
+      + `El titular que se tenía que poner es exactamente: «${String(titular || '').slice(0, 140)}», en la banda ${zona === 'bottom' ? 'INFERIOR' : 'SUPERIOR'} de la imagen. `
+      + 'Respondé SOLO con JSON: {"legible": true|false, "en_banda": true|false, "no_tapa": true|false, "un_solo_texto": true|false, "motivo": "<breve>"} '
+      + '— legible: el titular se lee completo, palabra por palabra, sin cortes ni letras deformadas, y dice exactamente el titular pedido. '
+      + '— en_banda: el titular está en la franja superior o inferior de la imagen, nunca en el medio. '
+      + '— no_tapa: el titular ni su fondo tapan el producto o sujeto principal, ni una cara u ojos, ni el logo o la marca visible de la foto. '
+      + '— un_solo_texto: no hay OTRO texto compuesto sobre la foto además de este titular (el texto propio del producto o de su packaging NO cuenta). '
+      + 'Si dudás en algún punto, respondé false en ese punto.';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 220, temperature: 0,
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${mime};base64,${fs.readFileSync(abs).toString('base64')}` } }] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    try { costs.trackUsage({ feature: 'vision-texto-imagen', userId: uid, model: 'gpt-4o-mini', json: j }); } catch (e) {}
+    const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return { ok: false, motivo: 'sin_veredicto' };
+    let v = null;
+    try { v = JSON.parse(m[0]); } catch (e) { v = null; }
+    if (!v) return { ok: false, motivo: 'sin_veredicto' };
+    const ok = v.legible === true && v.en_banda === true && v.no_tapa === true && v.un_solo_texto === true;
+    return { ok, motivo: ok ? 'verificado' : String(v.motivo || 'no_cumple').slice(0, 120) };
+  } catch (e) { return { ok: false, motivo: 'error' }; }
+}
+// Verificación del candidato LIMPIO del tipo inverso: la versión
+// previa tiene que ser LA MISMA foto (misma escena y encuadre) y no
+// llevar ningún texto compuesto. FAIL-CLOSED igual que el resto.
+async function verificarSinTexto({ uid, actualPath, limpiaPath }) {
+  try {
+    const key = openaiKeyFor(uid);
+    if (!key) return { ok: false, motivo: 'sin_clave' };
+    const abs = (p) => { const s = String(p || ''); return s.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(s)) : null; };
+    const aAct = abs(actualPath), aLim = abs(limpiaPath);
+    if (!aAct || !aLim || !fs.existsSync(aAct) || !fs.existsSync(aLim)) return { ok: false, motivo: 'sin_archivo' };
+    const img = (a) => {
+      const mime = /\.png$/i.test(a) ? 'image/png' : /\.webp$/i.test(a) ? 'image/webp' : 'image/jpeg';
+      return { type: 'image_url', image_url: { url: `data:${mime};base64,${fs.readFileSync(a).toString('base64')}` } };
+    };
+    const prompt = 'Te muestro DOS imágenes: la PRIMERA es la foto actual de un posteo, que lleva un texto compuesto encima, y la SEGUNDA es una versión previa de ese posteo. '
+      + 'Respondé SOLO con JSON: {"misma_foto": true|false, "sin_texto": true|false, "motivo": "<breve>"} '
+      + '— misma_foto: la segunda es LA MISMA foto que la primera (misma escena, mismo encuadre, mismo producto), no otra imagen. '
+      + '— sin_texto: la segunda NO lleva ningún texto compuesto sobre la foto (titulares, bandas con frases, píldoras dibujadas); el texto propio del producto o de su packaging NO cuenta. '
+      + 'Si dudás en algún punto, respondé false en ese punto.';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 200, temperature: 0,
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, img(aAct), img(aLim)] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    try { costs.trackUsage({ feature: 'vision-sin-texto', userId: uid, model: 'gpt-4o-mini', json: j }); } catch (e) {}
+    const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return { ok: false, motivo: 'sin_veredicto' };
+    let v = null;
+    try { v = JSON.parse(m[0]); } catch (e) { v = null; }
+    if (!v) return { ok: false, motivo: 'sin_veredicto' };
+    const ok = v.misma_foto === true && v.sin_texto === true;
+    return { ok, motivo: ok ? 'verificado' : String(v.motivo || 'no_cumple').slice(0, 120) };
+  } catch (e) { return { ok: false, motivo: 'error' }; }
+}
+// Factible del tipo texto_en_imagen (determinístico, sin IA): el
+// medio tiene que ser foto con archivo; si el posteo ya lleva un
+// texto puesto por el sistema (overlay_text), el cambio se compone
+// sobre la versión LIMPIA previa — sin esa base no hay cómo rehacer
+// el texto sin apilarlo ('ya_tiene_texto'); y tiene que haber un
+// texto para poner (el dictado o el caption).
+function pzCambioFactTextoEnImagen({ post, pedido }) {
+  if (!post || String(post.media_type || 'image') !== 'image') return 'cambio_solo_foto';
+  const img = String(post.image_path || '');
+  const abs = img.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(img)) : null;
+  if (!abs || !fs.existsSync(abs)) return 'sin_fuente';
+  if (String(post.overlay_text || '').trim()) {
+    const prev = String(post.prev_image_path || '');
+    const prevAbs = prev.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(prev)) : null;
+    if (!prevAbs || !fs.existsSync(prevAbs)) return 'ya_tiene_texto';
+  }
+  const fuente = pzTextoDictadoEnPedido(pedido) || String(post.caption || '').trim();
+  if (!fuente) return 'sin_caption';
+  return null;
+}
+// Factible del tipo sin_texto: solo hay algo que sacar si el sistema
+// puso un texto (overlay_text) Y queda la versión limpia previa
+// recuperable. Si el texto es de la foto misma, no hay versión sin
+// texto a la que volver: imposibilidad honesta, sin inventar.
+function pzCambioFactSinTexto({ post }) {
+  if (!post || String(post.media_type || 'image') !== 'image') return 'cambio_solo_foto';
+  if (!String(post.overlay_text || '').trim()) return 'sin_texto_puesto';
+  const prev = String(post.prev_image_path || '');
+  const prevAbs = prev.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(prev)) : null;
+  if (!prevAbs || !fs.existsSync(prevAbs)) return 'sin_version_limpia';
+  return null;
+}
+// Ejecutor del tipo texto_en_imagen: compone el texto DENTRO de la
+// imagen del posteo siguiendo el sistema que el feed del dueño viene
+// manteniendo (señal texto_feed): feed con-texto/mixto → el sistema
+// del feed (banda superior del pipeline, escala por el tamaño típico
+// del feed); feed limpio o sin señal → el feed no mantiene sistema
+// de texto: modo SOBRIO declarado (banda inferior, titular corto) —
+// el pedido del dueño manda sobre esta pieza, y el recibo lo dice.
+// El texto es el dictado en el pedido o el caption del posteo; si no
+// entra como titular, se deriva con la regla de titulares cortos
+// (makeHeadline, ≤6 palabras) y el recibo lo declara — nunca se
+// fuerza un texto largo. Si arriba el QA detecta que tapa, se
+// recompone abajo (el patrón del pipeline). El caption, el día y la
+// hora NO se tocan; este cambio no consume rehaces (no regenera la
+// foto: compone sobre la misma). Devuelve la pieza nueva verificada;
+// el reemplazo lo hace el runner.
+async function pzTextoEnImagenParaPost({ uid, post, pedido }) {
+  const overlayPrevio = String(post.overlay_text || '').trim();
+  let baseImg = String(post.image_path || '');
+  if (overlayPrevio && String(post.prev_image_path || '')) baseImg = String(post.prev_image_path);
+  const baseAbs = baseImg.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(baseImg)) : null;
+  if (!baseAbs || !fs.existsSync(baseAbs)) return { issue: 'sin_fuente' };
+  if (!openaiKeyFor(uid)) return { issue: 'sin_clave' };
+  const dictado = pzTextoDictadoEnPedido(pedido);
+  const fuente = String(dictado || String(post.caption || '').split('\n')[0] || '').replace(/\s+/g, ' ').trim();
+  if (!fuente) return { issue: 'sin_caption' };
+  const titular = makeHeadline(fuente, 6, 70, rubroOf(uid)) || makeHeadline(fuente, 5, 70, rubroOf(uid));
+  if (!titular) return { issue: 'sin_caption' };
+  const derivado = fuente.split(' ').filter(Boolean).length > titular.split(' ').filter(Boolean).length;
+  const tf = pzTextoFeedDe(uid);
+  const modo = (tf && tf.modo) || 'sin-senal';
+  const sistemaFeed = modo === 'con-texto' || modo === 'mixto';
+  const sistema = sistemaFeed ? 'feed' : 'sobrio';
+  const scale = sistemaFeed ? demo.headlineScaleForTextoFeed(tf) : 1;
+  const zonas = sistemaFeed ? ['top', 'bottom'] : ['bottom'];
+  for (const zona of zonas) {
+    const out = await pzComponerTitularEnFoto({ postId: post.id, srcAbs: baseAbs, titular, zona, scale });
+    if (!out) return { issue: 'fallo' };
+    const ver = await verificarTextoEnImagen({ uid, resultPath: out, titular, zona });
+    if (ver.ok) return { newPath: out, overlayText: titular, titular, derivado, sistema, zona };
+    console.log(`[texto-en-imagen] post ${post.id}: QA no aprobada en zona ${zona} (${ver.motivo})`);
+    try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(out))); } catch (e) {}
+  }
+  return { issue: 'revision' };
+}
+// Ejecutor del tipo sin_texto: vuelve a la versión LIMPIA previa,
+// verificada contra la actual (misma foto, sin texto compuesto)
+// antes de que el runner la restaure. Sin verificación no se toca
+// nada: la «limpia» podría ser otra foto.
+async function pzSinTextoParaPost({ uid, post }) {
+  const prev = String(post.prev_image_path || '');
+  const prevAbs = prev.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(prev)) : null;
+  if (!prevAbs || !fs.existsSync(prevAbs)) return { issue: 'sin_version_limpia' };
+  if (!openaiKeyFor(uid)) return { issue: 'sin_clave' };
+  const ver = await verificarSinTexto({ uid, actualPath: String(post.image_path || ''), limpiaPath: prev });
+  if (!ver.ok) {
+    console.log(`[sin-texto] post ${post.id}: la versión previa no verifica como la misma foto limpia (${ver.motivo})`);
+    return { issue: 'sin_version_limpia' };
+  }
+  return { newPath: prev, overlayText: '', titular: '', derivado: false, sistema: 'feed' };
+}
+// EL MAPA DEL CATÁLOGO. El orden es el orden de clasificación.
+const PZ_CAMBIO_TIPOS = {
+  sin_texto: { detectar: pzCambioDetectSinTexto, factible: pzCambioFactSinTexto, ejecutar: pzSinTextoParaPost, estimado: 30 },
+  texto_en_imagen: { detectar: pzCambioDetectTextoEnImagen, factible: pzCambioFactTextoEnImagen, ejecutar: pzTextoEnImagenParaPost, estimado: 60 },
+  rehacer: { detectar: null, factible: null, ejecutar: null, estimado: 60 },
+};
 
 // Red anti-silencio: corre DESPUÉS de aplicar los bloques, ANTES del res.json.
 // Si el cliente pidió la imagen explícita y el turno no produjo ninguna, el
@@ -42723,7 +43108,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1085';
+const BUILD_ID = '20261105-v1086';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

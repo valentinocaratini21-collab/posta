@@ -1513,6 +1513,11 @@ CREATE TABLE IF NOT EXISTS chat_seen_photos (
 // '' = hilo principal; 'post' = el resultado se asienta en el hilo del
 // posteo (hilo='post' + post_id), visible en el conserje.
 try { db.exec(`ALTER TABLE trabajos ADD COLUMN hilo TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE TEXTO-EN-IMAGEN) Tipo de cambio de un trabajo chat_cambio: la
+// clave del catálogo PZ_CAMBIO_TIPOS que lo creó ('texto_en_imagen',
+// 'sin_texto'); '' = el rehacer genérico histórico. El runner despacha
+// por este campo: un tipo nuevo no toca el carril de siempre.
+try { db.exec(`ALTER TABLE trabajos ADD COLUMN cambio_tipo TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CHAT-678 · 6 y 7) Posteo compartido al chat (post_id) y grupo de
 // fotos del mensaje (photos_json: ["/media/..."]): viajan con el mensaje
 // para que el chat los muestre y Posty sepa de qué posteo se habla.
