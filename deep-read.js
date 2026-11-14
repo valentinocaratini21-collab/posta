@@ -539,6 +539,12 @@ async function classifyDigestPhotos({ photos, items, apiKey, userId, fetchImpl, 
 // visión (VISION_MODEL, mismo request, mismo parseo) pero pregunta
 // SOLO por la presencia: ¿se ve EL NEGOCIO en la escena — su logo, un
 // producto con su nombre, su packaging, el frente de su local?
+// (LOTE ETIQUETA-Y-TEXTO · pieza B) La MISMA pasada pregunta además
+// por el CROMO DE TIENDA (cromo_tienda/cromo_texto): la corrida de
+// Blind Barber entregó el banner promocional de la web — con su
+// botón SHOP NOW horneado — como foto de producto, porque la única
+// pregunta era por la marca y el banner está lleno de marca. El
+// campo nuevo es aditivo: los veredictos de presencia no cambian.
 // Devuelve { [key]: { marca: true|false, detalle } } para TODAS las
 // fotos que la visión respondió (el false TAMBIÉN es veredicto: la
 // visión vio la foto y el negocio no está). Cualquier falla (sin
@@ -577,7 +583,7 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
     names.length ? `Sus productos/servicios: ${names.join(', ')}.` : '',
   ].filter(Boolean).join(' ');
   const content = [
-    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). ${ctxLines}\nPara CADA foto decidí si se ve EL NEGOCIO dentro de la escena: su logo, un producto con su nombre o su marca, su packaging, el frente de su local con su nombre. marca=true SOLO si algo del negocio se ve de verdad en la foto; si la foto es genérica (un producto sin marca visible, una persona trabajando, un interior sin ningún nombre) → marca=false. Si marca=true, clasificalo en "tipo": "logo" si se ve su LOGO como marca gráfica (el símbolo o logotipo de la marca, un letrero con su logo, su packaging con el logo impreso); "texto" si lo ÚNICO que se ve del negocio son PALABRAS impresas con su nombre (el texto de una etiqueta, una lista de ingredientes, un cartel de texto plano) SIN su logo gráfico; "ambos" si se ven las dos cosas. Respondé SOLO este JSON: {"results":[{"i":0,"marca":true,"tipo":"logo","detalle":"qué se ve del negocio, en pocas palabras"}]}` },
+    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). ${ctxLines}\nPara CADA foto decidí si se ve EL NEGOCIO dentro de la escena: su logo, un producto con su nombre o su marca, su packaging, el frente de su local con su nombre. marca=true SOLO si algo del negocio se ve de verdad en la foto; si la foto es genérica (un producto sin marca visible, una persona trabajando, un interior sin ningún nombre) → marca=false. Si marca=true, clasificalo en "tipo": "logo" si se ve su LOGO como marca gráfica (el símbolo o logotipo de la marca, un letrero con su logo, su packaging con el logo impreso); "texto" si lo ÚNICO que se ve del negocio son PALABRAS impresas con su nombre (el texto de una etiqueta, una lista de ingredientes, un cartel de texto plano) SIN su logo gráfico; "ambos" si se ven las dos cosas.\nAdemás, para CADA foto decidí si trae CROMO DE TIENDA WEB: elementos gráficos de la tienda online pegados sobre la imagen que NO son el producto ni su packaging — una insignia de listado (NEW, NUEVO, SALE, OFERTA, % OFF, DESCUENTO, BEST SELLER, MÁS VENDIDO, SOLD OUT, AGOTADO, LOW STOCK, QUEDAN POCOS, LIMITED, EDICIÓN LIMITADA, FREE SHIPPING, ENVÍO GRATIS, BACK IN STOCK, en cualquier idioma), un botón de compra dibujado (SHOP NOW, COMPRAR AHORA, BUY NOW, ADD TO CART), o un titular/copy de campaña del sitio sobre la foto (un aviso completo de la web usado como foto). Si la imagen ES un banner/aviso de la web → cromo_tienda=true. OJO: el texto impreso EN el producto o su envase (su nombre, las notas, los ingredientes, «new formula» en la caja) NO es cromo — es el producto: cromo_tienda=false. Si hay cromo, copiá su texto principal en "cromo_texto" (tal cual se lee, corto). Respondé SOLO este JSON: {"results":[{"i":0,"marca":true,"tipo":"logo","detalle":"qué se ve del negocio, en pocas palabras","cromo_tienda":false,"cromo_texto":""}]}` },
     ...imageParts,
   ];
   let data;
@@ -586,7 +592,10 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: VISION_MODEL, temperature: 0.1, max_tokens: 500,
+        // (LOTE ETIQUETA-Y-TEXTO) max_tokens 500 → 1000: la respuesta
+        // por foto suma cromo_tienda/cromo_texto; con el tope viejo el
+        // JSON podía truncarse con muchas fotos y perderse veredictos.
+        model: VISION_MODEL, temperature: 0.1, max_tokens: 1000,
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content }],
       }),
@@ -611,7 +620,16 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
     // con el veredicto cuando la visión lo clasifica: sin tipo válido
     // la entrada queda como antes (la vara de logo no se pronuncia).
     const tipo = (res.tipo === 'logo' || res.tipo === 'texto' || res.tipo === 'ambos') ? res.tipo : null;
-    if (photo) out[photo.key] = { marca: res.marca === true, ...(tipo ? { tipo } : {}), detalle: String(res.detalle || '').slice(0, 140) };
+    // (LOTE ETIQUETA-Y-TEXTO · pieza B) El CROMO DE TIENDA viaja en
+    // el MISMO veredicto (cero llamadas nuevas): true = la imagen es
+    // un banner/aviso de la web o trae insignia de listado/botón de
+    // compra dibujado; false = la visión la miró y no hay cromo;
+    // ausente = la visión no se pronunció (veredictos viejos o
+    // respuesta sin el campo) — para el gate de la prueba el ausente
+    // no es un pase de cromo ni un rechazo: manda el resto de la vara.
+    const cromo = (res.cromo_tienda === true) ? true : (res.cromo_tienda === false ? false : null);
+    const cromoTexto = (cromo === true && typeof res.cromo_texto === 'string' && res.cromo_texto.trim()) ? res.cromo_texto.trim().slice(0, 140) : null;
+    if (photo) out[photo.key] = { marca: res.marca === true, ...(tipo ? { tipo } : {}), ...(cromo !== null ? { cromo_tienda: cromo } : {}), ...(cromoTexto ? { cromo_texto: cromoTexto } : {}), detalle: String(res.detalle || '').slice(0, 140) };
   }
   return out;
 }

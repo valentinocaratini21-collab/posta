@@ -544,6 +544,17 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
       // ES el producto de esta pieza) no se toca, y sin dictamen de
       // tipo (logo_verdict sin anotar) el pase histórico manda.
       if (ctx && ctx.trialNoStock && w.logo_verdict === false && !productHit(w)) return false;
+      // (LOTE ETIQUETA-Y-TEXTO · pieza B) CROMO DE TIENDA: la foto
+      // que la visión dictaminó como banner/aviso de la web o con
+      // insignia de listado/botón de compra horneado NO se entrega
+      // como imagen de pieza en la prueba — ni siquiera si ES el
+      // producto del tema (el 678 de Blind Barber era el producto y
+      // era el banner promocional entero, con su botón SHOP NOW).
+      // El slot cae al próximo candidato o al camino de siempre sin
+      // foto válida; la foto sigue valiendo como evidencia del
+      // fundamento. Sin veredicto de cromo (null) no se rechaza:
+      // manda el resto de la vara, como con las demás varas.
+      if (ctx && ctx.trialNoStock && w.cromo_verdict === true) return false;
       // El rescate es del PRODUCTO (la visión lo identificó como EL
       // producto), no del índice del rango: una foto del producto
       // cuyos tags no alcanzan el mundo se rescata en cualquier rango —
@@ -1922,6 +1933,23 @@ function primerPosteoGate(o) {
     if (feedModoGate === 'limpio' && modoPiezaGate === 'clean') { porFeedLimpio = true; titularOk = true; }
     if (!titularOk) motivos.push('titular-largo-o-vacio');
   }
+  // (LOTE ETIQUETA-Y-TEXTO · piezas A/C4) LA PILL ENTRA A LA
+  // JURISDICCIÓN DE LA PUERTA: hasta este lote la pill ni era campo
+  // del gate — un spec 'text' de novedad la dibujaba igual con la
+  // señal perfecta en limpio. Con feed limpio, un slot 0 con pill
+  // no pasa (motivo pill-superpuesta-feed-limpio). En la prueba el
+  // spec ya nace sin pill (pieza A), así que esta puerta es el
+  // registro y la red para cualquier otro llamador. Y la AUSENCIA
+  // de señal queda registrada como dato del veredicto
+  // (sin_senal: true con feed_modo: null), no como hueco invisible:
+  // la corrida de Blind Barber se apagó en silencio porque nadie
+  // registraba el null.
+  const pillGate = String(oo.pill || '').trim();
+  let pillFrenada = false;
+  if (feedModoGate === 'limpio' && pillGate) {
+    pillFrenada = true;
+    motivos.push('pill-superpuesta-feed-limpio');
+  }
   let textoClase = null;
   if (lang === 'en') {
     const names = [star, temaFinal].filter(Boolean);
@@ -2008,6 +2036,13 @@ function primerPosteoGate(o) {
       modo_pieza: modoPiezaGate,
       feed_modo: feedModoGate,
       por_feed_limpio: porFeedLimpio,
+      // (LOTE ETIQUETA-Y-TEXTO · C4) La pill juzgada y la señal
+      // usada, visibles en el veredicto: sin_senal=true con
+      // feed_modo=null es el dato de que la puerta corrió sin
+      // señal (nunca más un apagado silencioso).
+      pill: pillGate || null,
+      pill_frenada: pillFrenada,
+      sin_senal: feedModoGate === null || feedModoGate === 'sin-senal',
     },
     foto: {
       fuente: photoSource,
@@ -2282,6 +2317,17 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // impreso) · sin anotar (esta vara no se pronuncia).
       const lv = clientDigest.brandLogoOf(digest, w.url);
       if (lv !== null) w.logo_verdict = lv;
+      // (LOTE ETIQUETA-Y-TEXTO · pieza B) La vara de CROMO viaja con
+      // la foto igual que las de presencia y logo: true (la visión
+      // dictaminó banner/insignia/botón de la tienda web, con su
+      // texto para el registro) · false (mirada, sin cromo) · sin
+      // anotar (el detector no se pronunció sobre esta foto).
+      const cv = clientDigest.brandCromoOf(digest, w.url);
+      if (cv !== null) {
+        w.cromo_verdict = cv;
+        const ct = clientDigest.brandCromoTextoOf(digest, w.url);
+        if (ct) w.cromo_texto = ct;
+      }
     }
   }
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
@@ -2868,6 +2914,17 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // (estilo del visitante → draft → default 2) manda como hoy.
   const tfSpec = (digest && digest.texto_feed && typeof digest.texto_feed === 'object') ? digest.texto_feed : null;
   const tfModo = tfSpec && (tfSpec.modo === 'limpio' || tfSpec.modo === 'con-texto' || tfSpec.modo === 'mixto') ? tfSpec.modo : null;
+  // (LOTE ETIQUETA-Y-TEXTO · pieza C2) SIN SEÑAL, EL WOW DE LA
+  // PRUEBA SALE LIMPIO: si el digest no trae una señal de texto
+  // utilizable (ausente, o con el modo honesto 'sin-senal'), el slot
+  // 0 no recibe titular superpuesto por la cadena por defecto — la
+  // marca sin costumbre conocida no recibe el vestido tipográfico
+  // de la casa sobre su mejor foto: sale la foto limpia con su
+  // caption, que nunca es un papelón (corrida Blind Barber: la
+  // señal llegó null y v1022 se apagó en silencio). Es SOLO el wow
+  // y SOLO la prueba: el resto de la semana sigue la dosificación
+  // de siempre y fuera de la prueba nada cambia.
+  const sinSenalTextoFeed = !!(trialNoStock && tfModo === null);
   let draftTextN;
   if (tfModo === 'limpio') draftTextN = 0;
   else if (tfModo === 'con-texto') draftTextN = Math.round((typeof tfSpec.ratio === 'number' ? tfSpec.ratio : 0.5) * specPosts.length);
@@ -2898,7 +2955,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // pieza con texto de menor prioridad — el total sigue siendo el mismo
   // (la dosificación no crece). Con estilo 'limpia' (0 textos) no se
   // fuerza: la elección del visitante manda.
-  if (wowFirst && specPosts[0] && !specPosts[0].poster && draftTextN > 0 && textModes[0] !== 'text') {
+  if (wowFirst && specPosts[0] && !specPosts[0].poster && draftTextN > 0 && textModes[0] !== 'text' && !sinSenalTextoFeed) {
     textModes[0] = 'text';
     let worstWow = -1; let worstWowRank = -1;
     textModes.forEach((m, j) => {
@@ -2922,6 +2979,14 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     // subordinada a la señal: no puede imponer texto al slot 0.
     if (champText && tfModo !== 'limpio' && specPosts[0] && !specPosts[0].poster && vIdx0 !== 0) specPosts[0].text_mode = champText;
   } catch (e) { /* el draft nunca frena la prueba */ }
+  // (LOTE ETIQUETA-Y-TEXTO · pieza C2) El default fail-closed se
+  // aplica AL FINAL de la dosificación: ni la asignación ni la
+  // campeona pueden dejar texto en el wow de una prueba sin señal.
+  // El motivo queda registrado EN la pieza (texto_sin_senal).
+  if (sinSenalTextoFeed && specPosts[0] && !specPosts[0].poster) {
+    specPosts[0].text_mode = 'clean';
+    specPosts[0].texto_sin_senal = true;
+  }
   // (2026-10-18) PILA DE TEXTO ACOTADA (amendment, misma vara que
   // clientes): en las piezas CON texto, el máximo es titular (≤6) + UN
   // solo elemento extra — la bajada (≤8 palabras) o la pastilla, nunca
@@ -2938,6 +3003,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (sp.subline) sp.subline = captions.capHeadlineWords(sp.subline, 8, lang);
     if (sp.subline && sp.pill) sp.pill = '';
   });
+  // (LOTE ETIQUETA-Y-TEXTO · pieza A) LA PILL SALE DE LA PRUEBA
+  // ENTERA: la familia de tags del catálogo (NEW/NUEVO, TIP,
+  // GIVEAWAY/SORTEO, DEAL, COMBO, 2X1, COMING SOON…) es cromo de
+  // listado — una píldora de esquina genérica, igual para todos los
+  // negocios, con el borde en el color de la casa — y NO es diseño
+  // de la marca: el renderer la dibujó sobre la foto real limpia de
+  // Blind Barber y Valentino la leyó como la etiqueta de la tienda
+  // («arriba de la imagen dice "new". un papelon eso»). Ninguna
+  // pieza de la prueba la dibuja, sobre foto real o generada; fuera
+  // de la prueba la pill sigue como siempre. Se apaga en el SPEC:
+  // el JSON que viaja al renderer ya sale sin pill.
+  if (trialNoStock) specPosts.forEach((sp) => { if (sp) sp.pill = ''; });
   // (v231) CANDADO DE NÚMEROS DE PROMO (adopción Predis + regla de
   // verdad): en la prueba, una pieza promo cuyo titular/bajada/caption
   // trae un número (precio, %, NxM) que NO está en el digest del
@@ -3134,6 +3211,12 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // está en la escena; una foto con marca_visible por texto de
       // etiqueta queda registrada como lo que es (logo_visible=false).
       const lvGate = wPool && typeof wPool.logo_verdict === 'boolean' ? wPool.logo_verdict : (raw.url ? clientDigest.brandLogoOf(digest, raw.url) : null);
+      // (LOTE ETIQUETA-Y-TEXTO · pieza B) El veredicto de CROMO de
+      // cada foto queda registrado igual que los de presencia y
+      // logo: el conserje y las diagnosis ven qué foto era el
+      // banner de la tienda y con qué texto, sin reconstruir a mano.
+      const cvGate = wPool && typeof wPool.cromo_verdict === 'boolean' ? wPool.cromo_verdict : (raw.url ? clientDigest.brandCromoOf(digest, raw.url) : null);
+      const ctGate = cvGate === true ? (wPool && wPool.cromo_texto ? wPool.cromo_texto : (raw.url ? clientDigest.brandCromoTextoOf(digest, raw.url) : null)) : null;
       fotosGate.push({
         url: raw.url || null,
         temas: Array.isArray(raw.temas) ? raw.temas.slice(0, 8) : [],
@@ -3142,6 +3225,8 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         marca_visible: marcaVisibleGate,
         marca_verdict: typeof mvGate === 'boolean' ? mvGate : null,
         logo_visible: typeof lvGate === 'boolean' ? lvGate : null,
+        cromo_tienda: typeof cvGate === 'boolean' ? cvGate : null,
+        cromo_texto: ctGate || null,
         via: productoGate ? 'producto' : (mvGate === true || marcaVisibleGate) ? 'marca' : 'ninguna',
         piezas: (usadasPorPath.get(raw.path) || []).slice(),
       });
@@ -3164,6 +3249,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         con_producto: fotosGate.filter((f) => !!f.producto).length,
         con_marca: fotosGate.filter((f) => f.via === 'marca' || f.marca_visible).length,
         con_logo: fotosGate.filter((f) => f.logo_visible === true).length,
+        con_cromo: fotosGate.filter((f) => f.cromo_tienda === true).length,
         solo_texto: fotosGate.filter((f) => f.logo_visible === false && (f.marca_verdict === true || f.marca_visible)).length,
         piezas_con_foto_web: fotosGate.reduce((a, f) => a + f.piezas.length, 0),
         piezas_poster: specPosts.filter((sp, i) => posterAt.has(i)).length,
@@ -3193,6 +3279,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         retematizado: !!(ppTemaOriginal && esperadoPP && ppTemaOriginal !== esperadoPP),
         headline: specPosts[0].headline || '',
         textMode: specPosts[0].text_mode || 'text',
+        pill: specPosts[0].pill || '',
         textoFeed: (digest && digest.texto_feed) || null,
         caption: t0.caption || '',
         lang,
@@ -3236,7 +3323,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       });
     } catch (e) { videoAperturaB = null; /* el registro jamás frena la prueba */ }
   }
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: videoIdxB, count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, texto_feed: tfSpec || null, video_apertura: videoAperturaB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: videoIdxB, count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, texto_feed: tfSpec || null, texto_feed_motivo: tfSpec ? null : (trialNoStock ? 'sin-senal-en-digest' : null), video_apertura: videoAperturaB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.

@@ -2176,7 +2176,15 @@ function sanitizeBrandPresence(obj) {
     // viejos) la entrada queda como estaba: la presencia vale, la
     // vara de logo no se pronuncia.
     const tipo = (v.tipo === 'logo' || v.tipo === 'texto' || v.tipo === 'ambos') ? v.tipo : null;
-    out[String(k).slice(0, 300)] = { marca: v.marca === true, ...(tipo ? { tipo } : {}), ...(v.detalle ? { detalle: String(v.detalle).slice(0, 140) } : {}) };
+    const entry = { marca: v.marca === true, ...(tipo ? { tipo } : {}), ...(v.detalle ? { detalle: String(v.detalle).slice(0, 140) } : {}) };
+    // (LOTE ETIQUETA-Y-TEXTO · pieza B) El veredicto de CROMO viaja
+    // con la presencia: true (banner/insignia/botón de la tienda web)
+    // · false (mirada, sin cromo) · ausente (veredicto de antes del
+    // detector: esta vara no se pronuncia). El texto del cromo solo
+    // se conserva con cromo positivo, para el registro del foto_gate.
+    if (v.cromo_tienda === true || v.cromo_tienda === false) entry.cromo_tienda = v.cromo_tienda === true;
+    if (entry.cromo_tienda === true && typeof v.cromo_texto === 'string' && v.cromo_texto.trim()) entry.cromo_texto = v.cromo_texto.trim().slice(0, 140);
+    out[String(k).slice(0, 300)] = entry;
     if (Object.keys(out).length >= 200) break;
   }
   return out;
@@ -2213,6 +2221,29 @@ function brandLogoOf(digest, key) {
   if (bp.tipo === 'logo' || bp.tipo === 'ambos') return true;
   if (bp.tipo === 'texto') return false;
   return null;
+}
+// (LOTE ETIQUETA-Y-TEXTO · pieza B) VARA DE CROMO DE TIENDA: ¿la
+// foto trae cromo de la tienda web (banner/aviso, insignia de
+// listado, botón de compra dibujado)? Devuelve true (la visión lo
+// vio: la foto NO se entrega como imagen de pieza en la prueba —
+// puede seguir como evidencia del fundamento) · false (la vio y no
+// hay cromo) · null (sin veredicto de cromo: la foto no se chequeó
+// con el detector o su veredicto es anterior — el null no rechaza
+// por sí solo; el resto de la vara manda). Solo lee el mapa de
+// presencia, que es donde el detector anota.
+function brandCromoOf(digest, key) {
+  if (!digest || !key) return null;
+  const bp = (digest.brand_presence && digest.brand_presence.entries) ? digest.brand_presence.entries[String(key)] : null;
+  if (!bp || typeof bp.cromo_tienda !== 'boolean') return null;
+  return bp.cromo_tienda === true;
+}
+// El texto del cromo (para el registro auditable del foto_gate):
+// null salvo que el veredicto sea positivo y traiga el texto.
+function brandCromoTextoOf(digest, key) {
+  if (!digest || !key) return null;
+  const bp = (digest.brand_presence && digest.brand_presence.entries) ? digest.brand_presence.entries[String(key)] : null;
+  if (!bp || bp.cromo_tienda !== true) return null;
+  return (typeof bp.cromo_texto === 'string' && bp.cromo_texto) ? bp.cromo_texto : null;
 }
 
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
@@ -4116,7 +4147,7 @@ module.exports = {
   // + puerta de texto de los captions de la semana (testeables).
   capStartText, captionArranqueMinuscula, captionPuertaTexto,
   // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
-  sanitizeBrandPresence, brandPresenceOf, brandLogoOf,
+  sanitizeBrandPresence, brandPresenceOf, brandLogoOf, brandCromoOf, brandCromoTextoOf,
   questionCandidatesOf, applyDeepBlocks,
   // (LOTE FUNDAMENTO-QUE-DUDA) La pregunta de la prueba: la candidata
   // a pregunta en su forma consumible (opciones de un toque).

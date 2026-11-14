@@ -1055,6 +1055,94 @@ async function qaComposedText({ b64, zone, apiKey, fetchImpl } = {}) {
   }
 }
 
+// ---------- 3c) QA DE ENCAJE SOBRE LA IMAGEN FINAL DEL WOW ----------
+// (LOTE ETIQUETA-Y-TEXTO · pieza C3) La capa que no existía: el
+// juicio sobre el ARTEFACTO final de la pieza wow de la prueba
+// (foto real + renderer), que hoy no pasa por NINGUNA QA visual.
+// Extiende la infraestructura de qaComposedText (mismo modelo,
+// mismo patrón de llamada) con dos preguntas nuevas: el INVENTARIO
+// de texto superpuesto (qué textos lleva la imagen final que no
+// sean el producto/packaging fotografiado) y el ENCAJE contra el
+// modo de la señal del feed. Devuelve además si el texto viene
+// HORNEADO en la foto fuente (banner de tienda, botón dibujado,
+// insignia de listado: no se puede recomponer fuera) o es un
+// compuesto removible. null = sin QA posible (sin clave, red,
+// respuesta ilegible): el llamador decide con su propia vara —
+// en la prueba, la señal y los gates de spec ya corrieron.
+const QA_WOW_FINAL_SYSTEM = [
+  'You are a strict visual QA reviewer for the FIRST post (the wow) of a business trial week.',
+  'Look at the finished image and list every OVERLAID text element: words that were ADDED on top of the photograph (a composited headline, a band, a corner pill/badge, a drawn button like SHOP NOW, campaign copy) — NOT text that belongs to the photographed product or its packaging (labels, ingredients, brand names printed on the product itself are part of the scene, never list them).',
+  'For each overlaid element decide its ORIGIN: "horneado" if it is baked into the source photograph itself (a web-store banner, a drawn buy button, a listing badge like NEW/SALE that is part of the photo file), "compuesto" if it looks composited by design software over the photo (a headline with a fade/band, a pill drawn by a template).',
+  'The user message tells you the FEED MODE of this brand (how its own Instagram feed uses overlaid text). Judge FIT ("encaja"): with mode "limpio" the brand posts clean photos with NO overlaid text, so ANY overlaid element does NOT fit; with "con-texto" overlaid headlines are the brand language and fit; with "mixto" a single headline fits but badges/buttons do not.',
+  'Return ONLY a JSON object: {"texto_no_tapa": true|false, "superpuestos": ["<each overlaid text, short>"], "horneado": true|false, "encaja": true|false, "detalle": "<short reason, max 20 words>"}. texto_no_tapa keeps the house meaning: false if the overlaid text covers a face, eyes or the main subject. horneado: true only if at least one overlaid element is baked into the source photo. No markdown, no prose outside the JSON.',
+].join(' ');
+
+function parseTrialWowQaContent(content) {
+  let txt = String((content && content.trim()) || '');
+  if (!txt) return null;
+  txt = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let j = null;
+  try { j = JSON.parse(txt); } catch (e) {
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (m) { try { j = JSON.parse(m[0]); } catch (e2) { /* cae a null */ } }
+  }
+  if (!j || typeof j !== 'object') return null;
+  if (!Array.isArray(j.superpuestos) || typeof j.horneado !== 'boolean' || typeof j.encaja !== 'boolean') return null;
+  return {
+    // passed = la pieza FINAL encaja con el feed: el texto no tapa
+    // al sujeto Y el juicio de encaje es favorable. Los superpuestos
+    // legítimos de un feed con-texto no lo bajan si encajan.
+    passed: (typeof j.texto_no_tapa === 'boolean' ? j.texto_no_tapa : true) && j.encaja === true,
+    superpuestos: j.superpuestos.map((s) => String(s || '').slice(0, 80)).filter(Boolean).slice(0, 8),
+    horneado: j.horneado === true,
+    encaja: j.encaja === true,
+    detalle: String(j.detalle || '').slice(0, 200),
+  };
+}
+
+async function qaTrialWowFinal({ b64, feedMode, apiKey, fetchImpl } = {}) {
+  try {
+    if (!b64 || !apiKey) return null;
+    const doFetch = fetchImpl || fetch;
+    const modo = (feedMode === 'limpio' || feedMode === 'con-texto' || feedMode === 'mixto') ? feedMode : 'sin-senal';
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        max_tokens: 400,
+        messages: [
+          { role: 'system', content: QA_WOW_FINAL_SYSTEM },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `FEED MODE of this brand: "${modo}". Inventory the overlaid text of this finished image, its origin, and whether it fits that feed mode. Answer with the JSON only.` },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'low' } },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r || !r.ok) return null;
+    const j = await r.json().catch(() => null);
+    if (!fetchImpl && j && j.usage) {
+      try {
+        costs.logApiCost({
+          feature: 'demo-ai-qa', model: 'gpt-4o-mini',
+          inTokens: (j.usage.prompt_tokens | 0) || 0,
+          outTokens: (j.usage.completion_tokens | 0) || 0,
+        });
+      } catch (e) { /* medir nunca rompe */ }
+    }
+    const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return parseTrialWowQaContent(content);
+  } catch (e) {
+    return null;
+  }
+}
+
 // ---------- 4) Composite del titular + JPEG final ----------
 // La IA genera la escena LIMPIA (sin texto); el titular lo compone el
 // código con composite-headline.py — el mismo del pipeline real — y la
@@ -1245,6 +1333,9 @@ module.exports = {
   qaComposedText,
   parseComposedQaContent,
   QA_COMPOSED_SYSTEM,
+  qaTrialWowFinal,
+  parseTrialWowQaContent,
+  QA_WOW_FINAL_SYSTEM,
   // (ADDENDUM · LOTE PRIMER-POSTEO-PERFECTO) QA del logo integrado en
   // la imagen generada del rescate del primer posteo.
   qaGeneratedLogo,

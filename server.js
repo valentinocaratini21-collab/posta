@@ -1789,6 +1789,58 @@ async function trialBrandPresence(webPhotos, itemNames, business) {
     return r ? r.verdicts : null;
   } catch (e) { return null; }
 }
+/* (LOTE ETIQUETA-Y-TEXTO · pieza C1) LA SEÑAL DE TEXTO DEL FEED,
+ * GARANTIZADA EN EL ARMADO DE LA PRUEBA. La traza del corte de la
+ * corrida de Blind Barber (14/11): la señal NACÍA bien — el prefill
+ * la computa con trialStyleSignature y la devuelve en style.firma —
+ * pero el front de /prueba NUNCA la reenviaba en el formulario del
+ * generate (ningún fd.append('estilo') en prueba.html ni en
+ * en-prueba.html), así que parseTrialStyle recibía null, el pegado
+ * condicional al digest no corría y texto_feed quedaba ausente SIN
+ * que nadie lo registrara: v1022 entero se apagó en silencio. El
+ * front ya reenvía el estilo (mismo lote); esta garantía es la red
+ * del servidor: el armado de la prueba termina SIEMPRE con
+ * digest.texto_feed presente — la señal real si llegó, o el modo
+ * honesto 'sin-senal' con su MOTIVO registrado (qué eslabón faltó)
+ * — y aguas abajo el wow sin señal sale limpio (demo: sinSenalTextoFeed)
+ * en vez de heredar el default con texto. Devuelve el motivo cuando
+ * tuvo que garantizar, o null si la señal ya estaba. */
+function trialTextoFeedGarantizado(trialDigest, estilo) {
+  if (!trialDigest || typeof trialDigest !== 'object') return null;
+  if (trialDigest.texto_feed && typeof trialDigest.texto_feed === 'object') return null;
+  const motivo = !estilo ? 'estilo-no-reenviado'
+    : !(estilo.firma && typeof estilo.firma === 'object') ? 'firma-ausente-en-estilo'
+    : 'firma-sin-texto-feed';
+  trialDigest.texto_feed = { modo: 'sin-senal', n: 0, superpuestos: 0, ratio: null, tamano: null, motivo };
+  return motivo;
+}
+/* (LOTE ETIQUETA-Y-TEXTO · pieza C3) EL JUICIO DE ENCAJE SOBRE LA
+ * IMAGEN FINAL DEL WOW: la salida de renderSpecPngs(Stream) del
+ * slot 0 de la prueba pasa por la QA de encaje (demoAi.qaTrialWowFinal)
+ * antes de mostrarse — la capa que no existía para foto real +
+ * renderer. Solo actúa con señal LIMPIO (con-texto/mixto: el texto
+ * es el lenguaje del feed y manda v1022 en el spec). Devuelve
+ * null (la QA no corre o no dictamina: la pieza sigue como está,
+ * con los gates de spec ya corridos) o { accion, qa } con accion:
+ * 'ok' (sin superpuestos ajenos) · 'recomponer' (el texto es un
+ * compuesto nuestro: la pieza se re-renderiza limpia) · 'retener'
+ * (el texto viene HORNEADO en la foto fuente: no se recompone
+ * fuera — la pieza cae a la cadena de rescate/candidato, la semana
+ * sigue). Nunca lanza. */
+async function trialWowFinalQa(buf, trialDigest) {
+  try {
+    const tf = (trialDigest && trialDigest.texto_feed && typeof trialDigest.texto_feed === 'object') ? trialDigest.texto_feed : null;
+    if (!tf || tf.modo !== 'limpio') return null;
+    if (!buf || !buf.length) return null;
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return null;
+    const qa = await demoAi.qaTrialWowFinal({ b64: buf.toString('base64'), feedMode: tf.modo, apiKey });
+    if (!qa) return null;
+    const sup = Array.isArray(qa.superpuestos) ? qa.superpuestos : [];
+    if (!sup.length && qa.encaja !== false) return { accion: 'ok', qa };
+    return { accion: qa.horneado ? 'retener' : 'recomponer', qa };
+  } catch (e) { return null; }
+}
 // Transferencia TOTAL al registrarse: la cuenta nace con el fundamento
 // de la prueba sembrado (digest persistido + ADN + perfil + colores).
 // Solo completa campos vacíos/genéricos: jamás pisa datos del dueño.
@@ -36431,6 +36483,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // del estilo la trae): el spec la lee de acá, y el digest
     // registrado la hereda por seedFromTrialDigest → saveDigest.
     if (trialDigest && estilo && estilo.firma && estilo.firma.texto_feed) trialDigest.texto_feed = estilo.firma.texto_feed;
+    // (LOTE ETIQUETA-Y-TEXTO · pieza C1) GARANTÍA: si la señal no
+    // llegó (el front no reenviaba el estilo: la traza del corte de
+    // Blind Barber), el digest queda con la señal honesta
+    // 'sin-senal' y su MOTIVO registrado — nunca más un null mudo.
+    { const tfMotivo = trialTextoFeedGarantizado(trialDigest, estilo); if (tfMotivo) console.log('[texto-feed] generate: señal ausente (' + tfMotivo + ') — registrada como sin-senal; el wow sale limpio', ig || ''); }
     // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Esta ruta no pasa el feed al digest
     // (feed: null): sin captions, la voz quedaba vacía aunque el @ las
     // tenga. Se reponen SOLO los marcadores de voz (best-effort, carrera
@@ -36514,6 +36571,38 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // arriba; a esta altura ya está (o no llega: póster tipográfico).
     profilePicPath = await raceMs(profilePicPathP, 2000);
     const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual, generateImage: (a) => generateNoPhotoFirstPostImage({ prompt: a.prompt, topicText: a.topicText }), logoPath: trialLogoAbsPath(trialDigest), verifySealedPiece: (a) => demoAi.qaGeneratedLogo({ b64: a.b64, business: a.business, apiKey: process.env.OPENAI_API_KEY || '' }) });
+    // (LOTE ETIQUETA-Y-TEXTO · pieza C3) QA DE ENCAJE SOBRE LA
+    // IMAGEN FINAL DEL WOW (ruta sync): la pieza 0 ya compuesta
+    // pasa por el juicio de encaje antes de que el payload exista.
+    // Texto compuesto que no encaja → se re-renderiza LIMPIA desde
+    // su spec; texto HORNEADO en la foto → la pieza queda en
+    // armado honesto y la cadena de fondo la genera (el contrato
+    // de siempre). Una pieza IA no se degrada a plantilla: su QA
+    // de compuesto ya corrió en su cadena — acá solo se registra.
+    // El veredicto viaja en spec.primer_posteo.qa_final.
+    try {
+      const p0 = posts && posts[0];
+      const sp0 = spec && spec.posts && spec.posts[0];
+      if (p0 && p0.type === 'image' && p0.image && !p0.armando && sp0) {
+        const m0 = /^data:image\/\w+;base64,(.+)$/.exec(p0.image);
+        const buf0 = m0 ? Buffer.from(m0[1], 'base64') : null;
+        const fin0 = buf0 ? await trialWowFinalQa(buf0, trialDigest) : null;
+        if (fin0 && spec.primer_posteo) {
+          spec.primer_posteo.qa_final = { accion: fin0.accion, superpuestos: fin0.qa.superpuestos, horneado: fin0.qa.horneado, detalle: fin0.qa.detalle };
+          if (fin0.accion === 'recomponer' && !p0.ai) {
+            const recomp = await demo.renderSpecPngs([{ ...sp0, text_mode: 'clean', headline: '', subline: '', pill: '', cta: '' }], { accent, btn });
+            if (recomp && recomp.bufs && recomp.bufs[0]) {
+              p0.image = 'data:image/jpeg;base64,' + recomp.bufs[0].toString('base64');
+              p0.text_mode = 'clean';
+            }
+            try { if (recomp && recomp.runDir) fs.rmSync(recomp.runDir, { recursive: true, force: true }); } catch (e) {}
+          } else if (fin0.accion === 'retener' && !p0.ai) {
+            posts[0] = { ...p0, image: null, armando: true };
+            console.error('[posta] QA final del wow (sync): texto HORNEADO ajeno al feed en la foto del slot 0 — la pieza queda en armado y la genera la cadena de fondo:', fin0.qa.detalle || '');
+          }
+        }
+      }
+    } catch (e) { /* la QA final jamás frena el armado */ }
     // (LOTE ONBOARDING-DIVERTIDO v760 · prompt por posteo) Cada posteo lleva
     // su prompt en palabras simples, desde lo realmente usado para esa pieza.
     (posts || []).forEach((pp, _i) => {
@@ -37801,6 +37890,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) Igual que en generate: la
     // señal de texto del feed viaja dentro del digest.
     if (trialDigest && estilo && estilo.firma && estilo.firma.texto_feed) trialDigest.texto_feed = estilo.firma.texto_feed;
+    // (LOTE ETIQUETA-Y-TEXTO · pieza C1) GARANTÍA, igual que en
+    // generate: sin señal, el digest queda con 'sin-senal' y su
+    // motivo registrado — nunca un null mudo (traza en el helper).
+    { const tfMotivo = trialTextoFeedGarantizado(trialDigest, estilo); if (tfMotivo) console.log('[texto-feed] generate-stream: señal ausente (' + tfMotivo + ') — registrada como sin-senal; el wow sale limpio', ig || ''); }
     // (LOTE IDIOMA-POSTEO-MARCA · v922) Igual que en /api/trial/generate:
     // el idioma del CONTENIDO es el idioma en que postea LA MARCA
     // (captions del feed primero, web después). `lang` sigue mandando
@@ -37905,6 +37998,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // resolución del slot 0, con la pieza FINAL y su veredicto.
     let slot0HitosPendientes = false;
     let slot0Emitido = false;
+    let wowBufLimpio0 = null; // (LOTE ETIQUETA-Y-TEXTO · C3) el buffer del wow recompuesto limpio por la QA final, si la hubo
     let feedClasificacion = null; // (PIEZA 1) veredicto auditable de la clasificación, viaja en el payload
     if (spec.primer_posteo && spec.primer_posteo.foto && spec.primer_posteo.foto.cadena === 'foto-real') {
       if (classifyPromise) {
@@ -38007,6 +38101,37 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       };
       const _prI = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
       posts[i].prompt_simple = _prI.prompt_simple; posts[i].prompt_detalle = _prI.prompt_detalle;
+      // (LOTE ETIQUETA-Y-TEXTO · pieza C3) QA DE ENCAJE SOBRE LA
+      // IMAGEN FINAL DEL WOW: antes de su primera emisión, la pieza
+      // 0 de foto real + renderer pasa por el juicio de encaje
+      // (trialWowFinalQa). Texto compuesto que no encaja con un
+      // feed limpio → la pieza se RECOMPONE sin texto (re-render
+      // limpio de su spec) y se emite la limpia. Texto HORNEADO en
+      // la foto fuente → la pieza se RETIENE a la cadena de rescate
+      // que ya corre abajo (rescueIdxS): cae al camino generado y
+      // la semana sigue, nunca se muestra así. El veredicto viaja
+      // en ppRecS.qa_final. Solo corre si la pieza no está ya
+      // retenida (rescate/clasificación la resuelven en su cadena).
+      if (i === 0 && !rescueIdxS.has(0) && !classifyPromise) {
+        const fin0 = await trialWowFinalQa(buf, trialDigest);
+        if (fin0) {
+          if (ppRecS) ppRecS.qa_final = { accion: fin0.accion, superpuestos: fin0.qa.superpuestos, horneado: fin0.qa.horneado, detalle: fin0.qa.detalle };
+          if (fin0.accion === 'recomponer') {
+            try {
+              const recomp = await demo.renderSpecPngs([{ ...withPhotos[0], text_mode: 'clean', headline: '', subline: '', pill: '', cta: '' }], { accent, btn, register: spec.feedRegister });
+              if (recomp && recomp.bufs && recomp.bufs[0]) {
+                wowBufLimpio0 = recomp.bufs[0];
+                posts[0] = { ...posts[0], image: 'data:image/jpeg;base64,' + wowBufLimpio0.toString('base64'), text_mode: 'clean' };
+                console.error('[posta] QA final del wow: texto compuesto fuera del feed limpio — la pieza se recompuso SIN texto:', fin0.qa.detalle || '');
+              }
+              try { if (recomp && recomp.runDir) fs.rmSync(recomp.runDir, { recursive: true, force: true }); } catch (e) {}
+            } catch (e) { /* la recomposición jamás frena el stream */ }
+          } else if (fin0.accion === 'retener') {
+            rescueIdxS.add(0);
+            console.error('[posta] QA final del wow: texto HORNEADO ajeno al feed en la foto del slot 0 — la pieza cae a la cadena de rescate:', fin0.qa.detalle || '');
+          }
+        }
+      }
       // (ADDENDUM 3A) La pieza en cadena de rescate NO se emite con el
       // póster: su evento llega tras el rescate (o en armado honesto).
       // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 5) El slot 0 también se
@@ -38020,6 +38145,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
+    // (LOTE ETIQUETA-Y-TEXTO · C3) Si la QA final recompuso el wow
+    // limpio, su buffer manda sobre el del render en todo lo que
+    // sigue (tour, video, payload): el JPG del runDir se pisa con
+    // la versión limpia para que ninguna superficie lea la vieja.
+    if (wowBufLimpio0) {
+      bufs[0] = wowBufLimpio0;
+      try { fs.writeFileSync(path.join(runDir, 'post-0.jpg'), wowBufLimpio0); } catch (e) {}
+    }
 
     // (v198) PIEZAS CON IA — solo si el feed clasificó ILUSTRADO: las 5
     // piezas de la semana se regeneran con el pipeline real (brief del
@@ -40768,7 +40901,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1051';
+const BUILD_ID = '20261105-v1052';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -96,6 +96,7 @@ console.log('\n[A] Pins estructurales: bifurcación, veredicto, rescate, QA, vit
     'Files ' + path.join(BASE, 'server.js') + ' and ' + path.join(ROOT, 'server.js') + ' differ',
     'Files ' + path.join(BASE, 'demo.js') + ' and ' + path.join(ROOT, 'demo.js') + ' differ',
     'Files ' + path.join(BASE, 'client-digest.js') + ' and ' + path.join(ROOT, 'client-digest.js') + ' differ',
+    'Files ' + path.join(BASE, 'demo-ai.js') + ' and ' + path.join(ROOT, 'demo-ai.js') + ' differ',
     'Files ' + path.join(BASE, 'demo-captions.js') + ' and ' + path.join(ROOT, 'demo-captions.js') + ' differ',
     'Files ' + path.join(BASE, 'public', 'app.js') + ' and ' + path.join(ROOT, 'public', 'app.js') + ' differ',
     'Files ' + path.join(BASE, 'public', 'index.html') + ' and ' + path.join(ROOT, 'public', 'index.html') + ' differ',
@@ -105,8 +106,8 @@ console.log('\n[A] Pins estructurales: bifurcación, veredicto, rescate, QA, vit
   ];
   const extra = lines.filter((l) => !expected.includes(l));
   const missing = expected.filter((l) => !lines.includes(l));
-  ok(extra.length === 0 && missing.length === 0, 'A20 (re-pin del aterrizaje v1020) diff vs base = el alcance del aterrizaje: los 6 archivos del lote + esta suite + las 2 suites vecinas re-pineadas en este mismo push (perfecto M0/M3 · v960)', { extra, missing });
-  eq(md5(path.join(ROOT, 'demo-ai.js')), md5(path.join(BASE, 'demo-ai.js')), 'A21 demo-ai.js intacto: el clasificador no se tocó (la corroboración vive en la ruta)');
+  ok(extra.length === 0 && missing.length === 0, 'A20 (re-pin del aterrizaje v1020 · re-pin v1052: el censo suma demo-ai.js, que el lote ETIQUETA-Y-TEXTO hace crecer de forma puramente aditiva con la QA final del wow) diff vs base = el alcance del aterrizaje: los 6 archivos del lote + esta suite + las 2 suites vecinas re-pineadas en este mismo push (perfecto M0/M3 · v960)', { extra, missing });
+  eq(md5(path.join(ROOT, 'demo-ai.js')), 'a16e78572cfd2f37336ec5ebf5218193', 'A21 (re-pin del aterrizaje v1052 · lote ETIQUETA-Y-TEXTO) demo-ai.js = el de ese lote (md5 pineado): crece de forma puramente aditiva con qaTrialWowFinal (+91 líneas, 0 removidas ni modificadas vs la base v1051, md5 99c4eba157486e499d9f9078785c79f5); qaComposedText y el clasificador intactos');
 }
 
 /* ── B · PIEZA 1 (señales del veto, a nivel spec) ───────────────── */

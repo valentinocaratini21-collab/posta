@@ -696,6 +696,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (mix === 'todo' && !det.length && rubroOk) fd.append('rubro_detectado', category);
     if (mix === 'libre') fd.append('producto_estrella', star);
     if (web) fd.append('web', web);
+    // (LOTE ETIQUETA-Y-TEXTO · pieza C1) THE PREFILL STYLE IS
+    // FORWARDED: the signature (with the feed text signal) was born
+    // in the prefill and died here — the form never sent it and the
+    // generation ran with no signal, silently (Blind Barber run).
+    // With no style in the response, nothing is sent and the server
+    // records the reason for the missing signal.
+    if (pf.j && pf.j.style) fd.append('estilo', JSON.stringify(pf.j.style));
     // (LOTE L6) If another tab or a reload already has a generation
     // running for this @, the trial_cache is polled instead of duplicating
     // the work: the server keeps generating even if the earlier fetch was

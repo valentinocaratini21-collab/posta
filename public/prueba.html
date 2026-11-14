@@ -696,6 +696,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (mix === 'todo' && !det.length && rubroOk) fd.append('rubro_detectado', category);
     if (mix === 'libre') fd.append('producto_estrella', star);
     if (web) fd.append('web', web);
+    // (LOTE ETIQUETA-Y-TEXTO · pieza C1) EL ESTILO DEL PREFILL SE
+    // REENVÍA: la firma (con la señal de texto del feed) nacía en el
+    // prefill y moría acá — el formulario nunca la mandaba y la
+    // generación corría sin señal, en silencio (corrida Blind
+    // Barber). Sin style en la respuesta, no se manda nada y el
+    // servidor registra el motivo de la señal ausente.
+    if (pf.j && pf.j.style) fd.append('estilo', JSON.stringify(pf.j.style));
     // (LOTE L6) Si otra pestaña o una recarga ya tiene una generación en
     // curso para este @, se polea el trial_cache en vez de duplicar el
     // trabajo: el servidor sigue generando aunque el fetch anterior se
