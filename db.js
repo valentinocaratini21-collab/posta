@@ -59,6 +59,27 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE INDEX IF NOT EXISTS idx_posts_due ON posts(status, scheduled_at);
 `);
+// (LOTE PAUSA-DURABLE) Frenos DELIBERADOS a nivel DÍA: un día que el dueño
+// vació a propósito (pausó el posteo de ese día, o el conserje decidió
+// «no sale» para esa fecha) queda registrado ACÁ, por (usuario, día),
+// porque la marca por posteo (posts.user_stopped) no guarda el día — la
+// pausa anula scheduled_at y el día se perdía: el relleno automático
+// (ensure del día, embudo semanal) lo trataba como un día libre más y
+// imponía un reemplazo (incidente 649→673; resurgimiento del 586).
+// Sin ALTERs: la tabla nace completa en este CREATE, pegado al de posts.
+// origen: 'dueno_pausa' | 'conserje_no_sale'. Sin TTL: el registro es
+// por día y un stop de un día pasado es inerte (los lectores solo
+// consultan el día que están por llenar).
+db.exec(`
+CREATE TABLE IF NOT EXISTS day_stops (
+  user_id INTEGER NOT NULL,
+  day_key TEXT NOT NULL,
+  post_id INTEGER,
+  origen TEXT NOT NULL DEFAULT 'dueno_pausa',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, day_key)
+);
+`);
 // Historial de versiones de borradores: cada edición por chat guarda la versión
 // anterior para poder "volver atrás" cuando el cliente lo pide.
 db.exec(`

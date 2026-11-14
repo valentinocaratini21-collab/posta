@@ -943,7 +943,7 @@ function pzShellHeadHTML(tab) {
   // del feed (homeHeadHTML). La máquina de escribir murió con el título
   // fijo: el título ya no varía.)
   return `<header class="pz-shell-head">
-    <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${en ? 'Open the chat with Posty' : 'Abrir el chat con Posty'}">
+    <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Open the chat with Posty' : 'Abrir el chat con Posty') : (en ? 'Go to Home' : 'Ir a Inicio')}">
       <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
       <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small>${en ? 'your community manager' : 'tu community manager'}</small></span>
     </button>
@@ -2102,11 +2102,11 @@ function pzNivelHoyHTML(d) {
         : (en ? 'Upload ' + que : 'Subí ' + que);
       const det = hecho
         ? (en ? 'Posty turns it into a post this week.' : 'Posty la convierte en un posteo de tu semana.')
-        : (en ? 'How: from your album in the chat — Posty turns it into a post this week.' : 'Cómo: desde tu álbum en el chat — Posty la convierte en un posteo de tu semana.');
+        : (en ? 'How: from Upload — Posty turns it into a post this week.' : 'Cómo: desde Subir — Posty la convierte en un posteo de tu semana.');
       total += 40;
       rows.push(hecho
         ? '<div class="' + clsFila(true) + '"><span class="pz-mision-ic" aria-hidden="true">📸</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp hecho">+40 XP</span><span class="pz-nivel-hoy-check" aria-hidden="true">✓</span></div>'
-        : '<button type="button" class="' + clsFila(false) + '" onclick="pzSftFotoAlChat()"><span class="pz-mision-ic" aria-hidden="true">📸</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp">+40 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></button>');
+        : '<button type="button" class="' + clsFila(false) + '" onclick="bbGo(\'#/app/subir\')"><span class="pz-mision-ic" aria-hidden="true">📸</span><span class="pz-mision-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span><span class="pz-mision-xp">+40 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></button>');
     }
     const reel = pzNivelReelSemana(d && d.posts);
     if (reel) {
@@ -7094,7 +7094,7 @@ function autopilotCardHTML(tag) {
     </div>
     <div id="apProg-${t}" style="margin-top:16px"></div>
     <div style="margin-top:4px">
-      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? <a href="#/app/chat" style="color:var(--cel);font-weight:700">Preguntale a Posty ${pzIc('chat', 13)}</a></p>
+      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? ${(typeof pzIsGuest === 'function' && pzIsGuest()) ? `<a href="#/app/chat" style="color:var(--cel);font-weight:700">Preguntale a Posty ${pzIc('chat', 13)}</a>` : `<a href="#/app/subir" style="color:var(--cel);font-weight:700">Pedilo en Subir</a>`}</p>
     </div>
   </div>`;
 }
@@ -15479,6 +15479,9 @@ async function pcSkip(id, card) {
         requestAnimationFrame(() => { card.classList.remove('pcard-gone'); card.style.pointerEvents = ''; });
       } },
       { label: 'Armar otro', fn: () => {
+        // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Armar otro: el invitado lo
+        // pide en su chat (prefill); el registrado lo pide en Subir.
+        if (typeof pzIsGuest === 'function' && !pzIsGuest()) { location.hash = '#/app/subir'; return; }
         try { sessionStorage.setItem('posty-chat-prefill', 'Armame un posteo para el ' + dayLabel); } catch (e) {}
         location.hash = '#/app/chat';
       } },
@@ -15494,7 +15497,9 @@ async function pcAskChange(id) {
     try { const posts = await api.get('/api/posts'); post = (Array.isArray(posts) ? posts : []).find(p => String(p.id) === String(id)) || null; } catch (e) {}
   }
   if (post) { hfOpenChatForPost(post); return; }
-  location.hash = '#/app/chat';
+  // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Sin posteo no hay superficie de
+  // cambio: el invitado cae en su chat; el registrado, en Inicio.
+  location.hash = (typeof pzIsGuest === 'function' && !pzIsGuest()) ? mzHomeHash() : '#/app/chat';
 }
 // --- Eliminar borrador: confirmación explícita + el mismo camino reversible
 // de pcSkip (Deshacer 5s). Solo borradores; nunca una pastilla principal.
@@ -16248,7 +16253,11 @@ async function runAutopilot(n, tag) {
       // Sin datos del negocio no generamos nada: primero el onboarding conversacional.
       // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
       if (r.need_profile) {
-        prog.innerHTML = `<div class="okmsg">para armar tu semana contame tu Instagram en el <a href="#/app/chat" style="color:var(--cel);font-weight:700">chat con Posty</a> y la armo con lo que ya publicás</div>`;
+        // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Sin datos del negocio: el
+        // invitado lo cuenta en su chat; el registrado, en Ajustes.
+        prog.innerHTML = (typeof pzIsGuest === 'function' && pzIsGuest())
+          ? `<div class="okmsg">para armar tu semana contame tu Instagram en el <a href="#/app/chat" style="color:var(--cel);font-weight:700">chat con Posty</a> y la armo con lo que ya publicás</div>`
+          : `<div class="okmsg">para armar tu semana contame tu Instagram en <a href="#/app/ajustes" style="color:var(--cel);font-weight:700">Ajustes</a> y la armo con lo que ya publicás</div>`;
         return;
       }
       ideas = r.ideas || [];
@@ -16432,9 +16441,15 @@ function rebuildFrustrated() {
     d.id = 'rebuildFrust';
     d.className = 'card';
     d.setAttribute('style', 'border:1.5px solid #FEC14D;background:#FFF9EC;margin:0 0 12px');
+    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Qué no cierra se cuenta donde
+    // vive el pedido: el invitado en su chat; el registrado en Subir
+    // (pedir algo de cero es expresar qué quiere).
+    const rbInv = (typeof pzIsGuest === 'function' && pzIsGuest());
     d.innerHTML = '<h3 style="margin:0 0 4px">' + pzIc('stop', 15) + ' Frenemos un toque</h3>' +
       '<p style="margin:0 0 12px;color:var(--mut);font-size:12.5px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata.</p>' +
-      '<a class="btn btn-primary btn-sm" href="#/app/chat">' + pzIc('chat', 18) + ' Contame en el chat qué no te cierra</a>';
+      (rbInv
+        ? '<a class="btn btn-primary btn-sm" href="#/app/chat">' + pzIc('chat', 18) + ' Contame en el chat qué no te cierra</a>'
+        : '<a class="btn btn-primary btn-sm" href="#/app/subir">' + pzIc('chat', 18) + ' Contame en Subir qué no te cierra</a>');
     main.prepend(d);
   }
 }
@@ -17041,7 +17056,11 @@ async function firstPublishFlow() {
         // El autopilot no generó (gate de ADN → chat, o cupo): decirlo de frente.
         say('🚀 Publicar mi primero', false);
         const m1 = mount();
-        if (m1) m1.innerHTML = '<div class="hint">No lo pude armar solo — <a href="#/app/chat" style="color:var(--cel);font-weight:700">contame de tu negocio en el chat</a> y lo hacemos juntos ' + pzIc('arrowDown', 13) + '</div>';
+        // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Contar el negocio: el
+        // invitado en su chat; el registrado en Ajustes.
+        if (m1) m1.innerHTML = (typeof pzIsGuest === 'function' && pzIsGuest())
+          ? '<div class="hint">No lo pude armar solo — <a href="#/app/chat" style="color:var(--cel);font-weight:700">contame de tu negocio en el chat</a> y lo hacemos juntos ' + pzIc('arrowDown', 13) + '</div>'
+          : '<div class="hint">No lo pude armar solo — <a href="#/app/ajustes" style="color:var(--cel);font-weight:700">contame de tu negocio en Ajustes</a> y lo hacemos juntos ' + pzIc('arrowDown', 13) + '</div>';
         return;
       }
       // runAutopilot re-renderiza la vista a los ~900ms: esperar al DOM nuevo
@@ -18974,9 +18993,13 @@ function xpStripHTML(sk, st, draftN) {
 }
 
 
-/* ---------- Handoff a Posty en el chat ---------- */
-// "Contame de tu negocio" vive en el chat: Posty lo pide ahí con grabador inline.
+/* ---------- Handoff a Posty ---------- */
+// (LOTE SIN-CHAT-REUBICACIÓN · 13/11) "Contame de tu negocio": para el
+// invitado sigue viviendo en su chat (Posty lo pide ahí con grabador
+// inline); para el registrado el camino vivo es Ajustes — el mismo
+// destino que usa su tarjeta sin-ADN («Contar de mi negocio»).
 function postyAskInChat(kind) {
+  if (typeof pzIsGuest === 'function' && !pzIsGuest()) { try { bbGo('#/app/ajustes'); } catch (e) { location.hash = '#/app/ajustes'; } return; }
   try { sessionStorage.setItem('posty-force-nudge', kind); } catch (e) {}
   location.hash = '#/app/chat';
 }
@@ -22927,12 +22950,20 @@ function pzHoySemanaMiniHTML(sem, en, pendProg) {
       : n === 0 ? (en ? 'Your week is just starting' : 'Tu semana recién arranca')
       : esDomingo ? (en ? `This week we hit ${n}/7 posts` : `esta semana cumplimos ${n}/7 posteos`)
       : (en ? `${n}/7 posts, your week is on its way` : `${n}/7 posteos, tu semana viene en camino`);
+    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Sin nada programado: el
+    // invitado va a su chat; el registrado, a «Que Posty lo arme».
+    const invitadoMini = (typeof pzIsGuest === 'function' && pzIsGuest());
     const accion = n >= 7
       ? (en ? 'We hit 7/7 — tomorrow a new week starts.' : 'cumplimos 7/7 — mañana arranca una nueva semana.')
       : (Number(pendProg || 0) > 0)
         ? (en ? 'The next ones are in your feed, with their day and time.' : 'Los próximos están en tu feed, con su día y su hora.')
-        : (en ? 'Nothing scheduled yet — tell Posty in the chat what you have to show.' : 'Todavía no hay nada programado — contale a Posty en el chat qué tenés para mostrar.');
-    const btnChat = (Number(pendProg || 0) > 0 || n >= 7) ? '' : `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button>`;
+        : invitadoMini
+          ? (en ? 'Nothing scheduled yet — tell Posty in the chat what you have to show.' : 'Todavía no hay nada programado — contale a Posty en el chat qué tenés para mostrar.')
+          : (en ? 'Nothing scheduled yet — Posty can build it.' : 'Todavía no hay nada programado — que lo arme Posty.');
+    const btnChat = (Number(pendProg || 0) > 0 || n >= 7) ? ''
+      : invitadoMini
+        ? `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button>`
+        : `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button>`;
     return `<div class="pz-semana-mini" aria-label="${en ? 'Week summary' : 'Resumen de la semana'}">${balls}</div>`
       + `<div class="pz-semana-insight">${pzIc('chartUp', 20)}<div><p><b>${titulo}</b> — ${accion}</p>${btnChat}</div></div>`;
   } catch (e) { return ''; }
@@ -23036,7 +23067,14 @@ function pzHoyTiraDetalleHTML(d, o) {
     }
     const p = d.post || null;
     if (!p) {
-      return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — tell Posty in the chat what you have to show.' : 'Hoy todavía no hay posteo — contale a Posty en el chat qué tenés para mostrar.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button></div></div>`;
+      // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) El día vacío es de Posty, no
+      // del cliente: el invitado conserva su chat (su superficie viva);
+      // el registrado lleva los dos caminos vivos — «Que Posty lo arme»
+      // (ensure: el posteo de hoy cae en la grilla) y «Subir algo mío».
+      if (typeof pzIsGuest === 'function' && pzIsGuest()) {
+        return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — tell Posty in the chat what you have to show.' : 'Hoy todavía no hay posteo — contale a Posty en el chat qué tenés para mostrar.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button></div></div>`;
+      }
+      return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — Posty can build it, or upload something of yours.' : 'Hoy todavía no hay posteo — Posty te lo arma, o subí algo tuyo.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="btn btn-soft btn-sm" data-pz-hoy-subir="1">${en ? 'Upload my own' : 'Subir algo mío'}</button></div></div>`;
     }
     const img = (p && p.image_path)
       ? `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
@@ -23134,6 +23172,11 @@ function pzHoyTiraBindDetalle(cont) {
     }
   } catch (e) {}
   cont.querySelectorAll('[data-pz-hoy-chat]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/chat'); else location.hash = '#/app/chat'; } catch (e) {} }; });
+  // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) La tarjeta del día vacío del
+  // registrado se recablea acá también (este binder corre tras cada tap
+  // de día): «Que Posty lo arme» y «Subir algo mío».
+  cont.querySelectorAll('[data-pz-hoy-armar]').forEach((b) => { b.onclick = () => { try { pzHoyArmarHoy(b); } catch (e) {} }; });
+  cont.querySelectorAll('[data-pz-hoy-subir]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/subir'); else location.hash = '#/app/subir'; } catch (e) {} }; });
   cont.querySelectorAll('[data-pz-boost-post]').forEach((b) => { b.onclick = () => { try { if (typeof pzBoostOpenById === 'function') pzBoostOpenById(b.getAttribute('data-pz-boost-post')); } catch (e) {} }; });
 }
 
@@ -23791,6 +23834,10 @@ function pzHoySpeechHTML(o) {
   const needOK = (o && typeof o.needOK === 'number') ? o.needOK : pendientes;
   const schedSolo = (o && typeof o.schedSolo === 'number') ? o.schedSolo : 0;
   let cuerpo = '';
+  // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) La rama final (sin semana) marca
+  // destArmar: para el registrado la burbuja dispara «Que Posty lo arme»
+  // en vez de abrir el chat retirado.
+  let destArmar = false;
   if (hoyPost) {
     const st = String(hoyPost.status || '');
     const ap = String(hoyPost.approval || 'pending');
@@ -23854,7 +23901,11 @@ function pzHoySpeechHTML(o) {
   } else if (haySemana) {
     cuerpo = en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`;
   } else {
-    cuerpo = en ? `Shall we build your week? Tell me what you have to show.` : `¿Armamos tu semana? Contame qué tenés para mostrar.`;
+    destArmar = true;
+    const invSpeech = (typeof pzIsGuest === 'function' && pzIsGuest());
+    cuerpo = en
+      ? (invSpeech ? `Shall we build your week? Tell me what you have to show.` : `Shall we build your week? Posty builds it from what you already post.`)
+      : (invSpeech ? `¿Armamos tu semana? Contame qué tenés para mostrar.` : `¿Armamos tu semana? Posty la arma con lo que ya publicás.`);
   }
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
@@ -23863,6 +23914,11 @@ function pzHoySpeechHTML(o) {
   // (#/app/schedule, «Revisá tu semana»), no al chat: el número tiene
   // que abrir lo que cuenta. Sin nada para revisar, el botón sigue
   // abriendo el chat.
+  // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Eso último ya no corre para el
+  // REGISTRADO: sin semana la burbuja dispara «Que Posty lo arme»
+  // (data-pz-hoy-armar → ensure) y en los estados informativos lleva a
+  // la semana (data-pz-hoy-semana → #/app/schedule). El invitado
+  // conserva el chat, que es su superficie viva.
   // (v846 · decisión Valentino 12:01: el saludo por hora («¡Buen día!»)
   // salió — era innecesario. La burbuja arranca directo con el cuerpo.)
   // (v879 · corrección Valentino 10/11 10:04) Sin cuerpo no hay burbuja:
@@ -23871,7 +23927,11 @@ function pzHoySpeechHTML(o) {
   // burbuja: en esos dos estados tampoco se rinde en Hoy (sigue en la
   // hoja del ritual).
   if (!cuerpo) return '';
-  const destAttr = needOK > 0 ? 'data-pz-hoy-revision="1"' : 'data-pz-hoy-chat="1"';
+  const esInvSpeech = (typeof pzIsGuest === 'function' && pzIsGuest());
+  const destAttr = needOK > 0 ? 'data-pz-hoy-revision="1"'
+    : esInvSpeech ? 'data-pz-hoy-chat="1"'
+    : destArmar ? 'data-pz-hoy-armar="1"'
+    : 'data-pz-hoy-semana="1"';
   return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" ${destAttr}><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }
 
@@ -23999,6 +24059,29 @@ async function pzHoyConserjeFill() {
   } catch (e) { try { slot.remove(); } catch (e2) {} }
 }
 
+// (LOTE SIN-CHAT-REUBICACIÓN · 13/11) «Que Posty lo arme»: el día vacío
+// es responsabilidad de Posty, no del cliente. Un toque → POST
+// /api/week/ensure (la misma maquinaria que Hoy ya dispara al cargar):
+// el servidor garantiza el posteo de hoy desde el fundamento y Hoy se
+// re-pinta con el posteo en la grilla, para aprobación de un toque.
+// Sin ADN mínimo el servidor responde reason:'no_dna' → el camino vivo
+// es Ajustes (el mismo destino «contar de mi negocio» que usa la
+// tarjeta sin-ADN del registrado). Sin plan, el botón se restaura.
+async function pzHoyArmarHoy(btn) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (btn) { btn.disabled = true; btn.textContent = en ? 'Building…' : 'Armando…'; }
+  let r = null;
+  // (COSTURA PAUSA-DURABLE) { armar: 1 } SOLO desde este botón: es el
+  // gesto deliberado del dueño sobre el día — el servidor levanta el
+  // stop durable del día frenado antes de asegurar. Las cargas
+  // automáticas de Hoy no mandan la marca y no destaban nada.
+  try { r = await api.post('/api/week/ensure', { armar: 1 }); } catch (e) { r = null; }
+  if (r && r.reason === 'no_dna') { try { bbGo('#/app/ajustes'); } catch (e) { location.hash = '#/app/ajustes'; } return; }
+  if (r && (r.ok || r.generating || r.complete)) { try { render(); } catch (e) {} return; }
+  if (btn) { btn.disabled = false; btn.textContent = en ? 'Have Posty build it' : 'Que Posty lo arme'; }
+  try { toast(en ? "Couldn't build it — try again" : 'No se pudo armar — probá de nuevo'); } catch (e) {}
+}
+
 // Cableado de Hoy (lo llama bindInicio): segmentador, mensaje→chat,
 // aprobar/cambiar/detalle por tarjeta, hoja de subida, conserje.
 function pzHoyBind(root) {
@@ -24008,6 +24091,13 @@ function pzHoyBind(root) {
   // (BANNER-REVISION · 12/11) El banner de revisión lleva a LA LISTA
   // (#/app/schedule, «Revisá tu semana»), no al chat.
   root.querySelectorAll('[data-pz-hoy-revision]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/schedule'); else location.hash = '#/app/schedule'; } catch (e) {} }; });
+  // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Caminos vivos del registrado:
+  // «Que Posty lo arme» (ensure), «Subir algo mío» (tab Subir) y la
+  // burbuja informativa → la semana. El data-pz-hoy-chat de arriba
+  // queda solo para las variantes del invitado.
+  root.querySelectorAll('[data-pz-hoy-armar]').forEach((b) => { b.onclick = () => { try { pzHoyArmarHoy(b); } catch (e) {} }; });
+  root.querySelectorAll('[data-pz-hoy-subir]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/subir'); else location.hash = '#/app/subir'; } catch (e) {} }; });
+  root.querySelectorAll('[data-pz-hoy-semana]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/schedule'); else location.hash = '#/app/schedule'; } catch (e) {} }; });
   root.querySelectorAll('[data-pz-hoy-aprobar]').forEach((b) => { b.onclick = () => pzHoyAprobarUno(b); });
   root.querySelectorAll('[data-pz-hoy-cambiar]').forEach((b) => { b.onclick = () => pzHoyCambiar(b.getAttribute('data-pz-hoy-cambiar')); });
   // (LOTE BOTONES-INICIO v914) Frenar y Eliminar del héroe de Inicio.
@@ -25277,7 +25367,10 @@ function pzNivelChip(clave, en) {
     semana_aceptada: ['#/app/schedule', 'Aceptar tu semana', 'Accept your week'],
     pieza_aceptada_primera: ['#/app/schedule', 'Aceptar piezas sin cambios', 'Accept pieces as-is'],
     semana_publicada: ['#/app/schedule', 'Revisar tu semana', 'Review your week'],
-    pregunta_respondida: ['#/app/chat', 'Responderle a Posty', 'Answer Posty'],
+    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) El registrado no tiene
+    // superficie de preguntas: el chip aterriza en Inicio (donde el
+    // router ya lo dejaba) sin nombrar el chat retirado.
+    pregunta_respondida: ['#/app/inicio', 'Seguir en Inicio', 'Continue in Home'],
   };
   const d = M[clave] || ['#/app/negocio', 'Ver lo que sabe de vos', 'See what it knows'];
   return { hash: d[0], label: en ? d[2] : d[1] };
@@ -29556,7 +29649,11 @@ async function pzCompartirPosteoChat(id) {
     if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
     try { track('chat_share_post', { id: pid }); } catch (e) {}
     const post = (r && r.post) || { id: pid };
-    try { pzHablarDePosteo(post); } catch (e) { location.hash = '#/app/chat'; }
+    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) El camino vivo es la
+    // conversación del posteo (pzHablarDePosteo); si eso falla, el
+    // invitado cae en su chat y el registrado en Inicio — nunca en la
+    // ruta retirada.
+    try { pzHablarDePosteo(post); } catch (e) { location.hash = (typeof pzIsGuest === 'function' && !pzIsGuest()) ? mzHomeHash() : '#/app/chat'; }
   } catch (e) {
     try { toast(en ? "I couldn't share it, try again" : 'No pude compartirlo, probá de nuevo'); } catch (e2) {}
   }
@@ -30165,7 +30262,14 @@ function bindInicio() {
     } else {
       // (LOTE CHATPANTALLA) La hoja se retiró: el pendiente se entrega
       // en la pantalla de chat (bindChatFull pinta el ancla y entrega).
-      if ((location.hash || '').split('?')[0] !== '#/app/chat') { location.hash = '#/app/chat'; }
+      // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Para el REGISTRADO esa
+      // pantalla ya no existe: el pendiente se entrega acá en Inicio
+      // (pintar el ancla + entregar el pedido), sin navegar a la ruta
+      // retirada. El invitado sigue yendo a su chat.
+      if ((location.hash || '').split('?')[0] !== '#/app/chat') {
+        if (typeof pzIsGuest === 'function' && !pzIsGuest()) { try { hfPaintAnchor(); } catch (e) {} try { pzCambioVozPromptDeliver(); } catch (e) {} }
+        else location.hash = '#/app/chat';
+      }
       else { try { hfPaintAnchor(); } catch (e) {} try { pzCambioVozPromptDeliver(); } catch (e) {} }
     }
   }
@@ -31149,11 +31253,22 @@ function bindApprovalPost() {
     render(); // re-render sin recargar la página
   };
   const ed = document.getElementById('apvEdit');
-  if (ed) ed.onclick = () => {
+  if (ed) ed.onclick = async () => {
     // (EDITAR-POSTEO · 4/11) Sin prefill: el campo queda limpio; la
     // tarjeta anclada (foto real + opciones en un toque) es el camino.
     // Un prefill viejo pendiente se descarta: sería otro contexto.
     try { sessionStorage.removeItem('posty-chat-prefill'); } catch (e) {}
+    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Editar = pedir un cambio sobre
+    // ESTE posteo. El invitado lo hace en su chat (ancla, como siempre);
+    // el registrado, en la conversación del posteo (pzHablarDePosteo —
+    // la misma superficie del botón «Hablar de este posteo»).
+    if (typeof pzIsGuest === 'function' && !pzIsGuest()) {
+      let pr = null;
+      try { pr = (typeof pzHablarResolver === 'function') ? await pzHablarResolver(ed.dataset.apvid) : null; } catch (e) {}
+      if (pr) { try { pzHablarDePosteo(pr); } catch (e) { location.hash = mzHomeHash(); } return; }
+      location.hash = mzHomeHash();
+      return;
+    }
     try { const id = ed.dataset.apvid; if (id && typeof hfAnchorForId === 'function') hfAnchorForId(id); } catch (e) {}
     location.hash = '#/app/chat';
   };

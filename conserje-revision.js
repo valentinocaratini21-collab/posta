@@ -13,9 +13,13 @@
 // · 'arreglar' devuelve el posteo a borrador + guarda la nota como regla de
 //   estilo; el reemplazo lo hace la pipeline de la mañana (generarlo de
 //   noche y que la mañana genere otro sería doble gasto).
-// · 'no_sale' rechaza el posteo y lo saca del slot (borrador). "No sale"
-//   significa "este posteo no", no "nada ese día": la pipeline siempre
-//   garantiza un posteo por día (ensureTodayPost genera uno si falta).
+// · 'no_sale' rechaza el posteo y lo saca del slot (borrador).
+//   (LOTE PAUSA-DURABLE — semántica corregida) "No sale" ahora frena
+//   también la FECHA: escribe day_stops y user_stopped=1, y ningún
+//   relleno (ensure ni embudo) impone un reemplazo ese día. La lectura
+//   vieja ("este posteo no, pero la pipeline garantiza otro") fue la
+//   puerta del resurgimiento del 586. Si el dueño quiere que Posty
+//   arme otro para esa fecha, el gesto es 'pedir', que borra el stop.
 // · A las 00:00, lo sin revisar CON problema queda retenido (no sale);
 //   lo limpio sin revisar lo decide el cliente a las 9:00 con su ritual.
 //   La revisión del dueño es una capa extra, nunca un veto sobre el
@@ -86,6 +90,36 @@ function shiftDays(ymd, n) {
     dt.setUTCDate(dt.getUTCDate() + n);
     return dt.toISOString().slice(0, 10);
   } catch (e) { return ''; }
+}
+
+// (LOTE PAUSA-DURABLE) Espejo de los frenos por DÍA de server.js
+// (day_stops, tabla creada en db.js; este ensure perezoso es el respaldo
+// para contextos que usan el módulo sin pasar por el boot completo).
+// Un día frenado no es un día libre para ningún relleno automático:
+// 'no_sale' lo escribe (origen 'conserje_no_sale'); 'pedir' y 'sale'
+// (los gestos deliberados que rellenan la fecha) lo borran.
+function ensureDayStopsTable(db) {
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS day_stops (
+      user_id INTEGER NOT NULL,
+      day_key TEXT NOT NULL,
+      post_id INTEGER,
+      origen TEXT NOT NULL DEFAULT 'dueno_pausa',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, day_key)
+    )`);
+  } catch (e) { /* sin tabla: los gestos siguen con su marca por posteo */ }
+}
+function dayStopSetC(db, uid, dayKey, postId, origen) {
+  if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(dayKey || ''))) return;
+  ensureDayStopsTable(db);
+  safe(() => db.prepare(`INSERT INTO day_stops (user_id, day_key, post_id, origen) VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, day_key) DO UPDATE SET post_id = excluded.post_id, origen = excluded.origen, created_at = datetime('now')`)
+    .run(uid, dayKey, postId || null, origen || 'conserje_no_sale'), null);
+}
+function dayStopClearC(db, uid, dayKey) {
+  if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(dayKey || ''))) return;
+  safe(() => db.prepare('DELETE FROM day_stops WHERE user_id = ? AND day_key = ?').run(uid, dayKey), null);
 }
 
 function ensureRevisionTable(db) {
@@ -366,7 +400,8 @@ function colaRevision(db, opts) {
 // Decidir sobre el posteo de mañana de un perfil.
 // 'sale': aprueba (programado) o programa+aprueba (propuesta).
 // 'arreglar': vuelve a borrador + regla de estilo con la nota.
-// 'no_sale': rechazado + fuera del slot (borrador).
+// 'no_sale': rechazado + fuera del slot (borrador) + la fecha frenada
+//   (day_stops + user_stopped=1 — LOTE PAUSA-DURABLE).
 // 'pedir': Posty lo arma (sin posteo todavía) — queda registrado.
 function decidirRevision(db, opts) {
   const o = opts || {};
@@ -386,7 +421,11 @@ function decidirRevision(db, opts) {
   // Pedir que Posty lo arme: no hay posteo todavía; queda registrado y la
   // pipeline de la mañana lo genera (no se genera de noche: el cupo y el
   // momento de generar son de la mañana).
+  // (LOTE PAUSA-DURABLE) 'pedir' es el gesto deliberado INVERSO del
+  // freno: borra el stop de la fecha — el dueño quiere que ese día se
+  // llene, y el ensure/embudo vuelven a poder operar sobre él.
   if (decision === 'pedir') {
+    dayStopClearC(db, uid, fecha);
     guardarDecision(db, uid, fecha, null, 'pedir', nota, 'dueno');
     logRevision(db, uid, null, 'revision_noche', 'Revisión noche ' + fecha + ': Posty lo arma.');
     return { ok: true, decision: 'pedir', user_id: uid, fecha_posteo: fecha, post_id: null };
@@ -410,6 +449,9 @@ function decidirRevision(db, opts) {
   try { db.exec('BEGIN IMMEDIATE'); } catch (e) { /* ya había transacción */ }
   try {
     if (decision === 'sale') {
+      // (LOTE PAUSA-DURABLE) 'sale' rellena la fecha por decisión del
+      // dueño: el stop de ese día se borra.
+      dayStopClearC(db, uid, fecha);
       if (post.status === 'draft') {
         // Programar la propuesta para mañana a la mejor hora de la cuenta.
         const hh = bestHourOf(db, uid);
@@ -436,10 +478,20 @@ function decidirRevision(db, opts) {
         } catch (e) { /* reglas opcionales: el arreglo no se frena */ }
       }
     } else if (decision === 'no_sale') {
-      // Rechazado y fuera del slot ahora mismo (no espera a las 17:00):
-      // la mañana genera otro si hace falta. El posteo queda como
-      // borrador, no se borra.
+      // Rechazado y fuera del slot ahora mismo (no espera a las 17:00).
+      // El posteo queda como borrador, no se borra.
+      // (LOTE PAUSA-DURABLE) El gesto se UNIFICA con la pausa del
+      // dueño: (a) suma user_stopped=1 — era el único freno que no lo
+      // escribía, y sin esa marca el embudo semanal lo resucitaba
+      // (caso 586: su UPDATE de agenda encima sobrescribía el
+      // approval); va en su propio UPDATE tolerante para que una DB
+      // sin la columna no frene la decisión — y (b) la FECHA queda
+      // frenada en day_stops: «no sale» es durable también a nivel
+      // día, ningún relleno agenda un reemplazo para esa fecha. El
+      // gesto inverso es 'pedir' («Posty lo arma»), que borra el stop.
       db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'rejected', error = '' WHERE id = ?`).run(post.id);
+      safe(() => db.prepare(`UPDATE posts SET user_stopped = 1 WHERE id = ?`).run(post.id), null);
+      dayStopSetC(db, uid, fecha, post.id, 'conserje_no_sale');
     }
     guardarDecision(db, uid, fecha, post.id, decision, nota, 'dueno');
     db.exec('COMMIT');

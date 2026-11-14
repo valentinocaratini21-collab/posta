@@ -263,10 +263,12 @@ t(htmlManana.includes('El de mañana') && htmlManana.includes('Mañana 19:00') &
 const htmlFut = sb.pzHoyTiraHTML(tiraPend, tiraOpts('2026-11-11'));
 t(htmlFut.includes('Todavía no hay posteo acá: los de la semana salen uno por uno, día por día.'),
   '§2: el día futuro bloqueado trae el mensaje del mock');
-// Hoy vacío: la invitación al chat sigue (no hay duplicado que matar).
+// Hoy vacío: la invitación al chat SALIÓ (RE-PIN lote SIN-CHAT-REUBICACIÓN:
+// la tarjeta del registrado ya no manda al chat retirado; trae
+// «Que Posty lo arme» + «Subir algo mío». Sin duplicado que matar.)
 const htmlSinPost = sb.pzHoyTiraHTML(sb.pzHoyTiraDias(semVacia, [], '2026-11-09', TZ), tiraOpts('2026-11-09'));
-t(htmlSinPost.includes('Hoy todavía no hay posteo') && htmlSinPost.includes('Abrir el chat'),
-  '§2: hoy vacío trae invitación al chat');
+t(htmlSinPost.includes('Hoy todavía no hay posteo') && htmlSinPost.includes('data-pz-hoy-armar') && htmlSinPost.includes('Subir algo mío') && !htmlSinPost.includes('Abrir el chat'),
+  '§2: hoy vacío trae el armado de Posty y Subir (sin invitación al chat)');
 // Dos posteos el mismo día (publicado 583 + programado 586): la
 // principal es el programado (hoyPostR1 prefiere scheduled); el
 // detalle del publicado sigue — la comparación es por id, no por día.

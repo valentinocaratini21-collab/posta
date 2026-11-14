@@ -15360,9 +15360,13 @@ function subirPlanDia(uid, kind, cuando) {
   const todayK = tzToday(tz);
   const monday = mondayKeyOf(todayK); const sunday = shiftDays(monday, 6);
   const diaValido = (k) => { const wd = weekdayOfYmd(k); if (closed.has(wd)) return false; if (kind === 'video' && wd !== 2 && wd !== 4) return false; return true; };
+  // (LOTE PAUSA-DURABLE) Un día frenado por el dueño (day_stops) NO es
+  // un día libre para el desplazamiento: el posteo de Posty que cede su
+  // día a un Subir salta los días frenados como salta los ocupados.
+  const stops = dayStopsSet(uid);
   const librePosteriorEnSemana = (k) => {
     const sun = shiftDays(mondayKeyOf(k), 6);
-    for (let d = shiftDays(k, 1); d <= sun; d = shiftDays(d, 1)) { if (d < todayK) continue; if (closed.has(weekdayOfYmd(d))) continue; if (!taken.has(d)) return d; }
+    for (let d = shiftDays(k, 1); d <= sun; d = shiftDays(d, 1)) { if (d < todayK) continue; if (closed.has(weekdayOfYmd(d))) continue; if (stops.has(d)) continue; if (!taken.has(d)) return d; }
     return null;
   };
   const intentar = (k) => {
@@ -15541,6 +15545,10 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
     const sl = armarSlotLabel(uid, plan.iso);
     const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(postId);
+    // (LOTE PAUSA-DURABLE) El Subir del propio cliente SÍ puede caer en
+    // un día frenado (es su gesto deliberado): al caer, el stop de ese
+    // día se borra — el dueño lo rellenó él.
+    try { const dkSub = ymdInTz((postRow && postRow.scheduled_at) || plan.iso, userTz(uid)); if (dkSub) dayStopClear(uid, dkSub); } catch (e) {}
     const slF = postRow && postRow.scheduled_at ? armarSlotLabel(uid, postRow.scheduled_at) : sl;
     return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, desplazado, semana_siguiente: !!plan.semana_siguiente });
   } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
@@ -16488,7 +16496,16 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     try { cmGusto.registrar(db, req.session.userId, post, 'rechazada'); } catch (e) {}
   } else if (action === 'unschedule') {
     // Frenar el autopiloto (2026-10-02): vuelve a borrador, no se publica.
+    // (LOTE PAUSA-DURABLE) El día se captura ANTES de que el UPDATE
+    // anule scheduled_at: el dueño vació ESE día a propósito y el día
+    // queda frenado en day_stops — ningún relleno automático (ensure,
+    // embudo semanal, desplazamiento de Subir) puede imponerle un
+    // reemplazo. Sin fecha (borrador puro), no hay día que marcar:
+    // queda solo la marca por posteo, como siempre. Las historias
+    // tienen su propio carril: no frenan el día del feed.
+    const diaFrenado = post.scheduled_at ? ymdInTz(post.scheduled_at, userTz(req.session.userId)) : null;
     db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending', user_stopped=1 WHERE id=?`).run(post.id);
+    if (diaFrenado && post.media_type !== 'story') dayStopSet(req.session.userId, diaFrenado, post.id, 'dueno_pausa');
     console.log(`[autopilot] usuario ${req.session.userId} frenó el post ${post.id}`);
   } else if (action === 'save-draft') {
     // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
@@ -16622,6 +16639,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     );
     // (CARRIL EXPRÉS) Al programarse en la semana deja de ser exprés.
     if (post.source === 'express') { try { db.prepare(`UPDATE posts SET source='' WHERE id=?`).run(post.id); } catch (e) {} }
+    // (LOTE PAUSA-DURABLE) Programar a mano ES el arrepentimiento: el
+    // stop del día destino se borra — el dueño rellenó el día él mismo
+    // y el día vuelve al régimen normal.
+    try { const dkProg = ymdInTz(finalWhen, userTz(req.session.userId)); if (dkProg) dayStopClear(req.session.userId, dkProg); } catch (e) {}
     clearPublishingStopped(req.session.userId); // (v275) programar a mano es reanudar la cuenta
     lintRes = scheduleLintForPost(req.session.userId, post.id); // (v198-A) lint al programar
     // 🎓 Autopiloto graduado (2026-10-02): si programó SIN editar, es un voto
@@ -16852,12 +16873,25 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         return res.json({ ok: true, generating: false, reason: 'no_dna', week_key: wk });
       }
     } catch (e) { /* si falla el chequeo, dejar que el pipeline decida */ }
+    // (COSTURA PAUSA-DURABLE × SIN-CHAT-REUBICACIÓN) El toque en
+    // «Que Posty lo arme» es un gesto deliberado del dueño SOBRE el
+    // día de hoy: el cliente lo marca con { armar: 1 } SOLO desde ese
+    // botón (pzHoyArmarHoy). Ese gesto levanta el stop durable del
+    // día (dayStopClear con la misma day_key que lee ensureTodayPost)
+    // y salta el cooldown anti-loop, que existe para las aperturas
+    // automáticas de la app. Las llamadas sin la marca (la carga de
+    // Hoy, la push 9:00, el ritual) NO tocan el stop: un día frenado
+    // por el dueño sigue frenado hasta su gesto.
+    const toqueArmar = !!(req.body && (req.body.armar === 1 || req.body.armar === true));
+    if (toqueArmar) {
+      try { dayStopClear(uid, morningPostPush.dayKeyInTz(new Date(), tz)); } catch (e) {}
+    }
     // Cooldown anti-loop (2026-10-14): si el último intento de HOY
     // falló hace menos de 10 minutos, no re-disparar en cada apertura
     // de la app. La push 9:00 y el ritual reintentan por su lado.
     try {
       const last = LAST_WEEK_RESULT.get(uid);
-      if (last && last.weekKey === wk && !last.ok && last.reason !== 'running' && Date.now() - (last.at || 0) < 10 * 60 * 1000) {
+      if (!toqueArmar && last && last.weekKey === wk && !last.ok && last.reason !== 'running' && Date.now() - (last.at || 0) < 10 * 60 * 1000) {
         return res.json({ ok: true, generating: false, reason: last.reason || 'retry_cooldown', count: 0, week_key: wk });
       }
     } catch (e) {}
@@ -17203,6 +17237,10 @@ function bestHourDe(uid) {
 // borradores (guard de estado: si otro camino ya lo programó, no hay
 // doble programación). Devuelve el posteo programado o null.
 function programarHoy(uid, postId, tz, hoy) {
+  // (LOTE PAUSA-DURABLE) Defensa en profundidad: jamás agendar en un
+  // día frenado por el dueño, venga el llamador de donde venga. Es la
+  // última puerta antes del UPDATE de agenda y cuesta una lectura.
+  if (dayStopGet(uid, hoy)) return null;
   const iso = zonedWallToUtc(`${hoy} ${String(bestHourDe(uid)).padStart(2, '0')}:00`, tz);
   if (!iso) return null;
   // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE) Nunca programar a una
@@ -17300,6 +17338,18 @@ async function ensureTodayPost(uid, tz, now) {
     try {
       if (!planOrTrialOk(uid)) return { ok: false, reason: 'no_plan' };
       if (closedDaysOf(uid).has(weekdayOfYmd(hoy))) return { ok: false, reason: 'dia_cerrado' };
+      // (LOTE PAUSA-DURABLE) Cuenta frenada: el embudo semanal ya
+      // respetaba users.publishing_stopped; el ensure del día ni la
+      // leía (una cuenta con freno administrativo recibía igual un
+      // posteo generado y agendado por acá).
+      if (publishingStopped(uid)) return { ok: false, reason: 'publishing_stopped' };
+      // (LOTE PAUSA-DURABLE) Día frenado por el dueño (day_stops): ni
+      // rescate de borrador, ni generación, ni agenda — el día vacío
+      // ES la decisión del dueño (incidente 649→673: el ensure creó
+      // un reemplazo el mismo minuto de la pausa). El reason viaja a
+      // /api/week/ensure → LAST_WEEK_RESULT, para que la superficie
+      // honesta sea la tarjeta de día vacío y no el «armando».
+      if (dayStopGet(uid, hoy)) return { ok: false, reason: 'dia_frenado_dueno' };
       const at = now || new Date();
       // 1) Programado hoy: se usa tal cual, no se regenera.
       let sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
@@ -17939,6 +17989,9 @@ function acceptAllDrafts(uid, items, opts) {
     let sinEditar = true;
     try { const s = db.prepare('SELECT client_signal FROM post_signals WHERE user_id = ? AND post_id = ?').get(uid, d.id); if (s && s.client_signal === 'edited') sinEditar = false; } catch (e) {}
     upd.run(when, d.id);
+    // (LOTE PAUSA-DURABLE) Aceptar un posteo PARA un día borra el stop
+    // de ese día: fue el dueño quien lo rellenó.
+    try { const dkAcc = ymdInTz(when, userTz(uid)); if (dkAcc) dayStopClear(uid, dkAcc); } catch (e) {}
     try { recordSignal(uid, d, 'approved'); } catch (e) {}
     if (sinEditar) piezasPrimera.push(d.id);
     acceptedItems.push({ id: d.id, scheduled_at: when });
@@ -20492,6 +20545,12 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
   } catch (e) { /* no bloquea */ }
   const pools = weekQuotaPools(uid);
   const closedSet = closedDaysOf(uid);
+  // (LOTE PAUSA-DURABLE) Los días frenados por el dueño (day_stops)
+  // entran al set de días ocupados: un día vaciado a propósito NUNCA
+  // es el «primer día libre» de su semana (era la puerta del
+  // resurgimiento del 586: el «no sale» del conserje volvía agendado
+  // al primer hueco). Si no quedan días, el borrador espera.
+  try { for (const dkStop of dayStopsSet(uid)) taken.add(dkStop); } catch (e) { /* no bloquea */ }
   // DIRECCIÓN DE FEED (v332): si el director compuso alguna de estas
   // semanas, el orden de salida de las piezas FEED es el compuesto (las
   // historias conservan el suyo). El mapa de slots no cambia — días y
@@ -20600,6 +20659,46 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
     scheduled.push({ id: d.id, scheduled_at: iso, week_key: monday });
   }
   return { scheduled, waiting };
+}
+
+// ⛔ (LOTE PAUSA-DURABLE) Frenos DELIBERADOS a nivel DÍA (tabla
+// day_stops, creada en db.js): un día que el dueño vació A PROPÓSITO no
+// es un día libre para ningún relleno automático. La marca por posteo
+// (posts.user_stopped) no alcanzaba: el relleno pregunta por DÍA y la
+// pausa borra la fecha (scheduled_at=NULL), así que el día se perdía —
+// el ensure creó un reemplazo el mismo minuto de la pausa (incidente
+// 649→673, 13/11) y el embudo semanal re-agendó un «no sale» del
+// conserje en el primer día libre (caso 586). Escritores: el PATCH
+// action='unschedule' (captura el día ANTES de anular la fecha) y el
+// 'no_sale' del conserje (conserje-revision.js tiene el espejo).
+// Lectores: ensureTodayPost, scheduleDraftsPerWeek (los días frenados
+// son días ocupados), programarHoy (defensa en profundidad) y el
+// desplazamiento por cadencia de Subir. El stop de un día se borra SOLO
+// con un gesto deliberado del dueño SOBRE ESE DÍA: programarlo o
+// aceptarlo (PATCH / acceptAllDrafts / schedule-all manual), el 'pedir'
+// o 'sale' del conserje, un Subir que cae en ese día, o la acción
+// «Que Posty lo arme» de la tarjeta de día vacío. Los días vacíos NO
+// deliberados no tienen stop: el relleno vigente sigue intacto.
+function dayStopGet(uid, dayKey) {
+  try { return db.prepare('SELECT user_id, day_key, post_id, origen FROM day_stops WHERE user_id = ? AND day_key = ?').get(uid, dayKey) || null; } catch (e) { return null; }
+}
+function dayStopSet(uid, dayKey, postId, origen) {
+  if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(dayKey || ''))) return false;
+  try {
+    db.prepare(`INSERT INTO day_stops (user_id, day_key, post_id, origen) VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, day_key) DO UPDATE SET post_id = excluded.post_id, origen = excluded.origen, created_at = datetime('now')`)
+      .run(uid, dayKey, postId || null, origen || 'dueno_pausa');
+    return true;
+  } catch (e) { return false; }
+}
+function dayStopClear(uid, dayKey) {
+  if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(String(dayKey || ''))) return;
+  try { db.prepare('DELETE FROM day_stops WHERE user_id = ? AND day_key = ?').run(uid, dayKey); } catch (e) {}
+}
+function dayStopsSet(uid) {
+  const s = new Set();
+  try { for (const r of db.prepare('SELECT day_key FROM day_stops WHERE user_id = ?').all(uid)) s.add(r.day_key); } catch (e) {}
+  return s;
 }
 
 // ⛔ Freno a nivel CUENTA (fix v275, 2026-10-20): users.publishing_stopped.
@@ -20777,6 +20876,11 @@ app.post('/api/posts/schedule-all', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'no_slots', waiting, message: 'No encontramos días libres en la semana de tus posteos para programarlos.' });
   }
   if (scheduled.length) clearPublishingStopped(uid); // (v275) programar todo a mano es reanudar la cuenta
+  // (LOTE PAUSA-DURABLE) «Programar mi semana» es un gesto del dueño:
+  // los días que recibieron un posteo en ESTA corrida quedan operando
+  // (su stop se borra). Los llamadores automáticos del embudo
+  // (scheduleAllDrafts) NO pasan por acá: no borran ningún stop.
+  try { const tzAll = userTz(uid); for (const sAll of scheduled) { const dkAll = ymdInTz(sAll.scheduled_at, tzAll); if (dkAll) dayStopClear(uid, dkAll); } } catch (e) {}
   res.json({ ok: true, scheduled, waiting });
   // ===== Track 4 "Pipeline perpetuo" =====
   // Al programar la semana N, la N+1 se empieza a armar SOLA en segundo plano.
@@ -38934,7 +39038,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1024';
+const BUILD_ID = '20261105-v1025';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
