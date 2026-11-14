@@ -27154,7 +27154,7 @@ async function subirView() {
   const en = pzVozEn();
   PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = ''; PZ_SUBIR.todo = false; PZ_SUBIR.busy = false;
   PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
-  PZ_EVENTO.es = false; PZ_EVENTO.nombre = ''; PZ_EVENTO.nombreOk = false; PZ_EVENTO.leido = ''; PZ_EVENTO.fecha = ''; PZ_EVENTO.caraAsset = 0; PZ_EVENTO.caraThumb = ''; PZ_EVENTO.postId = 0; PZ_EVENTO.pedidoId = 0; PZ_EVENTO.busy = false;
+  PZ_EVENTO.es = false; PZ_EVENTO.respondida = false; PZ_EVENTO.nombre = ''; PZ_EVENTO.nombreOk = false; PZ_EVENTO.leido = ''; PZ_EVENTO.fecha = ''; PZ_EVENTO.caraAsset = 0; PZ_EVENTO.caraThumb = ''; PZ_EVENTO.postId = 0; PZ_EVENTO.pedidoId = 0; PZ_EVENTO.busy = false;
   PZ_CERO.idea = ''; PZ_CERO.ent = null; PZ_CERO.conf = { quien: false, fecha: false, que: false }; PZ_CERO.datos = { nombre: '', quien: '', fecha: '', que: '' }; PZ_CERO.caraAsset = 0; PZ_CERO.caraThumb = ''; PZ_CERO.postId = 0; PZ_CERO.pedidoId = 0; PZ_CERO.busy = false;
   const chips = (q, opts) => `<div class="chips">${opts.map(o => `<button type="button" class="chip${o.on ? ' on' : ''}" data-subir-q="${q}" data-subir-v="${o.v}">${o.on ? '✓ ' : ''}${o.t}</button>`).join('')}</div>`;
   // (LOTE SUBIR-SIMPLE · 13/11) Un solo camino de entrada de material: el «+» abre
@@ -27168,7 +27168,7 @@ async function subirView() {
     <input type="file" id="pzSubirFile" accept="image/*,video/*" hidden>
     <div id="pzSubirUp"></div>
     <div class="preg-card pz-ev" id="pzEvCard">
-      <div class="kick"><img src="/posty-logo.png" alt=""> ${en ? 'DO YOU HAVE A SPECIAL DATE?' : '¿TENÉS UNA FECHA ESPECIAL?'}</div>
+      <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'DO YOU HAVE A SPECIAL DATE?' : '¿TENÉS UNA FECHA ESPECIAL?'}</div>
       <div class="q"><p>${en ? 'Is it an event with a date?' : '¿Es un evento con fecha?'}</p><div class="chips"><button type="button" class="chip" data-ev-es="si">${en ? 'Yes, it is an event' : 'Sí, es un evento'}</button><button type="button" class="chip on" data-ev-es="no">✓ No</button></div></div>
       <div id="pzEvPanel" hidden>
         <div class="q"><p>${en ? "What's the event called?" : '¿Cómo se llama el evento?'}</p>
@@ -27187,8 +27187,8 @@ async function subirView() {
         <div class="pz-subir-err" id="pzEvErr" hidden></div>
       </div>
     </div>
-    <div class="preg-card pz-cero" id="pzCeroCard">
-      <div class="kick"><img src="/posty-logo.png" alt=""> ${en ? 'BUILD IT FROM SCRATCH?' : '¿LO ARMAMOS DE CERO?'}</div>
+    <div class="preg-card pz-cero" id="pzCeroCard" hidden>
+      <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'BUILD IT FROM SCRATCH?' : '¿LO ARMAMOS DE CERO?'}</div>
       <p class="pz-cero-t">${en ? 'Tell me an idea in one line — by voice or in writing — and Posty shows you what it understood so you can confirm it. Nothing is built on unconfirmed data.' : 'Contame una idea en una frase — por voz o escrita — y Posty te devuelve lo que entendió para que lo confirmes. Nada se arma con datos sin confirmar.'}</p>
       <textarea id="pzCeroIdea" rows="2" maxlength="400" placeholder="${en ? 'E.g.: DJ Martín plays at the bar on Friday' : 'Ej.: el viernes toca DJ Martín en el bar'}"></textarea>
       <section class="pz-voz pz-cero-voz" data-pz-voz="cero">
@@ -27208,7 +27208,7 @@ async function subirView() {
       <div class="q"><p>${en ? 'The caption?' : '¿El caption?'}</p>${chips('caption', [{ v: 'posty', t: en ? 'You write it' : 'Escribilo vos', on: 1 }, { v: 'mio', t: en ? 'I have mine' : 'Ya tengo el mío' }])}<div id="pzSubirCapWrap" hidden><textarea id="pzSubirCapTxt" rows="3" placeholder="${en ? 'Paste your caption…' : 'Pegá tu caption…'}"></textarea></div></div>
       <div class="q" id="pzSubirQVideo" hidden><p>${en ? "It's a video: subtitles and polish?" : 'Si es un video: ¿subtítulos y mejora?'}</p>${chips('subs', [{ v: 'si', t: en ? 'Yes, do it' : 'Sí, hacelo', on: 1 }, { v: 'no', t: en ? 'No need' : 'No hace falta' }])}</div>
     </div>
-    <section class="pz-voz voz-op" data-pz-voz="extra" id="pzSubirVozOp" hidden>
+    <section class="pz-voz voz-op" data-pz-voz="extra" id="pzSubirVozOp">
       <div class="voz-op-txt"><div class="vq">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div><div class="vs" data-subir-voz-txt>${en ? 'Tell Posty with a voice note and we\'ll build it together.' : 'Contale a Posty con una nota de voz y la armamos juntos.'}</div></div>
       <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
       <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
@@ -27251,7 +27251,10 @@ async function pzSubirUpload(file) {
     // preguntas recién cuando existen (con la pieza ya subida).
     const todoPreg = document.getElementById('pzSubirTodoPreg'); if (todoPreg) todoPreg.hidden = false;
     const qv = document.getElementById('pzSubirQVideo'); if (qv) qv.hidden = PZ_SUBIR.kind !== 'video';
-    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = false;
+    // (LOTE SUBIR-AVATAR-DEDUP) La tarjeta de voz opcional es la puerta
+    // de idea solo mientras el flujo evento/cero no se activó; con el
+    // flujo activo la puerta es la tarjeta de cero y esta se oculta.
+    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = (typeof PZ_EVENTO !== 'undefined' && !!PZ_EVENTO.respondida);
     const listo = document.getElementById('pzSubirListo'); if (listo) listo.hidden = false;
     if (PZ_SUBIR.todo) { PZ_SUBIR.todo = false; pzSubirResolver(true); }
     try { pzEvSyncFlyer(); } catch (e) {}
@@ -27354,7 +27357,10 @@ async function pzSubirResolver(todoMode) {
     // (LOTE SUBIR-CABECERA · 13/11) Sin preguntas a la vista, la tarjeta
     // dorada vuelve a no anunciarlas (el formulario queda para otro ítem).
     const todoPreg2 = document.getElementById('pzSubirTodoPreg'); if (todoPreg2) todoPreg2.hidden = true;
-    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = true;
+    // (LOTE SUBIR-AVATAR-DEDUP) Al vaciarse la bandeja, la puerta de
+    // idea vuelve a su estado según el flujo: la tarjeta de voz si el
+    // flujo evento/cero no se activó; si se activó, manda la de cero.
+    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = (typeof PZ_EVENTO !== 'undefined' && !!PZ_EVENTO.respondida);
     if (listo) listo.hidden = true;
     try { cardScrollRecibo(); } catch (e) {}
   } catch (e) {
@@ -27405,7 +27411,11 @@ function bindSubir() {
    devuelve lo entendido para confirmar/corregir con toques — sin
    dato confirmado no se crea nada. La foto de una persona aportada
    entra como foto: el flyer se compone alrededor, jamás se redibuja. */
-const PZ_EVENTO = { es: false, nombre: '', nombreOk: false, leido: '', fecha: '', caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
+// (LOTE SUBIR-AVATAR-DEDUP · 14/11) `respondida` marca que la pregunta
+// del evento ya se tocó (sí o no): desde ahí el flujo evento/cero es LA
+// puerta de idea de la vista y la tarjeta de voz opcional se oculta —
+// una sola puerta de idea visible a la vez en Subir.
+const PZ_EVENTO = { es: false, respondida: false, nombre: '', nombreOk: false, leido: '', fecha: '', caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
 const PZ_CERO = { idea: '', ent: null, conf: { quien: false, fecha: false, que: false }, datos: { nombre: '', quien: '', fecha: '', que: '' }, caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
 function pzEvFechaLinda(ymd) {
   try {
@@ -27450,7 +27460,7 @@ function pzEvReciboPintar(r, caraPendiente) {
   if (!card) {
     card = document.createElement('div');
     card.className = 'recibo';
-    card.innerHTML = `<div class="r-head"><img src="/posty-logo.png" alt=""><div><div class="t">${en ? 'Done, I have it' : 'Listo, ya lo tengo'}</div><div class="s">${en ? 'This is what I will do:' : 'Esto es lo que voy a hacer:'}</div></div></div><div class="r-items"></div>`;
+    card.innerHTML = `<div class="r-head"><img src="/ai-avatar.png" alt=""><div><div class="t">${en ? 'Done, I have it' : 'Listo, ya lo tengo'}</div><div class="s">${en ? 'This is what I will do:' : 'Esto es lo que voy a hacer:'}</div></div></div><div class="r-items"></div>`;
     cont.appendChild(card);
   }
   const items = card.querySelector('.r-items');
@@ -27680,6 +27690,7 @@ function bindEventoCero() {
     b.onclick = () => {
       const v = b.getAttribute('data-ev-es');
       PZ_EVENTO.es = v === 'si';
+      PZ_EVENTO.respondida = true;
       document.querySelectorAll('[data-ev-es]').forEach(x => {
         const on = x === b;
         x.classList.toggle('on', on);
@@ -27687,6 +27698,13 @@ function bindEventoCero() {
       });
       const panel = document.getElementById('pzEvPanel');
       if (panel) panel.hidden = !PZ_EVENTO.es;
+      // (LOTE SUBIR-AVATAR-DEDUP) Respondida la pregunta, el flujo
+      // evento/cero queda como la única puerta de idea visible: entra
+      // la tarjeta de cero y sale la tarjeta de voz opcional.
+      const ceroCard = document.getElementById('pzCeroCard');
+      if (ceroCard) ceroCard.hidden = false;
+      const vozOp = document.getElementById('pzSubirVozOp');
+      if (vozOp) vozOp.hidden = true;
       if (PZ_EVENTO.es) {
         pzEvSyncFlyer();
         // Con flyer ya subido, el nombre se lee solo: el cliente solo

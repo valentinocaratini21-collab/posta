@@ -6392,6 +6392,7 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .chip.on{background:linear-gradient(180deg,#35A2DB,#1E82BE);border-color:#1B76AC;color:#fff;box-shadow:0 5px 10px rgba(39,147,200,.38),inset 0 1px 1px rgba(255,255,255,.45),inset 0 -2px 3px rgba(0,60,100,.25);font-weight:800}
 .pz-subir .q textarea{width:100%;margin-top:9px;border:1.5px solid #E0E9EF;border-radius:14px;padding:10px 12px;font-family:inherit;font-size:14px;color:#0A1E33;background:#fff;resize:vertical}
 .pz-subir .voz-op{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px dashed #C8D4DC;border-radius:20px;padding:12px 14px;margin-top:14px}
+.pz-subir .voz-op[hidden]{display:none}
 .pz-subir .voz-op .voz-op-txt{flex:1}
 .pz-subir .voz-op .mic-s{width:42px;height:42px;flex:none;border-radius:50%;background:linear-gradient(180deg,#FFD35C,#F2B63D);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 12px rgba(254,193,77,.45),inset 0 2px 2px rgba(255,255,255,.7);color:#0A1E33;cursor:pointer;touch-action:none}
 .pz-subir .voz-op .vq{font-size:14.5px;font-weight:800;color:#0A1E33}
