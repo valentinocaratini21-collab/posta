@@ -2573,6 +2573,87 @@ function trimFunctionTail(s) {
   if (w.length) w[w.length - 1] = w[w.length - 1].replace(/[,;:]+$/, '');
   return w.join(' ');
 }
+/* (LOTE CAPTIONS-DE-LA-SEMANA) FORMA DE ARRANQUE DE ORACIÓN de un
+ * tema: cuando una plantilla interpola el tema CRUDO como arranque de
+ * la oración, la primera letra va en mayúscula y el resto queda
+ * intacto — es lo que el titular hermano del bloque social ya hacía
+ * a mano para una sola palabra. Un tema que abre con dígito («2x1…»)
+ * o ya capitalizado no se toca. La corrida Blind Barber (posteo 675)
+ * salió «bar is one of the most requested things…» porque la plantilla
+ * de caption interpolaba el tema de temas_feed ('bar') sin esta forma,
+ * mientras su titular sí capitalizaba. */
+function capStartText(s) {
+  const t = String(s || '');
+  const m = t.match(/^(\s*["'«“”(\[]?)([a-záéíóúñüàèìòùâêîôûäëïöüç])/);
+  if (!m) return t;
+  return m[1] + m[2].toUpperCase() + t.slice(m[0].length);
+}
+/* (LOTE CAPTIONS-DE-LA-SEMANA) ¿Alguna oración del caption arranca en
+ * minúscula? Se mira el arranque del caption y el de cada oración
+ * (corte tras . ! ? …). No es defecto: abrir con dígito («3 claves…»,
+ * la palabra tras el número va en minúscula por convención), abrir con
+ * ¿/¡ (la apertura española lleva la primera palabra en minúscula) ni
+ * que la primera letra tras un emoji/símbolo inicial sea mayúscula. */
+function captionArranqueMinuscula(caption) {
+  // Alguna entrada del catálogo guarda los saltos como «\n» literal:
+  // se juzga el caption COMO SE LEE, con los saltos normalizados.
+  for (const rawLine of String(caption || '').replace(/\\n/g, '\n').split(/\n+/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    for (const seg of line.split(/(?<=[.!?…])\s+/)) {
+      const t = seg.replace(/^[\s"'«“”(\[]+/, '');
+      if (!t) continue;
+      const ch = t.charAt(0);
+      if (ch === '¿' || ch === '¡' || /[0-9]/.test(ch)) continue;
+      const m = t.match(/\p{L}/u);
+      if (m && /[a-záéíóúñüàèìòùâêîôûäëïöüç]/.test(m[0])) return true;
+    }
+  }
+  return false;
+}
+/* (LOTE CAPTIONS-DE-LA-SEMANA) Espejos ES de las clases de fragmento
+ * EN: apertura con palabra de función + coma (el resto de una frase
+ * cortada en el minado, nunca una apertura válida) y cola colgante sin
+ * puntuación de cierre. Conservadores a propósito: la cola solo se
+ * juzga en líneas SIN cierre, como la regla (2) de enSpliceLint. */
+const ES_CAPTION_OPENERS = /^\s*(desde|cuando|mientras|porque|aunque|con|sin|por|para|donde|y|pero|o|en|a|de|del)\s*,/i;
+const ES_HANGING_TAIL = new Set(['que', 'cuando', 'mientras', 'porque', 'aunque', 'donde', 'como', 'si', 'de', 'del', 'en', 'con', 'sin', 'por', 'para', 'a', 'al', 'la', 'el', 'los', 'las', 'un', 'una', 'su', 'sus', 'y', 'o', 'e', 'u', 'lo', 'le', 'se']);
+/* (LOTE CAPTIONS-DE-LA-SEMANA) PUERTA DE TEXTO DE LOS CAPTIONS DE LA
+ * SEMANA: devuelve la clase de defecto ('arranque-minuscula' |
+ * 'fragmento') o null si el caption pasa. Hasta este lote la única
+ * puerta de texto era la del slot 0 (primerPosteoGate, y solo la clase
+ * 6C de fragmentos EN): los captions de los slots 1..n no pasaban por
+ * NINGUNA — y la clase del arranque en minúscula por tema crudo
+ * interpolado no la cazaba nadie en ningún slot (diagnóstico Blind
+ * Barber, punto 6). La puerta corre en mk (el tema no nace) y en el
+ * armado del spec (demo.js), fail-closed con registro en ambos. */
+function captionPuertaTexto(caption, opts) {
+  const o = opts || {};
+  const cap = String(caption || '').replace(/\\n/g, '\n');
+  if (!cap.trim()) return null;
+  if (captionArranqueMinuscula(cap)) return 'arranque-minuscula';
+  const lineas = cap.split(/\n+/);
+  if (o.en) {
+    if (enSpliceLint(cap, o.names || [])) return 'fragmento';
+    for (const l of lineas) {
+      const t = l.trim();
+      if (!t) continue;
+      const bare = t.replace(/[\p{Extended_Pictographic}]/gu, '').trim();
+      if (/[.!?…]["']?$/.test(bare)) continue;
+      if (enHangingTail(t)) return 'fragmento';
+    }
+  } else {
+    if (ES_CAPTION_OPENERS.test(cap)) return 'fragmento';
+    for (const l of lineas) {
+      const t = l.trim();
+      if (!t) continue;
+      const bare = t.replace(/[\p{Extended_Pictographic}]/gu, '').trim();
+      if (/[.!?…]["']?$/.test(bare)) continue;
+      if (ES_HANGING_TAIL.has(lastContentWord(t))) return 'fragmento';
+    }
+  }
+  return null;
+}
 function deriveTopics(digest, opts) {
   const o = opts || {};
   // (v274 · MODO EN) Con lang 'en' los frames de texto salen en inglés US;
@@ -2702,6 +2783,17 @@ function deriveTopics(digest, opts) {
     // nombre minado («your the…», «in everyone's…», «do the…») NO nace
     // — misma vara fail-closed que el idioma positivo de acá arriba.
     if (en && enSpliceLint(`${headTxt}\n${capTxt}`, [A])) return null;
+    // (LOTE CAPTIONS-DE-LA-SEMANA) TERCERA RED del mismo choke point:
+    // la puerta de texto de captions (arranque en minúscula por tema
+    // crudo + fragmentos al inicio o al cierre, ES y EN). Corre para
+    // TODOS los temas de la semana, no solo el slot 0 — el caption del
+    // posteo 675 de Blind Barber nació acá sin pasar por ninguna
+    // puerta. Tema que no pasa, no nace (fail-closed con registro).
+    const puertaCap = captionPuertaTexto(capTxt, { en, names: [A] });
+    if (puertaCap) {
+      try { console.error('[digest] tema descartado por la puerta de captions (' + puertaCap + '):', String(capTxt || '').slice(0, 120)); } catch (e) {}
+      return null;
+    }
     const t = {
       kind,
       tag: frame.tag || '',
@@ -2806,37 +2898,37 @@ function deriveTopics(digest, opts) {
       headline: (x) => x,
       subline: () => (fechaTxt ? `Launching ${fechaTxt}` : 'Coming soon'),
       cta: 'Keep me posted',
-      caption: (x) => `${x} is part of what's coming at ${bizPh} ✨\n\nWe're getting everything ready${fechaTxt ? `: launch day is ${fechaTxt}` : ' — we open very soon'}.\n\nSign up and be the first to know 📩`,
+      caption: (x) => `${capStartText(x)} is part of what's coming at ${bizPh} ✨\n\nWe're getting everything ready${fechaTxt ? `: launch day is ${fechaTxt}` : ' — we open very soon'}.\n\nSign up and be the first to know 📩`,
     }) : mk('novedad', A, {
       tag: 'MUY PRONTO',
       headline: (x) => x,
       subline: () => (fechaTxt ? `Llega el ${fechaTxt}` : 'Muy pronto'),
       cta: 'Quiero enterarme',
-      caption: (x) => `${x} es parte de lo que se viene en ${bizPh} ✨\n\nEstamos preparando todo${fechaTxt ? `: el lanzamiento es el ${fechaTxt}` : ' — abrimos muy pronto'}.\n\nEscribinos por DM y sumate a los primeros 📩`,
+      caption: (x) => `${capStartText(x)} es parte de lo que se viene en ${bizPh} ✨\n\nEstamos preparando todo${fechaTxt ? `: el lanzamiento es el ${fechaTxt}` : ' — abrimos muy pronto'}.\n\nEscribinos por DM y sumate a los primeros 📩`,
     })) : narraServicio(it1) ? (en ? mk('novedad', A, {
       tag: 'NEW',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `${it1.precio}, just like you see it` : ''),
       cta: 'Tell me more',
-      caption: (x) => `${x} is now at ${bizPh} ✨\n\n${it1.precio ? `Yours for ${it1.precio}. ` : ''}We handle it end to end, with our usual care.\n\nDM us and we'll walk you through how to start 📩`,
+      caption: (x) => `${capStartText(x)} is now at ${bizPh} ✨\n\n${it1.precio ? `Yours for ${it1.precio}. ` : ''}We handle it end to end, with our usual care.\n\nDM us and we'll walk you through how to start 📩`,
     }) : mk('novedad', A, {
       tag: 'NUEVO',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `A ${it1.precio}, como lo ves` : ''),
       cta: 'Quiero saber más',
-      caption: (x) => `${x} ya está en ${bizPh} ✨\n\n${it1.precio ? `Lo tenés a ${it1.precio}. ` : ''}Lo hacemos de principio a fin, con el detalle de siempre.\n\nEscribinos por DM y te contamos cómo empezamos 📩`,
+      caption: (x) => `${capStartText(x)} ya está en ${bizPh} ✨\n\n${it1.precio ? `Lo tenés a ${it1.precio}. ` : ''}Lo hacemos de principio a fin, con el detalle de siempre.\n\nEscribinos por DM y te contamos cómo empezamos 📩`,
     })) : en ? mk('novedad', A, {
       tag: 'NEW',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `${it1.precio}, just like you see it` : ''),
       cta: 'I want mine',
-      caption: (x) => `${x} is here at ${bizPh} ✨\n\n${it1.precio ? `Yours for ${it1.precio}. ` : ''}Fresh in and ready for you.\n\nOrder yours today by DM 📩`,
+      caption: (x) => `${capStartText(x)} is here at ${bizPh} ✨\n\n${it1.precio ? `Yours for ${it1.precio}. ` : ''}Fresh in and ready for you.\n\nOrder yours today by DM 📩`,
     }) : mk('novedad', A, {
       tag: 'NUEVO',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `A ${it1.precio}, como lo ves` : ''),
       cta: 'Quiero el mío',
-      caption: (x) => `${x} ya está en ${bizPh} ✨\n\n${it1.precio ? `Lo tenés a ${it1.precio}. ` : ''}Recién llegado y listo para vos.\n\nPedilo hoy por DM 📩`,
+      caption: (x) => `${capStartText(x)} ya está en ${bizPh} ✨\n\n${it1.precio ? `Lo tenés a ${it1.precio}. ` : ''}Recién llegado y listo para vos.\n\nPedilo hoy por DM 📩`,
     });
     if (t) topics.push(t);
   }
@@ -2882,13 +2974,13 @@ function deriveTopics(digest, opts) {
         headline: (x) => x,
         subline: () => (fechaTxt ? `Launching ${fechaTxt}` : 'Coming soon'),
         cta: 'Join the list',
-        caption: (x) => `${x}, another service you'll be able to hand off ✨\n\n${bizPh} hasn't opened yet: we're signing up the first ones.\n\nSign up for the list and we'll let you know at launch 📩`,
+        caption: (x) => `${capStartText(x)}, another service you'll be able to hand off ✨\n\n${bizPh} hasn't opened yet: we're signing up the first ones.\n\nSign up for the list and we'll let you know at launch 📩`,
       }) : mk('novedad', A, {
         tag: 'MUY PRONTO',
         headline: (x) => x,
         subline: () => (fechaTxt ? `Llega el ${fechaTxt}` : 'Muy pronto'),
         cta: 'Sumarme a la lista',
-        caption: (x) => `${x}, otro de los servicios que vas a poder delegar ✨\n\n${bizPh} todavía no abrió: estamos sumando a los primeros.\n\nEscribinos por DM y te sumamos a la lista 📩`,
+        caption: (x) => `${capStartText(x)}, otro de los servicios que vas a poder delegar ✨\n\n${bizPh} todavía no abrió: estamos sumando a los primeros.\n\nEscribinos por DM y te sumamos a la lista 📩`,
       });
       if (t) topics.push(t);
     }
@@ -2905,13 +2997,13 @@ function deriveTopics(digest, opts) {
       headline: (x) => (priceInHeadline ? `${x} at ${promoPrice}` : x),
       subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `${promoPrice}, just like you see it` : ''),
       cta: 'I want this deal',
-      caption: (x) => `${x} at ${bizPh} 🔥\n\nFor a limited time only: when it's gone, it's gone.${termsLine}\n\nMessage us and we'll hold yours 📩`,
+      caption: (x) => `${capStartText(x)} at ${bizPh} 🔥\n\nFor a limited time only: when it's gone, it's gone.${termsLine}\n\nMessage us and we'll hold yours 📩`,
     }) : mk('promo', A, {
       tag: 'PROMO',
       headline: (x) => (priceInHeadline ? `${x} a ${promoPrice}` : x),
       subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `A ${promoPrice}, como lo ves` : ''),
       cta: 'Quiero aprovecharla',
-      caption: (x) => `${x} en ${bizPh} 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.${termsLine}\n\nEscribinos y te lo reservamos 📩`,
+      caption: (x) => `${capStartText(x)} en ${bizPh} 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.${termsLine}\n\nEscribinos y te lo reservamos 📩`,
     });
     if (t) {
       if (promoVig && promoVig.ends_at) { t.offer_ends_at = promoVig.ends_at; t.offer_terms = promoEndsTxt; }
@@ -2926,25 +3018,25 @@ function deriveTopics(digest, opts) {
         headline: (x) => x,
         subline: (x) => (it2.precio ? `${it2.precio}` : ''),
         cta: 'Ask us',
-        caption: (x) => `${x}, another service at ${bizPh} ✨\n\n${it2.precio ? `${it2.precio}. ` : ''}Tell us what you need and we'll reply with a clear proposal.\n\nMessage us to ask 📩`,
+        caption: (x) => `${capStartText(x)}, another service at ${bizPh} ✨\n\n${it2.precio ? `${it2.precio}. ` : ''}Tell us what you need and we'll reply with a clear proposal.\n\nMessage us to ask 📩`,
       }) : mk('novedad', A, {
         tag: 'NUEVO',
         headline: (x) => x,
         subline: (x) => (it2.precio ? `A ${it2.precio}` : ''),
         cta: 'Consultar',
-        caption: (x) => `${x}, otro servicio de ${bizPh} ✨\n\n${it2.precio ? `A ${it2.precio}. ` : ''}Contanos qué necesitás y te respondemos con una propuesta clara.\n\nConsultanos por DM 📩`,
+        caption: (x) => `${capStartText(x)}, otro servicio de ${bizPh} ✨\n\n${it2.precio ? `A ${it2.precio}. ` : ''}Contanos qué necesitás y te respondemos con una propuesta clara.\n\nConsultanos por DM 📩`,
       })) : en ? mk('novedad', A, {
         tag: 'NEW',
         headline: (x) => x,
         subline: (x) => (it2.precio ? `${it2.precio}` : ''),
         cta: 'I want mine',
-        caption: (x) => `${x}, another favorite at ${bizPh} ✨\n\n${it2.precio ? `${it2.precio}. ` : ''}Stop by or order it by DM.\n\nOrder yours today 📩`,
+        caption: (x) => `${capStartText(x)}, another favorite at ${bizPh} ✨\n\n${it2.precio ? `${it2.precio}. ` : ''}Stop by or order it by DM.\n\nOrder yours today 📩`,
       }) : mk('novedad', A, {
         tag: 'NUEVO',
         headline: (x) => x,
         subline: (x) => (it2.precio ? `A ${it2.precio}` : ''),
         cta: 'Quiero el mío',
-        caption: (x) => `${x}, otro favorito de ${bizPh} ✨\n\n${it2.precio ? `A ${it2.precio}. ` : ''}Pasá a buscarlo o pedilo por DM.\n\nTe esperamos 📩`,
+        caption: (x) => `${capStartText(x)}, otro favorito de ${bizPh} ✨\n\n${it2.precio ? `A ${it2.precio}. ` : ''}Pasá a buscarlo o pedilo por DM.\n\nTe esperamos 📩`,
       });
       if (t) topics.push(t);
     }
@@ -2995,13 +3087,13 @@ function deriveTopics(digest, opts) {
       headline: (x) => (/^[a-z]+$/.test(x) ? `${x.charAt(0).toUpperCase() + x.slice(1)}, as always` : x),
       subline: () => '',
       cta: '',
-      caption: (x) => `${x} is one of the most requested things at ${bizPh} ✨\n\nThanks for choosing us and recommending us.\n\nTell us: have you tried it yet? 👇`,
+      caption: (x) => `${capStartText(x)} is one of the most requested things at ${bizPh} ✨\n\nThanks for choosing us and recommending us.\n\nTell us: have you tried it yet? 👇`,
     }) : mk('social', A, {
       tag: '',
       headline: (x) => (/^[a-z]+$/.test(x) ? `${x.charAt(0).toUpperCase() + x.slice(1)}, como siempre` : x),
       subline: () => '',
       cta: '',
-      caption: (x) => `${x} es de lo que más nos piden en ${bizPh} ✨\n\nGracias por elegirnos y recomendarnos siempre.\n\nContanos: ¿ya lo probaste? 👇`,
+      caption: (x) => `${capStartText(x)} es de lo que más nos piden en ${bizPh} ✨\n\nGracias por elegirnos y recomendarnos siempre.\n\nContanos: ¿ya lo probaste? 👇`,
     });
     if (t) topics.push(t);
   }
@@ -3017,13 +3109,13 @@ function deriveTopics(digest, opts) {
       headline: () => 'Join the first ones',
       subline: () => (fechaTxt ? `Launching ${fechaTxt}` : 'Coming soon'),
       cta: 'Join the list',
-      caption: (x) => `${bizPh}'s waitlist is now open 📩\n\n${fechaTxt ? `Launch day is ${fechaTxt} and ` : ''}${x} is part of what's coming.\n\nSign up now and we'll tell you on day one 📩`,
+      caption: (x) => `${bizPh}'s waitlist is now open 📩\n\n${fechaTxt ? `Launch day is ${fechaTxt} and ${x}` : capStartText(x)} is part of what's coming.\n\nSign up now and we'll tell you on day one 📩`,
     }) : mk('reserva', A, {
       tag: 'LISTA DE ESPERA',
       headline: () => 'Sumate a los primeros',
       subline: () => (fechaTxt ? `Lanzamiento: ${fechaTxt}` : 'Muy pronto'),
       cta: 'Sumarme',
-      caption: (x) => `La lista de espera de ${bizPh} ya está abierta 📩\n\n${fechaTxt ? `El lanzamiento es el ${fechaTxt} y ` : ''}${x.toLowerCase()} es parte de lo que llega.\n\nEscribinos por DM y te avisamos el día uno 📩`,
+      caption: (x) => `La lista de espera de ${bizPh} ya está abierta 📩\n\n${fechaTxt ? `El lanzamiento es el ${fechaTxt} y ${x.toLowerCase()}` : capStartText(x)} es parte de lo que llega.\n\nEscribinos por DM y te avisamos el día uno 📩`,
     });
     if (t) topics.push(t);
   } else if (bookItem && digest.has_booking) {
@@ -3050,25 +3142,25 @@ function deriveTopics(digest, opts) {
         headline: (x) => `${capWords(x, 4)}: get a free quote`,
         subline: () => '',
         cta: 'Ask us',
-        caption: (x) => `${x} at ${bizPh} ✨\n\nTell us what you need and we'll reply with a clear proposal — no strings attached.\n\nComment INFO and we'll reach out 👇`,
+        caption: (x) => `${capStartText(x)} at ${bizPh} ✨\n\nTell us what you need and we'll reply with a clear proposal — no strings attached.\n\nComment INFO and we'll reach out 👇`,
       }) : mk('reserva', A, {
         tag: '',
         headline: (x) => `${capWords(x, 4)}: consultá sin compromiso`,
         subline: () => '',
         cta: 'Consultar',
-        caption: (x) => `${x} en ${bizPh} ✨\n\nContanos qué necesitás y te respondemos con una propuesta clara, sin compromiso.\n\nComentá INFO y te contactamos 👇`,
+        caption: (x) => `${capStartText(x)} en ${bizPh} ✨\n\nContanos qué necesitás y te respondemos con una propuesta clara, sin compromiso.\n\nComentá INFO y te contactamos 👇`,
       })) : en ? mk('reserva', A, {
         tag: '',
         headline: (x) => `${capWords(x, 4)}: order today`,
         subline: () => '',
         cta: 'Order now',
-        caption: (x) => `${x} is waiting for you at ${bizPh} ✨\n\nOrder it today and pick it up whenever you want.\n\nDM us to order 📩`,
+        caption: (x) => `${capStartText(x)} is waiting for you at ${bizPh} ✨\n\nOrder it today and pick it up whenever you want.\n\nDM us to order 📩`,
       }) : mk('reserva', A, {
         tag: '',
         headline: (x) => `${capWords(x, 4)}: pedilo hoy`,
         subline: () => '',
         cta: 'Pedir ahora',
-        caption: (x) => `${x} te espera en ${bizPh} ✨\n\nPedilo hoy y retiralo cuando quieras.\n\nEscribinos por DM 📩`,
+        caption: (x) => `${capStartText(x)} te espera en ${bizPh} ✨\n\nPedilo hoy y retiralo cuando quieras.\n\nEscribinos por DM 📩`,
       });
       if (t) topics.push(t);
     }
@@ -4020,6 +4112,9 @@ module.exports = {
   // colgante como utilidades compartidas (puerta de captions, gate del
   // primer posteo).
   EN_HANGING_SUBORDINATORS, lastContentWord, enHangingTail, trimFunctionTail,
+  // (LOTE CAPTIONS-DE-LA-SEMANA) Forma de arranque de oración del tema
+  // + puerta de texto de los captions de la semana (testeables).
+  capStartText, captionArranqueMinuscula, captionPuertaTexto,
   // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
   sanitizeBrandPresence, brandPresenceOf, brandLogoOf,
   questionCandidatesOf, applyDeepBlocks,

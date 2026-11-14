@@ -1427,6 +1427,28 @@ function dropTemplateVarTopics(list) {
   }
   return out;
 }
+// (LOTE CAPTIONS-DE-LA-SEMANA) PUERTA DE TEXTO EN EL ARMADO: todo
+// caption que entra a la semana de la prueba — venga del fundamento
+// (deriveTopics, que ya la corre en mk) o del catálogo de relleno —
+// pasa por captionPuertaTexto: arranque en minúscula por tema crudo
+// interpolado o fragmento colgante al inicio o al cierre = el tema no
+// entra (fail-closed con registro, la misma vara que la red de
+// variables de plantilla de acá arriba). Antes de este lote la única
+// puerta de texto era la del slot 0 y solo miraba fragmentos EN: el
+// caption del posteo 675 de Blind Barber («bar is one of the most
+// requested things…», slot 3) no pasó por ninguna.
+function dropCaptionGateTopics(list, lang) {
+  const out = [];
+  for (const t of (Array.isArray(list) ? list : [])) {
+    const clase = t && t.caption ? clientDigest.captionPuertaTexto(t.caption, { en: lang === 'en', names: [t.digest_anchor || ''] }) : null;
+    if (clase) {
+      try { console.error('[demo] tema descartado por la puerta de captions (' + clase + '):', String((t && t.caption) || '').slice(0, 120)); } catch (e) {}
+      continue;
+    }
+    out.push(t);
+  }
+  return out;
+}
 
 // (LOTE IDIOMA-POSTEO-MARCA · v922) Idioma en que postea LA MARCA.
 // REGLA (Valentino, caso Veja 11/11): titular, caption y texto dentro
@@ -1907,6 +1929,11 @@ function primerPosteoGate(o) {
     if (caption && (clientDigest.enSpliceLint(caption, names)
       || caption.split(/\n+/).some((l) => { const t = l.trim(); return t && !/[.!?…]["']?$/.test(t) && !!clientDigest.enHangingTail(t); }))) textoClase = textoClase || 'fragmento-caption';
   }
+  // (LOTE CAPTIONS-DE-LA-SEMANA) La clase del arranque en minúscula
+  // también en el slot 0 y en AMBOS idiomas: la puerta de captions la
+  // caza en mk y en el armado para los slots 1..n; acá cierra el slot
+  // que faltaba (los captions del wow no nacen en mk).
+  if (caption && clientDigest.captionArranqueMinuscula(caption)) textoClase = textoClase || 'arranque-minuscula-caption';
   const captionOk = textoClase === null;
   if (textoClase) motivos.push('texto-' + textoClase);
   if (!titularOk && textoClase) motivos.push('titular-' + textoClase);
@@ -2290,7 +2317,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // {{...}}, ${...}) NUNCA llega a la semana — se saca del pool antes de
   // elegir la ventana y el hueco lo cubre el siguiente tema limpio. Un
   // posteo con una variable sin reemplazar no se muestra ni se sirve.
-  const allTopics = clientDigest.dropVetoTopics(dropTemplateVarTopics(digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics), digest && digest.onboarding);
+  const allTopics = dropCaptionGateTopics(clientDigest.dropVetoTopics(dropTemplateVarTopics(digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics), digest && digest.onboarding), lang);
   // topicOffset (v187): temas desde una posición del pool — lo usan los
   // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
   // fotos, vía excludePhotos) de la semana ya generada.
