@@ -10739,6 +10739,95 @@ app.get('/api/admin/support/conserje/revision', requireAdminToken, (req, res) =>
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
+// (LOTE VER-EN-EL-FEED · Valentino 13/11 14:51) La grilla espejo del
+// perfil de UN cliente para la revisión del conserje: el posteo en
+// revisión puesto en su posición final entre los posteos reales, para
+// juzgar el conjunto sin salir del conserje. Fuentes: LAS MISMAS de la
+// home del dueño — el snapshot de IG (homeSnapshotGet: perfil +
+// recientes reales) y los posteos de la cuenta en la DB. Orden: el
+// criterio vigente de homeGridCompose (Lote 12): fijados del dueño
+// primero (por pinned_at, el más viejo primero); después los NO
+// publicados (programados y borradores) por fecha descendente; al
+// final los ya salidos (publicados + recientes de IG) por fecha
+// descendente, con «sin fecha» al final de su grupo (hfCmpDescKey).
+// Dedupe publicados↔recientes por shortcode y archivados en IG fuera,
+// igual que la home. SIN snapshot no hay grilla que mostrar: la
+// respuesta lo dice (disponible:false) y no se fabrica ninguna celda —
+// los posteos de la DB sin la lectura de IG no son el feed del cliente.
+function conserjeFeedMs(s) {
+  if (!s) return Infinity;
+  const str = String(s).trim();
+  if (!str) return Infinity;
+  const norm = str.replace(' ', 'T');
+  const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(norm) ? norm : norm + 'Z');
+  return isNaN(d) ? Infinity : d.getTime();
+}
+app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
+  try {
+    const uid = Number(req.query.user_id) || 0;
+    const postId = Number(req.query.post_id) || 0;
+    if (!uid) return res.status(400).json({ ok: false, error: 'falta user_id' });
+    const snap = homeSnapshotGet(uid);
+    if (!snap || !snap.payload) return res.json({ ok: true, disponible: false, motivo: 'sin_feed' });
+    const prof = snap.payload;
+    const rows = db.prepare(`SELECT id, image_path, media_type, status, scheduled_at, published_at, created_at, pinned, pinned_at, ig_permalink, ig_state
+      FROM posts WHERE user_id = ? AND status IN ('published','scheduled','draft')`).all(uid);
+    const tiles = [];
+    const pubShortcodes = new Set();
+    const archivedShortcodes = new Set();
+    for (const p of rows) {
+      if (String(p.media_type || '') === 'story') continue;
+      if (p.status === 'published' && p.ig_state === 'archived_ext') {
+        const scA = igShortcodeDePermalink(p.ig_permalink || '');
+        if (scA) archivedShortcodes.add(scA);
+        continue;
+      }
+      if (p.status === 'published') { const scP = igShortcodeDePermalink(p.ig_permalink || ''); if (scP) pubShortcodes.add(scP); }
+      const key = p.status === 'published'
+        ? conserjeFeedMs(p.published_at || p.scheduled_at)
+        : (p.scheduled_at ? conserjeFeedMs(p.scheduled_at) : conserjeFeedMs(p.created_at));
+      tiles.push({
+        kind: 'post', post_id: p.id, img: absImageUrl(uid, p.image_path),
+        media_type: p.media_type || 'image', status: p.status,
+        es_revision: postId > 0 && p.id === postId,
+        pinned: !!p.pinned, pinned_at: p.pinned_at || '', key,
+      });
+    }
+    for (const r of (Array.isArray(prof.recents) ? prof.recents : [])) {
+      if (!r || !r.img) continue;
+      if (r.shortcode && pubShortcodes.has(String(r.shortcode))) continue;
+      if (r.shortcode && archivedShortcodes.has(String(r.shortcode))) continue;
+      tiles.push({
+        kind: 'ig', post_id: null, img: r.img, media_type: r.type || 'image', status: 'published',
+        es_revision: false, pinned: r.pinned === true, pinned_at: '',
+        key: (typeof r.taken_at === 'number' ? r.taken_at * 1000 : Infinity),
+      });
+    }
+    const head = tiles.filter((t) => t.kind === 'post' && t.pinned)
+      .sort((a, b) => String(a.pinned_at).localeCompare(String(b.pinned_at)) || (a.post_id - b.post_id));
+    const rest = tiles.filter((t) => !(t.kind === 'post' && t.pinned));
+    const esPub = (t) => t.kind === 'ig' || t.status === 'published';
+    rest.sort((a, b) => {
+      const pa = esPub(a) ? 1 : 0, pb = esPub(b) ? 1 : 0;
+      if (pa !== pb) return pa - pb;
+      const fa = Number.isFinite(a.key), fb = Number.isFinite(b.key);
+      if (fa && fb) return b.key - a.key;
+      if (fa) return -1;
+      if (fb) return 1;
+      return 0;
+    });
+    const ordenadas = head.concat(rest);
+    res.json({
+      ok: true, disponible: true, user_id: uid,
+      username: prof.username || '', name: prof.name || '', pic: prof.pic || null,
+      revision_encontrada: ordenadas.some((t) => t.es_revision),
+      tiles: ordenadas.map((t) => ({
+        kind: t.kind, post_id: t.post_id, img: t.img, media_type: t.media_type,
+        status: t.status, es_revision: t.es_revision, pinned: t.pinned,
+      })),
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
 app.post('/api/admin/support/conserje/revision/decidir', requireAdminToken, (req, res) => {
   try {
     const b = req.body || {};
@@ -15669,6 +15758,105 @@ function subirPedidoCrear(uid, asset, kind, nota, respuestas) {
 function subirPedidoRow(id) {
   try { return db.prepare('SELECT * FROM subir_pedidos_voz WHERE id = ?').get(Number(id) || 0) || null; } catch (e) { return null; }
 }
+// (LOTE PEDIDO-VOZ-DUDA · paso 3 de la spec de pedidos por voz,
+// Valentino 13/11 22:26) LA PREGUNTA DE DUDA AL CLIENTE. La regla
+// madre: Posty se comunica SOLO ante una duda real — algo que no pudo
+// determinar con seguridad desde el fundamento — y la duda se
+// pregunta con opciones de un toque construidas desde lo que ya sabe,
+// nunca como pregunta abierta. El cruce es el del pedido contra el
+// fundamento del propio cliente (digestForUser + anchorsOf: productos
+// y servicios con nombre, catálogo incluido) y es DETERMINÍSTICO:
+// ninguna IA decide si hay duda. Devuelve {tipo, opciones} o null.
+//
+// DISPARA (exactamente dos condiciones, mutuamente excluyentes):
+// · producto_ambiguo — la nota no nombra completo a ningún producto
+//   pero toca una palabra distintiva COMPARTIDA por dos o más
+//   («la torta» con «Torta de chocolate» y «Torta de limón» en el
+//   fundamento): cuál de los dos es no se puede saber. Opciones: los
+//   productos que calzan (la estrella primero, tope 3).
+// · producto_promo / producto_evento — la nota no menciona a NINGÚN
+//   producto y el pedido trae una promo (la respuesta promo del
+//   formulario o «promo/descuento/2x1» en la nota) o un evento
+//   («evento/lanzamiento/sorteo/inauguración/apertura» en la nota):
+//   la promo o el evento ES de un producto y la nota no dice de cuál.
+//   Opciones: el fundamento (la estrella primero, tope 3).
+// El cliente siempre puede tocar «otra» además de las opciones.
+//
+// NO DISPARA (declarado, con su motivo):
+// · La nota nombra completo a un producto (o su nombre es de una
+//   palabra y lo nombra): identificado, no hay duda.
+// · La nota nombra completos a DOS productos: el texto es
+//   determinado; qué foco toma el posteo lo decide la revisión, que
+//   ya es la puerta de este flujo.
+// · Una sola coincidencia débil (una palabra distintiva de un único
+//   producto): identifica por eliminación — el cliente acorta los
+//   nombres («el budín» con un solo budín en el fundamento).
+// · El cliente escribió su caption entero (caption_modo 'mio'): ya
+//   especificó el posteo palabra por palabra; no hay hueco que una
+//   respuesta pueda cerrar y preguntar sería fricción sin beneficio.
+// · Sin fundamento con productos/servicios con nombre (sin digest o
+//   lista vacía): no hay opciones construibles desde lo sabido —
+//   inventarlas está prohibido, así que no hay pregunta.
+// · Pedido sin promo ni evento y sin mención ambigua (un encargo
+//   genérico: «quiero un posteo lindo para el viernes»): el pedido ya
+//   dice todo lo que hay para entender; lo revisa el equipo como hoy.
+// La fecha que la nota nombre («para el viernes») NUNCA es duda de
+// esta pregunta: el día del posteo lo fija la spec (el siguiente a la
+// aprobación), no una opción del cliente.
+function subirPedidoDuda(uid, nota, respuestas) {
+  const resp = respuestas || {};
+  if (String(resp.caption_modo || 'posty') === 'mio') return null;
+  const digest = digestForUser(uid);
+  if (!digest) return null;
+  const anchors = clientDigest.anchorsOf(digest).filter((a) => a && (a.kind === 'producto' || a.kind === 'servicio'));
+  if (!anchors.length) return null;
+  const notaN = clientDigest.norm(nota);
+  if (!notaN) return null;
+  const words = clientDigest.textWordSet(nota);
+  const fuertes = [], debiles = [];
+  for (const a of anchors) {
+    const multi = !!(a.phrase && a.phrase.split(' ').length >= 2);
+    let fuerte = false, debil = false;
+    if (multi && a.phrase && notaN.includes(a.phrase)) fuerte = true;
+    if (!fuerte) {
+      for (const w of (a.words || [])) {
+        let hit = false;
+        for (const f of clientDigest.wordForms(w)) { if (words.has(f)) { hit = true; break; } }
+        if (hit) { if (multi) debil = true; else fuerte = true; break; }
+      }
+    }
+    if (fuerte) fuertes.push(a); else if (debil) debiles.push(a);
+  }
+  if (fuertes.length >= 1) return null;
+  // Las opciones salen SOLO de lo que Posty ya sabe del negocio: la
+  // estrella y lo más vendido del dueño primero; el resto, en el
+  // orden del fundamento. Tope 3 (el modelo de la pregunta de la
+  // prueba llega a 4 con la candidata; acá la candidata es la duda
+  // misma y el toque tiene que ser de un vistazo).
+  const starNames = [digest.inferred_star && digest.inferred_star.item, digest.dueno && digest.dueno.estrella, digest.dueno && digest.dueno.mas_vendido].map((x) => String(x || '')).filter(Boolean);
+  const rank = (a) => { const i = starNames.findIndex((s) => clientDigest.sameItemName(s, a.text)); return i === -1 ? 99 : i; };
+  const nombres = (list) => {
+    const out = [];
+    for (const a of [...list].sort((x, y) => rank(x) - rank(y))) {
+      const tx = String(a.text || '').trim();
+      if (tx && !out.some((o) => clientDigest.sameItemName(o, tx))) out.push(tx);
+      if (out.length >= 3) break;
+    }
+    return out;
+  };
+  if (debiles.length >= 2) {
+    const ops = nombres(debiles);
+    return ops.length >= 2 ? { tipo: 'producto_ambiguo', opciones: ops } : null;
+  }
+  if (debiles.length === 1) return null;
+  const toks = new Set(notaN.split(' ').filter(Boolean));
+  const esPromo = ['desc', '2x1', 'envio'].includes(String(resp.promo || 'no')) || toks.has('promo') || toks.has('promocion') || toks.has('descuento') || toks.has('2x1');
+  const esEvento = toks.has('evento') || toks.has('lanzamiento') || toks.has('sorteo') || toks.has('inauguracion') || toks.has('apertura');
+  if (!esPromo && !esEvento) return null;
+  const ops = nombres(anchors);
+  if (!ops.length) return null;
+  return { tipo: esPromo ? 'producto_promo' : 'producto_evento', opciones: ops };
+}
 // El armado tras la aprobación: espejo fiel de la rama de construcción
 // del resolver (mismo caption, mismo plan de cadencia, misma mejora,
 // mismos subtítulos, mismo commit del desplazamiento) con dos
@@ -15696,6 +15884,12 @@ async function armarPedidoSubir(ped) {
     if (promo === 'desc') parts.push('Es una promo con descuento: comunicá el descuento en el caption, sin inventar un porcentaje que el dueño no dijo');
     if (promo === '2x1') parts.push('Es una promo 2x1: comunicá el 2x1 en el caption');
     if (promo === 'envio') parts.push('Es una promo con envío gratis: comunicá el envío gratis en el caption');
+    // (LOTE PEDIDO-VOZ-DUDA) Si el dueño respondió la pregunta de
+    // duda y confirmó un producto, esa confirmación ES parte de lo
+    // entendido y manda en el caption. Si tocó «otra» o no respondió,
+    // nada se agrega: lo dudoso jamás se afirma por él.
+    const dudaResp = String(ped.duda_respuesta || '').trim();
+    if (dudaResp && dudaResp !== 'otra') parts.push('El dueño confirmó que este pedido es sobre: ' + dudaResp.slice(0, 120));
     const extra = String(ped.nota || '').trim().slice(0, 400);
     if (extra) parts.push('Dato extra del dueño (nota de voz): ' + extra);
     let prop = null;
@@ -15794,7 +15988,18 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
       const respuestas = { cuando, promo: String(b.promo || 'no'), mejora: String(b.mejora || 'si'), caption_modo: capModoGate, caption_text: capModoGate === 'mio' ? String(b.caption_text || '').trim().slice(0, 2200) : '', subs: String(b.subs || 'si') };
       const pedidoId = subirPedidoCrear(uid, asset, kind, extraNota, respuestas);
       try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('pedido_revision', asset.id); } catch (e) {}
-      return res.json({ ok: true, modo: 'pedido_revision', pedido_id: pedidoId, kind });
+      // (LOTE PEDIDO-VOZ-DUDA · paso 3 de la spec) Con el pedido ya
+      // creado, el cruce con el fundamento puede dejar una DUDA real
+      // sobre el producto (subirPedidoDuda): solo en ese caso la
+      // respuesta lleva la pregunta con opciones de un toque y la
+      // duda queda persistida en el pedido para el conserje. Sin
+      // duda, la respuesta es exactamente la de siempre — el trabajo
+      // es la respuesta. El cómputo nunca frena el pedido: ante
+      // cualquier error no hay pregunta y el flujo sigue como hoy.
+      let duda = null;
+      try { duda = subirPedidoDuda(uid, extraNota, respuestas); } catch (e) { duda = null; }
+      if (duda) { try { db.prepare('UPDATE subir_pedidos_voz SET duda = ? WHERE id = ?').run(JSON.stringify(duda), pedidoId); } catch (e) {} }
+      return res.json({ ok: true, modo: 'pedido_revision', pedido_id: pedidoId, kind, ...(duda ? { duda } : {}) });
     }
     let caption = '', hashtags = '';
     const captionMio = String(b.caption_modo || 'posty') === 'mio';
@@ -15869,6 +16074,36 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
   } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
 });
 
+// POST /api/subir/pedidos-voz/:id/respuesta — (LOTE PEDIDO-VOZ-DUDA)
+// La respuesta del cliente a la pregunta de duda de SU pedido: un
+// toque sobre una de las opciones que Posty le ofreció (un producto
+// de su propio fundamento u 'otra'). Solo el dueño del pedido, solo
+// mientras el pedido sigue en revisión y solo si nació con duda. La
+// respuesta queda en duda_respuesta: es parte de «lo entendido» que
+// ve el conserje y la que el armado usa al aprobar. Repetir la misma
+// respuesta es idempotente; cambiarla, no (la primera palabra del
+// dueño es la que vale). Sin respuesta, el pedido se revisa con la
+// duda marcada — nada se afirma por él.
+app.post('/api/subir/pedidos-voz/:id/respuesta', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const ped = subirPedidoRow(req.params.id);
+    if (!ped || Number(ped.user_id) !== Number(uid)) return res.status(404).json({ ok: false, error: 'Ese pedido ya no está' });
+    let duda = null; try { duda = ped.duda ? JSON.parse(String(ped.duda)) : null; } catch (e) { duda = null; }
+    if (!duda || !Array.isArray(duda.opciones) || !duda.opciones.length) return res.status(409).json({ ok: false, error: 'Ese pedido no tiene una pregunta pendiente' });
+    if (ped.estado !== 'pendiente_revision') return res.status(409).json({ ok: false, error: 'Ese pedido ya se resolvió' });
+    const opcion = String((req.body || {}).opcion || '').trim();
+    if (!opcion || (opcion !== 'otra' && !duda.opciones.includes(opcion))) return res.status(400).json({ ok: false, error: 'Esa opción no es una de las que te ofrecí' });
+    const previa = String(ped.duda_respuesta || '').trim();
+    if (previa) {
+      if (previa === opcion) return res.json({ ok: true, pedido_id: ped.id, respuesta: previa, repetido: true });
+      return res.status(409).json({ ok: false, error: 'Ya respondiste esa pregunta' });
+    }
+    db.prepare('UPDATE subir_pedidos_voz SET duda_respuesta = ? WHERE id = ?').run(opcion, ped.id);
+    return res.json({ ok: true, pedido_id: ped.id, respuesta: opcion });
+  } catch (e) { console.error('[subir-pedido-respuesta]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu respuesta' }); }
+});
+
 // ---------- CONSERJE · PEDIDOS DE SUBIR POR VOZ (LOTE PEDIDO-VOZ-REVISION) ----------
 // El contrato con la vista del conserje (lote CONSERJE-PEDIDOS-VOZ):
 // el estado del pedido vive en subir_pedidos_voz y SOLO cambia por
@@ -15881,8 +16116,14 @@ function subirPedidoPublico(p) {
   if (!p) return null;
   let respuestas = {}; try { respuestas = JSON.parse(String(p.respuestas || '{}')) || {}; } catch (e) { respuestas = {}; }
   let armado = null; try { armado = p.armado ? JSON.parse(String(p.armado)) : null; } catch (e) { armado = null; }
-  const out = { id: p.id, user_id: p.user_id, asset_id: p.asset_id, kind: p.kind, nota: p.nota || '', respuestas, estado: p.estado, post_id: p.post_id || null, armado, error: p.error || '', created_at: p.created_at, decided_at: p.decided_at || null, decided_by: p.decided_by || '' };
+  let duda = null; try { duda = p.duda ? JSON.parse(String(p.duda)) : null; } catch (e) { duda = null; }
+  const out = { id: p.id, user_id: p.user_id, asset_id: p.asset_id, kind: p.kind, nota: p.nota || '', respuestas, duda, duda_respuesta: p.duda_respuesta || '', estado: p.estado, post_id: p.post_id || null, armado, error: p.error || '', created_at: p.created_at, decided_at: p.decided_at || null, decided_by: p.decided_by || '' };
   try { const u = db.prepare('SELECT email FROM users WHERE id = ?').get(p.user_id); if (u) out.email = u.email || ''; } catch (e) {}
+  // (MICRO-PIEZA DEL TABLERO · compuesto conserje) Nombre del negocio y
+  // @ de Instagram en el payload, desde profiles — la misma fuente que
+  // usa la tira (support-cases): la tarjeta del conserje identifica al
+  // cliente por su negocio, no solo por su email.
+  try { const prof = db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(p.user_id); out.business_name = (prof && prof.business_name) || ''; out.ig_username = (prof && prof.ig_username) || ''; } catch (e) { out.business_name = ''; out.ig_username = ''; }
   try { const a = db.prepare('SELECT file_path FROM assets WHERE id = ?').get(p.asset_id); if (a) out.asset_path = a.file_path || ''; } catch (e) {}
   if (p.post_id) {
     try { const post = db.prepare('SELECT id, status, scheduled_at, image_path, media_type, caption FROM posts WHERE id = ?').get(p.post_id); if (post) out.post = post; } catch (e) {}
@@ -40093,7 +40334,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1045';
+const BUILD_ID = '20261105-v1046';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

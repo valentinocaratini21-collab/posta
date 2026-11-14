@@ -223,6 +223,14 @@ db.exec(`CREATE TABLE IF NOT EXISTS foto_pedidos (
 // desplazado_post_id} — camino: directo | desplazo_posty |
 // siguiente_libre. error: último motivo de fallo del armado (el pedido
 // queda 'aprobado' y reintentable, nunca se arma solo).
+// duda / duda_respuesta (LOTE PEDIDO-VOZ-DUDA, columnas por ALTER tras
+// el CREATE): duda = JSON de la pregunta de duda al cliente (paso 3 de
+// la spec) cuando el cruce con su fundamento no determinó el producto
+// del pedido — {tipo, opciones} con las opciones salidas del propio
+// fundamento; '' = no hubo duda. duda_respuesta = la opción que el
+// cliente tocó (un nombre del fundamento u 'otra'); '' = sin
+// respuesta: el pedido se revisa con la duda marcada, sin afirmar lo
+// dudoso en ninguna superficie.
 db.exec(`CREATE TABLE IF NOT EXISTS subir_pedidos_voz (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -239,6 +247,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS subir_pedidos_voz (
   decided_by TEXT NOT NULL DEFAULT ''
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_pedidos_voz_user_estado ON subir_pedidos_voz (user_id, estado)`); } catch (e) { /* índice opcional */ }
+try { db.exec(`ALTER TABLE subir_pedidos_voz ADD COLUMN duda TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE subir_pedidos_voz ADD COLUMN duda_respuesta TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN kenburns_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

@@ -21,8 +21,11 @@
 //  · La ruta admin existe bajo requireAdminToken y delega en
 //    voiceRequests/decideVoiceRequest; el chunk pinta la sección (VM)
 //    con el chip de revisión, el detalle lado a lado con lo entendido
-//    ANTES de las acciones, y la declaración honesta de la nota del
-//    tab Subir (no se guarda en ningún lado).
+//    ANTES de las acciones. (La declaración sobre la nota del tab
+//    Subir se corrigió en el LOTE CONSERJE-PEDIDOS-SUBIR-VISTA: desde
+//    PEDIDO-VOZ-REVISION esa nota SÍ se guarda y se revisa en su
+//    propia sección del conserje — el pin de abajo se re-pineó con
+//    esa causa.)
 //  · CHUNK_V bumpeado (se tocó un chunk-*).
 // DB scratch en memoria; fechas fijas. Uso:
 //   node test-lote-conserje-pedidos-voz.js        → contra este árbol
@@ -158,7 +161,7 @@ check('la ruta delega en supportCases.voiceRequests', serverSrc.includes('suppor
 check('ruta POST decidir bajo requireAdminToken y delega en decideVoiceRequest', serverSrc.includes("app.post('/api/admin/support/conserje/pedidos-voz/decidir', requireAdminToken") && serverSrc.includes('supportCases.decideVoiceRequest(db,'));
 const chunkSrc = fs.readFileSync(path.join(TREE, 'public', 'chunk-conserje.js'), 'utf8');
 check('el chunk tiene la sección Pedidos por voz', chunkSrc.includes('🎙 Pedidos por voz') && chunkSrc.includes('data-cj="pedidos-voz"'));
-check('el chunk declara el hueco del tab Subir (no se guarda)', chunkSrc.includes('todavía no se guarda en ningún lado'));
+check('el chunk declara que el tab Subir SÍ se guarda y se revisa en su sección (frase corregida por CONSERJE-PEDIDOS-SUBIR-VISTA)', chunkSrc.includes('también se guardan y quedan en revisión') && !chunkSrc.includes('todavía no se guarda en ningún lado'));
 check('el chunk declara que el audio no se guarda', chunkSrc.includes('El audio no se guarda'));
 const appSrc = fs.readFileSync(path.join(TREE, 'public', 'app.js'), 'utf8');
 check('CHUNK_V bumpeado al tocar un chunk', !appSrc.includes("const CHUNK_V = '20261105-v977';"));

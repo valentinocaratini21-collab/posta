@@ -2457,7 +2457,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v1044'; // (v1044 · LOTE PEDIDOS-VOZ COMPUESTO) bump: chunk-conserje suma la sección Pedidos por voz // (v977 · LOTE PLAN-ÚNICO-PAYWALL) bump: chunk-ajustes Mi plan con plan único // (v967) bump: chunk-conserje lista variante 1 (mini 96 + caption + botones en la tarjeta) // (LOTE AJUSTES-CONTACTO) bump: chunk-ajustes suma la sección Contactanos // (v887) bump: chunk-conserje revisión variante 1 (mini 96 contain + fila + botones verde/Editar) // (v885) bump: chunk-analisis riel por suscripción (MP→ARS, Stripe→USD) // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
+const CHUNK_V = '20261105-v1046'; // (v1046 · LOTE CONSERJE COMPUESTO AMPLIO) bump: chunk-conserje suma el visor de imagen en grande, el botón «Ver en el feed» con su overlay y la sección Pedidos desde Subir // (v1044 · LOTE PEDIDOS-VOZ COMPUESTO) bump: chunk-conserje suma la sección Pedidos por voz // (v977 · LOTE PLAN-ÚNICO-PAYWALL) bump: chunk-ajustes Mi plan con plan único // (v967) bump: chunk-conserje lista variante 1 (mini 96 + caption + botones en la tarjeta) // (LOTE AJUSTES-CONTACTO) bump: chunk-ajustes suma la sección Contactanos // (v887) bump: chunk-conserje revisión variante 1 (mini 96 contain + fila + botones verde/Editar) // (v885) bump: chunk-analisis riel por suscripción (MP→ARS, Stripe→USD) // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -26568,10 +26568,42 @@ function pzSubirReciboPintar(r) {
     + (r.semana_siguiente ? `<div class="r-note">${en ? 'This week was already full: it goes out next week.' : 'Esta semana ya estaba completa: sale la semana que viene.'}</div>` : '')
     + (r.sin_dia ? `<div class="r-note">${en ? 'There were no free days: it stays in your material.' : 'No había días libres: quedó en tu material.'}</div>` : '')
     + (r.modo === 'pedido_revision' ? `<div class="r-note">${en ? 'Tomorrow it lands in your grid at your usual time — nothing goes out today.' : 'Mañana entra en tu grilla a tu hora de siempre — hoy no sale nada.'}</div>` : '')
+    + (r.modo === 'pedido_revision' && r.duda && r.pedido_id ? `<div class="r-duda" data-pz-duda="${r.pedido_id}"><div class="r-note" style="margin-top:6px">${esc(pzSubirDudaTexto(r.duda, en))}</div><div class="chips">${(Array.isArray(r.duda.opciones) ? r.duda.opciones : []).map((o) => `<button type="button" class="chip" data-pz-duda-op="${esc(o)}">${esc(o)}</button>`).join('')}<button type="button" class="chip" data-pz-duda-op="otra">${en ? "It's something else" : 'Es otra cosa'}</button></div></div>` : '')
     + (r.modo === 'posteado' ? `<button type="button" class="ver" data-subir-ver="${r.post_id}">${en ? 'See it in your week' : 'Verlo en tu semana'}</button>` : '');
   items.appendChild(div);
   const ver = div.querySelector('[data-subir-ver]');
   if (ver) ver.onclick = () => { try { sessionStorage.setItem('pz_ver_grilla', String(r.post_id)); } catch (e) {} location.hash = '#/app/inicio'; };
+  // (LOTE PEDIDO-VOZ-DUDA) Los chips de la pregunta de duda: un toque
+  // y la respuesta queda guardada en el pedido.
+  const dudaBox = div.querySelector('[data-pz-duda]');
+  if (dudaBox) dudaBox.querySelectorAll('[data-pz-duda-op]').forEach((btn) => { btn.onclick = () => pzSubirDudaResponder(dudaBox, r.pedido_id, btn.getAttribute('data-pz-duda-op'), btn.textContent, en); });
+}
+// (LOTE PEDIDO-VOZ-DUDA · paso 3 de la spec) La ÚNICA pregunta que el
+// recibo puede traer: la duda real sobre el producto del pedido, con
+// opciones de un toque salidas del fundamento del cliente. Sin duda,
+// el recibo es exactamente el de siempre — el trabajo es la
+// respuesta. Nunca hay texto libre: tocar un chip o no tocar nada
+// (y el pedido se revisa con la duda marcada).
+function pzSubirDudaTexto(duda, en) {
+  if (duda && duda.tipo === 'producto_ambiguo') return en ? 'One quick question so we get it right: which one did you mean?' : 'Una sola duda para no errarle: ¿a cuál te referías?';
+  if (duda && duda.tipo === 'producto_evento') return en ? 'One quick question so we get it right: which product is the event about?' : 'Una sola duda para no errarle: ¿el evento es por cuál producto?';
+  return en ? 'One quick question so we get it right: which product is the promo for?' : 'Una sola duda para no errarle: ¿la promo es de cuál producto?';
+}
+async function pzSubirDudaResponder(box, pedidoId, opcion, label, en) {
+  if (!box || box.dataset.busy) return;
+  box.dataset.busy = '1';
+  box.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  try {
+    const r = await api.post('/api/subir/pedidos-voz/' + pedidoId + '/respuesta', { opcion });
+    if (!r || !r.ok) throw new Error('respuesta');
+    const txt = opcion === 'otra'
+      ? (en ? '✓ Got it: it is something else — your note stands as you said it' : '✓ Quedó: es otra cosa — vale tu nota tal como la dijiste')
+      : '✓ ' + (en ? 'Confirmed: ' : 'Confirmado: ') + label;
+    box.innerHTML = `<div class="r-note">${esc(txt)}</div>`;
+  } catch (e) {
+    delete box.dataset.busy;
+    box.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+  }
 }
 async function pzSubirResolver(todoMode) {
   const en = pzVozEn();

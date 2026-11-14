@@ -14,7 +14,7 @@
 // capa extra del dueño: nunca publica por sí sola y nunca veta el ritual
 // del cliente de las 9:00. La ficha de cada cliente está en su detalle,
 // ahí mismo donde se decide.
-var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0 };
+var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0 };
 // (v849) Deep link de la push de cambio de posteo: #/app/conserje?user=<uid>
 // abre el detalle de ese cliente. Parser puro: 0 si no hay ?user= válido.
 // Un uid que no está en la revisión de esa noche no abre nada (fail-soft:
@@ -86,7 +86,9 @@ function conserjeFotoHTML(it, grande) {
   const url = it && it.post && it.post.image_url ? it.post.image_url : '';
   const h = grande ? 240 : 180;
   if (url) {
-    return '<div style="border-radius:14px;overflow:hidden;background:#0A1E33"><img src="' + esc(url) + '" alt="" style="width:100%;height:' + h + 'px;object-fit:cover;display:block"></div>';
+    // (v951) data-cj-img: el click abre la imagen en grande en el mismo
+    // lugar (el handler de la tarjeta la atiende antes que data-cj="ver").
+    return '<div style="border-radius:14px;overflow:hidden;background:#0A1E33"><img src="' + esc(url) + '" alt="" data-cj-img style="width:100%;height:' + h + 'px;object-fit:cover;display:block;cursor:zoom-in"></div>';
   }
   const ini = String((it && it.business_name) || '?').trim().charAt(0).toUpperCase() || '?';
   return '<div style="border-radius:14px;background:#2793C8;display:flex;align-items:center;justify-content:center;height:' + h + 'px;color:#fff;font-size:44px;font-weight:800">' + esc(ini) + '</div>';
@@ -99,7 +101,8 @@ function conserjeFotoHTML(it, grande) {
 function conserjeMiniFotoHTML(it) {
   const url = it && it.post && it.post.image_url ? it.post.image_url : '';
   if (url) {
-    return '<div style="width:96px;height:96px;flex:none;border-radius:12px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center"><img src="' + esc(url) + '" alt="" style="width:96px;height:96px;object-fit:contain;display:block"></div>';
+    // (v951) data-cj-img: el click abre la imagen en grande en el mismo lugar.
+    return '<div style="width:96px;height:96px;flex:none;border-radius:12px;overflow:hidden;background:#0A1E33;display:flex;align-items:center;justify-content:center"><img src="' + esc(url) + '" alt="" data-cj-img style="width:96px;height:96px;object-fit:contain;display:block;cursor:zoom-in"></div>';
   }
   const ini = String((it && it.business_name) || '?').trim().charAt(0).toUpperCase() || '?';
   return '<div style="width:96px;height:96px;flex:none;border-radius:12px;background:#2793C8;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:800">' + esc(ini) + '</div>';
@@ -119,6 +122,147 @@ function conserjeCapAjustar() {
       if (!txt || !mas) return;
       if (txt.scrollHeight <= txt.clientHeight + 1) mas.style.display = 'none';
     });
+  } catch (e) {}
+}
+
+// (LOTE VER-EN-EL-FEED · Valentino 13/11 14:51) «Ver en el feed»: la
+// grilla espejo del perfil del cliente con ESTE posteo puesto en su
+// posición final entre sus posteos reales, para juzgar el conjunto sin
+// salir de Conserje. La composición y el orden los arma el servidor con
+// las mismas fuentes y el mismo criterio que la home del dueño
+// (GET support/conserje/feed); acá solo se rinde lo que vino. El overlay
+// vive en document.body, como el visor de imagen (ningún re-render lo
+// borra), y cerrar (X, tocar fuera, Escape) vuelve exactamente a la
+// tarjeta o al detalle donde estaba: no se decide desde acá — las
+// decisiones siguen en la tarjeta, en el detalle y en el visor grande;
+// cerrar es un toque y la vista queda intacta detrás. Sin feed real
+// (disponible:false) se muestra UNA línea honesta y ninguna celda: el
+// feed de un cliente no se inventa.
+function conserjeFeedTileHTML(t, inicial) {
+  const esRev = !!(t && t.es_revision);
+  const tipo = String((t && t.media_type) || '');
+  const badge = (tipo === 'video' || tipo === 'reel' || tipo === 'reels')
+    ? '<span style="position:absolute;top:6px;left:6px;background:rgba(10,30,51,.75);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px">▶</span>' : '';
+  const pin = (t && t.pinned && !esRev)
+    ? '<span style="position:absolute;bottom:6px;left:6px;background:rgba(10,30,51,.75);color:#fff;font-size:11px;border-radius:8px;padding:2px 6px">📌 Fijado</span>' : '';
+  const chip = esRev
+    ? '<span style="position:absolute;bottom:6px;left:6px;background:#FEC14D;color:#0A1E33;font-size:11px;font-weight:800;border-radius:8px;padding:2px 7px">En revisión</span>' : '';
+  const ring = esRev ? 'outline:3px solid #FEC14D;outline-offset:-3px;' : '';
+  const foto = (t && t.img)
+    ? '<img src="' + esc(t.img) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">'
+    : '<div style="width:100%;height:100%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800">' + esc(inicial || '?') + '</div>';
+  return '<div style="position:relative;aspect-ratio:1/1;overflow:hidden;background:#0A1E33;' + ring + '">' + foto + badge + pin + chip + '</div>';
+}
+
+function conserjeFeedHTML(j, negocio) {
+  const nombre = (j && (j.name || j.username)) || negocio || 'el cliente';
+  const ini = String(negocio || (j && j.username) || '?').trim().charAt(0).toUpperCase() || '?';
+  let h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    + (j && j.pic ? '<img src="' + esc(j.pic) + '" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;display:block">' : '')
+    + '<div style="min-width:0"><div style="font-weight:800;font-size:15.5px;color:#0A1E33">' + esc(nombre) + '</div>'
+    + (j && j.username ? '<div style="font-size:12.5px;color:var(--mut)">@' + esc(j.username) + '</div>' : '')
+    + '</div></div>';
+  if (!j || !j.disponible) {
+    return h + '<p style="font-size:14px;line-height:1.6;color:#0A1E33;margin:0">Todavía no tenemos el feed de este cliente para mostrarlo: se arma con la lectura de su Instagram, y acá no lo inventamos.</p>';
+  }
+  const tiles = Array.isArray(j.tiles) ? j.tiles : [];
+  h += '<div class="cj-feed-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">'
+    + tiles.map((t) => conserjeFeedTileHTML(t, ini)).join('') + '</div>';
+  h += j.revision_encontrada
+    ? '<p style="font-size:13px;line-height:1.55;color:#0A1E33;margin:12px 0 0">Así va a quedar su feed: el posteo en revisión es la celda marcada, en el lugar donde va a salir.</p>'
+    : '<p style="font-size:13px;line-height:1.55;color:#0A1E33;margin:12px 0 0">Este es su feed hoy; el posteo en revisión todavía no tiene lugar en la grilla.</p>';
+  return h;
+}
+
+function conserjeFeedAbrir(uid, postId) {
+  try {
+    conserjeImgGrandeCerrar();
+    conserjeFeedCerrar();
+    if (!document || !document.body || !document.createElement) return;
+    const d = conserjeEstado.datos || {};
+    const it = (d.items || []).concat(d.sin_posteo || []).find((x) => String(x.user_id) === String(uid));
+    const negocio = (it && it.business_name) || '';
+    const over = document.createElement('div');
+    over.id = 'cjFeed';
+    over.setAttribute('role', 'dialog');
+    over.setAttribute('aria-label', 'El posteo en el feed del cliente');
+    over.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,30,51,.92);display:flex;align-items:flex-start;justify-content:center;padding:16px;box-sizing:border-box;overflow-y:auto';
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:#fff;border-radius:16px;max-width:430px;width:100%;padding:16px;box-sizing:border-box;position:relative';
+    panel.innerHTML = '<button type="button" data-cj-feed-cerrar style="position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:50%;border:0;background:#E2EDF5;color:#0A1E33;font-size:19px;font-weight:800;cursor:pointer;line-height:1">✕</button>';
+    const body = document.createElement('div');
+    body.id = 'cjFeedBody';
+    body.innerHTML = '<div class="d">⏳ Cargando el feed…</div>';
+    panel.appendChild(body);
+    over.appendChild(panel);
+    over.addEventListener('click', (ev) => {
+      const tg = ev && ev.target;
+      if (tg === over || (tg && tg.getAttribute && tg.getAttribute('data-cj-feed-cerrar') !== null)) conserjeFeedCerrar();
+    });
+    document.body.appendChild(over);
+    conserjeEstado.feedEsc = (ev) => { if (ev && ev.key === 'Escape') conserjeFeedCerrar(); };
+    document.addEventListener('keydown', conserjeEstado.feedEsc);
+    if (typeof adminApi !== 'function') throw new Error('sin adminApi');
+    adminApi('support/conserje/feed?user_id=' + encodeURIComponent(String(uid)) + '&post_id=' + encodeURIComponent(String(postId || '')), 'GET')
+      .then((j) => {
+        if (!over.parentNode) return; // ya se cerró
+        if (!j || !j.ok) { body.innerHTML = '<p style="font-size:14px;line-height:1.6;color:#0A1E33;margin:0">No se pudo cargar el feed. Probá de nuevo.</p>'; return; }
+        body.innerHTML = conserjeFeedHTML(j, negocio);
+      })
+      .catch(() => {
+        if (over.parentNode) body.innerHTML = '<p style="font-size:14px;line-height:1.6;color:#0A1E33;margin:0">No se pudo cargar el feed. Probá de nuevo.</p>';
+      });
+  } catch (e) {}
+}
+
+function conserjeFeedCerrar() {
+  try {
+    if (conserjeEstado.feedEsc) {
+      if (document && document.removeEventListener) document.removeEventListener('keydown', conserjeEstado.feedEsc);
+      conserjeEstado.feedEsc = null;
+    }
+    const over = document ? document.getElementById('cjFeed') : null;
+    if (over && over.parentNode) over.parentNode.removeChild(over);
+  } catch (e) {}
+}
+
+// (v951) Visor de imagen en grande, EN EL MISMO LUGAR: el click en una
+// imagen de Conserje (portada de la tarjeta, mini del detalle, fotos del
+// chat) la abre en grande sobre la vista actual, sin navegar ni perder
+// el scroll ni el contexto. Cerrar (X, tocar fuera de la imagen, Escape)
+// vuelve exactamente a donde estaba: el overlay vive en document.body
+// (fuera de #conserjeCard, así ningún re-render lo borra) y abrir/cerrar
+// no toca el scroll de la página. Una imagen a la vez; sin galería.
+function conserjeImgGrandeAbrir(src) {
+  try {
+    conserjeImgGrandeCerrar();
+    const url = String(src || '').trim();
+    if (!url || !document || !document.body || !document.createElement) return;
+    const over = document.createElement('div');
+    over.id = 'cjImgGrande';
+    over.setAttribute('role', 'dialog');
+    over.setAttribute('aria-label', 'Imagen en grande');
+    over.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,30,51,.92);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+    over.innerHTML = '<img src="' + esc(url) + '" alt="" style="max-width:100%;max-height:86vh;object-fit:contain;border-radius:12px;display:block">'
+      + '<button type="button" data-cj-img-cerrar style="position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:#0A1E33;font-size:22px;font-weight:800;cursor:pointer;line-height:1">✕</button>';
+    over.addEventListener('click', (ev) => {
+      const tg = ev && ev.target;
+      if (tg === over || (tg && tg.getAttribute && tg.getAttribute('data-cj-img-cerrar') !== null)) conserjeImgGrandeCerrar();
+    });
+    document.body.appendChild(over);
+    conserjeEstado.imgGrandeEsc = (ev) => { if (ev && ev.key === 'Escape') conserjeImgGrandeCerrar(); };
+    document.addEventListener('keydown', conserjeEstado.imgGrandeEsc);
+  } catch (e) {}
+}
+
+function conserjeImgGrandeCerrar() {
+  try {
+    if (conserjeEstado.imgGrandeEsc) {
+      if (document && document.removeEventListener) document.removeEventListener('keydown', conserjeEstado.imgGrandeEsc);
+      conserjeEstado.imgGrandeEsc = null;
+    }
+    const over = document ? document.getElementById('cjImgGrande') : null;
+    if (over && over.parentNode) over.parentNode.removeChild(over);
   } catch (e) {}
 }
 
@@ -197,6 +341,10 @@ function conserjeCardHTML(it, fecha) {
     + (dec && dec.nota ? '<div style="font-size:12.5px;color:var(--mut);margin-top:8px">' + esc(String(dec.nota).slice(0, 90)) + '</div>' : '')
     + (it.necesita_atencion && it.motivo_atencion ? '<div style="font-size:12.5px;color:#8a6d00;margin-top:6px">' + esc(it.motivo_atencion) + '</div>' : '')
     + botones
+    // (VER-EN-EL-FEED) El botón va DENTRO de la tarjeta: el handler
+    // delegado resuelve el [data-cj] más cercano (el botón), así que
+    // tocarlo abre el feed y NO el detalle.
+    + (p ? '<div style="margin-top:10px"><button type="button" class="btn btn-secondary" style="min-height:40px;font-size:13.5px;padding:6px 14px" data-cj="feed" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '">🖼 Ver en el feed</button></div>' : '')
     + '</div>';
 }
 
@@ -252,6 +400,7 @@ function conserjeDetalleHTML(it, d) {
     + (dec ? '<div class="card" style="padding:14px;margin-top:12px"><div style="font-size:13.5px">Ya decidiste: <b>' + esc(conserjeEtiquetaCorta(dec)) + '</b>' + (dec.nota ? ' — ' + esc(dec.nota) : '') + '</div><div style="font-size:12.5px;color:var(--mut)">Podés cambiarlo: elegí de nuevo abajo.</div></div>' : '')
     + botones
     + '<div style="margin-top:12px"><button class="btn btn-secondary" data-cj="chat" data-user="' + esc(String(it.user_id)) + '">💬 Ver el chat con Posty</button><div id="cjChat" style="margin-top:12px"></div></div>'
+    + (p ? '<div style="margin-top:12px"><button class="btn btn-secondary" data-cj="feed" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '">🖼 Ver en el feed</button></div>' : '')
     + '<div style="margin-top:12px">' + ig + '</div>'
     + conserjeFichaHTML(f)
     + sig;
@@ -320,16 +469,26 @@ function conserjeRender() {
   }
   // (LOTE CONSERJE-PEDIDOS-VOZ) Sección propia, fuera de la revisión de
   // la noche: los pedidos por voz de los clientes con lo que salió.
-  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🎙 Pedidos por voz</div>'
+  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🎙 Pedidos por voz · cambios a un posteo</div>'
     + '<div class="card" style="padding:14px">'
     + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">El pedido específico por voz no se hace en el momento: queda <b>pendiente de revisión</b>. Acá se ve qué pidió el cliente y qué entendió Posty; al aprobar, el pedido queda listo para armarlo al día siguiente — descartar lo cierra sin construir nada. Sin la interpretación de Posty no se aprueba: aprobar a ciegas no. El audio no se guarda: lo que se lee es la transcripción, tal cual la usó Posty.</div>'
-    + '<div style="font-size:13px;color:var(--mut);line-height:1.5;margin-top:6px">Ojo: la nota de voz del tab Subir (la que acompaña una foto al subirla) todavía no se guarda en ningún lado — esos pedidos no aparecen acá.</div>'
+    + '<div style="font-size:13px;color:var(--mut);line-height:1.5;margin-top:6px">Ojo: esta lista es la de la tira (cambios sobre un posteo que ya existe, o sobre la semana). Los pedidos desde el tab Subir, con material nuevo y una nota de voz, también se guardan y quedan en revisión: se ven en la sección «📤 Pedidos desde Subir», acá abajo.</div>'
     + '<button class="btn btn-secondary" data-cj="pedidos-voz" style="margin-top:10px">' + (conserjeEstado.pedidosVoz ? 'Actualizar los pedidos' : 'Ver los pedidos') + '</button>'
     + '<div id="cjPedidosVoz" style="margin-top:12px"></div></div>';
+  // (LOTE CONSERJE-PEDIDOS-SUBIR-VISTA) La otra puerta: los pedidos que
+  // nacen en el tab Subir (material nuevo + nota de voz específica).
+  // Sección propia, sin mezclar con la de la tira: acá el cliente pide
+  // un posteo NUEVO, no un cambio sobre uno que ya existe.
+  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">📤 Pedidos desde Subir · posteo nuevo</div>'
+    + '<div class="card" style="padding:14px">'
+    + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">El cliente subió material nuevo desde el tab Subir con una nota de voz pidiendo algo puntual. El pedido queda <b>pendiente de revisión</b>: al aprobar, Posty arma el posteo para el día siguiente, a la hora de siempre del cliente; al descartar, se cierra sin construir nada. Sin aprobación no se arma nada, nunca. El audio no se guarda: lo que se lee es la transcripción, tal cual la dictó el cliente.</div>'
+    + '<button class="btn btn-secondary" data-cj="pedidos-subir" style="margin-top:10px">' + (conserjeEstado.pedidosSubir ? 'Actualizar los pedidos' : 'Ver los pedidos') + '</button>'
+    + '<div id="cjPedidosSubir" style="margin-top:12px"></div></div>';
   html += '<style>@media (min-width:720px){.cj-lista{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cj-lista .card{margin:0}}</style>';
   card.innerHTML = html;
   conserjeCapAjustar();
   conserjePedidosVozPintar();
+  conserjePedidosSubirPintar();
 }
 
 // ---------- 🎙 Pedidos por voz (LOTE CONSERJE-PEDIDOS-VOZ) ----------
@@ -470,6 +629,202 @@ async function conserjePedidosVozCargar() {
   } catch (e) { if (box) box.innerHTML = '<div class="d">No se pudieron cargar los pedidos. Probá de nuevo.</div>'; }
 }
 
+// ---------- 📤 Pedidos desde Subir (LOTE CONSERJE-PEDIDOS-SUBIR-VISTA) ----------
+// Lee GET support/conserje/pedidos-subir (subir_pedidos_voz, LOTE
+// PEDIDO-VOZ-REVISION): cada pedido trae la nota transcripta, las
+// respuestas que el cliente dio en Subir (cuándo, promo, mejora,
+// caption, subtítulos), su estado y, cuando ya se armó, el posteo que
+// salió vinculado. «Lo que entendió Posty» de ESTA puerta son esas
+// respuestas: el pedido de Subir es la especificación del propio
+// cliente y el armado la sigue tal cual — no hay una interpretación
+// en texto libre como en la tira. Las decisiones van a los endpoints
+// que ya existen (aprobar / descartar): la puerta vive en el servidor
+// (sin aprobación el posteo no se arma nunca); esta vista no agrega
+// ninguna puerta propia, solo pinta y decide por esos endpoints.
+function conserjePedidoSubirUrl(p) {
+  const s = String(p || '');
+  if (!s) return '';
+  if (/^(https?:|data:|\/)/.test(s)) return s;
+  return '/' + s;
+}
+
+function conserjePedidoSubirChip(pe) {
+  if (pe.estado === 'armado') return '<span class="pill" style="background:#14743F;color:#fff;margin:0">Armado ✓</span>';
+  if (pe.estado === 'aprobado') return '<span class="pill" style="background:#2793C8;color:#fff;margin:0">Aprobado · falta armar</span>';
+  if (pe.estado === 'descartado') return '<span class="pill" style="background:#E2EDF5;color:#0A1E33;margin:0">Descartado</span>';
+  return '<span class="pill" style="background:#FEC14D;color:#0A1E33;margin:0">Pendiente de revisión</span>';
+}
+
+function conserjePedidoSubirEntendidoHTML(pe) {
+  const r = pe.respuestas || {};
+  const filas = [];
+  filas.push(['Material', pe.kind === 'video' ? 'Un video' : 'Una foto']);
+  filas.push(['Cuándo sale', r.cuando === 'semana' ? 'Esta semana' : 'Lo ubica Posty']);
+  if (r.promo === '2x1') filas.push(['Promo', '2x1']);
+  else if (r.promo === 'desc') filas.push(['Promo', 'Con descuento']);
+  else if (r.promo === 'envio') filas.push(['Promo', 'Envío gratis']);
+  else filas.push(['Promo', 'Sin promo']);
+  if (pe.kind === 'video') filas.push(['Subtítulos', r.subs === 'no' ? 'No' : 'Sí']);
+  else filas.push(['Mejorar la foto', r.mejora === 'no' ? 'No, tal cual la subió' : 'Sí']);
+  if (r.caption_modo === 'mio') filas.push(['Caption', 'Lo escribió el cliente: «' + String(r.caption_text || '') + '»']);
+  else filas.push(['Caption', 'Lo escribe Posty']);
+  return filas.map((f) => '<div style="font-size:13.5px;line-height:1.55"><b>' + esc(f[0]) + ':</b> ' + esc(f[1]) + '</div>').join('');
+}
+
+function conserjePedidoSubirDetalleHTML(pe) {
+  const assetUrl = conserjePedidoSubirUrl(pe.asset_path);
+  const izq = '<div style="flex:1;min-width:240px;background:#E8F4FB;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+    + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">Lo que pidió</div>'
+    + '<div style="font-size:13.5px;line-height:1.55">🎙 ' + esc(pe.nota || '') + '</div>'
+    + (assetUrl && pe.kind !== 'video' ? '<div style="border-radius:10px;overflow:hidden;background:#0A1E33;margin:8px 0"><img src="' + esc(assetUrl) + '" alt="" style="width:100%;height:180px;object-fit:contain;display:block" onerror="this.style.display=\'none\'"></div>' : '')
+    + (assetUrl && pe.kind === 'video' ? '<div style="font-size:12.5px;color:var(--mut);margin-top:6px">El material es un video (no se previsualiza acá).</div>' : '')
+    + '<div style="font-weight:800;font-size:13px;margin:12px 0 6px">Lo que entendió Posty</div>'
+    + conserjePedidoSubirEntendidoHTML(pe)
+    + '</div>';
+  let der;
+  if (pe.estado === 'armado' && pe.post) {
+    const po = pe.post;
+    const postUrl = conserjePedidoSubirUrl(po.image_path);
+    const fecha = po.status === 'published'
+      ? 'Publicado' + (po.published_at ? ' · ' + esc(String(po.published_at).slice(0, 16)) : '')
+      : (po.scheduled_at ? 'Programado · ' + esc(String(po.scheduled_at).slice(0, 16)) : 'Sin fecha');
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + (postUrl ? '<div style="border-radius:10px;overflow:hidden;background:#0A1E33;margin-bottom:8px"><img src="' + esc(postUrl) + '" alt="" style="width:100%;height:200px;object-fit:contain;display:block" onerror="this.style.display=\'none\'"></div>' : '')
+      + '<div><span class="pill" style="background:#2793C8;color:#fff;margin:0">' + esc(conserjePedidoEstadoLabel(po.status)) + '</span> <span style="font-size:12.5px;color:var(--mut)">' + fecha + '</span></div>'
+      + (po.caption ? '<div style="font-size:13.5px;line-height:1.5;margin-top:6px">' + esc(po.caption) + '</div>' : '')
+      + '</div>';
+  } else if (pe.estado === 'armado') {
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + '<div style="font-size:13.5px;line-height:1.55;color:var(--mut)">El pedido quedó armado, pero el posteo ya no se puede mostrar.</div></div>';
+  } else if (pe.estado === 'aprobado') {
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + '<div style="font-size:13.5px;line-height:1.55;color:var(--mut)">Todavía no hay posteo: se aprobó pero el armado no salió' + (pe.error ? ' (' + esc(pe.error) + ')' : '') + '. Aprobar de nuevo lo reintenta.</div></div>';
+  } else if (pe.estado === 'descartado') {
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + '<div style="font-size:13.5px;line-height:1.55;color:var(--mut)">No se construyó nada: el pedido se descartó.</div></div>';
+  } else {
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + '<div style="font-size:13.5px;line-height:1.55;color:var(--mut)">Todavía no hay posteo: sale recién si se aprueba el pedido, y se arma para el día siguiente.</div></div>';
+  }
+  // Las acciones son las del estado, y siempre por los endpoints que
+  // ya existen: aprobar dispara el armado en el servidor; descartar
+  // es terminal (el servidor rechaza aprobar un descartado y
+  // descartar un armado).
+  let acciones;
+  if (pe.estado === 'aprobado') {
+    acciones = '<div style="font-size:13.5px;font-weight:700;color:#B3261E">⚠ Aprobado, pero el armado no salió' + (pe.error ? ': ' + esc(pe.error) : '') + '</div>'
+      + '<div style="margin-top:8px"><button type="button" class="btn-mod ok" data-cj="pedido-subir-decidir" data-id="' + esc(String(pe.id)) + '" data-decision="aprobar">Reintentar el armado</button>'
+      + '<button type="button" class="btn-mod bad" data-cj="pedido-subir-decidir" data-id="' + esc(String(pe.id)) + '" data-decision="descartar">Descartar</button></div>';
+  } else if (pe.estado === 'armado') {
+    const a = pe.armado || {};
+    acciones = '<div style="font-size:13.5px;font-weight:700;color:#14743F">✅ Armado: sale ' + esc(a.dia ? conserjeFechaLinda(a.dia) : '') + (a.hora ? ' · ' + esc(a.hora) : '') + '</div>'
+      + (a.desplazado_post_id ? '<div style="font-size:12.5px;color:var(--mut);margin-top:4px">El posteo de Posty de ese día se movió para no pisarlo (un día, un posteo).</div>' : '');
+  } else if (pe.estado === 'descartado') {
+    acciones = '<div style="font-size:13.5px;font-weight:700;color:var(--mut)">Descartado: no se construye nada.</div>';
+  } else {
+    acciones = '<div>'
+      + '<button type="button" class="btn-mod ok" data-cj="pedido-subir-decidir" data-id="' + esc(String(pe.id)) + '" data-decision="aprobar">✓ Aprobar — se arma para mañana</button>'
+      + '<button type="button" class="btn-mod bad" data-cj="pedido-subir-decidir" data-id="' + esc(String(pe.id)) + '" data-decision="descartar">Descartar</button></div>';
+  }
+  return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">' + izq + der + '</div>'
+    + '<div style="margin-top:10px">' + acciones + '</div>';
+}
+
+function conserjePedidoSubirItemHTML(pe) {
+  const abierto = String(conserjeEstado.pedidoSubirAbierto || '') === String(pe.id);
+  // (MICRO-PIEZA DEL TABLERO · compuesto conserje) El cliente se
+  // identifica por su negocio y su @ cuando el payload los trae
+  // (subirPedidoPublico los suma desde profiles); el email queda de
+  // respaldo, como hasta v1044.
+  const quien = pe.business_name
+    ? esc(pe.business_name) + (pe.ig_username ? ' <span style="font-weight:600;font-size:13px;color:var(--mut)">@' + esc(pe.ig_username) + '</span>' : '')
+    : esc(pe.email || ('Cliente ' + pe.user_id));
+  let h = '<div class="card" style="padding:12px;margin-bottom:10px;background:#FBFDFE">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:14.5px">' + quien + '</div>' + conserjePedidoSubirChip(pe) + '</div>'
+    + '<div style="font-size:12.5px;color:var(--mut);margin-top:2px">' + esc(String(pe.created_at || '').slice(0, 16)) + ' · desde el tab Subir</div>'
+    + '<div style="font-size:14px;line-height:1.5;margin-top:6px">🎙 ' + esc(pe.nota || '') + '</div>'
+    + '<button type="button" class="btn btn-secondary" data-cj="pedido-subir-ver" data-id="' + esc(String(pe.id)) + '" style="margin-top:8px;min-height:40px;font-size:13.5px">' + (abierto ? 'Ocultar' : 'Ver qué salió →') + '</button>';
+  if (abierto) h += conserjePedidoSubirDetalleHTML(pe);
+  return h + '</div>';
+}
+
+function conserjePedidosSubirHTML() {
+  const d = conserjeEstado.pedidosSubir;
+  if (!d) return '';
+  if (!d.pedidos || !d.pedidos.length) return '<div class="d">Todavía no hay pedidos desde Subir.</div>';
+  return d.pedidos.map(conserjePedidoSubirItemHTML).join('');
+}
+
+function conserjePedidosSubirPintar() {
+  try {
+    const box = $('#cjPedidosSubir');
+    if (box && conserjeEstado.pedidosSubir) box.innerHTML = conserjePedidosSubirHTML();
+  } catch (e) { /* sin DOM (vm): la sección se pinta al cargar */ }
+}
+
+async function conserjePedidosSubirCargar() {
+  const box = $('#cjPedidosSubir');
+  if (box) box.innerHTML = '<div class="d">⏳ Cargando los pedidos…</div>';
+  try {
+    const d = await adminApi('support/conserje/pedidos-subir', 'GET');
+    if (!d || !d.ok) throw new Error('sin datos');
+    conserjeEstado.pedidosSubir = d;
+    conserjePedidosSubirPintar();
+    const btn = document.querySelector('[data-cj="pedidos-subir"]');
+    if (btn) btn.textContent = 'Actualizar los pedidos';
+  } catch (e) { if (box) box.innerHTML = '<div class="d">No se pudieron cargar los pedidos. Probá de nuevo.</div>'; }
+}
+
+async function conserjePedidoSubirDecidir(t) {
+  const id = Number(t.getAttribute('data-id') || '');
+  const dec = t.getAttribute('data-decision') || '';
+  if (!id || (dec !== 'aprobar' && dec !== 'descartar')) return;
+  t.disabled = true;
+  const avisar = (msg) => {
+    const box = $('#cjPedidosSubir');
+    if (box) {
+      const warn = document.createElement('div');
+      warn.className = 'warn';
+      warn.textContent = msg;
+      box.prepend(warn);
+    }
+  };
+  try {
+    const r = await adminApi('support/conserje/pedidos-subir/' + id + '/' + dec, 'POST', {});
+    if (!r || !r.ok) throw new Error('sin ok');
+    const d = conserjeEstado.pedidosSubir;
+    if (d && d.pedidos && r.pedido) {
+      const i = d.pedidos.findIndex((x) => Number(x.id) === id);
+      if (i >= 0) d.pedidos[i] = r.pedido;
+    }
+    conserjePedidosSubirPintar();
+  } catch (e) {
+    t.disabled = false;
+    const data = (e && e.data) || {};
+    if (data.pedido) {
+      // 502: la aprobación quedó registrada pero el armado no salió;
+      // el pedido actualizado viaja en el cuerpo y se pinta tal cual
+      // quedó (aprobado, con el motivo, reintentable).
+      const d = conserjeEstado.pedidosSubir;
+      if (d && d.pedidos) {
+        const i = d.pedidos.findIndex((x) => Number(x.id) === id);
+        if (i >= 0) d.pedidos[i] = data.pedido;
+      }
+      conserjePedidosSubirPintar();
+      avisar('Se aprobó, pero el armado no salió (' + (data.error || 'armado_fallido') + '). El pedido quedó aprobado: se puede reintentar.');
+    } else if (data.error === 'ya_armado' || data.error === 'ya_descartado') {
+      avisar('Ese pedido ya estaba ' + (data.error === 'ya_armado' ? 'armado' : 'descartado') + '. Actualizá la lista.');
+    } else {
+      avisar('No se pudo guardar la decisión. Probá de nuevo.');
+    }
+  }
+}
+
 async function conserjeCargar() {
   const card = $('#conserjeCard');
   if (card) card.innerHTML = '<div class="d">⏳ Cargando…</div>';
@@ -521,6 +876,11 @@ async function bindConserje() {
   if (card.__cjBound) return;
   card.__cjBound = true;
   card.addEventListener('click', async (ev) => {
+    // (v951) Imagen en grande: el click en una imagen de Conserje abre el
+    // visor en el mismo lugar, sin disparar la acción de la tarjeta (en
+    // la lista, la foto NO abre el detalle; el resto de la tarjeta sí).
+    const img = ev.target && ev.target.closest ? ev.target.closest('img[data-cj-img]') : null;
+    if (img) { conserjeImgGrandeAbrir(img.getAttribute('src')); return; }
     const t = ev.target.closest('[data-cj]');
     if (!t) return;
     const acc = t.getAttribute('data-cj');
@@ -533,6 +893,7 @@ async function bindConserje() {
       if (ev.target.closest && ev.target.closest('.cj-arreglo')) return;
       conserjeEstado.notaGuardada = null; conserjeEstado.vistaId = uid; conserjeRender(); window.scrollTo(0, 0); return;
     }
+    if (acc === 'feed') { conserjeFeedAbrir(uid, t.getAttribute('data-post')); return; }
     if (acc === 'volver') { conserjeEstado.notaGuardada = null; conserjeEstado.vistaId = null; conserjeRender(); window.scrollTo(0, 0); return; }
     if (acc === 'arreglar') {
       // (v906) En la lista, cada tarjeta lleva su propia caja (.cj-arreglo):
@@ -593,11 +954,11 @@ async function bindConserje() {
         const msgs = (j.chat || []).map((m) => {
           let t = String(m.text || '');
           const fm = t.match(/\[foto:([^\]]+)\]/);
-          const img = fm ? '<img src="' + esc((fm[1] || '').trim()) + '" alt="" style="width:100%;border-radius:12px;display:block;margin-top:6px" onerror="this.style.display=\'none\'">' : '';
+          const img = fm ? '<img src="' + esc((fm[1] || '').trim()) + '" alt="" data-cj-img style="width:100%;border-radius:12px;display:block;margin-top:6px;cursor:zoom-in" onerror="this.style.display=\'none\'">' : '';
           t = t.replace(/\[foto:[^\]]+\]/g, '').trim();
           return '<div style="padding:8px 10px;border-radius:12px;margin-bottom:6px;background:' + (m.role === 'user' ? '#E8F4FB' : '#fff') + ';border:1px solid var(--line);font-size:13.5px;line-height:1.5"><b style="font-size:12px;color:var(--mut)">' + (m.role === 'user' ? 'Cliente' : 'Posty') + '</b><div>' + esc(t) + '</div>' + img + '</div>';
         }).join('');
-        const fotos = (j.fotos_recientes || []).map((f) => '<img src="' + esc(f.file_path || '') + '" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:10px" onerror="this.style.display=\'none\'">').join('');
+        const fotos = (j.fotos_recientes || []).map((f) => '<img src="' + esc(f.file_path || '') + '" alt="" data-cj-img style="width:72px;height:72px;object-fit:cover;border-radius:10px;cursor:zoom-in" onerror="this.style.display=\'none\'">').join('');
         if (box) {
           box.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:8px">Chat con Posty (últimos ' + (j.chat || []).length + ' mensajes)</div>'
           + (fotos ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + fotos + '</div><div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Fotos recientes del cliente, las que el chat menciona.</div>' : '')
@@ -616,6 +977,14 @@ async function bindConserje() {
       return;
     }
     if (acc === 'pedido-decidir') { await conserjePedidoDecidir(t); return; }
+    if (acc === 'pedidos-subir') { await conserjePedidosSubirCargar(); return; }
+    if (acc === 'pedido-subir-ver') {
+      const pidSub = t.getAttribute('data-id');
+      conserjeEstado.pedidoSubirAbierto = String(conserjeEstado.pedidoSubirAbierto || '') === String(pidSub) ? 0 : pidSub;
+      conserjePedidosSubirPintar();
+      return;
+    }
+    if (acc === 'pedido-subir-decidir') { await conserjePedidoSubirDecidir(t); return; }
     if (acc === 'decidir' || acc === 'armar') {
       const decision = acc === 'armar' ? 'pedir' : t.getAttribute('data-decision');
       let nota = '';
