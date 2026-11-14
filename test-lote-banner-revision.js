@@ -15,6 +15,9 @@
 // y el sufijo del estado «ya salió»). Esta suite nació en v939 para ese banner: sus pins del banner
 // se re-pinearon para afirmar la AUSENCIA (cadenas en 0, sin atributo ni cableado, saludo vacío en
 // needOK>0) y sus pins de era al BUILD v1031 / app.js?v=705 / styles?v=20261280. Lo que la suite
+// RE-PIN DE ERA · lote BLOQUE-FUNDADOR-WEB v1032: los pins de era se mueven al BUILD v1032 /
+// app.js?v=706 (el lote que mueve los stamps re-pinea esta suite, como hizo TARJETA-REVISIÓN
+// con los suyos); los pins de comportamiento (la tarjeta removida) no cambian.
 // sigue custodiando: el conteo pzHoyRevisionContar (queda, alimenta el needOK del saludo) y la
 // garantía de que el aviso no vuelve. Los destinos del saludo en needOK=0/sin-semana se re-pinearon
 // también a los vigentes desde SIN-CHAT-REUBICACIÓN (v1025): semana y armar, no chat.
@@ -61,11 +64,11 @@ function extractFn(src, name) {
 
 (async () => {
   // ---------- 1. Estampado (provisional: el preparador re-numera) ----------
-  t(srv.includes("const BUILD_ID = '20261105-v1031';"), 'server: BUILD v1031 (re-pin TARJETA-REVISIÓN)');
-  t(cnt(srv, '20261105-v1031') === 1, 'server: BUILD v1031 ×1');
+  t(srv.includes("const BUILD_ID = '20261105-v1032';"), 'server: BUILD v1032 (re-pin era BLOQUE-FUNDADOR)');
+  t(cnt(srv, '20261105-v1032') === 1, 'server: BUILD v1032 ×1');
   t(!srv.includes('20261105-v1029'), 'server: sin restos de v1029 (re-pin v1031)');
-  t(idxES.includes('/app.js?v=705'), 'index ES: app.js?v=705 (re-pin v1031)');
-  t(cnt(idxES, 'app.js?v=705') === 1, 'index ES: app.js?v=705 ×1');
+  t(idxES.includes('/app.js?v=706'), 'index ES: app.js?v=706 (re-pin era v1032)');
+  t(cnt(idxES, 'app.js?v=706') === 1, 'index ES: app.js?v=706 ×1');
   t(idxES.includes('/styles.css?v=20261280'), 'index ES: styles?v=20261280 sin cambio (el lote no toca styles.css; re-pin de era)');
   t(idxEN.includes('/styles.css?v=20261280'), 'index EN: styles?v=20261280 (mismo valor que ES)');
   t(!idxEN.includes('/app.js?v='), 'index EN: no carga app.js (landing)');
@@ -193,16 +196,16 @@ function extractFn(src, name) {
     } catch (e) { /* aún no levanta */ }
     if (!version) await sleep(500);
   }
-  t(version && version.build === '20261105-v1031', 'boot: /api/version = v1031 (re-pin)', JSON.stringify(version));
+  t(version && version.build === '20261105-v1032', 'boot: /api/version = v1032 (re-pin era)', JSON.stringify(version));
   if (version) {
     let ok5 = 0;
     for (let i = 0; i < 5; i++) {
-      try { const r = await fetch(`http://127.0.0.1:${PORT}/api/version`); const j = await r.json(); if (j && j.build === '20261105-v1031') ok5++; } catch (e) {}
+      try { const r = await fetch(`http://127.0.0.1:${PORT}/api/version`); const j = await r.json(); if (j && j.build === '20261105-v1032') ok5++; } catch (e) {}
     }
     t(ok5 === 5, 'boot: /api/version 5/5', ok5 + '/5');
     const idx = await (await fetch(`http://127.0.0.1:${PORT}/`)).text();
-    t(idx.includes('/app.js?v=705') && idx.includes('/styles.css?v=20261280'), 'boot: el index servido trae ?v=705 y styles?v=20261280 (re-pin v1031)');
-    const bundle = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=705`)).text();
+    t(idx.includes('/app.js?v=706') && idx.includes('/styles.css?v=20261280'), 'boot: el index servido trae ?v=706 y styles?v=20261280 (re-pin era v1032)');
+    const bundle = await (await fetch(`http://127.0.0.1:${PORT}/app.js?v=706`)).text();
     t(bundle.includes('function pzHoyRevisionContar(') && !bundle.includes('data-pz-hoy-revision') && !bundle.includes('posteos para revisar'), 'boot: el bundle trae pzHoyRevisionContar (el conteo queda) y NINGUNA cadena de la tarjeta (v1031)');
     // Usuario de prueba + siembra: un borrador visible, uno bloqueado
     // (needs_review=1) y un programado pendiente.

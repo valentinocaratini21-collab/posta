@@ -5224,7 +5224,7 @@ function landingView(cfg) {
   <div class="section" id="equipo"><div class="wrap" style="max-width:760px">
     <h2><span class="hl">Somos un equipo, Posty y yo</span></h2>
     <div class="founder-card" id="homeFounderCard" aria-label="El equipo de Posty">
-      <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
+      <img src="valentino-posty-fundador.jpg?v=2" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
       <h3 style="margin-top:18px">Valentino Caratini</h3>
       <p class="fc-eye" style="margin-top:2px">Founder de Posty</p>
       <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Somos un equipo, Posty y yo: él arma tu semana y yo reviso que cada posteo salga perfecto. Vos solo mirás, y si algo no te gusta, lo ajustamos juntos.</p>
