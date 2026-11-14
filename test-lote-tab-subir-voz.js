@@ -113,7 +113,7 @@ function extractFn(src, name) {
     navigator: {},
   };
   vm.createContext(sandbox);
-  const need = ['mzTabsHTML', 'pzVozEn', 'pzVozStripHTML', 'pzVozLane', 'pzHoyCardHTML', 'homeGridCompose', 'homeTileHTML'];
+  const need = ['mzTabsHTML', 'pzVozEn', 'pzVozStripHTML', 'pzVozLane', 'pzHoyCardHTML', 'homeGridCompose', 'homeTileHTML', 'hfBorradorCapTxt', 'pzWhenRelDay', 'pzHoyHoraCorta']; // +3 extracciones por el RE-PIN B8 del LOTE GRILLA-ORDEN-Y-VERDAD (el helper de rótulo de borrador y sus dos dependencias)
   let okLoad = true;
   for (const f of need) { const src = extractFn(app, f); if (!src) { okLoad = false; console.error('  (sin extraer ' + f + ')'); } else { try { vm.runInContext(src, sandbox); } catch (e) { okLoad = false; console.error('  (eval ' + f + ': ' + e.message + ')'); } } }
   // stubs que homeTileHTML necesita y no se extraen
@@ -141,7 +141,7 @@ function extractFn(src, name) {
   const subirTile = tiles.find((x) => x.post && x.post.id === 901);
   t('B7 grilla: la celda de Subir rinde en posición final y la futura común no', ids.includes(901) && !ids.includes(902) && ids.includes(903) && !!subirTile && subirTile.subir === true, JSON.stringify(ids));
   const tileHtml = vm.runInContext(`homeTileHTML(${JSON.stringify(subirTile)}, 1)`, sandbox);
-  t('B8 celda de Subir: marca «Nuevo» + rótulo «Se postea…» debajo + data-subir-nuevo', has(tileHtml, 'hf-nuevo-badge') && has(tileHtml, 'Nuevo') && has(tileHtml, 'Se postea el viernes · 19:00') && has(tileHtml, 'data-subir-nuevo="1"'), tileHtml.slice(0, 240));
+  t('B8 celda de Subir: marca «Nuevo» + rótulo de BORRADOR debajo + data-subir-nuevo (RE-PIN LOTE GRILLA-ORDEN-Y-VERDAD: el fixture 901 es draft — un borrador NO se presenta como «Se postea»; su rótulo honesto es «Borrador · sería en 3 días · 19:00» vía hfBorradorCapTxt)', has(tileHtml, 'hf-nuevo-badge') && has(tileHtml, 'Nuevo') && has(tileHtml, 'Borrador · sería en 3 días · 19:00') && !has(tileHtml, 'Se postea') && has(tileHtml, 'data-subir-nuevo="1"'), tileHtml.slice(0, 400));
   const tileHtml2 = vm.runInContext(`homeTileHTML(${JSON.stringify({ ...subirTile, post: { ...subirPost, subir_nuevo: 0 } })}, 1)`, sandbox);
   t('B9 celda ya vista: sin marca «Nuevo»', !has(tileHtml2, 'hf-nuevo-badge') && !has(tileHtml2, 'data-subir-nuevo'));
 }

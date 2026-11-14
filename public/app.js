@@ -21821,9 +21821,43 @@ function homeGridCompose(input) {
     // debajo). El ancla FIFA (idxPub + avance por día) se retira: en
     // idx 0 no hay nada que partir y el fix v1 queda SUPERSEDED por
     // decisión (ver STATUS.md §0c y §4).
-    finalTiles.splice(0, 0, { kind: 'oculta', post: nextPost, openHoy, hoy: cardHoy, futuro: esFuturoR1 });
+    // (LOTE GRILLA-ORDEN-Y-VERDAD · 14/11 · SUPERSEDE la posición idx 0
+    // de PROXIMO-RITUAL cuando hay futuros más lejanos que la carta:
+    // la carta ya no se splicea acá; entra al arreglo y el orden de
+    // feed de abajo la ubica por su fecha, como a cualquier pieza
+    // futura.)
+    finalTiles.push({ kind: 'oculta', post: nextPost, openHoy, hoy: cardHoy, futuro: esFuturoR1 });
   }
-  return finalTiles;
+  // (LOTE GRILLA-ORDEN-Y-VERDAD · 14/11 · orden de Valentino con
+  // captura: «cuanto más tarde se postea el posteo, más a la izquierda
+  // tiene que aparecer») La grilla se lee como el feed real de
+  // Instagram: dentro del bloque de NO publicados (todo lo que va a
+  // salir), manda la fecha efectiva DESCENDENTE — el que sale MÁS
+  // TARDE va primero, arriba a la izquierda — y los publicados
+  // quedan debajo en su orden real (también descendente). Hasta este
+  // lote la carta del próximo quedaba fijada en idx 0 y se sentaba A
+  // LA IZQUIERDA de futuros más lejanos (la captura del 14/11:
+  // mañana · jueves · martes en vez de jueves · martes · mañana).
+  // La carta sigue existiendo, abierta y con su pill de salida: solo
+  // cambia su posición, que pasa a ser la de su fecha. Con un solo
+  // futuro (el caso común) sigue primera: es el único del bloque.
+  // Los fijados del dueño (el head) no se tocan: en Instagram el
+  // fijado manda sobre la cronología. Se reutiliza la clave del
+  // Lote 12 (hfFeedSortKey + hfCmpDescKey: fecha efectiva, sin fecha
+  // al final de su grupo) y el sort es estable, así que sin carta el
+  // resultado es el orden vigente. Ante cualquier duda, el arreglo
+  // sin reordenar (fail-open a lo vigente).
+  try {
+    const headGO = finalTiles.filter((t) => t && t.kind === 'post' && t.post && t.post.pinned);
+    const tailGO = finalTiles.filter((t) => !(t && t.kind === 'post' && t.post && t.post.pinned));
+    const isPubGO = (t) => t && (t.kind === 'ig' || (t.post && t.post.status === 'published'));
+    tailGO.sort((a, b) => {
+      const pa = isPubGO(a) ? 1 : 0, pb = isPubGO(b) ? 1 : 0;
+      if (pa !== pb) return pa - pb;
+      return hfCmpDescKey(hfFeedSortKey(a), hfFeedSortKey(b));
+    });
+    return headGO.concat(tailGO);
+  } catch (e) { return finalTiles; }
 }
 const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
 const HOME_PIN_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M15.6 3.5l4.9 4.9-2.1.7-2.3 2.3.02 3.4c0 .4-.42.62-.75.4l-3.35-2.26-2.94 2.94a1.06 1.06 0 0 1-1.5-1.5l2.94-2.94L8.56 8.03a.53.53 0 0 1 .4-.76l3.4.02 2.3-2.3.7-2.44a.5.5 0 0 1 .24-.05z"/></svg>';
@@ -22471,6 +22505,50 @@ function pzDiaEsFutura(p, hoyKey, lunesKey) {
   } catch (e) { return false; }
 }
 
+// (LOTE GRILLA-ORDEN-Y-VERDAD · 14/11) Rótulo honesto del BORRADOR
+// con día planeado en la grilla: un borrador NO se postea solo, así
+// que su línea debajo de la tile nunca dice «Se postea…»: dice que es
+// borrador y cuándo SERÍA («Borrador · sería mañana · 19:00» /
+// «Borrador · sería en 5 días · 19:00» / «Borrador · sería el
+// martes»). La fecha sale del scheduled_at planeado o, sin él, del
+// día del plan (t.day/t.ymd). Sin fecha legible: solo «Borrador»,
+// jamás una fecha inventada. Los programados NO pasan por acá: su
+// «Se postea…» (pzHoyPillSalida) es verdad y queda intacto. EN:
+// «Draft · would be tomorrow · 7:00 PM» / «Draft · tentatively
+// Tuesday».
+function hfBorradorCapTxt(p, t, en) {
+  try {
+    const base = en ? 'Draft' : 'Borrador';
+    if (!p) return base;
+    let d = null;
+    if (p.scheduled_at && typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
+    if (d && !isNaN(d)) {
+      const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+      const rel = (typeof pzWhenRelDay === 'function') ? pzWhenRelDay(d, tz, en) : '';
+      const hh = (typeof pzHoyHoraCorta === 'function') ? (pzHoyHoraCorta(p.scheduled_at, tz, en) || '') : '';
+      let cuando = '';
+      if (rel === 'hoy' || rel === 'today') cuando = en ? 'today' : 'hoy';
+      else if (rel === 'mañana' || rel === 'tomorrow') cuando = en ? 'tomorrow' : 'mañana';
+      else if (rel) cuando = rel; // «en N días» / «in N days»
+      else {
+        const zo = tz ? { timeZone: tz } : {};
+        const wd = d.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ weekday: 'long' }, zo)).replace(/\./g, '');
+        if (wd) cuando = en ? ('on ' + wd) : ('el ' + wd.toLowerCase());
+      }
+      if (cuando) return base + ' · ' + (en ? 'would be ' : 'sería ') + cuando + (hh ? ' · ' + hh : '');
+      return base;
+    }
+    const ymd = (t && (t.day || t.ymd)) || '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) {
+      const dd = new Date(String(ymd).slice(0, 10) + 'T12:00:00Z');
+      if (!isNaN(dd)) {
+        const wd = dd.toLocaleDateString(en ? 'en-US' : 'es-AR', { weekday: 'long', timeZone: 'UTC' }).replace(/\./g, '');
+        if (wd) return base + ' · ' + (en ? ('tentatively ' + wd) : ('sería el ' + wd.toLowerCase()));
+      }
+    }
+    return base;
+  } catch (e) { return en ? 'Draft' : 'Borrador'; }
+}
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -22534,7 +22612,17 @@ function homeTileHTML(t, i) {
   // nacidas de Subir: vive sobre la celda hasta que el cliente la VE
   // (la apaga el observador de la grilla vía /visto, no el tiempo).
   const nuevoBadge = (p.subir_nuevo && p.status !== 'published') ? `<span class="hf-nuevo-badge">${phEn ? 'New' : 'Nuevo'}</span>` : '';
-  const capSubir = t.subir ? `<span class="hf-tile-cap"><b>${esc((typeof pzHoyPillSalida === 'function') ? (pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) || '') : '')}</b></span>` : '';
+  // (LOTE GRILLA-ORDEN-Y-VERDAD · 14/11) La línea de la celda de
+  // Subir dice la verdad del estado: programado → «Se postea…»
+  // (pzHoyPillSalida, como siempre); BORRADOR → rótulo de borrador
+  // con su día tentativo (hfBorradorCapTxt): un borrador no se
+  // publica solo y la grilla no lo presenta como que sale (así se
+  // veían los borradores planeados del 14/11: «Se postea en 3
+  // días» / «Se postea en 5 días» sin ser programados).
+  const capSubirTxt = (p.status === 'draft')
+    ? ((typeof hfBorradorCapTxt === 'function') ? hfBorradorCapTxt(p, t, phEn) : '')
+    : ((typeof pzHoyPillSalida === 'function') ? (pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) || '') : '');
+  const capSubir = t.subir ? `<span class="hf-tile-cap"><b>${esc(capSubirTxt)}</b></span>` : '';
   // (LOTE FEED · marca de archivado) El archivado se ve MARCADO, no
   // se esconde: chip en la franja (la única excepción a «nada de
   // texto sobre la imagen», igual que la chapita) + borde propio.
