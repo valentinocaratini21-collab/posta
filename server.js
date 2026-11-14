@@ -6952,6 +6952,31 @@ function pzChatSaveReply(db, uid, reply) {
   return true;
 }
 
+// (LOTE POSTY-RESPONDE-CON-TRABAJO · regla de Valentino 13/11: «posty
+// solo responda si tiene alguna duda y que se responda con clicks a sus
+// preguntas. si no tiene preguntas no responde con mensajes, responde
+// con trabajo») Red determinística del cerebro: una respuesta que es
+// UNA SOLA pregunta abierta (una oración que termina en «?»), sin
+// trabajo ni opciones en el turno, no se entrega — la duda legal viaja
+// con el bloque ```options (opciones tocables derivadas del contexto)
+// y todo lo demás es trabajo entregado o silencio. Conservador a
+// propósito: un texto con más de una oración, o que no termina en
+// pregunta, NUNCA se toca (los recibos y las respuestas con dato no
+// son una pregunta suelta).
+function pzChatReplyEsPreguntaSuelta(reply) {
+  const t = String(reply || '').trim();
+  if (!t || t.length > 240 || t.includes('\n')) return false;
+  // La pregunta tiene que ser el cierre del texto: después del «?»
+  // solo puede haber emojis/símbolos sueltos (el cierre típico del
+  // chat). Se recorta ese rabo y se mira el núcleo.
+  let end = t.length;
+  while (end > 0 && !/[a-záéíóúñü0-9?]/i.test(t[end - 1])) end--;
+  const core = t.slice(0, end);
+  if (!core.endsWith('?')) return false;
+  const oraciones = core.split(/[.!…]+/).map(s => s.trim()).filter(Boolean);
+  return oraciones.length === 1;
+}
+
 // (v849) NOTIFICACIÓN AL DUEÑO — un cliente pidió un cambio de posteo.
 // Una push por pedido; nunca tira: el cambio nunca se frena por la push.
 // El dueño es Valentino (user 12). No existe una constante OWNER_USER_ID
@@ -7770,13 +7795,34 @@ app.post('/api/ideas/chat', async (req, res) => {
           if (regen && typeof regen.reply === 'string') regen.reply = chatStripOpen(regen.reply);
           if (regen && regen.reply && !pzChatClaimsSentPhotos(regen.reply)) out = regen;
           else {
-            out = { reply: FT('dale 😄 ¿me contás un poco más y lo armamos?', "sure 😄 tell me a bit more and we'll build it?"), idea: null };
+            // (LOTE POSTY-RESPONDE-CON-TRABAJO) El respaldo ya no es una
+            // pregunta abierta («¿me contás un poco más…?»): sin trabajo
+            // que entregar y sin una duda con opciones, Posty no dice
+            // nada — el turno queda sin mensaje (el cliente ve su propio
+            // mensaje y el trabajo llega cuando esté).
+            out = { reply: '', idea: null };
             out.edits = []; out.dna = null; out.rule = null; out.inspo = null;
           }
         }
       }
     } catch (e) { console.error('[chat-coherencia] guard error:', e.message); }
     const uid = req.session.userId;
+    // (LOTE POSTY-RESPONDE-CON-TRABAJO · red determinística) Si la
+    // respuesta del cerebro quedó en UNA pregunta abierta suelta y el
+    // turno no produjo trabajo (idea/edits/dna/rule/inspo), ni una duda
+    // con opciones tocables (```options), ni la tarjeta de voz del
+    // dueño, el mensaje NO sale: ni se guarda ni se devuelve (el
+    // cliente ya maneja reply vacío sin pintar burbuja). La duda legal
+    // es pregunta + opciones; el resto es trabajo o silencio. El saludo
+    // puro conserva su respuesta social de diseño (v916).
+    try {
+      const haySalida = !!(out.idea || (Array.isArray(out.edits) && out.edits.length) || (Array.isArray(out.options) && out.options.length) || out.dna || out.rule || out.inspo || vozPost);
+      const ultimoUser = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+      if (!haySalida && !pzIsPureGreeting(ultimoUser) && pzChatReplyEsPreguntaSuelta(out.reply)) {
+        console.log('[posty-responde] pregunta suelta sin trabajo ni opciones: el turno queda sin mensaje (uid ' + uid + ')');
+        out.reply = '';
+      }
+    } catch (e) { console.error('[posty-responde] red:', e.message); }
     // (LOTE CHAT-678 · 7) Las fotos que llegaron con este mensaje se guardan
     // con él (photos_json): el grupo se ve en la burbuja y persiste entre
     // sesiones. Solo rutas /media/ reales, tope 10 (máximo de un carrusel).
@@ -8419,7 +8465,10 @@ app.post('/api/ideas/chat', async (req, res) => {
       // Si pidió mostrar pero no hay nada con imagen: no prometer imágenes.
       if (!showDrafts || !showDrafts.length) {
         showDrafts = [];
-        out.reply = 'todavía no armé nada — la armamos? 🚀';
+        // (LOTE POSTY-RESPONDE-CON-TRABAJO) Solo el hecho, sin la
+        // pregunta abierta pegada («— la armamos?»): si el cliente
+        // quiere uno, lo pide y el trabajo es la respuesta.
+        out.reply = 'todavía no armé nada.';
       } else {
         // (LOTE C · CASO 1) Si pidió UN posteo concreto ("el posteo de
         // fitness"), los que matcheen van primero; si ninguno matchea, se
@@ -13015,18 +13064,24 @@ app.post('/api/chat/compartir-posteo', requireAuth, express.json(), async (req, 
   const when = wallInTz(post.scheduled_at, userTz(uid)) || '';
   const fecha = when ? when.slice(0, 10) : '';
   const userText = en ? 'I share this post to talk about it' : 'Te comparto este posteo para hablar de él';
-  const ackText = en
-    ? `Got it — the post for ${fecha || 'this week'}. Tell me what you want to change.`
-    : `Ya lo veo — el posteo del ${fecha || 'esta semana'}. Decime qué querés cambiar.`;
+  // (LOTE POSTY-RESPONDE-CON-TRABAJO) Sin acuse ni pregunta abierta:
+  // compartir el posteo no es una duda de Posty ni trabajo entregado —
+  // el posteo entra al hilo (mensaje del usuario con el posteo adjunto)
+  // y Posty no dice nada hasta que haya trabajo o una duda con opciones.
   const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id) VALUES (?,?,?,?)').run(uid, 'user', userText, postId);
-  db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id) VALUES (?,?,?,?)').run(uid, 'assistant', ackText, postId);
   res.json({ ok: true, postId, messageId: ins.lastInsertRowid, post });
 });
 
 // (LOTE CHAT-678 · 8) Dejarle una nota a Posty: se guarda en memoria_cliente
 // (tipo 'nota') — la planificación ya la lee vía memoriaParaBrief (v873),
 // así que la nota alimenta los próximos posteos sin reescribir el
-// planificador. En el chat se ve la nota + la confirmación de Posty.
+// planificador. En el chat se ve la nota del cliente.
+// (LOTE POSTY-RESPONDE-CON-TRABAJO · regla de Valentino 13/11) El acuse
+// enlatado histórico de la nota MUERE: la nota se registra y se ACTÚA (alimenta
+// la planificación = el trabajo es la respuesta); Posty no manda ningún
+// mensaje por una nota — sin duda y sin trabajo nuevo, no dice nada. La
+// respuesta del endpoint es el estado honesto mínimo (ok/guardada), sin
+// texto de acuse ni promesa de conversación.
 app.post('/api/chat/nota', requireAuth, express.json(), async (req, res) => {
   const uid = req.session.userId;
   const lang = langOfUser(uid);
@@ -13036,9 +13091,7 @@ app.post('/api/chat/nota', requireAuth, express.json(), async (req, res) => {
   let guardadas = 0;
   try { guardadas = memoriaCliente.guardarMemoria(db, uid, [{ tipo: 'nota', texto }], texto); } catch (e) { console.error('[chat-nota] memoria:', e.message); }
   const userText = (en ? '📝 Note for Posty: ' : '📝 Nota a Posty: ') + texto;
-  const ackText = en ? 'Noted ✅ I will keep it in mind for your posts.' : 'Anotado ✅ Lo tengo en cuenta para tus posteos.';
   const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', userText);
-  db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', ackText);
   res.json({ ok: true, guardada: guardadas > 0, messageId: ins.lastInsertRowid });
 });
 
@@ -37376,13 +37429,13 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'You cannot change designs, photos or headlines (they are part of the image). If they ask to change a post PHOTO, guide them: "tap the post and then the 📷 Change photo button". ' +
     'If they ask to change COLORS, guide them: "tap the 🎨 Colors button right below". ' +
     'If they ask to change the design HEADLINE, explain in one line that the headline is part of the design and offer to improve the caption instead. ' +
-    'Write in clear US English, warm and confident, 1-2 lines. Your visible "reply" text is a WhatsApp-style chat: write it ALL in lowercase (even at the start of sentences), short and friendly — e.g. "done! i changed that caption for you ✅" or "sure — what would you tweak first?". The texts you edit (captions and hashtags) are the work product: they keep their normal published capitalization and punctuation.\n\n' +
+    'Write in clear US English, warm and confident, 1-2 lines. Your visible "reply" text is a WhatsApp-style chat: write it ALL in lowercase (even at the start of sentences), short and friendly — e.g. "done! i changed that caption for you ✅". Your reply only reports the work you actually did: never end with an open question and never send a bare acknowledgment. The texts you edit (captions and hashtags) are the work product: they keep their normal published capitalization and punctuation.\n\n' +
     'Posts (index, day, current caption, current hashtags):\n' +
     postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
     (hist ? '\n\nRecent history:\n' + hist : '') +
     '\n\nOwner request: "' + msg.replace(/"/g, "'") + '"\n\n' +
     'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
-    'If the request applies to several posts, include all of them. If it is unclear, edits: [] and ask for clarification in reply. ' +
+    'If the request applies to several posts, include all of them. If it is unclear which post they mean, apply the edit to the one that best matches the conversation; if none matches, edits: [] and "reply": "" — never ask an open question. ' +
     'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
     'Free 3-day trial, no card. One plan: Posty $199/month, everything included — community manager and growth, $6.63 a day. ' +
     'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
@@ -37395,13 +37448,13 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'NO podés cambiar diseños, fotos ni titulares (vienen en la imagen). Si te pide cambiar la FOTO de un posteo, guialo: "tocá el posteo y después el botón 📷 Cambiar foto". ' +
     'Si te pide cambiar los COLORES, guialo: "tocá el botón 🎨 Colores que está acá abajo". ' +
     'Si te pide cambiar el TITULAR del diseño, explicale en una línea que el titular es parte del diseño y ofrecé mejorar el caption en su lugar. ' +
-    'Escribís en español rioplatense con voseo, tono cercano y canchero, 1-2 líneas. Tu texto visible ("reply") es un chat de WhatsApp: escribilo TODO en minúscula (también al arrancar cada frase) y sin signos de apertura (nada de ¡ ni ¿; los de cierre van normal) — ej: "listo! te cambié ese caption ✅" o "dale — qué querés tocar primero?". Los textos que editás (captions y hashtags) son el trabajo que se publica: mantienen su escritura normal.\n\n' +
+    'Escribís en español rioplatense con voseo, tono cercano y canchero, 1-2 líneas. Tu texto visible ("reply") es un chat de WhatsApp: escribilo TODO en minúscula (también al arrancar cada frase) y sin signos de apertura (nada de ¡ ni ¿; los de cierre van normal) — ej: "listo! te cambié ese caption ✅". Tu reply solo cuenta el trabajo que hiciste de verdad: jamás cierres con una pregunta abierta ni mandes un acuse pelado. Los textos que editás (captions y hashtags) son el trabajo que se publica: mantienen su escritura normal.\n\n' +
     'Posteos (índice, día, caption actual, hashtags actuales):\n' +
     postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
     (hist ? '\n\nHistorial reciente:\n' + hist : '') +
     '\n\nPedido del dueño: "' + msg.replace(/"/g, "'") + '"\n\n' +
     'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
-    'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply. ' +
+    'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende a qué posteo se refiere, aplicá el cambio al que mejor matchee con la conversación; si ninguno matchea, edits: [] y "reply": "" — jamás pidas aclaración con una pregunta abierta. ' +
     'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
     'Prueba gratis de 3 días, sin tarjeta. Plan único: Posty USD 199 por mes, con todo incluido — community manager y growth, $6.63 por día. ' +
     'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
@@ -37445,7 +37498,10 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
       try { db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(JSON.stringify(out), igKey); } catch (e) {}
     }
     res.json({
-      reply: chatStripOpen(String(parsed.reply || (en ? 'done ✅ anything else?' : 'listo ✅ algo más?'))).slice(0, 300),
+      // (LOTE POSTY-RESPONDE-CON-TRABAJO) Sin acuse por defecto: si el
+      // modelo no escribió respuesta, no sale ningún acuse armado —
+      // el trabajo (los edits aplicados) ES la respuesta.
+      reply: chatStripOpen(String(parsed.reply || '')).slice(0, 300),
       edits: edits.map((e) => ({ post: e.post, caption: posts[e.post].caption, hashtags: posts[e.post].hashtags })),
       chat_remaining: chatChk.remaining,
     });
@@ -39115,7 +39171,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1026';
+const BUILD_ID = '20261105-v1027';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

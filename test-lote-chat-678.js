@@ -201,9 +201,15 @@ function dbCount(sql, ...params) {
     // ---- 6. COMPARTIR POSTEO AL CHAT
     const sh = await reqJson('POST', '/api/chat/compartir-posteo', { postId: post1 }, cookie1);
     check('6a compartir posteo propio: 200 + ok + postId + messageId + post', sh.status === 200 && sh.json && sh.json.ok === true && sh.json.postId === post1 && sh.json.messageId > 0 && sh.json.post && sh.json.post.id === post1, JSON.stringify(sh.json));
-    const rowsShare = seedDb(db => db.prepare('SELECT role, text, post_id FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT 2').all(uid1));
-    check('6b compartir: quedan 2 mensajes nuevos con post_id (user + ack de Posty)', rowsShare.length === 2 && rowsShare.every(r => r.post_id === post1) && rowsShare[1].role === 'user' && rowsShare[0].role === 'assistant', JSON.stringify(rowsShare));
-    check('6c compartir: el mensaje del usuario dice que comparte el posteo', rowsShare[1].text.includes('comparto este posteo'), rowsShare[1].text);
+    const rowsShare = seedDb(db => db.prepare('SELECT role, text, post_id FROM chat_messages WHERE user_id = ? AND post_id = ? ORDER BY id DESC').all(uid1, post1));
+    // (RE-PIN · LOTE POSTY-RESPONDE-CON-TRABAJO) Antes se esperaban 2
+    // mensajes (user + el ack «Ya lo veo — decime qué querés cambiar»):
+    // la regla de Valentino (13/11) mata el acuse y la pregunta abierta —
+    // compartir deja SOLO el mensaje del usuario con el posteo adjunto.
+    check('6b compartir: queda SOLO el mensaje del usuario con post_id (sin ack de Posty)', rowsShare.length === 1 && rowsShare[0].role === 'user', JSON.stringify(rowsShare));
+    // (RE-PIN · LOTE POSTY-RESPONDE-CON-TRABAJO) Sin el ack, el mensaje
+    // del usuario es la ÚNICA fila con post_id: rowsShare[0] (antes [1]).
+    check('6c compartir: el mensaje del usuario dice que comparte el posteo', rowsShare[0].text.includes('comparto este posteo'), rowsShare[0].text);
     const hist1 = await reqJson('GET', '/api/ideas/chat', undefined, cookie1);
     const sharedMsg = (hist1.json && hist1.json.messages || []).find(m => m.post_id === post1 && m.role === 'user');
     check('6d historial: el mensaje compartido trae el post adjunto (id, imagen, caption, fecha)', sharedMsg && sharedMsg.post && sharedMsg.post.id === post1 && sharedMsg.post.image_path === '/media/foto-posteo-1.jpg' && sharedMsg.post.caption === 'Posteo de prueba para compartir' && sharedMsg.post.scheduled_at === '2026-11-12 19:00', JSON.stringify(sharedMsg && sharedMsg.post));
@@ -246,7 +252,10 @@ function dbCount(sql, ...params) {
     check('8b la nota queda en memoria_cliente (tipo nota, texto exacto)', mem && mem.texto === nota && mem.tipo === 'nota', JSON.stringify(mem));
     const notaUser = seedDb(db => db.prepare("SELECT role, text FROM chat_messages WHERE user_id = ? AND text LIKE '%Nota a Posty%' ORDER BY id DESC LIMIT 1").get(uid1));
     const notaAck = seedDb(db => db.prepare("SELECT role, text FROM chat_messages WHERE user_id = ? AND text LIKE '%Anotado%' ORDER BY id DESC LIMIT 1").get(uid1));
-    check('8c la nota se ve en el chat (mensaje user) y Posty la confirma (ack)', notaUser && notaUser.role === 'user' && notaUser.text.includes(nota) && notaAck && notaAck.role === 'assistant' && notaAck.text.includes('Anotado'), JSON.stringify({ notaUser, notaAck }));
+    // (RE-PIN · LOTE POSTY-RESPONDE-CON-TRABAJO) Antes se esperaba el
+    // ack «Anotado ✅» de Posty: la regla de Valentino (13/11) lo mata —
+    // la nota se ve como mensaje del usuario y NO existe acuse alguno.
+    check('8c la nota se ve en el chat (mensaje user) y NO hay acuse de Posty', notaUser && notaUser.role === 'user' && notaUser.text.includes(nota) && !notaAck, JSON.stringify({ notaUser, notaAck }));
     const n2 = await reqJson('POST', '/api/chat/nota', { texto: nota }, cookie1);
     check('8d misma nota otra vez: ok pero guardada false (dedupe, no se duplica)', n2.status === 200 && n2.json && n2.json.ok === true && n2.json.guardada === false, JSON.stringify(n2.json));
     const memCount = dbCount("SELECT COUNT(*) c FROM memoria_cliente WHERE user_id = ? AND tipo = 'nota' AND texto = ?", uid1, nota);
@@ -259,7 +268,9 @@ function dbCount(sql, ...params) {
     const larga = seedDb(db => db.prepare("SELECT texto FROM memoria_cliente WHERE user_id = ? AND tipo = 'nota' AND texto LIKE 'xxx%' ORDER BY id DESC LIMIT 1").get(uid1));
     check('8g nota de 501 chars: 200 y se guarda recortada a 500', n4.status === 200 && n4.json && n4.json.ok === true && larga && larga.texto.length === 500, 'status=' + n4.status + ' len=' + (larga && larga.texto.length));
     const hist3 = await reqJson('GET', '/api/ideas/chat', undefined, cookie1);
-    check('8h historial: la nota y su ack estan en el chat', (hist3.json && hist3.json.messages || []).some(m => m.role === 'user' && m.text.includes(nota)) && (hist3.json.messages || []).some(m => m.role === 'assistant' && m.text.includes('Anotado')), 'n=' + (hist3.json && hist3.json.messages || []).length);
+    // (RE-PIN · LOTE POSTY-RESPONDE-CON-TRABAJO) El historial trae la
+    // nota y NINGÚN acuse (antes se esperaba la nota + su ack).
+    check('8h historial: la nota esta en el chat y ningun acuse', (hist3.json && hist3.json.messages || []).some(m => m.role === 'user' && m.text.includes(nota)) && !(hist3.json.messages || []).some(m => m.role === 'assistant' && m.text.includes('Anotado')), 'n=' + (hist3.json && hist3.json.messages || []).length);
 
     // ---- Persistencia entre sesiones: reinicio sobre el MISMO DATA_DIR
     try { s1.child.kill('SIGTERM'); } catch (e) {}

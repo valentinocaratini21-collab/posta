@@ -117,8 +117,10 @@ check('4b GET: historial 60 mensajes / 7 días (era 30/24h)',
 check('4c show_drafts por tema: helper definido y usado; línea honesta cuando nada matchea',
   srv.includes('function pzChatShowDraftsTopic(drafts, lastUserText)') && srv.includes('pzChatShowDraftsTopic(showDrafts, lastUserShow)')
   && srv.includes("no tengo ningún posteo armado — estos son los que tengo 👇"));
-check('4d el reemplazo genérico «todavía no armé nada» sigue cuando no hay nada con imagen',
-  srv.includes("out.reply = 'todavía no armé nada — la armamos? 🚀';"));
+// (RE-PIN · LOTE POSTY-RESPONDE-CON-TRABAJO) La línea perdió la
+// pregunta abierta pegada («— la armamos? 🚀»): queda solo el hecho.
+check('4d el reemplazo genérico «todavía no armé nada» sigue cuando no hay nada con imagen (sin pregunta abierta)',
+  srv.includes("out.reply = 'todavía no armé nada.';"));
 
 // ---------- Parte 5: estática — prompt del chat ----------
 console.log('— 5) estática: prompt —');
