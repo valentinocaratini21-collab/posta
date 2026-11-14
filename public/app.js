@@ -19671,6 +19671,25 @@ function postAuthLanding(isReg) {
     location.hash = homeTab;
   }
 }
+// (L9-OBSERVABILIDAD) Motivo por el que el popup de conectar Instagram no
+// se mostro: queda en window.__igPopupSkip (contadores + ultimo motivo,
+// consultable en la pagina) y se manda best-effort al servidor por el
+// canal de analytics existente (track -> /api/track -> tabla events) SOLO
+// cuando el motivo cambia, para no inundar el canal en cada render.
+// Nunca cambia el comportamiento visible: el popup aparece igual que hoy.
+// Incluye el gate de L8 (sin wow con ig_pending) con motivo 'sin_wow'.
+function igPopupSkipLog(reason, tab) {
+  try {
+    const w = (typeof window !== 'undefined') ? window : null;
+    if (!w) return;
+    const st = w.__igPopupSkip || (w.__igPopupSkip = { counts: {}, last: '', lastAt: 0, lastTab: '' });
+    const r = String(reason || '');
+    st.counts[r] = (st.counts[r] || 0) + 1;
+    const changed = st.last !== r;
+    st.last = r; st.lastAt = Date.now(); st.lastTab = String(tab || '');
+    if (changed && typeof track === 'function') track('ig_popup_skip', { reason: r, tab: String(tab || ''), n: st.counts[r] });
+  } catch (e) {}
+}
 function igDismissKey() {
   const id = (ME && (ME.id || ME.email)) || 'anon';
   return 'posta_ig_dismissed_' + id;
@@ -19727,15 +19746,15 @@ function igPopupWow(tab) {
 }
 function maybeShowIgPopup(tab) {
   try {
-    if (!ME || !PROFILE) return;
-    if (PROFILE.ig_connected) return;
-    if (document.getElementById('igFirstOverlay')) return;
-    if (igPopupDismissed()) return;
+    if (!ME || !PROFILE) { igPopupSkipLog('sin_sesion', tab); return; }
+    if (PROFILE.ig_connected) { igPopupSkipLog('ya_conectado', tab); return; }
+    if (document.getElementById('igFirstOverlay')) { igPopupSkipLog('ya_visible', tab); return; }
+    if (igPopupDismissed()) { igPopupSkipLog('descartado', tab); return; }
     // (LOTE L8 · v954) El banner ig_pending ya NO mata el popup post-wow:
     // después del wow el popup aparece aunque el banner esté visible. Sin
     // wow, el banner sigue cubriendo (exclusión mutua de antes intacta).
     const wow = igPopupWow(tab);
-    if (!wow && PROFILE.ig_pending) return;
+    if (!wow && PROFILE.ig_pending) { igPopupSkipLog('sin_wow', tab); return; }
     // (LOTE POST-WOW v929 · veredicto Valentino: empujar la conexión FUERTE
     // como próximo paso después del wow, nunca como puerta antes. El primer
     // posteo en su perfil real es el momento de conversión: el CTA lleva
@@ -19786,7 +19805,7 @@ function maybeShowIgPopup(tab) {
       igPopupDismiss();
       ov.remove();
     };
-  } catch (e) {}
+  } catch (e) { igPopupSkipLog('excepcion', tab); }
 }
 /* ---------- toast global ---------- */
 function toast(html) {

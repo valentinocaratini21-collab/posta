@@ -43,10 +43,13 @@ const idxEsRel = read(path.join(ROOT, 'public/index.html'));
 console.log('A. Estáticos (L8)');
 t('A1 igPopupWow definida (def + 1 uso en el gate)', countOcc(appRel, 'function igPopupWow(tab)') === 1 && countOcc(appRel, 'const wow = igPopupWow(tab);') === 1);
 t('A2 igPopupDismissed/igPopupDismiss + TTL 24 h definidos', countOcc(appRel, 'function igPopupDismissed()') === 1 && countOcc(appRel, 'function igPopupDismiss()') === 1 && countOcc(appRel, 'const IG_DISMISS_TTL_MS = 24 * 60 * 60 * 1000;') === 1);
-t('A3 gate nuevo: sin wow + ig_pending no sale', countOcc(appRel, 'if (!wow && PROFILE.ig_pending) return;') === 1);
+// (Re-pin L9-OBSERVABILIDAD v1062: el gate lleva el hook igPopupSkipLog('sin_wow');
+// la intención del pin — sin wow + ig_pending no sale — no cambia.)
+t('A3 gate nuevo: sin wow + ig_pending no sale', countOcc(appRel, "if (!wow && PROFILE.ig_pending) { igPopupSkipLog('sin_wow', tab); return; }") === 1);
 t('A4 call site incondicional; el gate viejo murió', countOcc(appRel, 'maybeShowIgPopup(tab); // popup de conectar Instagram') === 1 && countOcc(appRel, 'if (!(PROFILE && PROFILE.ig_pending)) maybeShowIgPopup') === 0);
 t('A5 skip guarda timestamp; el \'1\' permanente murió', countOcc(appRel, 'igPopupDismiss();') === 1 && countOcc(appRel, "localStorage.setItem(igDismissKey(), '1')") === 0);
-t('A6 dismiss viejo solo se lee con TTL (nada de `if (dismissed) return`)', countOcc(appRel, 'if (dismissed) return;') === 0 && countOcc(appRel, 'if (igPopupDismissed()) return;') === 1);
+// (Re-pin L9-OBSERVABILIDAD v1062: el retorno lleva el hook igPopupSkipLog('descartado').)
+t('A6 dismiss viejo solo se lee con TTL (nada de `if (dismissed) return`)', countOcc(appRel, 'if (dismissed) return;') === 0 && countOcc(appRel, "if (igPopupDismissed()) { igPopupSkipLog('descartado', tab); return; }") === 1);
 t('A7 legado \'1\' se trata como vencido', appRel.includes("if (!isFinite(ts) || ts <= 0) return false; // legado '1': vencido"));
 t('A8 BUILD v981 x1 en server.js, v980 x0', countOcc(srvRel, "const BUILD_ID = '20261105-v981';") === 1 && countOcc(srvRel, '20261105-v980') === 0);
 t('A9 index ES app.js?v=676 x1, ?v=674 x0; styles.css?v=20261270 intacto', countOcc(idxEsRel, '/app.js?v=676') === 1 && countOcc(idxEsRel, '/app.js?v=674') === 0 && countOcc(idxEsRel, 'styles.css?v=20261270') === 1);
@@ -59,7 +62,10 @@ t('A14 app.js +30 líneas (32823 -> 32853) y server.js misma cantidad (BUILD sol
 // ---------- B. VM: comportamiento del popup ----------
 console.log('B. VM (maybeShowIgPopup real, DOM falso)');
 // Extrae igDismissKey + helpers + igPopupWow + maybeShowIgPopup del bundle.
-const sliceStart = appRel.indexOf('function igDismissKey()');
+// (L9-OBSERVABILIDAD v1062: si el bundle trae igPopupSkipLog — definido justo
+// antes de igDismissKey y referenciado por los retornos de maybeShowIgPopup —
+// el slice arranca en él para que la VM no lo deje indefinido.)
+const sliceStart = (() => { const i = appRel.indexOf('function igPopupSkipLog('); return i >= 0 ? i : appRel.indexOf('function igDismissKey()'); })();
 const sliceEnd = appRel.indexOf('/* ---------- toast global ---------- */');
 const slice = appRel.slice(sliceStart, sliceEnd);
 t('B0 slice extraído (helpers + maybeShowIgPopup)', slice.includes('function maybeShowIgPopup(tab)') && slice.includes('function igPopupWow(tab)') && slice.includes('IG_DISMISS_TTL_MS'));
