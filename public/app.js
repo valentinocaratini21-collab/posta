@@ -26436,7 +26436,7 @@ async function subirView() {
       <div class="q" id="pzSubirQVideo" hidden><p>${en ? "It's a video: subtitles and polish?" : 'Si es un video: ¿subtítulos y mejora?'}</p>${chips('subs', [{ v: 'si', t: en ? 'Yes, do it' : 'Sí, hacelo', on: 1 }, { v: 'no', t: en ? 'No need' : 'No hace falta' }])}</div>
     </div>
     <section class="pz-voz voz-op" data-pz-voz="extra" id="pzSubirVozOp" hidden>
-      <div class="voz-op-txt"><div class="vq">${en ? 'Anything else?' : '¿Algo más?'}</div><div class="vs" data-subir-voz-txt>${en ? 'If you want, tell Posty with a voice note.' : 'Si querés, contale a Posty con una nota de voz.'}</div></div>
+      <div class="voz-op-txt"><div class="vq">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div><div class="vs" data-subir-voz-txt>${en ? 'Tell Posty with a voice note and we\'ll build it together.' : 'Contale a Posty con una nota de voz y la armamos juntos.'}</div></div>
       <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
       <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
     </section>
