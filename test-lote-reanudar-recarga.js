@@ -185,7 +185,7 @@ function extractScript(html) {
 function makePage({ file, search, storage, ctl }) {
   const html = fs.readFileSync(path.join(ROOT, 'public', file), 'utf8');
   const src = extractScript(html);
-  const hidden0 = { fStarWrap: true, fLangWrap: true, fErr: true, fStatus: true, fPreview: true };
+  const hidden0 = { fStarWrap: true, fLangWrap: true, fErr: true, fStatus: true, fPreview: true, fAskWrap: true };
   const els = {};
   const mkEl = (id) => ({
     id, value: '', hidden: !!hidden0[id], textContent: '', innerHTML: '',
@@ -193,7 +193,10 @@ function makePage({ file, search, storage, ctl }) {
     focus() { this.focused = true; },
     addEventListener() {},
   });
-  for (const id of ['fIg', 'fWeb', 'fStar', 'fStarWrap', 'fLangWrap', 'fErr', 'fStatus', 'fPreview', 'btnGo', 'fLangEn', 'fLangEs']) els[id] = mkEl(id);
+  // fAsk*: el bloque de la pregunta del fundamento (v1035) vive en el HTML de
+  // la prueba y el script lo cablea al cargar (askSkipBtn.addEventListener);
+  // sin estos stubs la VM crasheaba tras los 21 checks estáticos.
+  for (const id of ['fIg', 'fWeb', 'fStar', 'fStarWrap', 'fLangWrap', 'fErr', 'fStatus', 'fPreview', 'btnGo', 'fLangEn', 'fLangEs', 'fAskWrap', 'fAskQ', 'fAskOpts', 'fAskSkip']) els[id] = mkEl(id);
   const form = mkEl('fEntry');
   form.listeners = {};
   form.addEventListener = function (type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); };
