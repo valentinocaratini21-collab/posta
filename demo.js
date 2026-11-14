@@ -1927,6 +1927,19 @@ function primerPosteoGate(o) {
   else if (esReal) { cadena = 'integracion-o-generada'; logoEstado = 'ausente-en-foto-real'; motivos.push('logo-ausente'); }
   else if (photoSource === 'ai-generated') { cadena = 'generada'; logoEstado = 'sellado-pendiente-de-qa'; logoMetodo = 'hibrido-sello-real'; }
   else { cadena = 'generada'; logoEstado = 'pendiente-rescate'; logoMetodo = 'hibrido-sello-real'; motivos.push('placa-no-es-salida'); }
+  // (LOTE TARTINE-FRENOS · P7) SIN ARCHIVO DE LOGO = FRENO, también en
+  // la cadena generada: si el llamador declara que NO existe el
+  // archivo del logo real (oo.logoFileExists === false), el sello
+  // híbrido es IMPOSIBLE y la pieza no puede pasar la vara — antes el
+  // veredicto salía positivo con el sello anotado como «ausente» y la
+  // pieza generada se entregaba sin logo (corrida Tartine, posteo
+  // 671). Solo frena la cadena generada; la foto real con logo en
+  // escena no depende del archivo. Sin declarar (undefined), el gate
+  // se comporta como siempre.
+  if (cadena === 'generada' && oo.logoFileExists === false) {
+    logoEstado = 'sin-archivo';
+    motivos.push('sin-archivo-de-logo');
+  }
   const pasa = motivos.length === 0;
   return {
     v: 2,
@@ -2412,7 +2425,12 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         const sinEstrellaNombre = !effStarPP || clientDigest.isGenericCategoryName(effStarPP.item);
         if (sinEstrellaNombre && topics.length) {
           const insPP = clientDigest.insigniaOf(digest);
-          const wowDegradadoPP = !wowFirst || (wowFirst.star_missing && !wowFirst.digest_anchor);
+          // (LOTE TARTINE-FRENOS · P4) La degradación mide la VALIDEZ
+          // del ancla, no su presencia: un ancla que es un rótulo del
+          // sitio o un nombre sin evidencia («Welcome to Tartine»)
+          // degrada IGUAL que una estrella ausente — antes el rótulo
+          // contaba como ancla y la insignia nunca tomaba el slot 0.
+          const wowDegradadoPP = !wowFirst || (wowFirst.star_missing && !(wowFirst.digest_anchor && clientDigest.starAnchorValida(digest, wowFirst.digest_anchor)));
           if (insPP && (wowDegradadoPP || insPP.fuente === 'dueno')) {
             const insWow = clientDigest.deriveInsigniaWow(digest, { category: cat, lang });
             if (insWow) {
@@ -3044,6 +3062,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         titularReparado: ppTitularReparado,
         category: cat, subcat,
         digest,
+        // (LOTE TARTINE-FRENOS · P7) El archivo del logo real, según
+        // el fundamento: con digest, logo_file vacío = no hay archivo
+        // (la descarga de la foto de perfil/logo corre ANTES del spec
+        // en ambas rutas) y la cadena generada frena en el gate.
+        logoFileExists: digest ? !!digest.logo_file : undefined,
       });
       if (ppPrecioCortado.length) primerPosteo.texto.precio_cortado = ppPrecioCortado;
     } catch (e) { primerPosteo = null; /* el registro jamás frena el spec */ }
@@ -3075,6 +3098,42 @@ async function renderSpecPngs(specPosts, colors) {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
     throw e;
   }
+}
+
+/* (LOTE TARTINE-FRENOS · P6 — corrida Tartine, 13/11) EL TOUR SIN
+ * PLACAS: el video de la semana recorría TODOS los diseños del runDir,
+ * incluidos los diseños-póster internos de las piezas sin foto — el
+ * video 672 cerró con la placa del logo a pantalla completa. Las
+ * escenas del tour ahora excluyen todo diseño póster; y si el diseño
+ * de la PROPIA pieza de video es una placa, no hay video (null): la
+ * pieza sale como imagen o en armado, nunca como video-placa.
+ * `finales` (opcional) es el array de posteos ya ensamblados: una
+ * pieza en armado es placa segura; una pieza que la IA reemplazó ya
+ * no lo es (su JPG es la escena generada, aunque el spec conserve el
+ * photo_source del póster). */
+function esDisenoPoster(specPost, finalPost) {
+  if (finalPost) {
+    if (finalPost.armando) return true;
+    if (finalPost.ai) return false;
+  }
+  if (!specPost) return true;
+  if (specPost.photo_source === 'brand-poster') return true;
+  if (specPost.treatment && specPost.treatment.skeleton === 'poster' && specPost.photo_source !== 'ai-generated') return true;
+  return false;
+}
+function tourScenesFor(specPosts, designPaths, videoIdx, finales) {
+  const paths0 = Array.isArray(designPaths) ? designPaths : [];
+  if (!paths0.length) return null;
+  const vi = Math.min(Math.max(videoIdx == null ? 0 : videoIdx, 0), paths0.length - 1);
+  if (esDisenoPoster(specPosts && specPosts[vi], finales && finales[vi])) return null;
+  const paths = [];
+  for (let k = 0; k < paths0.length; k++) {
+    const i = (vi + k) % paths0.length;
+    if (esDisenoPoster(specPosts && specPosts[i], finales && finales[i])) continue;
+    if (paths0[i]) paths.push(paths0[i]);
+  }
+  if (!paths.length) return null;
+  return { paths, idx: 0 };
 }
 
 async function renderVideoB64(imagePaths, runDir, idx) {
@@ -3269,6 +3328,12 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   let slot0Arming = false;
   const sealFirstAttempt = async (gen) => {
     if (!gen || !gen.b64) return false;
+    // (LOTE TARTINE-FRENOS · P7) Sin archivo de logo no hay sello
+    // posible: la pieza NO entra (queda en armado honesto y el
+    // rescate de fondo sigue) — antes entraba sin sellar y el
+    // registro la anotaba «sin-archivo-de-logo» con veredicto de
+    // éxito, la falla exacta de la corrida Tartine.
+    if (!logoPath) { firstLogoQa = { estado: 'sin-archivo-de-logo' }; return false; }
     const compBuf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: specPosts[0] && specPosts[0].text_mode === 'clean' ? '' : (specPosts[0] && specPosts[0].headline ? specPosts[0].headline : ''), gradeHex: accent, workDir: runDir, index: 0, logoPath: logoPath || null, headlineScale: headlineScaleForTextoFeed(digest && digest.texto_feed) }).catch(() => null);
     if (!compBuf) return false;
     if (logoPath) {
@@ -3285,7 +3350,10 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   {
     let generatedFirst = await genFirstPromise.catch(() => null);
     let sealedFirst = await sealFirstAttempt(generatedFirst);
-    for (let att = 2; !sealedFirst && slot0NeedsRescue && att <= 3; att++) {
+    // (LOTE TARTINE-FRENOS · P7) Sin archivo de logo no hay reintento
+    // que valga: el freno es el archivo, no la escena — no se quema
+    // generación repitiendo un sello imposible.
+    for (let att = 2; !sealedFirst && slot0NeedsRescue && att <= 3 && !!logoPath; att++) {
       const extra = firstLogoQa ? demoAi.logoQaRetryDirective(firstLogoQa, business) : '';
       generatedFirst = await generateFirstPostImageIfNeeded({ spec, business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: starPP0, generateImage, topicText: topicTextPP0, force: true, promptExtra: extra }).catch(() => null);
       if (!generatedFirst) break;
@@ -3308,16 +3376,20 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       const starI = (tI._insignia || tI._star) ? (tI.digest_anchor || null) : null;
       const promptI = buildNoPhotoBrandPrompt({ business, category, subcat: spec.subcat, paletteHex: [accent, btn].filter(Boolean), paletteNames: null, description: bioText || '', star: starI });
       const topicTextI = [tI.headline, tI.subline].filter(Boolean).join(' ');
+      // (LOTE TARTINE-FRENOS · P7) Sin archivo de logo, la pieza ni se
+      // genera: queda en rescate con el motivo declarado (fail-closed
+      // en esta cadena también, sin gastar generación).
+      if (!logoPath) { rescateSemana.push({ idx: i, cadena: 'en-rescate', motivo: 'sin-archivo-de-logo' }); continue; }
       const genI = await raceMsLocal(generateImage({ prompt: promptI, topicText: topicTextI }), 300000).catch(() => null);
       if (!genI || !genI.b64) { rescateSemana.push({ idx: i, cadena: 'en-rescate', motivo: 'generacion-fallo' }); continue; }
       const compI = await demoAi.compositeDemoPiece({ b64: genI.b64, headline: spI.text_mode === 'clean' ? '' : (spI.headline || ''), gradeHex: accent, workDir: runDir, index: i, logoPath: logoPath || null, headlineScale: headlineScaleForTextoFeed(digest && digest.texto_feed) }).catch(() => null);
       let logoQaI = null;
-      if (compI && logoPath && typeof verifySealedPiece === 'function') { try { logoQaI = await verifySealedPiece({ b64: compI.toString('base64'), business }); } catch (e) { logoQaI = null; } }
-      if (compI && (!logoPath || (logoQaI && logoQaI.ok))) {
+      if (compI && typeof verifySealedPiece === 'function') { try { logoQaI = await verifySealedPiece({ b64: compI.toString('base64'), business }); } catch (e) { logoQaI = null; } }
+      if (compI && logoQaI && logoQaI.ok) {
         finalBufs[i] = compI;
         try { fs.writeFileSync(path.join(runDir, `post-${i}.jpg`), compI); } catch (e) {}
         spI.photo_source = 'ai-generated';
-        rescateSemana.push({ idx: i, cadena: 'generada', logo: logoQaI ? { ok: true, detalle: logoQaI.detalle || null } : { estado: 'sin-verificar' } });
+        rescateSemana.push({ idx: i, cadena: 'generada', logo: { ok: true, detalle: logoQaI.detalle || null } });
       } else {
         rescateSemana.push({ idx: i, cadena: 'en-rescate', motivo: 'logo-qa', logo: logoQaI });
       }
@@ -3388,7 +3460,11 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     // (el video es un extra; el primer posteo nunca lo espera).
     const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
     const videoBudget = Math.max(2000, renderBudget - (Date.now() - t0));
-    const videoB64 = await raceMsLocal(renderVideoB64(designPaths, runDir, videoIdx), videoBudget);
+    // (LOTE TARTINE-FRENOS · P6) El tour recorre solo escenas que NO
+    // son diseños póster; si la pieza de video es una placa, no hay
+    // video (la pieza sale como imagen o en armado honesto).
+    const tourS = tourScenesFor(specPosts, designPaths, videoIdx, null);
+    const videoB64 = tourS ? await raceMsLocal(renderVideoB64(tourS.paths, runDir, tourS.idx), videoBudget) : null;
 
     // (LOTE B) Promociones de carrusel fallidas en ESTE armado (pieza
     // marcada carrusel cuyas láminas no se pudieron leer): se cuentan
@@ -3489,7 +3565,10 @@ async function redesignDemo({ spec, colors, photoOverrides, userPhotoDataUrl }) 
       const images = bufs.map((b) => 'data:image/jpeg;base64,' + b.toString('base64'));
       let video = null;
       const vIdx = idxs.indexOf(spec.videoIdx);
-      if (vIdx >= 0) {
+      // (LOTE TARTINE-FRENOS · P6) Ni en el rediseño sale un video
+      // sobre un diseño póster: si la pieza de video es una placa, el
+      // rediseño sale sin video.
+      if (vIdx >= 0 && !esDisenoPoster(sub[vIdx], null)) {
         const vpath = path.join(runDir, `post-${vIdx}.jpg`);
         fs.writeFileSync(vpath, bufs[vIdx]);
         const b64 = await renderVideoB64(vpath, runDir, vIdx);
@@ -4259,7 +4338,7 @@ module.exports = {
   categoryFromText,
   renderSpecPngs,
   renderSpecPngsStream,
-  renderVideoB64,
+  renderVideoB64, tourScenesFor, esDisenoPoster,
   DEMO_TOPICS: captions.DEMO_TOPICS,
   resolveTrialCaption: captions.resolveTrialCaption,
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.

@@ -168,6 +168,11 @@ function toTu(text) {
 const TAGS_AR = {
   moda: ['#modaargentina', '#tiendaderopa', '#ootd', '#comprelocal', '#nuevacoleccion'],
   gastronomia: ['#foodieargentina', '#gastronomia', '#antojo', '#restaurante', '#buenosairesfood'],
+  // (LOTE TARTINE-FRENOS · P8) Pool del SUBRUBRO panadería: una
+  // pastelería/panadería salía con los hashtags de café (#coffee
+  // #barista #specialtycoffee) porque la tabla no tenía su pool y la
+  // elección caía al rubro vecino. El subrubro manda (demoHashtags).
+  panaderia: ['#panaderiaargentina', '#panaderiaartesanal', '#medialunas', '#facturas', '#panaderia'],
   belleza: ['#bellezaargentina', '#peluqueria', '#estetica', '#makeup', '#skincare'],
   peluqueria: ['#peluqueria', '#peluqueriaargentina', '#coloracion', '#peluqueriabuenosaires', '#cortedepelo'],
   makeup: ['#maquillaje', '#makeupargentina', '#makeup', '#skincare', '#belleza'],
@@ -203,6 +208,7 @@ const TAGS_UY = Object.fromEntries(
 const TAGS_NEUTRAL = {
   moda: ['#moda', '#tiendaderopa', '#ootd', '#fashion', '#nuevacoleccion'],
   gastronomia: ['#foodie', '#gastronomia', '#antojo', '#restaurante', '#foodlover'],
+  panaderia: ['#panaderia', '#panaderiaartesanal', '#medialunas', '#panificacion', '#horneado'],
   belleza: ['#belleza', '#peluqueria', '#estetica', '#makeup', '#skincare'],
   peluqueria: ['#peluqueria', '#coloracion', '#cortedepelo', '#hairsalon', '#balayage'],
   makeup: ['#maquillaje', '#makeup', '#skincare', '#belleza', '#makeupartist'],
@@ -831,6 +837,9 @@ const DEMO_TOPICS = {
 const TAGS_US = {
   moda: ['#fashion', '#boutique', '#ootd', '#shoplocal', '#newarrivals'],
   gastronomia: ['#foodie', '#foodlover', '#restaurant', '#eatlocal', '#foodstagram'],
+  // (LOTE TARTINE-FRENOS · P8) Bakery pool (EN): a bakery no longer
+  // inherits the coffee set (#coffee #barista #specialtycoffee).
+  panaderia: ['#bakery', '#artisanbakery', '#freshbaked', '#croissant', '#bakerylife'],
   // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) El pool 'belleza' EN era un
   // set de PELUQUERÍA: una marca de skincare/maquillaje salía con
   // #balayage #hairsalon (corrida The Ordinary, 13/11). 'belleza' pasa
@@ -1536,6 +1545,47 @@ function anchorsMatch348(a, b) {
   return inter / Math.max(wa.size, wb.size) >= 0.6;
 }
 
+/* (LOTE TARTINE-FRENOS · P8) NOVEDAD SOLO CON EVIDENCIA: la plantilla
+ * de «novedad» afirmaba un hecho («Something new at {BIZ} — we added
+ * something this week», «ya está en…», «recién llegado») sin que el
+ * fundamento trajera novedad alguna — en la corrida Tartine el caption
+ * anunció una novedad inexistente. La novedad se afirma SOLO con
+ * evidencia en el fundamento: etapa de lanzamiento (_launch), pre-
+ * lanzamiento (prelaunch), ítem marcado nuevo (es_nuevo /
+ * novedad_evidencia) o una promo con fecha (offer_ends_at). Sin
+ * evidencia, el caption PRESENTA el ítem (o la casa) sin afirmar que
+ * llegó: degrada a una forma que no afirma hechos. */
+function novedadConEvidencia(t) {
+  if (!t || typeof t !== 'object') return false;
+  if (t._launch || t.prelaunch) return true;
+  if (t.es_nuevo === true || t.novedad_evidencia === true) return true;
+  if (t.offer_ends_at) return true;
+  return false;
+}
+const NOVEDAD_ASSERT_EN = /something new|we added|fresh in|just arrived|just landed|is here at|is now at|new arrivals|just dropped/i;
+const NOVEDAD_ASSERT_ES = /algo nuevo|reci[eé]n llegad|ya est[aá] en|lleg[oó]\b|sumamos|acaba de llegar/i;
+function captionSinAfirmacionNovedad(en, business, anchor) {
+  const biz = business || (en ? 'the house' : 'la casa');
+  const A = String(anchor || '').trim();
+  if (en) return A
+    ? `${A} at ${biz} ✨\n\nMade with our usual care.\n\nDM us to get yours 📩`
+    : `A house favorite at ${biz} 👀\n\nMade with our usual care, every day.\n\nStop by the store today 📍`;
+  return A
+    ? `${A} en ${biz} ✨\n\nHecho con el detalle de siempre.\n\nPedilo hoy por DM 📩`
+    : `Un clásico de ${biz} 👀\n\nHecho con el detalle de siempre, todos los días.\n\nPasá por el local hoy`;
+}
+function frenarNovedadSinEvidencia(caption, srcTopic, pieceTopic, en, business, tone) {
+  const kindNov = (srcTopic && srcTopic.kind === 'novedad') || (pieceTopic && pieceTopic.kind === 'novedad');
+  if (!kindNov) return caption;
+  if (novedadConEvidencia(srcTopic) || novedadConEvidencia(pieceTopic)) return caption;
+  const re = en ? NOVEDAD_ASSERT_EN : NOVEDAD_ASSERT_ES;
+  if (!re.test(String(caption || ''))) return caption;
+  const anchor = (pieceTopic && pieceTopic.digest_anchor) || (srcTopic && srcTopic.digest_anchor) || '';
+  let nc = captionSinAfirmacionNovedad(en, business, anchor);
+  if (!en && tone === 'tu') nc = toTu(nc);
+  return nc;
+}
+
 // Resuelve el caption de un posteo de la prueba, gateado por captionPasses.
 // Si el tema elegido no pasa, reintenta con los demás temas del rubro (mismo
 // orden de kind que ya traen). Nunca devuelve un caption que el gate rechace.
@@ -1595,7 +1645,7 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
     const check = en
       ? captionPassesEn(caption + '\n' + hashtags, gateInput)
       : captionPasses(caption + '\n' + hashtags, gateInput);
-    if (check.ok) return { caption, hashtags, topicIndex: i, ok: true };
+    if (check.ok) return { caption: frenarNovedadSinEvidencia(caption, t, piece, en, business, tone), hashtags, topicIndex: i, ok: true };
     try {
       console.error(`[posta] demo caption gate: tema "${t.headline}" rechazado (${check.reason})`);
     } catch (_) {}
@@ -1645,6 +1695,9 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
       if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
     }
   }
+  // (LOTE TARTINE-FRENOS · P8) El fallback de «novedad» tampoco afirma
+  // una novedad sin evidencia: degrada a la forma sin afirmación.
+  caption = frenarNovedadSinEvidencia(caption, null, piece, en, business, tone);
   return { caption, hashtags: demoHashtags(cat, country, tone, lang, subcat), topicIndex: idx, ok: true, fallback: true };
 }
 
@@ -1791,7 +1844,7 @@ module.exports = {
   TU_MAP,
   toTu,
   TU_HEADLINES,
-  demoHashtags,
+  demoHashtags, novedadConEvidencia, frenarNovedadSinEvidencia,
   topicDna,
   buildFinalCaption,
   resolveTrialCaption,

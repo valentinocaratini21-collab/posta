@@ -898,6 +898,32 @@ function isChromeDerivedName(raw) {
   if (words.length >= 2 && (words[words.length - 1] === 'menu' || words[words.length - 1] === 'menus')) return true;
   return false;
 }
+/* (LOTE TARTINE-FRENOS · P5 — corrida Tartine, 13/11) CLASE «RÓTULO
+ * DEL SITIO»: el saludo del hero, las secciones y la navegación del
+ * sitio del negocio NO son productos. En la corrida, el <title>/hero
+ * de tartinebakery.com («Welcome to Tartine») se minó como
+ * productos[0], la estrella ancló en el rótulo y el titular del primer
+ * posteo salió «Try Welcome to Tartine today». La clase se chequea
+ * sobre el nombre normalizado (sin acentos, minúsculas) y es
+ * conservadora a propósito: saludo + destino («welcome to X»,
+ * «bienvenidos a X»), saludos sueltos y rótulos exactos de sección/
+ * navegación. Un producto real con nombre propio («Welcome Wagon
+ * Burger») no matchea ninguna forma: las formas de saludo exigen el
+ * destino o el rótulo pelado. */
+const SITE_LABEL_EXACT = new Set(['welcome', 'bienvenido', 'bienvenida', 'bienvenidos', 'bienvenidas', 'hello', 'hola',
+  'home', 'inicio', 'menu', 'about us', 'our story', 'nuestra historia',
+  'order online', 'pedidos online', 'book a table', 'store locator',
+  'find a store', 'shop all', 'view all']);
+const SITE_LABEL_PREFIX = ['welcome to ', 'bienvenido a ', 'bienvenida a ', 'bienvenidos a ', 'bienvenidas a ', 'welcome home'];
+function isSiteLabelName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return false;
+  const n = norm(s);
+  if (!n) return false;
+  if (SITE_LABEL_EXACT.has(n)) return true;
+  for (const p of SITE_LABEL_PREFIX) if (n === p.trim() || n.startsWith(p)) return true;
+  return false;
+}
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
   return String(v || '').replace(/\s+/g, ' ')
@@ -947,6 +973,10 @@ function isPlausibleOfferItem(raw) {
   // no son nombres de producto y anclan captions rotos.
   if (OFFER_ENGLISH_LABELS.some((p) => ns.includes(p))) return false;
   if (nw.includes('coffees')) return false;
+  // (LOTE TARTINE-FRENOS · P5) Rótulo del sitio (saludo del hero,
+  // sección, navegación): jamás es un ítem de la oferta — la lista de
+  // productos que alimenta la estrella sale limpia de rótulos.
+  if (isSiteLabelName(s)) return false;
   // (LOTE PLACEHOLDER-COPY) Slogan de dos oraciones («Timeless style.
   // Effortless you.»): es el hero de la tienda, no un producto. La
   // guarda de abreviatura (primer segmento de UNA palabra: «Dr.»,
@@ -3079,8 +3109,38 @@ function insigniaOf(digest) {
   if (usable(mv)) return { frase: limpia(mv), fuente: 'dueno' };
   const inf = digest.inferred_star;
   if (inf && inf.item && usable(inf.item)) return { frase: limpia(inf.item), fuente: 'feed' };
+  // (LOTE TARTINE-FRENOS · P4) CUARTA FUENTE: los TEMAS DEL FEED
+  // (temas_feed — lo que el feed muestra y repite, minado de sus
+  // captions y su bio). En la corrida Tartine las tres fuentes
+  // clásicas vinieron vacías y la insignia no existió, aunque el feed
+  // repetía su insignia (el Morning Bun vive en los temas del feed).
+  // Cada tema pasa el MISMO filtro usable() de las demás fuentes: un
+  // rótulo del sitio o una categoría pelada tampoco es insignia acá.
+  const temasFeed = Array.isArray(digest.temas_feed) ? digest.temas_feed : [];
+  for (const t of temasFeed) {
+    const frase = t && typeof t === 'object' ? (t.nombre || t.tema || t.frase) : t;
+    if (usable(frase)) return { frase: limpia(frase), fuente: 'temas_feed' };
+  }
   if (usable(digest.producto_estrella)) return { frase: limpia(digest.producto_estrella), fuente: 'fundamento' };
   return null;
+}
+/* (LOTE TARTINE-FRENOS · P4) ¿El ancla de una «estrella» es VÁLIDA?
+ * El test de degradación del wow medía la mera PRESENCIA del ancla
+ * (digest_anchor no vacío): un rótulo del sitio minado como producto
+ * («Welcome to Tartine») contaba como estrella con evidencia y la
+ * insignia nunca degradaba. La validez es la de la puerta de
+ * admisión: nombre plausible, ni chrome, ni rol de crédito, ni
+ * suscripción, ni RÓTULO DEL SITIO (P5), ni veto del dueño. Un ancla
+ * inválida degrada IGUAL que una estrella ausente. */
+function starAnchorValida(digest, anchor) {
+  const a = String(anchor || '').trim();
+  if (!a) return false;
+  if (!isPlausibleOfferItem(a)) return false;
+  if (isChromeDerivedName(a) || isCreditRoleName(a)) return false;
+  if (isSubscriptionLikeName(a)) return false;
+  if (isSiteLabelName(a)) return false;
+  if (digest && isVetoText(a, digest.onboarding)) return false;
+  return true;
 }
 /* El wow de la INSIGNIA (espejo del degradado honesto, pero NOMBRANDO
  * la cosa): el primer posteo es de la insignia, nombrada como la piden
@@ -3693,7 +3753,7 @@ module.exports = {
   deriveTopics, deriveFirstPostWow, brandNegatives, ensureTable, saveDigest, getStoredDigest, getDigest,
   // (ADDENDUM 2 · LOTE PRIMER-POSTEO-PERFECTO) La insignia: la estrella
   // de los negocios sin nombres propios en su oferta.
-  insigniaOf, deriveInsigniaWow,
+  insigniaOf, deriveInsigniaWow, isSiteLabelName, starAnchorValida,
   // (ADDENDUM 3B · LOTE PRIMER-POSTEO-PERFECTO) Puerta de integridad de
   // precios: tokens, precios con fuente por ancla y corte de oraciones.
   priceTokensOf, sourcedPricesOf, unsourcedPriceTokens, stripPriceSentences,

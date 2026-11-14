@@ -2510,7 +2510,14 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
       return 0;
     }
   }
-  const posts = (out.posts || []).filter((p) => p && (p.image || p.video));
+  const postsAllImp = Array.isArray(out.posts) ? out.posts : [];
+  // (LOTE TARTINE-FRENOS · P1) Las piezas sin imagen/video (en armado)
+  // NO se importan, pero su ausencia deja de ser silenciosa: los
+  // índices faltantes se registran como evento al cerrar la
+  // importación (abajo), y el rescate de fondo los completa en la
+  // cuenta cuando la cadena los termina (scheduleWeekRescue).
+  const faltantesImp = postsAllImp.map((p, i) => (p && (p.image || p.video)) ? -1 : i).filter((x) => x >= 0);
+  const posts = postsAllImp.filter((p) => p && (p.image || p.video));
   if (!posts.length) return 0;
   if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
   // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) La señal con la que nace
@@ -2662,7 +2669,79 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
       console.log(`[formato-marca] trial import ig=${ig} degradado total: dominante=carrusel importados=${n} carruseles=0 (evento trial_formato_degradado)`);
     }
   } catch (e) { /* el registro nunca frena la importación */ }
+  // (LOTE TARTINE-FRENOS · P1) INCOMPLETUD VISIBLE: si la semana
+  // importada quedó con piezas en armado, el hueco queda registrado
+  // como evento consultable (nunca más una semana incompleta en
+  // silencio: la corrida Tartine entregó 2 de 3 sin que nadie lo
+  // registrara). El rescate de fondo crea los posteos faltantes en
+  // esta misma cuenta cuando las piezas pasan la vara.
+  if (faltantesImp.length) {
+    try { evTrack(userId, 'trial_import_incompleta', { ig, faltantes: faltantesImp, total: postsAllImp.length, importados: n }); } catch (e) {}
+    console.log(`[posta] importTrialWeek ig=${ig} user=${userId}: semana INCOMPLETA visible — faltan los índices ${faltantesImp.join(',')} de ${postsAllImp.length} (evento trial_import_incompleta)`);
+  }
   return n;
+}
+
+/* (LOTE TARTINE-FRENOS · P1) CREACIÓN TARDÍA DE UNA PIEZA RESCATADA:
+ * espejo de UNA iteración de importTrialWeek para cuando la semana YA
+ * se importó (importTrialWeek no puede re-correr: aborta si la cuenta
+ * tiene posteos). Crea el posteo de la pieza idx del payload en estado
+ * 'draft' — la agenda la pone scheduleAllDrafts, como con los demás —
+ * con la misma señal honesta del invitado/registrado, su fila de
+ * post_signals, su puerta de rubro y su digest_hash. Solo piezas de
+ * imagen/video simples (las que la cadena de rescate produce); un
+ * carrusel tardío no se fabrica acá. Devuelve el id o null. */
+function crearPosteoRescateTardio(userId, out, idx) {
+  try {
+    const p = (out && Array.isArray(out.posts)) ? out.posts[idx] : null;
+    if (!p || !(p.image || p.video)) return null;
+    const isVideo = p.type === 'video' && p.video;
+    const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
+    if (!m) return null;
+    const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
+    const buf = Buffer.from(m[3], 'base64');
+    if (!buf.length || buf.length > 15 * 1024 * 1024) return null;
+    const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+    fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+    let trialSignal = 'approved';
+    let trialSignalAuto = 0;
+    try {
+      const gu = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
+      if (gu && gu.is_guest) { trialSignal = 'auto'; trialSignalAuto = 1; }
+    } catch (e) {}
+    const clientPhoto = trialPostUsesClientPhoto(out, idx) ? 1 : 0;
+    const dpost = (out.design && Array.isArray(out.design.posts) && out.design.posts[idx]) || {};
+    const styleCode = String(dpost.style || p.style || '').slice(0, 60);
+    let rgP = ''; let rgProc = ''; let rgSin = 0;
+    try {
+      const espImp = (out && out.espejo && out.espejo.aprobado) ? (out.espejo.productos || []) : [];
+      if (espImp.length) {
+        const mm = rubroGarantias.productoDeIdea({ titulo: (dpost && dpost.headline) || '', angulo: p.caption || '' }, espImp);
+        if (mm) { rgP = String(mm.nombre || ''); rgProc = String(mm.procedencia || 'cliente'); } else rgSin = 1;
+      }
+    } catch (e) {}
+    const ins = db.prepare(
+      'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, '', String(p.why || '').slice(0, 500));
+    const postId = Number(ins.lastInsertRowid);
+    try {
+      db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
+        VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?,?)
+        ON CONFLICT(user_id, post_id) DO UPDATE SET style_code=excluded.style_code, tipo=excluded.tipo, updated_at=datetime('now')`)
+        .run(userId, postId, String(p.caption || ''), String(p.hashtags || ''), '', String(out.category || ''), trialSignal, '', styleCode, String(dpost.kind || ''), trialSignalAuto);
+    } catch (e) { console.error('[posta] rescate tardío signal:', e.message); }
+    try {
+      if (out.digest && out.digest.hash) {
+        const anch = clientDigest.anchorsOf(out.digest);
+        const un = anch.length ? !clientDigest.pieceAnchored(`${(dpost && dpost.headline) || ''} ${p.caption || ''}`, anch).ok : false;
+        db.prepare('UPDATE posts SET digest_hash = ? WHERE id = ?').run(String(out.digest.hash) + (un ? ':sin-ancla' : ''), postId);
+      }
+    } catch (e) {}
+    return postId;
+  } catch (e) {
+    console.error('[posta] crearPosteoRescateTardio:', e.message);
+    return null;
+  }
 }
 
 // La semana importada de /prueba cuenta como 1ra semana de racha:
@@ -25255,6 +25334,13 @@ async function generateNoPhotoFirstPostImage({ prompt, topicText, apiKey, gemini
 // null si no se logró (la pieza queda en armado honesto).
 async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logoPath = null, headline = '', textMode = '', accent = null, workDir, index = 0, apiKey = '', geminiKey = '', textoFeed = null } = {}) {
   if (!workDir || !prompt) return null;
+  // (LOTE TARTINE-FRENOS · P7) SIN ARCHIVO DE LOGO = FRENO, fail-closed
+  // y ANTES de gastar generación: esta cadena existe para sellar con el
+  // logo REAL; sin el archivo, el sello es imposible y el QA de logo se
+  // salteaba en silencio — la pieza salía «sellada» sin logo y con
+  // veredicto de éxito (corrida Tartine, posteo 671). Sin logoPath no
+  // hay pieza: la pieza queda en armado honesto con su motivo.
+  if (!logoPath) return null;
   const key = apiKey || process.env.OPENAI_API_KEY || '';
   // (LOTE TEXTO-SEGÚN-EL-FEED · piezas 4+6) DEFENSA EN EL COMPUESTO:
   // si una pieza con texto llega a componerse sobre un feed LIMPIO
@@ -25307,14 +25393,14 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
 }
 // (LOTE PRIMER-POSTEO-PERFECTO · pieza 2 + addendum 6A) EL RESCATE DE
 // FONDO DE LA SEMANA: espejo del contrato de scheduleFirstPostRetry —
-// trabaja sobre trial_cache y SOLO si la semana sigue sin importar
-// (borrador: ningún posteo con este digest_hash), reemplazando cada
-// pieza en armado por la que pasa la vara. Corre tras la respuesta:
-// en vivo la pieza nunca salió como placa (salió en armado honesto) y
-// acá la cadena la sigue trabajando. LÍMITE DECLARADO: si el invitado
-// importa la semana antes de que el rescate aterrice, la pieza
-// importada no se actualiza (la misma ventana que ya acepta
-// scheduleFirstPostRetry). Nunca tira.
+// trabaja sobre trial_cache reemplazando cada pieza en armado por la
+// que pasa la vara. Corre tras la respuesta: en vivo la pieza nunca
+// salió como placa (salió en armado honesto) y acá la cadena la sigue
+// trabajando. (LOTE TARTINE-FRENOS · P1) Si la semana YA se importó,
+// el rescate no aborta: al cerrar CREA los posteos de las piezas
+// completadas en la cuenta dueña (crearPosteoRescateTardio) y los
+// agenda; lo que sigue en armado queda registrado como incompletud
+// visible. Nunca tira.
 async function scheduleWeekRescue(o) {
   try {
     if (!o || !o.cacheKey || !Array.isArray(o.pieces) || !o.pieces.length) return { applied: false, reason: 'sin-datos' };
@@ -25330,9 +25416,16 @@ async function scheduleWeekRescue(o) {
     };
     let payload = readCache();
     if (!payload || !Array.isArray(payload.posts)) return { applied: false, reason: 'no-cache' };
-    if (imported()) return { applied: false, reason: 'imported' };
+    // (LOTE TARTINE-FRENOS · P1) La semana importada YA NO aborta el
+    // rescate: antes, si el invitado importaba antes de que la cadena
+    // terminara, el rescate escribía solo el caché y las piezas
+    // quedaban HUÉRFANAS (la corrida Tartine entregó 2 de 3 y el
+    // tercero no nació nunca). Ahora la cadena corre igual y, al
+    // cerrar, CREA los posteos faltantes en la cuenta dueña (abajo).
+    const importedYa = imported();
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-rescate-'));
     let applied = 0;
+    const appliedIdxs = [];
     try {
       for (const piece of o.pieces) {
         const idx = piece.idx | 0;
@@ -25340,7 +25433,10 @@ async function scheduleWeekRescue(o) {
         const r = await rescuePieceWithSeal({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '', textoFeed: (payload && payload.digest && payload.digest.texto_feed) || null }).catch(() => null);
         if (!r) continue;
         const fresh = readCache();
-        if (!fresh || !Array.isArray(fresh.posts) || imported()) break;
+        // (LOTE TARTINE-FRENOS · P1) Una importación a mitad de cadena
+        // ya no corta el rescate: las piezas siguen (la creación de
+        // los posteos en la cuenta se resuelve al cerrar).
+        if (!fresh || !Array.isArray(fresh.posts)) break;
         payload = fresh;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
         payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) } };
@@ -25359,11 +25455,89 @@ async function scheduleWeekRescue(o) {
         try {
           db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(payload), Date.now());
           applied++;
+          appliedIdxs.push(idx);
         } catch (e) {}
       }
     } finally {
       try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
     }
+    // (LOTE TARTINE-FRENOS · P7) Sin archivo de logo, las piezas que
+    // siguen en armado quedan con su MOTIVO registrado en el payload
+    // (frenadas, no «en curso»): el freno es visible, no una anotación
+    // con veredicto de éxito.
+    if (!o.logoPath) {
+      try {
+        const fin7 = readCache();
+        if (fin7 && Array.isArray(fin7.posts)) {
+          let toco7 = false;
+          for (const piece of o.pieces) {
+            const idx7 = piece.idx | 0;
+            if (fin7.posts[idx7] && fin7.posts[idx7].armando === true) {
+              if (Array.isArray(fin7.rescate_semana)) {
+                const ent7 = fin7.rescate_semana.find((x) => x && x.idx === idx7);
+                if (ent7) { ent7.estado = 'frenada'; ent7.motivo = 'sin-archivo-de-logo'; toco7 = true; }
+              }
+              if (idx7 === 0 && fin7.primer_posteo) {
+                if (fin7.primer_posteo.logo) fin7.primer_posteo.logo.estado = 'sin-archivo';
+                fin7.primer_posteo.veredicto = { pasa: false, cadena: 'generada', motivos: ['sin-archivo-de-logo'] };
+                toco7 = true;
+              }
+            }
+          }
+          if (toco7) db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(fin7), Date.now());
+        }
+      } catch (e) { /* el registro jamás frena el rescate */ }
+    }
+    // (LOTE TARTINE-FRENOS · P1) SEMANA IMPORTADA: las piezas que la
+    // cadena acaba de completar NACEN como posteos en la cuenta dueña
+    // (crearPosteoRescateTardio) y se agendan por el embudo de
+    // siempre. Ventana por tipo de cuenta: invitado 3, registrado 7
+    // (la misma de importTrialWeek). El día del spec se conserva
+    // cuando el embudo lo permite; si la agenda lo mueve, el cambio
+    // QUEDA DICHO en el payload (dia_spec vs dia_real) y en el evento
+    // trial_rescate_importado — nada se re-fecha en silencio. Las
+    // piezas que siguen en armado dejan su incompletud registrada
+    // (trial_semana_incompleta) en vez de un hueco mudo.
+    try {
+      if (importedYa || imported()) {
+        const ownerRow = o.digestHash ? db.prepare('SELECT user_id FROM posts WHERE digest_hash LIKE ? ORDER BY id ASC LIMIT 1').get(String(o.digestHash) + '%') : null;
+        const ownerId = ownerRow ? Number(ownerRow.user_id) : null;
+        if (ownerId) {
+          const finP = readCache();
+          if (finP && Array.isArray(finP.posts)) {
+            let esGuestP = false;
+            try { const guP = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(ownerId); esGuestP = !!(guP && guP.is_guest); } catch (e) {}
+            const capP = esGuestP ? 3 : 7;
+            const creados = [];
+            for (const idxP of appliedIdxs) {
+              if (idxP >= capP) continue;
+              const pid = crearPosteoRescateTardio(ownerId, finP, idxP);
+              if (pid) creados.push({ idx: idxP, postId: pid });
+            }
+            if (creados.length) {
+              try { scheduleAllDrafts(ownerId); } catch (e) { console.error('[posta] rescate tardío schedule:', e.message); }
+              let tocoP = false;
+              for (const c of creados) {
+                let diaReal = null;
+                try { const pr = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(c.postId); diaReal = pr ? pr.scheduled_at : null; } catch (e) {}
+                const diaSpec = (Array.isArray(finP.week) && finP.week[c.idx]) ? (finP.week[c.idx].day || null) : null;
+                if (Array.isArray(finP.rescate_semana)) {
+                  const entP = finP.rescate_semana.find((x) => x && x.idx === c.idx);
+                  if (entP) { entP.importada_tarde = true; entP.post_id = c.postId; entP.dia_spec = diaSpec; entP.dia_real = diaReal; tocoP = true; }
+                }
+                try { evTrack(ownerId, 'trial_rescate_importado', { ig: o.cacheKey, idx: c.idx, post_id: c.postId, dia_spec: diaSpec, dia_real: diaReal }); } catch (e) {}
+              }
+              if (tocoP) { try { db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(finP), Date.now()); } catch (e) {} }
+            }
+            const pendientesP = o.pieces.map((pc) => pc.idx | 0).filter((ix) => finP.posts[ix] && finP.posts[ix].armando === true);
+            if (pendientesP.length) {
+              try { evTrack(ownerId, 'trial_semana_incompleta', { ig: o.cacheKey, pendientes: pendientesP }); } catch (e) {}
+              console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: semana importada INCOMPLETA visible — pendientes ${pendientesP.join(',')} (evento trial_semana_incompleta)`);
+            }
+          }
+        }
+      }
+    } catch (e) { console.error('[posta] scheduleWeekRescue completado tardío:', e.message); }
     return { applied: applied > 0, reason: applied ? 'ok' : 'sin-reemplazos', piezas: applied };
   } catch (e) {
     return { applied: false, reason: 'error' };
@@ -36001,6 +36175,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     specPosts.forEach((sp, i) => { if (sp && sp.photo_source === 'brand-poster') rescueIdxS.add(i); });
     if (slot0LogoAusenteS) rescueIdxS.add(0);
     const posts = new Array(n).fill(null);
+    // (LOTE TARTINE-FRENOS · P2) El denominador del contador de la
+    // espera es el total de piezas DEL SPEC: viaja una sola vez, antes
+    // de cualquier evento 'post' (la página cuenta solo entregables).
+    send('meta', { total: n });
     // 3) Render con streaming: cada PNG que aparece se emite como post imagen
     send('status', { step: 'diseno', text: lang === 'en' ? "Got the ideas: now I'm designing your posts one by one…" : 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
     const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, async (i, buf) => {
@@ -36135,6 +36313,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             const refs = [profilePicPath, sharpRef].filter(Boolean);
             const { getStyle: getStyleDemo } = require('./image-styles');
             const makePiece = async (i) => {
+              // (LOTE TARTINE-FRENOS · P7) La cadena IA tampoco entrega
+              // piezas generadas sin archivo de logo: sin el logo real
+              // no hay sello posible y la vara del logo es absoluta —
+              // la pieza no se reemplaza (queda la de plantilla y la
+              // cadena de rescate/fondo decide con su motivo).
+              if (!trialLogoAbsPath(trialDigest)) return null;
               const sp = specPosts[i];
               const topicText = `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`;
               // (v233) UNA SOLA INYECCIÓN del preset: el estilo del
@@ -36390,6 +36574,19 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const idxsRescue = [...rescueIdxS].sort((a, b) => a - b);
       const emittedRescue = new Set();
       send('status', { step: 'imagen-generada', text: lang === 'en' ? "I'm creating the images your brand was missing, with your logo in the scene…" : 'Estoy creando las imágenes que le faltaban a tu marca, con tu logo en la escena…' });
+      // (LOTE TARTINE-FRENOS · P3) REVELADO HONESTO: si el slot 0 lo
+      // posee la cadena (su imagen final todavía no existe), la espera
+      // muestra como héroe PROVISORIO una foto REAL de la marca (del
+      // feed o su foto de perfil) — nunca el rectángulo vacío ni el
+      // diseño interno presentado como foto. El héroe final llega con
+      // la pieza (evento 'post' del índice 0) y lo reemplaza. Sin foto
+      // real disponible, no se emite héroe: queda el estado de armado.
+      if (rescueIdxS.has(0) && !closed) {
+        try {
+          const candHero = [...((spec && spec.photos) || []), profilePicPath].find((pp) => typeof pp === 'string' && pp && fs.existsSync(pp));
+          if (candHero) send('hero', { image: 'data:image/jpeg;base64,' + fs.readFileSync(candHero).toString('base64'), provisorio: true });
+        } catch (e) { /* el héroe provisorio es best-effort */ }
+      }
       const rescueKeepalive = setInterval(() => {
         send('status', { step: 'imagen-generada', text: lang === 'en' ? "Still creating your images…" : 'Sigo creando tus imágenes…' });
       }, 20000);
@@ -36668,7 +36865,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const extrasPromise = (async () => {
       try { return ig ? await buildTrialGridExtras() : []; } catch (e) { return []; }
     })();
-    const videoB64 = await demo.renderVideoB64(designPaths, runDir, videoIdx);
+    // (LOTE TARTINE-FRENOS · P6) EL TOUR SIN PLACAS: las escenas son
+    // solo los diseños que NO son póster (con el estado final de cada
+    // pieza: en armado = placa; reemplazada por IA = escena). Si la
+    // pieza de video es una placa, no hay video.
+    const tourS = demo.tourScenesFor(specPosts, designPaths, videoIdx, posts);
+    const videoB64 = tourS ? await demo.renderVideoB64(tourS.paths, runDir, tourS.idx) : null;
     // (LOTE CORRECTIVO-5) Si la pieza del índice de video ya salió como
     // carrusel (formato de la marca), el video NO la pisa: el prompt y
     // el envío de abajo corren igual sobre la pieza carrusel.
@@ -38732,7 +38934,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1023';
+const BUILD_ID = '20261105-v1024';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

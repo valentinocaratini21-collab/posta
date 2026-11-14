@@ -426,6 +426,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var firstPostAt = 0;
     var firstPostShown = false; // booleano explícito: firstPostAt puede ser 0 con reloj en 0
     var postsSeen = 0;
+    // (LOTE TARTINE-FRENOS · P2) The counter counts DELIVERABLES: the
+    // denominator is the spec's piece total ('meta' event) and each
+    // index counts once, when its piece is final.
+    var postsTotal = 5;
+    var countedIdx = {};
     var slowShown = false;
     var outcome = null; // true | false | 'need_star' | 'need_lang'
     var outcomeErr = '';
@@ -475,8 +480,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
             // (ADDENDUM 8) The mirror: only with the real datum (their
             // most-liked post, with its photo); no datum, no block.
             if (d && d.profile && d.profile.best_post) setWaitEspejo(d.profile.best_post);
+          } else if (ev === 'meta') {
+            if (d && d.total) postsTotal = d.total;
           } else if (ev === 'post') {
-            postsSeen++;
+            // (LOTE TARTINE-FRENOS · P2) Only deliverable pieces count
+            // (final, with image/video/carousel), once per index:
+            // arming events and re-emissions (the video piece is sent
+            // twice) do not inflate the counter — the Tartine run
+            // announced "Post 4 of 5" with 2 delivered.
+            var dPostTF = d && d.post;
+            var entregableTF = !!(dPostTF && !dPostTF.armando && (dPostTF.image || dPostTF.video || (dPostTF.images && dPostTF.images.length >= 2)));
+            if (entregableTF && !countedIdx[d.index]) { countedIdx[d.index] = 1; postsSeen++; }
             // (LOTE PRIMER-POSTEO-PERFECTO) The preview is ONLY index
             // 0: with the rescue retention, the first 'post' event can
             // be another piece — and that is not the first post.
@@ -489,8 +503,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
                 completeWait(d.post);
                 showStatus('Your first post is ready — finishing your week…');
               }
-            } else if (d && d.post) {
-              showStatus('Post ' + postsSeen + ' of 5 ready — still working on your week…');
+            } else if (d && d.post && entregableTF) {
+              showStatus('Post ' + postsSeen + ' of ' + postsTotal + ' ready — still working on your week…');
             }
           } else if (ev === 'done') {
             outcome = true;

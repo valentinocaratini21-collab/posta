@@ -424,6 +424,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var firstPostAt = 0;
     var firstPostShown = false; // booleano explícito: firstPostAt puede ser 0 con reloj en 0
     var postsSeen = 0;
+    // (LOTE TARTINE-FRENOS · P2) El contador cuenta ENTREGABLES: el
+    // denominador es el total de piezas del spec (evento 'meta') y
+    // cada índice cuenta una sola vez, cuando su pieza es final.
+    var postsTotal = 5;
+    var countedIdx = {};
     var slowShown = false;
     var outcome = null; // true | false | 'need_star' | 'need_lang'
     var outcomeErr = '';
@@ -473,8 +478,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
             // (ADDENDUM 8) El espejo: solo con el dato real (su posteo
             // con más me gusta, con su foto); sin dato, no hay bloque.
             if (d && d.profile && d.profile.best_post) setWaitEspejo(d.profile.best_post);
+          } else if (ev === 'meta') {
+            if (d && d.total) postsTotal = d.total;
           } else if (ev === 'post') {
-            postsSeen++;
+            // (LOTE TARTINE-FRENOS · P2) Solo cuentan las piezas
+            // entregables (finales, con imagen/video/carrusel), una
+            // vez por índice: los eventos de armado y las re-emisiones
+            // (la pieza de video sale dos veces) no inflan el contador
+            // — la corrida Tartine anunció «Posteo 4 de 5» con 2.
+            var dPostTF = d && d.post;
+            var entregableTF = !!(dPostTF && !dPostTF.armando && (dPostTF.image || dPostTF.video || (dPostTF.images && dPostTF.images.length >= 2)));
+            if (entregableTF && !countedIdx[d.index]) { countedIdx[d.index] = 1; postsSeen++; }
             // (LOTE PRIMER-POSTEO-PERFECTO) La vista previa es SOLO del
             // índice 0: con la retención del rescate, el primer evento
             // 'post' puede ser de otra pieza y no es el primer posteo.
@@ -489,8 +503,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
                 completeWait(d.post);
                 showStatus('Tu primer posteo ya está listo — termino tu semana…');
               }
-            } else if (d && d.post) {
-              showStatus('Posteo ' + postsSeen + ' de 5 listo — sigo con tu semana…');
+            } else if (d && d.post && entregableTF) {
+              showStatus('Posteo ' + postsSeen + ' de ' + postsTotal + ' listo — sigo con tu semana…');
             }
           } else if (ev === 'done') {
             outcome = true;
