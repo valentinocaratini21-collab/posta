@@ -17132,15 +17132,52 @@ function subirPlanDia(uid, kind, cuando, opts) {
   // (el armado tras la aprobación corre recién desde mañana). Sin
   // opts, el comportamiento es el de siempre, byte a byte.
   if (opts && opts.desdeYmd && /^\d{4}-\d{2}-\d{2}$/.test(String(opts.desdeYmd))) startK = String(opts.desdeYmd);
+  // (LOTE SUBIR-HOY) «Hoy» manda sobre el piso de mañana del video:
+  // el escaneo es SOLO hoy (hasta = hoy) y el `intentar` de siempre
+  // decide si hoy se puede (hora futura, día no cerrado, cadencia del
+  // video, desplazamiento con lugar en la semana). Si hoy no se
+  // puede, devuelve null y el resolver cae honesto al próximo día —
+  // jamás se escanea más allá de hoy en nombre de «hoy».
+  else if (cuando === 'hoy') startK = todayK;
   else if (kind === 'video') startK = shiftDays(todayK, 1);
   else if (cuando === 'semana') startK = todayK; // la semana se escanea entera: acá vive el desplazamiento
   else startK = wall0.ymd || shiftDays(todayK, 1);
-  const hasta = cuando === 'semana' ? sunday : shiftDays(startK, 60);
+  const hasta = cuando === 'semana' ? sunday : (cuando === 'hoy' ? todayK : shiftDays(startK, 60));
   for (let k = startK; k <= hasta; k = shiftDays(k, 1)) { const r = intentar(k); if (r) return { iso: r.iso, mover: r.mover, semana_siguiente: false }; }
   if (cuando === 'semana') {
     for (let k = shiftDays(sunday, 1); k <= shiftDays(sunday, 60); k = shiftDays(k, 1)) { const r = intentar(k); if (r) return { iso: r.iso, mover: r.mover, semana_siguiente: true }; }
   }
   return null;
+}
+// (LOTE SUBIR-HOY) ¿El posteo de hoy YA SALIÓ? Un publicado de hoy
+// no aparece en el mapa de ocupados (que solo mira borradores y
+// programados), así que sin este chequeo «hoy» podría agendar un
+// segundo posteo el mismo día. Las historias no cuentan (la misma
+// exclusión que el mapa de ocupados).
+function subirHoyYaSalio(uid) {
+  try {
+    const tz = userTz(uid); const todayK = tzToday(tz);
+    const rows = db.prepare(`SELECT published_at, scheduled_at FROM posts WHERE user_id = ? AND status = 'published' AND media_type != 'story' AND COALESCE(published_at, scheduled_at) > datetime('now', '-2 days')`).all(uid);
+    for (const r of rows) { if (ymdInTz(r.published_at || r.scheduled_at, tz) === todayK) return true; }
+  } catch (e) {}
+  return false;
+}
+// (LOTE SUBIR-HOY) El motivo legible de por qué hoy no se pudo, con
+// los mismos datos que mira el planificador (determinístico, sin
+// IA). El recibo lo dice tal cual: nunca se promete un «hoy»
+// imposible. 'ya_salio' lo decide el resolver con subirHoyYaSalio.
+function subirHoyMotivo(uid, kind) {
+  try {
+    const tz = userTz(uid); const todayK = tzToday(tz);
+    if (closedDaysOf(uid).has(weekdayOfYmd(todayK))) return 'sin_lugar';
+    if (kind === 'video' && weekdayOfYmd(todayK) !== 2 && weekdayOfYmd(todayK) !== 4) return 'sin_lugar';
+    const occ = subirTakenMap(uid).get(todayK);
+    if (occ && (subirEsDeCliente(occ) || occ.pinned)) return 'ocupado';
+    const wall0 = subirPlannerWall(uid);
+    const isoT = zonedWallToUtc(todayK + ' ' + wall0.hhmm, tz);
+    if (!isoT || new Date(isoT).getTime() <= Date.now()) return 'hora_pasada';
+    return 'sin_lugar';
+  } catch (e) { return 'sin_lugar'; }
 }
 function subirMoverPost(uid, postId, destYmd) {
   try {
@@ -17456,7 +17493,7 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     const assetId = parseInt(b.asset_id, 10) || 0;
     const asset = assetId ? sftAssetPropio(uid, assetId) : null;
     if (!asset) return res.status(404).json({ ok: false, error: 'Ese material ya no está — subilo de nuevo' });
-    const cuando = ['posty', 'semana', 'guardar'].includes(String(b.cuando || '')) ? String(b.cuando) : 'posty';
+    const cuando = ['posty', 'semana', 'guardar', 'hoy'].includes(String(b.cuando || '')) ? String(b.cuando) : 'posty';
     const kind = asset.kind === 'video' ? 'video' : 'foto';
     if (cuando === 'guardar') {
       try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('guardar', asset.id); } catch (e) {}
@@ -17465,7 +17502,7 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     const ya = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND foto_asset_id = ? AND source = 'subir'`).get(uid, asset.id);
     if (ya) {
       const sl = armarSlotLabel(uid, ya.scheduled_at);
-      return res.json({ ok: true, modo: 'posteado', post_id: ya.id, kind, scheduled_at: ya.scheduled_at, dia: sl.dia, dia_label: sl.dia_label, hora: sl.hora, caption: ya.caption || '', mejora_aplicada: false, subs_aplicados: false, desplazado: null, semana_siguiente: false, repetido: true });
+      return res.json({ ok: true, modo: 'posteado', post_id: ya.id, kind, scheduled_at: ya.scheduled_at, dia: sl.dia, dia_label: sl.dia_label, hora: sl.hora, caption: ya.caption || '', mejora_aplicada: false, subs_aplicados: false, desplazado: null, semana_siguiente: false, repetido: true, es_hoy: !!(ya.scheduled_at && ymdInTz(ya.scheduled_at, userTz(uid)) === tzToday(userTz(uid))), hoy_motivo: '' });
     }
     // (LOTE PEDIDO-VOZ-REVISION) La nota de voz que pide algo
     // específico NO se ejecuta en el momento: el pedido nace en
@@ -17513,7 +17550,22 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
       if (!prop || prop.error) return res.status(400).json({ ok: false, error: 'No pude preparar el posteo desde este material — probá de nuevo' });
       caption = prop.caption; hashtags = prop.hashtags || '';
     }
-    const plan = subirPlanDia(uid, kind, cuando);
+    // (LOTE SUBIR-HOY) Con «hoy» el plan se pide SOLO para hoy. Si
+    // el posteo de hoy ya salió o hoy no se puede, el ítem cae al
+    // próximo día posible con la mecánica de siempre y el recibo
+    // declara el motivo (hoy_motivo): jamás se le dice «hoy» a algo
+    // que no sale hoy.
+    let plan = null, hoyMotivo = '';
+    if (cuando === 'hoy') {
+      if (subirHoyYaSalio(uid)) hoyMotivo = 'ya_salio';
+      else {
+        plan = subirPlanDia(uid, kind, 'hoy');
+        if (!plan) hoyMotivo = subirHoyMotivo(uid, kind);
+      }
+      if (!plan) { plan = subirPlanDia(uid, kind, 'posty'); if (plan) plan.hoy_motivo = hoyMotivo; }
+    } else {
+      plan = subirPlanDia(uid, kind, cuando);
+    }
     if (!plan) {
       try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('guardar', asset.id); } catch (e) {}
       return res.json({ ok: true, modo: 'guardado', asset_id: asset.id, kind, sin_dia: true });
@@ -17564,7 +17616,11 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     // día se borra — el dueño lo rellenó él.
     try { const dkSub = ymdInTz((postRow && postRow.scheduled_at) || plan.iso, userTz(uid)); if (dkSub) dayStopClear(uid, dkSub); } catch (e) {}
     const slF = postRow && postRow.scheduled_at ? armarSlotLabel(uid, postRow.scheduled_at) : sl;
-    return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, desplazado, semana_siguiente: !!plan.semana_siguiente });
+    // (LOTE SUBIR-HOY) es_hoy sale del horario FINAL registrado (tras
+    // el desplazamiento y su reubicación si hiciera falta): el recibo
+    // dice «Hoy» solo si el posteo quedó hoy de verdad.
+    const esHoyFin = !!(postRow && postRow.scheduled_at) && ymdInTz(postRow.scheduled_at, userTz(uid)) === tzToday(userTz(uid));
+    return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, desplazado, semana_siguiente: !!plan.semana_siguiente, es_hoy: esHoyFin, hoy_motivo: plan.hoy_motivo || '' });
   } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
 });
 
@@ -42578,7 +42634,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1077';
+const BUILD_ID = '20261105-v1078';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -27205,7 +27205,7 @@ async function subirView() {
     <button type="button" class="todo" id="pzSubirTodo" hidden><img src="/ai-avatar.png" alt=""><span><b>${en ? 'Posty, take care of everything' : 'Posty, encargate de todo'}</b><i>${en ? 'One tap and done: Posty picks the day, improves it and writes the caption.' : 'Un toque y listo: Posty elige el día, lo mejora y escribe el caption.'} <span id="pzSubirTodoPreg" hidden>${en ? 'The questions below are only if you want to decide something yourself.' : 'Las preguntas de abajo son solo si querés decidir vos algo.'}</span></i></span></button>
     <div class="preg-card" id="pzSubirPreg" hidden>
       <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'POSTY ASKS YOU — ONE TAP EACH' : 'POSTY TE PREGUNTA — UN TOQUE CADA UNA'}</div>
-      <div class="q"><p>${en ? 'When do we post it?' : '¿Cuándo lo subimos?'}</p>${chips('cuando', [{ v: 'posty', t: en ? 'Let Posty pick the day' : 'Que Posty elija el día', on: 1 }, { v: 'semana', t: en ? 'This week' : 'Esta semana' }, { v: 'guardar', t: en ? 'Just save it' : 'Solo guardarlo' }])}</div>
+      <div class="q"><p>${en ? 'When do we post it?' : '¿Cuándo lo subimos?'}</p>${chips('cuando', [{ v: 'posty', t: en ? 'Let Posty pick the day' : 'Que Posty elija el día', on: 1 }, { v: 'hoy', t: en ? 'Today' : 'Hoy' }, { v: 'semana', t: en ? 'This week' : 'Esta semana' }, { v: 'guardar', t: en ? 'Just save it' : 'Solo guardarlo' }])}</div>
       <div class="q"><p>${en ? 'Is it a promo?' : '¿Es una promo?'}</p>${chips('promo', [{ v: 'no', t: 'No', on: 1 }, { v: 'desc', t: en ? '% off' : '% de descuento' }, { v: '2x1', t: '2x1' }, { v: 'envio', t: en ? 'Free shipping' : 'Envío gratis' }])}</div>
       <div class="q"><p>${en ? 'Shall we improve it?' : '¿Lo mejoramos?'}</p>${chips('mejora', [{ v: 'si', t: en ? 'Yes, improve it' : 'Sí, mejoralo', on: 1 }, { v: 'no', t: en ? 'As it is' : 'Así como está' }])}</div>
       <div class="q"><p>${en ? 'The caption?' : '¿El caption?'}</p>${chips('caption', [{ v: 'posty', t: en ? 'You write it' : 'Escribilo vos', on: 1 }, { v: 'mio', t: en ? 'I have mine' : 'Ya tengo el mío' }])}<div id="pzSubirCapWrap" hidden><textarea id="pzSubirCapTxt" rows="3" placeholder="${en ? 'Paste your caption…' : 'Pegá tu caption…'}"></textarea></div></div>
@@ -27266,6 +27266,15 @@ async function pzSubirUpload(file) {
   }
   if (zona) zona.classList.remove('subiendo');
 }
+// (LOTE SUBIR-HOY) El motivo honesto cuando el cliente pidió «hoy»
+// y hoy no se pudo: el recibo muestra el día real en su línea y esta
+// nota dice por qué no fue hoy. Nunca se promete un hoy imposible.
+function pzSubirHoyNota(motivo, en) {
+  if (motivo === 'ya_salio') return en ? "Today's post already went out — this one goes on the next available day." : 'El posteo de hoy ya salió — este va el próximo día posible.';
+  if (motivo === 'hora_pasada') return en ? 'Your usual posting time today has already passed — this one goes on the next available day.' : 'Tu hora de publicación de hoy ya pasó — este va el próximo día posible.';
+  if (motivo === 'ocupado') return en ? 'Today already has one of your posts — this one goes on the next available day.' : 'Hoy ya tiene un posteo tuyo — este va el próximo día posible.';
+  return en ? 'There was no room today — this one goes on the next available day.' : 'Hoy no había lugar — este va el próximo día posible.';
+}
 function pzSubirReciboPintar(r) {
   const en = pzVozEn();
   const cont = document.getElementById('pzSubirRecibos');
@@ -27293,7 +27302,7 @@ function pzSubirReciboPintar(r) {
     if (r.mejora_aplicada) extras.push(en ? 'improved' : 'mejorada');
     if (r.subs_aplicados) extras.push(en ? 'with subtitles' : 'con subtítulos');
     q = que + ': ' + (en ? 'post' : 'posteo') + (extras.length ? ', ' + extras.join(', ') : '');
-    const dl = String(r.dia_label || '');
+    const dl = r.es_hoy ? (en ? 'today' : 'hoy') : String(r.dia_label || '');
     w = '✓ ' + (dl ? dl.charAt(0).toUpperCase() + dl.slice(1) : '') + (r.hora ? ' · ' + r.hora : '');
   }
   const items = card.querySelector('.r-items');
@@ -27301,6 +27310,7 @@ function pzSubirReciboPintar(r) {
   div.innerHTML = `<div class="item">${PZ_SUBIR.thumb ? `<img src="${esc(PZ_SUBIR.thumb)}" alt="">` : ''}<div><div class="q">${esc(q)}</div><div class="w">${esc(w)}</div></div></div>`
     + (r.desplazado ? `<div class="r-note">${en ? 'I moved Posty\'s post from that day to ' : 'Moví el posteo de Posty de ese día al '}${esc(r.desplazado.dia_label || '')}${r.desplazado.hora ? ' · ' + esc(r.desplazado.hora) : ''}${en ? ': one post per day.' : ': un posteo por día.'}</div>` : '')
     + (r.semana_siguiente ? `<div class="r-note">${en ? 'This week was already full: it goes out next week.' : 'Esta semana ya estaba completa: sale la semana que viene.'}</div>` : '')
+    + (r.hoy_motivo ? `<div class="r-note">${esc(pzSubirHoyNota(r.hoy_motivo, en))}</div>` : '')
     + (r.sin_dia ? `<div class="r-note">${en ? 'There were no free days: it stays in your material.' : 'No había días libres: quedó en tu material.'}</div>` : '')
     + (r.modo === 'pedido_revision' ? `<div class="r-note">${en ? 'Tomorrow it lands in your grid at your usual time — nothing goes out today.' : 'Mañana entra en tu grilla a tu hora de siempre — hoy no sale nada.'}</div>` : '')
     + (r.modo === 'pedido_revision' && r.duda && r.pedido_id ? `<div class="r-duda" data-pz-duda="${r.pedido_id}"><div class="r-note" style="margin-top:6px">${esc(pzSubirDudaTexto(r.duda, en))}</div><div class="chips">${(Array.isArray(r.duda.opciones) ? r.duda.opciones : []).map((o) => `<button type="button" class="chip" data-pz-duda-op="${esc(o)}">${esc(o)}</button>`).join('')}<button type="button" class="chip" data-pz-duda-op="otra">${en ? "It's something else" : 'Es otra cosa'}</button></div></div>` : '')
