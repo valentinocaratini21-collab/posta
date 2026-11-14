@@ -200,6 +200,17 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN creatividad TEXT DEFAULT ''`); } cat
 // no hay re-render fiel: el ejecutor de rehacer-video la consume y su
 // ausencia es la imposibilidad honesta «sin_receta».
 try { db.exec(`ALTER TABLE posts ADD COLUMN reel_receta TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE PATRONES-DE-SERIE · 14/11) El ROL de la pieza dentro de su
+// serie como dato durable: rol_serie = JSON chico {avatar, texto}
+// (avatar: en_escena|sello|ausente|no_determinado; texto:
+// con-texto|sin-texto) y frenada = la marca durable A NIVEL PIEZA de
+// que un freno deliberado (soporte/dueño/conserje) la sacó de juego:
+// ningún agendado automático la resucita (complementa day_stops, que
+// protege el DÍA; esta protege la PIEZA). Sin estas columnas los
+// candados C1–C5 no tienen qué leer (causa raíz del diseño: el rol
+// no existía como dato y cada rehacer trataba el posteo como isla).
+try { db.exec(`ALTER TABLE posts ADD COLUMN rol_serie TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN frenada INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN rg_procedencia TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

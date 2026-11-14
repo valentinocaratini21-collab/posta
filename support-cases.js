@@ -39,6 +39,7 @@ const watchdog = require('./publish-watchdog');
 const ritualManana = require('./ritual-manana');
 const clientDigest = require('./client-digest');
 const { dayKeyInTz } = require('./morning-post-push');
+const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + marca durable de freno
 
 const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
 
@@ -905,6 +906,9 @@ function reschedulePost(db, postId, newScheduledAt, opts) {
   if (!Number.isFinite(t)) return { ok: false, error: 'fecha_invalida' };
   const norm = new Date(t).toISOString().slice(0, 19).replace('T', ' ');
   db.prepare(`UPDATE posts SET scheduled_at = ? WHERE id = ?`).run(norm, post.id);
+  // (LOTE PATRONES-DE-SERIE · C4) Reprogramar ES el gesto expreso del
+  // equipo sobre ESTA pieza: desmarca su freno durable, si lo tenía.
+  patronesSerie.marcarFrenada(db, post.id, false);
   const caso = openCaseForPost(db, post.id);
   logTeamAction(db, { actor, action: 'reprogramar', userId: post.user_id, postId: post.id,
     caseId: caso ? caso.id : null,
@@ -925,6 +929,22 @@ function redoPost(db, postId, opts) {
   // Borrador en revisión: mismo camino que el rechazo de la cola de
   // revisión — señal + regla de estilo, se borra y se regenera otro.
   if (post.status === 'draft' && Number(post.needs_review || 0) === 1) {
+    // (LOTE PATRONES-DE-SERIE · C1 + §4.3) El rol del avatar de la
+    // pieza en su serie es INMUTABLE bajo rehacer. Si el eje entró al
+    // sistema de patrones y quedó 'no_determinado', el reemplazo
+    // automático NO improvisa: se frena ANTES de borrar nada, con el
+    // motivo registrado en el log de equipo (el conserje lo resuelve
+    // con un humano; los caminos manuales muestran «no determinado»).
+    // Si el rol está determinado, viaja al regenerador para que la
+    // pieza nueva NAZCA con el mismo rol (y el mismo sistema de
+    // texto de su tira, C3 — el regenerador lo deriva del modo de la
+    // semana, como ya hacía).
+    const rolEjeRedo = patronesSerie.ejeAvatar(post);
+    if (rolEjeRedo === 'no_determinado') {
+      log('Rehacer FRENADO por candado de serie: el rol del avatar del posteo #' + post.id
+        + ' está no_determinado — el reemplazo automático no improvisa sobre una pieza de serie (queda para el conserje)');
+      return { ok: false, error: 'rol_no_determinado', post_id: post.id };
+    }
     try {
       const prof = safe(() => db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(post.user_id), null) || {};
       db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
@@ -940,7 +960,7 @@ function redoPost(db, postId, opts) {
     db.prepare(`DELETE FROM posts WHERE id = ?`).run(post.id);
     if (typeof o.regen === 'function') {
       try {
-        const p = o.regen(post.user_id, post.week_key || '', post.source_topic || '');
+        const p = o.regen(post.user_id, post.week_key || '', post.source_topic || '', { rol_serie: post.rol_serie || '' });
         if (p && typeof p.catch === 'function') p.catch(() => {});
       } catch (e) {}
     }
@@ -964,6 +984,14 @@ function redoPost(db, postId, opts) {
     const tSch = toMs(post.scheduled_at);
     const diaFrenado = Number.isFinite(tSch) ? dayKeyInTz(new Date(tSch), accountTz(db, post.user_id)) : null;
     db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'pending', error = '' WHERE id = ?`).run(post.id);
+    // (LOTE PATRONES-DE-SERIE · C4) Además de la marca de DÍA
+    // (day_stops, arriba), la PIEZA queda marcada frenada: ningún
+    // agendado automático la vuelve a poner en fecha — el 14/11 los
+    // tres borradores frenados de la tira volvieron a scheduled sin
+    // que ningún camino mirara la serie ni el motivo. La desmarcan
+    // solo los gestos expresos sobre esta pieza (programar/reprogramar
+    // del equipo, «sale» del conserje, gestos del dueño por posteo).
+    patronesSerie.marcarFrenada(db, post.id, true);
     const origenStop = (diaFrenado && post.media_type !== 'story')
       ? dayStopSetS(db, post.user_id, diaFrenado, post.id) : null;
     const diaMarcado = origenStop ? diaFrenado : null;

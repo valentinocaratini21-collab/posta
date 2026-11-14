@@ -2436,7 +2436,7 @@ async function aplicarJuicioFinalTrial(o) {
 // post.juicio) y el registro completo + el perfil en el payload
 // (out.continuidad_serie), auditable como juicio_final.
 // ALCANCE: solo la PRUEBA, como el juicio. El registrado, después.
-const CONTINUIDAD_SERIE_MOTIVOS = ['sistema-de-texto-roto', 'estrella-repetida', 'ritmo-roto'];
+const CONTINUIDAD_SERIE_MOTIVOS = ['sistema-de-texto-roto', 'estrella-repetida', 'ritmo-roto', 'rol-avatar-roto'];
 const CONTINUIDAD_SERIE_TOPE_POR_PIEZA = 1;
 
 function continuidadNormNombre(s) {
@@ -2469,11 +2469,23 @@ function perfilContinuidadSerie(posts, specPosts, digest, feedRecents, estrellas
   };
   const piezas = ps.map((p, i) => {
     const sp = sps[i] || {};
-    if (!p || p.armando) return { i, formato: 'armando', texto: 'armando', estrella: estrellaDePieza(i), origen: (p && p.ai) ? 'generada' : 'foto' };
+    // (LOTE PATRONES-DE-SERIE) El rol del avatar de la pieza: lo
+    // declarado por el plan (spec), lo que la pieza ya trae
+    // (post.rol_avatar en memoria o el JSON persistido rol_serie).
+    // Sin declaración, 'no_determinado' — un valor de primera clase,
+    // nunca una adivinanza (diseño §4.3).
+    let rolAvatar = null;
+    if (sp.rol_avatar) rolAvatar = sp.rol_avatar;
+    else if (p && p.rol_avatar) rolAvatar = p.rol_avatar;
+    else if (p && p.rol_serie) {
+      try { const rj = typeof p.rol_serie === 'string' ? JSON.parse(p.rol_serie) : p.rol_serie; if (rj && rj.avatar) rolAvatar = rj.avatar; } catch (e) {}
+    }
+    const rolAvatarOk = ['en_escena', 'sello', 'ausente', 'no_determinado'].includes(rolAvatar) ? rolAvatar : 'no_determinado';
+    if (!p || p.armando) return { i, formato: 'armando', texto: 'armando', estrella: estrellaDePieza(i), origen: (p && p.ai) ? 'generada' : 'foto', rol_avatar: rolAvatarOk };
     const formato = p.type === 'video' ? 'video' : p.type === 'carousel' ? 'carousel' : 'image';
     const tm = p.text_mode || sp.text_mode || null;
     const texto = formato === 'video' ? 'video' : (tm === 'clean' ? 'sin-texto' : 'con-texto');
-    return { i, formato, texto, estrella: estrellaDePieza(i), origen: p.ai ? 'generada' : (sp.poster ? 'poster' : 'foto') };
+    return { i, formato, texto, estrella: estrellaDePieza(i), origen: p.ai ? 'generada' : (sp.poster ? 'poster' : 'foto'), rol_avatar: rolAvatarOk };
   });
   // Texto: las comparables son las piezas imagen/carrusel entregadas
   // (el video lleva su texto en movimiento: otro dominio, v1077).
@@ -2504,6 +2516,22 @@ function perfilContinuidadSerie(posts, specPosts, digest, feedRecents, estrellas
   const recents = Array.isArray(feedRecents) ? feedRecents : [];
   const recVideos = recents.filter((r) => r && r.type === 'video').length;
   const feedRatioVideo = recents.length >= 4 ? Math.round((recVideos / recents.length) * 100) / 100 : null;
+  // (LOTE PATRONES-DE-SERIE) La dimensión del avatar: qué piezas foto
+  // de la serie llevan al personaje EN ESCENA (regla: a lo sumo 1 por
+  // tira — la serie de la prueba es una tira) y qué trae el feed real
+  // (los recientes clasificados UNA vez al sembrarse el snapshot;
+  // sin clasificar, el conteo queda en 0 y el patrón no se inventa).
+  // El invariante complementario queda registrado como expectativa:
+  // sello ⇔ el personaje NO está en escena.
+  const fotosSerie = piezas.filter((z) => z.formato === 'image' || z.formato === 'carousel');
+  const avatarEnEscenaIdx = fotosSerie.filter((z) => z.rol_avatar === 'en_escena').map((z) => z.i);
+  const avatarSelloIdx = fotosSerie.filter((z) => z.rol_avatar === 'sello').map((z) => z.i);
+  const feedAvatar = { en_escena: 0, sello: 0, ausente: 0, determinados: 0 };
+  for (const r of recents) {
+    if (!r || !['en_escena', 'sello', 'ausente'].includes(r.rol_avatar)) continue;
+    feedAvatar[r.rol_avatar] += 1;
+    feedAvatar.determinados += 1;
+  }
   return {
     feed_modo: feedModo,
     feed_ratio: feedRatio,
@@ -2525,6 +2553,12 @@ function perfilContinuidadSerie(posts, specPosts, digest, feedRecents, estrellas
     sello: {
       logo_disponible: !!((digest && (digest.logo_file || (digest.logo && digest.logo.file) || digest.logo_url))),
       por_pieza: piezas.map((z) => z.origen),
+    },
+    avatar: {
+      en_escena_idx: avatarEnEscenaIdx,
+      sello_idx: avatarSelloIdx,
+      sello_complementario: 'sello<=>no-en_escena',
+      feed: feedAvatar,
     },
   };
 }
@@ -2567,6 +2601,29 @@ function fallasContinuidadSerie(perfil, posts) {
   const exceso = gruposRep.reduce((a, g) => a + g.indices.length - 1, 0);
   if (exceso > 0 && (perfil.estrellas.alternativas || []).length >= exceso) {
     for (const g of gruposRep) g.indices.slice(1).forEach((i) => agregar(i, 'estrella-repetida', 'foto-candidato', g.nombre));
+  }
+  // — Rol del avatar (LOTE PATRONES-DE-SERIE · C2: UN SOLO AVATAR EN
+  // ESCENA POR TIRA) — La semana de la prueba es una tira (un rubro):
+  // dos piezas foto con el personaje EN ESCENA rompen el patrón que
+  // el feed real muestra (en las 12 piezas del feed propio de Posty,
+  // el avatar interactúa en UNA sola foto de la tira y en la otra va
+  // de sello). La falla se REGISTRA, no se repara: rehacer una foto
+  // para sacar al personaje es exactamente el incidente que este
+  // lote cierra (653). Acción 'registrado': la pieza sale como está
+  // y la falla queda visible en post.continuidad y en el armado.
+  // Caso cero: el feed trae al personaje en escena (determinado) y
+  // la serie — con al menos 2 fotos de rol determinado — no trae
+  // ninguna → nota de serie, sin tocar ninguna pieza.
+  const fotosRol = (perfil.piezas || []).filter((z) => z.formato === 'image' || z.formato === 'carousel');
+  const enEscenaRol = fotosRol.filter((z) => z.rol_avatar === 'en_escena');
+  if (enEscenaRol.length > 1) {
+    enEscenaRol.slice(1).forEach((z) => agregar(z.i, 'rol-avatar-roto', 'registrado'));
+  } else if (enEscenaRol.length === 0) {
+    const determinadasRol = fotosRol.filter((z) => z.rol_avatar && z.rol_avatar !== 'no_determinado');
+    const feedEnEscena = perfil && perfil.avatar && perfil.avatar.feed ? perfil.avatar.feed.en_escena : 0;
+    if (feedEnEscena >= 1 && determinadasRol.length >= 2) {
+      notas.push({ motivo: 'rol-avatar-roto', salida: 'registrado', detalle: 'sin-avatar-en-escena' });
+    }
   }
   // — Ritmo (de la serie, no de una pieza) —
   const motivosSerie = [];
@@ -2651,7 +2708,13 @@ async function aplicarContinuidadSerieTrial(o) {
     const esAi = !!post.ai || sp.photo_source === 'ai-generated';
     let salida = null;
     let intento = null;
-    if (falla.accion === 'foto-candidato' && !esAi && post.type !== 'video') {
+    if (falla.accion === 'registrado') {
+      // (LOTE PATRONES-DE-SERIE) La falla de rol se REGISTRA y la
+      // pieza sale como está: el pase nunca rehace una foto por un
+      // rol (ese rehacer es el incidente del 653). Sin intento, sin
+      // tocar el medio, sin mandar la pieza al armado.
+      salida = 'registrado';
+    } else if (falla.accion === 'foto-candidato' && !esAi && post.type !== 'video') {
       intento = 'foto-candidato';
       const cand = fotoCandidataNueva(perfil.estrellas.alternativas);
       if (cand) {
@@ -2684,7 +2747,7 @@ async function aplicarContinuidadSerieTrial(o) {
       aArmado(post);
       salida = 'armado-rescate';
     }
-    if (!cambiados.includes(i)) cambiados.push(i);
+    if (salida !== 'registrado' && !cambiados.includes(i)) cambiados.push(i);
     recs.set(i, { i, pasa: null, motivos: falla.motivos.slice(), salida, intento, pasadas: CONTINUIDAD_SERIE_TOPE_POR_PIEZA });
   }
 
@@ -2696,7 +2759,7 @@ async function aplicarContinuidadSerieTrial(o) {
     const otra = fallasContinuidadSerie(perfil, posts);
     for (const [i, rec] of recs) {
       const post = posts[i];
-      if (otra.fallas.has(i) && rec.salida !== 'armado-rescate') {
+      if (otra.fallas.has(i) && rec.salida !== 'armado-rescate' && rec.salida !== 'registrado') {
         aArmado(post);
         rec.salida = 'armado-rescate';
         rec.detalle = 'reparada-sigue-rompiendo';
@@ -2716,6 +2779,12 @@ async function aplicarContinuidadSerieTrial(o) {
     }
     registro.push(rec);
     post.continuidad = { pasa: rec.pasa, motivos: rec.motivos, salida: rec.salida };
+    // (LOTE PATRONES-DE-SERIE) El rol DETERMINADO viaja con la pieza
+    // (payload → trial_cache → importación): la cuenta lo hereda en
+    // posts.rol_serie sin re-clasificar. 'no_determinado' no se
+    // estampa: la ausencia del dato es el estado honesto.
+    const rolFinalPieza = perfil.piezas[i] && perfil.piezas[i].rol_avatar;
+    if (rolFinalPieza && rolFinalPieza !== 'no_determinado') post.rol_avatar = rolFinalPieza;
   }
 
   const serie = {

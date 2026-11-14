@@ -32,6 +32,7 @@
 
 const { dayKeyInTz } = require('./morning-post-push');
 const clientDigest = require('./client-digest'); // fundamento: productos, paleta, onboarding q1–q8
+const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) marca durable de freno a nivel pieza (C4)
 
 const OWNER_USER_ID = 12; // Valentino: su cuenta; su zona horaria manda la ventana.
 const VENTANA_ABRE_HORA = 19; // 19:00
@@ -486,10 +487,18 @@ function decidirRevision(db, opts) {
       } else {
         db.prepare(`UPDATE posts SET approval = 'approved', needs_review = 0 WHERE id = ?`).run(post.id);
       }
+      // (LOTE PATRONES-DE-SERIE · C4) «Sale» es EL gesto expreso del
+      // dueño sobre esta pieza: desmarca su freno durable, si lo tenía.
+      patronesSerie.marcarFrenada(db, post.id, false);
     } else if (decision === 'arreglar') {
       // Vuelve a borrador sin fecha (igual que rehacer un programado) y la
       // nota queda como regla de estilo para que mañana no se repita.
       db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'pending', error = '' WHERE id = ?`).run(post.id);
+      // (LOTE PATRONES-DE-SERIE · C4) El borrador que vuelve por
+      // «arreglar» queda frenado a nivel PIEZA: ningún agendado
+      // automático lo repone en fecha hasta el gesto expreso («sale»,
+      // programar del equipo o del dueño sobre esta pieza).
+      patronesSerie.marcarFrenada(db, post.id, true);
       if (nota) {
         try {
           db.prepare(`INSERT INTO style_rules (user_id, rule_key, rule_text, hits, active) VALUES (?, ?, ?, 1, 1)
@@ -511,6 +520,9 @@ function decidirRevision(db, opts) {
       // gesto inverso es 'pedir' («Posty lo arma»), que borra el stop.
       db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'rejected', error = '' WHERE id = ?`).run(post.id);
       safe(() => db.prepare(`UPDATE posts SET user_stopped = 1 WHERE id = ?`).run(post.id), null);
+      // (LOTE PATRONES-DE-SERIE · C4) Y la PIEZA queda frenada: el
+      // «no sale» del dueño no lo deshace ningún agendado automático.
+      patronesSerie.marcarFrenada(db, post.id, true);
       dayStopSetC(db, uid, fecha, post.id, 'conserje_no_sale');
     }
     guardarDecision(db, uid, fecha, post.id, decision, nota, 'dueno');

@@ -29,6 +29,7 @@ const morningPostPush = require('./morning-post-push');
 const supportCases = require('./support-cases');
 const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
+const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + candados C1–C5
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
 // Observabilidad dogfood (2026-10-05): los errores de imagen del dogfood van
@@ -2790,6 +2791,11 @@ function trialFeedRecentsFromEmbed(posts) {
         likes: num(post.likes),
         comments: num(post.comments),
         pinned: post.pinned === true ? true : null,
+        // (LOTE PATRONES-DE-SERIE) El rol del avatar viaja cuando el
+        // objeto fuente lo trae (clasificado al sembrarse el
+        // snapshot); sin clasificar, la clave no viaja y el perfil
+        // de serie lee 'no_determinado' — nunca una adivinanza.
+        rol_avatar: ['en_escena', 'sello', 'ausente'].includes(post.rol_avatar) ? post.rol_avatar : null,
       });
       if (out.length >= 12) break;
     }
@@ -2842,6 +2848,32 @@ async function seedTrialFeedSnapshot(userId, igRaw, out) {
       if (img) localized.push({ ...r, img });
     });
     if (!localized.length) return false;
+    // (LOTE PATRONES-DE-SERIE · §3.3.2 del diseño) El rol del avatar
+    // de cada foto real del feed se clasifica UNA VEZ, acá, al
+    // sembrarse el snapshot — nunca en caliente dentro de un rehacer.
+    // Sin clave de visión o sin veredicto, la foto queda sin rol y el
+    // patrón la lee 'no_determinado' (fail-closed). La clasificación
+    // jamás frena la siembra: cualquier falla deja los recents como
+    // estaban.
+    try {
+      const avKey = openaiKeyFor(userId);
+      if (avKey && deepRead.classifyAvatarPresence) {
+        const fotosAv = [];
+        localized.forEach((r, i) => {
+          const base = path.basename(String(r.img || ''));
+          if (base) fotosAv.push({ key: 'r' + i, path: path.join(MEDIA_DIR, base), idx: i });
+        });
+        if (fotosAv.length) {
+          const verdAv = await deepRead.classifyAvatarPresence({
+            photos: fotosAv, business: (out && out.business) ? String(out.business) : '', apiKey: avKey, userId,
+          });
+          for (const f of fotosAv) {
+            const v = verdAv && verdAv[f.key];
+            if (v && v.rol) localized[f.idx].rol_avatar = v.rol;
+          }
+        }
+      }
+    } catch (e) { /* la clasificación nunca frena la siembra */ }
     // La ventana de descarga pudo dejar aterrizar una lectura real: si
     // ya hay snapshot con recents, la real manda y no se pisa.
     const prev2 = homeSnapshotGet(userId);
@@ -3086,6 +3118,19 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
           ON CONFLICT(user_id, post_id) DO UPDATE SET style_code=excluded.style_code, tipo=excluded.tipo, updated_at=datetime('now')`)
           .run(userId, Number(ins.lastInsertRowid), String(p.caption || ''), String(p.hashtags || ''), '', String(out.category || ''), trialSignal, '', styleCode, String(dpost.kind || ''), trialSignalAuto);
       } catch (e) { console.error('[posta] importTrialWeek signal:', e.message); }
+      // (LOTE PATRONES-DE-SERIE) La pieza importada NACE con su rol de
+      // serie estampado: el eje texto sale de su text_mode de la
+      // prueba y el eje avatar del rol que el pase de continuidad
+      // dejó viajando en la pieza (post.rol_avatar), cuando el plan
+      // lo determinó. Sin determinación, el eje no se estampa: la
+      // ausencia es el estado honesto, no un 'no_determinado'
+      // inventado.
+      try {
+        const rolImp = {};
+        if (p && p.text_mode) rolImp.texto = p.text_mode === 'clean' ? 'sin-texto' : 'con-texto';
+        if (p && ['en_escena', 'sello', 'ausente'].includes(p.rol_avatar)) rolImp.avatar = p.rol_avatar;
+        if (Object.keys(rolImp).length) patronesSerie.sellarRolSerie(db, Number(ins.lastInsertRowid), rolImp);
+      } catch (e) { /* la estampa nunca frena la importación */ }
       // (v229) Trazabilidad de fundamento: el posteo importado guarda el
       // hash del digest de la prueba (y ':sin-ancla' si su titular+caption
       // no contiene ninguna ancla de ese digest).
@@ -7900,6 +7945,8 @@ function pzTrabajoCambioFalloAmable(kind, en) {
     regen_sin_cambio: ['el cambio no se aplicó sobre tu foto y dejé la actual', 'the change didn\'t apply over your photo and I left the current one'],
     regen_no_verificada: ['la pieza nueva no pasó la verificación contra tu pedido y dejé la actual', 'the new piece didn\'t pass the check against your request and I left the current one'],
     video_no_verificado: ['el video nuevo no pasó la verificación de subtítulos y dejé el actual — tocá reintentar', 'the new video didn\'t pass the subtitle check and I left the current one — tap retry'],
+    rol_no_determinado: ['ese posteo es parte de una serie y todavía no tengo determinado su rol en ella, así que no lo rehago solo para no romper el patrón: quedó registrado para resolverlo con el equipo', 'that post is part of a series and I haven\'t determined its role in it yet, so I won\'t redo it on my own and risk breaking the pattern: it\'s logged for the team to resolve'],
+    rol_avatar: ['el cambio dejaba ese posteo con un rol distinto dentro de su serie (el patrón que venimos manteniendo), así que lo dejé como estaba', 'the change would have given that post a different role within its series (the pattern we\'ve been keeping), so I left it as it was'],
     cambio_solo_foto: ['ese posteo es un video: el texto adentro de la imagen es un cambio de foto — en un video el texto va en sus textos quemados; pedime rehacer el video con ese texto y lo hago desde ahí', 'that post is a video: putting text inside the image is a photo change — in a video the text lives in its burned-in texts; ask me to redo the video with that text and I\'ll do it from there'],
     sin_caption: ['ese posteo no tiene ningún texto para poner adentro — decime qué texto querés que diga y lo pongo en el momento', 'that post has no text to put inside — tell me what you want it to say and I\'ll put it right away'],
     ya_tiene_texto: ['ese posteo ya tiene un texto adentro de la imagen y no tengo la foto limpia para rehacerlo — si subís la foto sin texto desde Subir, lo armo de nuevo', 'that post already has a text inside the image and I don\'t have the clean photo to redo it — upload the photo without text from Upload and I\'ll build it again'],
@@ -8184,6 +8231,16 @@ async function pzTrabajoChatCambioRun(jobId) {
       return;
     }
     if (ruta === 'foto') {
+      // (LOTE PATRONES-DE-SERIE · C1 + §4.3) El rol del avatar de la
+      // pieza en su serie es INMUTABLE bajo rehacer. Si el eje entró
+      // al sistema de patrones y quedó 'no_determinado', el cambio
+      // NO se intenta (ni se gasta la regeneración): recibo honesto
+      // y el trabajo queda en el conserje, como manda el riel de
+      // v1077. La ruta de video no pasa por acá: re-renderiza desde
+      // la receta de la MISMA fuente, el rol no cambia por
+      // construcción. La de texto no toca el medio.
+      const rolEjeFoto = patronesSerie.ejeAvatar(post);
+      if (rolEjeFoto === 'no_determinado') { settleFallo('rol_no_determinado'); return; }
       const work = (async () => {
         const rl = redoLeftOf(post);
         if (rl !== null && rl <= 0) return { issue: 'sin_rehaces' };
@@ -8192,6 +8249,13 @@ async function pzTrabajoChatCambioRun(jobId) {
         if (!rr.newPath) return { issue: 'fallo' };
         if (rr.gate && rr.gate.qaGate && rr.gate.qaGate.outcome === 'bandeja') return { issue: 'revision' };
         if (characterBlocksDelivery(rr.gate)) return { issue: 'revision' };
+        // (C1 · verificación ANTES de reemplazar) El gate de la pieza
+        // nueva trae el veredicto de personaje: si contradice el rol
+        // declarado de la pieza (la nueva metió un personaje en
+        // escena donde iba sello/ausente, o perdió al avatar de una
+        // pieza en escena), el reemplazo NO se aplica.
+        const candadoRol = patronesSerie.veredictoCandadoFoto({ ejePresente: rolEjeFoto !== null, avatar: rolEjeFoto, character: rr.gate && rr.gate.character });
+        if (candadoRol.bloquea) return { issue: candadoRol.motivo };
         const cur = db.prepare('SELECT redo_left, media_type, image_path FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
         guardarVersion(post);
         if (redoLeftOf(cur) === null || consumeRedo(uid, post.id)) {
@@ -11902,7 +11966,7 @@ app.post('/api/admin/posts/:id/schedule', requireAdminToken, (req, res) => {
     if (wk) weekKey = wk;
   } catch (e) { /* sin re-derivación: queda la week_key que traía */ }
   const movido = post.status === 'scheduled' && post.scheduled_at !== iso;
-  db.prepare(`UPDATE posts SET scheduled_at = ?, status = 'scheduled', error = '', notified = 0, user_stopped = 0, week_key = ? WHERE id = ?`)
+  db.prepare(`UPDATE posts SET scheduled_at = ?, status = 'scheduled', error = '', notified = 0, user_stopped = 0, frenada = 0, week_key = ? WHERE id = ?`)
     .run(iso, weekKey, post.id);
   console.log(`[admin] schedule: post ${post.id} (usuario ${post.user_id}) ${post.status} ${post.scheduled_at || 'sin fecha'} → scheduled ${iso}`);
   res.json({ ok: true, id: post.id, user_id: post.user_id, status: 'scheduled', scheduled_at: iso, week_key: weekKey, needs_review: post.needs_review ? 1 : 0, movido, ya_programado: post.status === 'scheduled' && !movido });
@@ -12371,7 +12435,7 @@ app.post('/api/admin/support/posts/:id/reprogramar', requireAdminToken, (req, re
 });
 app.post('/api/admin/support/posts/:id/rehacer', requireAdminToken, (req, res) => {
   const r = supportCases.redoPost(db, req.params.id, { actor: 'equipo', note: (req.body || {}).note,
-    regen: (uid, wk, topic) => regenerateOneDraft(uid, wk, topic) });
+    regen: (uid, wk, topic, rolInfo) => regenerateOneDraft(uid, wk, topic, rolInfo) });
   if (!r.ok) return res.status(r.error === 'no_existe' ? 404 : 400).json({ ok: false, error: r.error });
   // (LOTE FRENO-DIA-MARCADO) dia_marcado: el día que el freno de
   // soporte dejó frenado en day_stops (null si no aplicó).
@@ -12388,7 +12452,7 @@ app.post('/api/admin/support/:userId/chat', requireAdminToken, (req, res) => {
 // Regenera UN borrador para reemplazar uno rechazado en revisión. El rechazo ya
 // alimenta excludedTopicsLine() vía post_signals, así que la idea sale con otro
 // enfoque automáticamente. El nuevo borrador nace con rueditas si corresponde.
-async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
+async function regenerateOneDraft(uid, weekKey, rejectedTopic, rolInfo) {
   const key = openaiKeyFor(uid);
   if (!key) return { ok: false, reason: 'no_key' };
   const ideas = await generateIdeas(ideasInputFor(uid), key);
@@ -12445,11 +12509,25 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     }
   }
   if (!imagePath) return { ok: false, reason: 'no_image' };
-  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
-    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
+  // (LOTE PATRONES-DE-SERIE · C1 + C3) La pieza nueva NACE con el rol
+  // de la que reemplaza: el eje avatar viaja desde la pieza rechazada
+  // (redoPost lo pasa en rolInfo; sin rol determinado no se estampa
+  // nada) y el eje texto nace del modo de texto de ESTA semana
+  // (weekTextModeFor, el mismo cálculo de arriba) — el sistema de
+  // texto de la tira se conserva en el reemplazo.
+  let rolSerieNace = '';
+  try {
+    const prevRol = patronesSerie.parseRolSerie(rolInfo && rolInfo.rol_serie);
+    const nace = {};
+    if (prevRol && prevRol.avatar && prevRol.avatar !== 'no_determinado') nace.avatar = prevRol.avatar;
+    nace.texto = mode === 'clean' ? 'sin-texto' : 'con-texto';
+    rolSerieNace = JSON.stringify(nace);
+  } catch (e) { rolSerieNace = ''; }
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, rol_serie)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
       String(idea.porque || '').slice(0, 500), weekKey || '', (trainingWheelsActive(uid) || characterBlocksDelivery(genOut2) || (genOut2.qaGate && genOut2.qaGate.outcome === 'bandeja')) ? 1 : 0,
-      String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath));
+      String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath), rolSerieNace);
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
   return { ok: true, id: r.lastInsertRowid };
@@ -19496,6 +19574,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     // tienen su propio carril: no frenan el día del feed.
     const diaFrenado = post.scheduled_at ? ymdInTz(post.scheduled_at, userTz(req.session.userId)) : null;
     db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending', user_stopped=1 WHERE id=?`).run(post.id);
+    // (LOTE PATRONES-DE-SERIE · C4) La pausa del dueño también marca
+    // la PIEZA como frenada: ningún agendado automático la repone
+    // hasta su gesto expreso sobre este posteo.
+    patronesSerie.marcarFrenada(db, post.id, true);
     if (diaFrenado && post.media_type !== 'story') dayStopSet(req.session.userId, diaFrenado, post.id, 'dueno_pausa');
     console.log(`[autopilot] usuario ${req.session.userId} frenó el post ${post.id}`);
   } else if (action === 'save-draft') {
@@ -19631,7 +19713,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       }
     }
     scheduledInfo = { scheduled_at: finalWhen, week_key: whenMonday };
-    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=?, user_stopped=0 WHERE id=?`).run(
+    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=?, user_stopped=0, frenada=0 WHERE id=?`).run(
       finalWhen, caption ?? post.caption, hashtags ?? post.hashtags,
       // "Posty te avisa": si cambió la hora programada, se re-arma el aviso de
       // aprobación (3h antes). Si el posteo estaba rechazado y el usuario lo
@@ -20424,6 +20506,8 @@ async function ensureTodayPost(uid, tz, now) {
           AND COALESCE(approval,'pending') != 'rejected'
           AND COALESCE(source,'') != 'express'
           AND COALESCE(user_stopped, 0) = 0
+          AND COALESCE(frenada, 0) = 0
+          AND COALESCE(source,'') != 'subir'
           AND created_at >= datetime('now', '-2 days') ORDER BY id DESC`).all(uid);
         for (const c of cands) {
           let d = null;
@@ -21023,7 +21107,7 @@ function acceptAllDrafts(uid, items, opts) {
     }
     return weekLeftCache.get(k);
   };
-  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='', user_stopped=0 WHERE id=?`);
+  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='', user_stopped=0, frenada=0 WHERE id=?`);
   const acceptedItems = [];
   const piezasPrimera = []; // ids aceptados sin retoque previo (señal != edited)
   let blockedQuota = null; // primer bloqueo por cupo: { monday, poolKey }
@@ -23791,6 +23875,15 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
   } catch (e) { /* sin composición, orden de siempre */ }
   const scheduled = [];
   const waiting = [];
+  // (LOTE PATRONES-DE-SERIE · C5) ¿Hay una SERIE viva en esta cuenta?
+  // (piezas del plan entre los borradores o ya programadas). Si la
+  // hay, lo que nació FUERA del plan (la subida del cliente, que ya
+  // tiene su propio flujo de ubicación) no se auto-agenda dentro de
+  // la tira sin chequeo de serie: espera, con su motivo.
+  let haySerieC5 = drafts.some((x) => !patronesSerie.fueraDeSerie(x));
+  if (!haySerieC5) {
+    try { haySerieC5 = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'scheduled' AND COALESCE(source,'') != 'subir'`).get(uid).n > 0; } catch (e) {}
+  }
   for (const d of drafts) {
     const isStory = d.media_type === 'story';
     const tset = isStory ? takenStory : taken;
@@ -23798,6 +23891,21 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
     let monday = curMonday;
     if (typeof d.week_key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.week_key)) monday = mondayKeyOf(d.week_key);
     if (monday < curMonday) monday = curMonday;
+    // (LOTE PATRONES-DE-SERIE · C4) Lo FRENADO no resucita por agenda:
+    // la pieza marcada (soporte/dueño/conserje) queda fuera de todo
+    // agendado automático hasta su gesto expreso. Era el hueco del
+    // 14/11: los tres borradores frenados de la tira (679/680/681)
+    // volvieron a scheduled sin que ningún camino mirara el motivo.
+    if (patronesSerie.esFrenada(d)) {
+      waiting.push({ id: d.id, week_key: monday, reason: 'frenada' });
+      continue;
+    }
+    // (LOTE PATRONES-DE-SERIE · C5) Fuera de serie con serie viva:
+    // no entra solo a la tira.
+    if (haySerieC5 && patronesSerie.fueraDeSerie(d)) {
+      waiting.push({ id: d.id, week_key: monday, reason: 'fuera_de_serie' });
+      continue;
+    }
     // CHEQUEO-DUPLICADOS-CAPTIONS: si el caption ya está programado para esta
     // cuenta (o se publicó en los últimos 7 días), NO se programa: queda en
     // 'draft' sin consumir cupo ni día, y el lugar lo ocupa el siguiente
@@ -23950,7 +24058,7 @@ function scheduleAllDrafts(uid) {
   // si la cuenta está frenada administrativamente, el embudo no programa
   // NADA (ni siquiera posteos sin marca o creados después del freno).
   if (publishingStopped(uid)) return { ok: false, reason: 'publishing_stopped', scheduled: [], waiting: [] };
-  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(user_stopped,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(user_stopped,0)=0 AND COALESCE(frenada,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [], waiting: [] };
   // FASE 0 — qualityGate: solo lo bueno sale solo. El borrador que no pasa
   // el gate queda en 'draft' con needs_review=1 (cola de revisión humana) y
@@ -24081,6 +24189,12 @@ app.post('/api/posts/schedule-all', requireAuth, async (req, res) => {
   // (id + week_key + motivo), sin bloquear al resto. El 403 queda SOLO para
   // el tope verdadero —cuando NINGÚN borrador pudo programarse por cupo— y
   // trae los datos de la semana del posteo (mismo criterio que v215).
+  // (LOTE PATRONES-DE-SERIE · C4) Este upd pone user_stopped=0 al
+  // programar, pero SOLO corre sobre las piezas que
+  // scheduleDraftsPerWeek efectivamente programó — y ese planificador
+  // excluye las piezas frenada=1 (esperan con motivo 'frenada'), así
+  // que el gesto masivo ya no puede des-frenar una pieza marcada: la
+  // corrección vive en el filtro del planificador, no en este upd.
   const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='', notified=0, user_stopped=0 WHERE id=?`);
   const { scheduled, waiting } = scheduleDraftsPerWeek(uid, drafts, (iso, d) => upd.run(iso, d.id));
   scheduleLintForPosts(uid, scheduled.map((s) => s.id)); // (v198-A) lint al programar
@@ -43203,7 +43317,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1090';
+const BUILD_ID = '20261105-v1091';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

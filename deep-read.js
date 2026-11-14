@@ -634,6 +634,83 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
   return out;
 }
 
+// ---------- Rol del avatar en la foto (visión) ----------
+// (LOTE PATRONES-DE-SERIE · 14/11) El ROL del personaje/avatar de la
+// marca en una foto, para el perfil de serie (demo.js): ¿está DENTRO
+// de la escena interactuando, va como SELLO (cara/logo en un círculo
+// en una esquina, sin personaje en escena), o está AUSENTE? Misma
+// infraestructura de visión que classifyBrandPresence (VISION_MODEL,
+// mismo request, mismo parseo por índice). Devuelve
+// { [key]: { rol: 'en_escena'|'sello'|'ausente', detalle } } SOLO
+// para las fotos cuya respuesta trajo los DOS booleanos — la duda
+// queda SIN entrada y el llamador la lee 'no_determinado'
+// (fail-closed: jamás se adivina un rol). Se corre UNA vez por foto
+// al sembrarse el snapshot del feed, nunca en caliente dentro de un
+// rehacer (diseño §3.3.2).
+async function classifyAvatarPresence({ photos, business, apiKey, userId, fetchImpl, max } = {}) {
+  if (!apiKey) return {};
+  const cap = Math.min(Math.max(parseInt(max, 10) || VISION_MAX_PHOTOS, 1), VISION_MAX_PHOTOS);
+  const usable = [];
+  for (const p of (photos || [])) {
+    if (!p || !p.key || !p.path || usable.length >= cap) continue;
+    try {
+      const st = fs.statSync(p.path);
+      if (!st.isFile() || st.size < 1024 || st.size > 4 * 1024 * 1024) continue;
+    } catch (e) { continue; }
+    usable.push(p);
+  }
+  if (!usable.length) return {};
+  const doFetch = fetchImpl || fetch;
+  const sentPhotos = [];
+  const imageParts = [];
+  for (const p of usable) {
+    const ext = path.extname(p.path).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    try {
+      imageParts.push({ type: 'image_url', image_url: { url: `data:${mime};base64,` + fs.readFileSync(p.path).toString('base64') } });
+      sentPhotos.push(p);
+    } catch (e) { /* foto ilegible: se salta y el índice no se corre */ }
+  }
+  const sent = sentPhotos.length;
+  if (!sent) return {};
+  const biz = String(business || '').trim().slice(0, 80);
+  const content = [
+    { type: 'text', text: `Te muestro ${sent} fotos${biz ? ` del negocio «${biz}»` : ' de un negocio'}, en orden (foto 0 a ${sent - 1}). Para CADA foto decidí el rol del PERSONAJE o MASCOTA de la marca (un personaje dibujado o 3D reconocible, la cara/mascota que la marca usa como avatar):\n- "personaje_en_escena": true SOLO si el personaje está DENTRO de la escena interactuando (agarrando el producto, sentado en el local, participando de la foto como un sujeto más).\n- "sello": true SOLO si NO hay personaje en escena pero sí un sello circular en una esquina con la cara del personaje o el logo de la marca (un distintivo chico superpuesto, no parte de la escena).\nSi no hay personaje ni sello, ambos van false. Si no estás seguro de alguno, omití ese campo de esa foto (no adivines). Respondé SOLO este JSON: {"results":[{"i":0,"personaje_en_escena":true,"sello":false,"detalle":"qué se ve, en pocas palabras"}]}` },
+    ...imageParts,
+  ];
+  let data;
+  try {
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: VISION_MODEL, temperature: 0.1, max_tokens: 1000,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content }],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r || !r.ok) return {};
+    data = await r.json().catch(() => null);
+  } catch (e) { return {}; }
+  if (!fetchImpl && costs && costs.trackUsage) {
+    try { costs.trackUsage({ feature: 'avatar-presence', userId, model: VISION_MODEL, json: data }); } catch (e) {}
+  }
+  let parsed = null;
+  try { parsed = JSON.parse((data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || ''); } catch (e) {}
+  if (!parsed || !Array.isArray(parsed.results)) return {};
+  const out = {};
+  for (const res of parsed.results) {
+    const idx = parseInt(res && res.i, 10);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= sent) continue;
+    if (!res || typeof res.personaje_en_escena !== 'boolean' || typeof res.sello !== 'boolean') continue; // sin los dos booleanos no hay veredicto
+    const photo = sentPhotos[idx];
+    const rol = res.personaje_en_escena ? 'en_escena' : (res.sello ? 'sello' : 'ausente');
+    if (photo) out[photo.key] = { rol, detalle: String(res.detalle || '').slice(0, 140) };
+  }
+  return out;
+}
+
 // ---------- Calidad de la integración del logo (visión) ----------
 // (LOTE LOGO-ESTRATÉGICO) classifyBrandPresence dice si el negocio SE
 // VE; esta puerta juzga CÓMO se ve el logo que el pipeline INTEGRÓ en
@@ -736,6 +813,7 @@ module.exports = {
   fetchBioLink,
   classifyDigestPhotos,
   classifyBrandPresence,
+  classifyAvatarPresence,
   classifyLogoIntegration,
   photoContentKey,
   // piezas internas, exportadas para tests y reuso
