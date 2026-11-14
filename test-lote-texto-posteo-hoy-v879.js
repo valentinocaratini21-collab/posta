@@ -58,7 +58,11 @@ ok(speechSrc.includes("Today's post is already out"), 'fuente: «ya salió» EN 
 // Las demás ramas no se tocan.
 ok(speechSrc.includes('Tenés 1 posteo para revisar en tu feed.'), 'fuente: rama pendientes intacta');
 ok(speechSrc.includes('Tu semana ya está aprobada. Posty se ocupa de publicarla.'), 'fuente: rama haySemana intacta');
-ok(speechSrc.includes('¿Armamos tu semana? Contame qué tenés para mostrar.'), 'fuente: rama sin semana intacta');
+// (RE-PIN LOTE VERDAD-INVITADO · Blind Barber P8: la rama sin
+// semana se unificó — el invitado ya no va al chat; «Contame qué
+// tenés para mostrar» salió y quedó el texto del registrado.)
+ok(speechSrc.includes('¿Armamos tu semana? Posty la arma con lo que ya publicás.'), 'fuente: rama sin semana intacta (texto unificado VERDAD-INVITADO)');
+ok(!speechSrc.includes('Contame qué tenés para mostrar.'), 'fuente: la variante al chat del invitado salió (VERDAD-INVITADO)');
 // El «Te armé el posteo de hoy» que queda es solo autopilot (+ la frase
 // fija del chat de fotos, otro sitio, intacta): ×2 en todo app.js.
 ok(cnt(app, /Te armé el posteo de hoy/g) === 2, 'app.js: «Te armé el posteo de hoy» ×2 (autopilot + chat de fotos)');

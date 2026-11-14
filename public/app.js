@@ -2151,10 +2151,19 @@ function pzNivelHoyHTML(d) {
     // vieja leía solo publicadoHoy y la fila nunca se marcaba hecha
     // en vivo (bug latente de v805): se leen los dos.
     const hechoDia = !!(ritualHoy && (ritualHoy.publicadoHoy || ritualHoy.publicado_hoy));
+    // (LOTE VERDAD-INVITADO · Blind Barber P7) «Se publica solo hoy»
+    // afirma la salida: para el invitado sin Instagram conectado es
+    // falso — su posteo de hoy sale recién cuando conecte. La fila
+    // hecha («Se publicó solo») es un hecho real y no se toca.
+    const invSinIgNivel = (typeof pzIsGuest === 'function' && pzIsGuest())
+      && (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected);
+    const detDia = invSinIgNivel
+      ? (en ? 'It goes out on time once you connect your Instagram.' : 'Sale a su hora cuando conectes tu Instagram.')
+      : (en ? 'It goes out on its own today. Automatic.' : 'Se publica solo hoy. Automático.');
     total += 15;
     rows.push(hechoDia
       ? '<div class="' + clsFila(true) + '"><span class="pz-mision-ic" aria-hidden="true">📮</span><span class="pz-mision-tx"><b>' + esc(en ? 'Post of the day' : 'Posteo del día') + '</b><span>' + esc(en ? 'Published on its own. Automatic.' : 'Se publicó solo. Automático.') + '</span></span><span class="pz-mision-xp hecho">+15 XP</span><span class="pz-nivel-hoy-check" aria-hidden="true">✓</span></div>'
-      : '<div class="' + clsFila(false) + '"><span class="pz-mision-ic" aria-hidden="true">📮</span><span class="pz-mision-tx"><b>' + esc(en ? 'Post of the day' : 'Posteo del día') + '</b><span>' + esc(en ? 'It goes out on its own today. Automatic.' : 'Se publica solo hoy. Automático.') + '</span></span><span class="pz-mision-xp">+15 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></div>');
+      : '<div class="' + clsFila(false) + '"><span class="pz-mision-ic" aria-hidden="true">📮</span><span class="pz-mision-tx"><b>' + esc(en ? 'Post of the day' : 'Posteo del día') + '</b><span>' + esc(detDia) + '</span></span><span class="pz-mision-xp">+15 XP</span><span class="pz-nivel-hoy-vacio" aria-hidden="true"></span></div>');
     const tit = en ? ('You can earn ' + total + ' XP today') : ('Hoy podés sumar ' + total + ' XP');
     const sub = (rows.length >= 4)
       ? (en ? 'The 3 missions + the post of the day.' : 'Las 3 misiones + el posteo del día.')
@@ -9910,6 +9919,14 @@ function pzSemanaAprobadaState(list, wk) {
   return st;
 }
 function pzSemanaAprobadaHTML(en) {
+  // (LOTE VERDAD-INVITADO · Blind Barber P7) La misma frase que la
+  // burbuja de Inicio: para el invitado sin Instagram conectado la
+  // semana está aprobada pero NO se publica — la línea lo dice con
+  // su camino (conectar). Con conexión (o sin ser invitado), la
+  // línea de siempre.
+  const invSinIg = (typeof pzIsGuest === 'function' && pzIsGuest())
+    && (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected);
+  if (invSinIg) return `<p class="hf-semana-ok" id="hfSemanaOk">${pzIc('checkCircle', 14)} ${en ? 'Your week is approved. To have it go out, connect your Instagram: without a connection, nothing gets published.' : 'Tu semana está aprobada. Para que salga, conectá tu Instagram: sin conexión no se publica.'}</p>`;
   return `<p class="hf-semana-ok" id="hfSemanaOk">${pzIc('checkCircle', 14)} ${en ? 'Your week is approved. Posty will take care of publishing it.' : 'Tu semana está aprobada. Posty se ocupa de publicarla.'}</p>`;
 }
 // (LOTE SEMANA-APROBADA) Sync en su lugar, sin render(): crea el mensaje
@@ -22100,7 +22117,14 @@ function homeHeadHTML(prof, bizName, opts) {
 // El texto describe el comportamiento final (aviso solo si falta
 // confirmación): botón y comportamiento salen juntos en este lote.
 function pzPubInfoHTML(en) {
-  const t = en ? {
+  // (LOTE VERDAD-INVITADO · Blind Barber P7) El explicador describe
+  // el piloto automático; para el invitado sin Instagram conectado
+  // eso es falso hoy: sus posteos quedan listos acá y no sale
+  // ninguno hasta que conecte. Variante honesta ES/EN acá abajo;
+  // con conexión (o sin ser invitado), el texto de siempre.
+  const invSinIg = (typeof pzIsGuest === 'function' && pzIsGuest())
+    && (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected);
+  const tOrig = en ? {
     title: 'How does Posty publish?',
     lines: [
       'Posty publishes your scheduled posts on its own (autopilot).',
@@ -22119,6 +22143,25 @@ function pzPubInfoHTML(en) {
       'En modo manual, nada sale sin tu OK.',
     ],
   };
+  const t = invSinIg ? (en ? {
+    title: 'How does Posty publish?',
+    lines: [
+      'Posty leaves your posts ready and scheduled here, in your week.',
+      'Without Instagram connected, none of them goes out: they wait here.',
+      'Once you connect your Instagram, they go out on their own, on time (autopilot).',
+      "If you haven't confirmed a post, it warns you 30 minutes before, in case you want to stop it.",
+      'In manual mode, nothing goes out without your OK.',
+    ],
+  } : {
+    title: '¿Cómo publica Posty?',
+    lines: [
+      'Posty te deja los posteos listos y programados acá, en tu semana.',
+      'Sin Instagram conectado, no sale ninguno: quedan esperando acá.',
+      'Cuando conectás tu Instagram, salen solos a su hora (piloto automático).',
+      'Si no confirmaste un posteo, te avisa 30 minutos antes, por si querés frenarlo.',
+      'En modo manual, nada sale sin tu OK.',
+    ],
+  }) : tOrig;
   const lis = t.lines.map((l, i) => '<p class="hf-pubinfo-line"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L14.2 9.8 L22 12 L14.2 14.2 L12 22 L9.8 14.2 L2 12 L9.8 9.8 Z" fill="' + (i % 2 === 0 ? '#FEC14D' : '#2793C8') + '"/></svg><span>' + esc(l) + '</span></p>').join('');
   return `<div class="hf-ps-card hf-ps-glass hf-pubinfo-card"><div class="hf-ps-title">${esc(t.title)}</div>${lis}<div class="hf-ps-acts"><button type="button" class="hf-ps-btn hf-ps-primary" data-hf-ps-close>${en ? 'Got it' : 'Entendido'}</button></div></div>`;
 }
@@ -22924,20 +22967,19 @@ function pzHoySemanaMiniHTML(sem, en, pendProg) {
       : n === 0 ? (en ? 'Your week is just starting' : 'Tu semana recién arranca')
       : esDomingo ? (en ? `This week we hit ${n}/7 posts` : `esta semana cumplimos ${n}/7 posteos`)
       : (en ? `${n}/7 posts, your week is on its way` : `${n}/7 posteos, tu semana viene en camino`);
-    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) Sin nada programado: el
-    // invitado va a su chat; el registrado, a «Que Posty lo arme».
-    const invitadoMini = (typeof pzIsGuest === 'function' && pzIsGuest());
+    // (LOTE SIN-CHAT-REUBICACIÓN · 13/11 + LOTE VERDAD-INVITADO ·
+    // Blind Barber P8) Sin nada programado: «Que Posty lo arme» para
+    // TODOS. La preservación del chat del invitado de v1025 quedó
+    // SUPERADA por este lote: la mini lo mandaba a un chat que no
+    // arma la semana; el botón dispara el ensure con su propia
+    // sesión (verificado con boot en la suite del lote).
     const accion = n >= 7
       ? (en ? 'We hit 7/7 — tomorrow a new week starts.' : 'cumplimos 7/7 — mañana arranca una nueva semana.')
       : (Number(pendProg || 0) > 0)
         ? (en ? 'The next ones are in your feed, with their day and time.' : 'Los próximos están en tu feed, con su día y su hora.')
-        : invitadoMini
-          ? (en ? 'Nothing scheduled yet — tell Posty in the chat what you have to show.' : 'Todavía no hay nada programado — contale a Posty en el chat qué tenés para mostrar.')
-          : (en ? 'Nothing scheduled yet — Posty can build it.' : 'Todavía no hay nada programado — que lo arme Posty.');
+        : (en ? 'Nothing scheduled yet — Posty can build it.' : 'Todavía no hay nada programado — que lo arme Posty.');
     const btnChat = (Number(pendProg || 0) > 0 || n >= 7) ? ''
-      : invitadoMini
-        ? `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button>`
-        : `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button>`;
+      : `<button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button>`;
     return `<div class="pz-semana-mini" aria-label="${en ? 'Week summary' : 'Resumen de la semana'}">${balls}</div>`
       + `<div class="pz-semana-insight">${pzIc('chartUp', 20)}<div><p><b>${titulo}</b> — ${accion}</p>${btnChat}</div></div>`;
   } catch (e) { return ''; }
@@ -23041,13 +23083,14 @@ function pzHoyTiraDetalleHTML(d, o) {
     }
     const p = d.post || null;
     if (!p) {
-      // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) El día vacío es de Posty, no
-      // del cliente: el invitado conserva su chat (su superficie viva);
-      // el registrado lleva los dos caminos vivos — «Que Posty lo arme»
-      // (ensure: el posteo de hoy cae en la grilla) y «Subir algo mío».
-      if (typeof pzIsGuest === 'function' && pzIsGuest()) {
-        return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — tell Posty in the chat what you have to show.' : 'Hoy todavía no hay posteo — contale a Posty en el chat qué tenés para mostrar.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-chat="1">${en ? 'Open the chat' : 'Abrir el chat'}</button></div></div>`;
-      }
+      // (LOTE SIN-CHAT-REUBICACIÓN · 13/11 + LOTE VERDAD-INVITADO ·
+      // Blind Barber P8) El día vacío es de Posty, no del cliente:
+      // los dos caminos vivos — «Que Posty lo arme» (ensure: el
+      // posteo de hoy cae en la grilla) y «Subir algo mío» — para el
+      // registrado Y para el invitado. La preservación del chat del
+      // invitado de v1025 quedó SUPERADA por este lote: su tarjeta
+      // de hoy lo mandaba a un chat que no arma el día; el ensure
+      // corre con su sesión (verificado con boot en la suite).
       return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — Posty can build it, or upload something of yours.' : 'Hoy todavía no hay posteo — Posty te lo arma, o subí algo tuyo.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="btn btn-soft btn-sm" data-pz-hoy-subir="1">${en ? 'Upload my own' : 'Subir algo mío'}</button></div></div>`;
     }
     const img = (p && p.image_path)
@@ -23425,6 +23468,13 @@ function pzHoyPillSalida(p, tz, en) {
 // lo repone al refrescar).
 function pzHoyCuentaSaleTxt(iso, en) {
   try {
+    // (LOTE VERDAD-INVITADO · Blind Barber P7) «sale en …» afirma la
+    // salida: para el invitado sin Instagram conectado no hay cuenta
+    // — su píldora en la misma tarjeta ya dice la verdad («Pendiente:
+    // conectá tu Instagram», guarda de v1020). Con conexión, la
+    // cuenta es la de siempre.
+    if ((typeof pzIsGuest === 'function' && pzIsGuest())
+      && (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)) return '';
     let d = null;
     if (typeof pcParseDate === 'function') d = pcParseDate(iso);
     if (!d || isNaN(d)) { const s = String(iso || '').replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
@@ -23816,6 +23866,12 @@ function pzHoySpeechHTML(o) {
   // destArmar: para el registrado la burbuja dispara «Que Posty lo arme»
   // en vez de abrir el chat retirado.
   let destArmar = false;
+  // (LOTE VERDAD-INVITADO · Blind Barber P7) Para el invitado sin
+  // Instagram conectado, ninguna rama de esta burbuja afirma que la
+  // semana sale sola: sin conexión nada se publica en su Instagram.
+  // Con conexión (o sin ser invitado), los textos son los de siempre.
+  const invSinIg = (typeof pzIsGuest === 'function' && pzIsGuest())
+    && (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected);
   if (hoyPost) {
     const st = String(hoyPost.status || '');
     const ap = String(hoyPost.approval || 'pending');
@@ -23863,19 +23919,28 @@ function pzHoySpeechHTML(o) {
     // programados pendientes), todos salen solos a su hora.
     if (needOK > 0) {
       cuerpo = '';
+    } else if (invSinIg) {
+      cuerpo = en
+        ? `Your week is all set — the posts are ready here, in your week. To have them go out on your Instagram, connect it: without a connection, none of them goes out.`
+        : `Tu semana ya está armada — los posteos quedan listos acá, en tu semana. Para que salgan en tu Instagram, conectalo: sin conexión no sale ninguno.`;
     } else {
       cuerpo = en
         ? `Your week is all set — the posts go out on their own, on time, and you can see them in your feed. I'll let you know 30 min before each one in case you want to stop it.`
         : `Tu semana ya está armada — los posteos salen solos a su hora, los ves en tu feed. Te aviso 30 min antes de cada uno por si querés frenarlo.`;
     }
   } else if (haySemana) {
-    cuerpo = en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`;
+    cuerpo = invSinIg
+      ? (en ? `Your week is approved. To have it go out on your Instagram, connect it: without a connection, Posty can't publish it.` : `Tu semana ya está aprobada. Para que salga en tu Instagram, conectalo: sin conexión, Posty no puede publicarla.`)
+      : (en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`);
   } else {
     destArmar = true;
-    const invSpeech = (typeof pzIsGuest === 'function' && pzIsGuest());
+    // (LOTE VERDAD-INVITADO · Blind Barber P8) Sin semana, el
+    // invitado dice lo mismo que el registrado y su burbuja ARMA
+    // (destArmar, abajo): la variante «Contame qué tenés para
+    // mostrar» lo mandaba al chat, que no arma la semana.
     cuerpo = en
-      ? (invSpeech ? `Shall we build your week? Tell me what you have to show.` : `Shall we build your week? Posty builds it from what you already post.`)
-      : (invSpeech ? `¿Armamos tu semana? Contame qué tenés para mostrar.` : `¿Armamos tu semana? Posty la arma con lo que ya publicás.`);
+      ? `Shall we build your week? Posty builds it from what you already post.`
+      : `¿Armamos tu semana? Posty la arma con lo que ya publicás.`;
   }
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
@@ -23888,6 +23953,11 @@ function pzHoySpeechHTML(o) {
   // (data-pz-hoy-armar → ensure) y en los estados informativos lleva a
   // la semana (data-pz-hoy-semana → #/app/schedule). El invitado
   // conserva el chat, que es su superficie viva.
+  // (LOTE VERDAD-INVITADO · Blind Barber P8) Y sin semana tampoco
+  // corre para el INVITADO: su estado vacío arma como el del
+  // registrado (destArmar manda sobre el destino al chat). El chat
+  // del invitado queda solo en los estados informativos, donde la
+  // burbuja no promete armado.
   // (v846 · decisión Valentino 12:01: el saludo por hora («¡Buen día!»)
   // salió — era innecesario. La burbuja arranca directo con el cuerpo.)
   // (v879 · corrección Valentino 10/11 10:04) Sin cuerpo no hay burbuja:
@@ -23897,8 +23967,8 @@ function pzHoySpeechHTML(o) {
   // hoja del ritual).
   if (!cuerpo) return '';
   const esInvSpeech = (typeof pzIsGuest === 'function' && pzIsGuest());
-  const destAttr = esInvSpeech ? 'data-pz-hoy-chat="1"'
-    : destArmar ? 'data-pz-hoy-armar="1"'
+  const destAttr = destArmar ? 'data-pz-hoy-armar="1"'
+    : esInvSpeech ? 'data-pz-hoy-chat="1"'
     : 'data-pz-hoy-semana="1"';
   return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" ${destAttr}><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }

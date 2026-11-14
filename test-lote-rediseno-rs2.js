@@ -265,8 +265,11 @@ const htmlMananaBloq = sb.pzHoyTiraHTML(tiraPend, { en: false, tz: TZ, hoyKey: '
 t(htmlMananaBloq.includes('Su posteo se ve apenas salga el de hoy.'),
   '§2: mañana bloqueado (hoy no salió) trae su mensaje');
 const htmlSinPost = sb.pzHoyTiraHTML(sb.pzHoyTiraDias(semVacia, [], '2026-11-09', TZ), { en: false, tz: TZ, hoyKey: '2026-11-09', sel: '2026-11-09' });
-t(htmlSinPost.includes('Hoy todavía no hay posteo') && htmlSinPost.includes('Abrir el chat'),
-  '§2: hoy vacío trae invitación al chat');
+// (RE-PIN LOTE VERDAD-INVITADO · Blind Barber P8: hoy vacío ya no
+// invita al chat para nadie — trae «Que Posty lo arme» + «Subir
+// algo mío»; la preservación del invitado de v1025 quedó superada.)
+t(htmlSinPost.includes('Hoy todavía no hay posteo') && htmlSinPost.includes('data-pz-hoy-armar') && htmlSinPost.includes('Subir algo mío') && !htmlSinPost.includes('Abrir el chat'),
+  '§2: hoy vacío trae «Que Posty lo arme» + «Subir algo mío» (sin invitación al chat)');
 t(!htmlPub.includes('Aprobar todo') && !htmlPub.includes('pzHoyUploadHTML') && !htmlPub.includes('pzHoySemanaHTML'),
   '§2: la tira no rinde «Aprobar todo» ni subida ni semana grande');
 

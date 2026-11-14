@@ -24,7 +24,7 @@
  *     cuenta, ni su hora); sin el global (llamada directa) el detalle
  *     se rinde como antes pero SIN la nota; el publicado de hoy sigue
  *     con su detalle + Impulsar (no tiene tarjeta principal); mañana
- *     y los demás días siguen; hoy vacío sigue invitando al chat; si
+ *     y los demás días siguen; hoy vacío trae «Que Posty lo arme» + «Subir algo mío» para todos (VERDAD-INVITADO: la invitación al chat — la del invitado hasta v1025 — quedó superada); si
  *     hoy hay publicado + programado (dos posteos distintos), el
  *     detalle del publicado sigue (la comparación es por id, no por
  *     día);
@@ -326,8 +326,15 @@ const compCards = sb.pzHoyHoyHTML(HOY, { en: false, tz: TZ })
   + sb.pzHoySemanaInsightHTML(semVacia, false, 0);
 t((compCards.match(/19:00/g) || []).length === 1, '§4: en la zona de tarjetas, «19:00» ×1', compCards);
 t((compCards.match(/sale en/g) || []).length === 1, '§4: en la zona de tarjetas, «sale en» ×1');
-t(compCards.includes('Tu semana recién arranca') && compCards.includes('Abrir el chat'),
-  '§4: «Tu semana recién arranca» sigue después de la tira, con su botón al chat');
+// (RE-PIN LOTE VERDAD-INVITADO · Blind Barber P8: la mini sin
+// semana ya no manda al invitado al chat — «Que Posty lo arme»
+// como el registrado; la preservación de v1025 quedó superada.
+// Esta suite no llega a correr la sección: su extracción pide
+// pzHoySaludoTxt/pzHoySemanaInsightHTML, fuera del bundle desde
+// lotes posteriores (rotura previa a este lote); el pin queda
+// actualizado para cuando se re-base la extracción.)
+t(compCards.includes('Tu semana recién arranca') && compCards.includes('data-pz-hoy-armar') && !compCards.includes('Abrir el chat'),
+  '§4: «Tu semana recién arranca» sigue después de la tira, con «Que Posty lo arme» (sin botón al chat)');
 // (v879 · corrección Valentino 10/11 10:04: el saludo salió entero —
 // la hora vive solo en la tarjeta.) En toda la pantalla compuesta
 // «19:00» ×1 (solo la tarjeta).

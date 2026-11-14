@@ -102,7 +102,10 @@ check('§3 mini: sin estado ready (SEMANA UNA POR UNA)', !/ready/.test(hMini), h
 check('§3 insight lunes: «5/7 posteos, tu semana viene en camino»', /5\/7 posteos, tu semana viene en camino/.test(hMini), hMini);
 check('§3 insight: acción = están en tu feed', /Los próximos están en tu feed, con su día y su hora/.test(hMini), hMini);
 const hMini0 = vm.runInContext('pzHoySemanaMiniHTML({n:0,lunes:"2026-11-09",dias:[{key:"2026-11-09",estado:"hoy"},{key:"2026-11-10",estado:"fut"},{key:"2026-11-11",estado:"fut"},{key:"2026-11-12",estado:"fut"},{key:"2026-11-13",estado:"fut"},{key:"2026-11-14",estado:"fut"},{key:"2026-11-15",estado:"fut"}]}, false, 0)', sb);
-check('§3 insight n=0: «Tu semana recién arranca» + chat + botón', /Tu semana recién arranca/.test(hMini0) && /contale a Posty en el chat/.test(hMini0) && /Abrir el chat/.test(hMini0), hMini0);
+// (RE-PIN LOTE VERDAD-INVITADO · Blind Barber P8: la mini sin
+// semana ya no manda al invitado al chat — «Que Posty lo arme»
+// como el registrado; la preservación de v1025 quedó superada.)
+check('§3 insight n=0: «Tu semana recién arranca» + «Que Posty lo arme»', /Tu semana recién arranca/.test(hMini0) && /que lo arme Posty/.test(hMini0) && /data-pz-hoy-armar/.test(hMini0) && !/Abrir el chat/.test(hMini0), hMini0);
 check('§3 inicioView rinde la mini (pzHoySemanaMiniHTML en hoyAprobarHTML)', appSrc.includes('pzHoySemanaMiniHTML(semR1, enHome, pendProgR1)'), 'falta');
 
 // ---------- §6 · PARTE 6: el saludo dice lo que pasa EN ESTE ESTADO ----------

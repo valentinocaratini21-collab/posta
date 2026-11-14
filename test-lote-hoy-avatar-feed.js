@@ -79,7 +79,12 @@ ok(speechSrc.includes("`Te armé el posteo de hoy. <b>El de hoy sale${hh ? ' a l
 ok(speechSrc.includes('Tenés 1 posteo para revisar — miralo en tu feed y dale «Dale» si te gusta.'), 'texto ES pendientes=1 byte-idéntico (autopilot: en tu feed)');
 ok(speechSrc.includes('Tenés ${needOK} posteos para revisar — miralos en tu feed y dale «Dale» a los que te gusten.'), 'texto ES pendientes=N byte-idéntico (autopilot: en tu feed)');
 ok(speechSrc.includes("`Tu semana ya está aprobada. Posty se ocupa de publicarla.`"), 'texto ES haySemana byte-idéntico');
-ok(speechSrc.includes("`¿Armamos tu semana? Contame qué tenés para mostrar.`"), 'texto ES vacío byte-idéntico');
+// (RE-PIN LOTE VERDAD-INVITADO · Blind Barber P8: la rama sin
+// semana del invitado ya no lo manda al chat — el texto se unificó
+// con el del registrado y la burbuja arma (ensure); la variante
+// «Contame qué tenés para mostrar» salió del bundle.)
+ok(speechSrc.includes("`¿Armamos tu semana? Posty la arma con lo que ya publicás.`"), 'texto ES vacío byte-idéntico (unificado VERDAD-INVITADO)');
+ok(!speechSrc.includes('Contame qué tenés para mostrar'), 'texto ES vacío: la variante al chat del invitado salió (VERDAD-INVITADO)');
 ok(!speechSrc.includes('manual mode on'), 'texto EN hoyPost (rama manual) salió en v879 (queda solo la tarjeta)');
 ok(!speechSrc.includes("It's ready for"), 'texto EN hoyPost (rama borrador) salió en v879 (queda solo la tarjeta)');
 ok(speechSrc.includes("`I put together today's post for you. <b>Today's goes out${hh ? ' at ' + esc(hh) : ''} on its own</b> — take a look if you want, I'll let you know 30 min before in case you want to stop it, and when it's out.`"), 'texto EN hoyPost (rama autopilot: on its own) byte-idéntico (PARTE 6)');
