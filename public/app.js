@@ -24266,9 +24266,12 @@ function pzHoyCardHTML(p, o) {
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La nota de la tarjeta
     // aprobada tampoco afirma la salida (ni la historia) sin conexión.
     const igOkHoy = (typeof PROFILE === 'undefined' || !PROFILE) ? true : !!PROFILE.ig_connected;
+    // (LOTE GLOBO-AGENDADO-SIMPLE · decisión Valentino 12/11) El globo de
+    // confirmación queda SOLO «✓ agendado»: que también sale como historia
+    // se comunica en el DETALLE del posteo (approvalPostView), no acá.
     const notaOk = (!pendiente && st === 'scheduled')
       ? (igOkHoy
-        ? `<div class="pz-hoy-ok">✓ ${esc(pill || cuando || (en ? 'Scheduled' : 'Agendado'))}. ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>`
+        ? `<div class="pz-hoy-ok">✓ ${en ? 'scheduled' : 'agendado'}</div>`
         : `<div class="pz-hoy-ok">⏳ ${esc(cuando || (en ? 'Scheduled' : 'Agendado'))} — ${en ? 'it goes out once you connect your Instagram.' : 'sale cuando conectes tu Instagram.'}</div>`) : '';
     // (LOTE POSTEO-HOY-COMPACTO v859 · 9/11 · mock aprobado por Valentino:
     // tarjeta horizontal — miniatura 96x120 4:5 a la izquierda + columna
@@ -32592,12 +32595,21 @@ async function approvalPostView(id) {
   // solo con hermana real verificada (caption_on=1), porqué solo con
   // dato real guardado. Sin dato, nada se dibuja.
   const apvCleanTog = (!isVideo && Number(p.caption_on) === 1) ? `<div class="apv-clean-row"><button type="button" class="hf-crop-tog" data-apv-clean aria-pressed="false">${pzIc('image', 16)} ${en ? 'See original photo' : 'Ver foto original'}</button></div>` : '';
+  // (LOTE GLOBO-AGENDADO-SIMPLE · decisión Valentino 12/11) Que el posteo
+  // también sale como historia se dice ACÁ, en el detalle (salió del globo
+  // de la tarjeta Hoy). Condición = la de la historia gemela del scheduler:
+  // posteo de feed (imagen o carrusel; nunca historia ni reel) ya aprobado
+  // o publicado.
+  const apvMt = String(p.media_type || 'image');
+  const apvStoryLine = ((apvMt === 'image' || apvMt === 'carousel') && ((st === 'scheduled' && ap !== 'pending') || st === 'published'))
+    ? `<div class="apv-when apv-story">📸 ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>` : '';
   return `<div class="apv-wrap">
     ${apvBack}
     ${media}
     ${apvCleanTog}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
     ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
+    ${apvStoryLine}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
     ${apvReviewNotice}${actions}${draftActions}
