@@ -2457,7 +2457,22 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261105-v1087'; // (v1046 · LOTE CONSERJE COMPUESTO AMPLIO) bump: chunk-conserje suma el visor de imagen en grande, el botón «Ver en el feed» con su overlay y la sección Pedidos desde Subir // (v1044 · LOTE PEDIDOS-VOZ COMPUESTO) bump: chunk-conserje suma la sección Pedidos por voz // (v977 · LOTE PLAN-ÚNICO-PAYWALL) bump: chunk-ajustes Mi plan con plan único // (v967) bump: chunk-conserje lista variante 1 (mini 96 + caption + botones en la tarjeta) // (LOTE AJUSTES-CONTACTO) bump: chunk-ajustes suma la sección Contactanos // (v887) bump: chunk-conserje revisión variante 1 (mini 96 contain + fila + botones verde/Editar) // (v885) bump: chunk-analisis riel por suscripción (MP→ARS, Stripe→USD) // (PUBLICAR-TERMINOS v850) bump: chunk-terminos publica el domicilio // (v849) bump: chunk-conserje suma ?user= y auto-chat // (TERMINOS-CONDICIONES v836) bump: chunk-terminos nuevo + chunk-ajustes suma la fila Términos // (ESTUDIO-PROFUNDO M6) bump: chunk-analisis suma la tarjeta «qué cambió» // (LOTE CONSERJE-REVISION v754) chunk-conserje nuevo // (ADS-PANTALLA v750) bump: chunk-analisis cambia (billetera siempre visible + posteo de hoy + picker con buscador + botón del chat) // (COPY-2-REELS v732) rework: el mix del plan promete 2 reels/semana (martes y jueves) // (COPY-SIN-REELS v732) bump: chunk-ajustes sin promesa de reels/historias en el mix del plan (pmMix) // (AJUSTES-SIMPLE v723) bump: chunk-ajustes simplificado (Referidos primero siempre visible, fuera «análisis» y secciones duplicadas) // (CARTA-ESTRATEGIA v712) bump: chunk-analisis cambia (carta sin week_summary ni nada bajo Compartir) // (LOTE PUSH-FUNCIONANDO) bump: chunk-ajustes suma denied con camino exacto + no_token con detalle // (LOTE PUSHFIX) bump: chunk-ajustes suma la rama pendiente en pzPushErrTexto // (LOTE PRUEBA-ENTRADA-DIRECTA) bump: chunk-ajustes abre la hoja de cuenta si es invitado // (LOTE CEREBRO-CM) bump: chunk-analisis suma la línea «Esta semana: tema» en la carta actual // (LOTE IMPULSAR) bump: chunk-analisis suma la tarjeta mejor-posteo + impulso // (LOTE 15) bump: chunk-analisis cambia (carta Estrategia simple sin repeticiones + kit filtrado) // (LOTE SABE-SIEMPRE) bump: chunk-analisis suma fotos a la pregunta semanal + botón «Armar mi semana con estos» // (VENTY SLICE 1) bump: chunk-venty nuevo // (LOTE CONSERJE-DISENO) bump: chunk-conserje rediseño + flujo un toque
+// (LOTE CONSERJE-FRESCURA) PZ_BUILD: el build de ESTE cliente. Lo estampa el
+// preparador en cada lote con el mismo valor que el BUILD_ID de server.js y
+// que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
+// guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
+// puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
+const PZ_BUILD = '20261105-v1088';
+// CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
+// cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
+// deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
+// chunk (historial: v1046 CONSERJE COMPUESTO AMPLIO - v1044 PEDIDOS-VOZ -
+// v977 PLAN-UNICO - v967 conserje lista variante 1 - v887 conserje revision
+// variante 1 - v849 conserje ?user= - v836 terminos - v754 CONSERJE-REVISION
+// - v750 ADS-PANTALLA - v723 AJUSTES-SIMPLE - v712 CARTA-ESTRATEGIA) y quedo
+// congelado en '20261105-v1046' por 33 builds: un cliente con esa copia pedia
+// los chunks con la URL vieja para siempre (diagnostico conserje, seccion 2).
+const CHUNK_V = PZ_BUILD;
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2477,6 +2492,43 @@ function chunkFailHTML() {
     + '<p class="hint">Revis\u00e1 tu conexi\u00f3n y prob\u00e1 de nuevo.</p>'
     + '<button class="btn btn-soft" onclick="render()">Reintentar</button>'
     + '</div></div>';
+}
+// (LOTE CONSERJE-FRESCURA) Guarda de version: los estaticos con ?v= se
+// sirven immutable por 30 dias, asi que una SPA abierta hace dias (o
+// restaurada) sigue corriendo su copia aunque el servidor ya vaya varios
+// builds adelante: datos frescos con plantilla vieja (la captura del
+// conserje sin botones del 14/11; el servidor entregaba los botones desde
+// v967). Esta guarda compara PZ_BUILD contra /api/version al arrancar y
+// cada vez que la app vuelve a primer plano; si el servidor va adelante,
+// recarga UNA sola vez navegando con ?fresh=<build> (URL nueva = documento
+// nuevo, fuera de la entrada immutable cacheada) conservando el hash: el
+// usuario vuelve a la misma pantalla. Anti-loop en dos capas: la marca de
+// sessionStorage por build (si ya recargo por ese build no insiste; cubre
+// el flap de un deploy a mitad de camino) y el propio ?fresh= de la URL
+// (si ya llego con el sello de ese build y sigue vieja, no vuelve a
+// navegar). El registro de disparadores vive en el arranque, junto a los
+// listeners globales de identidad.
+let PZ_VGUARD_LAST = 0;
+async function pzVersionGuard() {
+  try {
+    const now = Date.now();
+    if (now - PZ_VGUARD_LAST < 60000) return; // a lo sumo un chequeo por minuto
+    PZ_VGUARD_LAST = now;
+    const r = await fetch('/api/version?vg=' + now, { cache: 'no-store', credentials: 'same-origin' });
+    if (!r || !r.ok) return;
+    const d = await r.json().catch(() => null);
+    if (!d || !d.build) return;
+    const srv = /-v(\d+)$/.exec(String(d.build));
+    const cli = /-v(\d+)$/.exec(PZ_BUILD);
+    if (!srv || !cli) return;
+    if (Number(srv[1]) <= Number(cli[1])) return; // igual o atras: nada que curar
+    const u = new URL(location.href);
+    if (u.searchParams.get('fresh') === String(d.build)) return; // ya llego con este sello
+    const key = 'pz_vguard_' + d.build;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, String(now)); } catch (e) {}
+    u.searchParams.set('fresh', String(d.build));
+    location.replace(u.toString());
+  } catch (e) {}
 }
 let ME = null;
 let PROFILE = null;
@@ -33396,6 +33448,13 @@ function maybeAskPushPostIg() {
 window.addEventListener('hashchange', () => { try { pzRevalidateIdentity(); } catch (e) {} try { const _r = render(); if (_r && typeof _r.then === 'function') _r.then(() => { try { pzRestoreScroll(); } catch (e) {} }); } catch (e) {} });
 try { window.addEventListener('pageshow', () => { try { pzRevalidateIdentity(); } catch (e) {} }); } catch (e) {}
 try { document.addEventListener('visibilitychange', () => { try { if (!document.hidden) pzRevalidateIdentity(); } catch (e) {} }); } catch (e) {}
+// (LOTE CONSERJE-FRESCURA) Disparadores de la guarda de version: al
+// arrancar (con margen para no bloquear el primer pintado) y cada vez que
+// la app vuelve a primer plano (visibilidad, foco, pageshow de bfcache).
+try { document.addEventListener('visibilitychange', () => { try { if (!document.hidden) pzVersionGuard(); } catch (e) {} }); } catch (e) {}
+try { window.addEventListener('focus', () => { try { pzVersionGuard(); } catch (e) {} }); } catch (e) {}
+try { window.addEventListener('pageshow', () => { try { pzVersionGuard(); } catch (e) {} }); } catch (e) {}
+setTimeout(() => { try { pzVersionGuard(); } catch (e) {} }, 2500);
 render();
 try { pzPullInit(); } catch (e) {}
 setTimeout(trackScreen, 800);
