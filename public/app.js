@@ -4961,6 +4961,22 @@ function lpIdeasGrowthHTML() {
     </div>
   </div></div></div>
 `;}
+function lpSubirHTML() {
+  return `
+  <div class="section" id="subir"><div class="wrap">
+    <h2>Tu material también se convierte en posteos</h2>
+    <p class="lede">¿Ya tenés fotos, un video o una idea dando vueltas? Mandáselos a Posty desde la app y los sumamos a tu semana.</p>
+    <div class="pz-mg pz-mg--big" style="display:block;max-width:880px;margin:4px auto 34px"><img src="posty-recibiendo.jpg" alt="Posty en el mostrador de una cafetería, mostrando en el celular la foto de un plato, rodeado de fotos de platos de un negocio" loading="lazy" style="width:100%;border-radius:26px"></div>
+    <div class="steps">
+      <div class="step"><div class="num">📷</div><h3>Tus fotos</h3><p>Nos mandás las fotos de tu negocio y las convertimos en posteos: les sumamos el texto con tu voz y tu estilo, y quedan programadas en tu semana.</p></div>
+      <div class="step"><div class="num">🎬</div><h3>Tus videos</h3><p>Nos mandás tus videos y los editamos nosotros: elegimos el mejor tramo, lo pasamos a vertical, le sumamos música y sale listo como posteo, programado en su día.</p></div>
+      <div class="step"><div class="num">💡</div><h3>Tus ideas</h3><p>Contale tu idea a Posty con una nota de voz. La cruzamos con tu negocio, la revisamos y sale al día siguiente como posteo.</p></div>
+    </div>
+    <p style="text-align:center;font-size:15.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">Lo que nos mandás <b>ocupa su día</b> en tu semana, como un posteo más: un día, un posteo.</p>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+  </div></div>`;
+}
+
 function landingView(cfg) {
   const plansRaw = (cfg && cfg.plans) || [];
   const plans = plansRaw.map(pp => ({ ...pp, price_label: pzFmtPrecioES(pp) }));
@@ -5230,6 +5246,7 @@ function landingView(cfg) {
     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
+  ${lpSubirHTML()}
   <div class="section" id="equipo"><div class="wrap" style="max-width:760px">
     <h2><span class="hl">Somos un equipo, Posty y yo</span></h2>
     <div class="founder-card" id="homeFounderCard" aria-label="El equipo de Posty">
