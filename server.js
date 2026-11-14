@@ -10640,6 +10640,26 @@ app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
   }
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
+// (LOTE CONSERJE-PEDIDOS-VOZ) Lo que los clientes pidieron por nota de
+// voz (tira bajo el posteo / bajo la semana), con la respuesta de Posty
+// y el posteo que quedó — lectura del equipo para controlar que lo
+// enviado sea lo correcto. Solo lee chat_messages (hilo post/semana) y
+// posts: no escribe nada.
+app.get('/api/admin/support/conserje/pedidos-voz', requireAdminToken, (req, res) => {
+  try { res.json(supportCases.voiceRequests(db, { limit: req.query.limit || 60, userId: req.query.user_id || 0, absImageUrl })); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// La puerta de aprobación del pedido por voz: aprobar lo deja listo
+// para el armado del día siguiente; descartar lo cierra sin construir
+// nada. Aprobar sin interpretación registrada se rechaza (400).
+app.post('/api/admin/support/conserje/pedidos-voz/decidir', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = supportCases.decideVoiceRequest(db, { messageId: b.message_id, decision: b.decision });
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
 // ---------- SUPERVISIÓN DEL CHAT (bamboo detrás de Posty) ----------
 // El cliente piensa que chatea con Posty; la cabeza es bamboo. La lectura
 // (chat), la cola (pendientes) y el dictado (dictar/borrador) viven acá.
@@ -15493,7 +15513,7 @@ function subirPlannerWall(uid) {
   try { const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid); if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour; } catch (e) {}
   return { ymd: null, hhmm: String(bestHour).padStart(2, '0') + ':00' };
 }
-function subirPlanDia(uid, kind, cuando) {
+function subirPlanDia(uid, kind, cuando, opts) {
   const tz = userTz(uid);
   const taken = subirTakenMap(uid);
   const closed = closedDaysOf(uid);
@@ -15525,7 +15545,11 @@ function subirPlanDia(uid, kind, cuando) {
     return { iso: zonedWallToUtc(k + ' ' + hhmm, tz), mover: { post_id: occ.id, dest_ymd: dest } };
   };
   let startK = null;
-  if (kind === 'video') startK = shiftDays(todayK, 1);
+  // (LOTE PEDIDO-VOZ-REVISION) opts.desdeYmd: piso de día del escaneo
+  // (el armado tras la aprobación corre recién desde mañana). Sin
+  // opts, el comportamiento es el de siempre, byte a byte.
+  if (opts && opts.desdeYmd && /^\d{4}-\d{2}-\d{2}$/.test(String(opts.desdeYmd))) startK = String(opts.desdeYmd);
+  else if (kind === 'video') startK = shiftDays(todayK, 1);
   else if (cuando === 'semana') startK = todayK; // la semana se escanea entera: acá vive el desplazamiento
   else startK = wall0.ymd || shiftDays(todayK, 1);
   const hasta = cuando === 'semana' ? sunday : shiftDays(startK, 60);
@@ -15598,6 +15622,138 @@ async function subirAplicarSubtitulos(uid, postId) {
   } catch (e) { console.error('[subir-subtitulos]', e.message); return false; }
 }
 
+// ================= LOTE PEDIDO-VOZ-REVISION =================
+// Los pedidos ESPECÍFICOS por nota de voz en el tab Subir NO se arman
+// en el momento (decisión de Valentino, 13/11): nacen en revisión, el
+// equipo los mira en el conserje y, solo con aprobación, el posteo se
+// arma para el DÍA SIGUIENTE a la aprobación, a la hora habitual del
+// cliente y con la cadencia de 1 posteo por día de siempre. Sin
+// aprobación, el pedido jamás se construye ni se agenda — y ningún
+// paso del tiempo lo dispara solo (no hay barrido que lo toque).
+//
+// ¿Qué nota es un «pedido específico»? La que PIDE algo concreto: un
+// hacer de Posty (quiero / hacé / anunciá / publicá / subí…), un
+// encargo con día («para el viernes»), o un dato propio para publicar
+// con ancla de anuncio o fecha (promo, 2x1, evento, lanzamiento… +
+// día / «hay» / «sale» / «tenemos»). La nota que solo DESCRIBE el
+// material («esta es la torta de la abuela») no es pedido: la subida
+// sigue instantánea, como siempre. El detector es determinístico y,
+// ante una señal de pedido, sesga hacia la revisión: el costo de
+// revisar de más es un día; el de publicar sin mirar es el error que
+// esta regla vino a evitar. El audio no se guarda en ningún flujo (la
+// transcripción es el texto que el cliente ve en su pantalla); el
+// texto del pedido queda persistido en subir_pedidos_voz.
+function subirNotaEsPedidoEspecifico(nota) {
+  const raw = String(nota || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ' ');
+  const t = ' ' + raw.replace(/[^a-z0-9%$]+/g, ' ').replace(/\s+/g, ' ') + ' ';
+  if (t.trim().length < 4) return false;
+  // (a) Verbos de encargo dirigidos a Posty (ES con voseo + EN).
+  const ASK = ['quiero', 'necesito', 'quisiera', 'haceme', 'armame', 'crea', 'creame', 'anuncia', 'anunciame', 'publica', 'publicame', 'subi', 'subime', 'postea', 'posteame', 'poneme', 'avisame', 'recordame', 'preparame', 'mostrame', 'contame', 'lanzame', 'organizame', 'i want', 'i need', 'please', 'announce', 'post'];
+  for (const v of ASK) { if (t.includes(' ' + v + ' ')) return true; }
+  if (/\bhace (un|una) (posteo|historia|reel|video|foto|publicacion)\b/.test(t)) return true;
+  if (t.includes(' pone que ')) return true;
+  // (b) Encargo con día: «para el viernes», «para este sábado», «para mañana».
+  if (/\bpara (el |este |esta )?(lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|fin de semana)\b/.test(t)) return true;
+  // (c) Dato propio para publicar + ancla de anuncio o de fecha.
+  const DATO = ['2x1', '%', '$', 'descuento', 'promo', 'sorteo', 'evento', 'lanzamiento', 'inauguracion'];
+  const ANCLA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'manana', 'fin de semana', 'finde', 'sale', 'hay', 'tenemos', 'empieza', 'arranca'];
+  const hasDato = DATO.some((d) => t.includes(d));
+  if (hasDato && ANCLA.some((a) => t.includes(' ' + a + ' ') || t.includes(' ' + a + 's '))) return true;
+  return false;
+}
+function subirPedidoCrear(uid, asset, kind, nota, respuestas) {
+  const info = db.prepare(`INSERT INTO subir_pedidos_voz (user_id, asset_id, kind, nota, respuestas, estado) VALUES (?,?,?,?,?, 'pendiente_revision')`)
+    .run(uid, asset.id, kind, String(nota || ''), JSON.stringify(respuestas || {}));
+  return Number(info.lastInsertRowid);
+}
+function subirPedidoRow(id) {
+  try { return db.prepare('SELECT * FROM subir_pedidos_voz WHERE id = ?').get(Number(id) || 0) || null; } catch (e) { return null; }
+}
+// El armado tras la aprobación: espejo fiel de la rama de construcción
+// del resolver (mismo caption, mismo plan de cadencia, misma mejora,
+// mismos subtítulos, mismo commit del desplazamiento) con dos
+// diferencias deliberadas: el piso de día es MAÑANA del día de la
+// aprobación (desdeYmd) y las respuestas salen del pedido guardado.
+// Devuelve {ok:false, error} sin tocar posteos cuando algo no se
+// puede (material borrado, caption sin generar, sin día): el pedido
+// queda 'aprobado' con el motivo y aprobar de nuevo reintenta.
+async function armarPedidoSubir(ped) {
+  const uid = Number(ped.user_id);
+  const asset = sftAssetPropio(uid, Number(ped.asset_id));
+  if (!asset) return { ok: false, error: 'material_inexistente' };
+  const kind = asset.kind === 'video' ? 'video' : 'foto';
+  const ya = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND foto_asset_id = ? AND source = 'subir'`).get(uid, asset.id);
+  if (ya) return { ok: true, post_id: ya.id, scheduled_at: ya.scheduled_at, camino: 'ya_existia', desplazado: null, mejora_aplicada: false, subs_aplicados: false, dia: ymdInTz(ya.scheduled_at, userTz(uid)), hora: armarSlotLabel(uid, ya.scheduled_at).hora };
+  let resp = {};
+  try { resp = JSON.parse(String(ped.respuestas || '{}')) || {}; } catch (e) { resp = {}; }
+  let caption = '', hashtags = '';
+  if (String(resp.caption_modo || 'posty') === 'mio') {
+    caption = String(resp.caption_text || '').trim().slice(0, 2200);
+    if (!caption) return { ok: false, error: 'sin_caption_propio' };
+  } else {
+    const promo = String(resp.promo || 'no');
+    const parts = [];
+    if (promo === 'desc') parts.push('Es una promo con descuento: comunicá el descuento en el caption, sin inventar un porcentaje que el dueño no dijo');
+    if (promo === '2x1') parts.push('Es una promo 2x1: comunicá el 2x1 en el caption');
+    if (promo === 'envio') parts.push('Es una promo con envío gratis: comunicá el envío gratis en el caption');
+    const extra = String(ped.nota || '').trim().slice(0, 400);
+    if (extra) parts.push('Dato extra del dueño (nota de voz): ' + extra);
+    let prop = null;
+    try { prop = await albumPropuesta(uid, asset.id, parts.join(' · '), ''); } catch (e) { prop = null; }
+    if (!prop || prop.error) return { ok: false, error: 'caption_no_generada' };
+    caption = prop.caption; hashtags = prop.hashtags || '';
+  }
+  const tz = userTz(uid);
+  const manana = shiftDays(tzToday(tz), 1);
+  const plan = subirPlanDia(uid, kind, 'posty', { desdeYmd: manana });
+  if (!plan) return { ok: false, error: 'sin_dia' };
+  let postId = 0, mejoraOk = false, subsOk = false;
+  if (kind === 'video') {
+    const full = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
+    const built = await buildClientVideoReelPost(uid, full, 'subir', { caption, hashtags });
+    if (!built || built.error || built.gated || !built.postId) return { ok: false, error: 'video_no_armado' };
+    postId = Number(built.postId);
+    db.prepare('UPDATE posts SET scheduled_at = ?, foto_asset_id = ?, week_key = ?, subir_nuevo = 1 WHERE id = ?').run(plan.iso, asset.id, mondayKeyOf(ymdInTz(plan.iso, tz)), postId);
+  } else {
+    const info = db.prepare(`INSERT INTO posts (user_id, caption, hashtags, image_path, media_type, status, scheduled_at, client_photo, foto_asset_id, source, week_key, subir_nuevo, created_at) VALUES (?,?,?,?,?, 'draft', ?, 1, ?, 'subir', ?, 1, datetime('now'))`).run(uid, caption, hashtags, asset.file_path, 'image', plan.iso, asset.id, mondayKeyOf(ymdInTz(plan.iso, tz)));
+    postId = Number(info.lastInsertRowid);
+  }
+  // Commit del desplazamiento, como en el resolver: recién con el
+  // posteo creado; si el movimiento falla, el posteo se reubica a un
+  // día libre desde mañana (nunca dos el mismo día).
+  let desplazado = null;
+  if (plan.mover) {
+    const movIso = subirMoverPost(uid, plan.mover.post_id, plan.mover.dest_ymd);
+    if (movIso) {
+      const slD = armarSlotLabel(uid, movIso);
+      desplazado = { post_id: plan.mover.post_id, dia_label: slD.dia_label, hora: slD.hora };
+    } else {
+      const libre = subirPlanDia(uid, kind, 'posty', { desdeYmd: manana });
+      if (libre && !libre.mover) db.prepare('UPDATE posts SET scheduled_at = ?, week_key = ? WHERE id = ?').run(libre.iso, mondayKeyOf(ymdInTz(libre.iso, tz)), postId);
+    }
+  }
+  if (kind === 'foto' && String(resp.mejora || 'si') === 'si') {
+    try {
+      const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+      const gen = await enhancePhotoGenerate(uid, post);
+      if (gen && gen.proposalPath) {
+        db.prepare(`UPDATE posts SET image_path = ?, prev_image_path = ?, enhance_proposal_path = '', enhance_base_path = '' WHERE id = ?`).run(gen.proposalPath, String(post.image_path || ''), postId);
+        mejoraOk = true;
+      }
+    } catch (e) { /* sin mejora: queda la foto original, como en el resolver */ }
+  }
+  if (kind === 'video' && String(resp.subs || 'si') === 'si') {
+    subsOk = await subirAplicarSubtitulos(uid, postId);
+  }
+  try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+  const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(postId);
+  const isoFinal = postRow && postRow.scheduled_at ? postRow.scheduled_at : plan.iso;
+  const diaFinal = ymdInTz(isoFinal, tz);
+  const camino = desplazado ? 'desplazo_posty' : (diaFinal === manana ? 'directo' : 'siguiente_libre');
+  const slF = armarSlotLabel(uid, isoFinal);
+  return { ok: true, post_id: postId, scheduled_at: isoFinal, dia: diaFinal, hora: slF.hora, camino, desplazado, mejora_aplicada: mejoraOk, subs_aplicados: subsOk };
+}
+
 // El resolvedor del tab Subir: recibe el material ya subido (asset) y
 // las respuestas de un toque (o los defaults de «encargate de todo») y
 // deja TODO hecho en el acto: día según la regla de cadencia, caption
@@ -15622,6 +15778,23 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     if (ya) {
       const sl = armarSlotLabel(uid, ya.scheduled_at);
       return res.json({ ok: true, modo: 'posteado', post_id: ya.id, kind, scheduled_at: ya.scheduled_at, dia: sl.dia, dia_label: sl.dia_label, hora: sl.hora, caption: ya.caption || '', mejora_aplicada: false, subs_aplicados: false, desplazado: null, semana_siguiente: false, repetido: true });
+    }
+    // (LOTE PEDIDO-VOZ-REVISION) La nota de voz que pide algo
+    // específico NO se ejecuta en el momento: el pedido nace en
+    // revisión (subir_pedidos_voz), el material queda guardado como
+    // suyo y el cliente recibe la confirmación honesta de que se lo
+    // preparamos para mañana. Sin nota, o con una nota que solo
+    // describe el material, el flujo sigue instantáneo como siempre.
+    // «guardar» ya volvió más arriba: acá la intención de postear
+    // existe. Un pedido con caption propio vacío no se puede armar
+    // jamás, así que no se frena: cae al 400 de siempre más abajo.
+    const extraNota = String(b.extra || '').trim().slice(0, 400);
+    const capModoGate = String(b.caption_modo || 'posty') === 'mio' ? 'mio' : 'posty';
+    if (extraNota && subirNotaEsPedidoEspecifico(extraNota) && (capModoGate === 'posty' || String(b.caption_text || '').trim())) {
+      const respuestas = { cuando, promo: String(b.promo || 'no'), mejora: String(b.mejora || 'si'), caption_modo: capModoGate, caption_text: capModoGate === 'mio' ? String(b.caption_text || '').trim().slice(0, 2200) : '', subs: String(b.subs || 'si') };
+      const pedidoId = subirPedidoCrear(uid, asset, kind, extraNota, respuestas);
+      try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('pedido_revision', asset.id); } catch (e) {}
+      return res.json({ ok: true, modo: 'pedido_revision', pedido_id: pedidoId, kind });
     }
     let caption = '', hashtags = '';
     const captionMio = String(b.caption_modo || 'posty') === 'mio';
@@ -15694,6 +15867,68 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     const slF = postRow && postRow.scheduled_at ? armarSlotLabel(uid, postRow.scheduled_at) : sl;
     return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, desplazado, semana_siguiente: !!plan.semana_siguiente });
   } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
+});
+
+// ---------- CONSERJE · PEDIDOS DE SUBIR POR VOZ (LOTE PEDIDO-VOZ-REVISION) ----------
+// El contrato con la vista del conserje (lote CONSERJE-PEDIDOS-VOZ):
+// el estado del pedido vive en subir_pedidos_voz y SOLO cambia por
+// estos endpoints. Aprobar dispara el armado en el acto para el día
+// siguiente; si el armado falla, el pedido queda 'aprobado' con el
+// motivo en error y aprobar de nuevo reintenta. Descartar es
+// terminal. Nada acá se ejecuta por tiempo: sin decisión del equipo,
+// el pedido espera para siempre en 'pendiente_revision'.
+function subirPedidoPublico(p) {
+  if (!p) return null;
+  let respuestas = {}; try { respuestas = JSON.parse(String(p.respuestas || '{}')) || {}; } catch (e) { respuestas = {}; }
+  let armado = null; try { armado = p.armado ? JSON.parse(String(p.armado)) : null; } catch (e) { armado = null; }
+  const out = { id: p.id, user_id: p.user_id, asset_id: p.asset_id, kind: p.kind, nota: p.nota || '', respuestas, estado: p.estado, post_id: p.post_id || null, armado, error: p.error || '', created_at: p.created_at, decided_at: p.decided_at || null, decided_by: p.decided_by || '' };
+  try { const u = db.prepare('SELECT email FROM users WHERE id = ?').get(p.user_id); if (u) out.email = u.email || ''; } catch (e) {}
+  try { const a = db.prepare('SELECT file_path FROM assets WHERE id = ?').get(p.asset_id); if (a) out.asset_path = a.file_path || ''; } catch (e) {}
+  if (p.post_id) {
+    try { const post = db.prepare('SELECT id, status, scheduled_at, image_path, media_type, caption FROM posts WHERE id = ?').get(p.post_id); if (post) out.post = post; } catch (e) {}
+  }
+  return out;
+}
+app.get('/api/admin/support/conserje/pedidos-subir', requireAdminToken, (req, res) => {
+  try {
+    const estado = String(req.query.estado || '');
+    const uidF = Number(req.query.user_id || 0) || 0;
+    const limit = Math.min(Math.max(Number(req.query.limit || 60) || 60, 1), 200);
+    const where = []; const args = [];
+    if (['pendiente_revision', 'aprobado', 'armado', 'descartado'].includes(estado)) { where.push('estado = ?'); args.push(estado); }
+    if (uidF) { where.push('user_id = ?'); args.push(uidF); }
+    const rows = db.prepare(`SELECT * FROM subir_pedidos_voz ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ?`).all(...args, limit);
+    res.json({ ok: true, pedidos: rows.map(subirPedidoPublico) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/support/conserje/pedidos-subir/:id/aprobar', requireAdminToken, async (req, res) => {
+  try {
+    const ped = subirPedidoRow(req.params.id);
+    if (!ped) return res.status(404).json({ ok: false, error: 'no_existe' });
+    if (ped.estado === 'armado') return res.json({ ok: true, pedido: subirPedidoPublico(ped), repetido: true });
+    if (ped.estado === 'descartado') return res.status(409).json({ ok: false, error: 'ya_descartado' });
+    if (ped.estado === 'pendiente_revision') {
+      db.prepare(`UPDATE subir_pedidos_voz SET estado = 'aprobado', decided_at = datetime('now'), decided_by = 'equipo', error = '' WHERE id = ?`).run(ped.id);
+    }
+    const r = await armarPedidoSubir(subirPedidoRow(ped.id));
+    if (!r.ok) {
+      db.prepare('UPDATE subir_pedidos_voz SET error = ? WHERE id = ?').run(String(r.error || 'armado_fallido'), ped.id);
+      return res.status(502).json({ ok: false, error: r.error || 'armado_fallido', pedido: subirPedidoPublico(subirPedidoRow(ped.id)) });
+    }
+    const armado = { scheduled_at: r.scheduled_at, dia: r.dia, hora: r.hora, camino: r.camino, desplazado_post_id: r.desplazado ? r.desplazado.post_id : null, mejora_aplicada: !!r.mejora_aplicada, subs_aplicados: !!r.subs_aplicados };
+    db.prepare(`UPDATE subir_pedidos_voz SET estado = 'armado', post_id = ?, armado = ?, error = '' WHERE id = ?`).run(r.post_id, JSON.stringify(armado), ped.id);
+    res.json({ ok: true, pedido: subirPedidoPublico(subirPedidoRow(ped.id)) });
+  } catch (e) { console.error('[pedidos-subir-aprobar]', e.message); res.status(500).json({ ok: false, error: 'no_se_pudo_aprobar' }); }
+});
+app.post('/api/admin/support/conserje/pedidos-subir/:id/descartar', requireAdminToken, (req, res) => {
+  try {
+    const ped = subirPedidoRow(req.params.id);
+    if (!ped) return res.status(404).json({ ok: false, error: 'no_existe' });
+    if (ped.estado === 'armado') return res.status(409).json({ ok: false, error: 'ya_armado' });
+    if (ped.estado === 'descartado') return res.json({ ok: true, pedido: subirPedidoPublico(ped), repetido: true });
+    db.prepare(`UPDATE subir_pedidos_voz SET estado = 'descartado', decided_at = datetime('now'), decided_by = 'equipo' WHERE id = ?`).run(ped.id);
+    res.json({ ok: true, pedido: subirPedidoPublico(subirPedidoRow(ped.id)) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'no_se_pudo_descartar' }); }
 });
 
 // GET /api/posts/dias-libres — (LOTE CHAT-CLICKS · punto 2) días libres
@@ -39539,7 +39774,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1043';
+const BUILD_ID = '20261105-v1044';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

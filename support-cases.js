@@ -132,6 +132,15 @@ function ensureSchema(db) {
   // mensaje de chat que dejó la respuesta del operador — es lo que
   // distingue una respuesta real del acuse automático del desvío).
   try { db.exec(`ALTER TABLE support_team_log ADD COLUMN chat_msg_id INTEGER`); } catch (e) { /* ya existe */ }
+  // Revisión de los pedidos específicos por voz (conserje): el pedido NO se
+  // ejecuta en el momento — queda pendiente, se revisa con Valentino y, si
+  // se aprueba, se arma al día siguiente. Una fila por mensaje-pedido
+  // (chat_messages.id); sin fila = pendiente.
+  db.exec(`CREATE TABLE IF NOT EXISTS support_voz_pedidos (
+    message_id INTEGER PRIMARY KEY,
+    estado TEXT NOT NULL DEFAULT 'pendiente',
+    decidido_en TEXT
+  )`);
 }
 
 function accountTz(db, uid) {
@@ -1348,13 +1357,130 @@ function buildOwnerPanel(db, opts) {
   };
 }
 
+// (LOTE CONSERJE-PEDIDOS-VOZ) Los pedidos que un cliente hace por nota
+// de voz sobre un posteo o sobre su semana: la tira de voz guarda en
+// chat_messages la TRANSCRIPCIÓN del pedido (role='user', hilo='post'
+// con su post_id, o hilo='semana' con post_id=0) y la respuesta de
+// Posty como el mensaje assistant que sigue en el mismo hilo. Único
+// escritor de esas filas: POST /api/chat/hilo/log (lo alimenta
+// pzVozCerrar al cerrar cada pedido, por el carril directo o por el
+// cerebro). El AUDIO no queda guardado en ningún lado:
+// /api/ideas/transcribe lo transcribe en memoria y lo descarta — acá
+// se lee solo el texto, y la vista lo declara.
+// El vínculo pedido↔posteo es EXACTO en hilo='post' (el post_id de la
+// propia fila, escrito por el flujo que ejecutó el pedido); en
+// hilo='semana' no hay un posteo único y no se fabrica el par.
+// La nota de voz del tab Subir (el «extra» de POST /api/subir/resolver)
+// NO se persiste en ninguna tabla: entra como ingrediente del prompt
+// del caption y se descarta — por eso no aparece acá (la vista lo
+// declara; nada se inventa para llenar ese hueco).
+function voiceRequests(db, opts) {
+  ensureSchema(db);
+  const o = opts || {};
+  const limit = Math.min(Math.max(Number(o.limit) || 60, 1), 200);
+  const uidFilter = Number(o.userId) > 0 ? Math.floor(Number(o.userId)) : 0;
+  const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : (uid, p) => String(p || '');
+  const rows = safe(() => db.prepare(
+    `SELECT id, user_id, text, created_at, hilo, post_id FROM chat_messages
+      WHERE role = 'user' AND hilo IN ('post', 'semana')${uidFilter ? ' AND user_id = ?' : ''}
+      ORDER BY id DESC LIMIT ?`).all(...(uidFilter ? [uidFilter, limit] : [limit])), []);
+  const pedidos = rows.map((r) => {
+    const uid = Number(r.user_id);
+    const hilo = r.hilo === 'semana' ? 'semana' : 'post';
+    const pid = Number(r.post_id) || 0;
+    const prof = safe(() => db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(uid), null) || {};
+    const reply = safe(() => db.prepare(
+      `SELECT id, text, created_at FROM chat_messages
+        WHERE user_id = ? AND role = 'assistant' AND hilo = ? AND COALESCE(post_id, 0) = ? AND id > ?
+        ORDER BY id ASC LIMIT 1`).get(uid, hilo, pid, Number(r.id)), null);
+    // Estado de revisión del pedido (tabla support_voz_pedidos; sin
+    // fila = pendiente). Lo que Posty entendió, hoy, es su respuesta
+    // registrada en el hilo — el campo `entendido` es la costura donde
+    // el lote del lado Subir va a volcar su interpretación parseada
+    // cuando exista; sin entendido no se aprueba (no a ciegas).
+    const rev = safe(() => db.prepare(
+      'SELECT estado, decidido_en FROM support_voz_pedidos WHERE message_id = ?').get(Number(r.id)), null);
+    let posteo = null;
+    if (hilo === 'post' && pid > 0) {
+      const p = safe(() => db.prepare(
+        `SELECT id, status, media_type, caption, image_path, prev_image_path, scheduled_at, published_at
+           FROM posts WHERE id = ? AND user_id = ?`).get(pid, uid), null);
+      if (p) {
+        posteo = {
+          id: p.id, status: p.status || '', media_type: p.media_type || 'image',
+          caption: p.caption || '', scheduled_at: p.scheduled_at || null, published_at: p.published_at || null,
+          image_url: p.image_path ? (safe(() => abs(uid, p.image_path), null) || '') : '',
+          tiene_anterior: !!String(p.prev_image_path || ''),
+        };
+      }
+    }
+    const tz = accountTz(db, uid);
+    let cuando = String(r.created_at || '');
+    try {
+      const d = new Date(String(r.created_at || '').replace(' ', 'T') + 'Z');
+      if (!isNaN(d)) {
+        cuando = new Intl.DateTimeFormat('es', { timeZone: tz, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+      }
+    } catch (e) { /* sin formato: queda el crudo UTC */ }
+    return {
+      id: Number(r.id), user_id: uid,
+      business_name: prof.business_name || '', ig_username: prof.ig_username || '',
+      cuando, cuando_utc: String(r.created_at || ''),
+      ambito: hilo === 'semana' ? 'semana' : 'posteo',
+      pedido: String(r.text || ''),
+      respuesta: reply ? String(reply.text || '') : null,
+      entendido: reply ? String(reply.text || '') : null,
+      entregado: !!reply,
+      revision: {
+        estado: rev && rev.estado ? String(rev.estado) : 'pendiente',
+        decidido_en: rev && rev.decidido_en ? String(rev.decidido_en) : null,
+      },
+      posteo,
+    };
+  });
+  return { ok: true, pedidos, total: pedidos.length };
+}
+
+// La puerta de aprobación del pedido específico por voz: pendiente →
+// aprobado (listo para el armado del día siguiente) o descartado (se
+// cierra sin construir nada); una decisión ya tomada se puede corregir
+// volviendo a pendiente o cambiando a la otra. Aprobar exige la
+// interpretación registrada (el `entendido`): sin eso sería aprobar a
+// ciegas y se rechaza. El armado de mañana, la espera del pedido y la
+// confirmación al cliente son del lote del lado Subir: este módulo
+// solo persiste y expone la decisión — es la puerta, no el armado.
+function decideVoiceRequest(db, opts) {
+  ensureSchema(db);
+  const o = opts || {};
+  const mid = Number(o.messageId);
+  const decision = String(o.decision || '');
+  if (!mid) return { ok: false, error: 'sin_pedido' };
+  if (!['aprobado', 'descartado', 'pendiente'].includes(decision)) return { ok: false, error: 'decision_invalida' };
+  const m = safe(() => db.prepare(
+    "SELECT id, user_id, hilo, post_id FROM chat_messages WHERE id = ? AND role = 'user' AND hilo IN ('post', 'semana')").get(mid), null);
+  if (!m) return { ok: false, error: 'pedido_inexistente' };
+  if (decision === 'aprobado') {
+    const reply = safe(() => db.prepare(
+      `SELECT id FROM chat_messages
+        WHERE user_id = ? AND role = 'assistant' AND hilo = ? AND COALESCE(post_id, 0) = ? AND id > ?
+        ORDER BY id ASC LIMIT 1`).get(Number(m.user_id), m.hilo, Number(m.post_id) || 0, mid), null);
+    if (!reply) return { ok: false, error: 'sin_interpretacion' };
+  }
+  safe(() => db.prepare(
+    `INSERT INTO support_voz_pedidos (message_id, estado, decidido_en) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(message_id) DO UPDATE SET estado = excluded.estado, decidido_en = excluded.decidido_en`).run(mid, decision), null);
+  const row = safe(() => db.prepare('SELECT estado, decidido_en FROM support_voz_pedidos WHERE message_id = ?').get(mid), null);
+  if (!row) return { ok: false, error: 'no_se_guardo' };
+  return { ok: true, message_id: mid, estado: String(row.estado), decidido_en: row.decidido_en ? String(row.decidido_en) : null };
+}
+
 module.exports = {
   ensureSchema, openCase, getCase, listCases, addEvent, setOwner, setNextStep,
   closeCase, reopenCase, logTeamAction, teamLog,
   scanAlerts, refreshCaseStates, buildJourney, buildOverview, luzFor, accountTz,
   reschedulePost, redoPost, replyAsPosty,
   isConcierge, setConcierge, divertToConcierge, conciergeClients, pendingConcierge,
-  morningFor, confirmMorning, logOperatorAction, buildOwnerPanel,
+  morningFor, confirmMorning, logOperatorAction, buildOwnerPanel, voiceRequests, decideVoiceRequest,
   ACTION_LABELS,
   CASE_TYPES, FUNNEL_STEPS,
 };

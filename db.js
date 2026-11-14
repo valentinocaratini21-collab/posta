@@ -209,6 +209,36 @@ db.exec(`CREATE TABLE IF NOT EXISTS foto_pedidos (
   requested_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, producto)
 )`);
+// (LOTE PEDIDO-VOZ-REVISION) Pedidos ESPECÍFICOS por nota de voz en el
+// tab Subir: NO se arman en el momento — nacen 'pendiente_revision',
+// el equipo los revisa en el conserje y, solo si los aprueba, el posteo
+// se arma para el día siguiente a la aprobación. Es el registro ÚNICO
+// del pedido (la nota «extra» del resolver antes se descartaba tras
+// entrar al prompt del caption: no quedaba en ninguna tabla).
+// estado: pendiente_revision → aprobado → armado | descartado.
+// respuestas: JSON con las respuestas de un toque del cliente (cuando,
+// promo, mejora, caption_modo, caption_text, subs) tal como vinieron,
+// para que el armado tras la aprobación sea el mismo que el del acto.
+// armado: JSON del resultado {scheduled_at, dia, hora, camino,
+// desplazado_post_id} — camino: directo | desplazo_posty |
+// siguiente_libre. error: último motivo de fallo del armado (el pedido
+// queda 'aprobado' y reintentable, nunca se arma solo).
+db.exec(`CREATE TABLE IF NOT EXISTS subir_pedidos_voz (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  asset_id INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'foto',
+  nota TEXT NOT NULL DEFAULT '',
+  respuestas TEXT NOT NULL DEFAULT '{}',
+  estado TEXT NOT NULL DEFAULT 'pendiente_revision',
+  post_id INTEGER,
+  armado TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  decided_at TEXT,
+  decided_by TEXT NOT NULL DEFAULT ''
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_pedidos_voz_user_estado ON subir_pedidos_voz (user_id, estado)`); } catch (e) { /* índice opcional */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN kenburns_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

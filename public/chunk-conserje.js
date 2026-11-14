@@ -14,7 +14,7 @@
 // capa extra del dueño: nunca publica por sí sola y nunca veta el ritual
 // del cliente de las 9:00. La ficha de cada cliente está en su detalle,
 // ahí mismo donde se decide.
-var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null };
+var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0 };
 // (v849) Deep link de la push de cambio de posteo: #/app/conserje?user=<uid>
 // abre el detalle de ese cliente. Parser puro: 0 si no hay ?user= válido.
 // Un uid que no está en la revisión de esa noche no abre nada (fail-soft:
@@ -318,9 +318,156 @@ function conserjeRender() {
         + '</div>';
       }).join('') + '</div>';
   }
+  // (LOTE CONSERJE-PEDIDOS-VOZ) Sección propia, fuera de la revisión de
+  // la noche: los pedidos por voz de los clientes con lo que salió.
+  html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🎙 Pedidos por voz</div>'
+    + '<div class="card" style="padding:14px">'
+    + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">El pedido específico por voz no se hace en el momento: queda <b>pendiente de revisión</b>. Acá se ve qué pidió el cliente y qué entendió Posty; al aprobar, el pedido queda listo para armarlo al día siguiente — descartar lo cierra sin construir nada. Sin la interpretación de Posty no se aprueba: aprobar a ciegas no. El audio no se guarda: lo que se lee es la transcripción, tal cual la usó Posty.</div>'
+    + '<div style="font-size:13px;color:var(--mut);line-height:1.5;margin-top:6px">Ojo: la nota de voz del tab Subir (la que acompaña una foto al subirla) todavía no se guarda en ningún lado — esos pedidos no aparecen acá.</div>'
+    + '<button class="btn btn-secondary" data-cj="pedidos-voz" style="margin-top:10px">' + (conserjeEstado.pedidosVoz ? 'Actualizar los pedidos' : 'Ver los pedidos') + '</button>'
+    + '<div id="cjPedidosVoz" style="margin-top:12px"></div></div>';
   html += '<style>@media (min-width:720px){.cj-lista{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cj-lista .card{margin:0}}</style>';
   card.innerHTML = html;
   conserjeCapAjustar();
+  conserjePedidosVozPintar();
+}
+
+// ---------- 🎙 Pedidos por voz (LOTE CONSERJE-PEDIDOS-VOZ) ----------
+// Lee GET support/conserje/pedidos-voz (voiceRequests en el servidor):
+// cada pedido trae su respuesta de Posty y, si fue sobre un posteo, el
+// posteo que quedó. Pedido y entregado se miran lado a lado al abrirlo.
+function conserjePedidoEstadoLabel(status) {
+  const m = { draft: 'Borrador', scheduled: 'Programado', published: 'Publicado', publishing: 'Publicando', paused: 'Pausado', cancelled: 'Cancelado', dismissed: 'Descartado' };
+  return m[String(status || '')] || String(status || '');
+}
+
+function conserjePedidoDetalleHTML(p) {
+  const izq = '<div style="flex:1;min-width:240px;background:#E8F4FB;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+    + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">Lo que pidió</div>'
+    + '<div style="font-size:13.5px;line-height:1.55">' + esc(p.pedido) + '</div>'
+    + '<div style="font-weight:800;font-size:13px;margin:12px 0 6px">Lo que entendió Posty</div>'
+    + (p.entendido
+      ? '<div style="font-size:13.5px;line-height:1.55">' + esc(p.entendido) + '</div>'
+      : '<div style="font-size:13.5px;color:#B3261E">Sin entregar todavía: Posty todavía no respondió este pedido, así que tampoco hay una interpretación registrada para revisar.</div>')
+    + '</div>';
+  let der;
+  if (p.ambito === 'semana') {
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + '<div style="font-size:13.5px;line-height:1.55;color:var(--mut)">Fue un pedido sobre la semana, no sobre un posteo puntual: no hay un único posteo para mostrar. Lo entregado se lee en la respuesta de Posty.</div></div>';
+  } else if (!p.posteo) {
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + '<div style="font-size:13.5px;line-height:1.55;color:var(--mut)">El posteo de este pedido ya no está: no se puede mostrar lo entregado.</div></div>';
+  } else {
+    const po = p.posteo;
+    const fecha = po.status === 'published'
+      ? 'Publicado' + (po.published_at ? ' · ' + esc(String(po.published_at).slice(0, 16)) : '')
+      : (po.scheduled_at ? 'Programado · ' + esc(String(po.scheduled_at).slice(0, 16)) : 'Sin fecha');
+    der = '<div style="flex:1;min-width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:6px">El posteo que quedó</div>'
+      + (po.image_url ? '<div style="border-radius:10px;overflow:hidden;background:#0A1E33;margin-bottom:8px"><img src="' + esc(po.image_url) + '" alt="" style="width:100%;height:200px;object-fit:contain;display:block" onerror="this.style.display=\'none\'"></div>' : '')
+      + '<div><span class="pill" style="background:#2793C8;color:#fff;margin:0">' + esc(conserjePedidoEstadoLabel(po.status)) + '</span> <span style="font-size:12.5px;color:var(--mut)">' + fecha + '</span></div>'
+      + (po.caption ? '<div style="font-size:13.5px;line-height:1.5;margin-top:6px">' + esc(po.caption) + '</div>' : '')
+      + (po.tiene_anterior ? '<div style="font-size:12.5px;color:var(--mut);margin-top:6px">Tiene una imagen anterior guardada (se puede volver).</div>' : '')
+      + '</div>';
+  }
+  // La puerta de revisión: se aprueba lo entendido, no a ciegas (sin
+  // interpretación registrada el botón de aprobar nace deshabilitado y
+  // el servidor además lo rechaza). Aprobar = listo para el armado de
+  // mañana; descartar = se cierra sin construir nada.
+  const estado = (p.revision && p.revision.estado) || 'pendiente';
+  let acciones;
+  if (estado === 'aprobado') {
+    acciones = '<div style="font-size:13.5px;font-weight:700;color:#14743F">✅ Aprobado: queda listo para armarlo mañana.</div>'
+      + '<div style="margin-top:8px"><button type="button" class="btn-mod bad" data-cj="pedido-decidir" data-id="' + esc(String(p.id)) + '" data-decision="descartado">Descartar</button>'
+      + '<button type="button" class="btn-mod" data-cj="pedido-decidir" data-id="' + esc(String(p.id)) + '" data-decision="pendiente">Volver a pendiente</button></div>';
+  } else if (estado === 'descartado') {
+    acciones = '<div style="font-size:13.5px;font-weight:700;color:var(--mut)">Descartado: no se construye nada.</div>'
+      + '<div style="margin-top:8px"><button type="button" class="btn-mod" data-cj="pedido-decidir" data-id="' + esc(String(p.id)) + '" data-decision="pendiente">Volver a pendiente</button></div>';
+  } else {
+    acciones = '<div>'
+      + '<button type="button" class="btn-mod ok" data-cj="pedido-decidir" data-id="' + esc(String(p.id)) + '" data-decision="aprobado"' + (p.entendido ? '' : ' disabled') + '>✓ Aprobar — se arma mañana</button>'
+      + '<button type="button" class="btn-mod bad" data-cj="pedido-decidir" data-id="' + esc(String(p.id)) + '" data-decision="descartado">Descartar</button></div>'
+      + (p.entendido ? '' : '<div style="font-size:12.5px;color:#B3261E;margin-top:6px">Sin la interpretación de Posty no se aprueba: aprobar a ciegas no.</div>');
+  }
+  return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">' + izq + der + '</div>'
+    + '<div style="margin-top:10px">' + acciones + '</div>';
+}
+
+async function conserjePedidoDecidir(t) {
+  const id = Number(t.getAttribute('data-id') || '');
+  const dec = t.getAttribute('data-decision') || '';
+  if (!id || !dec) return;
+  t.disabled = true;
+  try {
+    const r = await adminApi('support/conserje/pedidos-voz/decidir', 'POST', { message_id: id, decision: dec });
+    if (!r || !r.ok) {
+      t.disabled = false;
+      const box = $('#cjPedidosVoz');
+      if (box) {
+        const warn = document.createElement('div');
+        warn.className = 'warn';
+        warn.textContent = (r && r.error === 'sin_interpretacion')
+          ? 'No se aprobó: Posty todavía no registró qué entendió de este pedido.'
+          : 'No se pudo guardar la decisión. Probá de nuevo.';
+        box.prepend(warn);
+      }
+      return;
+    }
+    const d = conserjeEstado.pedidosVoz;
+    if (d && d.pedidos) {
+      const it = d.pedidos.find((x) => Number(x.id) === id);
+      if (it) it.revision = { estado: r.estado, decidido_en: r.decidido_en || null };
+    }
+    conserjePedidosVozPintar();
+  } catch (e) { t.disabled = false; }
+}
+
+function conserjePedidoRevisionChip(p) {
+  const estado = (p.revision && p.revision.estado) || 'pendiente';
+  if (estado === 'aprobado') return '<span class="pill" style="background:#14743F;color:#fff;margin:0">Aprobado · para mañana</span>';
+  if (estado === 'descartado') return '<span class="pill" style="background:#E2EDF5;color:#0A1E33;margin:0">Descartado</span>';
+  return '<span class="pill" style="background:#FEC14D;color:#0A1E33;margin:0">Pendiente de revisión</span>';
+}
+
+function conserjePedidoItemHTML(p) {
+  const abierto = String(conserjeEstado.pedidoAbierto || '') === String(p.id);
+  const chip = conserjePedidoRevisionChip(p);
+  let h = '<div class="card" style="padding:12px;margin-bottom:10px;background:#FBFDFE">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:14.5px">' + esc(p.business_name || ('Cliente ' + p.user_id)) + (p.ig_username ? ' <span style="font-weight:600;color:var(--mut);font-size:13px">@' + esc(p.ig_username) + '</span>' : '') + '</div>' + chip + '</div>'
+    + '<div style="font-size:12.5px;color:var(--mut);margin-top:2px">' + esc(p.cuando || '') + (p.ambito === 'semana' ? ' · sobre la semana' : '') + '</div>'
+    + '<div style="font-size:14px;line-height:1.5;margin-top:6px">🎙 ' + esc(p.pedido) + '</div>'
+    + '<button type="button" class="btn btn-secondary" data-cj="pedido-ver" data-id="' + esc(String(p.id)) + '" style="margin-top:8px;min-height:40px;font-size:13.5px">' + (abierto ? 'Ocultar' : 'Ver qué salió →') + '</button>';
+  if (abierto) h += conserjePedidoDetalleHTML(p);
+  return h + '</div>';
+}
+
+function conserjePedidosVozHTML() {
+  const d = conserjeEstado.pedidosVoz;
+  if (!d) return '';
+  if (!d.pedidos || !d.pedidos.length) return '<div class="d">Todavía no hay pedidos por voz de clientes.</div>';
+  return d.pedidos.map(conserjePedidoItemHTML).join('');
+}
+
+function conserjePedidosVozPintar() {
+  try {
+    const box = $('#cjPedidosVoz');
+    if (box && conserjeEstado.pedidosVoz) box.innerHTML = conserjePedidosVozHTML();
+  } catch (e) { /* sin DOM (vm): la sección se pinta al cargar */ }
+}
+
+async function conserjePedidosVozCargar() {
+  const box = $('#cjPedidosVoz');
+  if (box) box.innerHTML = '<div class="d">⏳ Cargando los pedidos…</div>';
+  try {
+    const d = await adminApi('support/conserje/pedidos-voz', 'GET');
+    if (!d || !d.ok) throw new Error('sin datos');
+    conserjeEstado.pedidosVoz = d;
+    conserjePedidosVozPintar();
+    const btn = document.querySelector('[data-cj="pedidos-voz"]');
+    if (btn) btn.textContent = 'Actualizar los pedidos';
+  } catch (e) { if (box) box.innerHTML = '<div class="d">No se pudieron cargar los pedidos. Probá de nuevo.</div>'; }
 }
 
 async function conserjeCargar() {
@@ -461,6 +608,14 @@ async function bindConserje() {
       } catch (e) { if (box) box.innerHTML = '<div class="d">No se pudo cargar el chat. Probá de nuevo.</div>'; }
       return;
     }
+    if (acc === 'pedidos-voz') { await conserjePedidosVozCargar(); return; }
+    if (acc === 'pedido-ver') {
+      const pidVoz = t.getAttribute('data-id');
+      conserjeEstado.pedidoAbierto = String(conserjeEstado.pedidoAbierto || '') === String(pidVoz) ? 0 : pidVoz;
+      conserjePedidosVozPintar();
+      return;
+    }
+    if (acc === 'pedido-decidir') { await conserjePedidoDecidir(t); return; }
     if (acc === 'decidir' || acc === 'armar') {
       const decision = acc === 'armar' ? 'pedir' : t.getAttribute('data-decision');
       let nota = '';
