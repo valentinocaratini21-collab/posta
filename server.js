@@ -16448,6 +16448,48 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   res.json(scheduledInfo ? { ok: true, scheduled_at: scheduledInfo.scheduled_at, week_key: scheduledInfo.week_key, ...(lintRes && !lintRes.ok ? { in_review: true, lint_reason: lintRes.reason } : {}) } : { ok: true });
 });
 
+// POST /api/posts/:id/edit-caption  body {caption}
+// (LOTE DETALLE-POSTEO · 13/11 · pedido de Valentino) Editar el caption
+// de un posteo PROGRAMADO desde el detalle, en la misma pantalla, sin
+// pasar por el chat. Espejo de USUARIO del endpoint admin de v965
+// (POST /api/admin/posts/:id/edit-caption): misma semántica — SOLO
+// cambia el caption; nunca toca status, scheduled_at, hashtags,
+// image_path ni needs_review; esa vía no corre el lint de programación
+// ni la puerta de duplicados (en esta base ninguna de las dos existe
+// para la edición de un programado) y no escribe versiones. Las dos
+// diferencias con el admin: el posteo tiene que ser del usuario de la
+// sesión (otro dueño → 404) y rige el corte de invitado
+// (guestBackstop, el mismo del PATCH). Para borradores, el detalle usa
+// la edición en revisión vigente (PATCH action:'save-draft').
+app.post('/api/posts/:id/edit-caption', requireAuth, express.json(), (req, res) => {
+  if (guestBackstop(req, res)) return;
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const nuevo = body.caption === undefined ? '' : String(body.caption);
+  if (!nuevo) return res.status(400).json({ ok: false, error: 'falta caption' });
+  const post = db.prepare(`SELECT id, user_id, status, scheduled_at, caption FROM posts WHERE id = ? AND user_id = ?`).get(id, req.session.userId);
+  if (!post) return res.status(404).json({ ok: false, error: 'no_existe' });
+  if (post.status !== 'scheduled') {
+    const motivo = post.status === 'draft' ? 'es_borrador'
+      : post.status === 'published' ? 'ya_publicado'
+      : post.status === 'publishing' ? 'publicando'
+      : (post.status === 'cancelled' || post.status === 'dismissed') ? 'cancelado'
+      : 'no_programado';
+    const detalle = post.status === 'draft'
+      ? 'este posteo es un borrador, no está programado — se edita como en revisión (PATCH action:save-draft)'
+      : 'este posteo no está programado (status: ' + post.status + ')';
+    return res.status(400).json({ ok: false, motivo, error: detalle });
+  }
+  const actual = post.caption || '';
+  const cambiaria = actual !== nuevo;
+  if (cambiaria) {
+    db.prepare(`UPDATE posts SET caption = ? WHERE id = ?`).run(nuevo, post.id);
+    console.log(`[detalle] edit-caption: post ${post.id} (usuario ${post.user_id}, sale ${post.scheduled_at || 'sin fecha'}) caption ${actual.length}→${nuevo.length} chars`);
+  }
+  res.json({ ok: true, id: post.id, status: post.status, scheduled_at: post.scheduled_at, caption: nuevo, cambiado: cambiaria, ya_correcto: !cambiaria });
+});
+
 // POST /api/posts/:id/reject-reason  body {reason}
 // El cliente cuenta QUÉ no le gustó de un borrador: se guarda la señal +
 // una regla NEGATIVA en style_rules (entra al prompt sola vía Track D).
@@ -38477,7 +38519,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1020';
+const BUILD_ID = '20261105-v1021';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

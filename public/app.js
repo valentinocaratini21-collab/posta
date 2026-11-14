@@ -23480,16 +23480,87 @@ function pzHoyCardHTML(p, o) {
     // la franja verde de Agendado. Solo lo usa pzHoyHoyHTML (hero:true);
     // la compacta de abajo sigue para el resto de tarjetas.)
     if (o && o.hero) {
-      // (LOTE BOTONES-INICIO v914 · idea Valentino: tres botones bajo el
-      // caption del posteo de hoy, en Inicio, para no navegar: Editar
-      // abre el chat anclado (mismo camino que «Cambialo»),
-      // Frenar = pcHold (solo programados), Eliminar = DELETE con
-      // confirmación (no en publicados). Rechazar y Rehacer NO van acá:
-      // quedan en el detalle. Solo el héroe, no la compacta.
-      const tres = `<div class="pz-hoy-tres">`
-        + `<button type="button" class="btn btn-soft" data-pz-hoy-cambiar="${esc(String(p.id))}">${pzIc('pencil', 16)} ${en ? 'Edit' : 'Editar'}</button>`
-        + (st === 'scheduled' ? `<button type="button" class="btn btn-ghost" data-pz-hoy-frenar="${esc(String(p.id))}">⏸ ${en ? 'Hold' : 'Frenar'}</button>` : '')
-        + (st !== 'published' ? `<button type="button" class="btn btn-ghost" data-pz-hoy-eliminar="${esc(String(p.id))}">${pzIc('trash', 16)} ${en ? 'Delete' : 'Eliminar'}</button>` : '')
+      // (LOTE BOTONES-INICIO v914 · origen: botones bajo el caption del
+      // posteo de hoy, en Inicio, para no navegar. Solo el héroe.)
+      // (LOTE DETALLE-POSTEO · 13/11 · SUPERSEDE a v914 por DOS pedidos
+      // nuevos de Valentino — la funcionalidad, con captura de esta
+      // fila, y el DISEÑO aprobado «Dale, armalo asi» sobre el mock
+      // mock-detalle-v1: la zona de acciones queda (1) el estado como
+      // PÍLDORA DE UNA LÍNEA, (2) las acciones como CUATRO TARJETAS
+      // blandas con ícono con gradiente arriba y nombre abajo —
+      // Rehacer (azul) · Editar (azul) · Frenar (amarillo) · Eliminar
+      // (coral). Sale el cartel verde de dos renglones DENTRO del
+      // héroe (pz-hoy-ok queda solo en la compacta, intacta). Frenar =
+      // pcHold y Eliminar = DELETE con confirmación conservan
+      // EXACTAMENTE su comportamiento: solo cambia la presentación a
+      // tarjeta (mismos data-* de siempre). «Rehacer» es de primer
+      // nivel con el motor vigente (pzHoyRehacer → hfRedoPost →
+      // photo-restyle) y su contador redo_left: a 0 la tarjeta nace
+      // deshabilitada y la línea del contador, bajo las tarjetas, lo
+      // dice en el lugar. «Editar» ya NO abre el chat: abre el caption
+      // editable EN ESTA MISMA TARJETA (pzHoyEditarAbrir) — salvo en
+      // publicados, donde Editar conserva su camino vigente al chat
+      // (un publicado no se edita en el lugar: vuelve como versión
+      // nueva). «Cambialo» de las acciones sigue yendo al chat.
+      // COMPOSICIÓN AL ATERRIZAR (v1021, sobre la base viva): la
+      // PÍLDORA cubre solo al programado NO pendiente — con
+      // APROBAR-AUTO (v1010) un approval='auto' ES pendiente y su
+      // estado lo llevan «Dale, publicalo ✓» y el chip, sin píldora,
+      // jamás «Aprobado» ni «Agendado» para el que sale solo
+      // (honestidad C12 intacta); y con la pieza 7 de ILUSTRADA la
+      // píldora mira la conexión: sin Instagram conectado no promete
+      // la historia, dice que sale al conectar (misma verdad que la
+      // notaOk viva de la compacta). ADDENDUM V4 (mock-detalle-v4):
+      // «Ver el posteo completo» NO va ni como botón ni como link —
+      // tocar la FOTO abre la vista completa (la media del héroe ya
+      // lleva data-pz-hoy-detalle desde v1017) y el lugar bajo las
+      // acciones lo ocupa la TIRA DE VOZ (pzVozStripHTML, al final de
+      // la tarjeta, como quedó desacoplada en v1017 — sin duplicarla).
+      const pillEstado = (!pendiente && st === 'scheduled')
+        ? (() => {
+            const hh = (typeof pzHoyHoraCorta === 'function') ? (pzHoyHoraCorta(p.scheduled_at, tz, en) || '') : '';
+            let rel = '';
+            try {
+              const d = (typeof pcParseDate === 'function') ? pcParseDate(p.scheduled_at) : null;
+              if (d && !isNaN(d) && typeof pzWhenRelDay === 'function') rel = pzWhenRelDay(d, tz, en) || '';
+            } catch (e) {}
+            const dia = rel ? (rel.charAt(0).toLowerCase() + rel.slice(1)) : (en ? 'today' : 'hoy');
+            const core = (en ? 'Scheduled · ' : 'Agendado · ') + dia + (hh ? ' ' + hh : '');
+            return igOkHoy
+              ? `<div class="pz-hoy-pill-estado">${pzIc('checkCircle', 15)}<span>${esc(core)} — ${en ? 'also shared as a story' : 'también sale como historia'}</span></div>`
+              : `<div class="pz-hoy-pill-estado">${pzIc('clock', 15)}<span>${esc(core)} — ${en ? 'goes out once you connect your Instagram' : 'sale cuando conectes tu Instagram'}</span></div>`;
+          })()
+        : '';
+      const redoLeft = (typeof hfRedoLeft === 'function') ? hfRedoLeft(p) : null;
+      const redoLine = (redoLeft !== null && typeof hfRedoLineHTML === 'function') ? hfRedoLineHTML(p, en) : '';
+      const cardRehacer = (redoLeft !== null)
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-rehacer="${esc(String(p.id))}"${redoLeft > 0 ? '' : ' disabled'}><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc('refresh', 20)}</span>${en ? 'Redo' : 'Rehacer'}</button>`
+        : '';
+      const cardEditar = st === 'published'
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-cambiar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`
+        : `<button type="button" class="pz-hoy-act" data-pz-hoy-editar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`;
+      const cardFrenar = st === 'scheduled'
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-frenar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-amarillo">${pzIc('pause', 20)}</span>${en ? 'Hold' : 'Frenar'}</button>`
+        : '';
+      const cardEliminar = st !== 'published'
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-eliminar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-coral">${pzIc('trash', 20)}</span>${en ? 'Delete' : 'Eliminar'}</button>`
+        : '';
+      const acts = `<div class="pz-hoy-acts">`
+        + cardRehacer + cardEditar + cardFrenar + cardEliminar
+        + `</div>`
+        + (redoLine ? `<div class="pz-hoy-redo-line">${redoLine}</div>` : '');
+      // Editor de caption EN LA TARJETA (oculto hasta tocar «Editar»):
+      // textarea con el caption completo + Guardar/Cancelar. El estado
+      // viaja en data-pz-hoy-edit-status: al guardar, pzHoyEditarGuardar
+      // aplica la semántica vigente de ese estado (programado: el
+      // espejo de usuario del edit-caption admin v965; borrador: la
+      // edición en revisión, PATCH action:'save-draft'). En publicados
+      // no hay editor: su «Editar» va al chat (versión nueva).
+      const editBox = st === 'published' ? '' : `<div class="pz-hoy-edit" data-pz-hoy-editbox="${esc(String(p.id))}" data-pz-hoy-edit-status="${esc(st)}" hidden>`
+        + `<textarea class="pz-hoy-edit-ta" rows="4" maxlength="2200" aria-label="${en ? 'Post text' : 'Texto del posteo'}">${esc(String((p && p.caption) || ''))}</textarea>`
+        + `<div class="pz-hoy-edit-err" data-pz-hoy-edit-err="${esc(String(p.id))}" hidden></div>`
+        + `<div class="pz-hoy-edit-row"><button type="button" class="btn btn-ghost" data-pz-hoy-edit-cancel="${esc(String(p.id))}">${en ? 'Cancel' : 'Cancelar'}</button>`
+        + `<button type="button" class="btn btn-primary" data-pz-hoy-edit-save="${esc(String(p.id))}">${en ? 'Save' : 'Guardar'}</button></div>`
         + `</div>`;
       const esVideo = String((p && p.media_type) || '') === 'video';
       const heroImg = media ? media.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"').replace('class="pz-hoy-thumb-video"', 'class="pz-hoy-hero-video"') : '';
@@ -23499,8 +23570,10 @@ function pzHoyCardHTML(p, o) {
       return `<article class="card pz-hoy-card pz-hoy-hero" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
         + heroMedia
         + (caption ? `<p class="pz-hoy-hero-caption">${esc(caption)}</p>` : '')
-        + tres
-        + `${acciones}${notaOk}${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}`
+        + editBox
+        + pillEstado
+        + acts
+        + `${acciones}${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}`
         + `</article>`;
     }
     return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
@@ -23595,6 +23668,95 @@ function pzHoyHoyHTML(p, o) {
       + pzHoyCardHTML(p, { cartita: false, sinCuando: true, en, tz, prop: (o && o.prop) || null, hero: true })
       + `</div>`;
   } catch (e) { return ''; }
+}
+
+// (LOTE DETALLE-POSTEO · 13/11 · pedido de Valentino) «Editar» del
+// héroe de Inicio: abre el caption editable EN LA MISMA TARJETA —
+// textarea con el texto actual + Guardar/Cancelar — sin navegar al
+// chat ni depender de la voz o de notas. Al abrir se oculta el caption
+// rendido; al cerrar o guardar vuelve. Segundo toque cierra.
+function pzHoyEditarAbrir(btn) {
+  try {
+    const card = btn && btn.closest ? btn.closest('[data-post-id]') : null;
+    if (!card) return;
+    const box = card.querySelector('[data-pz-hoy-editbox]');
+    if (!box) return;
+    if (!box.hidden) { pzHoyEditarCerrar(btn); return; }
+    box.hidden = false;
+    const cap = card.querySelector('.pz-hoy-hero-caption');
+    if (cap) cap.style.display = 'none';
+    const ta = box.querySelector('textarea');
+    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+  } catch (e) {}
+}
+function pzHoyEditarCerrar(btn) {
+  try {
+    const card = btn && btn.closest ? btn.closest('[data-post-id]') : null;
+    if (!card) return;
+    const box = card.querySelector('[data-pz-hoy-editbox]');
+    if (box) box.hidden = true;
+    const cap = card.querySelector('.pz-hoy-hero-caption');
+    if (cap) cap.style.display = '';
+    const err = card.querySelector('[data-pz-hoy-edit-err]');
+    if (err) { err.hidden = true; err.textContent = ''; }
+  } catch (e) {}
+}
+// Guardar aplica EN EL LUGAR, con la semántica vigente según el
+// estado del posteo: programado → POST /api/posts/:id/edit-caption
+// (espejo de usuario del endpoint admin de v965: solo cambia el
+// caption, nunca el horario ni el estado); borrador → PATCH
+// action:'save-draft' (la edición en revisión). Si el servidor
+// frena, el motivo se lee dentro del editor y el texto no se pierde.
+async function pzHoyEditarGuardar(btn) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const card = btn && btn.closest ? btn.closest('[data-post-id]') : null;
+  if (!card) return;
+  const box = card.querySelector('[data-pz-hoy-editbox]');
+  const ta = box ? box.querySelector('textarea') : null;
+  const id = btn.getAttribute('data-pz-hoy-edit-save');
+  if (!box || !ta || !id) return;
+  const status = box.getAttribute('data-pz-hoy-edit-status') || '';
+  const nuevo = ta.value;
+  const err = box.querySelector('[data-pz-hoy-edit-err]');
+  btn.disabled = true;
+  try {
+    if (status === 'scheduled') {
+      await api.post('/api/posts/' + encodeURIComponent(id) + '/edit-caption', { caption: nuevo });
+    } else {
+      await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'save-draft', caption: nuevo });
+    }
+  } catch (e) {
+    btn.disabled = false;
+    if (err) { err.textContent = '😅 ' + (((e && e.message) || '') || (en ? 'Could not save it' : 'No se pudo guardar')); err.hidden = false; }
+    return;
+  }
+  btn.disabled = false;
+  const cap = card.querySelector('.pz-hoy-hero-caption');
+  if (cap) { cap.textContent = String(nuevo || '').trim(); cap.style.display = ''; }
+  try { const p = (typeof PZ_HOY_POSTS !== 'undefined' && PZ_HOY_POSTS) ? PZ_HOY_POSTS[String(id)] : null; if (p) p.caption = nuevo; } catch (e) {}
+  box.hidden = true;
+  if (err) { err.hidden = true; err.textContent = ''; }
+  toast('✅ ' + (en ? 'Text saved' : 'Texto guardado'));
+}
+// «Rehacer» de primer nivel en la fila del héroe: un toque llama al
+// flujo vigente (hfRedoPost → photo-restyle, contador incluido) y la
+// imagen nueva se ve en esta misma tarjeta al terminar (hfRedoPost
+// re-renderiza Inicio). Mientras genera, el botón lo dice; si el
+// servidor frena por el límite (redo_exhausted), hfRedoPost avisa y
+// el botón vuelve a su estado (a 0 ya nace deshabilitado).
+async function pzHoyRehacer(btn) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const id = btn && btn.getAttribute ? btn.getAttribute('data-pz-hoy-rehacer') : null;
+  if (!id || btn.disabled) return;
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = en ? '⏳ Redoing…' : '⏳ Rehaciendo…';
+  try { await hfRedoPost(id); }
+  finally {
+    // Si hfRedoPost terminó en render(), este nodo ya no está en el
+    // DOM nuevo; restaurar sobre el nodo viejo es inocuo.
+    try { btn.disabled = false; btn.innerHTML = label; } catch (e) {}
+  }
 }
 
 // Mensaje de Posty en Hoy (botón → chat). Un solo mensaje: el texto dice
@@ -23851,6 +24013,11 @@ function pzHoyBind(root) {
   // (LOTE BOTONES-INICIO v914) Frenar y Eliminar del héroe de Inicio.
   root.querySelectorAll('[data-pz-hoy-frenar]').forEach((b) => { b.onclick = () => { try { pcHold(b.getAttribute('data-pz-hoy-frenar')); } catch (e) {} }; });
   root.querySelectorAll('[data-pz-hoy-eliminar]').forEach((b) => { b.onclick = () => { try { pzHoyEliminar(b.getAttribute('data-pz-hoy-eliminar'), b); } catch (e) {} }; });
+  // (LOTE DETALLE-POSTEO) Editar inline y Rehacer de primer nivel del héroe.
+  root.querySelectorAll('[data-pz-hoy-editar]').forEach((b) => { b.onclick = () => pzHoyEditarAbrir(b); });
+  root.querySelectorAll('[data-pz-hoy-rehacer]').forEach((b) => { b.onclick = () => { try { pzHoyRehacer(b); } catch (e) {} }; });
+  root.querySelectorAll('[data-pz-hoy-edit-save]').forEach((b) => { b.onclick = () => { try { pzHoyEditarGuardar(b); } catch (e) {} }; });
+  root.querySelectorAll('[data-pz-hoy-edit-cancel]').forEach((b) => { b.onclick = () => pzHoyEditarCerrar(b); });
   root.querySelectorAll('[data-pz-hoy-detalle]').forEach((el) => {
     const go = () => { const id = el.getAttribute('data-pz-hoy-detalle'); if (id) location.hash = '#/app/post/' + encodeURIComponent(id); };
     el.onclick = go;

@@ -2,6 +2,17 @@
 // Suite del lote BOTONES-INICIO v914.
 // Re-pineada por el preparador: base v913 (3e153c3f; app.js 31492, styles 6226), D3 31525/6229.
 // Re-base 3: HEAD v905 -> v912 -> v913 mientras se trabajaba.
+// RE-PIN DEL PREPARADOR (aterrizaje DETALLE-POSTEO v1021, sobre HEAD
+// vivo v1020): la base de control de este scratch es el árbol v1020
+// (base-v913/ apunta a él). La fila .pz-hoy-tres quedó SUPERSEDIDA por
+// el diseño aprobado del 13/11 (píldora + tarjetas .pz-hoy-acts +
+// editor inline + Rehacer de primer nivel): A1, A3, A6, A7, A9, B1–B8
+// se re-pinean a esa verdad con su causa; el harness B suma la
+// extracción de hfRedoLeft/hfRedoLineHTML (sin ellas la tarjeta
+// Rehacer no rendía y B3 pasaba vacuo — ya lo había notado el builder
+// del DETALLE); D pasa a BUILD v1021 / app.js?v=699 / styles
+// 20261279 / conteos del árbol fusionado; E5 a CHUNK_V v977. El resto
+// (A2, A4, A5, A8, C, E1–E4, M78) no se toca: sigue valiendo.
 // A: estática (tres botones solo en el héroe, cableado, CSS, sin Rechazar/Rehacer)
 // B: render real de pzHoyCardHTML (extraída y evaluada en vm con stubs)
 // C: comportamiento de pzHoyEliminar (confirm + DELETE)
@@ -35,13 +46,14 @@ const idxR = read(path.join(REL, 'public/index.html'));
 const idxEnR = read(path.join(REL, 'public/en/index.html'));
 
 // ---------- A. Estática ----------
-t('A1: .pz-hoy-tres ×1 en app.js (solo el héroe) y ×0 en base',
-  occ(jsR, /pz-hoy-tres/g) === 1 && occ(jsB, /pz-hoy-tres/g) === 0);
+t('A1: (RE-PIN v1021) .pz-hoy-tres ×0 en app.js del release (supersedida por .pz-hoy-acts del DETALLE) y ×1 en la base viva',
+  occ(jsR, /pz-hoy-tres/g) === 0 && occ(jsR, /pz-hoy-acts/g) >= 1 && occ(jsB, /pz-hoy-tres/g) === 1);
 t('A2: data-pz-hoy-frenar ×1 y data-pz-hoy-eliminar ×1 en app.js (render + bind cuentan aparte)',
   jsR.includes('data-pz-hoy-frenar="${esc(String(p.id))}"') &&
   jsR.includes('data-pz-hoy-eliminar="${esc(String(p.id))}"'));
-t('A3: Editar reusa data-pz-hoy-cambiar (cero handler nuevo para Editar)',
-  jsR.includes('data-pz-hoy-cambiar="${esc(String(p.id))}">${pzIc(\'pencil\', 16)}'));
+t('A3: (RE-PIN v1021) Editar es inline (data-pz-hoy-editar); data-pz-hoy-cambiar queda para el publicado (su tarjeta) y para «Cambialo»',
+  jsR.includes('data-pz-hoy-editar="${esc(String(p.id))}"') &&
+  jsR.includes('data-pz-hoy-cambiar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc(\'pencil\', 20)}'));
 t('A4: pzHoyBind cablea frenar y eliminar (querySelectorAll ×1 cada uno)',
   occ(jsR, /querySelectorAll\('\[data-pz-hoy-frenar\]'\)/g) === 1 &&
   occ(jsR, /querySelectorAll\('\[data-pz-hoy-eliminar\]'\)/g) === 1);
@@ -49,17 +61,18 @@ t('A5: pzHoyEliminar definida ×1 (confirm + api.del + render)',
   occ(jsR, /async function pzHoyEliminar\(id, btn\)/g) === 1 &&
   jsR.includes("window.confirm(en ? 'Delete this post permanently?'") &&
   jsR.includes("await api.del('/api/posts/' + encodeURIComponent(id));"));
-t('A6: Frenar solo si scheduled, Eliminar solo si no published',
-  jsR.includes("(st === 'scheduled' ? `<button type=\"button\" class=\"btn btn-ghost\" data-pz-hoy-frenar=") &&
-  jsR.includes("(st !== 'published' ? `<button type=\"button\" class=\"btn btn-ghost\" data-pz-hoy-eliminar="));
-t('A7: Rechazar y Rehacer NO aparecen en el héroe (ni en el bloque tres)',
-  !/pz-hoy-tres[\s\S]{0,1200}(Rechazar|Rehacer|apvReject|apvRedo)/.test(jsR.slice(jsR.indexOf('const tres ='))));
+t('A6: (RE-PIN v1021) Frenar solo si scheduled, Eliminar solo si no published (forma tarjeta .pz-hoy-act)',
+  jsR.includes("st === 'scheduled'\n        ? `<button type=\"button\" class=\"pz-hoy-act\" data-pz-hoy-frenar=") &&
+  jsR.includes("st !== 'published'\n        ? `<button type=\"button\" class=\"pz-hoy-act\" data-pz-hoy-eliminar="));
+t('A7: (RE-PIN v1021) Rechazar sigue SIN aparecer en el héroe; Rehacer SÍ (es de primer nivel desde DETALLE-POSTEO)',
+  !/Rechazar|apvReject/.test(jsR.slice(jsR.indexOf('const pillEstado'), jsR.indexOf('const editBox'))) &&
+  jsR.slice(jsR.indexOf('const pillEstado'), jsR.indexOf('const editBox')).includes('data-pz-hoy-rehacer'));
 t('A8: comentario de trazabilidad BOTONES-INICIO v914 ×3 en app.js (héroe, eliminar, bind)',
   occ(jsR, /BOTONES-INICIO v914/g) === 3);
-t('A9: CSS .pz-hoy-tres ×1 + .pz-hoy-tres .btn ×1 en styles.css, ×0 en base',
-  occ(cssR, /\.pz-hoy-tres\{display:flex;gap:8px;margin:2px 2px 13px\}/g) === 1 &&
-  occ(cssR, /\.pz-hoy-tres \.btn\{flex:1;padding:10px 6px\}/g) === 1 &&
-  occ(cssB, /pz-hoy-tres/g) === 0);
+t('A9: (RE-PIN v1021) CSS: .pz-hoy-tres ×0 en el release (sale con la fila) y .pz-hoy-acts ×1; en la base viva la fila vieja existía (×2)',
+  occ(cssR, /\.pz-hoy-tres\{/g) === 0 &&
+  occ(cssR, /\.pz-hoy-acts\{/g) === 1 &&
+  occ(cssB, /pz-hoy-tres/g) === 2);
 
 // ---------- B. Render real (vm) ----------
 function extractFn(src, startMarker, endMarker) {
@@ -79,34 +92,36 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 const cardSrc = extractFn(jsR, 'function pzHoyCardHTML(p, o) {', '// (LOTE A · ítem 2)');
+vm.runInContext(extractFn(jsR, 'function hfRedoLeft(p) {', '// Línea del contador'), sandbox);
+vm.runInContext(extractFn(jsR, 'function hfRedoLineHTML(p, en) {', '// (Tanda feed 6A · ítem 2)'), sandbox);
 vm.runInContext(cardSrc, sandbox);
 const pzHoyCardHTML = vm.runInContext('pzHoyCardHTML', sandbox);
 const post = (over) => Object.assign({ id: 42, status: 'scheduled', approval: 'pending', media_type: 'image', image_path: '/media/x.jpg', caption: 'Tesora que todos piden', scheduled_at: '2026-11-11T19:00:00-05:00' }, over);
 
 const hSched = pzHoyCardHTML(post({}), { hero: true, en: false });
-t('B1: héroe programado rinde los tres botones con su id',
-  hSched.includes('data-pz-hoy-cambiar="42"') && hSched.includes('data-pz-hoy-frenar="42"') && hSched.includes('data-pz-hoy-eliminar="42"') &&
-  hSched.includes('>Editar<') === false && hSched.includes('Editar') && hSched.includes('Frenar') && hSched.includes('Eliminar'));
-t('B2: los tres botones van DESPUÉS del caption y ANTES de «Ver el posteo completo»',
-  hSched.indexOf('pz-hoy-hero-caption') < hSched.indexOf('pz-hoy-tres') &&
-  hSched.indexOf('pz-hoy-tres') < hSched.indexOf('pz-hoy-hero-link'));
-t('B3: héroe programado NO trae Rechazar ni Rehacer',
-  !hSched.includes('Rechazar') && !hSched.includes('Rehacer'));
+t('B1: (RE-PIN v1021) héroe programado rinde las CUATRO tarjetas del DETALLE con su id (Rehacer/Editar inline/Frenar/Eliminar)',
+  hSched.includes('data-pz-hoy-rehacer="42"') && hSched.includes('data-pz-hoy-editar="42"') && hSched.includes('data-pz-hoy-frenar="42"') && hSched.includes('data-pz-hoy-eliminar="42"') &&
+  hSched.includes('Rehacer') && hSched.includes('Editar') && hSched.includes('Frenar') && hSched.includes('Eliminar'));
+t('B2: (RE-PIN v1021) las tarjetas van DESPUÉS del caption; «Ver el posteo completo» ya no existe ni como botón ni como link (ADDENDUM V4)',
+  hSched.indexOf('pz-hoy-hero-caption') < hSched.indexOf('pz-hoy-acts') &&
+  !hSched.includes('pz-hoy-hero-link') && !hSched.includes('Ver el posteo completo'));
+t('B3: (RE-PIN v1021) héroe programado NO trae Rechazar; Rehacer SÍ (primer nivel desde DETALLE-POSTEO)',
+  !hSched.includes('Rechazar') && hSched.includes('data-pz-hoy-rehacer="42"'));
 const hDraft = pzHoyCardHTML(post({ status: 'draft', approval: 'pending' }), { hero: true, en: false });
-t('B4: borrador: Editar + Eliminar, SIN Frenar',
-  hDraft.includes('data-pz-hoy-cambiar="42"') && hDraft.includes('data-pz-hoy-eliminar="42"') && !hDraft.includes('data-pz-hoy-frenar'));
+t('B4: (RE-PIN v1021) borrador: Editar inline + Eliminar, SIN Frenar',
+  hDraft.includes('data-pz-hoy-editar="42"') && hDraft.includes('data-pz-hoy-eliminar="42"') && !hDraft.includes('data-pz-hoy-frenar'));
 const hPub = pzHoyCardHTML(post({ status: 'published', approval: 'approved' }), { hero: true, en: false });
-t('B5: publicado: solo Editar (sin Frenar ni Eliminar)',
-  hPub.includes('data-pz-hoy-cambiar="42"') && !hPub.includes('data-pz-hoy-frenar') && !hPub.includes('data-pz-hoy-eliminar'));
+t('B5: (RE-PIN v1021) publicado: su tarjeta es Cambialo (data-pz-hoy-cambiar), sin Frenar/Eliminar/Rehacer',
+  hPub.includes('data-pz-hoy-cambiar="42"') && !hPub.includes('data-pz-hoy-frenar') && !hPub.includes('data-pz-hoy-eliminar') && !hPub.includes('data-pz-hoy-rehacer'));
 const hCompact = pzHoyCardHTML(post({}), { cartita: false, en: false });
-t('B6: tarjeta compacta (resto de la semana): SIN tres botones',
-  !hCompact.includes('pz-hoy-tres'));
+t('B6: (RE-PIN v1021) tarjeta compacta (resto de la semana): SIN tarjetas .pz-hoy-acts',
+  !hCompact.includes('pz-hoy-acts'));
 const hEn = pzHoyCardHTML(post({}), { hero: true, en: true });
-t('B7: EN: Edit / Hold / Delete',
-  hEn.includes('Edit') && hEn.includes('Hold') && hEn.includes('Delete'));
+t('B7: (RE-PIN v1021) EN: Redo / Edit / Hold / Delete',
+  hEn.includes('>Redo<') && hEn.includes('>Edit<') && hEn.includes('>Hold<') && hEn.includes('>Delete<'));
 const hNoCap = pzHoyCardHTML(post({ caption: '' }), { hero: true, en: false });
-t('B8: sin caption, los tres botones rinden igual',
-  hNoCap.includes('pz-hoy-tres') && hNoCap.includes('data-pz-hoy-frenar="42"'));
+t('B8: (RE-PIN v1021) sin caption, las tarjetas rinden igual',
+  hNoCap.includes('pz-hoy-acts') && hNoCap.includes('data-pz-hoy-frenar="42"'));
 
 // ---------- C. pzHoyEliminar ----------
 async function testEliminar() {
@@ -146,16 +161,16 @@ testEliminar().then(() => finish()).catch((e) => { console.log('FAIL C: ' + e.me
 
 function finish() {
   // ---------- D. Estampado ----------
-  t('D1: BUILD v914 ×1 en server.js, v900 ×0',
-    occ(srvR, /20261105-v914/g) === 1 && occ(srvR, /20261105-v900/g) === 0);
-  t('D2: app.js?v=627 ×1 en index ES, styles.css?v=20261252 ×1 ES + ×1 EN, EN sin app.js?v=',
-    occ(idxR, /app\.js\?v=627/g) === 1 &&
-    occ(idxR, /styles\.css\?v=20261252/g) === 1 &&
-    occ(idxEnR, /styles\.css\?v=20261252/g) === 1 &&
+  t('D1: (RE-PIN v1021) BUILD v1021 ×1 en server.js, v900 ×0',
+    occ(srvR, /20261105-v1021/g) === 1 && occ(srvR, /20261105-v900/g) === 0);
+  t('D2: (RE-PIN v1021) app.js?v=699 ×1 en index ES, styles.css?v=20261279 ×1 ES + ×1 EN, EN sin app.js?v=',
+    occ(idxR, /app\.js\?v=699/g) === 1 &&
+    occ(idxR, /styles\.css\?v=20261279/g) === 1 &&
+    occ(idxEnR, /styles\.css\?v=20261279/g) === 1 &&
     !idxEnR.includes('app.js?v='));
-  t('D3: app.js 31525 líneas (31492 base v913 + 33), styles.css 6229 (6226 base v913 + 3)',
-    nlines(path.join(REL, 'public/app.js')) === 31525 &&
-    nlines(path.join(REL, 'public/styles.css')) === 6229);
+  t('D3: (RE-PIN v1021) app.js 33663 líneas (33496 base v1020 + 167 del DETALLE fusionado), styles.css 6426 (6416 base v1020 + 10)',
+    nlines(path.join(REL, 'public/app.js')) === 33663 &&
+    nlines(path.join(REL, 'public/styles.css')) === 6426);
 
   // ---------- E. Resto intacto ----------
   t('E1: v900 intacto: stripe config ×1 y payment-method ×1 en server.js',
@@ -169,8 +184,8 @@ function finish() {
   t('E4: pcHold intacto (PATCH unschedule) y apvDelete intacto (confirm + api.del)',
     jsR.includes("await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'unschedule' });") &&
     jsR.includes("await api.del('/api/posts/' + encodeURIComponent(apvDl.dataset.apvid));"));
-  t('E5: CHUNK_V v890 ×1 línea en app.js; acciones Aprobar/Cambiar del héroe intactas',
-    occ(jsR, /20261105-v890/g) === 1 &&
+  t('E5: (RE-PIN v1021) CHUNK_V v977 ×1 línea en app.js (el DETALLE no toca chunks); acciones Aprobar/Cambiar del héroe intactas',
+    occ(jsR, /20261105-v977/g) === 1 &&
     jsR.includes('data-pz-hoy-aprobar="${esc(String(p.id))}"') &&
     jsR.includes('data-pz-hoy-cambiar="${esc(String(p.id))}">${en ? \'Change it\' : \'Cambialo\'}</button>'));
 
