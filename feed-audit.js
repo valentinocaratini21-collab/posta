@@ -1025,6 +1025,41 @@ function firmaMedian(nums) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+// (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) La señal de texto del feed
+// derivada de la firma de estilo: cuántos posteos del feed llevan
+// texto SUPERPUESTO (palabras agregadas SOBRE la foto: un titular,
+// una banda, una placa gráfica, texto de diseño) frente a texto EN
+// ESCENA (lo que ya estaba en el mundo fotografiado: carteles,
+// menúes, vidrieras, etiquetas, packaging — eso NO es texto
+// superpuesto). n = posteos efectivamente clasificados por visión
+// sobre el eje texto_superpuesto. Vara: n < 5 → 'sin-senal' (manda
+// la cadena actual, intacta) · 'limpio' si superpuestos ≤ 1 y
+// ratio ≤ 0,15 (la excepción: un gráfico de colaboración en 12 no
+// cambia la costumbre) · 'con-texto' si ratio ≥ 0,5 · 'mixto' el
+// resto. Tamano: el tamaño típico del titular del clasificador del
+// feed ('large'|'small') cuando la corrida lo tiene; si no, null.
+const TEXTO_FEED_MODOS = ['limpio', 'con-texto', 'mixto', 'sin-senal'];
+function textoFeedFromCounts(c) {
+  const o = (c && typeof c === 'object') ? c : {};
+  const nn = Math.max(0, Math.floor(Number(o.n) || 0));
+  const si = Math.max(0, Math.floor(Number(o.superpuestos) || 0));
+  const ratio = nn > 0 ? Math.round((Math.min(si, nn) / nn) * 100) / 100 : null;
+  const t = (o.tamano === 'large' || o.tamano === 'small') ? o.tamano : null;
+  if (nn < 5) return { modo: 'sin-senal', n: nn, superpuestos: si, ratio, tamano: null };
+  if (si <= 1 && ratio != null && ratio <= 0.15) return { modo: 'limpio', n: nn, superpuestos: si, ratio, tamano: t };
+  if (ratio != null && ratio >= 0.5) return { modo: 'con-texto', n: nn, superpuestos: si, ratio, tamano: t };
+  return { modo: 'mixto', n: nn, superpuestos: si, ratio, tamano: t };
+}
+// Valida una señal que llega de afuera (la firma reenviada por el
+// front): el modo NO se confía — se re-deriva de los conteos con la
+// misma vara. Sin conteos válidos → null (sin-señal manda).
+function textoFeedValido(tf) {
+  if (!tf || typeof tf !== 'object') return null;
+  if (!TEXTO_FEED_MODOS.includes(tf.modo)) return null;
+  if (typeof tf.n !== 'number' || typeof tf.superpuestos !== 'number') return null;
+  return textoFeedFromCounts({ n: tf.n, superpuestos: tf.superpuestos, tamano: tf.tamano });
+}
+
 // posts: salida de parseEmbedPosts (o ítems de web con type/thumb).
 // opts: { vision: async (items) => [{que, encuadre, angulo, luz, texto}...],
 //         visionTimeoutMs (default 8000), source: 'tu feed' | 'tu web' }.
@@ -1057,7 +1092,7 @@ async function trialStyleSignature(posts, opts = {}) {
         if (Array.isArray(r) && r.length) vis = r;
       } catch (_) { vis = null; }
     }
-    const validVis = (v) => v && typeof v === 'object' && FIRMA_QUE.includes(v.que) && FIRMA_ENCUADRE.includes(v.encuadre) && FIRMA_ANGULO.includes(v.angulo) && FIRMA_LUZ.includes(v.luz) && (v.texto === true || v.texto === false || v.texto == null);
+    const validVis = (v) => v && typeof v === 'object' && FIRMA_QUE.includes(v.que) && FIRMA_ENCUADRE.includes(v.encuadre) && FIRMA_ANGULO.includes(v.angulo) && FIRMA_LUZ.includes(v.luz) && (v.texto === true || v.texto === false || v.texto == null) && (v.texto_superpuesto === true || v.texto_superpuesto === false || v.texto_superpuesto == null);
     const seen = (vis || []).filter(validVis);
     const que = firmaCount(seen.map((v) => v.que));
     const encuadre = firmaCount(seen.map((v) => v.encuadre));
@@ -1065,6 +1100,13 @@ async function trialStyleSignature(posts, opts = {}) {
     const luz = firmaCount(seen.map((v) => v.luz));
     const textoEnImagen = { si: 0, no: 0 };
     seen.forEach((v) => { if (v.texto === true) textoEnImagen.si++; else if (v.texto === false) textoEnImagen.no++; });
+    // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) Conteo del texto
+    // SUPERPUESTO: solo los posteos que la visión juzgó en este eje
+    // cuentan para la n de la señal (un posteo sin juicio no presume
+    // ni limpio ni con texto).
+    const superpuestos = { si: 0, no: 0 };
+    seen.forEach((v) => { if (v.texto_superpuesto === true) superpuestos.si++; else if (v.texto_superpuesto === false) superpuestos.no++; });
+    const textoFeed = textoFeedFromCounts({ n: superpuestos.si + superpuestos.no, superpuestos: superpuestos.si, tamano: null });
     const qMode = firmaMode(que, FIRMA_QUE);
     const eMode = firmaMode(encuadre, FIRMA_ENCUADRE);
     const lMode = firmaMode(luz, FIRMA_LUZ);
@@ -1077,7 +1119,7 @@ async function trialStyleSignature(posts, opts = {}) {
       count: qMode.count,
     } : null;
     return {
-      n, tipos, que, encuadre, angulo, luz, texto_en_imagen: textoEnImagen,
+      n, tipos, que, encuadre, angulo, luz, texto_en_imagen: textoEnImagen, superpuestos, texto_feed: textoFeed,
       duraciones: { n: durs.length, mediana_seg: med == null ? null : Math.round(med * 10) / 10 },
       dominante, procedencia,
       sin_video: tipos.video === 0,
@@ -1416,6 +1458,8 @@ module.exports = {
   FIRMA_ANGULO,
   FIRMA_LUZ,
   trialStyleSignature,
+  textoFeedFromCounts,
+  textoFeedValido,
   firmaStyleCode,
   firmaGoalLines,
   localizeTrialPhotos,

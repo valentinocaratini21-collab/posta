@@ -32,8 +32,18 @@ function kindOfTipo(tipo) {
 
 // Cuántos textos lleva una tanda de N posteos imagen: 2 de 5 (≈40%),
 // mínimo 1. Para la semana canónica de 5: exactamente 2.
-function textCountForBatch(n) {
-  return Math.max(1, Math.round((Number(n) || 0) * 2 / 5));
+// (LOTE TEXTO-SEGÚN-EL-FEED · pieza 5) Con la señal del feed del
+// cliente (digest.texto_feed), la frecuencia copia la costumbre de
+// la marca con la MISMA vara de la prueba: feed limpio → 0 textos;
+// con-texto → round(ratio × N); mixto → round(ratio × N) acotado a
+// 1..3. Sin señal (o señal en 'sin-senal'), la cuenta de siempre.
+function textCountForBatch(n, textoFeed) {
+  const nn = Number(n) || 0;
+  const tf = (textoFeed && typeof textoFeed === 'object') ? textoFeed : null;
+  if (tf && tf.modo === 'limpio') return 0;
+  if (tf && tf.modo === 'con-texto') return Math.max(0, Math.round(nn * (typeof tf.ratio === 'number' ? tf.ratio : 0.5)));
+  if (tf && tf.modo === 'mixto') return Math.min(3, Math.max(1, Math.round(nn * (typeof tf.ratio === 'number' ? tf.ratio : 0.3))));
+  return Math.max(1, Math.round(nn * 2 / 5));
 }
 
 // Modos de una tanda NUEVA (pipeline semanal): 'text' | 'clean' para
@@ -42,7 +52,7 @@ function textCountForBatch(n) {
 // hace el worker de generateWeekDrafts) queda EXENTO de la cuenta, como
 // el reel en el demo: su portada lleva texto por formato y no consume
 // uno de los lugares con texto.
-function planWeekTextModes(picks, deficit) {
+function planWeekTextModes(picks, deficit, textoFeed) {
   const list = Array.isArray(picks) ? picks : [];
   let carouselIdx = -1;
   try {
@@ -53,7 +63,7 @@ function planWeekTextModes(picks, deficit) {
     }
   } catch (e) {}
   const topics = list.map((p) => ({ kind: kindOfTipo(p && p.tipo) }));
-  const modes = captions.assignTextModes(topics, carouselIdx, textCountForBatch(deficit != null ? deficit : list.length));
+  const modes = captions.assignTextModes(topics, carouselIdx, textCountForBatch(deficit != null ? deficit : list.length, textoFeed));
   return { modes, carouselIdx };
 }
 
@@ -62,10 +72,10 @@ function planWeekTextModes(picks, deficit) {
 // pieza incluida en la posición `selfPos`. Corre el MISMO asignador:
 // si la semana ya tiene sus textos mejor rankeados, la pieza sale
 // limpia; si hay lugar y su kind rankea, sale con texto.
-function modeFromWeekKinds(kinds, selfPos) {
+function modeFromWeekKinds(kinds, selfPos, textoFeed) {
   const list = Array.isArray(kinds) ? kinds : [];
   const topics = list.map((kind) => ({ kind }));
-  const modes = captions.assignTextModes(topics, -1, textCountForBatch(topics.length));
+  const modes = captions.assignTextModes(topics, -1, textCountForBatch(topics.length, textoFeed));
   return modes[selfPos] || 'text';
 }
 

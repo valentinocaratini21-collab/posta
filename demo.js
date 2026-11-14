@@ -1830,6 +1830,22 @@ function pickFirstPostCandidates(o) {
 //     verificado, NO se muestra: la cadena sigue (addendum 4:
 //     perfección antes que velocidad — ningún timeout fuerza la
 //     salida; el límite real es el tope de gasto de IA).
+
+// (LOTE TEXTO-SEGÚN-EL-FEED · pieza 6) EL PESO DEL TITULAR COPIA
+// AL FEED: en piezas con texto de un feed con-texto, la escala del
+// titular sale del tamaño típico del feed ('large' → 1,45 — la
+// escala que vivía solo en el camino ilustrado, ahora en todos los
+// compuestos). En limpio no hay titular que escalar; en mixto y
+// sin-señal manda la escala 1 de siempre. La banda (la zona) sigue
+// siendo la libre de la foto: acá solo se copia el peso.
+function headlineScaleForTextoFeed(textoFeed) {
+  try {
+    const tf = (textoFeed && typeof textoFeed === 'object') ? textoFeed : null;
+    if (!tf || tf.modo !== 'con-texto') return 1;
+    return tf.tamano === 'large' ? 1.45 : 1;
+  } catch (e) { return 1; }
+}
+
 function primerPosteoGate(o) {
   const oo = o || {};
   const star = String(oo.star || '').trim();
@@ -1855,11 +1871,27 @@ function primerPosteoGate(o) {
   // arranque) + puerta de precios.
   const titularPalabras = headline ? headline.split(/\s+/).filter(Boolean).length : 0;
   let titularOk = !!headline && titularPalabras <= 6;
-  if (!titularOk) motivos.push('titular-largo-o-vacio');
+  // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 3) LA PUERTA DE ENCAJE: con
+  // señal de feed limpio, un slot 0 con texto NO pasa (motivo
+  // texto-superpuesto-feed-limpio) y a un slot 0 limpio NO se le
+  // exige titular (se registra por_feed_limpio: el titular de la
+  // pieza no se muestra, así que tampoco se le aplican los chequeos
+  // de titular). Sin señal — o con la señal en otro modo — el
+  // contrato de siempre no cambia en nada.
+  const feedModoGate = oo.textoFeed && typeof oo.textoFeed === 'object' ? (oo.textoFeed.modo || null) : null;
+  const modoPiezaGate = oo.textMode === 'clean' ? 'clean' : (oo.textMode === 'text' ? 'text' : null);
+  let porFeedLimpio = false;
+  if (feedModoGate === 'limpio' && modoPiezaGate === 'text') {
+    titularOk = false;
+    motivos.push('texto-superpuesto-feed-limpio');
+  } else {
+    if (feedModoGate === 'limpio' && modoPiezaGate === 'clean') { porFeedLimpio = true; titularOk = true; }
+    if (!titularOk) motivos.push('titular-largo-o-vacio');
+  }
   let textoClase = null;
   if (lang === 'en') {
     const names = [star, temaFinal].filter(Boolean);
-    if (clientDigest.enSpliceLint(headline, names) || clientDigest.enHangingTail(headline)) { titularOk = false; textoClase = textoClase || 'fragmento-titular'; }
+    if (!porFeedLimpio && (clientDigest.enSpliceLint(headline, names) || clientDigest.enHangingTail(headline))) { titularOk = false; textoClase = textoClase || 'fragmento-titular'; }
     if (caption && (clientDigest.enSpliceLint(caption, names)
       || caption.split(/\n+/).some((l) => { const t = l.trim(); return t && !/[.!?…]["']?$/.test(t) && !!clientDigest.enHangingTail(t); }))) textoClase = textoClase || 'fragmento-caption';
   }
@@ -1911,13 +1943,19 @@ function primerPosteoGate(o) {
       ok: estrellaOk,
     },
     texto: {
-      titular: headline || null,
-      titular_palabras: titularPalabras,
+      titular: porFeedLimpio ? null : (headline || null),
+      titular_palabras: porFeedLimpio ? 0 : titularPalabras,
       titular_ok: titularOk,
       titular_reparado: !!oo.titularReparado,
       caption_ok: captionOk,
       clase_frenada: textoClase,
       precio: precioReg,
+      // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 3) El juicio de encaje
+      // registrado: modo de la pieza, modo del feed y si la pieza
+      // salió limpia POR la costumbre del feed.
+      modo_pieza: modoPiezaGate,
+      feed_modo: feedModoGate,
+      por_feed_limpio: porFeedLimpio,
     },
     foto: {
       fuente: photoSource,
@@ -2671,11 +2709,30 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // semana es exactamente la de hoy.
   const estiloOK = parseEstiloVisual(estiloVisual);
   if (estiloOK) specPosts.forEach((sp) => { sp.estilo_visual = estiloOK; });
-  const draftTextN = estiloOK === 'limpia' ? 0 : estiloOK === 'banda' ? specPosts.length : draftMod.draftTextCount(draft);
+  // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 2) LA SEÑAL DEL FEED GOBIERNA
+  // LA DOSIFICACIÓN: la costumbre de la marca manda sobre el gusto
+  // del visitante. Con feed limpio, las 5 piezas salen 'clean'
+  // (incluidos el slot 0 y los forzados de póster/wow/campeona, que
+  // quedan subordinados abajo: ese text_mode viaja al rescate de
+  // fondo, así que si el titular sobrevive acá reaparece ahí). Con
+  // con-texto, la frecuencia copia el ratio del feed. Con mixto,
+  // copia el ratio acotado a 1..3. Sin señal, la cadena actual
+  // (estilo del visitante → draft → default 2) manda como hoy.
+  const tfSpec = (digest && digest.texto_feed && typeof digest.texto_feed === 'object') ? digest.texto_feed : null;
+  const tfModo = tfSpec && (tfSpec.modo === 'limpio' || tfSpec.modo === 'con-texto' || tfSpec.modo === 'mixto') ? tfSpec.modo : null;
+  let draftTextN;
+  if (tfModo === 'limpio') draftTextN = 0;
+  else if (tfModo === 'con-texto') draftTextN = Math.round((typeof tfSpec.ratio === 'number' ? tfSpec.ratio : 0.5) * specPosts.length);
+  else if (tfModo === 'mixto') draftTextN = Math.min(3, Math.max(1, Math.round((typeof tfSpec.ratio === 'number' ? tfSpec.ratio : 0.3) * specPosts.length)));
+  else draftTextN = estiloOK === 'limpia' ? 0 : estiloOK === 'banda' ? specPosts.length : draftMod.draftTextCount(draft);
   const textModes = captions.assignTextModes(topics, Math.min(2, Math.max(0, specPosts.length - 1)), draftTextN);
   // El póster es una pieza tipográfica: sin texto no existe. Si quedó
   // limpio, entra en las 2 y sale la pieza con texto de menor prioridad.
-  for (const pi of posterAt) {
+  // (LOTE TEXTO-SEGÚN-EL-FEED) Con feed limpio el forzado NO corre:
+  // el póster con texto sobre un feed limpio es exactamente la falla
+  // que esta regla cierra (la pieza ganadora de póster la resuelve
+  // la cadena de rescate, no un titular).
+  if (tfModo !== 'limpio') for (const pi of posterAt) {
     if (textModes[pi] !== 'text') {
       textModes[pi] = 'text';
       let worst = -1; let worstRank = -1;
@@ -2713,7 +2770,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     // principal: el estilo es la última palabra sobre el look.
     const champText = estiloOK ? null : draftMod.draftChampionText(draft);
     const vIdx0 = Math.min(2, Math.max(0, specPosts.length - 1));
-    if (champText && specPosts[0] && !specPosts[0].poster && vIdx0 !== 0) specPosts[0].text_mode = champText;
+    // (LOTE TEXTO-SEGÚN-EL-FEED) Con feed limpio la campeona queda
+    // subordinada a la señal: no puede imponer texto al slot 0.
+    if (champText && tfModo !== 'limpio' && specPosts[0] && !specPosts[0].poster && vIdx0 !== 0) specPosts[0].text_mode = champText;
   } catch (e) { /* el draft nunca frena la prueba */ }
   // (2026-10-18) PILA DE TEXTO ACOTADA (amendment, misma vara que
   // clientes): en las piezas CON texto, el máximo es titular (≤6) + UN
@@ -2973,6 +3032,8 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         temaFinal: t0.digest_anchor || t0.headline || null,
         retematizado: !!(ppTemaOriginal && esperadoPP && ppTemaOriginal !== esperadoPP),
         headline: specPosts[0].headline || '',
+        textMode: specPosts[0].text_mode || 'text',
+        textoFeed: (digest && digest.texto_feed) || null,
         caption: t0.caption || '',
         lang,
         photoSource: photoSourceOf.get(0) || null,
@@ -2988,7 +3049,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     } catch (e) { primerPosteo = null; /* el registro jamás frena el spec */ }
   }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, texto_feed: tfSpec || null, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -3208,7 +3269,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   let slot0Arming = false;
   const sealFirstAttempt = async (gen) => {
     if (!gen || !gen.b64) return false;
-    const compBuf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: specPosts[0] && specPosts[0].text_mode === 'clean' ? '' : (specPosts[0] && specPosts[0].headline ? specPosts[0].headline : ''), gradeHex: accent, workDir: runDir, index: 0, logoPath: logoPath || null }).catch(() => null);
+    const compBuf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: specPosts[0] && specPosts[0].text_mode === 'clean' ? '' : (specPosts[0] && specPosts[0].headline ? specPosts[0].headline : ''), gradeHex: accent, workDir: runDir, index: 0, logoPath: logoPath || null, headlineScale: headlineScaleForTextoFeed(digest && digest.texto_feed) }).catch(() => null);
     if (!compBuf) return false;
     if (logoPath) {
       if (typeof verifySealedPiece !== 'function') { firstLogoQa = { estado: 'sin-verificador' }; return false; }
@@ -3249,7 +3310,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       const topicTextI = [tI.headline, tI.subline].filter(Boolean).join(' ');
       const genI = await raceMsLocal(generateImage({ prompt: promptI, topicText: topicTextI }), 300000).catch(() => null);
       if (!genI || !genI.b64) { rescateSemana.push({ idx: i, cadena: 'en-rescate', motivo: 'generacion-fallo' }); continue; }
-      const compI = await demoAi.compositeDemoPiece({ b64: genI.b64, headline: spI.text_mode === 'clean' ? '' : (spI.headline || ''), gradeHex: accent, workDir: runDir, index: i, logoPath: logoPath || null }).catch(() => null);
+      const compI = await demoAi.compositeDemoPiece({ b64: genI.b64, headline: spI.text_mode === 'clean' ? '' : (spI.headline || ''), gradeHex: accent, workDir: runDir, index: i, logoPath: logoPath || null, headlineScale: headlineScaleForTextoFeed(digest && digest.texto_feed) }).catch(() => null);
       let logoQaI = null;
       if (compI && logoPath && typeof verifySealedPiece === 'function') { try { logoQaI = await verifySealedPiece({ b64: compI.toString('base64'), business }); } catch (e) { logoQaI = null; } }
       if (compI && (!logoPath || (logoQaI && logoQaI.ok))) {
@@ -4214,7 +4275,7 @@ module.exports = {
   // (LOTE IMAGEN-GENERADA-SIN-FOTO-REAL · v960) Prompt de marca, predicado
   // sin-foto-real y generador del primer posteo (inyectado por el server).
   buildNoPhotoBrandPrompt, firstPostNeedsGeneratedImage, generateFirstPostImageIfNeeded,
-  primerPosteoGate, logoSupportFor,
+  primerPosteoGate, logoSupportFor, headlineScaleForTextoFeed,
   FIRST_POST_RENDER_BUDGET_MS, FIRST_POST_VIDEO_BUDGET_MS, FIRST_POST_RETRY_BUDGET_MS,
   raceMsLocal,
   applyVoiceToTopics,

@@ -1386,8 +1386,8 @@ async function classifyFeedPostStyles(items, lang) {
       imgIdx = urls.map((o) => o.i);
     }
     const promptText = lang === 'en'
-      ? `These photos are the latest posts of ONE business on Instagram, in order. For EACH photo tell me: what it shows (producto_primer_plano | producto_accion | persona_camara | local | texto | otro), the framing (primer_plano | plano_medio | plano_general | cenital | otro), the angle (frontal | picado | contrapicado | otro), the light (natural | calida | estudio | noche | otro) and whether there is text in the image (true/false). Reply ONLY with JSON {"posts": [...]} with ONE entry per photo, in the same order. If a photo is unclear, use "otro" and texto null.`
-      : `Estas fotos son los últimos posteos de UN negocio en Instagram, en orden. Para CADA foto decime: qué se muestra (producto_primer_plano | producto_accion | persona_camara | local | texto | otro), el encuadre (primer_plano | plano_medio | plano_general | cenital | otro), el ángulo (frontal | picado | contrapicado | otro), la luz (natural | calida | estudio | noche | otro) y si hay texto en la imagen (true/false). Respondé SOLO un JSON {"posts": [...]} con UNA entrada por foto, en el mismo orden. Si una foto no se distingue, usá "otro" y texto null.`;
+      ? `These photos are the latest posts of ONE business on Instagram, in order. For EACH photo tell me: what it shows (producto_primer_plano | producto_accion | persona_camara | local | texto | otro), the framing (primer_plano | plano_medio | plano_general | cenital | otro), the angle (frontal | picado | contrapicado | otro), the light (natural | calida | estudio | noche | otro), whether there is text in the image (true/false) and whether the text is OVERLAID ("texto_superpuesto": true/false): overlaid text = words ADDED on top of the photo (a headline, a banner, a graphic panel, design text); text that was already IN the photographed world (shop signs, menus, storefronts, labels, packaging) is NOT overlaid — if there is no text of any kind, texto_superpuesto is false. Reply ONLY with JSON {"posts": [...]} with ONE entry per photo, in the same order. If a photo is unclear, use "otro" and texto null.`
+      : `Estas fotos son los últimos posteos de UN negocio en Instagram, en orden. Para CADA foto decime: qué se muestra (producto_primer_plano | producto_accion | persona_camara | local | texto | otro), el encuadre (primer_plano | plano_medio | plano_general | cenital | otro), el ángulo (frontal | picado | contrapicado | otro), la luz (natural | calida | estudio | noche | otro), si hay texto en la imagen (true/false) y si el texto es SUPERPUESTO ("texto_superpuesto": true/false): texto superpuesto = palabras AGREGADAS sobre la foto (un titular, una banda, una placa gráfica, texto de diseño); el texto que ya estaba EN el mundo fotografiado (carteles del local, menúes, vidrieras, etiquetas, packaging) NO es superpuesto — si no hay texto de ningún tipo, texto_superpuesto es false. Respondé SOLO un JSON {"posts": [...]} con UNA entrada por foto, en el mismo orden. Si una foto no se distingue, usá "otro" y texto null.`;
     const resp = await Promise.race([
       fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -1410,10 +1410,11 @@ async function classifyFeedPostStyles(items, lang) {
     const valid = (v) => v && typeof v === 'object'
       && feedAudit.FIRMA_QUE.includes(v.que) && feedAudit.FIRMA_ENCUADRE.includes(v.encuadre)
       && feedAudit.FIRMA_ANGULO.includes(v.angulo) && feedAudit.FIRMA_LUZ.includes(v.luz)
-      && (v.texto === true || v.texto === false || v.texto == null);
+      && (v.texto === true || v.texto === false || v.texto == null)
+      && (v.texto_superpuesto === true || v.texto_superpuesto === false || v.texto_superpuesto == null);
     parsed.posts.slice(0, imgIdx.length).forEach((v, k) => {
       if (!valid(v)) return;
-      out[imgIdx[k]] = { que: v.que, encuadre: v.encuadre, angulo: v.angulo, luz: v.luz, texto: v.texto == null ? null : !!v.texto };
+      out[imgIdx[k]] = { que: v.que, encuadre: v.encuadre, angulo: v.angulo, luz: v.luz, texto: v.texto == null ? null : !!v.texto, texto_superpuesto: v.texto_superpuesto == null ? null : !!v.texto_superpuesto };
     });
     return out;
   } catch (_) { return null; }
@@ -3274,7 +3275,11 @@ function weekTextModeFor(uid, weekKey, kind, selfId) {
     else kinds.push(kindOfTipo(r.tipo));
   }
   if (selfPos < 0) { selfPos = kinds.length; kinds.push(kind); }
-  return cleanPieces.modeFromWeekKinds(kinds, selfPos);
+  // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 5) Pieza suelta en la semana
+  // de un cliente de feed limpio → 'clean' por la misma señal.
+  let tfSingle = null;
+  try { const dgS = clientDigest.getDigest(db, uid); tfSingle = (dgS && dgS.texto_feed) || null; } catch (e) {}
+  return cleanPieces.modeFromWeekKinds(kinds, selfPos, tfSingle);
 }
 
 // "Hacelo": crea el posteo como BORRADOR por el pipeline normal de un posteo
@@ -19069,7 +19074,13 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // 'clean' (sin titular hacia la generación; el caption cierra con
     // CTA). El pick del carousel queda exento de la cuenta (planWeekTextModes).
     try {
-      const tm = planWeekTextModes(picks, deficit);
+      // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 5) La semana del cliente
+      // lee la MISMA señal con la MISMA vara: el texto_feed del
+      // digest (que la prueba siembra al importar). Sin señal
+      // registrada, la dosificación sale como hoy.
+      let tfWeek = null;
+      try { const dgW = clientDigest.getDigest(db, uid); tfWeek = (dgW && dgW.texto_feed) || null; } catch (e) {}
+      const tm = planWeekTextModes(picks, deficit, tfWeek);
       picks.forEach((p, ix) => { p._textMode = tm.modes[ix] || 'text'; });
       const nText = picks.slice(0, deficit).filter((p) => p._textMode === 'text').length;
       console.log(`[pipeline:${tag}] usuario ${uid}: limpieza — ${nText} con texto / ${Math.max(0, deficit - nText)} limpias en la tanda${tm.carouselIdx >= 0 ? ` (carousel exento: pick ${tm.carouselIdx})` : ''}`);
@@ -25104,9 +25115,20 @@ async function generateNoPhotoFirstPostImage({ prompt, topicText, apiKey, gemini
 // tope de gasto entre intentos (addendum 4: el límite real es el
 // gasto de IA, no el tiempo). Devuelve { buf, engine, qa, logoQa } o
 // null si no se logró (la pieza queda en armado honesto).
-async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logoPath = null, headline = '', textMode = '', accent = null, workDir, index = 0, apiKey = '', geminiKey = '' } = {}) {
+async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logoPath = null, headline = '', textMode = '', accent = null, workDir, index = 0, apiKey = '', geminiKey = '', textoFeed = null } = {}) {
   if (!workDir || !prompt) return null;
   const key = apiKey || process.env.OPENAI_API_KEY || '';
+  // (LOTE TEXTO-SEGÚN-EL-FEED · piezas 4+6) DEFENSA EN EL COMPUESTO:
+  // si una pieza con texto llega a componerse sobre un feed LIMPIO
+  // (un spec cacheado de antes de la regla, un forzado residual), se
+  // compone SIN titular en vez de descartarse — la escena se salva,
+  // el titular no (registro texto:'sin-titular-feed-limpio', espejo
+  // del 'sin-titular' de abajo). Y en un feed con-texto, la escala
+  // del titular copia el tamaño típico del feed.
+  const tfRes = (textoFeed && typeof textoFeed === 'object') ? textoFeed : null;
+  const feedLimpioRes = !!(tfRes && tfRes.modo === 'limpio');
+  const headlineRes = feedLimpioRes ? '' : (textMode === 'clean' ? '' : (headline || ''));
+  const scaleRes = demo.headlineScaleForTextoFeed(tfRes);
   let promptNow = prompt;
   let lastLogoQa = null;
   for (let att = 1; att <= 3; att++) {
@@ -25118,9 +25140,9 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
       // no se sella una escena mala — la cadena sigue en fondo.
       return null;
     }
-    const buf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: textMode === 'clean' ? '' : (headline || ''), gradeHex: accent, workDir, index, headlineScale: 1, inkHex: null, zone: 'top', logoPath: logoPath || null }).catch(() => null);
+    const buf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: headlineRes, gradeHex: accent, workDir, index, headlineScale: scaleRes, inkHex: null, zone: 'top', logoPath: logoPath || null }).catch(() => null);
     if (!buf) return null;
-    if (headline && textMode !== 'clean') {
+    if (headlineRes) {
       const tqa = await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: key }).catch(() => null);
       if (tqa && !tqa.passed) {
         // Titular compuesto ilegible: se re-compone SIN titular (la
@@ -25141,7 +25163,7 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
         continue;
       }
     }
-    return { buf, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa };
+    return { buf, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa, ...(feedLimpioRes && textMode === 'text' ? { texto: 'sin-titular-feed-limpio' } : {}) };
   }
   return null;
 }
@@ -25177,13 +25199,13 @@ async function scheduleWeekRescue(o) {
       for (const piece of o.pieces) {
         const idx = piece.idx | 0;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
-        const r = await rescuePieceWithSeal({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '' }).catch(() => null);
+        const r = await rescuePieceWithSeal({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '', textoFeed: (payload && payload.digest && payload.digest.texto_feed) || null }).catch(() => null);
         if (!r) continue;
         const fresh = readCache();
         if (!fresh || !Array.isArray(fresh.posts) || imported()) break;
         payload = fresh;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
-        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null } };
+        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) } };
         if (payload.design && Array.isArray(payload.design.posts) && payload.design.posts[idx]) payload.design.posts[idx].photo_source = 'ai-generated';
         if (idx === 0 && payload.primer_posteo) {
           payload.primer_posteo.etapa = 'fondo';
@@ -25770,6 +25792,14 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       ];
       if (hexes && hexes[0]) compArgs.push('--grade', String(hexes[0])); // look de color del feed
       compArgs.push('--font', brandFontOf(settings));
+      // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 6) El peso del titular
+      // copia el tamaño típico del feed del cliente (señal del
+      // digest): con-texto + titulares grandes → escala 1,45.
+      try {
+        const dgScale = clientDigest.getDigest(db, uid);
+        const scaleReg = demo.headlineScaleForTextoFeed(dgScale && dgScale.texto_feed);
+        if (scaleReg > 1) compArgs.push('--scale', String(scaleReg));
+      } catch (e) {}
       compArgs.push(...logoSealArgsForUser(uid)); // (LOTE PERSONALIZACIÓN · ítem 1) sello del logo del cliente, si lo hay
       execFileSync('python3', compArgs, { timeout: 30000 });
       console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
@@ -33444,6 +33474,20 @@ function parseTrialStyle(v) {
         const dc = num(s.firma.dominante.count, 12); if (dc != null) dm.count = dc;
         if (dm.que) fm.dominante = dm;
       }
+      // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) El eje de texto de la
+      // firma deja de descartarse: texto_en_imagen (cualquier texto),
+      // superpuestos (solo el agregado sobre la foto) y la señal
+      // texto_feed — con el modo RE-DERIVADO de los conteos por la
+      // misma vara (feed-audit), nunca confiado tal cual del request.
+      const conteo12 = (o) => {
+        if (!o || typeof o !== 'object') return null;
+        const c = {}; const cs = num(o.si, 12); const cn = num(o.no, 12);
+        if (cs != null) c.si = cs; if (cn != null) c.no = cn;
+        return Object.keys(c).length ? c : null;
+      };
+      const tei = conteo12(s.firma.texto_en_imagen); if (tei) fm.texto_en_imagen = tei;
+      const spu = conteo12(s.firma.superpuestos); if (spu) fm.superpuestos = spu;
+      const tfv = feedAudit.textoFeedValido(s.firma.texto_feed); if (tfv) fm.texto_feed = tfv;
       if (Object.keys(fm).length) out.firma = fm;
     }
     // (ESTUDIO-PROFUNDO M2 · RANKEO PROPIO) Top 3 por tasa de respuesta
@@ -34295,6 +34339,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       } catch (e) { /* sin embed: la estrella se infiere como hoy */ }
     }
     const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet, starSignals: _trialStarSignals, feedPosts: _embedPostsVoz || null });
+    // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) La señal de texto del
+    // feed viaja DENTRO del digest de la prueba (la firma validada
+    // del estilo la trae): el spec la lee de acá, y el digest
+    // registrado la hereda por seedFromTrialDigest → saveDigest.
+    if (trialDigest && estilo && estilo.firma && estilo.firma.texto_feed) trialDigest.texto_feed = estilo.firma.texto_feed;
     // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Esta ruta no pasa el feed al digest
     // (feed: null): sin captions, la voz quedaba vacía aunque el @ las
     // tenga. Se reponen SOLO los marcadores de voz (best-effort, carrera
@@ -35639,6 +35688,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap, starSignals: _trialStarSignalsS,
       feedPosts: (trialData && Array.isArray(trialData.posts)) ? trialData.posts : null,
     });
+    // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) Igual que en generate: la
+    // señal de texto del feed viaja dentro del digest.
+    if (trialDigest && estilo && estilo.firma && estilo.firma.texto_feed) trialDigest.texto_feed = estilo.firma.texto_feed;
     // (LOTE IDIOMA-POSTEO-MARCA · v922) Igual que en /api/trial/generate:
     // el idioma del CONTENIDO es el idioma en que postea LA MARCA
     // (captions del feed primero, web después). `lang` sigue mandando
@@ -35899,6 +35951,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           feedClasificacion.motivo = 'foto-real-de-producto-con-marca-admitida';
           console.log('[posta] trial stream: clasificación «illustrated» VETADA por foto real de producto con marca admitida — el feed queda photo');
         }
+        // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 6) El tamaño típico del
+        // titular que el clasificador vio en ESTA corrida completa
+        // la señal (la firma del prefill no lo tiene): viaja en el
+        // digest → caché → digest registrado, y de ahí a la escala
+        // de los compuestos (rescate y pipeline de clientes).
+        if (trialDigest && trialDigest.texto_feed && cls.formula && (cls.formula.headline === 'large' || cls.formula.headline === 'small')) {
+          trialDigest.texto_feed.tamano = cls.formula.headline;
+        }
       }
       if (cls && cls.kind === 'illustrated' && !(feedClasificacion && feedClasificacion.vetada)) {
         feedKind = 'illustrated';
@@ -36050,11 +36110,19 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   b64: gen.b64, headline: '', gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor,
                 });
               }
+              // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 4) DEFENSA EN EL
+              // COMPUESTO: si esta pieza quedó 'text' pero el feed
+              // del negocio es LIMPIO, se compone SIN titular (el
+              // motivo queda registrado como 'sin-titular-feed-limpio')
+              // — nunca se descarta la escena por esto.
+              const tfMake = (trialDigest && trialDigest.texto_feed) || null;
+              const feedLimpioMake = !!(tfMake && tfMake.modo === 'limpio');
               let buf = await demoAi.compositeDemoPiece({
-                b64: gen.b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor, zone: 'top',
+                b64: gen.b64, headline: feedLimpioMake ? '' : made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor, zone: 'top',
               });
               let textInfo = { passed: true, zone: 'top', retried: false };
-              const textQa = buf ? await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: demoApiKey }) : null;
+              if (feedLimpioMake) textInfo = { passed: true, zone: 'none', retried: false, motivo: 'sin-titular-feed-limpio' };
+              const textQa = (!feedLimpioMake && buf) ? await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: demoApiKey }) : null;
               if (textQa) textInfo.passed = textQa.passed;
               if (buf && textQa && !textQa.passed && costs.demoAiCapOk()) {
                 // (v862) Sin escape abajo: la pieza sale LIMPIA (el
@@ -36239,7 +36307,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           const topicTextI = [specPosts[i] && specPosts[i].headline, specPosts[i] && specPosts[i].subline].filter(Boolean).join(' ');
           let r = null;
           if (demoApiKey && costs.demoAiCapOk()) {
-            r = await rescuePieceWithSeal({ prompt: promptI, topicText: topicTextI, business, logoPath: trialLogoPathS, headline: made[i].headline || '', textMode: specPosts[i].text_mode || '', accent, workDir: runDir, index: i, apiKey: demoApiKey, geminiKey }).catch(() => null);
+            r = await rescuePieceWithSeal({ prompt: promptI, topicText: topicTextI, business, logoPath: trialLogoPathS, headline: made[i].headline || '', textMode: specPosts[i].text_mode || '', accent, workDir: runDir, index: i, apiKey: demoApiKey, geminiKey, textoFeed: (trialDigest && trialDigest.texto_feed) || null }).catch(() => null);
           }
           if (r) {
             bufs[i] = r.buf;
@@ -36256,7 +36324,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               estilo_visual: specPosts[i].estilo_visual || null,
               ai: true,
               engine: r.engine,
-              qa: { ...(r.qa || {}), logo: r.logoQa || null },
+              qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) },
             };
             if (specPosts[i]) specPosts[i].photo_source = 'ai-generated';
             const _prR = trialPostPrompt({ post: posts[i], specPost: specPosts[i] || {}, paletteNames: estiloPaletteNames, tone: (estilo && estilo.tone) || null, lang });
@@ -36610,6 +36678,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         ppRecS.veredicto_spec = specVerd;
         if (ppRecS.foto) ppRecS.foto_spec = ppRecS.foto;
         ppRecS.etapa = 'final';
+        // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 3) La señal y el modo
+        // final de la pieza quedan registrados EN el veredicto de
+        // la pieza entregada: si el spec traía texto sobre un feed
+        // limpio, el motivo texto-superpuesto-feed-limpio del gate
+        // (en veredicto_spec) convive con este registro.
+        ppRecS.texto_feed = (trialDigest && trialDigest.texto_feed) || null;
+        ppRecS.texto_modo_final = (p0F && p0F.text_mode) || (specPosts[0] && specPosts[0].text_mode) || null;
         ppRecS.foto = { fuente: finFuente, cadena: finCadena, via: ppRecS.foto ? ppRecS.foto.via : null };
         ppRecS.veredicto = { pasa: finPasa, cadena: finCadena, motivos: finMotivos };
       } catch (e) { /* el registro jamás frena la prueba */ }
@@ -38519,7 +38594,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1021';
+const BUILD_ID = '20261105-v1022';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

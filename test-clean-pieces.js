@@ -127,7 +127,9 @@ ok('generator.js: la meta numérica está en el prompt y en CAPTION_CRAFT', () =
 console.log('== 4) Wiring en server.js (contratos) ==');
 const srv = fs.readFileSync('server.js', 'utf8');
 ok('generateWeekDrafts aplica la dosificación tras ordenar los picks', () => {
-  assert.ok(srv.includes('const tm = planWeekTextModes(picks, deficit);'));
+  // (LOTE TEXTO-SEGÚN-EL-FEED · re-pin con causa) La llamada suma el
+  // tercer argumento: la señal texto_feed del digest del cliente.
+  assert.ok(srv.includes('const tm = planWeekTextModes(picks, deficit, tfWeek);'));
   assert.ok(srv.includes("p._textMode = tm.modes[ix] || 'text'"));
 });
 ok('pieza limpia: sin titular hacia la generación y caption que cierra con CTA', () => {
