@@ -23971,7 +23971,15 @@ function pzHoyTiraHTML(dias, o) {
     const strip = dias.map((d, i) => {
       if (!d) return '';
       const done = d.revelado && d.post && String(d.post.status || '') === 'published';
-      const cls = 'pz-semana-dia' + (done ? ' done' : d.esHoy ? ' today' : (d.revelado || d.esPasado) ? '' : ' wait') + (selDia && d.key === selDia.key ? ' sel' : '');
+      // (LOTE TIRA-SEMANA-ESTADOS · 14/11 · idea Valentino: hecho y hoy
+      // ya NO se excluyen) Si el posteo de hoy ya salió (published
+      // verificado, el único camino a .done), el día lleva .done (verde
+      // con ✓) Y .today: el latido suave corre sobre el halo verde (CSS
+      // .done.today). Hoy sin salir sigue .today solo (• amarillo que
+      // late). El .wait queda solo para el futuro sin revelar; el día
+      // pasado sin posteo queda sin clase ni marca (bola hueca muda):
+      // un tick es «salió», nunca se pinta por posición en la semana.
+      const cls = 'pz-semana-dia' + (done ? ' done' : '') + (d.esHoy ? ' today' : '') + (!done && !d.esHoy && !(d.revelado || d.esPasado) ? ' wait' : '') + (selDia && d.key === selDia.key ? ' sel' : '');
       const mark = done ? '✓' : d.esHoy ? '•' : ''; // (v874) pendientes: punto hueco, sin marca
       return `<button type="button" class="${cls}" data-pz-hoy-tira-dia="${esc(d.key)}" aria-label="${esc(labels[i] || '')}"><span class="pz-semana-bola">${mark}</span>${labels[i] || ''}</button>`;
     }).join('');
