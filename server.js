@@ -16939,6 +16939,17 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         if (r.changes > 0) console.log(`[week-ensure] fundador ${uid}: ${r.changes} posteos liberados de revisión`);
       }
     } catch (e) { console.error('[week-ensure] liberar revisión:', e.message); }
+    // (LOTE LOGO-PRUEBA-REARME · puntos 1 y 4) SEMANA DE PRUEBA EN
+    // ARMADO: si el trial_cache de este usuario todavía tiene piezas
+    // en armado, la home NO presenta la semana parcial como final —
+    // la respuesta lo declara (trial_arming) y el cliente muestra el
+    // estado de armado con su refresco — y el RESUMIDOR re-abre la
+    // cadena de rescate si la anterior se agotó o quedó en espera
+    // (en segundo plano: esta respuesta no espera a la cadena).
+    let trialArming = false;
+    try { trialArming = semanaPruebaPendientesDeUsuario(uid).pendientes > 0; } catch (e) {}
+    if (trialArming) { try { rearmarSemanaPruebaDeUsuario(uid).catch(() => {}); } catch (e) {} }
+    const conArmado = (obj) => (trialArming ? { ...obj, trial_arming: true } : obj);
     // (LOTE RITUAL-1-OPCION · 6/11 · «un posteo por día») La tanda
     // semanal QUEDA FUERA: este endpoint ya no genera la semana ni
     // completa déficits (generateWeekDrafts NO se llama acá). Garantiza
@@ -16949,8 +16960,8 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
       const schedHoy = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
       recHoy = morningPostPush.pickTodayPost(schedHoy, tz, new Date());
     } catch (e) { /* sin programado legible: se intenta asegurar */ }
-    if (recHoy) return res.json({ ok: true, generating: false, count: 1, complete: true, week_key: wk });
-    if (!planOrTrialOk(uid)) return res.json({ ok: false, generating: false, reason: 'no_plan', week_key: wk });
+    if (recHoy) return res.json(conArmado({ ok: true, generating: false, count: 1, complete: true, week_key: wk }));
+    if (!planOrTrialOk(uid)) return res.json(conArmado({ ok: false, generating: false, reason: 'no_plan', week_key: wk }));
     // Gate de ADN "no generar a ciegas" (MISMA lógica que generateWeekDrafts):
     // si la cuenta no tiene descripción del negocio ni producto_estrella, no
     // disparar nada y avisar al frontend con reason:'no_dna' para que muestre
@@ -16963,7 +16974,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
       const dnaOk = (dna.producto_estrella || '').trim().length >= 3;
       if (!descOk && !dnaOk) {
         console.log(`[week-ensure] usuario ${uid}: sin ADN mínimo, no se genera a ciegas`);
-        return res.json({ ok: true, generating: false, reason: 'no_dna', week_key: wk });
+        return res.json(conArmado({ ok: true, generating: false, reason: 'no_dna', week_key: wk }));
       }
     } catch (e) { /* si falla el chequeo, dejar que el pipeline decida */ }
     // (COSTURA PAUSA-DURABLE × SIN-CHAT-REUBICACIÓN) El toque en
@@ -16985,7 +16996,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
     try {
       const last = LAST_WEEK_RESULT.get(uid);
       if (!toqueArmar && last && last.weekKey === wk && !last.ok && last.reason !== 'running' && Date.now() - (last.at || 0) < 10 * 60 * 1000) {
-        return res.json({ ok: true, generating: false, reason: last.reason || 'retry_cooldown', count: 0, week_key: wk });
+        return res.json(conArmado({ ok: true, generating: false, reason: last.reason || 'retry_cooldown', count: 0, week_key: wk }));
       }
     } catch (e) {}
     // Disparar en segundo plano: la respuesta vuelve al toque.
@@ -17000,7 +17011,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         console.error('[week-ensure] ensure-hoy:', e.message);
         try { LAST_WEEK_RESULT.set(uid, { ok: false, reason: 'exception', error: String(e.message || e).slice(0, 300), at: Date.now(), weekKey: wk }); } catch (e2) {}
       });
-    return res.json({ ok: true, generating: true, count: 0, missing: 1, week_key: wk });
+    return res.json(conArmado({ ok: true, generating: true, count: 0, missing: 1, week_key: wk }));
   } catch (e) {
     console.error('[week-ensure]:', e.message);
     return res.status(500).json({ ok: false, error: 'No se pudo verificar la semana.' });
@@ -21267,16 +21278,25 @@ function logoExtDeBytes(buf) {
   if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
   return 'png';
 }
-async function logoPaletaYArchivo(logoUrl, fileBase) {
+// (LOTE LOGO-PRUEBA-REARME · punto 4 del diagnóstico Blind Barber)
+// La foto de perfil de IG llega a la prueba como data: URI y la cosecha
+// histórica solo aceptaba https:// → logo_file quedaba '' SIEMPRE para
+// el invitado y la cadena de póster no podía sellar ninguna pieza. La
+// cosecha ahora acepta las TRES fuentes reales del logo: URL https,
+// data: URI (la foto de perfil ES el logo en la mayoría de los
+// negocios) y el logo del SITIO (favicon grande / apple-touch-icon /
+// logo del header). Todo pasa por el mismo embudo de archivo+paleta:
+// un logo cosechado es un archivo real en MEDIA_DIR o no es.
+function logoBufferDesdeDataUri(s) {
+  const m = /^data:image\/(?:png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(s || '').trim());
+  if (!m) return null;
   try {
-    if (!logoUrl || !/^https:\/\//.test(logoUrl)) return null;
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 10000);
-    let buf = null;
-    try {
-      const r = await fetch(logoUrl, { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' } });
-      if (!r.ok) return null;
-      buf = Buffer.from(await r.arrayBuffer());
-    } finally { clearTimeout(t); }
+    const buf = Buffer.from(m[1].replace(/\s+/g, ''), 'base64');
+    return buf.length >= 200 ? buf : null;
+  } catch (e) { return null; }
+}
+async function logoArchivoDesdeBuffer(buf, fileBase) {
+  try {
     if (!buf || buf.length < 200) return null;
     const file = `${fileBase}.${logoExtDeBytes(buf)}`;
     try { fs.writeFileSync(path.join(MEDIA_DIR, file), buf); } catch (e) { return null; }
@@ -21286,6 +21306,75 @@ async function logoPaletaYArchivo(logoUrl, fileBase) {
       paleta = (Array.isArray(cols) ? cols : []).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')).slice(0, 3).map((hex) => ({ hex: String(hex).toUpperCase(), rol: 'logo' }));
     } catch (e) { paleta = []; }
     return { paleta, file };
+  } catch (e) { return null; }
+}
+async function logoFetchBuffer(url, ms) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms || 10000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' } });
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    return buf.length ? buf : null;
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+async function logoPaletaYArchivo(logoUrl, fileBase) {
+  try {
+    if (!logoUrl) return null;
+    if (/^data:/i.test(logoUrl)) {
+      const bufD = logoBufferDesdeDataUri(logoUrl);
+      return bufD ? logoArchivoDesdeBuffer(bufD, fileBase) : null;
+    }
+    if (!/^https:\/\//.test(logoUrl)) return null;
+    const buf = await logoFetchBuffer(logoUrl);
+    return buf ? logoArchivoDesdeBuffer(buf, fileBase) : null;
+  } catch (e) { return null; }
+}
+// Candidatos a logo DENTRO del HTML del sitio, en orden de vara:
+// apple-touch-icon (suele ser el logo a buena resolución) → img del
+// header con «logo» en su src/alt/clase → <link rel=icon> de mayor
+// tamaño declarado. og:image NO entra: es la foto de portada del
+// negocio, no su logo (la vara es archivo de logo real).
+function logoCandidatosDelSitio(html, baseUrl) {
+  const out = []; const seen = new Set();
+  const push = (u, score) => {
+    try {
+      const abs = new URL(String(u || '').trim(), baseUrl).href;
+      if (!/^https:\/\//.test(abs) || seen.has(abs)) return;
+      seen.add(abs); out.push({ url: abs, score });
+    } catch (e) {}
+  };
+  const hrefDe = (tag) => { const m = /href=["']([^"']+)["']/i.exec(tag); return m ? m[1] : ''; };
+  for (const m of String(html || '').matchAll(/<link[^>]+>/gi)) {
+    const tag = m[0];
+    if (/rel=["'][^"']*apple-touch-icon/i.test(tag)) push(hrefDe(tag), 100);
+    else if (/rel=["'][^"']*icon/i.test(tag)) {
+      const sz = /sizes=["'](\d+)x\d+["']/i.exec(tag);
+      push(hrefDe(tag), 40 + Math.min(50, sz ? parseInt(sz[1], 10) : 0));
+    }
+  }
+  for (const m of String(html || '').matchAll(/<img[^>]+>/gi)) {
+    const tag = m[0];
+    if (!/logo/i.test(tag) || /sprite/i.test(tag)) continue;
+    const src = /src=["']([^"']+)["']/i.exec(tag);
+    if (src) push(src[1], 60);
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, 4).map((x) => x.url);
+}
+async function logoDelSitioYArchivo(siteUrl, fileBase) {
+  try {
+    let base = String(siteUrl || '').trim();
+    if (!base) return null;
+    if (!/^https?:\/\//i.test(base)) base = 'https://' + base;
+    const htmlBuf = await logoFetchBuffer(base, 8000);
+    if (!htmlBuf) return null;
+    const cands = logoCandidatosDelSitio(htmlBuf.toString('utf8'), base);
+    for (const cand of cands) {
+      const buf = await logoFetchBuffer(cand, 8000).catch(() => null);
+      const got = buf ? await logoArchivoDesdeBuffer(buf, fileBase) : null;
+      if (got) return got;
+    }
+    return null;
   } catch (e) { return null; }
 }
 // Refresca el logo de una cuenta con fundamento: paleta desde el logo +
@@ -25600,6 +25689,16 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
 const SEMANA_REARME_MAX_PASADAS = 6;
 const SEMANA_REARME_DELAY_MS = 60 * 1000;
 const semanaRearmeTokens = new Map(); // cacheKey -> token vigente
+// (LOTE LOGO-PRUEBA-REARME · puntos 1 y 4) Estado vivo de las cadenas:
+// qué semanas tienen una cadena TRABAJANDO ahora (para que el
+// resumidor no duplique) y la FIRMA del bloqueo de la última pasada
+// (pendientes + presencia de logo): una pasada que no puede cambiar
+// nada — bloqueo determinístico idéntico, sin archivo de logo la
+// cadena de póster no gasta ni puede sellar — NO quema el máximo de
+// pasadas; a la segunda idéntica seguida la cadena queda EN ESPERA
+// (no agotada) y el resumidor la re-abre cuando el dueño vuelve.
+const semanaCadenasVivas = new Set(); // cacheKey con cadena trabajando
+const semanaRearmeEstado = new Map(); // cacheKey -> { sig, sinProgreso }
 function semanaRearmeToken(cacheKey, nueva) {
   if (nueva || !semanaRearmeTokens.has(cacheKey)) semanaRearmeTokens.set(cacheKey, (semanaRearmeTokens.get(cacheKey) || 0) + 1);
   return semanaRearmeTokens.get(cacheKey);
@@ -25626,6 +25725,10 @@ async function scheduleWeekRescue(o) {
     // la invocación fresca (sin intento, desde las rutas) abre cadena
     // nueva; las re-programadas heredan el token vigente.
     const tokenCadena = semanaRearmeToken(o.cacheKey, o.intento == null);
+    // (LOTE LOGO-PRUEBA-REARME) La invocación fresca marca la cadena
+    // como viva y limpia su firma de bloqueo: el resumidor consulta
+    // este conjunto antes de re-abrir una cadena que ya trabaja.
+    if (o.intento == null) { semanaCadenasVivas.add(o.cacheKey); semanaRearmeEstado.delete(o.cacheKey); }
     const readCache = () => {
       try {
         const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(o.cacheKey);
@@ -25782,28 +25885,60 @@ async function scheduleWeekRescue(o) {
     // cadena corta en SEMANA_REARME_MAX_PASADAS pasadas y cada
     // intento de cada pasada sigue gateado por el tope de gasto
     // vigente (costs.demoAiCapOk dentro de rescuePieceWithSeal).
-    // Sin logoPath la pasada no gasta nada (el rescate frena antes
-    // de generar): el logo se RE-RESUELVE del digest fresco en cada
-    // pasada, por si el archivo aparece (refresco del fundamento).
-    // Si las pasadas de esta cadena se agotan, la semana queda en
-    // armado honesto — nunca «incompleta» — y una generación nueva
-    // abre otra cadena; el log es el registro del equipo.
+    // (LOTE LOGO-PRUEBA-REARME · puntos 1 y 4 — la corrida Blind
+    // Barber agotó 6 pasadas IDÉNTICAS: el logo se «re-resolvía» del
+    // digest cacheado, que nunca ganaba el archivo porque la cosecha
+    // rechazaba la foto data: y nadie volvía a buscarlo) Tres
+    // correcciones: (a) entre pasadas la cadena REFRESCA su bloqueo
+    // de verdad — refrescarLogoPrueba vuelve a las fuentes (la foto
+    // del payload, el logo del sitio) y persiste el archivo en el
+    // digest del caché antes de la pasada siguiente; (b) una pasada
+    // que no PUEDE cambiar nada (sin logo: no gasta ni puede sellar;
+    // mismos pendientes, misma firma) NO cuenta contra el máximo —
+    // a la segunda idéntica seguida la cadena queda EN ESPERA, no
+    // agotada; (c) cuando la cadena se cierra, espera o se agota,
+    // sale del conjunto de cadenas vivas y el RESUMIDOR (abajo) la
+    // re-abre cuando el dueño vuelve a la app. Con logo presente las
+    // pasadas son reintentos reales (la generación puede cambiar el
+    // resultado) y queman el máximo como siempre.
     try {
       const finR = readCache();
       if (finR && Array.isArray(finR.posts)) {
         const pendR = o.pieces.filter((pc) => finR.posts[pc.idx | 0] && finR.posts[pc.idx | 0].armando === true);
         if (!pendR.length) {
           semanaRearmeToken(o.cacheKey, true); // semana completa: la cadena se cierra
-        } else if ((o.intento | 0) + 1 <= SEMANA_REARME_MAX_PASADAS) {
-          const logoR = trialLogoAbsPath(finR.digest) || o.logoPath || null;
-          const intentoR = (o.intento | 0) + 1;
-          const timerR = setTimeout(() => {
-            if (!semanaRearmeVigente(o.cacheKey, tokenCadena)) return; // manda una cadena más nueva
-            scheduleWeekRescue({ ...o, pieces: pendR, logoPath: logoR, intento: intentoR }).catch(() => {});
-          }, SEMANA_REARME_DELAY_MS);
-          if (timerR && typeof timerR.unref === 'function') timerR.unref();
+          semanaCadenasVivas.delete(o.cacheKey);
+          semanaRearmeEstado.delete(o.cacheKey);
         } else {
-          console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: pasadas de esta cadena agotadas (${SEMANA_REARME_MAX_PASADAS}) — la semana sigue en armado, pendientes ${pendR.map((p) => p.idx | 0).join(',')}`);
+          const logoR0 = trialLogoAbsPath(finR.digest) || o.logoPath || null;
+          const sigR = pendR.map((p) => p.idx | 0).sort((a, b) => a - b).join(',') + '|' + (logoR0 ? 'con-logo' : 'sin-logo');
+          const estR = semanaRearmeEstado.get(o.cacheKey) || { sig: '', sinProgreso: 0 };
+          const identicaR = !logoR0 && applied === 0 && estR.sig === sigR;
+          if (identicaR) estR.sinProgreso += 1;
+          else if (!logoR0 && applied === 0) { estR.sig = sigR; estR.sinProgreso = 0; }
+          else semanaRearmeEstado.delete(o.cacheKey);
+          if (semanaRearmeEstado.get(o.cacheKey) !== estR && (identicaR || (!logoR0 && applied === 0))) semanaRearmeEstado.set(o.cacheKey, estR);
+          if (identicaR && estR.sinProgreso >= 2) {
+            semanaCadenasVivas.delete(o.cacheKey);
+            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: bloqueo idéntico tras el refresco (sin archivo de logo) — la cadena queda EN ESPERA con ${pendR.length} pieza(s) en armado; el resumidor la re-abre cuando el dueño vuelva`);
+          } else if (identicaR || (o.intento | 0) + 1 <= SEMANA_REARME_MAX_PASADAS) {
+            const intentoR = identicaR ? (o.intento | 0) : (o.intento | 0) + 1;
+            const timerR = setTimeout(async () => {
+              if (!semanaRearmeVigente(o.cacheKey, tokenCadena)) return; // manda una cadena más nueva
+              // REFRESCO DEL BLOQUEO: el insumo que falta se busca de
+              // nuevo en sus fuentes ANTES de la pasada (si apareció
+              // el logo, esta pasada ya lo usa; si no, la firma de
+              // bloqueo decide si la pasada cuenta o espera).
+              const logoNuevoR = await refrescarLogoPrueba(o.cacheKey).catch(() => null);
+              const finT = readCache();
+              const logoR = logoNuevoR || (finT ? trialLogoAbsPath(finT.digest) : null) || logoR0;
+              scheduleWeekRescue({ ...o, pieces: pendR, logoPath: logoR, intento: intentoR }).catch(() => {});
+            }, SEMANA_REARME_DELAY_MS);
+            if (timerR && typeof timerR.unref === 'function') timerR.unref();
+          } else {
+            semanaCadenasVivas.delete(o.cacheKey);
+            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: pasadas de esta cadena agotadas (${SEMANA_REARME_MAX_PASADAS}) — la semana sigue en armado, pendientes ${pendR.map((p) => p.idx | 0).join(',')}`);
+          }
         }
       }
     } catch (e) { /* el re-arme jamás frena el rescate */ }
@@ -25811,6 +25946,107 @@ async function scheduleWeekRescue(o) {
   } catch (e) {
     return { applied: false, reason: 'error' };
   }
+}
+// (LOTE LOGO-PRUEBA-REARME · puntos 1 y 4) REFRESCO DEL BLOQUEO DE
+// LA PRUEBA: si el digest del caché sigue sin archivo de logo, el logo
+// se vuelve a buscar en SUS FUENTES — la foto de perfil guardada en el
+// payload (ig_pic / profile.pic / digest.logo_url, hoy data: o https)
+// y, si esa no produce archivo, el logo del sitio (web_info.url) — y
+// el resultado se PERSISTE en el digest del trial_cache: la pasada
+// siguiente del re-arme (y el resumidor) ya encuentran el archivo.
+// Sin esto, «re-resolver del digest» era re-leer el mismo vacío.
+// Devuelve la ruta absoluta del logo o null. Nunca tira.
+async function refrescarLogoPrueba(cacheKey) {
+  try {
+    const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
+    if (!row || !row.payload) return null;
+    let payload = null;
+    try { payload = JSON.parse(row.payload); } catch (e) { return null; }
+    if (!payload || typeof payload !== 'object') return null;
+    const ya = trialLogoAbsPath(payload.digest);
+    if (ya) return ya;
+    const fileBase = `logo-trial-${String(cacheKey || '').toLowerCase().replace(/[^a-z0-9._]/g, '')}`;
+    let got = null;
+    const pic = payload.ig_pic || (payload.profile && payload.profile.pic) || (payload.digest && payload.digest.logo_url) || '';
+    if (pic) got = await logoPaletaYArchivo(pic, fileBase).catch(() => null);
+    if (!got && payload.web_info && payload.web_info.url) got = await logoDelSitioYArchivo(payload.web_info.url, fileBase).catch(() => null);
+    if (!got) return null;
+    payload.digest = payload.digest || {};
+    if (pic && !payload.digest.logo_url) payload.digest.logo_url = pic;
+    payload.digest.logo_file = got.file;
+    if (got.paleta && got.paleta.length >= 2) payload.digest.logo_paleta = got.paleta;
+    try {
+      db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(cacheKey, JSON.stringify(payload), Date.now());
+    } catch (e) { /* sin persistencia el archivo igual sirve para esta pasada */ }
+    return trialLogoAbsPath(payload.digest);
+  } catch (e) { return null; }
+}
+// (LOTE LOGO-PRUEBA-REARME · punto 1) La semana de prueba de UN
+// usuario, leída del trial_cache por su @: cuántas piezas siguen en
+// armado. Lectura síncrona y barata (la usa /api/week/ensure para la
+// superficie honesta de armado). Sin @, sin caché o sin piezas en
+// armado → pendientes 0.
+function semanaPruebaPendientesDeUsuario(uid) {
+  try {
+    const prof = getProfile(uid) || {};
+    const ig = String(prof.ig_username || '').trim().replace(/^@/, '').toLowerCase();
+    if (!ig) return { ig: '', pendientes: 0 };
+    const row = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(ig);
+    if (!row || !row.payload) return { ig, pendientes: 0 };
+    if (Date.now() - (row.created_at || 0) >= 72 * 3600 * 1000) return { ig, pendientes: 0 };
+    let payload = null;
+    try { payload = JSON.parse(row.payload); } catch (e) { return { ig, pendientes: 0 }; }
+    if (!payload || !Array.isArray(payload.posts)) return { ig, pendientes: 0 };
+    let n = 0;
+    for (const p of payload.posts) if (p && p.armando === true) n++;
+    return { ig, pendientes: n };
+  } catch (e) { return { ig: '', pendientes: 0 }; }
+}
+const semanaResumidorEnVuelo = new Set();
+// (LOTE LOGO-PRUEBA-REARME · puntos 1 y 5) EL RESUMIDOR: al abrir la
+// app, una semana de prueba con piezas en armado y SIN cadena viva
+// (la anterior se agotó o quedó en espera) re-abre su cadena de
+// rescate — primero refresca el bloqueo (el logo puede existir ahora)
+// y después relanza scheduleWeekRescue con las piezas reconstruidas
+// del payload, con los mismos bornes y topes de gasto de siempre.
+// Cuando una pasada completa una pieza de una semana ya importada,
+// el cierre de la propia cadena la crea como posteo en la cuenta
+// (crearPosteoRescateTardio, P1 de Tartine): el rescate tardío corre
+// también desde esta reanudación, no solo desde el stream. Nunca
+// tira; lo llama /api/week/ensure en segundo plano.
+async function rearmarSemanaPruebaDeUsuario(uid) {
+  try {
+    if (!uid || semanaResumidorEnVuelo.has(uid)) return { pendientes: 0, rearmada: false };
+    const info = semanaPruebaPendientesDeUsuario(uid);
+    if (!info.ig || !info.pendientes) return { pendientes: 0, rearmada: false };
+    if (semanaCadenasVivas.has(info.ig)) return { pendientes: info.pendientes, rearmada: false };
+    semanaResumidorEnVuelo.add(uid);
+    try {
+      const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(info.ig);
+      let payload = null;
+      try { payload = row && row.payload ? JSON.parse(row.payload) : null; } catch (e) { payload = null; }
+      if (!payload || !Array.isArray(payload.posts)) return { pendientes: info.pendientes, rearmada: false };
+      const pendIdx = [];
+      payload.posts.forEach((p, i) => { if (p && p.armando === true) pendIdx.push(i); });
+      if (!pendIdx.length) return { pendientes: 0, rearmada: false };
+      const logoPath = (await refrescarLogoPrueba(info.ig).catch(() => null)) || trialLogoAbsPath(payload.digest);
+      const specPosts = (payload.design && Array.isArray(payload.design.posts)) ? payload.design.posts : [];
+      const pieces = pendIdx.map((i) => {
+        const spI = specPosts[i] || {};
+        return {
+          idx: i,
+          prompt: demo.buildNoPhotoBrandPrompt({ business: payload.business || '', category: payload.category || 'otro', subcat: (payload.design && payload.design.subcat) || payload.subcat || '', paletteHex: [payload.accent, payload.btn].filter(Boolean), paletteNames: [], description: (payload.web_info && payload.web_info.description) || '', star: (payload.digest && (payload.digest.producto_estrella || payload.digest.protagonista)) || (payload.onboarding && payload.onboarding.producto_estrella) || null }),
+          topicText: [spI.tema, spI.headline, spI.subline].filter(Boolean).join(' '),
+          headline: spI.headline || '',
+          textMode: spI.text_mode || '',
+        };
+      });
+      console.log(`[posta] resumidor: la semana de @${info.ig} (usuario ${uid}) sigue en armado — se re-abre la cadena con ${pieces.length} pieza(s)`);
+      try { evTrack(uid, 'trial_rescate_reanudado', { ig: info.ig, pendientes: pendIdx }); } catch (e) {}
+      scheduleWeekRescue({ cacheKey: info.ig, digestHash: (payload.digest && payload.digest.hash) || '', pieces, business: payload.business || '', logoPath, accent: payload.accent || null, apiKey: process.env.OPENAI_API_KEY || '', geminiKey: process.env.GEMINI_API_KEY || '' }).catch(() => {});
+      return { pendientes: pendIdx.length, rearmada: true };
+    } finally { semanaResumidorEnVuelo.delete(uid); }
+  } catch (e) { return { pendientes: 0, rearmada: false }; }
 }
 // Devuelve SOLO el prompt expandido para un concepto. Útil para previsualizar
 // el brief antes de gastar una generación de imagen.
@@ -35096,6 +35332,18 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         trialDigest.logo_file = logoGot.file;
         if (logoGot.paleta.length >= 2) trialDigest.logo_paleta = logoGot.paleta;
       }
+      // (LOTE LOGO-PRUEBA-REARME · punto 4) SEGUNDA FUENTE: si la foto
+      // de perfil no produjo archivo, el logo se cosecha del SITIO del
+      // negocio (favicon grande / apple-touch-icon / logo del header)
+      // antes de que la semana nazca — sin archivo de logo, la cadena
+      // de póster no puede sellar y las piezas quedan en armado.
+      if (!logoGot && trialDigest && webData && webData.url) {
+        const logoSitio = await Promise.race([logoDelSitioYArchivo(webData.url, `logo-trial-${String(ig || '').toLowerCase().replace(/[^a-z0-9._]/g, '')}`), new Promise((r) => setTimeout(() => r(null), 5000))]);
+        if (logoSitio) {
+          trialDigest.logo_file = logoSitio.file;
+          if (logoSitio.paleta.length >= 2) trialDigest.logo_paleta = logoSitio.paleta;
+        }
+      }
     } catch (e) {}
 
     let screenshot = null;
@@ -39206,7 +39454,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1033';
+const BUILD_ID = '20261105-v1034';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1474,7 +1474,13 @@ function buildFromParts(parts) {
   // logo en la mayoría de los negocios. Se guarda la URL tal cual la trae
   // la lectura pública; si no hay foto, queda '' y NO se dibuja ningún
   // logo (fail-closed: sin logo en el fundamento, no hay sello).
+  // (LOTE LOGO-PRUEBA-REARME · punto 4) La lectura pública de la prueba
+  // trae la foto como data: URI: también es fuente válida del logo (la
+  // cosecha de archivo del server la decodifica); descartarla acá era
+  // perder el logo del negocio antes de que existiera. https conserva
+  // su corte de higiene; la data: viaja entera con un tope sano.
   if (p.feed && typeof p.feed.pic === 'string' && /^https:\/\//.test(p.feed.pic)) d.logo_url = p.feed.pic.slice(0, 500);
+  else if (p.feed && typeof p.feed.pic === 'string' && /^data:image\//.test(p.feed.pic) && p.feed.pic.length <= 300000) d.logo_url = p.feed.pic;
   // (LOTE PERSONALIZACIÓN · ítem 3) VOZ: marcadores aprendidos de SUS
   // captions (+ palabras del dueño si el llamador las pasa en
   // p.ownerWords). Determinístico, USD 0. Sin captions, [].
@@ -2061,7 +2067,14 @@ function sanitizeBrandPresence(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj || {})) {
     if (!v || typeof v !== 'object' || typeof v.marca !== 'boolean') continue;
-    out[String(k).slice(0, 300)] = { marca: v.marca === true, ...(v.detalle ? { detalle: String(v.detalle).slice(0, 140) } : {}) };
+    // (LOTE LOGO-PRUEBA-REARME · punto 4) El TIPO de presencia viaja
+    // con el veredicto: 'logo' (la marca gráfica: símbolo, logotipo,
+    // letrero, packaging con su logo) vs 'texto' (solo palabras
+    // impresas: el texto de una etiqueta). Sin tipo (veredictos
+    // viejos) la entrada queda como estaba: la presencia vale, la
+    // vara de logo no se pronuncia.
+    const tipo = (v.tipo === 'logo' || v.tipo === 'texto' || v.tipo === 'ambos') ? v.tipo : null;
+    out[String(k).slice(0, 300)] = { marca: v.marca === true, ...(tipo ? { tipo } : {}), ...(v.detalle ? { detalle: String(v.detalle).slice(0, 140) } : {}) };
     if (Object.keys(out).length >= 200) break;
   }
   return out;
@@ -2078,6 +2091,25 @@ function brandPresenceOf(digest, key) {
   if (pm && pm.marca === true) return true;
   const bp = (digest.brand_presence && digest.brand_presence.entries) ? digest.brand_presence.entries[k] : null;
   if (bp && typeof bp.marca === 'boolean') return bp.marca;
+  return null;
+}
+// (LOTE LOGO-PRUEBA-REARME · punto 4) VARA ÚNICA DE LOGO: ¿la foto
+// muestra el LOGO de la marca — su marca gráfica — o solo TEXTO con
+// su nombre? Devuelve true (logo visto) · false (la visión vio la
+// marca pero SOLO como texto impreso: la etiqueta de un frasco dice
+// el nombre, pero el logo no está en la escena) · null (sin veredicto
+// de tipo: la foto no se chequeó o el veredicto es de antes de la
+// distinción — para ESTA vara el null no es un pase). Es la misma
+// vara para todos los caminos: el texto de packaging ya no satisface
+// «logo presente» en la foto real como lo satisfacía en la generada
+// el archivo. Solo lee el mapa de presencia (el que distingue tipo);
+// el photo_map no distingue y no se pronuncia acá.
+function brandLogoOf(digest, key) {
+  if (!digest || !key) return null;
+  const bp = (digest.brand_presence && digest.brand_presence.entries) ? digest.brand_presence.entries[String(key)] : null;
+  if (!bp || bp.marca !== true) return null;
+  if (bp.tipo === 'logo' || bp.tipo === 'ambos') return true;
+  if (bp.tipo === 'texto') return false;
   return null;
 }
 
@@ -3796,7 +3828,7 @@ module.exports = {
   // primer posteo).
   EN_HANGING_SUBORDINATORS, lastContentWord, enHangingTail, trimFunctionTail,
   // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
-  sanitizeBrandPresence, brandPresenceOf,
+  sanitizeBrandPresence, brandPresenceOf, brandLogoOf,
   questionCandidatesOf, applyDeepBlocks,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
   rubroId,

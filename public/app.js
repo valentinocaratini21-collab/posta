@@ -13254,7 +13254,7 @@ function weekCardHTML(d, o) {
 // tarjetas grandes lado a lado, flechas ‹ ›, cada tarjeta con su día.
 // La agenda compacta de v214 (grilla de 7 columnas + cofre #agVault +
 // panel #agSheet) quedó descartada por Valentino.
-function homeWeekHTML(posts, quota, generating, noDna) {
+function homeWeekHTML(posts, quota, generating, noDna, trialArming) {
   prefetchMedia(posts);
   const q = quota || {};
   const qTotal = Number(q.limit) || 0;
@@ -13289,7 +13289,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Posty está armando tu posteo de hoy ${pzIc('sparkle', 16)}</b>
+    <b>${trialArming ? 'Posty está terminando de armar tu semana' : 'Posty está armando tu posteo de hoy'} ${pzIc('sparkle', 16)}</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
     <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">${pzIc('search', 18)} ¿Por qué tarda tanto?</button>
@@ -13358,7 +13358,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">${pzIc('checkCircle', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${list.filter(p => p.status === 'draft').length}</span></button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
-    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} Estoy armando tu posteo de hoy…</div>` : ''}
+    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} ${trialArming ? ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "I'm still building your week — the missing pieces appear here as soon as they're ready" : 'Estoy terminando de armar tu semana — las piezas que faltan aparecen acá apenas estén listas') : 'Estoy armando tu posteo de hoy…'}</div>` : ''}
     ${staleHTML}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
@@ -14065,14 +14065,19 @@ async function chatView() {
   // 2026-10-05: si no hay nada por venir, disparar la generación en segundo
   // plano (sin bloquear). El home muestra "armando" y refresca solo.
   let weekGenerating = false;
+  let weekTrialArming = false;
   let weekNoDna = false;
   // 2026-10-14: ensure corre SIEMPRE, no solo con la semana vacía — si la
   // semana está parcial, el backend crea los posteos que faltan solo.
   try {
     const er = await api.post('/api/week/ensure', {}).catch(() => null);
-    weekGenerating = !!(er && er.generating);
+    // (LOTE LOGO-PRUEBA-REARME) trial_arming: la semana de la prueba
+    // sigue en armado (piezas en el caché sin completar) — la home lo
+    // muestra como armado en curso, nunca como semana final.
+    weekTrialArming = !!(er && er.trial_arming);
+    weekGenerating = !!(er && (er.generating || er.trial_arming));
     weekNoDna = !!(er && er.reason === 'no_dna' && !nDrafts && !nSched);
-    if ((er && er.generating) || posts.some(p => !p.image_path && p.status === 'draft')) {
+    if ((er && (er.generating || er.trial_arming)) || posts.some(p => !p.image_path && p.status === 'draft')) {
       // Refrescar en 8s para mostrar las tarjetas cuando aparezcan.
       setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 8000);
     }
@@ -14088,8 +14093,8 @@ async function chatView() {
     </div>
     ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
-    <div class="hs-chat-label"><b>Tu semana, lista.</b></div>
-    ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna)}
+    <div class="hs-chat-label"><b>${weekTrialArming ? 'Tu semana se está armando…' : 'Tu semana, lista.'}</b></div>
+    ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna, weekTrialArming)}
     <div id="albumCard"></div>
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">${pzIc('bolt', 18)} Activar mi semana (${nDrafts})</button>` : ''}
   </div>`;
@@ -20391,14 +20396,16 @@ async function scheduleView() {
   // 2026-10-05: si no hay nada por venir, disparar la generación en segundo
   // plano (sin bloquear). El home muestra "armando" y refresca solo.
   let weekGenerating = false;
+  let weekTrialArming = false;
   let weekNoDna = false;
   // 2026-10-14: ensure corre SIEMPRE, no solo con la semana vacía — si la
   // semana está parcial, el backend crea los posteos que faltan solo.
   try {
     const er = schedEr;
-    weekGenerating = !!(er && er.generating);
+    weekTrialArming = !!(er && er.trial_arming);
+    weekGenerating = !!(er && (er.generating || er.trial_arming));
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
-    if ((er && er.generating) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
+    if ((er && (er.generating || er.trial_arming)) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
       setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
@@ -24155,12 +24162,14 @@ async function inicioView() {
   // El mismo auto-arranque de la semana que dispara Schedule al entrar:
   // si no, entrando por Inicio la semana nunca se armaría sola.
   let weekGenerating = false;
+  let weekTrialArming = false;
   let weekNoDna = false;
   try {
     const er = weekEr;
-    weekGenerating = !!(er && er.generating);
+    weekTrialArming = !!(er && er.trial_arming);
+    weekGenerating = !!(er && (er.generating || er.trial_arming));
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
-    if ((er && er.generating) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
+    if ((er && (er.generating || er.trial_arming)) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
       setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/inicio')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
@@ -24301,7 +24310,7 @@ async function inicioView() {
     ? (displayTiles.length
       ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
       : `${tabEmptyHTML}<div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`)
-    : HF_VISITOR ? hfVisitorEmptyHTML(enHome) : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
+    : HF_VISITOR ? hfVisitorEmptyHTML(enHome) : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna, weekTrialArming);
   // (v440 · SOLO FEED) La barra ancha «Instagram sin conectar» (mz-igbar)
   // SALIÓ de Inicio: el estado de IG vive UNA sola vez, como píldora
   // compacta en el encabezado del perfil (igHeadChipHTML dentro de
@@ -24700,7 +24709,7 @@ async function feedView() {
     ? (displayTiles.length
       ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
       : `${tabEmptyHTML}<div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`)
-    : homeWeekHTML(allPosts, quota, !!(weekEr && weekEr.generating), weekNoDna);
+    : homeWeekHTML(allPosts, quota, !!(weekEr && (weekEr.generating || weekEr.trial_arming)), weekNoDna, !!(weekEr && weekEr.trial_arming));
   // Stats de cabecera — SOLO datos reales, con el origen etiquetado:
   // posteos = conteo real de Instagram (posts_count del perfil; sin
   // perfil, los publicados de la DB) · consultas de la semana = lo que

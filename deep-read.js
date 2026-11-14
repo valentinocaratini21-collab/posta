@@ -577,7 +577,7 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
     names.length ? `Sus productos/servicios: ${names.join(', ')}.` : '',
   ].filter(Boolean).join(' ');
   const content = [
-    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). ${ctxLines}\nPara CADA foto decidí si se ve EL NEGOCIO dentro de la escena: su logo, un producto con su nombre o su marca, su packaging, el frente de su local con su nombre. marca=true SOLO si algo del negocio se ve de verdad en la foto; si la foto es genérica (un producto sin marca visible, una persona trabajando, un interior sin ningún nombre) → marca=false. Respondé SOLO este JSON: {"results":[{"i":0,"marca":true,"detalle":"qué se ve del negocio, en pocas palabras"}]}` },
+    { type: 'text', text: `Te muestro ${sent} fotos de un negocio, en orden (foto 0 a ${sent - 1}). ${ctxLines}\nPara CADA foto decidí si se ve EL NEGOCIO dentro de la escena: su logo, un producto con su nombre o su marca, su packaging, el frente de su local con su nombre. marca=true SOLO si algo del negocio se ve de verdad en la foto; si la foto es genérica (un producto sin marca visible, una persona trabajando, un interior sin ningún nombre) → marca=false. Si marca=true, clasificalo en "tipo": "logo" si se ve su LOGO como marca gráfica (el símbolo o logotipo de la marca, un letrero con su logo, su packaging con el logo impreso); "texto" si lo ÚNICO que se ve del negocio son PALABRAS impresas con su nombre (el texto de una etiqueta, una lista de ingredientes, un cartel de texto plano) SIN su logo gráfico; "ambos" si se ven las dos cosas. Respondé SOLO este JSON: {"results":[{"i":0,"marca":true,"tipo":"logo","detalle":"qué se ve del negocio, en pocas palabras"}]}` },
     ...imageParts,
   ];
   let data;
@@ -607,7 +607,11 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
     if (!Number.isInteger(idx) || idx < 0 || idx >= sent) continue;
     if (!res || typeof res.marca !== 'boolean') continue; // sin respuesta booleana no hay veredicto
     const photo = sentPhotos[idx];
-    if (photo) out[photo.key] = { marca: res.marca === true, detalle: String(res.detalle || '').slice(0, 140) };
+    // (LOTE LOGO-PRUEBA-REARME · punto 4) El tipo de presencia viaja
+    // con el veredicto cuando la visión lo clasifica: sin tipo válido
+    // la entrada queda como antes (la vara de logo no se pronuncia).
+    const tipo = (res.tipo === 'logo' || res.tipo === 'texto' || res.tipo === 'ambos') ? res.tipo : null;
+    if (photo) out[photo.key] = { marca: res.marca === true, ...(tipo ? { tipo } : {}), detalle: String(res.detalle || '').slice(0, 140) };
   }
   return out;
 }

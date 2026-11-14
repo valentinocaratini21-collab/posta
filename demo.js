@@ -532,6 +532,18 @@ function pickWebPhoto(topic, webPool, used, ctx, opts) {
       // preferencia de albumRefsForPiece queda intacta) y una foto
       // sin marca y sin ancla de producto sigue fail-closed al póster.
       if (ctx && ctx.trialNoStock && w.marca_verdict !== true && w.marca_visible !== true && !productHit(w)) return false;
+      // (LOTE LOGO-PRUEBA-REARME · punto 4) VARA ÚNICA DE LOGO: una
+      // foto cuya ÚNICA evidencia de marca es TEXTO impreso (la
+      // visión vio el nombre en la etiqueta y dictaminó que el LOGO
+      // no está: logo_verdict === false) ya no se entrega como foto
+      // real «con logo presente» — el packaging que dice el nombre no
+      // es el logo de la marca, la misma vara que la cadena generada
+      // aplica con el archivo. El slot cae a la cadena de composición
+      // con el logo real (póster/sello), como manda la regla del logo
+      // siempre en la imagen. La vía del producto (productHit: la foto
+      // ES el producto de esta pieza) no se toca, y sin dictamen de
+      // tipo (logo_verdict sin anotar) el pase histórico manda.
+      if (ctx && ctx.trialNoStock && w.logo_verdict === false && !productHit(w)) return false;
       // El rescate es del PRODUCTO (la visión lo identificó como EL
       // producto), no del índice del rango: una foto del producto
       // cuyos tags no alcanzan el mundo se rescata en cualquier rango —
@@ -2237,6 +2249,12 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       if (!w.url) continue;
       const v = clientDigest.brandPresenceOf(digest, w.url);
       if (v !== null) w.marca_verdict = v;
+      // (LOTE LOGO-PRUEBA-REARME · punto 4) La vara de LOGO viaja con
+      // la foto igual que la de presencia: true (el logo gráfico está
+      // en la escena) · false (la visión vio la marca SOLO como texto
+      // impreso) · sin anotar (esta vara no se pronuncia).
+      const lv = clientDigest.brandLogoOf(digest, w.url);
+      if (lv !== null) w.logo_verdict = lv;
     }
   }
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
@@ -3028,6 +3046,11 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       const productoGate = wPool ? (wPool.producto || null) : (raw.url ? clientDigest.photoProductFor(digest, raw.url) : null);
       const marcaVisibleGate = wPool ? !!wPool.marca_visible : (raw.url ? clientDigest.photoBrandVisible(digest, raw.url) : false);
       const mvGate = wPool && typeof wPool.marca_verdict === 'boolean' ? wPool.marca_verdict : (raw.url ? clientDigest.brandPresenceOf(digest, raw.url) : null);
+      // (LOTE LOGO-PRUEBA-REARME · punto 4) El registro distingue el
+      // LOGO del texto: logo_visible=true solo si la marca gráfica
+      // está en la escena; una foto con marca_visible por texto de
+      // etiqueta queda registrada como lo que es (logo_visible=false).
+      const lvGate = wPool && typeof wPool.logo_verdict === 'boolean' ? wPool.logo_verdict : (raw.url ? clientDigest.brandLogoOf(digest, raw.url) : null);
       fotosGate.push({
         url: raw.url || null,
         temas: Array.isArray(raw.temas) ? raw.temas.slice(0, 8) : [],
@@ -3035,6 +3058,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         producto: productoGate || null,
         marca_visible: marcaVisibleGate,
         marca_verdict: typeof mvGate === 'boolean' ? mvGate : null,
+        logo_visible: typeof lvGate === 'boolean' ? lvGate : null,
         via: productoGate ? 'producto' : (mvGate === true || marcaVisibleGate) ? 'marca' : 'ninguna',
         piezas: (usadasPorPath.get(raw.path) || []).slice(),
       });
@@ -3052,6 +3076,8 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         admitidas: fotosGate.filter((f) => f.admitida).length,
         con_producto: fotosGate.filter((f) => !!f.producto).length,
         con_marca: fotosGate.filter((f) => f.via === 'marca' || f.marca_visible).length,
+        con_logo: fotosGate.filter((f) => f.logo_visible === true).length,
+        solo_texto: fotosGate.filter((f) => f.logo_visible === false && (f.marca_verdict === true || f.marca_visible)).length,
         piezas_con_foto_web: fotosGate.reduce((a, f) => a + f.piezas.length, 0),
         piezas_poster: specPosts.filter((sp, i) => posterAt.has(i)).length,
       },
