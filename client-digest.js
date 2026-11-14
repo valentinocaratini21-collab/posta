@@ -1294,12 +1294,26 @@ function emptyDigest() {
     // ingesta intentó UNA vez por foto integrar el logo real en la
     // escena (edición multirreferencia) y el chequeo de presencia
     // juzgó el resultado. { entries: { [urlFoto]: { status, path?,
-    // engine?, at } }, at } — status 'integrada' = la foto editada
-    // (path absoluto en el volumen de media) SÍ muestra el negocio;
-    // 'sin-marca' / 'sin-edicion' = el intento corrió y no rescató:
-    // la foto sigue el comportamiento vigente. La presencia de una
+    // engine?, calidad?, at } }, at } — status 'integrada' = la foto
+    // editada (path absoluto en el volumen de media) SÍ muestra el
+    // negocio; 'sin-marca' / 'sin-edicion' = el intento corrió y no
+    // rescató: la foto sigue el comportamiento vigente.
+    // (LOTE LOGO-ESTRATÉGICO) status 'sin-calidad' = la presencia
+    // pasó pero la PUERTA DE CALIDAD rechazó la integración (logo
+    // ilegible, pegado plano o invasivo): la editada NO se entrega y
+    // el veredicto viaja en entries[].calidad. La presencia de una
     // clave en entries ES el registro del intento (no se reintenta).
     logo_integrado: null,
+    // (LOTE LOGO-ESTRATÉGICO) El asset del logo real como campo
+    // propio del estudio: { url, file, fuente, at } — url = la foto
+    // de perfil de IG (la resolución vigente: homeProfileFromRead /
+    // logoPaletaYArchivo), file = el archivo ya descargado al volumen
+    // de media ('' = todavía no bajó), fuente = 'ig' | 'web'. null =
+    // el estudio no encontró logo alcanzable: todo el pipeline del
+    // logo degrada honesto (sin logo no se integra ni se sella nada).
+    // Viaja con el digest (trial_cache → cuenta) como logo_url/
+    // logo_file, que quedan como espejo compatible.
+    logo: null,
     // (ESTUDIO-PROFUNDO · M5 COMPETENCIA) La competencia del estudio:
     // fundamento.competitors (ver study-competitors.js: esquema y contrato
     // para el lote semanal de tendencias). null = todavía no estudiada. El
@@ -1583,6 +1597,14 @@ function buildFromParts(parts) {
   // su corte de higiene; la data: viaja entera con un tope sano.
   if (p.feed && typeof p.feed.pic === 'string' && /^https:\/\//.test(p.feed.pic)) d.logo_url = p.feed.pic.slice(0, 500);
   else if (p.feed && typeof p.feed.pic === 'string' && /^data:image\//.test(p.feed.pic) && p.feed.pic.length <= 300000) d.logo_url = p.feed.pic;
+  // (LOTE LOGO-ESTRATÉGICO) El asset del logo como campo propio: si el
+  // llamador ya resolvió el logo (p.logoAsset: la misma resolución de
+  // homeProfileFromRead / logoPaletaYArchivo), se adopta saneado; si
+  // no, nace de la foto de perfil que ya trae la lectura (fuente 'ig',
+  // sin archivo: la descarga la completa el camino del sello y el
+  // campo se sincroniza ahí). Sin URL ni archivo → null (degradación
+  // honesta: el pipeline del logo no inventa un asset).
+  d.logo = sanitizeDigestLogo(p.logoAsset) || (d.logo_url ? { url: d.logo_url, file: '', fuente: 'ig', at: now } : null);
   // (LOTE PERSONALIZACIÓN · ítem 3) VOZ: marcadores aprendidos de SUS
   // captions (+ palabras del dueño si el llamador las pasa en
   // p.ownerWords). Determinístico, USD 0. Sin captions, [].
@@ -2171,7 +2193,18 @@ function photoProductFor(digest, key) {
 // clave = URL de la foto original (≤300); status cerrado; el path de la
 // foto editada solo viaja con status 'integrada' (≤400, mismo volumen
 // de media: el fundamento vive server-side). Tope 20 fotos.
-const LOGO_INT_STATUS = new Set(['integrada', 'sin-marca', 'sin-edicion']);
+// (LOTE LOGO-ESTRATÉGICO) El status 'sin-calidad' se suma al conjunto
+// cerrado (la puerta de calidad rechazó la integración) y el veredicto
+// de esa puerta viaja saneado en `calidad` (solo booleanos).
+const LOGO_INT_STATUS = new Set(['integrada', 'sin-marca', 'sin-edicion', 'sin-calidad']);
+function sanitizeLogoCalidad(q) {
+  if (!q || typeof q !== 'object') return null;
+  const out = {};
+  for (const k of ['legible', 'impreso', 'invade', 'ok']) {
+    if (typeof q[k] === 'boolean') out[k] = q[k];
+  }
+  return typeof out.ok === 'boolean' ? out : null;
+}
 function sanitizeLogoIntegrado(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj || {})) {
@@ -2183,6 +2216,8 @@ function sanitizeLogoIntegrado(obj) {
       e.path = p.slice(0, 400);
       if (v.engine) e.engine = String(v.engine).slice(0, 20);
     }
+    const calidad = sanitizeLogoCalidad(v.calidad);
+    if (calidad) e.calidad = calidad;
     const at = Number(v.at);
     if (Number.isFinite(at) && at > 0) e.at = at;
     out[String(k).slice(0, 300)] = e;
@@ -2194,6 +2229,34 @@ function sanitizeLogoIntegrado(obj) {
 function logoIntegradoOf(digest, key) {
   if (!digest || !digest.logo_integrado || !digest.logo_integrado.entries || !key) return null;
   return digest.logo_integrado.entries[String(key)] || null;
+}
+// (LOTE LOGO-ESTRATÉGICO) Saneado del asset del logo (digest.logo):
+// url https (≤500) y/o file = nombre pelado dentro del volumen de
+// media (sin rutas: jamás un path arbitrario), fuente cerrada
+// ('ig' | 'web'). Sin url ni file válidos → null.
+function sanitizeDigestLogo(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const url = String(obj.url || '').trim();
+  const file = String(obj.file || '').trim();
+  const out = { url: '', file: '', fuente: 'ig', at: null };
+  if (/^https:\/\//.test(url)) out.url = url.slice(0, 500);
+  if (file && !/[/\\]/.test(file) && file.length <= 120) out.file = file;
+  if (!out.url && !out.file) return null;
+  if (obj.fuente === 'web' || obj.fuente === 'ig') out.fuente = obj.fuente;
+  const atNum = Number(obj.at);
+  if (Number.isFinite(atNum) && atNum > 0) out.at = atNum;
+  else if (typeof obj.at === 'string' && obj.at) out.at = obj.at.slice(0, 40);
+  return out;
+}
+// El asset del logo del fundamento: el campo propio si está; si el
+// digest es de antes del campo, se deriva de logo_url/logo_file (la
+// misma resolución de siempre). Sin logo alcanzable → null.
+function digestLogoOf(digest) {
+  if (!digest || typeof digest !== 'object') return null;
+  const own = sanitizeDigestLogo(digest.logo);
+  if (own) return own;
+  if (digest.logo_url) return { url: String(digest.logo_url).slice(0, 500), file: String(digest.logo_file || ''), fuente: 'ig', at: null };
+  return null;
 }
 // (v907) ¿La foto muestra LA MARCA del negocio dentro de la escena
 // (logo, packaging con marca, letrero)? Lo dice la visión al clasificar
@@ -2487,6 +2550,15 @@ function applyDeepBlocks(stored, fresh) {
   if (fresh.fuentes && fresh.fuentes.feed) {
     if (Array.isArray(fresh.voz_marcadores)) out.voz_marcadores = fresh.voz_marcadores;
     if (fresh.logo_url) out.logo_url = fresh.logo_url;
+    // (LOTE LOGO-ESTRATÉGICO) El asset del logo sigue a la lectura
+    // fresca: el campo propio manda, pero la DESCARGA ya hecha
+    // sobrevive al refresco cuando la URL no cambió (el fresco nace
+    // sin archivo: lo baja el camino del sello, no el estudio).
+    if (fresh.logo) {
+      out.logo = (fresh.logo.file || !(out.logo && out.logo.url === fresh.logo.url))
+        ? fresh.logo
+        : { ...fresh.logo, file: out.logo.file || '' };
+    } else if (fresh.logo_url) out.logo = { url: fresh.logo_url, file: (out.logo && out.logo.url === fresh.logo_url) ? (out.logo.file || '') : '', fuente: 'ig', at: fresh.built_at || new Date().toISOString() };
   }
   // (LOTE CORRECTIVO-5 · FORMATO DE LA MARCA) El formato dominante se
   // recalcula cuando la corrida fresca trajo posteos leídos; sin esa
@@ -4188,7 +4260,7 @@ module.exports = {
   isChromeDerivedName,
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
   lexDiceFor, voicePhraseFor,
-  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible, sanitizeLogoIntegrado, logoIntegradoOf,
+  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible, sanitizeLogoIntegrado, logoIntegradoOf, sanitizeDigestLogo, digestLogoOf,
   // (LOTE LÉXICO-INGLÉS · L7) Nombre pelado para fórmulas EN + lint de empalmes.
   bareEnName, enSpliceLint,
   // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) La clase subordinante

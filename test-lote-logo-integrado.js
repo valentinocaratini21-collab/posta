@@ -160,7 +160,13 @@ async function seccionRescate() {
   let editorCalls = [];
   const editorOk = async (args) => { editorCalls.push(args); return { b64: JPEG_B64, engine: 'nano' }; };
   const visionOk = async () => ({ [PHOTO_URL]: { marca: true, detalle: 'logo en la pared' } });
-  const rA = await srv.trialLogoIntegracion([{ url: PHOTO_URL, path: photoPath }], noBrandEntries, { ...baseOpts, editor: editorOk, vision: visionOk });
+  // (PIN DEL PREPARADOR DE LOGO-ESTRATÉGICO, según la nota del builder
+  // de ese lote: con la puerta de calidad viva, el fixture §2(a) debe
+  // inyectar la costura `calidad` aprobada; sin ella la puerta real no
+  // devuelve veredicto en sandbox y el intento cae 'sin-calidad'
+  // fail-closed — el comportamiento nuevo correcto, no el de este §.)
+  const calidadOk = async () => ({ [PHOTO_URL]: { legible: true, impreso: true, invade: false, ok: true } });
+  const rA = await srv.trialLogoIntegracion([{ url: PHOTO_URL, path: photoPath }], noBrandEntries, { ...baseOpts, editor: editorOk, vision: visionOk, calidad: calidadOk });
   const eA = rA && rA.entries && rA.entries[PHOTO_URL];
   ok('A1 (a) el intento se registra como INTEGRADA', !!eA && eA.status === 'integrada', rA);
   ok('A2 (a) la foto editada quedó escrita en el volumen de media', !!eA && !!eA.path && fs.existsSync(eA.path) && path.basename(eA.path).startsWith('logo-int-'), eA);

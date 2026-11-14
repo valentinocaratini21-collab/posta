@@ -634,6 +634,92 @@ async function classifyBrandPresence({ photos, business, items, apiKey, userId, 
   return out;
 }
 
+// ---------- Calidad de la integración del logo (visión) ----------
+// (LOTE LOGO-ESTRATÉGICO) classifyBrandPresence dice si el negocio SE
+// VE; esta puerta juzga CÓMO se ve el logo que el pipeline INTEGRÓ en
+// la escena (la foto editada por el rescate de logo-integrado): ¿se
+// LEE? ¿parece IMPRESO en la superficie (perspectiva, luz y sombra de
+// la foto) o pegado plano como un sticker digital? ¿INVADE — tapa o
+// compite con el producto/tema principal de la foto? Misma
+// infraestructura de visión que classifyBrandPresence (VISION_MODEL,
+// mismo request, mismo parseo). Devuelve { [key]: { legible, impreso,
+// invade, ok } } SOLO para las fotos cuya respuesta trajo los TRES
+// booleanos; ok = legible && impreso && !invade. Cualquier falla (sin
+// clave, red, JSON ilegible, booleano ausente) → sin entrada = NO ok
+// (fail-closed: ningún llamador puede leer {} como un pase).
+async function classifyLogoIntegration({ photos, business, apiKey, userId, fetchImpl, model } = {}) {
+  if (!apiKey) return {};
+  const cap = VISION_MAX_PHOTOS;
+  const usable = [];
+  for (const p of (photos || [])) {
+    if (!p || !p.key || !p.path || usable.length >= cap) continue;
+    try {
+      const st = fs.statSync(p.path);
+      if (!st.isFile() || st.size < 1024 || st.size > 4 * 1024 * 1024) continue;
+    } catch (e) { continue; }
+    usable.push(p);
+  }
+  if (!usable.length) return {};
+  const doFetch = fetchImpl || fetch;
+  const sentPhotos = [];
+  const imageParts = [];
+  for (const p of usable) {
+    const ext = path.extname(p.path).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    try {
+      imageParts.push({ type: 'image_url', image_url: { url: `data:${mime};base64,` + fs.readFileSync(p.path).toString('base64') } });
+      sentPhotos.push(p);
+    } catch (e) { /* foto ilegible: se salta y el índice no se corre */ }
+  }
+  const sent = sentPhotos.length;
+  if (!sent) return {};
+  const biz = String(business || '').trim().slice(0, 80);
+  const content = [
+    { type: 'text', text: `Te muestro ${sent} fotos de un negocio${biz ? ` («${biz}»)` : ''}, en orden (foto 0 a ${sent - 1}). En cada foto se integró el LOGO del negocio dentro de la escena. Para CADA foto juzgá SOLO la integración del logo: legible=true si el logo se lee con claridad (sus letras/forma se distinguen); impreso=true si el logo parece FÍSICAMENTE impreso o aplicado sobre una superficie real de la foto (sigue la perspectiva, la luz y la sombra de la escena) — impreso=false si parece un sticker digital pegado plano por encima de la imagen, un sello en una esquina o una banda; invade=true si el logo tapa, pisa o compite con el producto o el tema principal de la foto. Respondé SOLO este JSON: {"results":[{"i":0,"legible":true,"impreso":true,"invade":false,"detalle":"en pocas palabras"}]}` },
+    ...imageParts,
+  ];
+  let data;
+  try {
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: model || VISION_MODEL, temperature: 0.1, max_tokens: 500,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content }],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r || !r.ok) return {};
+    data = await r.json().catch(() => null);
+  } catch (e) { return {}; }
+  if (!fetchImpl && costs && costs.trackUsage) {
+    try { costs.trackUsage({ feature: 'logo-integration', userId, model: model || VISION_MODEL, json: data }); } catch (e) {}
+  }
+  let parsed = null;
+  try { parsed = JSON.parse((data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || ''); } catch (e) {}
+  if (!parsed || !Array.isArray(parsed.results)) return {};
+  const out = {};
+  for (const res of parsed.results) {
+    const idx = parseInt(res && res.i, 10);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= sent) continue;
+    // Sin los TRES booleanos no hay veredicto: la entrada no existe y
+    // el llamador lo lee como NO ok (fail-closed).
+    if (!res || typeof res.legible !== 'boolean' || typeof res.impreso !== 'boolean' || typeof res.invade !== 'boolean') continue;
+    const photo = sentPhotos[idx];
+    if (photo) {
+      out[photo.key] = {
+        legible: res.legible === true,
+        impreso: res.impreso === true,
+        invade: res.invade === true,
+        ok: res.legible === true && res.impreso === true && res.invade === false,
+        detalle: String(res.detalle || '').slice(0, 140),
+      };
+    }
+  }
+  return out;
+}
+
 /* Clave durable de una foto local: hash de su CONTENIDO (la misma foto
  * con otro nombre sigue siendo la misma foto; la caché del mapa es por
  * contenido, no por ruta). */
@@ -650,6 +736,7 @@ module.exports = {
   fetchBioLink,
   classifyDigestPhotos,
   classifyBrandPresence,
+  classifyLogoIntegration,
   photoContentKey,
   // piezas internas, exportadas para tests y reuso
   itemsFromHtml,

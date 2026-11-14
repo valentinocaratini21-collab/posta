@@ -1825,6 +1825,43 @@ const LOGO_INT_PROMPT = [
   'It must read as part of the place: never a sticker pasted on top, never a flat overlay, never a watermark or stamp in a corner, never a band across the image.',
   'Keep every person, product and detail of the original photo exactly as it is. Only add the logo to the surface.',
 ].join(' ');
+// ---------- (LOTE LOGO-ESTRATÉGICO) Superficies por rubro ----------
+// Valentino (13/11): «siempre aparezca el logo del negocio en la
+// imagen, y usarlo estratégicamente: pensar dónde y cómo ponerlo».
+// El prompt genérico de arriba dejaba la superficie librada al
+// modelo («una superficie natural»); acá la superficie se ELIGE por
+// el rubro del negocio con una tabla determinística (mismo rubro →
+// misma superficie, testeable) y el prompt la NOMBRA: la primera de
+// la lista es la preferida y las demás son el orden de caída si esa
+// superficie no existe en la foto. Sin rubro reconocido → genéricas.
+const LOGO_SUPERFICIES_GENERICAS = ['la pared del local', 'la vidriera del local', 'el packaging del producto', 'la bolsa de papel'];
+const LOGO_SUPERFICIES_POR_RUBRO = [
+  { rubro: 'cafe', claves: ['cafe', 'cafeteria', 'coffee', 'espresso', 'barista', 'tostado'], superficies: ['la taza o el vaso de café servido en la escena', 'la bolsa de papel o de granos sobre el mostrador', 'la pared del local detrás del mostrador', 'la vidriera del local'] },
+  { rubro: 'panaderia', claves: ['panaderia', 'pasteleria', 'reposteria', 'bakery', 'tortas', 'dulces'], superficies: ['la caja de pastelería', 'la bolsa de papel', 'el packaging del producto', 'la pared del local'] },
+  { rubro: 'perfumeria', claves: ['perfum', 'cosmet', 'belleza', 'beauty', 'maquillaje', 'makeup', 'skincare', 'fragancia'], superficies: ['la caja del producto', 'la bolsa de la tienda', 'el mostrador del local', 'la pared del local'] },
+  { rubro: 'ropa', claves: ['ropa', 'indumentaria', 'moda', 'fashion', 'clothing', 'vestimenta', 'boutique'], superficies: ['la etiqueta colgante (tag) de la prenda', 'la bolsa de la tienda', 'el packaging de la prenda', 'la vidriera del local'] },
+  { rubro: 'comida', claves: ['comida', 'restaurante', 'restaurant', 'gastronom', 'hamburgues', 'pizza', 'pizzeria', 'cocina', 'parrilla', 'sushi', 'food'], superficies: ['el packaging o la caja del plato', 'la servilleta impresa junto al plato', 'la pared del local', 'la bolsa de papel del pedido'] },
+];
+function logoRubroNormalizado(rubro) {
+  return String(rubro || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function logoSuperficieParaRubro(rubro) {
+  const t = logoRubroNormalizado(rubro);
+  for (const g of LOGO_SUPERFICIES_POR_RUBRO) {
+    if (g.claves.some((c) => t.includes(c))) return { rubro: g.rubro, superficie: g.superficies[0], superficies: g.superficies.slice() };
+  }
+  return { rubro: 'generico', superficie: LOGO_SUPERFICIES_GENERICAS[0], superficies: LOGO_SUPERFICIES_GENERICAS.slice() };
+}
+// El prompt del intento: el base de logo-integrado (arte EXACTO,
+// prohibiciones) + la superficie del rubro nombrada + la jerarquía
+// (el logo se lee pero no compite con la estrella; nunca sello en
+// esquina ni banda — reforzado acá y en el base).
+function logoIntPromptEstrategico(rubro) {
+  const sup = logoSuperficieParaRubro(rubro);
+  return LOGO_INT_PROMPT
+    + ` UBICACIÓN ESTRATÉGICA para este rubro (${sup.rubro}): integrá el logo impreso en ${sup.superficie}; si esa superficie no existe en la foto, usá ${sup.superficies[1] || LOGO_SUPERFICIES_GENERICAS[0]} — nunca un lugar al azar.`
+    + ' JERARQUÍA: el logo se tiene que leer de un vistazo pero siempre secundario frente al producto y a la escena: tamaño acorde a la superficie que lo lleva, ubicado en el centro de esa superficie con aire alrededor, siguiendo su perspectiva, su luz y su sombra. Nunca agrandarlo como un titular, nunca sobre el producto, nunca un sello en una esquina, nunca una banda.';
+}
 async function trialLogoIntegracion(webPhotos, photoEntries, opts = {}) {
   try {
     if (!Array.isArray(webPhotos) || !webPhotos.length) return null;
@@ -1868,10 +1905,17 @@ async function trialLogoIntegracion(webPhotos, photoEntries, opts = {}) {
     }
     const editor = typeof opts.editor === 'function' ? opts.editor : ((args) => demoAi.generateDemoPieceImage(args));
     const vision = typeof opts.vision === 'function' ? opts.vision : ((args) => deepRead.classifyBrandPresence(args));
+    // (LOTE LOGO-ESTRATÉGICO) La puerta de calidad de la integración
+    // (deepRead.classifyLogoIntegration): UNA llamada por foto editada
+    // que pasó presencia; su veredicto queda cacheado en el registro.
+    const calidadFn = typeof opts.calidad === 'function' ? opts.calidad : ((args) => deepRead.classifyLogoIntegration(args));
+    // (LOTE LOGO-ESTRATÉGICO) El intento ya no deja la superficie
+    // librada al modelo: el prompt nombra la superficie DEL RUBRO.
+    const promptInt = logoIntPromptEstrategico(opts.rubro || '');
     const entries = {};
     for (const w of candidates) {
       const attempt = (async () => {
-        const gen = await editor({ prompt: LOGO_INT_PROMPT, refs: [w.path, logoAbs], geminiKey, genGpt: null, refNote: LOGO_INT_REF_NOTE });
+        const gen = await editor({ prompt: promptInt, refs: [w.path, logoAbs], geminiKey, genGpt: null, refNote: LOGO_INT_REF_NOTE });
         // Solo vale la vía multirreferencia: si el b64 no vino de Nano,
         // el logo no viajó y la «integración» sería un logo redibujado.
         if (!gen || !gen.b64 || gen.engine !== 'nano') return { status: 'sin-edicion' };
@@ -1880,7 +1924,22 @@ async function trialLogoIntegracion(webPhotos, photoEntries, opts = {}) {
         fs.writeFileSync(abs, Buffer.from(gen.b64, 'base64'));
         const verdicts = await vision({ photos: [{ key: w.url, path: abs }], business: opts.business || '', apiKey });
         const v = verdicts && verdicts[w.url];
-        if (v && v.marca === true) return { status: 'integrada', path: abs, engine: gen.engine };
+        if (v && v.marca === true) {
+          // (LOTE LOGO-ESTRATÉGICO) PUERTA DE CALIDAD: la presencia
+          // no alcanza — la integración tiene que LEERSE, verse
+          // IMPRESA en la superficie (no sticker plano) y NO invadir
+          // a la estrella. Sin veredicto completo = NO ok
+          // (fail-closed): la editada no se entrega y la foto sigue
+          // el comportamiento vigente (con el 7: póster).
+          let calidad = null;
+          try {
+            const qv = await calidadFn({ photos: [{ key: w.url, path: abs }], business: opts.business || '', apiKey });
+            const q = qv && qv[w.url];
+            if (q && typeof q.ok === 'boolean') calidad = { legible: q.legible === true, impreso: q.impreso === true, invade: q.invade === true, ok: q.ok === true };
+          } catch (e) { calidad = null; }
+          if (calidad && calidad.ok) return { status: 'integrada', path: abs, engine: gen.engine, calidad };
+          return { status: 'sin-calidad', calidad };
+        }
         return { status: 'sin-marca' };
       })();
       const raced = await Promise.race([
@@ -1890,9 +1949,10 @@ async function trialLogoIntegracion(webPhotos, photoEntries, opts = {}) {
       entries[w.url] = {
         status: raced.status,
         ...(raced.path ? { path: raced.path, engine: raced.engine } : {}),
+        ...(raced.calidad ? { calidad: raced.calidad } : {}),
         at: Date.now(),
       };
-      console.log(`[logo-integrado] ${opts.business || 'prueba'}: foto ${path.basename(String(w.path))} → ${raced.status}${raced.timeout ? ' (timeout)' : ''}`);
+      console.log(`[logo-integrado] ${opts.business || 'prueba'}: foto ${path.basename(String(w.path))} → ${raced.status}${raced.timeout ? ' (timeout)' : ''}${raced.calidad ? ` [calidad legible=${raced.calidad.legible} impreso=${raced.calidad.impreso} invade=${raced.calidad.invade}]` : ''}`);
     }
     return Object.keys(entries).length ? { entries } : null;
   } catch (e) { console.error('[logo-integrado] falló:', e.message); return null; }
@@ -22911,6 +22971,9 @@ async function refreshLogoPaleta(db, uid) {
     const dg2 = clientDigest.getDigest(db, uid) || {};
     dg2.logo_url = logoUrl;
     dg2.logo_file = got.file;
+    // (LOTE LOGO-ESTRATÉGICO) El asset estructurado se refresca junto
+    // con el espejo logo_url/logo_file.
+    dg2.logo = clientDigest.sanitizeDigestLogo({ url: logoUrl, file: got.file, fuente: 'ig', at: Date.now() });
     if (got.paleta.length >= 2) dg2.logo_paleta = got.paleta;
     clientDigest.saveDigest(db, uid, dg2);
     return true;
@@ -36751,7 +36814,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       // prueba; si no llega en 3 s, el helper lo resuelve por URL).
       try {
         const logoGotInt = await Promise.race([logoTrialPromise, new Promise((r) => setTimeout(() => r(null), 3000))]);
-        deep.logoIntegracion = await trialLogoIntegracion(webExtraPhotos, photoEntries, { business, logoUrl: igPic, logoFile: (logoGotInt && logoGotInt.file) || '', brandPresence });
+        deep.logoIntegracion = await trialLogoIntegracion(webExtraPhotos, photoEntries, { business, logoUrl: igPic, logoFile: (logoGotInt && logoGotInt.file) || '', brandPresence, rubro: String((fields && (fields.rubro_detectado || fields.rubro)) || (webData && webData.categoryHint) || '') });
       } catch (e) { console.error('[logo-integrado] generate:', e.message); }
       trialGateInfo = {
         presencia: {
@@ -37028,6 +37091,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       if (logoGot && trialDigest) {
         trialDigest.logo_url = igPic;
         trialDigest.logo_file = logoGot.file;
+        // (LOTE LOGO-ESTRATÉGICO) El asset estructurado (digest.logo)
+        // sigue al archivo que esta misma promesa ya descargó.
+        trialDigest.logo = clientDigest.sanitizeDigestLogo({ url: igPic, file: logoGot.file, fuente: 'ig', at: Date.now() });
         if (logoGot.paleta.length >= 2) trialDigest.logo_paleta = logoGot.paleta;
       }
       // (LOTE LOGO-PRUEBA-REARME · punto 4) SEGUNDA FUENTE: si la foto
@@ -38157,7 +38223,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       // igual que en /api/trial/generate: en la ingesta, cacheado en
       // el fundamento, nunca en el render.
       try {
-        deep.logoIntegracion = await trialLogoIntegracion(webExtraPhotos, photoEntries, { business, logoUrl: (trialProfile && trialProfile.pic) || igPic || '', brandPresence });
+        deep.logoIntegracion = await trialLogoIntegracion(webExtraPhotos, photoEntries, { business, logoUrl: (trialProfile && trialProfile.pic) || igPic || '', brandPresence, rubro: String((fields && (fields.rubro_detectado || fields.rubro)) || (webData && webData.categoryHint) || '') });
       } catch (e) { console.error('[logo-integrado] stream:', e.message); }
       trialGateInfo = {
         presencia: {
@@ -41291,7 +41357,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1056';
+const BUILD_ID = '20261105-v1057';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -41982,4 +42048,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
+module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
