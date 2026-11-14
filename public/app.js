@@ -18054,6 +18054,7 @@ async function pzAdsRefrescar() {
 // re-pinta con el posteo como «Impulsado ✓» y el historial nuevo. La
 // hoja sigue viva para sus otros puntos de entrada (Hoy, detalle).
 async function pzAdsImpulsar(monto, btn) {
+  try { pzIgMomentTry('accion'); } catch (e) {} // (MOMENTOS-CLAVE) Impulsar requiere conexión: la invitación aparece en contexto, sin frenar la acción
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
   if (!pzBoostMontos().includes(m)) return;
@@ -19744,6 +19745,128 @@ function igPopupWow(tab) {
   } catch (e) {}
   return null;
 }
+/* ---------- MOMENTOS CLAVE DE CONEXIÓN (LOTE MOMENTOS-CLAVE · directiva
+   Valentino 12/11 21:50: «hay que ponerlos en los momentos claves que
+   creemos que lo van a activar») ----------
+   La invitación a conectar Instagram no sale una sola vez: sale en los
+   momentos de máxima intención de la prueba, cada uno UNA vez por
+   invitado/usuario, con registro persistente (localStorage por usuario,
+   sobrevive recargas). Momentos: 'wow' (post-wow, el de siempre) ·
+   'aprobo' (aprobó su primer posteo) · 'hora19' (19:00 del día 1 con un
+   posteo aprobado que no puede salir sin conexión) · 'semana3' (ve sus
+   3 posteos armados) · 'accion' (toca algo que requiere conexión) ·
+   'fin' (fin de la prueba, junto a la pantalla del plan).
+   REGLAS: nunca bloquea la prueba ni una acción · con Instagram
+   conectado ningún momento dispara · el descarte de cualquier popup
+   impone silencio de 24 h a los momentos comunes (wow/aprobo/semana3/
+   accion); los de consecuencia (hora19/fin) atraviesan el silencio pero
+   salen una sola vez cada uno · máximo un popup por sesión de uso para
+   los momentos comunes (sessionStorage) · nunca dos overlays a la vez.
+   OBSERVABILIDAD (follow-up de L9-OBSERVABILIDAD · v1062): ningún freno
+   nuevo es silencioso: si el gate frena un momento, el motivo queda en
+   igPopupSkipLog ('mom_wow' en el post-wow; 'mom_<momento>' en los demás). */
+const PZ_IG_MOM_SILENCE_MS = 24 * 60 * 60 * 1000;
+const PZ_IG_MOM_CONSEC = { hora19: 1, fin: 1 };
+function pzIgMomKey() {
+  const id = (ME && (ME.id || ME.email)) || 'anon';
+  return 'posta_ig_moments_' + id;
+}
+function pzIgMomState() {
+  try {
+    const raw = localStorage.getItem(pzIgMomKey());
+    const o = raw ? JSON.parse(raw) : null;
+    if (o && typeof o === 'object') return { s: (o.s && typeof o.s === 'object') ? o.s : {}, d: Number(o.d) || 0 };
+  } catch (e) {}
+  return { s: {}, d: 0 };
+}
+function pzIgMomSave(st) {
+  try { localStorage.setItem(pzIgMomKey(), JSON.stringify(st)); } catch (e) {}
+}
+function pzIgMomGate(mom) {
+  try {
+    if (!ME || !PROFILE) return false;
+    if (PROFILE.ig_connected) return false;
+    if (document.getElementById('igFirstOverlay')) return false;
+    const st = pzIgMomState();
+    if (st.s[mom]) return false; // cada momento, una sola vez
+    if (!PZ_IG_MOM_CONSEC[mom]) {
+      if (st.d && (Date.now() - st.d) < PZ_IG_MOM_SILENCE_MS) return false; // silencio 24 h post-descarte
+      let sess = null;
+      try { sess = sessionStorage.getItem('posta_ig_mom_sess'); } catch (e) {}
+      if (sess) return false; // un popup por sesión de uso (momentos comunes)
+    }
+    return true;
+  } catch (e) { return false; }
+}
+function pzIgMomMark(mom) {
+  const st = pzIgMomState();
+  st.s[mom] = Date.now();
+  pzIgMomSave(st);
+  try { sessionStorage.setItem('posta_ig_mom_sess', mom); } catch (e) {}
+}
+function pzIgMomDismiss() {
+  const st = pzIgMomState();
+  st.d = Date.now();
+  pzIgMomSave(st);
+}
+function pzIgMomSub(mom) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const subs = {
+    aprobo: en ? 'You approved your post: connect your Instagram so it can go out on your profile.' : 'Ya aprobaste tu posteo: conectá tu Instagram para que salga en tu perfil.',
+    hora19: en ? "Today's post is approved, but it can't go out without your Instagram connected." : 'Tu posteo de hoy quedó aprobado, pero no puede salir sin tu Instagram conectado.',
+    semana3: en ? 'Your 3 posts are ready: connect your Instagram so they go out on their own.' : 'Tus 3 posteos ya están armados: conectá tu Instagram para que salgan solos.',
+    accion: en ? 'You need your Instagram connected for this: it takes two taps.' : 'Para esto necesitás tu Instagram conectado: son dos toques.',
+    fin: en ? "Your trial ended, but your posts don't have to stop: connect your Instagram and we keep going." : 'Tu prueba terminó, pero tus posteos no tienen por qué frenar: conectá tu Instagram y seguimos.',
+  };
+  return subs[mom] || null;
+}
+function pzIgMomentTry(mom) {
+  try {
+    if (!pzIgMomGate(mom)) { try { igPopupSkipLog('mom_' + mom); } catch (e) {} return false; }
+    pzIgMomMark(mom);
+    igPopupShow(pzIgMomSub(mom), (typeof ME !== 'undefined' && ME && ME.lang === 'en'));
+    return true;
+  } catch (e) { return false; }
+}
+// Chequeos automáticos por render: los momentos que se detectan mirando
+// el estado ya cargado (posteo de hoy aprobado y vencido · semana de la
+// prueba con sus 3 posteos en pantalla). Solo para usuarios en prueba.
+function pzIgMomAutoChecks(tab) {
+  try {
+    if (!ME || !PROFILE || PROFILE.ig_connected) return;
+    const enPrueba = ((typeof pzIsGuest === 'function') && pzIsGuest()) || (ME && ME.plan_status === 'trial');
+    if (!enPrueba) return;
+    try {
+      const hp = (typeof PZ_HOY_POSTS !== 'undefined' && typeof PZ_HOY_POST_ID !== 'undefined' && PZ_HOY_POST_ID) ? PZ_HOY_POSTS[String(PZ_HOY_POST_ID)] : null;
+      if (hp && String(hp.status || '') === 'scheduled' && (String(hp.approval || 'pending') === 'approved' || Number(hp.owner_liked || 0) === 1) && hp.scheduled_at) {
+        let dH = (typeof pcParseDate === 'function') ? pcParseDate(hp.scheduled_at) : null;
+        if (!dH || isNaN(dH)) dH = new Date(String(hp.scheduled_at).replace(' ', 'T'));
+        if (dH && !isNaN(dH) && dH.getTime() <= Date.now()) { if (pzIgMomentTry('hora19')) return; }
+      }
+    } catch (e) {}
+    try {
+      if (tab === 'inicio' && typeof PZ_HOY_TIRA_DIAS !== 'undefined' && Array.isArray(PZ_HOY_TIRA_DIAS)) {
+        let conPost = 0;
+        for (const dT of PZ_HOY_TIRA_DIAS) { if (dT && dT.post) conPost++; }
+        if (conPost >= 3) pzIgMomentTry('semana3');
+      }
+    } catch (e) {}
+  } catch (e) {}
+}
+// «Ver en Instagram» (links reales a posteos/reels): la intención es
+// explícita — la invitación aparece en contexto SIN frenar la acción
+// (el link sigue abriendo su pestaña; nunca preventDefault).
+try {
+  if (typeof window !== 'undefined' && !window.__pzIgMomLinkWire && typeof document !== 'undefined' && document.addEventListener) {
+    window.__pzIgMomLinkWire = true;
+    document.addEventListener('click', (ev) => {
+      try {
+        const a = (ev.target && ev.target.closest) ? ev.target.closest('a[href*="instagram.com/p/"], a[href*="instagram.com/reel/"]') : null;
+        if (a) pzIgMomentTry('accion');
+      } catch (e) {}
+    }, true);
+  }
+} catch (e) {}
 function maybeShowIgPopup(tab) {
   try {
     if (!ME || !PROFILE) { igPopupSkipLog('sin_sesion', tab); return; }
@@ -19761,6 +19884,17 @@ function maybeShowIgPopup(tab) {
     // la fecha límite REAL del posteo de hoy (de su scheduled_at, nunca
     // inventada). Sin posteo programado hoy, copia genérica de siempre.
     const wowSub = wow ? wow.sub : null, wowEn = wow ? wow.en : false;
+    // (MOMENTOS-CLAVE) El post-wow es el momento 'wow': pasa el gate del
+    // sistema de momentos (una vez por usuario, silencio de 24 h, sesión)
+    // y queda registrado. Si el gate lo frena, el motivo se registra como
+    // los demás frenos de este popup (follow-up L9 v1062): 'mom_wow'.
+    if (!pzIgMomGate('wow')) { igPopupSkipLog('mom_wow', tab); return; }
+    pzIgMomMark('wow');
+    igPopupShow(wowSub, wowEn);
+  } catch (e) { igPopupSkipLog('excepcion', tab); }
+}
+function igPopupShow(wowSub, wowEn) {
+  try {
     const ov = document.createElement('div');
     ov.id = 'igFirstOverlay';
     ov.className = 'pz-exp-overlay';
@@ -19803,9 +19937,10 @@ function maybeShowIgPopup(tab) {
     if (skip) skip.onclick = (e) => {
       e.preventDefault();
       igPopupDismiss();
+      try { pzIgMomDismiss(); } catch (e2) {} // (MOMENTOS-CLAVE) el descarte impone el silencio de 24 h a los momentos comunes
       ov.remove();
     };
-  } catch (e) { igPopupSkipLog('excepcion', tab); }
+  } catch (e) {}
 }
 /* ---------- toast global ---------- */
 function toast(html) {
@@ -20300,6 +20435,7 @@ function pzPrefetchKick() {
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
   maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso; el gate ig_pending vive adentro: el wow lo atraviesa)
+  try { pzIgMomAutoChecks(tab); } catch (e) {} // (MOMENTOS-CLAVE) hora19 / semana3 según el estado ya cargado
   // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan).
   // En nativo (tiendas): sin modal de ventas → aviso neutro inline, sin CTA de pago.
   try {
@@ -20743,6 +20879,7 @@ async function showExpiredModal() {
       <button class="pz-exp-later" id="pzExpLater">${en ? 'Pause my posts' : 'Pausar mis posteos'}</button>
     </div>`;
   document.body.appendChild(ov);
+  try { pzIgMomentTry('fin'); } catch (e) {} // (MOMENTOS-CLAVE) fin de la prueba: la invitación a conectar sale junto a la pantalla del plan
   const close = () => { try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} ov.remove(); };
   const goPlan = (pid) => { close(); location.hash = '#/app/ajustes' + (pid ? '?plan_sel=' + encodeURIComponent(pid) : ''); };
   ov.querySelector('#pzExpClose').onclick = close;
@@ -28132,6 +28269,7 @@ async function pzTemaAprobarHoy() {
     else r = await api.patch('/api/posts/' + encodeURIComponent(p.id), { action: 'like' });
     if (r && r.ok) {
       chatSay(pzTemaT('listo ✓ queda programado para hoy' + (tema.hora ? ' ' + tema.hora : '') + '.', 'done ✓ it stays scheduled for today' + (tema.hora ? ' ' + tema.hora : '') + '.'));
+      try { pzIgMomentTry('aprobo'); } catch (e) {} // (MOMENTOS-CLAVE) aprobó desde el chat: el momento es DESPUÉS de aprobar
       setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
     } else {
       chatSay(pzTemaT('no se pudo 😕 ', "it did not work 😕 ") + ((r && (r.message || r.error)) || pzTemaT('probá de nuevo', 'try again')));
