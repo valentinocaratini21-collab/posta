@@ -1,3 +1,10 @@
+// (LOTE TARJETA-IMPULSAR, 13/11 + ADDENDUM del fee: pins V2–V5, V11,
+// M3–M6, ARS2–ARS4, ARS6 y ARS7 actualizados 1:1 al rediseño aprobado
+// — línea única con números reales sin caption, montos que ELIGEN
+// (pzAdsElegirMonto) con la moneda dicha una sola vez, botón con el
+// TOTAL pauta + 10% de gestión, garantía-regla del fee sin billetera,
+// fuera «Elegir otro posteo», historial vacío en una línea. El mapeo
+// completo pin a pin está en el STATUS del lote TARJETA-IMPULSAR.)
 // test-lote-post-grande-ads-lindo.js — LOTE POST-GRANDE-ADS-LINDO (11/11 ·
 // Valentino 13:01: «que se vea mas grande el posteo de hoy, y un diseno
 // mas lindo de la pantalla de "ads"»):
@@ -201,10 +208,10 @@ const POST_HOY = { id: 593, status: 'scheduled', approval: 'approved', media_typ
   let htmlAds = '';
   try { htmlAds = String(await sb.adsView()); } catch (e) { htmlAds = 'ERROR: ' + (e && e.message); }
   t('V1: adsView rinde billetera con el saldo real', htmlAds.includes('Billetera') && htmlAds.includes('$100'), htmlAds.slice(0, 300));
-  t('V2: adsView rinde el posteo recomendado con foto + motivo real', htmlAds.includes('/media/v593.mp4') && htmlAds.includes('El mejor de tu semana') && htmlAds.includes('4 de alcance, 2 me gusta'), htmlAds.slice(0, 1200));
-  t('V3: adsView rinde los 3 montos visibles con $50 RECOMENDADO · 7 DÍAS', htmlAds.includes('pzAdsImpulsar(20') && htmlAds.includes('pzAdsImpulsar(50') && htmlAds.includes('pzAdsImpulsar(100') && htmlAds.includes('RECOMENDADO · 7 DÍAS'), htmlAds.slice(0, 800));
-  t('V4: adsView rinde la regla de crédito si el anuncio no se crea', htmlAds.includes('Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.'), htmlAds.slice(0, 800));
-  t('V5: adsView rinde «Elegir otro posteo» + «Tus impulsos» con historial real', htmlAds.includes('Elegir otro posteo') && htmlAds.includes('Tus impulsos') && htmlAds.includes('$50 · 7 días') && htmlAds.includes('Activo'), htmlAds.slice(0, 1200));
+  t('V2: adsView rinde el posteo recomendado con foto + la línea única con los números reales (TARJETA-IMPULSAR)', htmlAds.includes('/media/v593.mp4') && htmlAds.includes('Este fue tu mejor posteo de la semana: 4 de alcance y 2 me gusta. Mostralo más.'), htmlAds.slice(0, 1200));
+  t('V3: adsView rinde los 3 montos que se ELIGEN (pzAdsElegirMonto) con $50 RECOMENDADO y la moneda una sola vez (TARJETA-IMPULSAR)', htmlAds.includes('pzAdsElegirMonto(20') && htmlAds.includes('pzAdsElegirMonto(50') && htmlAds.includes('pzAdsElegirMonto(100') && htmlAds.includes('pzAdsImpulsar(50') && htmlAds.includes('RECOMENDADO') && !htmlAds.includes('RECOMENDADO · 7 DÍAS') && htmlAds.includes('En dólares · dura 7 días'), htmlAds.slice(0, 800));
+  t('V4: adsView rinde la garantía-regla del fee del addendum (sin billetera ni crédito)', htmlAds.includes('Si el anuncio no se crea o no queda corriendo, no se cobra nada.') && !htmlAds.includes('queda como crédito'), htmlAds.slice(0, 800));
+  t('V5: adsView SIN «Elegir otro posteo» (sale por el brief) + «Tus impulsos» con historial real', !htmlAds.includes('Elegir otro posteo') && htmlAds.includes('Tus impulsos') && htmlAds.includes('$50 · 7 días') && htmlAds.includes('Activo'), htmlAds.slice(0, 1200));
   t('V6: adsView rinde Cargar en la billetera', htmlAds.includes('Cargar plata:') && htmlAds.includes('pzAdsCargar(20') && htmlAds.includes('pzAdsCargar(50') && htmlAds.includes('pzAdsCargar(100'));
 
   fetchCalls.length = 0;
@@ -230,18 +237,18 @@ const POST_HOY = { id: 593, status: 'scheduled', approval: 'approved', media_typ
     vm.runInContext('pzBoostState = pzBoostNewState(); pzBoostState.billetera = {balance_cents:10000,currency:"USD",billing_provider:null}; pzBoostState.elegibles = []; pzBoostState.selPost = null; pzBoostState.adsReady = true; pzBoostState.boostHabilitado = true; pzBoostState.adsPermiso = true; pzBoostState.motivoGate = null; pzBoostState.conversionPendiente = false;', sandbox);
   } catch (e) { console.log('FAIL setup vacío: ' + (e && e.message)); }
   const htmlVacio = String(sb.pzAdsHTML());
-  t('V11: sin recomendado, vacío honesto + «Elegir otro posteo» (nada inventado)', htmlVacio.includes('Todavía no hay un posteo con resultados reales') && htmlVacio.includes('Elegir otro posteo'));
+  t('V11: sin recomendado, vacío honesto y SIN «Elegir otro posteo» (nada inventado)', htmlVacio.includes('Todavía no hay un posteo con resultados reales') && !htmlVacio.includes('Elegir otro posteo'));
 
   // ===== M) Ads como el mock =====
   t('M1: Ads tiene el título + el sub del mock', htmlAds.includes('class="pz-ads-title">Ads</h1>') && htmlAds.includes('Impulsá el posteo que más rindió y traé clientes nuevos.'), htmlAds.slice(0, 300));
   t('M2: la billetera del mock (ícono + «Tu Billetera» + «Crédito para impulsar» + US$100)', htmlAds.includes('pz-ads-wicon') && htmlAds.includes('Tu Billetera') && htmlAds.includes('Crédito para impulsar') && htmlAds.includes('US$100'), htmlAds.slice(0, 600));
-  t('M3: el recomendado del mock (kick + foto 92×92 + h4 con el caption)', htmlAds.includes('POSTY RECOMIENDA · IMPULSAR') && htmlAds.includes('pz-ads-rec-top') && htmlAds.includes('pz-ads-rec-thumb') && htmlAds.includes('<h4>Así se mueve el color cuando posty lo postea</h4>'), htmlAds.slice(0, 1200));
-  t('M4: los montos del mock en fila ($20/$50/$100 con «dólares») + botón grande «Impulsar por US$ 50»', htmlAds.includes('<b>$20</b><small>dólares</small>') && htmlAds.includes('<b>$50</b><small>dólares</small>') && htmlAds.includes('<b>$100</b><small>dólares</small>') && htmlAds.includes('Impulsar por US$ 50') && htmlAds.includes('class="pz-ads-big"'), htmlAds.slice(0, 1200));
-  t('M5: el fineprint de crédito vive dentro de la tarjeta (pz-ads-credito)', htmlAds.includes('class="pz-ads-credito"') && htmlAds.includes('Se cobra en dólares. Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.'), htmlAds.slice(0, 1200));
-  t('M6: el historial vacío es honesto (pz-ads-empty, primera oración en negrita)', (() => {
+  t('M3: el recomendado del mock v3 (kick POSTY RECOMIENDA + foto + línea, SIN h4 con el caption)', htmlAds.includes('POSTY RECOMIENDA') && !htmlAds.includes('POSTY RECOMIENDA · IMPULSAR') && htmlAds.includes('pz-ads-rec-top') && htmlAds.includes('pz-ads-rec-thumb') && !htmlAds.includes('<h4>'), htmlAds.slice(0, 1200));
+  t('M4: los montos del mock v3 en fila ($20/$50/$100, moneda una sola vez) + desglose y botón grande con el TOTAL «Impulsar por US$ 55»', htmlAds.includes('<b>$20</b>') && htmlAds.includes('<b>$50</b>') && htmlAds.includes('<b>$100</b>') && !htmlAds.includes('<small>dólares</small>') && htmlAds.includes('US$ 50 de pauta + US$ 5 de gestión de Posty = US$ 55') && htmlAds.includes('Impulsar por US$ 55') && htmlAds.includes('class="pz-ads-big"'), htmlAds.slice(0, 1200));
+  t('M5: el fineprint de la tarjeta es la garantía-regla del fee (pz-ads-credito, sin crédito a billetera)', htmlAds.includes('class="pz-ads-credito"') && htmlAds.includes('Si el anuncio no se crea o no queda corriendo, no se cobra nada.'), htmlAds.slice(0, 1200));
+  t('M6: el historial vacío es UNA sola línea honesta («Todavía no impulsaste ningún posteo.»)', (() => {
     let h = '';
     try { h = String(sb.pzAdsHistorialHTML([])); } catch (e) { h = 'ERROR'; }
-    return h.includes('class="pz-ads-empty"') && h.includes("<b>Todavía no impulsaste ningún posteo.</b>") && h.includes('Cuando lo hagas, aparece acá con sus números reales.');
+    return h.includes('class="pz-ads-empty"') && h.includes('<b>Todavía no impulsaste ningún posteo.</b>') && !h.includes('Cuando lo hagas');
   })());
   let htmlEN = '';
   try {
@@ -261,19 +268,19 @@ const POST_HOY = { id: 593, status: 'scheduled', approval: 'approved', media_typ
   try { vm.runInContext(MP_SETUP, sandbox); } catch (e) { console.log('FAIL setup MP: ' + (e && e.message)); }
   const htmlMP = String(sb.pzAdsHTML());
   t('ARS1: usuario MP ve la billetera en pesos ($15.000, sin US$)', htmlMP.includes('$15.000') && !htmlMP.includes('US$') && htmlMP.includes('Crédito para impulsar · en pesos'), htmlMP.slice(0, 500));
-  t('ARS2: usuario MP ve los montos ARS en pesos ($5.000/$10.000/$20.000 pesos)', htmlMP.includes('<b>$5.000</b><small>pesos</small>') && htmlMP.includes('<b>$10.000</b><small>pesos</small>') && htmlMP.includes('<b>$20.000</b><small>pesos</small>') && htmlMP.includes('pzAdsImpulsar(5000') && htmlMP.includes('pzAdsImpulsar(10000') && htmlMP.includes('pzAdsImpulsar(20000'), htmlMP.slice(0, 1200));
-  t('ARS3: usuario MP ve el botón grande en pesos (Impulsar por $10.000)', htmlMP.includes('Impulsar por $10.000'), htmlMP.slice(0, 1200));
-  t('ARS4: usuario MP ve «Se cobra en pesos» + Cargar $10.000/$20.000/$50.000', htmlMP.includes('Se cobra en pesos.') && htmlMP.includes('pzAdsCargar(10000') && htmlMP.includes('pzAdsCargar(20000') && htmlMP.includes('pzAdsCargar(50000') && htmlMP.includes('$10.000') && htmlMP.includes('$50.000'), htmlMP.slice(0, 1200));
+  t('ARS2: usuario MP ve los montos ARS en pesos que se ELIGEN ($5.000/$10.000/$20.000, moneda una sola vez)', htmlMP.includes('<b>$5.000</b>') && htmlMP.includes('<b>$10.000</b>') && htmlMP.includes('<b>$20.000</b>') && !htmlMP.includes('<small>pesos</small>') && htmlMP.includes('pzAdsElegirMonto(5000') && htmlMP.includes('pzAdsElegirMonto(10000') && htmlMP.includes('pzAdsElegirMonto(20000') && htmlMP.includes('pzAdsImpulsar(10000') && htmlMP.includes('En pesos · dura 7 días'), htmlMP.slice(0, 1200));
+  t('ARS3: usuario MP ve el botón grande en pesos con el TOTAL (Impulsar por $11.000 = $10.000 + 10%)', htmlMP.includes('Impulsar por $11.000') && htmlMP.includes('$10.000 de pauta + $1.000 de gestión de Posty = $11.000'), htmlMP.slice(0, 1200));
+  t('ARS4: usuario MP ve la garantía del fee (sin «Se cobra en pesos») + Cargar $10.000/$20.000/$50.000', !htmlMP.includes('Se cobra en pesos.') && htmlMP.includes('Si el anuncio no se crea o no queda corriendo, no se cobra nada.') && htmlMP.includes('pzAdsCargar(10000') && htmlMP.includes('pzAdsCargar(20000') && htmlMP.includes('pzAdsCargar(50000') && htmlMP.includes('$10.000') && htmlMP.includes('$50.000'), htmlMP.slice(0, 1200));
   t('ARS5: el historial MP muestra la moneda del impulso ($10.000 ARS · 7 días)', htmlMP.includes('$10.000 ARS · 7 días') && htmlMP.includes('Activo'), htmlMP.slice(0, 1200));
   // Desajuste 1: MP con billetera todavía en USD (migración pendiente) —
   // la pantalla sigue en ARS porque el que paga es MP.
   try { vm.runInContext('pzBoostState.billetera = {balance_cents:0,currency:"USD",billing_provider:"mp",montos_ars:[10000,20000,50000],presupuestos_ars:[5000,10000,20000]};', sandbox); } catch (e) { console.log('FAIL setup MP/USD: ' + (e && e.message)); }
   const htmlMP2 = String(sb.pzAdsHTML());
-  t('ARS6: MP con billetera todavía en USD sigue mostrando ARS (manda el riel)', htmlMP2.includes('Se cobra en pesos.') && htmlMP2.includes('<b>$10.000</b><small>pesos</small>') && !htmlMP2.includes('US$') && !htmlMP2.includes('dólares'), htmlMP2.slice(0, 800));
+  t('ARS6: MP con billetera todavía en USD sigue mostrando ARS (manda el riel)', htmlMP2.includes('En pesos · dura 7 días') && htmlMP2.includes('<b>$10.000</b>') && htmlMP2.includes('de gestión de Posty') && !htmlMP2.includes('US$') && !htmlMP2.includes('dólares'), htmlMP2.slice(0, 800));
   // Desajuste 2: riel Stripe con billetera ARS vieja — la pantalla es USD.
   try { vm.runInContext('pzBoostState.billetera = {balance_cents:10000,currency:"ARS",billing_provider:"stripe",montos_usd:[20,50,100]}; pzBoostState.elegibles = [' + MP_POST + ']; pzBoostState.selPost = ' + MP_POST + ';', sandbox); } catch (e) { console.log('FAIL setup Stripe/ARS: ' + (e && e.message)); }
   const htmlUS2 = String(sb.pzAdsHTML());
-  t('ARS7: Stripe con billetera ARS vieja sigue mostrando USD (manda el riel)', htmlUS2.includes('US$') && htmlUS2.includes('Se cobra en dólares.') && htmlUS2.includes('<b>$50</b><small>dólares</small>') && htmlUS2.includes('pzAdsImpulsar(50') && !htmlUS2.includes('pesos') && !htmlUS2.includes('Se cobra en pesos'), htmlUS2.slice(0, 800));
+  t('ARS7: Stripe con billetera ARS vieja sigue mostrando USD (manda el riel)', htmlUS2.includes('US$') && htmlUS2.includes('En dólares · dura 7 días') && htmlUS2.includes('<b>$50</b>') && !htmlUS2.includes('<small>dólares</small>') && htmlUS2.includes('pzAdsImpulsar(50') && !htmlUS2.includes('pesos') && !htmlUS2.includes('Se cobra en pesos'), htmlUS2.slice(0, 800));
   // El cobro no cambia: MP manda montoARS, Stripe manda montoUSD.
   try { vm.runInContext(MP_SETUP, sandbox); } catch (e) {}
   fetchCalls.length = 0;

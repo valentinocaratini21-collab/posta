@@ -17726,7 +17726,9 @@ function pzAdsMontosCarga() {
 function pzAdsHistorialHTML(boosts) {
   const list = Array.isArray(boosts) ? boosts : [];
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  if (!list.length) return `<div class="pz-ads-empty"><b>${esc(en ? "You haven't boosted any post yet." : 'Todavía no impulsaste ningún posteo.')}</b>${esc(en ? 'When you do, it shows here with its real numbers.' : 'Cuando lo hagas, aparece acá con sus números reales.')}</div>`;
+  // (LOTE TARJETA-IMPULSAR · 13/11) El vacío de «Tus impulsos» es UNA
+  // línea: «Todavía no impulsaste ningún posteo.» (mock v3 aprobado).
+  if (!list.length) return `<div class="pz-ads-empty"><b>${esc(en ? "You haven't boosted any post yet." : 'Todavía no impulsaste ningún posteo.')}</b></div>`;
   const loc = en ? 'en-US' : 'es-AR';
   const fechaCorta = (ts) => { try { return new Date(String(ts).replace(' ', 'T')).toLocaleDateString(loc, { day: 'numeric', month: 'short' }); } catch (e) { return ''; } };
   const hasta = (b) => {
@@ -17758,6 +17760,132 @@ function pzAdsHistorialHTML(boosts) {
   }).join('') + (list.length > 5 ? `<p class="pz-ads-note">${esc(en ? 'Showing the 5 most recent.' : 'Mostramos los 5 más recientes.')}</p>` : '');
 }
 
+// ---------- LOTE TARJETA-IMPULSAR · 13/11 ----------
+// Rediseño de la tarjeta de Impulsar del tab Ads (mock-impulsar-v3
+// aprobado por Valentino 13/11 13:15): la tarjeta grande habla en UNA
+// línea con los números reales, los montos se ELIGEN (el botón grande
+// impulsa con el elegido, con el mismo POST único de
+// IMPULSAR-DIRECTO), la garantía es una línea, «Elegir otro posteo»
+// deja de ser un link y pasa a ser las 3 recomendaciones chicas con
+// datos reales, y sin Página autorizada la tarjeta se reduce a ese
+// único paso. El flujo de un toque del lote base no se toca:
+// pzAdsImpulsar / pzBoostConfirmar quedan como están.
+
+// (LOTE TARJETA-IMPULSAR) La línea de Posty de la tarjeta grande, con
+// los números REALES del posteo (los mismos reach/likes que elige «el
+// que mejor rindió»). Regla anti-invención: el número que no existe no
+// se escribe — con solo alcance va solo alcance, con solo me gusta va
+// solo me gusta, y sin métricas la frase sale sin números. Si el
+// posteo NO es el recomendado (subió desde las recomendaciones
+// chicas), no se le atribuye «tu mejor posteo»: van sus números y
+// «Mostralo más.», sin la corona.
+function pzAdsRecLinea(p) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const parts = [];
+  if (Number(p.reach || 0) > 0) parts.push(Number(p.reach) + (en ? ' reach' : ' de alcance'));
+  if (Number(p.likes || 0) > 0) parts.push(Number(p.likes) + (en ? ' likes' : ' me gusta'));
+  const nums = parts.join(en ? ' and ' : ' y ');
+  if (p.recomendado) {
+    return (en ? 'This was your best post of the week' : 'Este fue tu mejor posteo de la semana')
+      + (nums ? ': ' + nums : '') + (en ? '. Show it to more people.' : '. Mostralo más.');
+  }
+  const base = nums ? (nums.charAt(0).toUpperCase() + nums.slice(1)) : (en ? 'Already published' : 'Ya está publicado');
+  return base + (en ? '. Show it to more people.' : '. Mostralo más.');
+}
+
+// (LOTE TARJETA-IMPULSAR) ¿La compuerta está cerrada porque la Página
+// no autorizó? Es el motivo 'sin_autorizacion_publicitaria' de
+// pzBoostGate (el server lo manda como 'page_not_authorized' en
+// /elegibles). Hoy es el estado real de TODO cliente externo
+// (auditoría de autorización 13/11: la conexión es solo Instagram
+// Login y la Página se resuelve del lado servidor), así que la tarjeta
+// reducida es un estado principal, no un borde. Otros motivos
+// (Instagram sin conectar, pauta sin configurar, sin datos) NO
+// reducen: la tarjeta completa sigue mostrando su aviso de siempre.
+function pzAdsPaginaSinAutorizar() {
+  const gate = pzBoostGate();
+  return !!(gate.cerrado && gate.motivo === 'sin_autorizacion_publicitaria');
+}
+
+// (LOTE TARJETA-IMPULSAR) ÚNICO punto de entrada del botón «Autorizar
+// mi Página» de la tarjeta reducida. El mecanismo que este toque tiene
+// que disparar lo define el lote de conexión de Página, que va DEBAJO
+// de este en la cadena: cuando exista, se cambia SOLO el cuerpo de
+// esta función y la tarjeta no se rehace. Hoy ningún acto del cliente
+// otorga la Página (auditoría 13/11): el toque re-verifica el estado
+// real contra el servidor (pzBoostLoad trae elegibles + ads_ready
+// frescos) y re-pinta — si la autorización ya está, la tarjeta vuelve
+// completa en el acto; si no, queda el motivo honesto inline. Nunca
+// gasta nada.
+async function pzAdsAutorizarPagina(btn) {
+  const txt0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = gzT('Verificando…', 'Checking…'); }
+  try { await pzBoostLoad(); } catch (e) {}
+  if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; }
+  pzAdsPintar();
+  if (pzAdsPaginaSinAutorizar()) {
+    const el = document.getElementById('pzAdsRecMsg');
+    if (el && !el.textContent) el.textContent = pzBoostMotivo('sin_autorizacion_publicitaria', 0);
+  }
+}
+
+// (LOTE TARJETA-IMPULSAR) Las recomendaciones chicas: otros posteos
+// CON DATOS REALES (alcance o me gusta > 0), sin el de la tarjeta
+// grande y sin los ya impulsados. Sin datos no hay sección: nunca se
+// rellena con posteos sin números.
+function pzAdsOtrosConDatos(p) {
+  const s = pzBoostState || {};
+  const clave = pzBoostKey(p);
+  return (Array.isArray(s.elegibles) ? s.elegibles : []).filter((e) => {
+    if (!e) return false;
+    const k = pzBoostKey(e);
+    if (!k || k === clave) return false;
+    if (e.ya_impulsado || pzBoostImpulsados.has(k)) return false;
+    return Number(e.reach || 0) > 0 || Number(e.likes || 0) > 0;
+  }).slice(0, 3);
+}
+
+function pzAdsOtrosHTML(p) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const otros = pzAdsOtrosConDatos(p);
+  if (!otros.length) return '';
+  const cards = otros.map((e) => {
+    const key = pzBoostKey(e);
+    const img = e.image_path
+      ? `<img src="${esc(e.image_path)}" alt="" style="width:100%;height:64px;object-fit:cover;border-radius:12px;display:block">`
+      : `<div style="width:100%;height:64px;border-radius:12px;background:#EAF5FB"></div>`;
+    const l1 = Number(e.reach || 0) > 0 ? `<div style="font-size:12.5px;font-weight:800;color:#0A1E33">${esc(Number(e.reach) + (en ? ' reach' : ' de alcance'))}</div>` : '';
+    const l2 = Number(e.likes || 0) > 0 ? `<div style="font-size:12.5px;color:#7d93a7;font-weight:600">${esc(Number(e.likes) + (en ? ' likes' : ' me gusta'))}</div>` : '';
+    return `<button type="button" onclick="pzAdsElegirOtro('${key}')" style="flex:1;background:#fff;border:1.5px solid #e3ebf1;border-radius:16px;padding:6px;cursor:pointer;font-family:inherit;text-align:center;box-shadow:0 3px 0 rgba(16,42,67,.05)">${img}<div style="margin-top:6px">${l1}${l2}</div></button>`;
+  }).join('');
+  return `<section style="margin:2px 0 12px"><h3 style="font-size:14.5px;letter-spacing:.09em;font-weight:800;text-transform:uppercase;color:#0A1E33;margin:8px 0 10px">${esc(en ? 'You can also boost' : 'También podés impulsar')}</h3><div style="display:flex;gap:8px">${cards}</div></section>`;
+}
+
+// (LOTE TARJETA-IMPULSAR) Tocar una recomendación chica la sube a la
+// tarjeta grande (la selección es por clave, como en el picker); la
+// que estaba grande vuelve a la lista si tiene datos, porque la lista
+// se deriva del estado en cada pintado.
+function pzAdsElegirOtro(key) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const e = (s.elegibles || []).find((x) => pzBoostKey(x) === key);
+  if (!e) return;
+  s.selId = key;
+  s.selPost = e;
+  pzAdsPintar();
+}
+
+// (LOTE TARJETA-IMPULSAR) Los montos de la tarjeta se ELIGEN: el toque
+// marca la selección y el botón grande pasa a decir «Impulsar por US$
+// {elegido}». Impulsar sigue siendo el acto del botón grande, con el
+// POST único de IMPULSAR-DIRECTO (pzAdsImpulsar -> pzBoostConfirmar).
+function pzAdsElegirMonto(m) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  const monto = Number(m) || 0;
+  if (!pzBoostMontos().includes(monto)) return;
+  s.selMonto = monto;
+  pzAdsPintar();
+}
+
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
@@ -17784,6 +17912,12 @@ function pzAdsHTML() {
   // impulsos». Misma funcionalidad: mismos montos, mismo recomendado,
   // misma billetera, mismo historial, mismas rutas/API, mismos ids y
   // onclicks (pzAdsCargar / pzAdsImpulsar / pzAdsPickOpen).)
+  // (LOTE TARJETA-IMPULSAR · 13/11 · mock v3: ese diseño se redibuja —
+  // la línea pasa a pzAdsRecLinea sin caption, los montos se eligen con
+  // pzAdsElegirMonto y la moneda con la duración va una sola vez, el
+  // link pasa a ser las recomendaciones chicas (pzAdsOtrosHTML) y sin
+  // Página la tarjeta se reduce a «Autorizar mi Página». La billetera,
+  // el historial, las rutas/API y los ids no cambian.)
   const amtTxt = moneda === 'USD' ? ('US$' + saldo) : ('$' + saldo.toLocaleString('es-AR'));
   const walSub = en ? 'Credit to boost' : (moneda === 'USD' ? 'Crédito para impulsar' : 'Crédito para impulsar · en pesos');
   const walletSVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 1 0-4h14v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H4"/><circle cx="16.5" cy="14" r="1.3" fill="currentColor" stroke="none"/></svg>';
@@ -17802,34 +17936,71 @@ function pzAdsHTML() {
   const apPills = [20, 50, 100].map((m) => `<button type="button" class="pz-applepay-pill${pzApplePayMonto === m ? ' pz-applepay-pill-sel' : ''}" data-monto="${m}" onclick="pzAdsApplePayElegir(${m}, this)">$${m}</button>`).join('');
   const apHTML = `<div class="pz-applepay" id="pzAdsApplePay" hidden><div class="pz-applepay-titulo">${esc(en ? 'Or pay with Apple Pay' : 'O pagá con Apple Pay')}</div><div class="pz-applepay-montos">${apPills}</div><div id="pzAdsApplePayBtn"></div><p class="pz-applepay-msg" id="pzAdsApplePayMsg"></p></div>`;
   const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><div class="pz-ads-tarjeta"><button type="button" class="pz-ads-tarjeta-btn" onclick="pzTarjetaInlineAbrir(document.getElementById('pzAdsTarjeta'))">${esc(tarjetaLabel)}</button></div>${apHTML}<div id="pzAdsTarjeta"></div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
-  const kickHTML = `<div class="pz-ads-kick">${esc(en ? 'POSTY RECOMMENDS · BOOST' : 'POSTY RECOMIENDA · IMPULSAR')}</div>`;
-  const otroHTML = `<button type="button" class="pz-ads-other" onclick="pzAdsPickOpen()">↻ ${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
+  const kickHTML = `<div class="pz-ads-kick">${esc(en ? 'POSTY RECOMMENDS' : 'POSTY RECOMIENDA')}</div>`;
   let recHTML = '';
-  const creditoTxt = en
-    ? (moneda === 'USD' ? 'Charged in dollars. If the ad is not created, you don’t lose the money: it stays as credit in your wallet.' : 'Charged in pesos. If the ad is not created, you don’t lose the money: it stays as credit in your wallet.')
-    : (moneda === 'USD' ? 'Se cobra en dólares. Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.' : 'Se cobra en pesos. Si el anuncio no se crea, no perdés la plata: queda como crédito en tu billetera.');
+  // (LOTE TARJETA-IMPULSAR + ADDENDUM 13/11 13:35 — modelo decidido
+  // por Valentino: la pauta corre desde la cuenta publicitaria del
+  // CLIENTE y Meta le cobra a él; la billetera de Posty quedó
+  // descartada) La garantía es UNA línea con la regla del fee: si el
+  // anuncio no se crea o no queda corriendo, no se cobra nada. El fee
+  // del 10% se cobra solo con la campaña corriendo, por el carril del
+  // lote FEE-IMPULSAR; esta tarjeta solo muestra el desglose y el
+  // total antes del toque.
+  const garantiaTxt = en
+    ? 'If the ad isn’t created or doesn’t end up running, nothing is charged.'
+    : 'Si el anuncio no se crea o no queda corriendo, no se cobra nada.';
   if (!p) {
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><p class="pz-ads-credito">${esc(creditoTxt)}</p></div></section>${otroHTML}`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><p class="pz-ads-credito">${esc(garantiaTxt)}</p></div></section>`;
+  } else if (pzAdsPaginaSinAutorizar()) {
+    // (LOTE TARJETA-IMPULSAR) Página sin autorizar: la tarjeta ENTERA
+    // se reduce a ese único paso — foto + una línea + «Autorizar mi
+    // Página» + «No se gastó nada.». Sin montos, sin botón de impulso
+    // y sin párrafo de error. Es el estado principal de todo cliente
+    // externo hoy (auditoría de autorización 13/11). La billetera y el
+    // historial son secciones hermanas y quedan como están.
+    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const lineaAut = p.recomendado
+      ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: authorize your Facebook Page.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: autorizar tu Página de Facebook.')
+      : (en ? 'One tap is all it takes to boost it: authorize your Facebook Page.' : 'Para impulsarlo falta un solo toque: autorizar tu Página de Facebook.');
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Authorize my Page' : 'Autorizar mi Página')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
-    const nums = pzBoostNumerosComa(p);
-    const caption = String((p && p.caption) || '').trim();
-    const linea = (p.recomendado && nums)
-      ? `${esc(en ? 'Your best post this week' : 'El mejor de tu semana')}: <b>${esc(nums)}</b>${esc(en ? '. That is why Posty recommends this one and not another.' : '. Por eso Posty te recomienda este y no otro.')}`
-      : `<b>${esc(nums || (en ? 'Published' : 'Publicado'))}</b>`;
+    // (LOTE TARJETA-IMPULSAR) UNA línea con los números reales y sin el
+    // caption truncado arriba (pzAdsRecLinea). Sale «Por eso Posty te
+    // recomienda este y no otro».
+    const linea = pzAdsRecLinea(p);
     const warn = gate.cerrado ? `<p class="pz-boost-warn">${esc(pzBoostMotivo(gate.motivo, mMain))}</p>` : '';
-    const monedaChica = moneda === 'USD' ? (en ? 'dollars' : 'dólares') : 'pesos';
+    // (LOTE TARJETA-IMPULSAR) El monto elegido manda: el resaltado y el
+    // botón grande siguen a selMonto (preseleccionado el recomendado
+    // del medio). La etiqueta RECOMENDADO queda en el monto
+    // recomendado; la moneda y la duración se dicen UNA sola vez,
+    // bajo la fila — ya no va la moneda bajo cada monto ni los 7 días
+    // en la etiqueta.
+    const mSel = montos.includes(Number(s.selMonto)) ? Number(s.selMonto) : mMain;
+    // (ADDENDUM 13/11) El monto elegido es la PAUTA (lo que Meta le
+    // cobra al cliente desde su cuenta). La gestión de Posty es el
+    // 10% aparte — con los montos vigentes es exacto (20→2, 50→5,
+    // 100→10); el redondeo es al entero de la moneda. El TOTAL se
+    // muestra antes del toque: desglose en UNA línea bajo la fila y
+    // el botón grande dice el total. El toque sigue impulsando por la
+    // pauta (mSel): el cobro del fee es del lote FEE-IMPULSAR.
+    const feeSel = Math.round(mSel * 0.10);
+    const totalSel = mSel + feeSel;
+    const prefijoM = moneda === 'USD' ? 'US$ ' : '$';
+    const desgloseTxt = en
+      ? `${prefijoM}${pzBoostFmtMonto(mSel)} in ad spend + ${prefijoM}${pzBoostFmtMonto(feeSel)} Posty management fee = ${prefijoM}${pzBoostFmtMonto(totalSel)}`
+      : `${prefijoM}${pzBoostFmtMonto(mSel)} de pauta + ${prefijoM}${pzBoostFmtMonto(feeSel)} de gestión de Posty = ${prefijoM}${pzBoostFmtMonto(totalSel)}`;
     const amountBtn = (m) => {
-      const sel = m === mMain;
-      const tag = sel ? `<span class="pz-ads-tag">${esc(en ? 'RECOMMENDED · 7 DAYS' : 'RECOMENDADO · 7 DÍAS')}</span>` : '';
-      return `<button type="button" class="pz-ads-amount${sel ? ' sel' : ''}" onclick="pzAdsImpulsar(${m}, this)">${tag}<b>$${esc(pzBoostFmtMonto(m))}</b><small>${esc(monedaChica)}</small></button>`;
+      const sel = m === mSel;
+      const tag = m === mMain ? `<span class="pz-ads-tag">${esc(en ? 'RECOMMENDED' : 'RECOMENDADO')}</span>` : '';
+      return `<button type="button" class="pz-ads-amount${sel ? ' sel' : ''}" onclick="pzAdsElegirMonto(${m})">${tag}<b>$${esc(pzBoostFmtMonto(m))}</b></button>`;
     };
     const montosHTML = ya
       ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
-      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div>`;
-    const bigBtn = ya ? '' : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mMain}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(mMain))}</button>`;
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div>${caption ? `<h4>${esc(caption)}</h4>` : ''}<p>${linea}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(creditoTxt)}</p>${warn}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${otroHTML}`;
+      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p><p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`;
+    const bigBtn = ya ? '' : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mSel}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(totalSel))}</button>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   }
   const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
   return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${recHTML}${histHTML}`;
