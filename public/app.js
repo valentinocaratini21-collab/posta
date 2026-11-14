@@ -21525,7 +21525,45 @@ function homeGridCompose(input) {
   // su tile va PRIMERA en la grilla (idx 0, arriba a la izquierda;
   // decisión Valentino 5/11 ~13:26, reemplaza v688 y el fix FIFA v1).
   let nextPost = null;
-  try {
+  // (LOTE PROXIMO-POSTEO-AVANZA) Para el INVITADO (la prueba), la carta
+  // «Ver próximo posteo» resolvía SIEMPRE al primer posteo del conjunto:
+  // la selección vigente elige el programado futuro más cercano, y
+  // mientras el posteo de hoy sigue pendiente ese ES el posteo de hoy —
+  // el mismo que el héroe de Hoy ya está mostrando. Los posteos 2 y 3
+  // existían, pero la carta reabría el 1 (defecto confirmado en 4
+  // auditorías de la serie de pruebas: Crumbl, Byredo, Veja ×2).
+  // Selección del invitado: la carta es el posteo SIGUIENTE al de hoy
+  // dentro del conjunto, por fecha de programación (así el avance
+  // 1→2→3 ocurre con la composición, como el avance automático de
+  // siempre); si el de hoy es el último del conjunto, NO hay carta
+  // (fail-closed: el patrón propio de esta UI, «sin próximo no hay
+  // carta»); si hoy no tiene posteo, la carta es el próximo por salir,
+  // igual que hoy. El flujo REGISTRADO no cambia: su selección y su
+  // freno (RITUAL-SIGUIENTE) quedan intactos abajo.
+  let proxGuestSel = false;
+  if (o && o.guest) {
+    try {
+      const tzX = (typeof pcTz === 'function') ? pcTz() : undefined;
+      const hoyKeyX = new Date().toLocaleDateString('en-CA', tzX ? { timeZone: tzX } : {});
+      const cands = [];
+      for (const it of upcoming) {
+        const p = it && it.p;
+        if (!p || isStory(p) || p.status !== 'scheduled' || p.pinned || !p.scheduled_at) continue;
+        let d = null;
+        if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
+        if (!d) { const s = String(p.scheduled_at).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
+        if (!d || isNaN(d)) continue;
+        cands.push({ p, t: d.getTime(), key: (typeof schedDayKeyOf === 'function') ? (schedDayKeyOf(d, tzX) || '') : '' });
+      }
+      cands.sort((a, b) => (a.t - b.t) || ((a.p.id || 0) - (b.p.id || 0)));
+      let curIdx = -1;
+      for (let i = 0; i < cands.length; i++) { if (cands[i].key && cands[i].key === hoyKeyX) { curIdx = i; break; } }
+      if (curIdx >= 0) nextPost = (curIdx + 1 < cands.length) ? cands[curIdx + 1].p : null;
+      else { const nowX = Date.now(); for (const c of cands) { if (c.t > nowX) { nextPost = c.p; break; } } }
+      proxGuestSel = true;
+    } catch (e) { proxGuestSel = false; nextPost = null; }
+  }
+  if (!proxGuestSel) try {
     const nowMs = Date.now();
     let bestT = Infinity;
     for (const it of upcoming) {
@@ -21700,7 +21738,12 @@ function homeGridCompose(input) {
   // 'publishing'/'failed' no viven en upcoming y sin la lista
   // completa el freno no los vería. Sin fecha o sin zona, fail-open
   // (la carta avanza: el freno nunca esconde por duda).
-  if (nextPost && hoyKey) {
+  // (LOTE PROXIMO-POSTEO-AVANZA) El freno RITUAL-SIGUIENTE no aplica al
+  // invitado: su carta ES por definición «el siguiente al de hoy» — no
+  // adelanta la publicación de hoy, muestra el próximo posteo del
+  // conjunto. Frenarla acá recrearía el defecto (la carta desaparecería
+  // todo el día 1 y los posteos 2/3 quedarían invisibles en Inicio).
+  if (nextPost && hoyKey && !(o && o.guest)) {
     try {
       const tzG = (typeof pcTz === 'function') ? pcTz() : undefined;
       const srcG = (typeof o !== 'undefined' && o && Array.isArray(o.all)) ? o.all : upcoming;
@@ -25083,7 +25126,7 @@ async function inicioView() {
   const pl = schedPlacements(allPosts, tz);
   const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter(p => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts });
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts, guest: (typeof pzIsGuest === 'function' && pzIsGuest()) });
   for (const t of tiles) {
     if (t.kind === 'post' && !t.day) {
       const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
@@ -25524,7 +25567,7 @@ async function feedView() {
   const pl = schedPlacements(allPosts, tz);
   const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter(p => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts });
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts, guest: (typeof pzIsGuest === 'function' && pzIsGuest()) });
   for (const t of tiles) {
     if (t.kind === 'post' && !t.day) {
       const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
@@ -29700,7 +29743,7 @@ function hfLiveCompose(allPosts, prof) {
   const pl = schedPlacements(allPosts, tz);
   const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter((p) => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts });
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts, guest: (typeof pzIsGuest === 'function' && pzIsGuest()) });
   const props = {};
   for (const t of tiles) {
     if (t.kind !== 'post' || !t.post) continue;
@@ -33039,7 +33082,7 @@ function f3HomeTilesFrom(all, tz) {
   const pl = schedPlacements(all, tz);
   const upcoming = hfFeedUpcoming(all, tz);
   const published = all.filter(p => p.status === 'published');
-  const tiles = homeGridCompose({ upcoming, published, recents: ((pzHomeProfGet() || {}).recents || []), ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all });
+  const tiles = homeGridCompose({ upcoming, published, recents: ((pzHomeProfGet() || {}).recents || []), ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all, guest: (typeof pzIsGuest === 'function' && pzIsGuest()) });
   for (const t of tiles) {
     if (t.kind === 'post' && !t.day) {
       const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
