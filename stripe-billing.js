@@ -259,11 +259,35 @@ async function createSetupSession(db, client, { user, baseUrl }) {
 // Reenvío del mismo form: si el PM ya está adjunto a ESTE cliente, se
 // sigue igual (idempotente). Si fijar la default falla, el PM igual queda
 // adjunto y el cobro lo toma como el más reciente (resolverTarjetaGuardada).
+// (LOTE TARJETA-ADS-GUARDAR) El customer guardado puede estar inválido en
+// Stripe (borrado, o de otro modo) y el attach tira «No such customer»:
+// espejo del reintento de createSetupSession — se limpia el id guardado y
+// se reintenta una sola vez con un customer nuevo.
 async function adjuntarTarjeta(db, client, user, pmId) {
   client = client || stripeClient();
   if (!client) throw new Error('Stripe no configurado');
   if (!/^pm_[A-Za-z0-9]+$/.test(String(pmId || ''))) throw new Error('PaymentMethod inválido');
-  const customerId = await getOrCreateCustomer(db, client, user);
+  let customerId = await getOrCreateCustomer(db, client, user);
+  try {
+    await adjuntarIntento(client, customerId, pmId);
+  } catch (e) {
+    if (!/No such customer/i.test(String((e && e.message) || ''))) throw e;
+    try { db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').run('', user.id); } catch (err) {}
+    customerId = await getOrCreateCustomer(db, client, { ...user, stripe_customer_id: '' });
+    // Si el reintento también falla, tira el error del reintento (el más
+    // fresco: el customer viejo ya no es el problema — p. ej. el PM es de
+    // otro modo y el motivo pasa a ser 'payment_method_no_existe').
+    await adjuntarIntento(client, customerId, pmId);
+  }
+  await fijarTarjetaPorDefecto(client, customerId, pmId);
+  let pm = null;
+  try { pm = await client.paymentMethods.retrieve(pmId); } catch (err) {}
+  const card = (pm && pm.card) || {};
+  return { customerId, brand: card.brand || '', last4: card.last4 || '' };
+}
+// Un intento de attach con la tolerancia de reenvío del lote original: si
+// el PM ya está adjunto a ESTE cliente, se sigue igual (idempotente).
+async function adjuntarIntento(client, customerId, pmId) {
   try {
     await client.paymentMethods.attach(pmId, { customer: customerId });
   } catch (e) {
@@ -271,11 +295,17 @@ async function adjuntarTarjeta(db, client, user, pmId) {
     try { pm = await client.paymentMethods.retrieve(pmId); } catch (err) {}
     if (!pm || pm.customer !== customerId) throw e;
   }
-  await fijarTarjetaPorDefecto(client, customerId, pmId);
-  let pm = null;
-  try { pm = await client.paymentMethods.retrieve(pmId); } catch (err) {}
-  const card = (pm && pm.card) || {};
-  return { customerId, brand: card.brand || '', last4: card.last4 || '' };
+}
+// (LOTE TARJETA-ADS-GUARDAR) Motivo honesto para el error de adjuntar: el
+// cliente muestra qué falló en vez del genérico, sin exponer el mensaje
+// crudo de Stripe. 'cliente_no_existe' = el customer guardado no existe
+// (ni el reintento lo curó); 'payment_method_no_existe' = el PM no existe
+// en este modo (típico: clave pública de un modo y secreto del otro).
+function motivoAdjuntarError(e) {
+  const msg = String((e && e.message) || '');
+  if (/No such customer/i.test(msg)) return 'cliente_no_existe';
+  if (/No such payment_method/i.test(msg)) return 'payment_method_no_existe';
+  return 'adjuntar_fallido';
 }
 // Deja la tarjeta como la de pago por defecto del cliente (la que lee
 // el cobro de la billetera). Idempotente: fijar la misma dos veces no
@@ -501,7 +531,7 @@ module.exports = {
   stripeConfigured, webhookConfigured, stripeClient, _setClient,
   constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, _clearPriceCache, getOrCreateCustomer,
   buildCheckoutParams, createCheckout, createPortalSession,
-  buildSetupParams, createSetupSession, fijarTarjetaPorDefecto, adjuntarTarjeta,
+  buildSetupParams, createSetupSession, fijarTarjetaPorDefecto, adjuntarTarjeta, motivoAdjuntarError,
   processEvent, applySubscription,
   lookupKeyFor, planIdFromLookupKey, planIdFromSubscription,
   buildTopupIntentParams, crearTopupIntent, validarTopupIntent, recuperarTopupIntent,

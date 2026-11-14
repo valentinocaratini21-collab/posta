@@ -18153,6 +18153,8 @@ function pzTarjetaMotivo(motivo) {
     setup_fallido: gzT('No se pudo abrir el pago seguro. Probá de nuevo en un momento.', 'The secure payment page could not be opened. Try again in a moment.'),
     payment_method_invalido: gzT('Esa tarjeta no se pudo usar. Revisá los datos y probá de nuevo.', 'That card could not be used. Check the details and try again.'),
     adjuntar_fallido: gzT('No se pudo guardar la tarjeta. Revisá los datos y probá de nuevo.', 'The card could not be saved. Check the details and try again.'),
+    cliente_no_existe: gzT('No encontramos tu cuenta de pago. Probá de nuevo — si sigue fallando, avisanos.', 'We couldn\'t find your billing account. Try again — if it keeps failing, let us know.'),
+    payment_method_no_existe: gzT('Esa tarjeta no se pudo verificar. Probá con otra tarjeta.', 'That card couldn\'t be verified. Try a different card.'),
     tarjeta_invalida: gzT('Revisá los datos de la tarjeta y probá de nuevo.', 'Check the card details and try again.'),
     stripe_error: gzT('Algo falló en el formulario seguro. Probá de nuevo.', 'Something went wrong with the secure payment form. Try again.'),
   };

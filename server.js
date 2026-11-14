@@ -25150,7 +25150,9 @@ app.post('/api/billing/stripe/payment-method', requireAuth, async (req, res) => 
     res.json({ ok: true, tarjeta: { brand: out.brand, last4: out.last4 } });
   } catch (e) {
     console.error('[stripe] Error adjuntando tarjeta:', e.message);
-    res.status(500).json({ ok: false, motivo: 'adjuntar_fallido' });
+    // (LOTE TARJETA-ADS-GUARDAR) Motivo honesto (stripe-billing.js): el
+    // cliente ya puede decir qué falló en vez del genérico.
+    res.status(500).json({ ok: false, motivo: stripeBilling.motivoAdjuntarError(e) });
   }
 });
 
@@ -41168,7 +41170,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1054';
+const BUILD_ID = '20261105-v1055';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
