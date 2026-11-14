@@ -36,7 +36,7 @@
  * ===================================================================== */
 
 const crypto = require('crypto');
-const { sendEmail, emailConfigured, emailFaceHeader } = require('./email');
+const { sendEmail, emailConfigured, emailFaceHeader, emailFounderHeader } = require('./email');
 const { EDITIONS, editionFor } = require('./ideas-editions');
 const { RUBROS, SUBRUBROS } = require('./rubro-id');
 
@@ -56,7 +56,7 @@ function baseUrl() {
   return (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
 }
 function ideasFrom() {
-  return process.env.IDEAS_EMAIL_FROM || 'Posty <ideas@postycommunitymanager.com>';
+  return process.env.IDEAS_EMAIL_FROM || 'Valentino Caratini <ideas@postycommunitymanager.com>';
 }
 const IDEAS_REPLY_TO = 'hola@postycommunitymanager.com';
 
@@ -156,11 +156,11 @@ function getSubscriberByToken(db, token) {
 function ideasShell(inner, unsubUrl) {
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader()}
+  ${emailFounderHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
-      Te llega los lunes porque te suscribiste en postycommunitymanager.com · Posty, tu community manager.<br>
+      Te llega los lunes porque te suscribiste en postycommunitymanager.com. Te lo manda Valentino Caratini, Founder de Posty.<br>
       ¿No lo querés más? <a href="${unsubUrl}" style="color:#2793C8;font-weight:700">Date de baja en un clic</a>, sin vueltas.
     </p>
   </div>
@@ -187,12 +187,13 @@ function weeklyIdeasEmail(sub, edition) {
   const html = `
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(edition.preheader)}</div>
 ${ideasShell(`
-    <p style="font-size:16px;margin:0 0 6px">Hola, soy Posty 🐾</p>
+    <p style="font-size:16px;margin:0 0 6px">Hola, soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">${esc(edition.intro)}</p>
     ${ideasHtml}
     <p style="font-size:15px;line-height:1.6;margin:6px 0 20px;color:#47617A">
-      Estas 3 ideas son gratis y son tuyas. Si querés, las hago por vos: armo tu semana
-      completa con tus productos, tus fotos y tus colores, la publico y atiendo tus mensajes.
+      Estas 3 ideas son gratis y son tuyas. Somos fans de lo que hacés y, si querés, las hacemos
+      por vos: armamos tu semana completa con tus productos, tus fotos y tus colores, la
+      publicamos y atendemos tus mensajes.
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${base}/prueba" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Probá Posty gratis 3 días →</a>

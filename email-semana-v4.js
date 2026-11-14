@@ -213,10 +213,10 @@ function buildWeekEmailV4(opts) {
   const closingQ = en ? 'Like the week as-is?' : '¿Te gusta la semana así?';
   const closingBtn = en ? `Approve all ${n} posts` : `Aprobar los ${n} posteos`;
   const foot = en
-    ? `Posty — your community manager<br>
+    ? `Valentino Caratini, Founder of Posty<br>
     <a href="${esc(base)}">Open Posty</a> · Reply to this email if you want to change something<br>
     If you don't want these notices, tell me in the chat.`
-    : `Posty — tu community manager<br>
+    : `Valentino Caratini, Founder de Posty<br>
     <a href="${esc(base)}">Abrir Posty</a> · Respondé este email si querés cambiar algo<br>
     Si no querés recibir estos avisos, decímelo en el chat.`;
 

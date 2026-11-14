@@ -7,7 +7,7 @@
 // si no hay email configurado o el usuario no tiene email (el push cubre).
 'use strict';
 
-const { sendEmail, emailConfigured, emailFaceHeader } = require('./email');
+const { sendEmail, emailConfigured, emailFaceHeader, founderSignLine } = require('./email');
 const { signAction, signWeekAction, absoluteMediaUrl, userHourLabel } = require('./approval');
 const { buildWeekEmailV4 } = require('./email-semana-v4');
 
@@ -129,7 +129,7 @@ async function sendApprovalEmail(db, post) {
     <p style="text-align:center;margin:0 0 20px">
       <a href="${rejectUrl}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">❌ ${en ? 'Reject' : 'Rechazar'}</a>
     </p>
-    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">${en ? 'If you do nothing, it goes out on its own in 3 hours. — ' : 'Si no hacés nada, sale solo en 3 horas. — '}<b>Posty</b> 🤖</p>`, en ? 'en' : undefined);
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">${en ? 'If you do nothing, it goes out on its own in 3 hours. ' : 'Si no hacés nada, sale solo en 3 horas. '}${founderSignLine(en ? 'en' : 'es')}</p>`, en ? 'en' : undefined);
     return await sendEmail({ to: gate.user.email, subject, html });
   } catch (e) {
     console.error(`[notify-email] aprobación post #${post && post.id}:`, e.message);
@@ -158,7 +158,7 @@ async function sendMissedEmail(db, post) {
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Since you haven't approved anything yet, I'd rather not publish without your OK.
       Once you approve the first few, they'll go out on their own after that. 🚀<br>
-      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+      <span style="font-size:13px">${founderSignLine('en')}</span>
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Approve it now</a>
@@ -167,7 +167,7 @@ async function sendMissedEmail(db, post) {
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Como todavía no me aprobaste nada, prefiero no publicar sin tu OK.
       Cuando me apruebes los primeros, después salen solos. 🚀<br>
-      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+      <span style="font-size:13px">${founderSignLine('es')}</span>
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Aprobarlo ahora</a>
@@ -270,13 +270,13 @@ async function sendWeekReady(db, userId, n) {
     }
     const subject = en ? 'Your week is ready 🎉' : 'Tu semana está lista 🎉';
     const html = emailShell(en ? `
-    <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Posty 🤖</p>
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Valentino, founder of Posty</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#0A1E33">I built your week and already scheduled it: <b>${n} ${n === 1 ? 'post goes out on its own' : 'posts go out on their own'}</b> at their times ✨</p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${base}/#/app/schedule" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">See my week 👀</a>
     </p>
     <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Want to change anything? You can adjust it from your week in one tap 👇</p>` : `
-    <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Posty 🤖</p>
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Valentino, fundador de Posty</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#0A1E33">Armé tu semana y ya la dejé programada: <b>${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'}</b> en su horario ✨</p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${base}/#/app/schedule" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">Ver mi semana 👀</a>
@@ -344,7 +344,7 @@ async function sendWeekPreview(db, userId, weekKey, drafts) {
 
     const n = rows.length;
     const html = emailShell(en ? `
-    <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Posty 🤖</p>
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">Hi${user.name ? ' ' + esc(user.name) : ''}! I'm Valentino, founder of Posty</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33">I built your week: <b>${n} ${n === 1 ? 'post' : 'posts'}</b> ready to go out 👇</p>
     ${cards}
     <p style="text-align:center;margin:8px 0 12px">
@@ -352,7 +352,7 @@ async function sendWeekPreview(db, userId, weekKey, drafts) {
     </p>
     <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0 0 8px;text-align:center">One tap and they're scheduled. No opening the app, no chat. ✨</p>
     <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Want to change something or skip this week? Just ignore this email: nothing gets published without your OK.</p>` : `
-    <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Posty 🤖</p>
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Valentino, fundador de Posty</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33">Armé tu semana: <b>${n} ${n === 1 ? 'posteo' : 'posteos'}</b> listos para salir 👇</p>
     ${cards}
     <p style="text-align:center;margin:8px 0 12px">

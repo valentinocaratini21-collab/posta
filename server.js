@@ -4269,7 +4269,7 @@ app.post('/api/auth/forgot', async (req, res) => {
         html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
           ${emailFaceHeader(fen ? 'en' : 'es')}
           <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-            <p style="font-size:16px;line-height:1.6">${fen ? "Hi! I'm Posty 🤖 You asked to reset your password. Tap the button and choose a new one:" : '¡Hola! Soy Posty 🤖 Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:'}</p>
+            <p style="font-size:16px;line-height:1.6">${fen ? "Hi! I'm Valentino, from Posty. You asked to reset your password. Tap the button and choose a new one:" : '¡Hola! Soy Valentino, de Posty. Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:'}</p>
             <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">${fen ? 'Reset my password' : 'Cambiar mi contraseña'}</a></p>
             <p style="font-size:13px;line-height:1.6;color:#47617A">${fen ? "The link expires in 1 hour. If it wasn't you, just ignore this email 😊" : 'El link vence en 1 hora. Si no fuiste vos, ignorá este mail 😊'}</p>
           </div></div>`,
@@ -39511,7 +39511,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1041';
+const BUILD_ID = '20261105-v1042';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

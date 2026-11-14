@@ -159,25 +159,26 @@ function weeklyReminderEmailEn(user, baseUrl, streak, mission) {
   const subject = hasStreak ? `Your streak is still alive ${streak.level.emoji}` : "Let's build this week's posts 📱";
   const streakLine = hasStreak ? `
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      You've gone <b>${streak.current} ${streak.current === 1 ? 'week' : 'weeks'} in a row</b> ${streak.level.emoji} — build this week and keep the streak growing.
+      You've gone <b>${streak.current} ${streak.current === 1 ? 'week' : 'weeks'} in a row</b> ${streak.level.emoji}. We build this week's posts too, and the streak keeps growing.
     </p>` : '';
   const missionLine = (mission && mission.length) ? `
     <div style="background:#fff;border:1.5px dashed #FEC14D;border-radius:12px;padding:16px 18px;margin:0 0 20px">
       <p style="font-size:15px;font-weight:800;margin:0 0 8px;color:#0A1E33">📸 Your photo mission for this week</p>
       ${mission.map((s, i) => `<p style="font-size:14px;line-height:1.5;margin:0 0 6px;color:#47617A"><b>${i + 1}.</b> ${s}</p>`).join('')}
-      <p style="font-size:13px;line-height:1.5;margin:8px 0 0;color:#47617A">Upload them in the app — they'll be the stars of your posts. With real content, everything comes out so much better.</p>
+      <p style="font-size:13px;line-height:1.5;margin:8px 0 0;color:#47617A">Upload them in the app: they'll be the stars of your posts. With real content, everything comes out so much better.</p>
     </div>` : '';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader('en')}
+  ${emailFounderHeader('en')}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋 I'm Valentino, founder of Posty.</p>
     ${streakLine}
     ${missionLine}
+    <p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#47617A">
+      New week, new posts. We build them with your products, your photos and your style, and we publish them for you. It takes 1 minute inside the app.
+    </p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      New week, new posts. Jump in and build your business's posts in 1 minute:
-      I design them and publish them for you.<br>
-      <span style="font-size:13px">Brought to you by <b>Posty</b>, your community manager 🤖</span>
+      We're fans of what you do, and we want your feed to show it.
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Build my week</a>
@@ -185,11 +186,12 @@ function weeklyReminderEmailEn(user, baseUrl, streak, mission) {
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
       You're getting this reminder because you have a Posty account and haven't installed the app on your phone yet.
       Once you install it, these emails turn off by themselves.<br>
-      Don't want them anymore? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      Don't want them anymore? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.<br>
+      Valentino Caratini, Founder of Posty
     </p>
   </div>
 </div>`;
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 function weeklyReminderEmail(user, baseUrl, streak, mission) {
@@ -200,25 +202,26 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
   const subject = hasStreak ? `Tu racha sigue viva ${streak.level.emoji}` : 'Armá los posteos de tu semana 📱';
   const streakLine = hasStreak ? `
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Llevás <b>${streak.current} ${streak.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b> ${streak.level.emoji} — armá esta semana y la racha sigue creciendo.
+      Llevás <b>${streak.current} ${streak.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b> ${streak.level.emoji}. Armamos los de esta semana y la racha sigue creciendo.
     </p>` : '';
   const missionLine = (mission && mission.length) ? `
     <div style="background:#fff;border:1.5px dashed #FEC14D;border-radius:12px;padding:16px 18px;margin:0 0 20px">
       <p style="font-size:15px;font-weight:800;margin:0 0 8px;color:#0A1E33">📸 Tu misión de fotos de esta semana</p>
       ${mission.map((s, i) => `<p style="font-size:14px;line-height:1.5;margin:0 0 6px;color:#47617A"><b>${i + 1}.</b> ${s}</p>`).join('')}
-      <p style="font-size:13px;line-height:1.5;margin:8px 0 0;color:#47617A">Subilas en la app — van a protagonizar tus posteos. Con contenido real, todo sale muchísimo mejor.</p>
+      <p style="font-size:13px;line-height:1.5;margin:8px 0 0;color:#47617A">Subilas en la app: van a protagonizar tus posteos. Con contenido real, todo sale muchísimo mejor.</p>
     </div>` : '';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader()}
+  ${emailFounderHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy Valentino, el fundador de Posty.</p>
     ${streakLine}
     ${missionLine}
+    <p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#47617A">
+      Nueva semana, nuevos posteos. Los armamos con tus productos, tus fotos y tu estilo, y los publicamos por vos. Te lleva 1 minuto desde la app.
+    </p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Nueva semana, nuevos posteos. Entrá y armá los de tu negocio en 1 minuto:
-      yo los diseño y los publico por vos.<br>
-      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+      Somos fans de lo que hacés, y queremos que tu feed lo muestre.
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Armar mi semana</a>
@@ -226,11 +229,12 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
       Te llega este recordatorio porque tenés cuenta en Posty y todavía no instalaste la app en tu teléfono.
       Cuando la instales, estos mails se apagan solos.<br>
-      ¿No querés recibirlos más? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      ¿No querés recibirlos más? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.<br>
+      Valentino Caratini, Founder de Posty
     </p>
   </div>
 </div>`;
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 // LA CARA (2026-10-25 · regla de los dos motivos): todo email a un cliente
@@ -264,6 +268,50 @@ function emailShell(inner, lang) {
     </p>
   </div>
 </div>`;
+}
+
+// (LOTE VOZ-FUNDADOR · 13/11/2026) La voz del fundador: el correo que
+// presenta a Posty a un negocio lo escribe Valentino en primera persona,
+// presentando a Posty, y el trabajo se atribuye al EQUIPO en plural
+// («armamos», «publicamos», «dejamos programado»), nunca «Posty arma»
+// en tercera persona. Reglas de la casa para todo copy nuevo de este
+// lote: sin rayas largas (Valentino, 13/11 21:34: suenan a IA) y, en las
+// piezas de presentación, una línea de fan genuina hacia el negocio
+// antes de la oferta. Referencia canónica de la voz: la carta del
+// fundador aprobada el 13/11 (equipo-posty/representantes/carta-fundador/).
+// La cabecera del fundador comparte la identidad visual de la casa; el
+// nombre y el rol van en TEXTO visible, como la regla de la cara pide.
+const FOUNDER_FROM = 'Valentino Caratini <hola@postycommunitymanager.com>';
+function emailFounderHeader(lang) {
+  const role = lang === 'en' ? 'Founder of Posty' : 'Founder de Posty';
+  return `<div style="background:#2793C8;padding:20px 28px;border-radius:14px 14px 0 0">
+    <img src="${EMAIL_FACE_BASE()}/ai-avatar.png" alt="Posty" width="46" height="46" style="border-radius:50%;display:inline-block;vertical-align:middle">
+    <span style="display:inline-block;vertical-align:middle;margin-left:12px;font-size:17px;font-weight:800;color:#fff">Valentino Caratini <span style="font-weight:600">· ${role}</span></span>
+  </div>`;
+}
+
+function emailFounderShell(inner, lang) {
+  const foot = lang === 'en' ? `
+      Valentino Caratini, Founder of Posty.<br>
+      Don't want these emails? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.` : `
+      Valentino Caratini, Founder de Posty.<br>
+      ¿No querés recibir estos mails? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.`;
+  return `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+  ${emailFounderHeader(lang)}
+  <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+    ${inner}
+    <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">${foot}
+    </p>
+  </div>
+</div>`;
+}
+
+// Firma del fundador para los avisos operativos (clase b del lote): las
+// plantillas transaccionales conservan su cuerpo; solo la firma o el
+// saludo de marca («Posty 🤖») pasa a ser la firma del fundador.
+function founderSignLine(lang) {
+  return lang === 'en' ? '<b>Valentino Caratini</b>, Founder of Posty' : '<b>Valentino Caratini</b>, Founder de Posty';
 }
 
 // LOTE EMAIL-LINDO (v621): previews reales en el nudge de borradores.
@@ -359,7 +407,7 @@ function buildDraftsNudgeEmailEn(user, baseUrl) {
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       I already built them with your brand and your style. ${lead}
       or edit anything you want before they go out. I'll be waiting 😄<br>
-      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+      <span style="font-size:13px">${founderSignLine('en')}</span>
     </p>${draftsNudgeCards(user, 'en')}${buttons}`, 'en');
   return { subject, html };
 }
@@ -393,7 +441,7 @@ function buildDraftsNudgeEmail(user, baseUrl) {
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Ya los armé con tu marca y tu estilo. ${lead}
       o editá lo que quieras antes de que salgan. Te espero 😄<br>
-      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+      <span style="font-size:13px">${founderSignLine('es')}</span>
     </p>${draftsNudgeCards(user, 'es')}${buttons}`);
   return { subject, html };
 }
@@ -419,25 +467,25 @@ function trialAbandonEmailEn(lead, baseUrl, bizName, link) {
   const subject = 'Your week is still saved 👀';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader('en')}
+  ${emailFounderHeader('en')}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-    <p style="font-size:16px;margin:0 0 12px">Hey 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Hey 👋 I'm Valentino, founder of Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Your week is still saved 👀 I built it for <b>${biz}</b> and it came out great.
-      Take a look before it's gone:<br>
-      <span style="font-size:13px">Brought to you by <b>Posty</b>, your community manager 🤖</span>
+      Your week is still saved 👀 We built it for <b>${biz}</b> and it came out great.
+      We're fans of what you do, and this week shows it. Take a look before it's gone:
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">See my week 👀</a>
     </p>
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
-      This is the only notice I'll send you: your week deletes itself in 72 hours.
+      This is the only notice we'll send you: your week deletes itself in 72 hours.
       You left your email in Posty's free trial.<br>
-      Don't want it? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      Don't want it? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.<br>
+      Valentino Caratini, Founder of Posty
     </p>
   </div>
 </div>`;
-  return sendEmail({ to: lead.email, subject, html });
+  return sendEmail({ to: lead.email, subject, html, from: FOUNDER_FROM });
 }
 
 function trialAbandonEmail(lead, baseUrl, bizName, link, lang) {
@@ -446,25 +494,25 @@ function trialAbandonEmail(lead, baseUrl, bizName, link, lang) {
   const subject = 'Tu semana sigue guardada 👀';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader()}
+  ${emailFounderHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-    <p style="font-size:16px;margin:0 0 12px">Che 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Che 👋 Soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Tu semana sigue guardada 👀 La armé para <b>${biz}</b> y está buenísima.
-      Mirala acá antes de que se borre:<br>
-      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+      Tu semana sigue guardada 👀 La armamos para <b>${biz}</b> y está buenísima.
+      Somos fans de lo que hacés, y esta semana lo muestra. Mirala acá antes de que se borre:
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi semana 👀</a>
     </p>
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
-      Este es el único aviso que te mando: tu semana se borra sola en 72 horas.
+      Este es el único aviso que te mandamos: tu semana se borra sola en 72 horas.
       Dejaste tu email en la prueba gratuita de Posty.<br>
-      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.<br>
+      Valentino Caratini, Founder de Posty
     </p>
   </div>
 </div>`;
-  return sendEmail({ to: lead.email, subject, html });
+  return sendEmail({ to: lead.email, subject, html, from: FOUNDER_FROM });
 }
 
 // ---------------------------------------------------------------------------
@@ -478,24 +526,24 @@ function trialPostReadyEmailEn(lead, baseUrl, bizName, link) {
   const subject = 'Your post for tomorrow is ready';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader('en')}
+  ${emailFounderHeader('en')}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-    <p style="font-size:16px;margin:0 0 12px">Hey 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Hey 👋 I'm Valentino, founder of Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Your post for tomorrow is ready 👀 I built it for <b>${biz}</b> and it's waiting for you.
-      Take a look:<br>
-      <span style="font-size:13px">Brought to you by <b>Posty</b>, your community manager 🤖</span>
+      Your post for tomorrow is ready 👀 We built it for <b>${biz}</b> and it's waiting for you.
+      We're fans of what you do, and it shows in this one. Take a look:
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">See my post 👀</a>
     </p>
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
       You left your email in Posty's free trial.<br>
-      Don't want it? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      Don't want it? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.<br>
+      Valentino Caratini, Founder of Posty
     </p>
   </div>
 </div>`;
-  return sendEmail({ to: lead.email, subject, html });
+  return sendEmail({ to: lead.email, subject, html, from: FOUNDER_FROM });
 }
 
 function trialPostReadyEmail(lead, baseUrl, bizName, link, lang) {
@@ -504,24 +552,24 @@ function trialPostReadyEmail(lead, baseUrl, bizName, link, lang) {
   const subject = 'Tu posteo de mañana está listo';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
-  ${emailFaceHeader()}
+  ${emailFounderHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-    <p style="font-size:16px;margin:0 0 12px">Che 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Che 👋 Soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Tu posteo de mañana está listo 👀 Lo armé para <b>${biz}</b> y te está esperando.
-      Miralo acá:<br>
-      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+      Tu posteo de mañana está listo 👀 Lo armamos para <b>${biz}</b> y te está esperando.
+      Somos fans de lo que hacés, y en este posteo se nota. Miralo acá:
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi posteo 👀</a>
     </p>
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
       Dejaste tu email en la prueba gratuita de Posty.<br>
-      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.<br>
+      Valentino Caratini, Founder de Posty
     </p>
   </div>
 </div>`;
-  return sendEmail({ to: lead.email, subject, html });
+  return sendEmail({ to: lead.email, subject, html, from: FOUNDER_FROM });
 }
 
 // ---------------------------------------------------------------------------
@@ -543,20 +591,27 @@ function trialPostReadyEmail(lead, baseUrl, bizName, link, lang) {
 // ---------------------------------------------------------------------------
 function founderTouchEmailEn(lead, baseUrl, weekLink) {
   const link = String(weekLink || baseUrl || '').trim();
-  const subject = "I'm Valentino — writing to you myself";
+  // (LOTE VOZ-FUNDADOR · 13/11) Línea de fan con hueco por negocio: si el
+  // lead trae el nombre del negocio se personaliza; si no, queda la
+  // genuina genérica de la carta del fundador aprobada.
+  const bizName = String((lead && (lead.biz || lead.business || lead.business_name || lead.nombre)) || '').trim();
+  const fanLine = bizName ? `We're fans of what you do at ${bizName}: your product deserves to be seen by a lot more people.` : "We're fans of what you do: your product deserves to be seen by a lot more people.";
+  const subject = "I'm Valentino, writing to you myself";
   const text = [
     'Hi,',
     '',
-    "I'm writing to you myself, from my usual email. The letter you got from Posty may have looked like one more company email, and I wanted you to know that behind Posty there's a person — and that person is me.",
+    "I'm writing to you myself, from my usual email. The letter you got from Posty may have looked like one more company email, and I wanted you to know that behind Posty there's a person, and that person is me.",
     '',
-    "I built Posty because I kept seeing good businesses lose sales over an abandoned Instagram — not for lack of trying: the day just isn't long enough. And the alternative, a human community manager, is expensive, and you still have to chase them to get anything posted.",
+    "I built Posty because I kept seeing good businesses lose sales over an abandoned Instagram, not for lack of trying: the day just isn't long enough. And the alternative, a human community manager, is expensive, and you still have to chase them to get anything posted.",
     '',
-    "Posty is that team member who never misses: it reads your Instagram and your website, builds and publishes your posts and your reel with your products and your way of speaking, gives you a heads-up 30 minutes before every post, keeps an eye on your competitors, and writes you its letter every Sunday. If you have a store, it works with your real catalog and your real stock. And whatever you don't like, you change over chat — like talking to an employee.",
+    "With Posty we are that team that never misses: we read your Instagram and your website, build and publish your posts and your reel with your products and your way of speaking, give you a heads-up 30 minutes before every post, keep an eye on your competitors, and write you our letter every Sunday. If you have a store, we work with your real catalog and your real stock. And whatever you don't like, you change over chat, like talking to an employee.",
+    '',
+    fanLine,
     '',
     'Your week is already built, with your products. Take a look, no commitment:',
     link,
     '',
-    "It's free for 3 days, no card required. And if something is holding you back from trying it, will you tell me what it is? Tell me and we'll sort it out together — that's exactly why I'm writing myself instead of sending a robot.",
+    "It's free for 3 days, no card required. And if something is holding you back from trying it, will you tell me what it is? Tell me and we'll sort it out together: that's exactly why I'm writing myself instead of sending a robot.",
     '',
     'Thanks for reading this far.',
     '',
@@ -571,20 +626,27 @@ function founderTouchEmail(lead, baseUrl, weekLink, lang) {
   // viene, manda lead.lang (users.lang de la cuenta o el idioma de su Carta).
   if ((lang || (lead && lead.lang)) === 'en') return founderTouchEmailEn(lead, baseUrl, weekLink);
   const link = String(weekLink || baseUrl || '').trim();
-  const subject = 'Soy Valentino — te escribo yo';
+  // (LOTE VOZ-FUNDADOR · 13/11) Línea de fan con hueco por negocio: si el
+  // lead trae el nombre del negocio se personaliza; si no, queda la
+  // genuina genérica de la carta del fundador aprobada.
+  const bizName = String((lead && (lead.biz || lead.business || lead.business_name || lead.nombre)) || '').trim();
+  const fanLine = bizName ? `Somos fans de lo que hacés en ${bizName}: ese producto se merece que lo vea mucha más gente.` : 'Somos fans de lo que hacés: tu producto se merece que lo vea mucha más gente.';
+  const subject = 'Soy Valentino, te escribo yo';
   const text = [
     'Hola,',
     '',
     'Te escribo yo mismo, desde mi mail de siempre. La carta que te llegó de Posty pudo parecer un correo más de una empresa, y quería que supieras que atrás de Posty hay una persona, y soy yo.',
     '',
-    'Creé Posty porque vi demasiados negocios buenos perdiendo ventas por tener el Instagram abandonado — no por falta de ganas: es que el día no alcanza. Y la alternativa, un community manager humano, sale cara y encima hay que perseguirlo para que publique.',
+    'Creé Posty porque vi demasiados negocios buenos perdiendo ventas por tener el Instagram abandonado, no por falta de ganas: es que el día no alcanza. Y la alternativa, un community manager humano, sale cara y encima hay que perseguirlo para que publique.',
     '',
-    'Posty es ese miembro del equipo que no falta: lee tu Instagram y tu web, arma y publica tus posteos y tu reel con tus productos y tu forma de hablar, te avisa 30 minutos antes de cada publicación, mira a tu competencia y cada domingo te escribe su carta. Si tenés tienda, trabaja con tu catálogo y tu stock real. Y lo que no te guste, lo cambiás por chat, como quien le habla a un empleado.',
+    'Con Posty formamos ese equipo que no falta: leemos tu Instagram y tu web, armamos y publicamos tus posteos y tu reel con tus productos y tu forma de hablar, te avisamos 30 minutos antes de cada publicación, miramos a tu competencia y cada domingo te escribimos la carta. Si tenés tienda, trabajamos con tu catálogo y tu stock real. Y lo que no te guste, lo cambiás por chat, como quien le habla a un empleado.',
+    '',
+    fanLine,
     '',
     'Tu semana ya está armada, con tus productos. Fijate, sin compromiso:',
     link,
     '',
-    'Es gratis por 3 días, sin tarjeta. Y si hay algo que te frene para probarlo, ¿me contás qué es? Contame y lo vemos juntos — para eso te escribo yo y no un robot.',
+    'Es gratis por 3 días, sin tarjeta. Y si hay algo que te frene para probarlo, ¿me contás qué es? Contame y lo vemos juntos: para eso te escribo yo y no un robot.',
     '',
     'Gracias por leer hasta acá.',
     '',
@@ -601,18 +663,17 @@ function emptyWeekEmailEn(user, baseUrl) {
   const name = (user.name || '').trim();
   const cta = `${baseUrl}/#/app/ideas`;
   const subject = 'Your posts for the week, ready in 2 minutes ⚡';
-  const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
+  const html = emailFounderShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋 I'm Valentino, founder of Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#47617A">
       This week your posts can be ready without you thinking about a thing: tap the
-      button and I'll build them for you — copy, designs and a reel with your brand and your style.
-      Come on, let's crush it together 💪<br>
-      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+      button and we build them for you, with copy, designs and a reel in your brand and your style.
+      We're fans of what you do. Come on, let's crush it together 💪
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">⚡ Let's build your week</a>
     </p>`, 'en');
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 function emptyWeekEmail(user, baseUrl) {
@@ -620,18 +681,17 @@ function emptyWeekEmail(user, baseUrl) {
   const name = (user.name || '').trim();
   const cta = `${baseUrl}/#/app/ideas`;
   const subject = 'Tus posteos de la semana, listos en 2 minutos ⚡';
-  const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+  const html = emailFounderShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#47617A">
       Esta semana tus posteos pueden estar listos sin que pienses en nada: tocá el
-      botón y los armo por vos — textos, diseños y reel con tu marca y tu estilo.
-      Dale, que la rompemos juntos 💪<br>
-      <span style="font-size:13px"><b>Posty</b> 🤖</span>
+      botón y los armamos por vos, con textos, diseños y reel con tu marca y tu estilo.
+      Somos fans de lo que hacés. Dale, que la rompemos juntos 💪
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">⚡ Armemos tu semana</a>
     </p>`);
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 // Aviso "ya salió": cada vez que un posteo se publica, el cliente recibe la prueba
@@ -649,7 +709,7 @@ function publishedEmailEn(user, post, baseUrl, permalink, isFirst, referralLink)
     ${isFirst ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">🎉 <b>It's your first post with me!</b> The first of many — I'll make sure every week comes out better.</p>` : ''}
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       You didn't have to do a thing — we take care of everything.<br>
-      <span style="font-size:13px">With love, <b>Posty</b> 🤖</span>
+      <span style="font-size:13px">With love, ${founderSignLine('en')}</span>
     </p>
     ${permalink ? `<p style="text-align:center;margin:0 0 8px">
       <a href="${permalink}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">View on Instagram</a>
@@ -672,7 +732,7 @@ function publishedEmail(user, post, baseUrl, permalink, isFirst, referralLink) {
     ${isFirst ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">🎉 <b>¡Es tu primer posteo conmigo!</b> El primero de muchísimos — yo me ocupo de que cada semana salga mejor.</p>` : ''}
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       No tuviste que hacer nada — nosotros nos ocupamos de todo.<br>
-      <span style="font-size:13px">Con cariño, <b>Posty</b> 🤖</span>
+      <span style="font-size:13px">Con cariño, ${founderSignLine('es')}</span>
     </p>
     ${permalink ? `<p style="text-align:center;margin:0 0 8px">
       <a href="${permalink}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver en Instagram</a>
@@ -718,7 +778,7 @@ function weeklyReportEmailEn(user, baseUrl, rows) {
     ${cards}
     <p style="font-size:15px;line-height:1.6;margin:16px 0 20px;color:#47617A">
       All of this, while you ran your business. Next week, even more. 🚀<br>
-      <span style="font-size:13px">Your community manager, <b>Posty</b> 🤖</span>
+      <span style="font-size:13px">${founderSignLine('en')}</span>
     </p>
     <p style="text-align:center;margin:0">
       <a href="${baseUrl}/" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">See my week →</a>
@@ -757,7 +817,7 @@ function weeklyReportEmail(user, baseUrl, rows) {
     ${cards}
     <p style="font-size:15px;line-height:1.6;margin:16px 0 20px;color:#47617A">
       Todo esto, mientras vos atendías tu negocio. La semana que viene, más. 🚀<br>
-      <span style="font-size:13px">Tu community manager, <b>Posty</b> 🤖</span>
+      <span style="font-size:13px">${founderSignLine('es')}</span>
     </p>
     <p style="text-align:center;margin:0">
       <a href="${baseUrl}/" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi semana →</a>
@@ -772,30 +832,30 @@ function weeklyReportEmail(user, baseUrl, rows) {
 function trialExpiryEmailEn(user, baseUrl) {
   const cta = `${baseUrl}/#/app/ajustes`;
   const subject = 'Your trial ends tomorrow 🥹';
-  const html = emailShell(`
+  const html = emailFounderShell(`
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Hey, it's Posty. Your free trial ends tomorrow — and I don't want your posts to stop.
-      Pick your plan and on Monday your week is ready as always: you approve, I publish. 💛
+      Hi, I'm Valentino, founder of Posty. Your free trial ends tomorrow, and we don't want your posts to stop.
+      Pick your plan and on Monday your week is ready as always: you approve, we publish. 💛
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">See plans →</a>
     </p>`, 'en');
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 function trialExpiryEmail(user, baseUrl) {
   if (user && user.lang === 'en') return trialExpiryEmailEn(user, baseUrl);
   const cta = `${baseUrl}/#/app/ajustes`;
   const subject = 'Mañana se termina tu prueba 🥹';
-  const html = emailShell(`
+  const html = emailFounderShell(`
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Che, soy Posty. Mañana se termina tu prueba gratis — y no quiero que tus posteos frenen.
-      Elegí tu plan y el lunes tu semana está lista como siempre: vos aprobás, yo publico. 💛
+      Hola, soy Valentino, el fundador de Posty. Mañana se termina tu prueba gratis, y no queremos que tus posteos frenen.
+      Elegí tu plan y el lunes tu semana está lista como siempre: vos aprobás, nosotros publicamos. 💛
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver planes →</a>
     </p>`);
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 // Email día 2 "publicá tu primero" (2026-09-30, mejora "garantizar el primer posteo").
@@ -811,22 +871,21 @@ function firstPublishNudgeEmailEn(user, baseUrl) {
   const cta = `${baseUrl}/#/app/schedule`;
   const subject = 'Your first post is ready to go live 🚀';
   const body = n > 0
-    ? `I already built your posts with your brand and your style. The best part is
+    ? `We already built your posts with your brand and your style. The best part is
       still missing: seeing the first one <b>live on your Instagram</b> 🚀<br>
-      Publish it in 1 tap — I'll take care of the rest.`
-    : `Your trial is still running and your first post hasn't gone out yet — let's
+      Publish it in 1 tap, and we take care of the rest.`
+    : `Your trial is still running and your first post hasn't gone out yet. Let's
       change that right now 🚀<br>
-      Tap the button: I'll build your first post on the spot and we'll publish it together, in 1 tap.`;
-  const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
+      Tap the button: we build your first post on the spot and publish it together, in 1 tap.`;
+  const html = emailFounderShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋 I'm Valentino, founder of Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      ${body}<br>
-      <span style="font-size:13px">Brought to you by <b>Posty</b>, your community manager 🤖</span>
+      ${body}
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">🚀 Publish my first one</a>
     </p>`, 'en');
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 function firstPublishNudgeEmail(user, baseUrl) {
@@ -836,22 +895,21 @@ function firstPublishNudgeEmail(user, baseUrl) {
   const cta = `${baseUrl}/#/app/schedule`;
   const subject = 'Tu primer posteo está listo para salir 🚀';
   const body = n > 0
-    ? `Ya dejé tus posteos armados con tu marca y tu estilo. Falta lo mejor:
+    ? `Ya dejamos tus posteos armados con tu marca y tu estilo. Falta lo mejor:
       ver el primero <b>vivo en tu Instagram</b> 🚀<br>
-      Publicalo con 1 tap — yo me ocupo del resto.`
-    : `Tu prueba sigue corriendo y todavía no salió tu primer posteo — vamos a
+      Publicalo con 1 tap, que nosotros nos ocupamos del resto.`
+    : `Tu prueba sigue corriendo y todavía no salió tu primer posteo. Vamos a
       cambiar eso ya 🚀<br>
-      Tocá el botón: armo tu primer posteo al toque y lo publicamos juntos, en 1 tap.`;
-  const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+      Tocá el botón: armamos tu primer posteo al toque y lo publicamos juntos, en 1 tap.`;
+  const html = emailFounderShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      ${body}<br>
-      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+      ${body}
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">🚀 Publicar mi primero</a>
     </p>`);
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 // Magic link: entrar sin contraseña (vale 15 minutos, un solo uso).
@@ -892,7 +950,7 @@ function magicLinkEmail(email, link, lang) {
     const html = emailShell(`
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Tap it and you're in — no password needed 👇 (valid for 15 minutes)<br>
-      <span style="font-size:13px">Sent to you by <b>Posty</b> 🤖</span>
+      <span style="font-size:13px">Sent to you by ${founderSignLine('en')}</span>
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Sign in to Posty ✨</a>
@@ -903,7 +961,7 @@ function magicLinkEmail(email, link, lang) {
   const html = emailShell(`
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Tocalo y entrás directo, sin contraseña 👇 (vale 15 minutos)<br>
-      <span style="font-size:13px">Te lo manda <b>Posty</b> 🤖</span>
+      <span style="font-size:13px">Te lo manda ${founderSignLine('es')}</span>
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Entrar a Posty ✨</a>
@@ -923,56 +981,58 @@ function magicLinkEmail(email, link, lang) {
 function photoRitualEmailEn(user, baseUrl, missionText) {
   const name = (user.name || '').trim();
   const cta = `${baseUrl}/#/app/schedule?fotos=semana`;
-  const subject = 'This week, can you send me 3 to 5 photos of your business? 📸';
+  const subject = 'This week, can you send us 3 to 5 photos of your business? 📸';
   const idea = String(missionText || '').replace(/</g, '&lt;').trim();
   const ideaLine = idea ? `
     <div style="background:#fff;border:1.5px dashed #FEC14D;border-radius:12px;padding:14px 16px;margin:0 0 20px">
       <p style="font-size:14px;line-height:1.55;margin:0;color:#47617A">💡 <b style="color:#0A1E33">Idea of the week:</b> ${idea}</p>
     </div>` : '';
-  const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋 I'm <b>Posty</b>.</p>
+  const html = emailFounderShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋 I'm Valentino, founder of Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#47617A">
-      I'm building this week's posts and I want them to feature <b>your real business</b>,
-      not generic photos. Can you send me <b>3 to 5 photos</b>? Whatever you have on your phone,
-      just as they are — I'll polish them and turn them into posts ✨
+      We're building this week's posts and we want them to feature <b>your real business</b>,
+      not generic photos. Can you send us <b>3 to 5 photos</b>? Whatever you have on your phone,
+      just as they are: we polish them and turn them into posts ✨
+      We're fans of what you do, and your own photos show it best.
     </p>
     ${ideaLine}
     <p style="text-align:center;margin:0 0 16px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">📸 Upload my photos</a>
     </p>
     <p style="font-size:13.5px;line-height:1.6;margin:0;color:#47617A">
-      Can you manage fewer, or none at all? No worries: I'll create the images myself, as always.
+      Can you manage fewer, or none at all? No worries: we create the images ourselves, as always.
       But with yours, your posts sell twice as much 😉
     </p>`, 'en');
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 function photoRitualEmail(user, baseUrl, missionText) {
   if (user && user.lang === 'en') return photoRitualEmailEn(user, baseUrl, missionText);
   const name = (user.name || '').trim();
   const cta = `${baseUrl}/#/app/schedule?fotos=semana`;
-  const subject = 'Esta semana, ¿me pasás 3 a 5 fotos de tu negocio? 📸';
+  const subject = 'Esta semana, ¿nos pasás 3 a 5 fotos de tu negocio? 📸';
   const idea = String(missionText || '').replace(/</g, '&lt;').trim();
   const ideaLine = idea ? `
     <div style="background:#fff;border:1.5px dashed #FEC14D;border-radius:12px;padding:14px 16px;margin:0 0 20px">
       <p style="font-size:14px;line-height:1.55;margin:0;color:#47617A">💡 <b style="color:#0A1E33">Idea de la semana:</b> ${idea}</p>
     </div>` : '';
-  const html = emailShell(`
-    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy <b>Posty</b>.</p>
+  const html = emailFounderShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#47617A">
-      Estoy armando los posteos de esta semana y quiero que salgan con <b>tu negocio real</b>,
-      no con fotos genéricas. ¿Me pasás <b>3 a 5 fotos</b>? Las que tengas en el celular,
-      como salgan — yo las arreglo y las convierto en posteos ✨
+      Estamos armando los posteos de esta semana y queremos que salgan con <b>tu negocio real</b>,
+      no con fotos genéricas. ¿Nos pasás <b>3 a 5 fotos</b>? Las que tengas en el celular,
+      como salgan: las arreglamos y las convertimos en posteos ✨
+      Somos fans de lo que hacés, y tus fotos propias son las que mejor lo muestran.
     </p>
     ${ideaLine}
     <p style="text-align:center;margin:0 0 16px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">📸 Subir mis fotos</a>
     </p>
     <p style="font-size:13.5px;line-height:1.6;margin:0;color:#47617A">
-      ¿Llegás a menos, o a ninguna? No pasa nada: creo las imágenes yo, como siempre.
+      ¿Llegás a menos, o a ninguna? No pasa nada: creamos las imágenes nosotros, como siempre.
       Pero con las tuyas, tus posteos venden el doble 😉
     </p>`);
-  return sendEmail({ to: user.email, subject, html });
+  return sendEmail({ to: user.email, subject, html, from: FOUNDER_FROM });
 }
 
 // Aviso de CIERRE de prueba (2026-10-25 · A5): cuando la prueba TERMINA
@@ -987,12 +1047,12 @@ function trialClosedEmailEn(user, baseUrl) {
   const biz = String(user.biz || '').replace(/</g, '&lt;').slice(0, 80);
   const subject = 'Your trial ended — your week is saved 💙';
   const inner = `
-    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Hi${name ? `, ${name}` : ''} 👋 I'm Valentino, founder of Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Your trial just ended${biz ? ` — and everything we built for <strong style="color:#0A1E33">${biz}</strong> stays right here` : ''}: your week is ready and saved, with your posts, your colors and everything we learned about your business. If you join, it's all waiting for you exactly as you left it.
+      Your trial just ended${biz ? `, and everything we built for <strong style="color:#0A1E33">${biz}</strong> stays right here` : ''}: your week is ready and saved, with your posts, your colors and everything we learned about your business. We're fans of what you do, and we would love to keep building it with you. If you join, it's all waiting for you exactly as you left it.
     </p>
     <a href="${baseUrl}/#/app/ajustes?plan=1" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">Pay for my plan</a>`;
-  return sendEmail({ to: user.email, subject, html: emailShell(inner, 'en') });
+  return sendEmail({ to: user.email, subject, html: emailFounderShell(inner, 'en'), from: FOUNDER_FROM });
 }
 function trialClosedEmail(user, baseUrl) {
   if (user && user.lang === 'en') return trialClosedEmailEn(user, baseUrl);
@@ -1000,12 +1060,12 @@ function trialClosedEmail(user, baseUrl) {
   const biz = String(user.biz || '').replace(/</g, '&lt;').slice(0, 80);
   const subject = 'Tu prueba terminó — tu semana quedó guardada 💙';
   const inner = `
-    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy Valentino, el fundador de Posty.</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Tu prueba acaba de terminar${biz ? ` — y todo lo que armamos para <strong style="color:#0A1E33">${biz}</strong> queda acá` : ''}: tu semana quedó lista y guardada, con tus posteos, tus colores y todo lo que aprendimos de tu negocio. Si te sumás, te espera tal cual la dejaste.
+      Tu prueba acaba de terminar${biz ? `, y todo lo que armamos para <strong style="color:#0A1E33">${biz}</strong> queda acá` : ''}: tu semana quedó lista y guardada, con tus posteos, tus colores y todo lo que aprendimos de tu negocio. Somos fans de lo que hacés, y nos encantaría seguir armándola con vos. Si te sumás, te espera tal cual la dejaste.
     </p>
     <a href="${baseUrl}/#/app/ajustes?plan=1" style="display:inline-block;background:#2793C8;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:12px">Pagar mi plan</a>`;
-  return sendEmail({ to: user.email, subject, html: emailShell(inner) });
+  return sendEmail({ to: user.email, subject, html: emailFounderShell(inner), from: FOUNDER_FROM });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, emailFounderHeader, emailFounderShell, founderSignLine, FOUNDER_FROM, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
