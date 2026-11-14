@@ -208,9 +208,13 @@ async function cargarBilleteraARS(input) {
 // `buscarDebito(ref)` devuelve el impulso ya hecho (o null).
 // `crearAnuncio({ posteoId, montoUSD | montoARS, spendCents, zona, objetivo })`
 // devuelve { ok, anuncioId, campaignId, adsetId, adId }.
+// Si la creación devolvió { ok: false, motivo: 'activacion_fallida',
+// campaignId, adsetId, adId, error }, el ad SÍ existe en Meta pero quedó
+// pausado: se asienta como error con los ids (tipo 'activacion_fallida')
+// y hacia afuera el motivo sigue siendo 'anuncio_fallido' (SIN débito).
 // `debitar({ clienteId, montoUSD | montoARS, ref, campaignId })` devuelve
 // { ok, saldoNuevo }. `registrar` recibe { tipo: 'exito' |
-// 'debito_fallido', ..., feeCents }.
+// 'debito_fallido' | 'activacion_fallida', ..., feeCents }.
 // (LOTE v888 · decisión Valentino 10/11 14:17) `cobrarDirecto` (solo USD):
 // cuando la billetera es ARS con saldo > 0, el saldo en pesos NO bloquea
 // el cobro en dólares — queda como crédito en pesos y el impulso se cobra
@@ -299,9 +303,28 @@ async function impulsarConSaldo(input) {
   } catch (e) {
     anuncio = { ok: false, error: String((e && e.message) || e).slice(0, 300) };
   }
-  // El ad NO se creó: NO se debita nada.
+  // El ad NO se creó (o se creó pero NO quedó activo): NO se debita nada.
+  // (LOTE ADS-HARDENING-ACTIVACION) Si la activación falló, el ad SÍ
+  // existe en Meta (pausado): queda asentado como error con los ids
+  // para revisión manual — mismo patrón que 'debito_fallido'. Hacia
+  // afuera el motivo sigue siendo 'anuncio_fallido' (sin débito ni cobro).
   if (!anuncio || !anuncio.ok) {
-    return no('anuncio_fallido');
+    if (anuncio && anuncio.motivo === 'activacion_fallida' && typeof registrar === 'function') {
+      try {
+        await registrar({
+          tipo: 'activacion_fallida', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+          anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
+          adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
+          error: anuncio.error || 'activación fallida',
+        });
+      } catch (e) { /* el registro nunca tapa el motivo real */ }
+    }
+    return no('anuncio_fallido', {
+      ...(anuncio && anuncio.campaignId ? { campaignId: anuncio.campaignId } : {}),
+      ...(anuncio && anuncio.adsetId ? { adsetId: anuncio.adsetId } : {}),
+      ...(anuncio && anuncio.adId ? { adId: anuncio.adId } : {}),
+      ...(anuncio && anuncio.anuncioId ? { anuncioId: anuncio.anuncioId } : {}),
+    });
   }
   // El ad SÍ se creó: recién ahora se cobra — del saldo, o directo con
   // la tarjeta guardada (v888: la billetera no se toca).

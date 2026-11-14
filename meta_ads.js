@@ -127,6 +127,21 @@ async function resolvePageId(igUserId) {
   return hit.id;
 }
 
+// Lee el estado real de campaña y conjunto en Meta (fuente de verdad
+// tras el encendido), con el token del riel que corre (el del entorno o
+// el SUAT del cliente vía ctx). Si una lectura falla, ese estado queda
+// null — nunca se asume ACTIVE sin haberlo leído.
+async function verificarActivos(campaignId, adsetId, ctx = null) {
+  const leer = async (id) => {
+    try {
+      const d = await g(`/${id}`, { params: { fields: 'status' }, ctx });
+      return (d && d.status) || null;
+    } catch (e) { return null; }
+  };
+  const [campaign, adset] = await Promise.all([leer(campaignId), leer(adsetId)]);
+  return { campaign, adset };
+}
+
 // Crea campaña + conjunto + creativo + anuncio. Devuelve los ids de Meta.
 // `spendCents` = presupuesto TOTAL en centavos de la moneda de la cuenta
 // (el llamador convierte según getAccountCurrency; acá va directo).
@@ -137,6 +152,9 @@ async function resolvePageId(igUserId) {
 // `destinationType` (p. ej. INSTAGRAM_DIRECT) solo se envía si viene.
 // (Composición sobre v1048: el parámetro `ctx` del riel del cliente
 // se conserva intacto, al final de los históricos.)
+// Si la activación NO deja campaña y conjunto en ACTIVE, createBoost
+// LANZA el error (code 'activacion_fallida', con los ids): el llamador
+// NO debe cobrar por un anuncio que quedó pausado.
 async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days = 7, country = 'AR', ctx = null, objective = 'OUTCOME_ENGAGEMENT', optimizationGoal = 'POST_ENGAGEMENT', destinationType = null, targeting = null }) {
   // (LOTE CONEXIÓN-PÁGINA) Con ctx, la pauta corre en la cuenta del
   // CLIENTE con su SUAT: no exige la configuración de Posty y el
@@ -190,9 +208,33 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
     name, adset_id: adset.id, creative: { creative_id: creative.id }, status: 'ACTIVE',
   }});
 
-  // 5. Encender campaña y conjunto
-  await g(`/${camp.id}`, { method: 'POST', ctx: gctx, params: { status: 'ACTIVE' } }).catch(() => {});
-  await g(`/${adset.id}`, { method: 'POST', ctx: gctx, params: { status: 'ACTIVE' } }).catch(() => {});
+  // 5. Encender campaña y conjunto — y VERIFICAR que quedaron ACTIVE.
+  // (LOTE ADS-HARDENING-ACTIVACION) Antes el encendido se tragaba el
+  // error con .catch(()=>{}) y createBoost devolvía los ids igual: el
+  // endpoint daba el boost por lanzado y cobraba con el anuncio
+  // pausado. Ahora la fuente de verdad es la lectura del estado en
+  // Meta: si no queda ACTIVE, NO se da por lanzado y se lanza el
+  // error (el llamador no cobra nada).
+  let activacionErr = '';
+  try { await g(`/${camp.id}`, { method: 'POST', ctx: gctx, params: { status: 'ACTIVE' } }); }
+  catch (e) { activacionErr = `campaña: ${String((e && e.message) || e).slice(0, 120)}`; }
+  try { await g(`/${adset.id}`, { method: 'POST', ctx: gctx, params: { status: 'ACTIVE' } }); }
+  catch (e) { activacionErr = (activacionErr ? activacionErr + ' · ' : '') + `conjunto: ${String((e && e.message) || e).slice(0, 120)}`; }
+  let estados = await verificarActivos(camp.id, adset.id, gctx);
+  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE') {
+    // Un reintento de lectura: Meta a veces tarda un instante en reflejarlo.
+    await new Promise((r) => setTimeout(r, 1200));
+    estados = await verificarActivos(camp.id, adset.id, gctx);
+  }
+  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE') {
+    const err = new Error(
+      `La activación del anuncio falló en Meta (campaña ${camp.id}: ${estados.campaign || 'sin dato'}, conjunto ${adset.id}: ${estados.adset || 'sin dato'}${activacionErr ? ' — ' + activacionErr : ''}). El anuncio quedó creado pero pausado; no se cobró nada.`
+    );
+    err.code = 'activacion_fallida';
+    err.campaignId = camp.id; err.adsetId = adset.id; err.adId = ad.id; err.creativeId = creative.id;
+    err.campaignStatus = estados.campaign || null; err.adsetStatus = estados.adset || null;
+    throw err;
+  }
 
   return { campaignId: camp.id, adsetId: adset.id, adId: ad.id, creativeId: creative.id };
 }
@@ -419,4 +461,4 @@ async function findLookalikeAudienceId() {
   } catch (e) { return null; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId };

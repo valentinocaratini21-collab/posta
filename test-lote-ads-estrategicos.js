@@ -172,6 +172,10 @@ global.fetch = async (url, opts) => {
   if (u.includes('/adsets')) return json({ id: 'adset_1' });
   if (u.includes('/adcreatives')) return json({ id: 'cre_1' });
   if (u.endsWith('/ads')) return json({ id: 'ad_1' });
+  // (Compatibilidad ADS-HARDENING) createBoost ahora lee el estado real
+  // tras encender: el stub sirve la lectura de estado de campaña y
+  // conjunto (ACTIVE) y el POST de encendido.
+  if (u.includes('/camp_1') || u.includes('/adset_1')) return json(method === 'POST' ? { success: true } : { status: 'ACTIVE' });
   return json({});
 };
 const metaAds = require(path.join(ROOT, 'meta_ads.js'));

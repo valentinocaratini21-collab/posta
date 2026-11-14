@@ -13108,14 +13108,26 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds);
           targetingAds = rt.targeting; resueltoAds = rt.resuelto;
         } catch (e) { targetingAds = null; resueltoAds = null; }
-        const cr = await metaAds.createBoost({
-          name: `Posty · Billetera u${uid} · p${a.posteoId}`,
-          pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
-          spendCents: a.spendCents, days: 7, country: adCountry(uid),
-          objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
-          destinationType: mapeoAds.destinationType, targeting: targetingAds,
-          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null,
-        });
+        let cr;
+        try {
+          cr = await metaAds.createBoost({
+            name: `Posty · Billetera u${uid} · p${a.posteoId}`,
+            pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
+            spendCents: a.spendCents, days: 7, country: adCountry(uid),
+            objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
+            destinationType: mapeoAds.destinationType, targeting: targetingAds,
+            ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null,
+          });
+        } catch (e) {
+          // (LOTE ADS-HARDENING-ACTIVACION) Si la activación falló, el
+          // ad SÍ existe en Meta (pausado): el fallo viaja estructurado
+          // para que impulsarConSaldo lo asiente como error con los
+          // ids. Cualquier otro fallo de creación se propaga como antes.
+          if (e && e.code === 'activacion_fallida') {
+            return { ok: false, motivo: 'activacion_fallida', error: String((e && e.message) || e).slice(0, 300), anuncioId: e.campaignId || null, campaignId: e.campaignId || null, adsetId: e.adsetId || null, adId: e.adId || null };
+          }
+          throw e;
+        }
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
       },
       debitar: async (d) => {
@@ -13160,6 +13172,14 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
               pautaCents: rec.spendCents, moneda: 'USD',
             });
           }
+        } else if (rec.tipo === 'activacion_fallida') {
+          // (LOTE ADS-HARDENING-ACTIVACION) El ad SÍ se creó en Meta
+          // pero NO quedó activo (pausado): sin débito ni cobro, queda
+          // asentado como error con los ids para revisión manual.
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `activación fallida en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, propuestaAds.objetivo || '', audienciaJsonDe());
         } else if (rec.tipo === 'debito_fallido') {
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
@@ -41807,7 +41827,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1071';
+const BUILD_ID = '20261105-v1072';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
