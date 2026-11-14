@@ -1764,6 +1764,27 @@ function captionPassesEn(caption, input) {
     const meta = low.match(/(^|\n)\s*(in your words|as you asked)\s*:/);
     if (meta) return { ok: false, reason: `meta-line: "${meta[2]}:" is an internal engine note, not caption copy — the customer's voice goes in the body, never as a label at the end` };
   }
+  // PLANTILLA-CRUZADA-EN + ESTRELLA-GENÉRICA (Juli, 2026-11-14 — ids reales
+  // 660/663/669/677 y 641/678, trials del 13-14/11): el esqueleto
+  // "[producto], another favorite/service at [negocio]" corrió IDÉNTICO en
+  // seis negocios en 48 h (VEJA, MEJURI, Jeni's, The Ordinary, Crumbl,
+  // Blind Barber) — cuando la misma oración le sirve a cualquier negocio,
+  // no dice nada del tuyo: es la firma de plantilla cruzada, como la
+  // confesión prefabricada en español. Y la estrella coronada no puede ser
+  // la palabra-categoría: "Bar is one of the most requested things at…"
+  // (678) y "cafe is one of the most requested…" (641) nombran el rubro,
+  // no un producto. La fórmula con producto real al frente ("Our house
+  // blend is one of the most requested…") NO se frena: el sujeto genérico
+  // en posición inicial es la firma, no la fórmula.
+  {
+    const tpl = low.match(/\banother (favorite|service|product) at\b/);
+    if (tpl) return { ok: false, reason: `cross-account template: "another ${tpl[1]} at" is the same filler skeleton across businesses — name the product and say one concrete thing about it` };
+    const firstLow = (c.split('\n').map((s) => s.trim()).filter(Boolean)[0] || '')
+      .toLowerCase().replace(/[\p{Extended_Pictographic}]/gu, '').trim();
+    if (/^(bar|cafe|coffee|shop|store|salon|bakery|gym|restaurant)\b[^.\n]*\bis one of the most requested\b/.test(firstLow)) {
+      return { ok: false, reason: 'generic star: the opening crowns a category word ("bar", "cafe") as the star — the star is a real product with a name, or there is no post' };
+    }
+  }
   const trimmedLen = c.trim().length;
   if (trimmedLen < 40) return { ok: false, reason: 'too short (under 40 characters)' };
   if (trimmedLen > 320) return { ok: false, reason: `too long: ${trimmedLen} characters (max 320; target 100-280 in 3 short blocks: hook / body / CTA)` };
