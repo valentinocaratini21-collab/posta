@@ -384,6 +384,22 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (waitEl) waitEl.hidden = true;
     showFirstPostPreview(post);
   }
+  // (LOTE PRUEBA-AVISO-DÍA-2-Y-3) La expectativa se fija en el wow
+  // mismo, con las fechas concretas de SU prueba (mañana y pasado en
+  // la hora del propio dispositivo, que es la zona que el servidor
+  // aplica al invitado): «esto es el día 1 de 3…». La expectativa
+  // durable + el permiso con motivo viven en Inicio (tarjeta
+  // pzTrialAviso de app.js); esta línea cubre la pantalla del wow.
+  function pvDiasTxt() {
+    try {
+      var loc = (LANG === 'en') ? 'en-US' : 'es-ES';
+      function f(d) { return new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(d) + ' ' + new Intl.DateTimeFormat(loc, { day: 'numeric' }).format(d); }
+      var m = f(new Date(Date.now() + 86400000));
+      var p = f(new Date(Date.now() + 2 * 86400000));
+      if (LANG === 'en') return 'This is day 1 of 3: tomorrow, ' + m + ', you’ll get another post, and on ' + p + ' the last one of the trial.';
+      return 'Esto es el día 1 de 3: mañana, ' + m + ', te llega otro posteo, y el ' + p + ' el último de la prueba.';
+    } catch (e) { return ''; }
+  }
   function showFirstPostPreview(post) {
     if (!previewEl || !post) return;
     // (ADDENDUM 3A) A piece still building is NEVER rendered as a
@@ -400,7 +416,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       (img ? '<img class="pv-img" src="' + esc(img) + '" alt="">' : '') +
       (head ? '<p class="pv-head">' + esc(head) + '</p>' : '') +
       (cap ? '<p class="pv-cap">' + esc(cap) + '</p>' : '') +
-      '<p class="pv-note">Finishing your week — don’t close this window…</p>';
+      '<p class="pv-note">Finishing your week — don’t close this window… ' + pvDiasTxt() + '</p>';
     previewEl.hidden = false;
   }
   async function trialStatus(ig) {

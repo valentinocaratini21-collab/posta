@@ -702,6 +702,22 @@ function startScheduler(db) {
     });
     console.log('[posta] Email posteo-listo de prueba: barrido cada 15 min');
   } catch (e) { console.error('[post-ready] no se pudo programar:', e.message); }
+  // Push «tu posteo de hoy está listo» de la prueba (LOTE
+  // PRUEBA-AVISO-DÍA-2-Y-3 · pedido Valentino 13/11 21:06): el canal
+  // push del aviso de los días 2 y 3, gemelo del email de v929 — solo
+  // invitados con suscripción push (el permiso que pidieron con el
+  // motivo en la tarjeta del día 1 de Inicio), ventana 9:00 en su
+  // zona, dedup durable por posteo. Barrido cada 15 min, require
+  // perezoso dentro del callback como el del email.
+  try {
+    cron.schedule('*/15 * * * *', () => {
+      try {
+        const tdp = require('./trial-day-push');
+        if (tdp && typeof tdp.sendTrialDayPushes === 'function') tdp.sendTrialDayPushes(db).catch((e) => console.error('[trial-day-push]', e.message));
+      } catch (e) { console.error('[trial-day-push]', e.message); }
+    });
+    console.log('[posta] Push posteo-listo de prueba (días 2 y 3): barrido cada 15 min');
+  } catch (e) { console.error('[trial-day-push] no se pudo programar:', e.message); }
   // Recordatorio semanal por email: lunes 10:00 (Buenos Aires).
   // Solo a quienes tienen cuenta y NO instalaron la app en el teléfono.
   try {

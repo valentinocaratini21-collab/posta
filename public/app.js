@@ -23718,6 +23718,123 @@ function pzPostWowEmailBind(root) {
     }
   };
 }
+// (LOTE PRUEBA-AVISO-DÍA-2-Y-3 · pedido Valentino 13/11 21:06:
+// «Es muy importante avisarles de la manera correcta y en el momento
+// correcto») La expectativa del día 1 + el permiso con motivo, en
+// Inicio, justo arriba de la tarjeta de email post-wow: «Esto es el
+// día 1 de 3: mañana, {fecha}, te llega otro posteo, y el {fecha} el
+// último de la prueba» + «¿Te aviso cuando esté el de mañana?» de un
+// toque (pushDoSubscribe, el mecanismo de permiso que ya existe; la
+// suscripción es lo que habilita el aviso de trial-day-push.js).
+// Las fechas salen de los posteos REALES de su semana (los días 2 y
+// 3 ya están en allPosts): si el patrón no es hoy/+1/+2, la tarjeta
+// no se muestra — silencio antes que una promesa falsa. Solo
+// invitados, solo el día 1, descartable con «Ahora no». Sin push
+// disponible o con el permiso ya activo, la línea va igual (con el
+// estado «Listo» si ya avisamos) y el email de abajo sigue su curso.
+function pzTrialAvisoDismissKey() {
+  try { const id = (typeof ME !== 'undefined' && ME && (ME.id || ME.email)) || 'anon'; return 'pz_trial_aviso_dismissed_' + id; } catch (e) { return 'pz_trial_aviso_dismissed_anon'; }
+}
+function pzTrialAvisoDias(o) {
+  try {
+    const posts = (o && o.posts) || [];
+    const tz = (o && o.tz) || undefined;
+    const hoyKey = String((o && o.hoyKey) || '');
+    if (!hoyKey || typeof pzHoyDiaKey !== 'function') return null;
+    const byDay = {};
+    for (const p of posts) {
+      if (!p || !p.scheduled_at) continue;
+      const st = String(p.status || '');
+      if (st !== 'scheduled' && st !== 'published') continue;
+      const k = pzHoyDiaKey(p.scheduled_at, tz);
+      if (k && !byDay[k]) byDay[k] = p;
+    }
+    const days = Object.keys(byDay).sort();
+    if (!days.length || days[0] !== hoyKey) return null;
+    const later = days.filter((k) => k > hoyKey);
+    if (later.length < 2) return null;
+    const addD = (key, n) => { const d = new Date(key + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    if (later[0] !== addD(hoyKey, 1) || later[1] !== addD(hoyKey, 2)) return null;
+    return { d2: byDay[later[0]], d3: byDay[later[1]] };
+  } catch (e) { return null; }
+}
+function pzTrialAvisoFecha(p, tz, en) {
+  try {
+    // Por partes: en-US con weekday+day juntos ordena «14 Saturday»;
+    // la frase necesita «sábado 14» / «Saturday 14» en los dos idiomas.
+    const d = new Date(String(p.scheduled_at).replace(' ', 'T'));
+    const loc = en ? 'en-US' : 'es-ES';
+    const wd = new Intl.DateTimeFormat(loc, { timeZone: tz, weekday: 'long' }).format(d);
+    const dn = new Intl.DateTimeFormat(loc, { timeZone: tz, day: 'numeric' }).format(d);
+    return wd + ' ' + dn;
+  } catch (e) { return ''; }
+}
+function pzTrialAvisoPushOn() {
+  try {
+    if (typeof pushPerm === 'function' && pushPerm() === 'granted') {
+      let f = null; try { f = localStorage.getItem('push-sub'); } catch (e) {}
+      if (f === '1') return true;
+    }
+  } catch (e) {}
+  return false;
+}
+function pzTrialAvisoHTML(o) {
+  try {
+    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return '';
+    if (typeof pzIsGuest !== 'function' || !pzIsGuest()) return '';
+    if (!(o && o.hoyPost)) return '';
+    const dias = pzTrialAvisoDias(o);
+    if (!dias) return '';
+    let dismissed = null;
+    try { dismissed = localStorage.getItem(pzTrialAvisoDismissKey()); } catch (e) {}
+    if (dismissed) return '';
+    const en = !!(o && o.en);
+    const tz = (o && o.tz) || undefined;
+    const f2 = pzTrialAvisoFecha(dias.d2, tz, en);
+    const f3 = pzTrialAvisoFecha(dias.d3, tz, en);
+    if (!f2 || !f3) return '';
+    const linea = en
+      ? `This is day 1 of 3: tomorrow, ${esc(f2)}, you’ll get another post, and on ${esc(f3)} the last one of the trial.`
+      : `Esto es el día 1 de 3: mañana, ${esc(f2)}, te llega otro posteo, y el ${esc(f3)} el último de la prueba.`;
+    let ask = '';
+    if (pzTrialAvisoPushOn()) {
+      ask = `<p class="pz-postwow-ok">✔ ${en ? 'Done — I’ll let you know when it’s ready.' : 'Listo — te aviso cuando esté listo.'}</p>`;
+    } else if (typeof pushSupported === 'function' && pushSupported() && (typeof pushPerm !== 'function' || pushPerm() !== 'denied')) {
+      ask = `<p class="pz-postwow-q">${en ? 'Want me to let you know when tomorrow’s is ready?' : '¿Te aviso cuando esté el de mañana?'}</p>`
+        + `<button type="button" class="btn btn-primary btn-block" data-pz-aviso-yes>${en ? 'Let me know' : 'Avisame'}</button>`
+        + `<div class="pz-postwow-err" hidden></div>`
+        + `<button type="button" class="pz-postwow-skip" data-pz-aviso-skip>${en ? 'Not now' : 'Ahora no'}</button>`;
+    }
+    return `<div class="card pz-postwow-email" id="pzTrialAviso">`
+      + `<p class="pz-postwow-q">${linea}</p>`
+      + ask
+      + `</div>`;
+  } catch (e) { return ''; }
+}
+function pzTrialAvisoBind(root) {
+  if (!root) return;
+  const card = root.querySelector('#pzTrialAviso');
+  if (!card) return;
+  const yes = card.querySelector('[data-pz-aviso-yes]');
+  const skip = card.querySelector('[data-pz-aviso-skip]');
+  const err = card.querySelector('.pz-postwow-err');
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (skip) skip.onclick = () => { try { localStorage.setItem(pzTrialAvisoDismissKey(), '1'); } catch (e) {} card.remove(); };
+  if (yes) yes.onclick = async () => {
+    yes.disabled = true;
+    try {
+      const r = (typeof pushDoSubscribe === 'function') ? await pushDoSubscribe() : { ok: false };
+      if (r && r.ok) {
+        card.innerHTML = `<p class="pz-postwow-ok">✔ ${en ? 'Done — I’ll let you know when it’s ready.' : 'Listo — te aviso cuando esté listo.'}</p>`;
+        return;
+      }
+      throw new Error((r && r.reason) || 'fail');
+    } catch (e2) {
+      yes.disabled = false;
+      if (err) { err.hidden = false; err.textContent = en ? 'I couldn’t turn it on — your post will be waiting here anyway 🙂' : 'No pude activarlo — igual tu posteo te espera acá 🙂'; }
+    }
+  };
+}
 function pzHoyHoyHTML(p, o) {
   try {
     const en = !!(o && o.en);
@@ -24155,6 +24272,7 @@ function pzHoyBind(root) {
   try { pzHoyTiraBind(root); } catch (e) {}
   try { pzHoyConserjeFill(); } catch (e) {}
   try { pzPostWowEmailBind(root); } catch (e) {}
+  try { pzTrialAvisoBind(root); } catch (e) {}
 }
 
 // (LOTE REDISENO-R6) Entrada al conserje desde Hoy, solo en ventana
@@ -24507,6 +24625,7 @@ async function inicioView() {
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: needOKR1, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
+      + pzTrialAvisoHTML({ hoyPost: hoyPostR1, posts: allPosts, hoyKey: hoyKeyR1, tz, en: enHome })
       + pzPostWowEmailHTML({ hoyPost: hoyPostR1, en: enHome })
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;

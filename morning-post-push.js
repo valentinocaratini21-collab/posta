@@ -177,6 +177,14 @@ async function sendMorningPostPush(db, opts) {
         const u = db.prepare('SELECT lang, COALESCE(publishing_stopped,0) AS stopped FROM users WHERE id = ?').get(uid);
         if (u) { if (u.lang === 'en') lang = 'en'; stopped = Number(u.stopped) || 0; }
       } catch (e) {}
+      // (LOTE PRUEBA-AVISO-DÍA-2-Y-3) El invitado NO publica: esta
+      // push («sale a las 19:00», ritual) le prometería una salida
+      // que no existe. Su aviso de los días 2 y 3 es el de la prueba
+      // (trial-day-push.js, comprobante «ya está en tu semana»).
+      // Lectura aparte y fail-open: si algo falla, no es invitado.
+      let isGuest = 0;
+      try { const g = db.prepare('SELECT COALESCE(is_guest,0) AS g FROM users WHERE id = ?').get(uid); if (g) isGuest = Number(g.g) || 0; } catch (e) {}
+      if (isGuest) { res.skipped++; continue; }
       if (stopped) { res.skipped++; continue; }
       if (!inMorningWindow(now, tz)) { res.skipped++; continue; }
       const dayKey = dayKeyInTz(now, tz);
