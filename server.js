@@ -486,6 +486,12 @@ const destacadoCobro = require('./destacado-cobro');
 // y elige el posteo; Posty hace el resto. Módulo puro + inyectado.
 const adsBilletera = require('./ads-billetera');
 // === ADS-BILLETERA require (fin) ===
+// === FEE-IMPULSAR require (inicio) ===
+// (LOTE FEE-IMPULSAR) Fee de gestión de Posty (10% de la pauta) cobrado
+// aparte con la tarjeta guardada, solo con la campaña corriendo. La
+// costura es adsFee.cobrarFeeCampanaCorriendo (ver ads-fee.js).
+const adsFee = require('./ads-fee');
+// === FEE-IMPULSAR require (fin) ===
 const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
 
 // Funnel: eventos de conversión (prueba → registro → conexión → semana → pago).
@@ -11414,16 +11420,20 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
     }
     if (!targetId) return res.status(400).json({ ok: false, motivo: 'sin_destacado' });
     if (!posteoIdReq && !st.destacadoPublicado) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
-    if (!metaAds.adsConfigured()) return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
     let gate = { ready: false };
     try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
-    if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
+    // (LOTE CONEXIÓN-PÁGINA) Sin configuración de Posty, el riel del
+    // cliente igual corre: su conexión capturada es la habilitación.
+    if (!metaAds.adsConfigured() && gate.via !== 'cliente') return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: gate.code === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria', code: gate.code || null, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
     // Permiso ads_management (App Review): se verifica ANTES de cobrar.
     // Sin él, Meta rechaza la creación del anuncio DESPUÉS del cobro
     // (el cliente pagaría por un ad que nunca corre). Sin verificar
     // (Meta caído) también se bloquea: nunca se asume el permiso.
     try {
-      const perm = await metaAds.checkAdsPermission();
+      const perm = gate.via === 'cliente'
+        ? await metaAds.checkClientAdsAccess(gate.suat, gate.adAccountId)
+        : await metaAds.checkAdsPermission();
       if (!perm.ok) return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
       if (!perm.hasAdsManagement) return res.status(409).json({ ok: false, motivo: 'ads_sin_permiso' });
     } catch (e) {
@@ -11431,11 +11441,60 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
     }
     // (LOTE MONEDA-CUENTA v976) Moneda de la cuenta verificada DESPUÉS
     // del permiso y ANTES de cobrar: indeterminada = sin cobro, sin ad.
-    const monedaCuenta = await monedaCuentaAds();
+    // (LOTE CONEXIÓN-PÁGINA) Con riel del cliente, la moneda es la de
+    // SU cuenta (leída con su SUAT), no la de la cuenta de Posty.
+    const monedaCuenta = gate.via === 'cliente'
+      ? await metaAds.getAccountCurrency({ token: gate.suat, adAccountId: gate.adAccountId }).then(c => (c === 'USD' || c === 'ARS') ? c : null).catch(() => null)
+      : await monedaCuentaAds();
     if (!monedaCuenta) return res.status(503).json({ ok: false, motivo: 'moneda_cuenta_indeterminada' });
     const post = db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(targetId, uid) || {};
     if (!post.ig_media_id) return res.status(409).json({ ok: false, motivo: 'sin_publicar' });
     const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
+    // (LOTE IMPULSAR-DIRECTO-RE-RIELADO) RIEL DEL CLIENTE: el
+    // destacado corre en la cuenta del cliente, así que el cobro
+    // íntegro con la tarjeta de procesarImpulso NO corre (Meta le
+    // cobra la pauta directo a él; cobrarle también el monto entero
+    // acá sería pagar dos veces). Posty cobra solo su 10% de gestión
+    // por la costura del fee, si la campaña quedó corriendo.
+    if (gate.via === 'cliente') {
+      const convDest = destacadoSemana.conversionParaCuenta(destacadoSemana.conversionARSFromEnv(process.env), monedaCuenta);
+      const spendDest = typeof convDest === 'function' ? convDest(monto) : 0;
+      if (!(typeof spendDest === 'number' && Number.isFinite(spendDest) && spendDest > 0)) {
+        return res.status(409).json({ ok: false, motivo: 'conversion_pendiente' });
+      }
+      let crD = null;
+      try {
+        crD = await metaAds.createBoost({
+          name: `Posty · Destacado u${uid} · p${targetId}`,
+          pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
+          spendCents: spendDest, days: 7, country: adCountry(uid),
+          ctx: { token: gate.suat, adAccountId: gate.adAccountId },
+        });
+      } catch (e) { crD = null; }
+      if (!crD || !crD.campaignId) {
+        // Sin campaña no hay cobro de ningún tipo; queda el registro
+        // 'error' para el equipo, como en el riel histórico.
+        try {
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
+            VALUES (?,?,?,0,0,0,?,'error','engagement',7,?)`)
+            .run(uid, targetId, post.ig_media_id, monedaCuenta, 'creación fallida en la cuenta del cliente (destacado, riel cliente)');
+        } catch (e) {}
+        return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
+      }
+      db.prepare(`INSERT INTO ad_boosts
+        (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
+        VALUES (?,?,?,?,0,?,?,'active',?,?,?,'engagement',7)`)
+        .run(uid, targetId, post.ig_media_id, spendDest, spendDest, monedaCuenta, crD.campaignId, crD.adsetId || '', crD.adId || '');
+      // El fee es el 10% del monto USD que el cliente eligió (la
+      // pauta que corre en su cuenta es ese monto convertido a la
+      // moneda de su cuenta; la gestión es sobre el monto elegido).
+      feeImpulsoTrasActivacion(uid, {
+        postId: targetId, campaignId: crD.campaignId, adsetId: crD.adsetId || '',
+        pautaCents: Math.round(monto * 100), moneda: 'USD', metaToken: gate.suat,
+      });
+      return res.json({ ok: true, cobroId: null, anuncioId: crD.campaignId, posteoId: targetId, montoUSD: monto, dias: 7, riel: 'cliente' });
+    }
     const r = await destacadoSemana.procesarImpulso({
       semana: { destacadoId: targetId }, monto, clienteId: uid,
       zona: adCountry(uid), env: process.env, adsConfigurado: true,
@@ -11451,6 +11510,7 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
           name: `Posty · Destacado u${uid} · p${a.posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
           spendCents: a.spendCents, days: 7, country: adCountry(uid),
+          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null,
         });
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
       },
@@ -12208,6 +12268,58 @@ app.get('/api/ads/billetera/hoy', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar el posteo de hoy' }); }
 });
 
+// === FEE-IMPULSAR · LA COSTURA (inicio) ===
+// (LOTE FEE-IMPULSAR) Punto de enganche del fee de gestión (10% de la
+// pauta): se llama UNA vez por campaña, en el punto exacto en que la
+// activación quedó verificada — hoy, el registro de éxito del impulso
+// de abajo (la campaña ya existe en Meta con sus ids y quedó asentada
+// activa); el riel sobre la cuenta del cliente (CONEXIÓN-PÁGINA) llama
+// a ESTA misma función apenas su activación quede verificada, con
+// pautaCents = el presupuesto total de la campaña del cliente. El
+// módulo (ads-fee.js) re-verifica que campaña y conjunto estén ACTIVE
+// en Meta antes de cobrar (fail-closed, espejo de verificarActivos de
+// ADS-HARDENING) y es idempotente por campaña. NUNCA rompe el impulso:
+// un fee que no sale con la campaña corriendo queda registrado como
+// pendiente en ad_fees + señal al equipo (track + log), nada más.
+// COMPOSICIÓN (LOTE IMPULSAR-DIRECTO-RE-RIELADO): el riel del
+// cliente NO pasa por este enganche desde el registro de billetera:
+// su rama corre ANTES de impulsarConSaldo (la billetera no se toca)
+// y llama a esta misma función con pautaCents = el presupuesto
+// íntegro de la campaña del cliente y metaToken = su SUAT, para que
+// la verificación de «corriendo» lea con el token del cliente. Este
+// enganche del registro queda para el riel histórico (cuenta propia),
+// donde la pauta USD no lleva split interno (el split de adSplit es
+// solo del flujo ARS, que este enganche no toca: está gateado a USD).
+function feeImpulsoTrasActivacion(uid, datos) {
+  try {
+    return adsFee.cobrarFeeCampanaCorriendo(db, {
+      client: stripeBilling.stripeClient(),
+      // (LOTE IMPULSAR-DIRECTO-RE-RIELADO) El riel del cliente lee
+      // los estados de SU campaña con SU token: sin esto, la
+      // verificación usaría el token de Posty y jamás vería
+      // «corriendo» una campaña de la cuenta del cliente (no cobraría
+      // nunca: fail-closed pero roto). Sin metaToken, el lector por
+      // defecto es el histórico de Posty.
+      ...(datos.metaToken ? { metaToken: datos.metaToken } : {}),
+      senalEquipo: (info) => {
+        try { track(info.userId, 'fee_impulso_pendiente', String(info.campanaRef || '')); } catch (e) {}
+        console.error('[fee-impulso] fee pendiente:', JSON.stringify(info));
+      },
+    }, {
+      userId: uid,
+      postId: datos.postId,
+      campaignId: datos.campaignId,
+      adsetId: datos.adsetId,
+      pautaCents: datos.pautaCents,
+      moneda: datos.moneda || 'USD',
+    }).catch((e) => { console.error('[fee-impulso] costura:', (e && e.message) || e); return null; });
+  } catch (e) {
+    console.error('[fee-impulso] costura:', (e && e.message) || e);
+    return null;
+  }
+}
+// === FEE-IMPULSAR · LA COSTURA (fin) ===
+
 // Impulsar con saldo: el cliente elige posteo + monto; Posty hace el resto.
 // El débito ocurre SOLO cuando el ad se creó bien en Meta; si la creación
 // falla, NO se debita nada. (v888: la tasa tiene default 1425, el gate
@@ -12255,15 +12367,19 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     let yaActivo = null;
     try { yaActivo = db.prepare(`SELECT id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND status IN ('pending','active') LIMIT 1`).get(uid, posteoId); } catch (e) { yaActivo = null; }
     if (yaActivo) return res.status(409).json({ ok: false, motivo: 'ya_impulsado' });
-    if (!metaAds.adsConfigured()) return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
     let gate = { ready: false };
     try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
-    if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_autorizacion_publicitaria' });
-    const elig = await metaAds.checkEligibility(cand.ig_media_id).catch(() => ({ ok: true }));
+    // (LOTE CONEXIÓN-PÁGINA) Sin configuración de Posty, el riel del
+    // cliente igual corre: su conexión capturada es la habilitación.
+    if (!metaAds.adsConfigured() && gate.via !== 'cliente') return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: gate.code === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria', code: gate.code || null, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
+    const elig = await metaAds.checkEligibility(cand.ig_media_id, gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null).catch(() => ({ ok: true }));
     if (!elig.ok) return res.status(409).json({ ok: false, motivo: 'sin_elegible' });
     // Permiso ads_management ANTES de gastar (mismo gate que impulsar).
     try {
-      const perm = await metaAds.checkAdsPermission();
+      const perm = gate.via === 'cliente'
+        ? await metaAds.checkClientAdsAccess(gate.suat, gate.adAccountId)
+        : await metaAds.checkAdsPermission();
       if (!perm.ok) return res.status(503).json({ ok: false, motivo: 'ads_verificacion_fallida' });
       if (!perm.hasAdsManagement) return res.status(409).json({ ok: false, motivo: 'ads_sin_permiso' });
     } catch (e) {
@@ -12274,9 +12390,71 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     // débito y sin cobro directo. El riel ARS gasta pesos y solo puede
     // correr sobre una cuenta ARS: sobre otra moneda no hay conversión
     // definida (nunca se inventa una tasa) y se frena igual.
-    const monedaCuenta = await monedaCuentaAds();
+    // (LOTE CONEXIÓN-PÁGINA) Con riel del cliente, la moneda es la de
+    // SU cuenta (leída con su SUAT), no la de la cuenta de Posty.
+    const monedaCuenta = gate.via === 'cliente'
+      ? await metaAds.getAccountCurrency({ token: gate.suat, adAccountId: gate.adAccountId }).then(c => (c === 'USD' || c === 'ARS') ? c : null).catch(() => null)
+      : await monedaCuentaAds();
     if (!monedaCuenta) return res.status(503).json({ ok: false, motivo: 'moneda_cuenta_indeterminada' });
     if (esARS && monedaCuenta !== 'ARS') return res.status(409).json({ ok: false, motivo: 'moneda_cuenta_incompatible' });
+    // (LOTE IMPULSAR-DIRECTO-RE-RIELADO) RIEL DEL CLIENTE: con la
+    // conexión capturada, la campaña corre en la cuenta publicitaria
+    // DEL CLIENTE y Meta le cobra directo a él — la billetera de
+    // Posty NO se toca en este camino (ni débito ni cobro directo:
+    // cobrarle también acá sería pagar dos veces la misma pauta). Lo
+    // único que Posty cobra es su gestión: el 10% aparte, con la
+    // tarjeta guardada, vía la costura del fee, y solo si la campaña
+    // quedó corriendo. El riel es el de los montos USD de la decisión
+    // ($20/$50/$100): un pedido en pesos o una cuenta que no opera en
+    // USD frena cerrado, sin gasto de ningún lado.
+    if (gate.via === 'cliente') {
+      if (esARS || monedaCuenta !== 'USD') return res.status(409).json({ ok: false, motivo: 'moneda_cuenta_incompatible' });
+      if ((getSettings(uid) || {}).demo_mode) return res.status(409).json({ ok: false, motivo: 'demo' });
+      const pautaCents = Math.round(montoUSD * 100);
+      // Reintento del mismo impulso (mismo día, posteo y monto): el ya
+      // creado, sin segunda campaña (la costura del fee además es
+      // idempotente por campaña).
+      let previo = null;
+      try { previo = db.prepare(`SELECT id, meta_campaign_id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND budget_cents = ? AND currency = 'USD' AND status IN ('active','pending') AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid, posteoId, pautaCents); } catch (e) { previo = null; }
+      if (previo) {
+        return res.json({ ok: true, ya_creado: true, anuncioId: previo.meta_campaign_id || null, posteoId, montoUSD, dias: 7, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
+      }
+      let cr = null;
+      try {
+        cr = await metaAds.createBoost({
+          name: `Posty · Impulso u${uid} · p${posteoId}`,
+          pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
+          spendCents: pautaCents, days: 7, country: adCountry(uid),
+          ctx: { token: gate.suat, adAccountId: gate.adAccountId },
+        });
+      } catch (e) { cr = null; }
+      if (!cr || !cr.campaignId) {
+        // Meta no creó la campaña: no se cobra fee ni se debita nada.
+        // Queda el registro 'error' para el equipo (ese estado no
+        // bloquea el reintento: el gate de arriba solo mira
+        // active/pending).
+        try {
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
+            VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?)`)
+            .run(uid, posteoId, cand.ig_media_id, pautaCents, 'creación fallida en la cuenta del cliente (riel cliente)');
+        } catch (e) {}
+        return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
+      }
+      db.prepare(`INSERT INTO ad_boosts
+        (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
+        VALUES (?,?,?,?,0,?,'USD','active',?,?,?,'engagement',7)`)
+        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '');
+      try { track(uid, 'ad_boost_usd', String(pautaCents)); } catch (e) {}
+      try { track(uid, 'ad_boost_riel_cliente', String(pautaCents)); } catch (e) {}
+      // La costura del fee: 10% del presupuesto ÍNTEGRO de la campaña
+      // del cliente, verificado con SU token (metaToken), en el acto.
+      feeImpulsoTrasActivacion(uid, {
+        postId: posteoId, campaignId: cr.campaignId, adsetId: cr.adsetId || '',
+        pautaCents, moneda: 'USD', metaToken: gate.suat,
+      });
+      return res.json({ ok: true, anuncioId: cr.campaignId, posteoId, montoUSD, dias: 7, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
+    }
     const w = getAdWallet(uid);
     // (LOTE v888 · decisión Valentino 10/11 14:17) El saldo en pesos NO
     // bloquea el cobro en dólares: queda como crédito en pesos y el
@@ -12307,6 +12485,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           name: `Posty · Billetera u${uid} · p${a.posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
           spendCents: a.spendCents, days: 7, country: adCountry(uid),
+          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null,
         });
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
       },
@@ -12341,6 +12520,17 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
             VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7)`)
             .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
           try { track(uid, esARS ? 'ad_boost_ars' : 'ad_boost_usd', String(budgetRec)); } catch (e) {}
+          // (LOTE FEE-IMPULSAR) La costura del fee de gestión, en el
+          // punto exacto: la campaña ya quedó registrada activa con
+          // sus ids de Meta. Solo la rama USD (el fee de la decisión
+          // es sobre la pauta en dólares) y solo con campaña real. Es
+          // asíncrona y nunca frena ni rompe la respuesta del impulso.
+          if (!esARS && rec.campaignId) {
+            feeImpulsoTrasActivacion(uid, {
+              postId: rec.posteoId, campaignId: rec.campaignId, adsetId: rec.adsetId || '',
+              pautaCents: rec.spendCents, moneda: 'USD',
+            });
+          }
         } else if (rec.tipo === 'debito_fallido') {
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
@@ -12453,18 +12643,73 @@ app.post('/api/ads/webhook', async (req, res) => {
 const ADS_GATE_MSG = {
   ads_not_configured: 'Estamos terminando de habilitar la pauta para tu cuenta. Te avisamos en cuanto esté lista.',
   ig_not_connected: 'Conectá tu Instagram para poder potenciar tus posteos.',
-  page_not_authorized: 'Estamos terminando de conectar tu cuenta para la pauta. Te avisamos en cuanto esté lista.',
+  // (LOTE CONEXIÓN-PÁGINA) Nunca más «te avisamos» ni «escribinos»: lo
+  // que falta lo conecta el propio cliente en un toque, en el mismo
+  // flujo de conexión (connect_url acompaña en la respuesta del gate).
+  ads_not_connected: 'Falta conectar tu cuenta publicitaria: es un toque, en el mismo flujo de conexión, y no se gasta nada hasta que impulses.',
+  page_not_authorized: 'Conectá tu cuenta publicitaria para impulsar: es un toque, en el mismo flujo de conexión.',
 };
-async function adsReadiness(userId) {
-  if (!metaAds.adsConfigured()) return { ready: false, code: 'ads_not_configured' };
-  const user = db.prepare('SELECT ig_user_id FROM users WHERE id = ?').get(userId) || {};
-  if (!user.ig_user_id) return { ready: false, code: 'ig_not_connected' };
+// (LOTE CONEXIÓN-PÁGINA) La conexión publicitaria capturada en el
+// login unificado (tabla ig_ads_connections, ver db.js). Es la fuente
+// contra la que valida la compuerta: la Página y la cuenta del cliente
+// ya NO se buscan entre los activos del system user de Posty.
+function getAdsConnection(userId) {
   try {
-    const pageId = await metaAds.resolvePageId(user.ig_user_id);
-    return { ready: true, pageId, igUserId: user.ig_user_id };
-  } catch (e) {
-    return { ready: false, code: 'page_not_authorized' };
+    const row = db.prepare('SELECT * FROM ig_ads_connections WHERE user_id = ?').get(userId);
+    if (!row) return null;
+    const parse = (t) => { try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+    return { ...row, ig_account_ids: parse(row.ig_account_ids), ad_accounts: parse(row.ad_accounts) };
+  } catch (e) { return null; }
+}
+function adsConnectionReady(userId) {
+  const c = getAdsConnection(userId);
+  return !!(c && c.suat && c.primary_ad_account_id);
+}
+// Configuración del login unificado: el config_id es del dashboard de
+// Meta (env); la app y su secreto se resuelven igual que en el
+// callback de Instagram (settings por usuario → env).
+function unifiedCfgFor(userId) {
+  const s = getSettings(userId);
+  return {
+    configId: (process.env.META_FLB_CONFIG_ID || '').trim(),
+    appId: s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID || '',
+    appSecret: s.meta_app_secret || process.env.IG_APP_SECRET || process.env.META_APP_SECRET || '',
+  };
+}
+function unifiedReady(userId) {
+  const c = unifiedCfgFor(userId);
+  return !!(c.configId && c.appId && c.appSecret);
+}
+async function adsReadiness(userId) {
+  // El IG conectado vive en settings (lo escribe el callback de
+  // conexión). La versión anterior leía users.ig_user_id — una columna
+  // que este código nunca crea: en una base nueva la consulta lanzaba
+  // y TODOS los consumidores caían a «no listo» en silencio.
+  const s = getSettings(userId);
+  const igUserId = s.ig_user_id || '';
+  if (!igUserId) return { ready: false, code: 'ig_not_connected' };
+  // (1) Riel del cliente: lo capturado en la conexión manda.
+  const conn = getAdsConnection(userId);
+  if (conn && conn.suat && conn.primary_ad_account_id) {
+    return {
+      ready: true, via: 'cliente', igUserId,
+      pageId: conn.fb_page_id || '', adAccountId: conn.primary_ad_account_id,
+      suat: conn.suat, currency: conn.ad_currency || '',
+    };
   }
+  // (2) Riel histórico de la cuenta propia: la Página resuelve con el
+  // token del sistema porque está en el portfolio de Posty. Sigue
+  // intacto para las cuentas que ya resolvían (la propia incluida).
+  if (metaAds.adsConfigured()) {
+    try {
+      const pageId = await metaAds.resolvePageId(igUserId);
+      return { ready: true, via: 'posty', pageId, igUserId };
+    } catch (e) { /* no resuelve: cae al camino de conexión */ }
+  }
+  if (!metaAds.adsConfigured() && !(conn && conn.suat)) return { ready: false, code: 'ads_not_configured' };
+  // (3) Falta la cuenta publicitaria del cliente: un toque al mismo
+  // flujo de conexión la captura (nunca «te avisamos»/«escribinos»).
+  return { ready: false, code: 'ads_not_connected', connect_url: '/api/ig/unified/go' };
 }
 
 // Recomendaciones: posteos publicados (30d) con engagement rate arriba del promedio.
@@ -12539,7 +12784,7 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
   // acá: sin débito, sin boost creado, sin plata retenida.
   const gate = await adsReadiness(req.session.userId).catch(() => ({ ready: false, code: 'page_not_authorized' }));
   if (!gate.ready) {
-    return res.status(409).json({ error: ADS_GATE_MSG[gate.code] || ADS_GATE_MSG.page_not_authorized });
+    return res.status(409).json({ error: ADS_GATE_MSG[gate.code] || ADS_GATE_MSG.page_not_authorized, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
   }
   const elig = await metaAds.checkEligibility(post.ig_media_id).catch(() => ({ ok: true }));
   if (!elig.ok) {
@@ -12551,9 +12796,14 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
   // que en impulsar y en la billetera USD. Solo cuando Meta está
   // configurado: sin configurar, el flujo sigue el camino viejo de pauta
   // 'pending' para activación manual del equipo.
-  if (metaAds.adsConfigured()) {
+  // (LOTE CONEXIÓN-PÁGINA) Con riel del cliente, el permiso que se
+  // verifica es el de SU conexión (su cuenta sigue compartida con la
+  // app, leído con su SUAT), no el del system user de Posty.
+  if (metaAds.adsConfigured() || gate.via === 'cliente') {
     try {
-      const perm = await metaAds.checkAdsPermission();
+      const perm = gate.via === 'cliente'
+        ? await metaAds.checkClientAdsAccess(gate.suat, gate.adAccountId)
+        : await metaAds.checkAdsPermission();
       if (!perm.ok) return res.status(503).json({ error: 'No pudimos verificar el permiso de publicidad con Meta. Probá de nuevo en unos minutos.' });
       if (!perm.hasAdsManagement) return res.status(409).json({ error: 'Todavía no podemos crear anuncios en Meta para tu cuenta: falta el permiso de publicidad (ads_management).' });
     } catch (e) {
@@ -12566,12 +12816,59 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
   // no se puede confirmar, o no es la de la billetera, gastar sería
   // gastar en otra moneda. Fail-closed, sin débito. (Sin Meta
   // configurado no hay gasto: la rama 'pending' queda intacta.)
+  // (LOTE CONEXIÓN-PÁGINA) Con riel del cliente, la moneda que manda es
+  // la de SU cuenta publicitaria (leída con su SUAT); el cruce contra
+  // la billetera se mantiene fail-closed igual que en el riel propio.
   let monedaCuentaBoost = null;
-  if (metaAds.adsConfigured()) {
-    monedaCuentaBoost = await monedaCuentaAds();
+  if (metaAds.adsConfigured() || gate.via === 'cliente') {
+    monedaCuentaBoost = gate.via === 'cliente'
+      ? await metaAds.getAccountCurrency({ token: gate.suat, adAccountId: gate.adAccountId }).then(c => (c === 'USD' || c === 'ARS') ? c : null).catch(() => null)
+      : await monedaCuentaAds();
     if (!monedaCuentaBoost) return res.status(503).json({ error: 'No pudimos confirmar la moneda de la cuenta publicitaria en Meta. No se debitó nada. Probá de nuevo en unos minutos.' });
     const wMon = getAdWallet(req.session.userId);
-    if (wMon.currency !== monedaCuentaBoost) return res.status(409).json({ error: 'Tu billetera está en ' + (wMon.currency === 'ARS' ? 'pesos' : 'dólares') + ' y la cuenta publicitaria opera en ' + (monedaCuentaBoost === 'ARS' ? 'pesos' : 'dólares') + ': pautar así mezclaría monedas. Escribinos y lo resolvemos. No se debitó nada.' });
+    // (LOTE IMPULSAR-DIRECTO-RE-RIELADO) El cruce es contra la
+    // billetera porque el riel histórico gasta DE la billetera; con
+    // riel del cliente la billetera no participa y el cruce no corre.
+    if (gate.via !== 'cliente' && wMon.currency !== monedaCuentaBoost) return res.status(409).json({ error: 'Tu billetera está en ' + (wMon.currency === 'ARS' ? 'pesos' : 'dólares') + ' y la cuenta publicitaria opera en ' + (monedaCuentaBoost === 'ARS' ? 'pesos' : 'dólares') + ': pautar así mezclaría monedas. Escribinos y lo resolvemos. No se debitó nada.' });
+  }
+  // (LOTE IMPULSAR-DIRECTO-RE-RIELADO) RIEL DEL CLIENTE: la campaña
+  // corre en SU cuenta con el presupuesto ÍNTEGRO (sin el split
+  // interno del riel de billetera) y la billetera no se toca — ni el
+  // gate de saldo ni el débito. El 10% de gestión va por la costura
+  // del fee con la tarjeta guardada, solo si la campaña quedó
+  // corriendo (la costura cobra únicamente en moneda USD: el fee de
+  // la decisión es sobre la pauta en dólares; con una cuenta en otra
+  // moneda, la costura frena sola y no cobra nada).
+  if (gate.via === 'cliente') {
+    let rC = null;
+    try {
+      rC = await metaAds.createBoost({
+        name: `Posty · Boost u${req.session.userId} · p${postId}`,
+        pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
+        spendCents: budgetCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
+        ctx: { token: gate.suat, adAccountId: gate.adAccountId },
+      });
+    } catch (e) {
+      return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
+    }
+    const brC = db.prepare(`INSERT INTO ad_boosts
+      (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, started_at)
+      VALUES (?,?,?,?,0,?,?,'active',?,?,?,'engagement',?,datetime('now'))`)
+      .run(req.session.userId, postId, post.ig_media_id, budgetCents, budgetCents, monedaCuentaBoost, rC.campaignId, rC.adsetId, rC.adId, AD_DEFAULT_DAYS);
+    try { track(req.session.userId, 'ad_boost', String(budgetCents)); } catch (e) {}
+    try {
+      const pg = require('./publish-guard');
+      pg.record(db, { userId: req.session.userId, postId, kind: 'boost', status: 'published', detail: `boost ${brC.lastInsertRowid} camp ${rC.campaignId || ''} riel cliente` });
+    } catch (e) { /* el ledger nunca bloquea una pauta lograda */ }
+    feeImpulsoTrasActivacion(req.session.userId, {
+      postId, campaignId: rC.campaignId, adsetId: rC.adsetId || '',
+      pautaCents: budgetCents, moneda: monedaCuentaBoost, metaToken: gate.suat,
+    });
+    return res.json({
+      ok: true, boost_id: brC.lastInsertRowid, launched: true, launch_error: '',
+      balance_cents: getAdWallet(req.session.userId).balance_cents, riel: 'cliente',
+      message: '🚀 Tu pauta ya está corriendo en Instagram y Facebook.',
+    });
   }
   const { fee_cents, spend_cents } = adSplit(budgetCents);
   const w = getAdWallet(req.session.userId);
@@ -12586,13 +12883,16 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
   // 'pending' para activación manual del equipo.
   let boostId = 0;
   let launched = false, launchError = '';
-  if (metaAds.adsConfigured()) {
+  if (metaAds.adsConfigured() || gate.via === 'cliente') {
     let r;
     try {
       r = await metaAds.createBoost({
         name: `Posty · Boost u${req.session.userId} · p${postId}`,
         pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
         spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
+        // (LOTE CONEXIÓN-PÁGINA) Riel del cliente: la campaña se crea
+        // en SU cuenta publicitaria, con su SUAT.
+        ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null,
       });
     } catch (e) {
       return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
@@ -23037,6 +23337,12 @@ app.get('/api/ig/callback', async (req, res) => {
     db.prepare(
       `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, demo_mode=0, updated_at=datetime('now') WHERE user_id=?`
     ).run(finalIgId, accessToken, req.session.userId);
+    // (LOTE CONEXIÓN-PÁGINA) Si cambió la cuenta de IG, la conexión
+    // publicitaria capturada era del negocio anterior: se descarta
+    // (el SUAT vive en el portfolio de ESE cliente, no del nuevo).
+    if (prevIgId && finalIgId && prevIgId !== String(finalIgId)) {
+      try { db.prepare('DELETE FROM ig_ads_connections WHERE user_id=?').run(req.session.userId); } catch (e) { /* no bloquea la conexión */ }
+    }
     // Si cambió la cuenta de IG: la marca y los posteos pendientes eran de otro negocio → reset total
     let brandReset = false;
     if (prevIgId && finalIgId && prevIgId !== String(finalIgId)) {
@@ -23082,7 +23388,19 @@ app.get('/api/ig/callback', async (req, res) => {
     evTrack(req.session.userId, 'ig_connect', {});
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
     delete req.session.igInterruptedAt; // (CORRECTIVO-6) conectado: la señal se apaga
-    res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
+    const igDestFinal = withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : ''));
+    // (LOTE CONEXIÓN-PÁGINA) LA MISMA SENTADA: si el login unificado
+    // está configurado y todavía no hay conexión publicitaria
+    // capturada, el flujo SIGUE SOLO al diálogo unificado — el cliente
+    // tocó una sola vez «Conectar Instagram» y no decide nada en el
+    // medio. La vuelta del unificado aterriza en igDestFinal. Si el
+    // unificado no está configurado o ya hay captura, el regreso es el
+    // de siempre, byte a byte.
+    if (unifiedReady(req.session.userId) && !adsConnectionReady(req.session.userId)) {
+      req.session.igAdsDest = igDestFinal;
+      return res.redirect('/api/ig/unified/go?chained=1');
+    }
+    res.redirect(igDestFinal);
   } catch (e) {
     req.session.igInterruptedAt = Date.now(); // (CORRECTIVO-6) el canje falló: volvió sin completarse
     res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(e.message)));
@@ -23135,7 +23453,104 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
   // el cambio y se reinician marca + posteos pendientes (eran de otro negocio).
   db.prepare(`UPDATE settings SET last_ig_user_id=ig_user_id, ig_user_id='', ig_page_id='', ig_access_token='' WHERE user_id=?`).run(req.session.userId);
   db.prepare(`UPDATE profiles SET ig_connected=0 WHERE user_id=?`).run(req.session.userId);
+  // (LOTE CONEXIÓN-PÁGINA) Desconectar también descarta el SUAT
+  // capturado: no queda ningún token del cliente guardado sin su IG.
+  try { db.prepare('DELETE FROM ig_ads_connections WHERE user_id=?').run(req.session.userId); } catch (e) { /* no bloquea la desconexión */ }
   res.json({ ok: true });
+});
+
+// ---------- (LOTE CONEXIÓN-PÁGINA) Login unificado: Página + cuenta ----------
+// Facebook Login for Business (Instagram API with Unified Login). En
+// la MISMA sentada de la conexión de Instagram, el cliente elige su
+// portfolio, su cuenta de IG y su cuenta publicitaria; el canje del
+// code devuelve el SUAT que vive en SU portfolio y cubre los activos
+// compartidos. La pauta corre desde SU cuenta (decisión de Valentino
+// 13/11). El diálogo lo aloja Meta como el login actual; en Posty es
+// un solo toque: o encadenado al callback de IG (ver /api/ig/callback)
+// o directo desde la compuerta / Ajustes vía /api/ig/unified/go.
+const UNIFIED_DIALOG = 'https://www.facebook.com/v26.0/dialog/oauth';
+function adsWithQs(base, qs) { return base + (base.includes('?') ? '&' : '?') + qs; }
+function buildUnifiedAuth(req) {
+  const c = unifiedCfgFor(req.session.userId);
+  if (!c.configId || !c.appId) return { error: 'La conexión publicitaria todavía no está habilitada en Posty.' };
+  const host = req.get('host');
+  const redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/unified/callback`;
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.igAdsState = state;
+  req.session.igAdsRedirect = redirectUri;
+  // Destino post-conexión: encadenado manda el que dejó el callback de
+  // IG; directo, ?next= validado o Ajustes (mismo criterio anti
+  // open-redirect que el flujo de Instagram).
+  if (!req.query.chained) {
+    const nx = String(req.query.next || '');
+    req.session.igAdsDest = (/^\/#\/[^\s"'\\<>]*$/.test(nx)) ? nx : '/#/app/ajustes';
+  }
+  const q = new URLSearchParams({
+    client_id: c.appId, config_id: c.configId,
+    redirect_uri: redirectUri, state, response_type: 'code',
+  });
+  return { url: `${UNIFIED_DIALOG}?${q.toString()}` };
+}
+app.get('/api/ig/unified/go', requireAuth, (req, res) => {
+  const r = buildUnifiedAuth(req);
+  if (r.error) {
+    const safe = String(r.error).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return res.status(400).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>No se pudo iniciar la conexión</h2><p>${safe}</p><p><a href="/#/app/ajustes">\u2190 Volver a Posta</a></p></body></html>`);
+  }
+  res.redirect(r.url);
+});
+app.get('/api/ig/unified/callback', async (req, res) => {
+  const dest = () => {
+    const d = req.session.igAdsDest;
+    delete req.session.igAdsDest;
+    return (typeof d === 'string' && /^\/#\/[^\s"'\\<>]*$/.test(d)) ? d : '/#/app/ajustes';
+  };
+  const { code, state, error, error_description } = req.query;
+  if (error) {
+    const msg = /access_denied|user_denied/i.test(error)
+      ? 'Denegaste el acceso. Probá de nuevo y tocá "Permitir".'
+      : (error_description || error);
+    return res.redirect(adsWithQs(dest(), 'igads=error&msg=' + encodeURIComponent(msg)));
+  }
+  if (!req.session.userId || state !== req.session.igAdsState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
+  try {
+    const uid = req.session.userId;
+    const c = unifiedCfgFor(uid);
+    const suat = await metaAds.exchangeUnifiedCode({ appId: c.appId, appSecret: c.appSecret, code });
+    const assets = await metaAds.fetchClientAssets(suat);
+    const s = getSettings(uid);
+    // La Página capturada: la del IG conectado; si compartió una sola, esa.
+    const page = assets.pages.find(p => p.ig_user_id && String(p.ig_user_id) === String(s.ig_user_id || ''))
+      || (assets.pages.length === 1 ? assets.pages[0] : null);
+    // La cuenta publicitaria principal: la primera activa compartida.
+    const primary = assets.adAccounts.find(a => Number(a.account_status) === 1) || assets.adAccounts[0] || null;
+    const igIds = new Set(assets.igAccountIds);
+    if (s.ig_user_id) igIds.add(String(s.ig_user_id));
+    // Sin cuenta publicitaria compartida (la salteó en el diálogo), la
+    // conexión de posteos queda completa igual: la fila se guarda con
+    // el SUAT y estado 'sin_cuenta'; la compuerta ofrece el mismo
+    // toque para terminarla. Nunca queda «conectado a medias» mudo.
+    const status = primary ? 'ok' : 'sin_cuenta';
+    db.prepare(`INSERT INTO ig_ads_connections
+      (user_id, suat, client_business_id, config_id, ig_account_ids, fb_page_id, fb_page_name, ad_accounts, primary_ad_account_id, ad_currency, status, connected_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+      ON CONFLICT(user_id) DO UPDATE SET suat=excluded.suat, client_business_id=excluded.client_business_id,
+        config_id=excluded.config_id, ig_account_ids=excluded.ig_account_ids, fb_page_id=excluded.fb_page_id,
+        fb_page_name=excluded.fb_page_name, ad_accounts=excluded.ad_accounts,
+        primary_ad_account_id=excluded.primary_ad_account_id, ad_currency=excluded.ad_currency,
+        status=excluded.status, connected_at=excluded.connected_at, updated_at=datetime('now')`)
+      .run(uid, suat, assets.businessId || '', c.configId, JSON.stringify([...igIds]),
+        page ? page.id : '', page ? page.name : '', JSON.stringify(assets.adAccounts),
+        primary ? primary.account_id : '', primary ? (primary.currency || '') : '', status);
+    if (page) {
+      db.prepare(`UPDATE settings SET ig_page_id=?, updated_at=datetime('now') WHERE user_id=?`).run(page.id, uid);
+    }
+    try { track(uid, 'ig_ads_connected', status); } catch (e) {}
+    res.redirect(adsWithQs(dest(), primary ? 'igads=ok' : 'igads=sin_cuenta'));
+  } catch (e) {
+    console.error('[ig/unified/callback]:', e.message);
+    res.redirect(adsWithQs(dest(), 'igads=error&msg=' + encodeURIComponent(e.message)));
+  }
 });
 
 // ---------- TikTok: conectar y compartir posteos (v1, siempre a pedido) ----------
@@ -40062,13 +40477,21 @@ function fbFilledFields(obj) {
   return FB_DNA_FIELDS.filter(f => websiteFieldHas(obj && obj[f]));
 }
 
-// Resuelve la Page: primero el input manual (o lo guardado), después intenta
-// deducirla del login vía /me/accounts con el token guardado.
+// Resuelve la Page: primero el input manual (o lo guardado), después
+// LA CAPTURADA en la conexión unificada, y recién al final la
+// deducción histórica vía /me/accounts con el token del sistema.
 async function resolveFbPageId(uid, manualInput) {
   const dna0 = readDna(uid);
   const manual = extractPageId(manualInput || dna0.fb_page || '');
   if (manual) return manual;
+  // (LOTE CONEXIÓN-PÁGINA) La Página que el cliente compartió al
+  // conectar manda: es su activo, no una deducción contra las páginas
+  // que ve el system user de Posty. Con captura, /api/fb/analyze deja
+  // de pedir la URL pegada a mano.
+  const conn = getAdsConnection(uid);
+  if (conn && conn.fb_page_id) return conn.fb_page_id;
   const s = getSettings(uid);
+  if (s.ig_page_id) return s.ig_page_id;
   if (s.ig_user_id && s.ig_access_token) {
     try {
       return await metaAds.resolvePageId(s.ig_user_id);
@@ -40100,7 +40523,18 @@ app.post('/api/fb/analyze', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Conectá tu Instagram para que podamos leer tu página de Facebook.' });
     }
 
-    const r = await analyzeFbPage({ pageId, accessToken: token }); // solo lee y analiza
+    // (LOTE CONEXIÓN-PÁGINA) Si la lectura con el token de siempre
+    // falla y hay un SUAT capturado, se reintenta con el SUAT: la
+    // página compartida se lee con el token de la integración.
+    let r;
+    try {
+      r = await analyzeFbPage({ pageId, accessToken: token }); // solo lee y analiza
+    } catch (e1) {
+      const connA = getAdsConnection(uid);
+      if (connA && connA.suat && connA.suat !== token) {
+        r = await analyzeFbPage({ pageId, accessToken: connA.suat });
+      } else throw e1;
+    }
 
     // Merge al ADN: esparcir lo actual + lo nuevo, jamás pisar campos existentes.
     const cur = readDna(uid);
@@ -40334,7 +40768,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1047';
+const BUILD_ID = '20261105-v1048';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

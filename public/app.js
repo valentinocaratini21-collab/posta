@@ -17851,11 +17851,15 @@ async function pzAdsRefrescar() {
   pzAdsPintar();
 }
 
-// (LOTE TAB-ADS) Un toque en un monto = se envía el ad con ese monto
-// (mismo camino que la hoja v880: pzBoostConfirmar). Si no se puede
-// (saldo, gate o moneda), NO impulsa: se abre la hoja v880 con el
-// aviso y el camino de carga. En éxito la hoja NO se abre: el tab se
-// re-pinta con el posteo como «Impulsado ✓» y el historial nuevo.
+// (LOTE IMPULSAR-DIRECTO-UN-CLIC · Valentino 12/11: un toque en un
+// monto o en «Impulsar por US$ 50» impulsa DIRECTO, sin abrir la hoja
+// v880 — la hoja repetía lo mismo (foto, montos, «Elegir otro posteo»)
+// y era un paso de más. Si no se puede (saldo, gate o moneda), NO
+// impulsa y NO abre la hoja: el motivo queda inline en la tarjeta
+// (#pzAdsRecMsg), con el camino en la misma pantalla (cargar en la
+// billetera, agregar tarjeta). En éxito la hoja NO se abre: el tab se
+// re-pinta con el posteo como «Impulsado ✓» y el historial nuevo. La
+// hoja sigue viva para sus otros puntos de entrada (Hoy, detalle).
 async function pzAdsImpulsar(monto, btn) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
@@ -17863,14 +17867,51 @@ async function pzAdsImpulsar(monto, btn) {
   const p = s.selPost || null;
   if (!p) return;
   s.selMonto = m;
-  if (!pzBoostPuede(m)) { pzBoostOpen(p); return; }
-  const j = await pzBoostConfirmar(btn);
+  if (!pzBoostPuede(m)) { pzAdsImpulsarBloqueo(m); return; }
+  const txt0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = gzT('Impulsando…', 'Boosting…'); }
+  let j = null;
+  try { j = await pzBoostConfirmar(btn, true); } catch (e) { j = null; }
+  if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; }
   if (j && j.ok) {
     try { await pzAdsRefrescar(); } catch (e) {}
-  } else {
-    const msgEl = document.getElementById('pzAdsRecMsg');
-    if (msgEl) msgEl.textContent = pzBoostMotivo((j && j.motivo) || '', m, j && j.cobroId);
+  } else if (!j) {
+    // Red de seguridad: si pzBoostConfirmar explotó antes de responder
+    // (j null), la tarjeta no queda muda: motivo genérico inline.
+    try { const msgEl = document.getElementById('pzAdsRecMsg'); if (msgEl && !msgEl.textContent) msgEl.textContent = pzBoostMotivo('', m); } catch (e) {}
   }
+  // Si falló con motivo, el mensaje ya quedó inline en #pzAdsRecMsg
+  // (lo escribe pzBoostConfirmar con enTarjeta=true).
+}
+
+// (LOTE IMPULSAR-DIRECTO-UN-CLIC) Bloqueo del impulso directo en el
+// tab Ads: el motivo se muestra EN LA TARJETA (#pzAdsRecMsg), nunca se
+// abre la hoja. Mismo orden que el aviso de la hoja (saldo viejo ARS →
+// gate → saldo), así la tarjeta dice lo mismo que diría la hoja.
+// Sin tarjeta guardada y con saldo corto, el motivo es «sin tarjeta»
+// y queda pegado el botón «Agregar tarjeta» (mismo patrón que la hoja:
+// chunk analisis bajo demanda).
+function pzAdsImpulsarBloqueo(m) {
+  const s = pzBoostState || {};
+  const gate = pzBoostGate();
+  const monedaARS = ((s.billetera && s.billetera.currency) || 'USD') !== 'USD';
+  const saldoViejoARS = monedaARS && !pzBoostEsMP();
+  let motivo = '';
+  if (saldoViejoARS) motivo = 'saldo_ars_pendiente';
+  else if (gate.cerrado) motivo = gate.motivo;
+  else if (pzBoostSaldo() < m) {
+    const bil = s.billetera || {};
+    motivo = (bil.tarjeta && bil.tarjeta.tiene) ? 'saldo_insuficiente' : 'sin_tarjeta_guardada';
+  }
+  const msgEl = document.getElementById('pzAdsRecMsg');
+  if (!msgEl) return;
+  msgEl.textContent = pzBoostMotivo(motivo, m);
+  if (motivo === 'sin_tarjeta_guardada') pzAdsImpulsarAdjuntarTarjeta(msgEl);
+}
+
+async function pzAdsImpulsarAdjuntarTarjeta(msgEl) {
+  try { await loadChunk('analisis'); } catch (e) {}
+  try { if (msgEl && typeof anaAgregarTarjetaBtn === 'function') anaAgregarTarjetaBtn(msgEl); } catch (e) {}
 }
 
 function pzAdsPickOpen() {
@@ -18244,9 +18285,13 @@ function pzBoostMotivo(motivo, monto, cobroId) {
       return gzT('La pauta todavía no está configurada para tu cuenta. Te avisamos en cuanto esté lista. No se gastó nada.', 'Ads aren’t set up for your account yet. We’ll let you know as soon as it’s ready. Nothing was spent.');
     case 'ig_not_connected':
       return gzT('Conectá tu Instagram para poder potenciar tus posteos.', 'Connect your Instagram to boost your posts.');
+    case 'sin_cuenta_publicitaria':
+      // (LOTE CONEXIÓN-PÁGINA) El camino es del cliente y es un toque:
+      // nada de «todavía no autorizó» sin salida.
+      return gzT('Falta conectar tu cuenta publicitaria. Es un toque, en el mismo flujo de conexión — y no se gasta nada hasta que impulses.', 'Your ad account isn’t connected yet. It’s one tap, in the same connection flow — and nothing is spent until you boost.');
     case 'page_not_authorized':
     case 'sin_autorizacion_publicitaria':
-      return gzT('Tu Página de Facebook todavía no autorizó la cuenta publicitaria. No se gastó nada.', 'Your Facebook Page hasn’t authorized the ad account yet. Nothing was spent.');
+      return gzT('Para impulsar, conectá tu cuenta publicitaria: un toque en el mismo flujo de conexión. No se gastó nada.', 'To boost, connect your ad account: one tap in the same connection flow. Nothing was spent.');
     case 'sin_publicar':
       return gzT('Este posteo todavía no está publicado en Instagram.', 'This post isn’t published on Instagram yet.');
     case 'posteo_no_encontrado':
@@ -18263,6 +18308,9 @@ function pzBoostMotivo(motivo, monto, cobroId) {
     // se carga en pesos.
     case 'saldo_usd_pendiente':
       return gzT('Todavía tenés saldo en dólares en la billetera. Gastalo antes de cargar en pesos.', 'You still have dollars balance in the wallet. Spend it before topping up in pesos.');
+    case 'sin_cliente_stripe':
+    case 'sin_tarjeta_guardada':
+      return gzT('No tenés una tarjeta guardada para impulsar. Agregá una tarjeta en la billetera y probá de nuevo. No se cobró nada.', 'You don’t have a saved card to boost with. Add a card in your wallet and try again. Nothing was charged.');
     case 'boost_deshabilitado':
       return gzT('El impulso todavía no está habilitado en tu cuenta.', 'Boosting isn’t enabled on your account yet.');
     case 'ya_impulsado':
@@ -18420,7 +18468,7 @@ function pzBoostTitulo(p) {
 // la compuerta se considera cerrada.
 function pzBoostGate() {
   const s = pzBoostState || {};
-  if (s.adsReady === false) return { cerrado: true, motivo: (s.motivoGate === 'ig_not_connected' ? 'ig_not_connected' : (s.motivoGate === 'ads_not_configured' ? 'ads_no_configurado' : 'sin_autorizacion_publicitaria')) };
+  if (s.adsReady === false) return { cerrado: true, motivo: (s.motivoGate === 'ig_not_connected' ? 'ig_not_connected' : (s.motivoGate === 'ads_not_configured' ? 'ads_no_configurado' : (s.motivoGate === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria'))) };
   if (s.adsReady !== true) return { cerrado: true, motivo: 'sin_datos' };
   if (s.boostHabilitado === false) return { cerrado: true, motivo: 'boost_deshabilitado' };
   if (s.adsPermiso === false) return { cerrado: true, motivo: 'ads_sin_permiso' };
@@ -18674,7 +18722,10 @@ function pzBoostPickConfirmar() {
   if (!p) return;
   // (LOTE TAB-ADS) El picker se abrió desde el tab Ads: la elección
   // cambia la tarjeta del tab (no abre la hoja). La hoja queda para el
-  // toque en un monto que no se puede impulsar.
+  // picker cuando no se abrió desde Ads y para los otros puntos de
+  // entrada (Hoy, detalle). (IMPULSAR-DIRECTO: desde el tab, un monto
+  // que no se puede impulsar ya NO abre la hoja: el motivo queda
+  // inline en la tarjeta.)
   if (pzAdsPickDesdeAds) {
     pzAdsPickDesdeAds = false;
     pzBoostCerrar();
@@ -18777,11 +18828,15 @@ async function pzBoostCargar(btn) {
   }
 }
 
-async function pzBoostConfirmar(btn) {
+// (LOTE IMPULSAR-DIRECTO-UN-CLIC) enTarjeta=true: el impulso se pidió
+// desde la tarjeta del tab Ads — los mensajes van inline a #pzAdsRecMsg
+// (nunca a la hoja) y el éxito NO pinta en la hoja (la tarjeta se
+// re-pinta sola con pzAdsRefrescar). La hoja sigue con enTarjeta=false.
+async function pzBoostConfirmar(btn, enTarjeta) {
   const s = pzBoostState || {};
   const p = s.selPost || null;
   const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
-  const msgEl = document.getElementById('pzBoostMsg');
+  const msgEl = document.getElementById(enTarjeta ? 'pzAdsRecMsg' : 'pzBoostMsg');
   const decir = (t) => { if (msgEl) msgEl.textContent = t; };
   if (!p || (!p.post_id && !p.ig_media_id)) { decir(pzBoostMotivo('sin_posteo', monto)); return null; }
   if (btn) btn.disabled = true;
@@ -18806,10 +18861,12 @@ async function pzBoostConfirmar(btn) {
       if (pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
     }
     pzBoostMarcarImpulsado((p.solo_ig && j.posteoId) ? Number(j.posteoId) : Number(p.post_id));
-    pzBoostPintarExito(p, monto);
+    if (!enTarjeta) pzBoostPintarExito(p, monto);
     try { toast(gzT('✓ Posteo impulsado por 7 días', '✓ Post boosted for 7 days')); } catch (e) {}
   } else {
-    decir(pzBoostMotivo((j && j.motivo) || '', monto, j && j.cobroId));
+    const motivo = (j && j.motivo) || '';
+    decir(pzBoostMotivo(motivo, monto, j && j.cobroId));
+    if (enTarjeta && (motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada')) pzAdsImpulsarAdjuntarTarjeta(msgEl);
   }
   return j;
 }

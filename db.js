@@ -107,6 +107,30 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS semana_destacado (
   PRIMARY KEY (user_id, week_key)
 )`); } catch (e) { /* tabla destacado: ya existe o sin DB */ }
 // === DESTACADO-BOOST tabla (fin) ===
+// === LOTE CONEXIÓN-PÁGINA: conexión publicitaria unificada del cliente ===
+// Lo que el cliente comparte en el login unificado (Facebook Login for
+// Business): el SUAT (token de integración que vive en el portfolio DEL
+// CLIENTE), su negocio, sus cuentas de IG, su Página y sus cuentas
+// publicitarias. Es la fuente contra la que valida la compuerta de pauta
+// (adsReadiness): sin fila o sin primary_ad_account_id, la pauta del
+// cliente no está conectada. Tabla nueva completa en un solo CREATE:
+// ningún ALTER posterior la toca.
+try { db.exec(`CREATE TABLE IF NOT EXISTS ig_ads_connections (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  suat TEXT DEFAULT '',
+  client_business_id TEXT DEFAULT '',
+  config_id TEXT DEFAULT '',
+  ig_account_ids TEXT DEFAULT '[]',
+  fb_page_id TEXT DEFAULT '',
+  fb_page_name TEXT DEFAULT '',
+  ad_accounts TEXT DEFAULT '[]',
+  primary_ad_account_id TEXT DEFAULT '',
+  ad_currency TEXT DEFAULT '',
+  status TEXT DEFAULT '',
+  connected_at TEXT DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`); } catch (e) { /* tabla conexión-página: ya existe o sin DB */ }
+// === LOTE CONEXIÓN-PÁGINA tabla (fin) ===
 try { db.exec(`ALTER TABLE profiles ADD COLUMN competitors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN monthly_goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
@@ -591,6 +615,33 @@ db.exec(`CREATE TABLE IF NOT EXISTS ad_transactions (
   ref TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// (LOTE FEE-IMPULSAR) Fee de gestión de Posty (10% de la pauta) cobrado
+// aparte, con la tarjeta guardada del cliente, SOLO cuando la campaña
+// quedó corriendo (ver ads-fee.js). Una fila por campaña (campana_ref
+// UNIQUE = la idempotencia del cobro): estado 'cobrado' |
+// 'pendiente_fallo' | 'sin_medio' — los dos últimos son el registro
+// auditable que mira el equipo cuando la campaña corre y el fee no
+// salió. El mismo DDL vive en ads-fee.js (ensureFeeSchema) para que el
+// módulo sea autocontenido; este CREATE IF NOT EXISTS es la casa
+// canónica del esquema.
+db.exec(`CREATE TABLE IF NOT EXISTS ad_fees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  campana_ref TEXT NOT NULL UNIQUE,
+  campaign_id TEXT NOT NULL DEFAULT '',
+  adset_id TEXT NOT NULL DEFAULT '',
+  post_id INTEGER,
+  pauta_cents INTEGER NOT NULL DEFAULT 0,
+  fee_cents INTEGER NOT NULL DEFAULT 0,
+  moneda TEXT NOT NULL DEFAULT 'USD',
+  estado TEXT NOT NULL DEFAULT 'pendiente_fallo',
+  stripe_payment_intent TEXT NOT NULL DEFAULT '',
+  stripe_customer TEXT NOT NULL DEFAULT '',
+  intentos INTEGER NOT NULL DEFAULT 0,
+  detalle TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 db.exec(`CREATE TABLE IF NOT EXISTS email_tokens (
   token TEXT PRIMARY KEY,
