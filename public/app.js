@@ -23679,7 +23679,7 @@ async function hfLiveRevalidateFeed() {
 // propia «Mi feed» salió; el feed ya vive en Hoy, con la misma
 // composición). BLOQUE HOY-R1 — extraíble en tests (test-lote-rediseno-r1.js).
 var PZ_HOY_VIEW = 'aprobar'; // vista vigente de Hoy en esta sesión
-var PZ_HOY_POSTS = {}; // id → post (para «Cambialo» → chat con el posteo)
+var PZ_HOY_POSTS = {}; // id → post (para pzHoyCambiar → chat con el posteo)
 var PZ_HOY_MEJOR = null; // (v846) recomendado de la sección Impulsar de Hoy: el mejor posteo de la semana (mismo de la carta)
 
 // Saludo según la hora (como el mock): 06–12 mañana, 12–20 tarde,
@@ -24305,7 +24305,7 @@ function pzHoyCuentaSaleTxt(iso, en) {
 }
 
 // Tarjeta de «Por aprobar» (estructura del mock: foto + formato + día/
-// hora + título + texto + «Dale, publicalo ✓» / «Cambialo»). La cartita
+// hora + título + texto + «Dale, publicalo ✓»). La cartita
 // lleva la píldora «Se postea mañana · HH:MM» y la cuenta en vivo hasta
 // que SALE (data-pz-cuenta-sale). Aprobada: nota «✓ Agendado…» sin
 // botones. Sin imagen no hay foto (nunca un bloque de color).
@@ -24350,7 +24350,7 @@ function pzHoyCardHTML(p, o) {
     const caption = String((p && p.caption) || '').trim();
     const whenAttr = (prop && prop.iso) ? prop.iso : (p.scheduled_at || '');
     const acciones = pendiente
-      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button><button type="button" class="btn btn-ghost" data-pz-hoy-cambiar="${esc(String(p.id))}">${en ? 'Change it' : 'Cambialo'}</button></div>`
+      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button></div>`
       : '';
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La nota de la tarjeta
     // aprobada tampoco afirma la salida (ni la historia) sin conexión.
@@ -24393,7 +24393,9 @@ function pzHoyCardHTML(p, o) {
       // editable EN ESTA MISMA TARJETA (pzHoyEditarAbrir) — salvo en
       // publicados, donde Editar conserva su camino vigente al chat
       // (un publicado no se edita en el lugar: vuelve como versión
-      // nueva). «Cambialo» de las acciones sigue yendo al chat.
+      // nueva). El botón «Cambialo» de las acciones salió (Valentino
+      // 14/11: estaba de más): el pedido de cambio vive en la tira de
+      // voz de la misma tarjeta.
       // COMPOSICIÓN AL ATERRIZAR (v1021, sobre la base viva): la
       // PÍLDORA cubre solo al programado NO pendiente — con
       // APROBAR-AUTO (v1010) un approval='auto' ES pendiente y su
@@ -24408,6 +24410,18 @@ function pzHoyCardHTML(p, o) {
       // lleva data-pz-hoy-detalle desde v1017) y el lugar bajo las
       // acciones lo ocupa la TIRA DE VOZ (pzVozStripHTML, al final de
       // la tarjeta, como quedó desacoplada en v1017 — sin duplicarla).
+      // (LOTE BOTONES-DETALLE-SIMPLES · 14/11 · Valentino con captura:
+      // a Rehacer y Editar «les falta un ícono» y «Cambialo» está de
+      // más) Los glifos existían: pzIc pinta TODO con trazo fijo
+      // #2793C8, y sobre el gradiente azul el celeste se perdía
+      // (sobre el amarillo y el coral sí se veía). Las cuatro
+      // tarjetas quedan con UN solo diseño simple: chip plano
+      // celeste suave (.pz-hoy-act-ic en styles.css), sin gradientes
+      // ni clases de color. Y la fila de aprobación pierde
+      // «Cambialo»: queda «Dale, publicalo ✓» solo, a ancho
+      // completo — el pedido de cambio vive en la tira de voz de
+      // esta misma tarjeta (y en publicados, «Editar» conserva su
+      // camino al chat vía data-pz-hoy-cambiar).
       const pillEstado = (!pendiente && st === 'scheduled')
         ? (() => {
             const hh = (typeof pzHoyHoraCorta === 'function') ? (pzHoyHoraCorta(p.scheduled_at, tz, en) || '') : '';
@@ -24426,16 +24440,16 @@ function pzHoyCardHTML(p, o) {
       const redoLeft = (typeof hfRedoLeft === 'function') ? hfRedoLeft(p) : null;
       const redoLine = (redoLeft !== null && typeof hfRedoLineHTML === 'function') ? hfRedoLineHTML(p, en) : '';
       const cardRehacer = (redoLeft !== null)
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-rehacer="${esc(String(p.id))}"${redoLeft > 0 ? '' : ' disabled'}><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc('refresh', 20)}</span>${en ? 'Redo' : 'Rehacer'}</button>`
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-rehacer="${esc(String(p.id))}"${redoLeft > 0 ? '' : ' disabled'}><span class="pz-hoy-act-ic">${pzIc('refresh', 20)}</span>${en ? 'Redo' : 'Rehacer'}</button>`
         : '';
       const cardEditar = st === 'published'
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-cambiar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`
-        : `<button type="button" class="pz-hoy-act" data-pz-hoy-editar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-azul">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`;
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-cambiar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`
+        : `<button type="button" class="pz-hoy-act" data-pz-hoy-editar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`;
       const cardFrenar = st === 'scheduled'
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-frenar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-amarillo">${pzIc('pause', 20)}</span>${en ? 'Hold' : 'Frenar'}</button>`
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-frenar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('pause', 20)}</span>${en ? 'Hold' : 'Frenar'}</button>`
         : '';
       const cardEliminar = st !== 'published'
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-eliminar="${esc(String(p.id))}"><span class="pz-hoy-act-ic pz-hoy-act-coral">${pzIc('trash', 20)}</span>${en ? 'Delete' : 'Eliminar'}</button>`
+        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-eliminar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('trash', 20)}</span>${en ? 'Delete' : 'Eliminar'}</button>`
         : '';
       const acts = `<div class="pz-hoy-acts">`
         + cardRehacer + cardEditar + cardFrenar + cardEliminar
@@ -24984,8 +24998,9 @@ async function pzHoyAprobarUno(btn) {
   }
 }
 
-// «Cambialo»: abre el chat con Posty sobre ESE posteo (mismo flujo que
-// «Pedir que lo arregle» del conserje + hfOpenChatForPost).
+// pzHoyCambiar (lo usa «Editar» en publicados; era el botón
+// «Cambialo»): abre el chat con Posty sobre ESE posteo (mismo flujo
+// que «Pedir que lo arregle» del conserje + hfOpenChatForPost).
 function pzHoyCambiar(id) {
   const p = (typeof PZ_HOY_POSTS !== 'undefined' && PZ_HOY_POSTS) ? PZ_HOY_POSTS[String(id)] : null;
   if (!p) return;

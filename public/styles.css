@@ -6244,10 +6244,8 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-hoy-act{flex:1 1 0;max-width:112px;display:flex;flex-direction:column;align-items:center;gap:7px;background:#fff;border:0;border-radius:18px;padding:12px 4px 10px;font-family:inherit;font-size:13.5px;font-weight:800;color:var(--txt);cursor:pointer;box-shadow:0 2px 8px rgba(10,30,51,.08),inset 0 0 0 1px rgba(10,30,51,.04)}
 .pz-hoy-act:active{transform:translateY(1px)}
 .pz-hoy-act[disabled]{opacity:.45;cursor:default}
-.pz-hoy-act-ic{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;color:#fff}
-.pz-hoy-act-azul{background:linear-gradient(145deg,#3aa7dd,#1f7fb8)}
-.pz-hoy-act-amarillo{background:linear-gradient(145deg,#ffd35c,#f5b921);color:#5c4300}
-.pz-hoy-act-coral{background:linear-gradient(145deg,#ff8a70,#f2604c)}
+/* (LOTE BOTONES-DETALLE-SIMPLES · 14/11 · Valentino: que los íconos se vean y los botones sean más simples) UN solo diseño de chip para las cuatro tarjetas: fondo plano celeste suave. El glifo lo pinta pzIc con su trazo fijo #2793C8, que sobre este fondo tiene contraste real. Salieron los tres gradientes (azul/amarillo/coral): sobre el gradiente azul, el glifo celeste era invisible (Rehacer y Editar se veían como cuadrados vacíos). */
+.pz-hoy-act-ic{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:#E9F4FA}
 .pz-hoy-redo-line{margin:0 2px 13px}
 .pz-hoy-edit{margin:0 2px 13px}
 .pz-hoy-edit-ta{width:100%;box-sizing:border-box;border:1px solid #d8dee4;border-radius:12px;padding:10px 12px;font:inherit;font-size:15px;line-height:1.45;resize:vertical;min-height:88px;background:#fff;color:var(--txt)}
