@@ -330,7 +330,17 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   if (nReels > 0 && have.video === 0) {
     try {
       const aiVideo = require('./ai-video');
-      if (aiVideo.aiVideoEnabledFor(uid)) {
+      // (LOTE PRUEBA-SIN-VIDEO-CARO · REGLA 1) La cuenta INVITADA
+      // (la prueba) ni siquiera intenta el video firma: la
+      // generación premium no se quema en invitados (Valentino
+      // 13/11). ai-video.js tiene la misma puerta fail-closed en el
+      // punto único de llamada a fal; esto es el registro en el
+      // callsite y el ahorro del intento.
+      let esInvitadoFirma = false;
+      try { const uF = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(uid); esInvitadoFirma = !!(uF && Number(uF.is_guest) === 1); } catch (e) {}
+      if (esInvitadoFirma) {
+        console.log(`[extras:${tag}] usuario ${uid}: cuenta invitada (prueba) — video firma premium omitido por regla de costo (13/11)`);
+      } else if (aiVideo.aiVideoEnabledFor(uid)) {
         const heroFile = localFile(mediaDir, feed[0].image_path);
         if (heroFile) {
           let videoPrompt = '';

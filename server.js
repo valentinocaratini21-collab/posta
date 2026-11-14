@@ -2519,6 +2519,41 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   const faltantesImp = postsAllImp.map((p, i) => (p && (p.image || p.video)) ? -1 : i).filter((x) => x >= 0);
   const posts = postsAllImp.filter((p) => p && (p.image || p.video));
   if (!posts.length) return 0;
+  // (LOTE PRUEBA-SIN-VIDEO-CARO + PRIMER-POSTEO-IMAGEN · REGLA 2 —
+  // Valentino 13/11) EL PRIMER POSTEO DE LA PRUEBA ES IMAGEN: la
+  // importación crea los posteos en el orden del payload FILTRADO (las
+  // piezas en armado se saltan) y la agenda cae por orden de creación
+  // (scheduleAllDrafts: created_at ASC) — si las piezas de imagen del
+  // spec estaban en la cadena de rescate, la primera pieza con medio
+  // era el VIDEO (tour local) y el reel quedaba con el primer día de
+  // la semana (corrida Blind Barber, guest 101: posteo 674 video el
+  // sábado, la imagen recién el domingo). Acá la pieza de video NUNCA
+  // abre la semana importada: si es la primera con medio y hay alguna
+  // pieza de imagen/carrusel en la semana, pasa AL FINAL de la
+  // importación (su slot interior) y la semana abre con imagen. La
+  // excepción angosta (feed casi todo video + video REAL del producto)
+  // la decide el predicado único de demo.js sobre el digest del
+  // payload; el video del demo es un tour generado, nunca «video
+  // real», así que hoy la excepción no se habilita jamás.
+  let postsImp = posts;
+  try {
+    const primeraImp = posts[0];
+    const hayImagenImp = posts.some((p) => p && p.type !== 'video');
+    if (primeraImp && primeraImp.type === 'video' && primeraImp.video && hayImagenImp) {
+      const dgImp = (out && out.digest) || null;
+      const fmImp = (dgImp && dgImp.formatos && typeof dgImp.formatos === 'object') ? dgImp.formatos : null;
+      const infoImp = demo.trialVideoAperturaInfo({
+        dominante: (clientDigest.formatoDominanteDe && dgImp) ? clientDigest.formatoDominanteDe(dgImp) : null,
+        conteos: fmImp ? fmImp.conteos : null,
+        total: fmImp ? fmImp.total : 0,
+        realVideo: !!(primeraImp.video_real || (out && out.video_real_producto)),
+      });
+      if (!infoImp.excepcion) {
+        postsImp = posts.slice(1).concat([primeraImp]);
+        console.log(`[trial-primer-posteo] ig=${ig}: la pieza de video abría la semana importada — pasa al final, la semana abre con imagen (feed_casi_todo_video=${infoImp.feed_casi_todo_video} video_real=${infoImp.video_real})`);
+      }
+    }
+  } catch (e) { postsImp = posts; /* la regla jamás frena la importación */ }
   if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
   // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) La señal con la que nace
   // el posteo importado: si el dueño es INVITADO, nadie aprobó nada
@@ -2537,7 +2572,7 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   let n = 0;
   let carruselesImportados = 0; // (LOTE B) carruseles que SÍ nacieron carrusel en esta importación
   let idx = -1;
-  for (const p of posts.slice(0, (opts && opts.limit) || 7)) {
+  for (const p of postsImp.slice(0, (opts && opts.limit) || 7)) {
     idx++;
     try {
       const isVideo = p.type === 'video' && p.video;
@@ -39171,7 +39206,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1032';
+const BUILD_ID = '20261105-v1033';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

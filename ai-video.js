@@ -343,6 +343,27 @@ async function generateSignatureClip({ db, uid, planId, imageFile, prompt, media
   const t0 = Date.now();
   const safeWeek = String(weekKey || '').replace(/[^a-zA-Z0-9-_]+/g, '-').replace(/^-+|-+$/g, '') || 'semana';
   try {
+    // (LOTE PRUEBA-SIN-VIDEO-CARO · REGLA 1 — Valentino, 13/11:
+    // «los videos 2.5 no salen en la prueba ! porque sino nos
+    // fundimos») FAIL-CLOSED EN EL PUNTO ÚNICO: para una cuenta
+    // INVITADA (la prueba) este módulo no genera NI reusa video
+    // firma — la generación premium (fal/seedance) nunca se quema en
+    // un invitado. La puerta vive acá porque toda llamada a fal vive
+    // en este módulo (§7.6): ningún camino puede saltearla, ni
+    // siquiera con el uid en la lista de habilitados de §7.1. Si la
+    // fila del usuario no se puede leer (o la columna no existe, p.
+    // ej. fixtures mínimos de test), no se bloquea: el módulo nunca
+    // rompe la semana del registrado y la lista de uids sigue
+    // mandando como hasta hoy.
+    try {
+      if (db && uid != null) {
+        const uG = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(uid);
+        if (uG && Number(uG.is_guest) === 1) {
+          alog(`uid ${uid} semana ${safeWeek}: cuenta invitada (prueba) — el video premium NO se genera en la prueba (regla de costo 13/11), semana sin firma`);
+          return null;
+        }
+      }
+    } catch (e) { /* sin fila/columna legible: no bloquea (ver comentario) */ }
     if (!mediaDir) { alog(`uid ${uid}: sin mediaDir — semana sin firma`); return null; }
     // El nombre incluye el uid A PROPÓSITO: en producción mediaDir es el
     // MEDIA_DIR compartido por todos los usuarios (server.js) — sin uid,

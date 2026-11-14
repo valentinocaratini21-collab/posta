@@ -2161,6 +2161,35 @@ function enforceTopicRotation(topics, pool) {
   }
   return win;
 }
+/* (LOTE PRUEBA-SIN-VIDEO-CARO + PRIMER-POSTEO-IMAGEN · REGLA 2 —
+ * Valentino, 13/11: «el primer posteo me gustaria que sea imagen
+ * generalmente») EL PRIMER POSTEO DE LA PRUEBA ES IMAGEN. El wow abre
+ * con imagen por defecto: la foto real de la estrella/insignia es la
+ * prueba más rápida de «esto es TU negocio», el logo se verifica mejor
+ * en fija y no se quema video en un invitado. El video vive ADENTRO de
+ * la semana (ritmo foto · video · foto), nunca abriendo. EXCEPCIÓN
+ * ANGOSTA, codificada acá como predicado único (lo consumen el spec —
+ * como registro auditable — y la importación de la semana en
+ * server.js — como enforcement): un video solo puede abrir si el feed
+ * de la marca es CASI TODO video (dominante reel con ≥ 2/3 de la
+ * ventana reciente) Y hay un video REAL del producto (realVideo).
+ * Jamás un reel generado abriendo: el video del demo es el tour local
+ * de diseños (renderDemoVideo, ffmpeg local, sin costo por llamada) y
+ * ese activo NUNCA cuenta como video real — ningún camino de la
+ * prueba produce hoy un video real del producto, así que la excepción
+ * queda codificada pero sin activo que la habilite (excepcion=false
+ * en toda prueba real hasta que exista ese plumbing). */
+function trialVideoAperturaInfo({ dominante, conteos, total, realVideo } = {}) {
+  const reelN = (conteos && Number.isFinite(conteos.reel)) ? conteos.reel : 0;
+  const totN = Number.isFinite(total) ? total : 0;
+  const feedCasiTodoVideo = !!(dominante === 'reel' && totN > 0 && reelN * 3 >= totN * 2);
+  return {
+    dominante: dominante || null,
+    feed_casi_todo_video: feedCasiTodoVideo,
+    video_real: !!realVideo,
+    excepcion: !!(feedCasiTodoVideo && realVideo),
+  };
+}
 function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang, trialNoStock = false, draft = null, firmaStyle = null, firmaSinVideo = false, estiloVisual = null }) {
   // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
   // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
@@ -3072,7 +3101,29 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     } catch (e) { primerPosteo = null; /* el registro jamás frena el spec */ }
   }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, texto_feed: tfSpec || null, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
+  // (LOTE PRUEBA-SIN-VIDEO-CARO + PRIMER-POSTEO-IMAGEN · REGLA 2) El
+  // registro de apertura de la semana de prueba: ¿el feed es casi todo
+  // video? ¿hay video real del producto? El video del demo (tour local)
+  // vive en su slot interior (videoIdx posicional, jamás 0 con 2+
+  // piezas) y la excepción de apertura — que exigiría un video REAL —
+  // no tiene activo en la prueba (realVideo siempre false acá): el
+  // enforcement de «la primera pieza entregada es imagen» vive en la
+  // importación (server.js importTrialWeek), que consume este mismo
+  // predicado sobre el digest del payload.
+  let videoAperturaB = null;
+  let videoIdxB = Math.min(2, Math.max(0, specPosts.length - 1));
+  if (trialNoStock) {
+    try {
+      const fmtsB = (digest && digest.formatos && typeof digest.formatos === 'object') ? digest.formatos : null;
+      videoAperturaB = trialVideoAperturaInfo({
+        dominante: formatoDomB,
+        conteos: fmtsB ? fmtsB.conteos : null,
+        total: fmtsB ? fmtsB.total : 0,
+        realVideo: false,
+      });
+    } catch (e) { videoAperturaB = null; /* el registro jamás frena la prueba */ }
+  }
+  return { specPosts, estilo_visual: estiloOK || null, styles: stylesN, photos, videoIdx: videoIdxB, count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null, voiceLine, voiceMarkers, formato: formatoSpec, foto_gate: fotoGate, formato_diag: formatoDiagB, primer_posteo: primerPosteo, texto_feed: tfSpec || null, video_apertura: videoAperturaB, draft_aplicado: (draft && Array.isArray(draft.rondas) && draft.rondas.length === 4) ? { dims: (draft.dims || []).slice(), rondas: (draft.rondas || []).map((r) => ({ dim: r.dim, elegida: r.elegida })), campeona: draft.campeona || null } : null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -4339,6 +4390,9 @@ module.exports = {
   renderSpecPngs,
   renderSpecPngsStream,
   renderVideoB64, tourScenesFor, esDisenoPoster,
+  // (LOTE PRUEBA-SIN-VIDEO-CARO + PRIMER-POSTEO-IMAGEN · REGLA 2) El
+  // predicado único de la excepción de apertura en video de la prueba.
+  trialVideoAperturaInfo,
   DEMO_TOPICS: captions.DEMO_TOPICS,
   resolveTrialCaption: captions.resolveTrialCaption,
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Eco de voz por pieza + titular con su frase.
