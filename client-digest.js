@@ -471,6 +471,15 @@ const OFFER_STORE_CHROME = ['country/region', 'country region', 'your bag', 'sho
  * («latte», «flat white», «espresso», «barista», «brunch», «makeup»)
  * no están en la lista y siguen pasando. */
 const OFFER_ENGLISH_LABELS = ['best sellers', 'best seller', 'single origin', 'origin coffees'];
+/* (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3) Las
+ * tres clases de basura de la corrida: CTAs de la tienda, verbos de
+ * navegación abriendo un encabezado y slogans en mayúsculas. */
+const OFFER_CTA_PHRASES = ['view product details', 'view details', 'view product', 'see details', 'see product',
+  'add to cart', 'add to bag', 'buy now', 'shop the look', 'quick add',
+  'ver producto', 'ver detalles', 'agregar al carrito', 'anadir al carrito', 'comprar ahora'];
+const OFFER_NAV_VERB_FIRST = new Set(('explore explora discover descubri descubre browse shop meet try watch listen download join learn see get conoce proba mira').split(' '));
+const OFFER_SLOGAN_WORDS = new Set(('from every together better good best more your our the and for with always never made todo todos siempre nunca mejor mejores para con tus sus nuestro nuestra').split(' '));
+const OFFER_PRONOUN_SINGLE = new Set(('our your their yours ours his hers its').split(' '));
 const OFFER_2P_VERBS = new Set(['aprende', 'aprendes', 'aprobas', 'aproba', 'descubre', 'descubri', 'empeza', 'empezas', 'mira', 'miras', 'suma', 'sumas', 'sumate', 'uni', 'unis', 'unite', 'gana', 'ganas', 'ahorra', 'ahorras', 'crece', 'creces', 'ordena', 'ordenas', 'organiza', 'organizas', 'delega', 'delegas', 'vende', 'vendes', 'elegi', 'elegis', 'elegilo', 'hace', 'haces', 'hacelo', 'tene', 'tenes', 'pode', 'podes', 'quere', 'queres', 'senti', 'sentis', 'pensa', 'pensas', 'cree', 'crees', 'segui', 'seguis', 'veni', 'venis', 'abri', 'abris', 'cerra', 'cerras', 'entra', 'entras', 'sali', 'salis', 'dormi', 'dormis', 'rei', 'reis']);
 /* (LOTE ESTRELLA-MODELO-REAL · v924 — caso Veja, 11/11) Categoría, no
  * modelo: el posteo de Veja dijo «HOMME». «Homme» es francés para
@@ -747,18 +756,53 @@ function extractNamedProducts({ captions, items, business, handle } = {}) {
 /* (LOTE CORRECTIVO-8) ¿Una entrada de productos_nombrados está
  * CORROBORADA? La puerta de correctivo-4 validaba la estrella contra
  * la lista que produjo el propio minero: circular — el artefacto
- * «Model Photo» era el ítem N.º 1 de su propia evidencia. Ahora una
- * entrada nacida SOLO de las captions necesita DOS señales
- * independientes entre {sujeto, repetida, catalogo, dueno}, donde
- * 'catalogo'/'dueno' con la frase presente en el feed ('frase')
- * suman la segunda señal (dos superficies que coinciden). 'frase'
- * sola — la señal que los créditos simulaban — nunca corrobora.
- * · Entrada con respaldo de fuente fuerte (fuente ≠ 'caption'):
- *   corrobora como siempre (es la superficie externa misma).
- * · Entrada legada sin `clases` (digest guardado antes de este
- *   lote): manda la fuente — la de caption sola era justamente la
- *   lista circular y no corrobora. */
+ * «Model Photo» era el ítem N.º 1 de su propia evidencia. C8 exigió
+ * dos señales entre {sujeto, repetida, catalogo, dueno}.
+ * (LOTE FUNDAMENTO-QUE-DUDA) La corrida Blind Barber probó que dos
+ * señales INTRA-CAPTION (sujeto + repetida) siguen siendo UNA sola
+ * fuente: las captions se validaban a sí mismas y coronaron un
+ * adjetivo («Infused»). La regla vigente: la entrada corrobora si
+ * su nombre vive en una superficie EXTERNA (fuente ≠ 'caption', o
+ * clase 'catalogo'/'dueno' sumada por calce con catálogo/ADN); la
+ * evidencia de captions sola ya no corrobora a nadie.
+ * · Entrada legada sin `clases` (digest guardado antes de C8):
+ *   manda la fuente — la de caption sola era justamente la lista
+ *   circular y no corrobora. */
 function namedEntryCorroborated(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  if (!Array.isArray(entry.clases)) return entry.fuente !== 'caption';
+  // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3.1)
+  // La regla de C8 contaba DOS señales INTRA-CAPTION (sujeto +
+  // repetida) como corroboración cruzada — pero las dos salen de la
+  // MISMA fuente (los captions de la marca): la corrida Blind Barber
+  // coronó «Infused» (un adjetivo de los cocktails) con exactamente
+  // esas dos clases y la barra de estrella se auto-validó otra vez.
+  // Desde este lote, una entrada nacida de las captions corrobora
+  // SOLO si el nombre TAMBIÉN vive en una superficie externa del
+  // negocio — clase 'catalogo' (su tienda, su web, su link de bio,
+  // su PDF) o 'dueno' (su ADN): la evidencia intra-caption sola ya
+  // no corona a nadie; sin fuente externa, el candidato es DUDA
+  // (question_candidates) o insignia, nunca estrella afirmada.
+  const c = new Set(entry.clases);
+  if (entry.fuente !== 'caption') return true; // la superficie externa misma
+  return c.has('catalogo') || c.has('dueno');
+}
+/* (LOTE FUNDAMENTO-QUE-DUDA) ADMISIÓN A CLASIFICACIÓN ≠ CORONACIÓN:
+ * la regla que namedEntryCorroborated endureció es la de CORONAR
+ * (estrella/insignia). Pero los nombres de las captions son también
+ * los CANDIDATOS que el mapa foto→producto clasifica contra las
+ * fotos del sitio (L1 de fotos-elegibilidad): si un nombre real del
+ * feed no puede entrar al vocabulario, el mapa nunca se construye
+ * y la «foto mapeada» — una de las fuentes externas que la spec
+ * reconoce — no puede existir para una tienda sin catálogo legible.
+ * La admisión al vocabulario conserva la vara de C8 (dos señales
+ * entre sujeto/repetida/catalogo/dueno, o fuente externa; 'frase'
+ * sola nunca): el nombre suelto sin evidencia sigue afuera, pero el
+ * nombre con dos señales del crudo entra a CLASIFICAR — y solo
+ * corrobora (namedEntryCorroborated / itemHasProductEvidence)
+ * cuando la clasificación lo ata a una foto real o a otra
+ * superficie externa. */
+function namedEntryCandidata(entry) {
   if (!entry || typeof entry !== 'object') return false;
   if (!Array.isArray(entry.clases)) return entry.fuente !== 'caption';
   const c = new Set(entry.clases);
@@ -779,7 +823,12 @@ function namedItemCorroborated(digest, name) {
   if (!digest || !Array.isArray(digest.productos_nombrados)) return true;
   const matches = digest.productos_nombrados.filter((x) => x && sameItemName(String(x.nombre || x), String(name || '')));
   if (!matches.length) return true;
-  return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e));
+  // (LOTE FUNDAMENTO-QUE-DUDA) La FOTO MAPEADA a este ítem también es
+  // fuente externa (la visión lo identificó en una foto real de su
+  // sitio): un nombre que solo vive en captions pero tiene su foto
+  // clasificada corrobora por la foto, no por las captions.
+  return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e))
+    || itemHasProductEvidence(digest, name);
 }
 /* (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 8) ¿Este ítem tiene evidencia
  * de PRODUCTO (cosa vendible fotografiable), no de servicio? La
@@ -849,7 +898,10 @@ function starNamedEvidenceOk(digest, name) {
   }
   const matches = digest.productos_nombrados.filter((x) => x && sameItemName(String(x.nombre || x), s));
   if (!matches.length) return false;
-  return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e));
+  // (LOTE FUNDAMENTO-QUE-DUDA) Ídem namedItemCorroborated: la foto
+  // mapeada al ítem es la fuente externa que las captions no son.
+  return matches.some((e) => (e && e.fuente !== 'caption') || namedEntryCorroborated(e))
+    || itemHasProductEvidence(digest, s);
 }
 /* (LOTE INGESTA — caso Veja/Byredo/Crumbl, 11/11) Nombre de SECCIÓN
  * del sitio (menú, pie, legal, ayuda), no un producto: un tema que
@@ -977,6 +1029,28 @@ function isPlausibleOfferItem(raw) {
   // sección, navegación): jamás es un ítem de la oferta — la lista de
   // productos que alimenta la estrella sale limpia de rótulos.
   if (isSiteLabelName(s)) return false;
+  // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3)
+  // TRES CLASES DE BASURA que los filtros vigentes no cubrían y que
+  // en la corrida entraron como «productos»:
+  // · CTA de página de producto/tienda («View product details», el
+  //   botón bajo cada producto de la vidriera): es la acción de la
+  //   tienda, no algo que el negocio venda.
+  if (OFFER_CTA_PHRASES.some((p) => ns.includes(p))) return false;
+  // · Encabezado de navegación con verbo («Explore Blind Barber
+  //   Fragrance», «Upgrade Your Grooming Routine»): un título que
+  //   INVITA a hacer algo es cromo del sitio, no la oferta.
+  if (OFFER_NAV_VERB_FIRST.has(nw[0])) return false;
+  // · Slogan de campaña en mayúsculas minado de captions («GOOD FROM
+  //   EVERY ANGLE», «BETTER TOGETHER»): frase completa en caps con
+  //   palabra de slogan. Un nombre de producto en caps sin palabra
+  //   de slogan («HAIR CLAY», «DISCOVERY SET») NO se toca.
+  const capsWords = words.filter((w) => /[\p{L}]/u.test(w));
+  if (capsWords.length >= 2
+    && capsWords.every((w) => w === w.toUpperCase() && w !== w.toLowerCase())
+    && nw.some((w) => OFFER_SLOGAN_WORDS.has(w))) return false;
+  // · Pronombre suelto («Our», minado como «producto» con clase
+  //   sujeto en la corrida): una palabra de función no es un ítem.
+  if (nw.length === 1 && OFFER_PRONOUN_SINGLE.has(nw[0])) return false;
   // (LOTE PLACEHOLDER-COPY) Slogan de dos oraciones («Timeless style.
   // Effortless you.»): es el hero de la tienda, no un producto. La
   // guarda de abreviatura (primer segmento de UNA palabra: «Dr.»,
@@ -1448,6 +1522,24 @@ function buildFromParts(parts) {
     for (const m of mined) if (!have.has(norm(m))) { d.servicios.push(toItem(m)); have.add(norm(m)); }
     d.servicios = d.servicios.slice(0, 10);
   }
+  // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3.4)
+  // COSECHA DE SERVICIOS: la lista que web-extract levanta del sitio
+  // se llama literalmente «services» (el menú de servicios de la
+  // home) pero entraba TODA como «productos» — en un rubro de
+  // servicios, digest.servicios quedaba vacío salvo que el ADN lo
+  // trajera, y el fundamento de una barbería era la vidriera de su
+  // tienda (de ahí que la «insignia» saliera un set de fragancias).
+  // En una familia de servicios, esa lista cosechada TAMBIÉN pobla
+  // digest.servicios (mismos ítems, misma fuente 'web'): alimenta
+  // temas e insignia como la vidriera alimenta productos. Fuera de
+  // las familias de servicios, nada cambia.
+  if (SERVICE_FAMILY_CATS_DIGEST.has(d.category) && webItems.length) {
+    const haveS = new Set(d.servicios.map((s) => norm(s.nombre)));
+    for (const w of webItems) {
+      if (d.servicios.length >= 10) break;
+      if (w && w.nombre && !haveS.has(norm(w.nombre))) { d.servicios.push(w); haveS.add(norm(w.nombre)); }
+    }
+  }
   d.has_booking = !!(bioOff.hasBooking || formOff.hasBooking || (dna && BOOKING_RE.test(JSON.stringify(dna))));
 
   // --- temas del feed: vocabulario minado de captions + bio ---
@@ -1823,6 +1915,11 @@ function detectContradictions(priced) {
  * · prominencia: qué tan arriba está en su catálogo/web;
  * · rendimiento: si su posteo con más alcance lo menciona.
  * La confianza sale del puntaje y de la distancia al segundo. */
+/* (LOTE FUNDAMENTO-QUE-DUDA) Piso del bonus «más querido» de
+ * inferStar: interacciones (likes + comentarios) mínimas del posteo
+ * más querido del set para que el bonus exista. Por debajo, la señal
+ * es ruido (la corrida Blind Barber coronó con 1 interacción). */
+const INFERSTAR_LOVE_MIN = 5;
 function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
   // (LOTE ESTRELLA-MODELO-REAL · v924) Una categoría no puede ser la
   // estrella inferida: se saca del puntaje antes de puntuar. Si no
@@ -1865,12 +1962,17 @@ function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
     // bonus (retrocompatible: las métricas viejas solo traen reach).
     // Nunca pisa dueño ni ventas: vive DENTRO de inferStar, la rama
     // inferida — effectiveStarOf ya ordena dueño → ventas → inferida.
+    // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3)
+    // PISO DE CARIÑO: el bonus relativo no tenía piso y coronó con
+    // bestLove = 1 interacción — un solo like no es «el más querido»,
+    // es ruido. Sin un mínimo de interacciones reales en el posteo
+    // más querido del set, el bonus NO existe.
     let bestLove = 0; let bestLoveText = '';
     for (const m of (metrics || [])) {
       const love = (Number(m && m.likes) || 0) + (Number(m && m.comments) || 0);
       if (love > bestLove) { bestLove = love; bestLoveText = String((m && m.text) || ''); }
     }
-    if (bestLove > 0 && bestLoveText && hit(bestLoveText)) {
+    if (bestLove >= INFERSTAR_LOVE_MIN && bestLoveText && hit(bestLoveText)) {
       score += 3;
       evidence.push(`es el más querido de su feed (${bestLove} interacciones en su posteo con más cariño)`);
     }
@@ -2151,7 +2253,12 @@ function questionCandidatesOf(d) {
   // respuesta genérica descartada por L3 («proyecto») no la suprime.
   const starDelDueno = (d.dueno && d.dueno.estrella && duenoStarEvidenceMatch(d, d.dueno.estrella)) || (star && star.fuente === 'dueno');
   if (star && star.item && (star.confidence || 0) >= 0.5 && !starDelDueno) {
-    out.push({ tipo: 'estrella', item: star.item, texto: `tu producto estrella es ${star.item}?` });
+    // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 5.3)
+    // La candidata nace TAMBIÉN cuando la única evidencia es
+    // intra-caption: evidencia débil = duda, no estrella silenciosa.
+    // `debil` lo marca: la estrella no se afirma como hecho en
+    // ninguna superficie hasta que el dueño la confirme.
+    out.push({ tipo: 'estrella', item: star.item, debil: !starNamedEvidenceOk(d, star.item), texto: `tu producto estrella es ${star.item}?` });
   }
   const preciosDueno = (d.dueno && d.dueno.precios && typeof d.dueno.precios === 'object') ? d.dueno.precios : {};
   for (const c of (d.contradictions || []).slice(0, 2)) {
@@ -2161,6 +2268,68 @@ function questionCandidatesOf(d) {
     if (vs) out.push({ tipo: 'contradiccion', item: c.item, texto: `cuál es el precio actual de ${c.item}? figura ${vs}.` });
   }
   return out.slice(0, 3);
+}
+
+/* (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 5)
+ * LA PREGUNTA DE LA PRUEBA: la candidata de question_candidates
+ * existía y quedaba registrada en el digest, pero NINGUNA superficie
+ * de la prueba la consumía (solo la lee el loop «Posty pregunta» del
+ * registrado) — la duda sin superficie era inferencia silenciosa: la
+ * corrida infirió «Infused» con 0,76, generó la pregunta correcta y
+ * la pregunta murió en un campo. Esta función es la forma CONSUMIBLE
+ * de la primera candidata sin responder (rubro primero, como en
+ * questionCandidatesOf): { tipo, texto, opciones } con las opciones
+ * de UN TOQUE derivadas del fundamento ya minado (la candidata + los
+ * productos/servicios reales del digest; el rubro, con los rótulos
+ * del idioma de la prueba). `answered` = { estrella, rubro } — lo
+ * que el front ya respondió viaja como fields y no se repregunta.
+ * Sin candidata (o todo respondido): null — la prueba no pregunta
+ * por preguntar (regla: Posty pregunta solo lo que no supo con
+ * seguridad). */
+function trialQuestionFor(digest, opts) {
+  const o = opts || {};
+  const lang = o.lang === 'en' ? 'en' : 'es';
+  const answered = o.answered || {};
+  if (!digest || typeof digest !== 'object' || !Array.isArray(digest.question_candidates)) return null;
+  for (const c of digest.question_candidates) {
+    if (!c || !c.tipo) continue;
+    if (c.tipo === 'rubro') {
+      if (answered.rubro) continue;
+      const rid = digest.rubro_id || {};
+      let opciones = [];
+      try {
+        opciones = rubroId.questionOptions({
+          rubro: rid.rubro || c.rubro,
+          nivel_duda: rid.nivel_duda || 'rubro',
+          candidatas: (Array.isArray(rid.candidatas) && rid.candidatas.length) ? rid.candidatas : (c.opciones || []),
+        }, lang);
+      } catch (e) { opciones = []; }
+      if (!opciones.length) opciones = Array.isArray(c.opciones) ? c.opciones : [];
+      if (!opciones.length) continue;
+      const labels = opciones.map((x) => x.label);
+      const texto = lang === 'en'
+        ? (labels.length >= 2 ? `Is your business more ${labels[0]} or ${labels[1]}?` : `Is your business ${labels[0]}?`)
+        : (labels.length >= 2 ? `¿Tu negocio es más ${labels[0]} o ${labels[1]}?` : `¿Confirmás que tu rubro es ${labels[0]}?`);
+      return { tipo: 'rubro', texto, opciones };
+    }
+    if (c.tipo === 'estrella') {
+      if (answered.estrella) continue;
+      const opciones = [];
+      const pushOp = (raw) => {
+        const v = String((raw && (raw.nombre || raw)) || '').trim();
+        if (v && !opciones.some((x) => sameItemName(x, v))) opciones.push(v);
+      };
+      pushOp(c.item);
+      for (const it of [...(digest.productos || []), ...(digest.servicios || [])]) {
+        if (opciones.length >= 4) break;
+        pushOp(it);
+      }
+      if (!opciones.length) continue;
+      const texto = lang === 'en' ? `Is ${c.item} your star product?` : `¿Tu producto estrella es ${c.item}?`;
+      return { tipo: 'estrella', item: c.item, debil: !!c.debil, texto, opciones: opciones.slice(0, 4) };
+    }
+  }
+  return null;
 }
 
 /* applyDeepBlocks(stored, fresh) — merge del refresco semanal: los
@@ -3124,6 +3293,11 @@ function degradedBrandWow(digest, opts) {
  *  (3) el producto_estrella sembrado del fundamento.
  * Una palabra suelta de categoría («pastas», «café») NO es insignia:
  * la insignia es una COSA nombrable como la piden los clientes. */
+/* (LOTE FUNDAMENTO-QUE-DUDA) Familias de rubro de SERVICIOS (la
+ * misma lista que deriveTopics/deriveInsigniaWow usan en local):
+ * para estas familias el menú de servicios es fundamento de primer
+ * orden — alimenta digest.servicios y la insignia. */
+const SERVICE_FAMILY_CATS_DIGEST = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
 function insigniaOf(digest) {
   if (!digest || typeof digest !== 'object') return null;
   const limpia = (s) => String(s || '').trim().replace(/\s+/g, ' ');
@@ -3140,7 +3314,13 @@ function insigniaOf(digest) {
   const mv = digest.dueno && digest.dueno.mas_vendido;
   if (usable(mv)) return { frase: limpia(mv), fuente: 'dueno' };
   const inf = digest.inferred_star;
-  if (inf && inf.item && usable(inf.item)) return { frase: limpia(inf.item), fuente: 'feed' };
+  // (LOTE FUNDAMENTO-QUE-DUDA) La inferida entra a la insignia SOLO
+  // con la evidencia que la corona estrella (fuente externa): una
+  // inferida débil (solo captions) tampoco es insignia por esta vía
+  // — la insignia sale de los temas/servicios, no del adjetivo que
+  // las captions repitieron. La del dueño (fuente 'dueno') no pasa
+  // por esta puerta: es su palabra.
+  if (inf && inf.item && usable(inf.item) && (inf.fuente === 'dueno' || starNamedEvidenceOk(digest, inf.item))) return { frase: limpia(inf.item), fuente: 'feed' };
   // (LOTE TARTINE-FRENOS · P4) CUARTA FUENTE: los TEMAS DEL FEED
   // (temas_feed — lo que el feed muestra y repite, minado de sus
   // captions y su bio). En la corrida Tartine las tres fuentes
@@ -3152,6 +3332,16 @@ function insigniaOf(digest) {
   for (const t of temasFeed) {
     const frase = t && typeof t === 'object' ? (t.nombre || t.tema || t.frase) : t;
     if (usable(frase)) return { frase: limpia(frase), fuente: 'temas_feed' };
+  }
+  // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3.4)
+  // En un rubro de SERVICIOS, la insignia sale del MENÚ DE SERVICIOS
+  // cosechado antes que de un ítem de la tienda: la insignia de una
+  // barbería es el corte, no el set de fragancias de su vidriera.
+  if (SERVICE_FAMILY_CATS_DIGEST.has(String(digest.category || ''))) {
+    for (const sv of (Array.isArray(digest.servicios) ? digest.servicios : [])) {
+      const frase = sv && typeof sv === 'object' ? (sv.nombre || sv) : sv;
+      if (usable(frase)) return { frase: limpia(frase), fuente: 'servicios' };
+    }
   }
   if (usable(digest.producto_estrella)) return { frase: limpia(digest.producto_estrella), fuente: 'fundamento' };
   return null;
@@ -3808,6 +3998,9 @@ module.exports = {
   // exportada: el vocabulario del mapa foto→producto filtra los
   // nombrados del feed con la MISMA regla de C8 (sin auto-validación).
   namedEntryCorroborated,
+  // (LOTE FUNDAMENTO-QUE-DUDA) La ADMISIÓN al vocabulario de
+  // clasificación (la vara de C8), separada de la coronación.
+  namedEntryCandidata,
   // (v231) Adopción de patrones: candado de números de promo
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
@@ -3830,6 +4023,9 @@ module.exports = {
   // (CORRECTIVO-7) Gate de marca en foto real: veredictos de presencia.
   sanitizeBrandPresence, brandPresenceOf, brandLogoOf,
   questionCandidatesOf, applyDeepBlocks,
+  // (LOTE FUNDAMENTO-QUE-DUDA) La pregunta de la prueba: la candidata
+  // a pregunta en su forma consumible (opciones de un toque).
+  trialQuestionFor,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
   rubroId,
 };

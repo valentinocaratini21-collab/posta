@@ -126,6 +126,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <input id="fStar" type="text" autocomplete="off" placeholder="E.g.: specialty coffee" aria-label="What do you sell the most">
       <p class="hint">I couldn't see it on your Instagram or your website — tell me in your own words and I'll build your first post around it.</p>
     </div>
+    <div class="field" id="fAskWrap" hidden>
+      <label id="fAskQ"></label>
+      <div class="langrow" id="fAskOpts" style="flex-wrap:wrap"></div>
+      <p class="hint">One quick question before I build your week — tap one and I'll keep going. Or skip it and I'll build with what I already know.</p>
+      <button type="button" class="btn btn-ghost" id="fAskSkip">Skip this question</button>
+    </div>
     <div class="field" id="fLangWrap" hidden>
       <label>What language do you post in? *</label>
       <p class="hint">Your website is in another language and I can't tell what language you post in — pick one and I'll build your week in that language.</p>
@@ -159,6 +165,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   var $ = function (id) { return document.getElementById(id); };
   var igEl = $('fIg'), webEl = $('fWeb'), starEl = $('fStar'), starWrap = $('fStarWrap');
   var langWrap = $('fLangWrap');
+  // (LOTE FUNDAMENTO-QUE-DUDA) THE TRIAL QUESTION: if the fundamento
+  // is left with a real doubt (unconfirmed star or rubro), the server
+  // stops the stream with the question and its one-tap options
+  // (falta_pregunta); it is shown here BEFORE building the week and
+  // the answer travels on resubmit as fields (chosen star as
+  // producto_estrella; rubro as category + rubro_src='pregunta';
+  // skip as pregunta_<tipo>).
+  var askWrap = $('fAskWrap'), askQ = $('fAskQ'), askOpts = $('fAskOpts'), askSkipBtn = $('fAskSkip');
+  var pendingPregunta = null, askRubroAnswer = null, askSkipStar = false, askSkipRubro = false;
   // (LOTE L2 · HONEST LANGUAGE FALLBACK) The brand-language choice,
   // when the server asks for it (falta_idioma_marca): it sticks for
   // resubmits on this visit, like the star.
@@ -217,6 +232,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       localStorage.setItem(PENDING_KEY, JSON.stringify({
         ig: ig, web: web, star: String(star || '').slice(0, 60),
         brandLang: brandLangChoice || '', ts: Date.now(),
+        // (LOTE FUNDAMENTO-QUE-DUDA) The trial question's answers also
+        // survive a reload: an answered question is never re-asked.
+        askRubro: askRubroAnswer || null, askSkipStar: !!askSkipStar, askSkipRubro: !!askSkipRubro,
       }));
     } catch (e) {}
   }
@@ -516,6 +534,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
             break;
           } else if (ev === 'error') {
             if (d && d.falta_producto) { outcome = 'need_star'; break; }
+            if (d && d.falta_pregunta) { outcome = 'need_question'; pendingPregunta = d.pregunta || null; break; }
             if (d && d.falta_idioma_marca) { outcome = 'need_lang'; break; }
             if (d && (d.trial_used || d.trial_locked)) { outcome = false; outcomeUsed = true; outcomeErr = (d && d.message) || ''; break; }
             outcome = false;
@@ -534,12 +553,61 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       try { reader.releaseLock(); } catch (e) {}
     }
     if (outcome === true) return true;
+    if (outcome === 'need_question') { showAsk(); showStatus('One question before I build your week — tap an answer and I’ll keep going.'); return 'need_question'; }
     if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('I still don’t know what you sell — tell me above and I’ll build your week around it.'); return 'need_star'; }
     if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Your website is in another language and I can’t tell what language you post in — pick one below and I’ll build your week in that language.'); return 'need_lang'; }
     if (outcomeUsed) { clearPending(); showErrHtml(usedHtml(outcomeErr || 'This business already used its one free trial 💛')); return false; }
     showErr(outcomeErr || "We couldn't build your first post. Try again.");
     return false;
   }
+  // (LOTE FUNDAMENTO-QUE-DUDA) Shows the question the stream brought
+  // back (falta_pregunta) with its one-tap options. The answer is
+  // kept in state and the form resubmits itself: the server reads it
+  // as fields and never asks twice.
+  function showAsk() {
+    var p = pendingPregunta;
+    if (!p) return;
+    askQ.textContent = p.texto || '';
+    askOpts.innerHTML = '';
+    if (p.tipo === 'rubro') {
+      (p.opciones || []).forEach(function (op) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-ghost'; b.textContent = op.label || op.rubro || '';
+        b.addEventListener('click', function () {
+          askRubroAnswer = { rubro: op.rubro || '', subrubro: op.subrubro || '' };
+          askWrap.hidden = true;
+          if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit'));
+        });
+        askOpts.appendChild(b);
+      });
+    } else {
+      (p.opciones || []).forEach(function (nombre) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-ghost'; b.textContent = nombre;
+        b.addEventListener('click', function () {
+          // The chosen star travels as the owner's own word: the star
+          // field this flow already knows (libre mix).
+          starEl.value = nombre; askSkipStar = false;
+          askWrap.hidden = true;
+          if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit'));
+        });
+        askOpts.appendChild(b);
+      });
+      var bOtro = document.createElement('button');
+      bOtro.type = 'button'; bOtro.className = 'btn btn-ghost'; bOtro.textContent = 'Other';
+      bOtro.addEventListener('click', function () {
+        askWrap.hidden = true; starWrap.hidden = false; starEl.focus();
+        showStatus('Tell me what you sell the most and I’ll build your week around it.');
+      });
+      askOpts.appendChild(bOtro);
+    }
+    askWrap.hidden = false;
+  }
+  askSkipBtn.addEventListener('click', function () {
+    if (pendingPregunta && pendingPregunta.tipo === 'rubro') askSkipRubro = true; else askSkipStar = true;
+    askWrap.hidden = true;
+    if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit'));
+  });
   // Builds the first post (and the week). Returns true | false | 'need_star' | 'need_lang'.
   async function buildFirstPost(ig, web, estrella, brandLang) {
     showStatus('Looking up your Instagram…');
@@ -565,7 +633,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var fd = new FormData();
     fd.append('business', String(pf.j.name || '') || ig);
     fd.append('ig', ig);
-    fd.append('category', category || 'otro');
+    // (LOTE FUNDAMENTO-QUE-DUDA) The rubro answer to the question
+    // overrides the prefill category (the server reads it as a
+    // confirmation: rubro_src='pregunta').
+    fd.append('category', askRubroAnswer ? askRubroAnswer.rubro : (category || 'otro'));
+    if (askRubroAnswer) {
+      if (askRubroAnswer.subrubro) fd.append('subcat', askRubroAnswer.subrubro);
+      fd.append('rubro_src', 'pregunta');
+    } else if (askSkipRubro) fd.append('pregunta_rubro', 'skip');
+    if (askSkipStar) fd.append('pregunta_estrella', 'skip');
     fd.append('country', 'US');
     fd.append('tone', 'vos');
     fd.append('lang', LANG);
@@ -607,7 +683,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     btn.disabled = true; btn.textContent = 'Building…';
     try {
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
-      if (built === 'need_star' || built === 'need_lang' || !built) { btn.disabled = false; btn.textContent = 'Build my first post'; return; }
+      if (built === 'need_star' || built === 'need_lang' || built === 'need_question' || !built) { btn.disabled = false; btn.textContent = 'Build my first post'; return; }
       showStatus('Entering your product…');
       var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
@@ -648,6 +724,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (pend.web) webEl.value = pend.web;
       if (pend.star) starEl.value = pend.star;
       if (pend.brandLang) brandLangChoice = pend.brandLang;
+      if (pend.askRubro) askRubroAnswer = pend.askRubro;
+      if (pend.askSkipStar) askSkipStar = true;
+      if (pend.askSkipRubro) askSkipRubro = true;
       if (form.requestSubmit) form.requestSubmit();
       else form.dispatchEvent(new Event('submit'));
     } else {

@@ -72,10 +72,18 @@ t('a1 el digest guarda productos_nombrados con el producto de las captions',
 t('a2 productos_nombrados no incluye categorías (coffee/pastry)',
   !dHG.productos_nombrados.some((x) => /^(coffee|cafe|pastry)$/i.test(x.nombre)));
 const effHG = cd.effectiveStarOf(dHG);
-t('a3 la estrella efectiva es Fresh Good Batch', !!effHG && effHG.item === 'Fresh Good Batch');
+// RE-PIN (lote FUNDAMENTO-QUE-DUDA, diagnóstico Blind Barber):
+// «Fresh Good Batch» vive SOLO en las captions de este fixture
+// (fuente 'caption', clases frase+repetida+sujeto, sin catálogo ni
+// foto mapeada) — la coronación con evidencia intra-caption es la
+// circularidad que coronó a «Infused». Con la regla nueva degrada
+// a DUDA: candidata debil que la prueba pregunta con opciones.
+t('a3 RE-PIN fundamento-que-duda: sin fuente externa, «Fresh Good Batch» ya NO es estrella efectiva',
+  effHG === null);
 const wowHG = cd.deriveFirstPostWow(dHG, { lang: 'en' });
-t('a4 el wow vende la estrella con nombre (anchor + _star)',
-  !!wowHG && wowHG.digest_anchor === 'Fresh Good Batch' && wowHG._star === 1);
+t('a4 RE-PIN fundamento-que-duda: el wow degrada honesto (star_missing, sin _star) y la duda nace como candidata debil',
+  !!wowHG && wowHG.star_missing === true && !wowHG._star &&
+  (dHG.question_candidates || []).some((c) => c.tipo === 'estrella' && c.item === 'Fresh Good Batch' && c.debil === true));
 const dHGb = mkHG(cdB);
 const effHGb = cdB.effectiveStarOf(dHGb);
 t('a5 CONTROL base v980: la estrella NO es el producto con nombre',

@@ -75,7 +75,16 @@ console.log('\n[B] Forma Veja: la estrella manda y el slot 0 jamás es placa');
   const spec = demo.buildDemoSpec({ business: 'VEJA', category: 'moda', country: 'US', tone: 'vos', photoPath: null, goal: '', goal_key: '', accent: '#8A6D4B', btn: '#3B2F2F', count: 5, bioText: 'Sneakers sustentables.', profilePicPath: '/media/veja-perfil.jpg', feedRegister: null, extraPhotos: [], digest: dg, lang: 'en', trialNoStock: true, draft: null, firmaStyle: null, firmaSinVideo: false, estiloVisual: null });
   const rec = spec.primer_posteo;
   ok(!!rec, 'B1 el spec trae el registro del gate de mostrar (spec.primer_posteo)');
-  ok(rec && rec.estrella && rec.estrella.tema_final && clientDigest.sameItemName(rec.estrella.tema_final, 'Salar'), 'B2 el tema del slot 0 ES la estrella validada (Salar)', rec && rec.estrella);
+  // RE-PIN (lote FUNDAMENTO-QUE-DUDA, diagnóstico Blind Barber):
+  // en este fixture «Salar» vive SOLO en las captions (la vidriera
+  // trae otros modelos: Esplar, V-10, Condor) — su «validación»
+  // era la circularidad intra-caption que coronó a «Infused».
+  // Con la regla nueva no es estrella validada: el gate registra
+  // sin_confirmar con un tema de la vidriera y la duda nace como
+  // candidata debil que la prueba pregunta antes de afirmar.
+  ok(rec && rec.estrella && rec.estrella.sin_confirmar === true && rec.estrella.esperada === null &&
+    (dg.question_candidates || []).some((c) => c.tipo === 'estrella' && clientDigest.sameItemName(c.item, 'Salar') && c.debil === true),
+    'B2 RE-PIN fundamento-que-duda: sin fuente externa, «Salar» no es estrella validada (sin_confirmar + candidata debil)', rec && rec.estrella);
   eq(spec.specPosts[0].photo_source, 'brand-poster', 'B3 sin foto real de la estrella, el ganador interno es el póster (dato interno)');
   eq(demo.firstPostNeedsGeneratedImage(spec), true, 'B4 el disparador del rescate generado detecta el póster');
   ok(rec && rec.veredicto && rec.veredicto.cadena === 'generada' && rec.veredicto.motivos.includes('placa-no-es-salida') && rec.veredicto.pasa === false, 'B5 el gate NO pasa con placa: la cadena es la generada', rec && rec.veredicto);

@@ -9,9 +9,13 @@
 // veredicto de presencia corría una llamada de visión de hasta 45 s
 // contra una carrera de 6/7 s, sin caché y sin registro: «sin
 // verificar» mudo, corrida tras corrida.
-// El lote: (L1) itemNames suma los productos_nombrados CORROBORADOS
-// del feed (corroboración cruzada de C8, namedEntryCorroborated — el
-// nombre suelto sin evidencia no entra); (L2a) la presencia corre
+// El lote: (L1) itemNames suma los productos_nombrados ADMITIDOS
+// del feed (la vara de C8: namedEntryCandidata desde el lote
+// FUNDAMENTO-QUE-DUDA, que separó ADMISIÓN de CORONACIÓN — la
+// coronación namedEntryCorroborated exige fuente externa y el
+// mapa foto→producto es justamente esa fuente: con la regla de
+// coronación el vocabulario nacía vacío; el nombre suelto sin
+// evidencia no entra a ninguna de las dos); (L2a) la presencia corre
 // como JOB con presupuesto propio (12 s) y caché por hash de
 // contenido: la carrera perdida completa en segundo plano y la
 // próxima corrida del mismo negocio lee el veredicto sin re-pagar la
@@ -143,10 +147,18 @@ function stubVisionFetch(itemName, marca) {
   const named = clientDigest.extractNamedProducts({ captions, items: [], business: 'VEJA', handle: 'veja' });
   ok('A2 el minero del feed encuentra nombres en las captions', named.length >= 2, named.map((e) => e.nombre));
   ok('A2b ningún rótulo de créditos («Model Photo») entra al vocabulario', !named.some((e) => /model photo/i.test(e.nombre)), named.map((e) => e.nombre));
-  const corroborados = named.filter((e) => clientDigest.namedEntryCorroborated(e));
-  ok('A3 la corroboración de C8 deja pasar los modelos reales (≥1)', corroborados.length >= 1, corroborados.map((e) => e.nombre));
+  // RE-PIN (lote FUNDAMENTO-QUE-DUDA): el vocabulario L1 es la
+  // ADMISIÓN a la clasificación de fotos, no la coronación. La
+  // regla de C8 se partió en dos: namedEntryCorroborated (corona:
+  // exige fuente externa — con ella el vocabulario nacía vacío y
+  // el mapa foto→producto, que ES la fuente externa, no podía
+  // existir) y namedEntryCandidata (admisión: la vara de C8). El
+  // server (trialFeedItemNames) usa la de admisión; esta suite
+  // espeja ese mismo vocabulario.
+  const corroborados = named.filter((e) => clientDigest.namedEntryCandidata(e));
+  ok('A3 RE-PIN fundamento-que-duda: la ADMISIÓN de C8 (namedEntryCandidata) deja pasar los modelos reales (≥1)', corroborados.length >= 1, corroborados.map((e) => e.nombre));
   if (!fx.real) {
-    ok('A3b el nombre débil (1 mención suelta, «frase» sola) NO corrobora y queda fuera', !corroborados.some((e) => /whisper/i.test(e.nombre)), corroborados.map((e) => e.nombre));
+    ok('A3b el nombre débil (1 mención suelta, «frase» sola) NO se admite y queda fuera', !corroborados.some((e) => /whisper/i.test(e.nombre)), corroborados.map((e) => e.nombre));
   }
   const sinVocab = await deepRead.classifyDigestPhotos({ photos: fx.localized.slice(0, 6).map((w) => ({ key: w.url, path: w.path })), items: [], apiKey: 'test', fetchImpl: stubVisionFetch('The Atlas', false) });
   ok('A4 con items=[] la clasificación devuelve {} (mecánica del «antes»: sin vocabulario no hay mapa)', Object.keys(sinVocab).length === 0, sinVocab);
@@ -313,6 +325,7 @@ function stubVisionFetch(itemName, marca) {
   ok('D4 ningún llamado viejo raceMs(trialBrandPresence(...)) queda en las rutas', count(serverSrc, 'raceMs(trialBrandPresence(') === 0, count(serverSrc, 'raceMs(trialBrandPresence('));
   ok('D5 demo: foto_gate en el spec y en el spec guardado', count(demoSrc, 'foto_gate: fotoGate') === 1 && count(demoSrc, 'foto_gate: spec.foto_gate') === 1, { a: count(demoSrc, 'foto_gate: fotoGate'), b: count(demoSrc, 'foto_gate: spec.foto_gate') });
   ok('D6 client-digest exporta namedEntryCorroborated (la regla de C8, una sola copia)', typeof clientDigest.namedEntryCorroborated === 'function');
+  ok('D6b RE-PIN fundamento-que-duda: client-digest exporta namedEntryCandidata (la admisión L1, separada de la coronación)', typeof clientDigest.namedEntryCandidata === 'function');
   ok('D7 BUILD provisorio del lote', count(serverSrc, "BUILD_ID = '20261105-v1011'") === 1 && count(serverSrc, '20261105-v1010') === 0);
 
   console.log(`\n${passed} ok · ${failed} mal`);

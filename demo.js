@@ -2353,6 +2353,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // `else` y el mapa de specPosts está afuera del if/else.
   const photoSourceOf = new Map();
   let wowGateInfo = null;
+  var variedadReg = null; // (LOTE FUNDAMENTO-QUE-DUDA) registro de la variedad dura (foto/producto), lo lee foto_gate
   // (LOTE PRIMER-POSTEO-PERFECTO) Registro del gate de mostrar del
   // slot 0: el tema que ocupaba el slot ANTES del wow (para declarar la
   // re-tematización de la pieza 1) y si el titular se reparó (pieza 4).
@@ -2596,6 +2597,61 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       photos[i] = p;
     }
     for (const i of posterAt) { photos[i] = profilePicPath || null; if (!photoSourceOf.has(i)) photoSourceOf.set(i, 'brand-poster'); }
+    // (LOTE FUNDAMENTO-QUE-DUDA · VARIEDAD DURA — vara Ligre,
+    // diagnóstico Blind Barber punto 3.5) Ningún PRODUCTO ni ninguna
+    // FOTO se repite entre piezas de la semana. El loop de arriba
+    // evita repetir la foto DENTRO de su pasada (usedWeb), pero la
+    // corrida repitió igual: el topic social sin ancla tomó por
+    // pickWebPhoto el MISMO hero (el Discovery Set) que el video de
+    // otra pieza usaba de escena — dos piezas vendían el mismo
+    // producto con la misma foto. Esta pasada corre sobre el
+    // resultado FINAL (fotos + producto de cada pieza ya elegidos):
+    // la pieza posterior que repite foto o producto RE-ELIGE otra
+    // foto del pool con el mismo gate (excluidas las fotos ya usadas
+    // y las del producto repetido); si el pool no alcanza, en la
+    // prueba la pieza va a póster/rescate — nunca a repetir. Fuera
+    // de la prueba, sin alternativa la pieza queda como está (la
+    // semana registrada no se queda sin foto por esta regla).
+    try {
+      const poolPathsV = new Set(webPool.map((w) => w.path));
+      // El producto de la foto sale del registro de la pieza o, si la
+      // pieza no tenía ancla (el topic social de la corrida), del
+      // propio pool: el mapa foto→producto anotó la foto aunque la
+      // pieza no la haya reclamado por nombre.
+      const prodDePathV = new Map(webPool.map((w) => [w.path, w.producto || null]));
+      const slotDePath = new Map(); const slotDeProd = new Map();
+      const dupSlotsV = [];
+      for (let i = 0; i < topics.length; i++) {
+        if (posterAt.has(i)) continue;
+        const pV = photos[i];
+        if (typeof pV !== 'string' || !poolPathsV.has(pV)) continue;
+        const prodV = photoProductOf.get(i) || prodDePathV.get(pV) || null;
+        let dupV = slotDePath.has(pV);
+        if (prodV && slotDeProd.has(clientDigest.norm(prodV))) dupV = true;
+        if (dupV) dupSlotsV.push(i);
+        else { slotDePath.set(pV, i); if (prodV) slotDeProd.set(clientDigest.norm(prodV), i); }
+      }
+      if (dupSlotsV.length) {
+        variedadReg = { repetidas: dupSlotsV.length, resueltas: 0, a_poster: 0 };
+        for (const i of dupSlotsV) {
+          const usedV = new Set();
+          for (let j = 0; j < topics.length; j++) { if (j !== i && typeof photos[j] === 'string') usedV.add(photos[j]); }
+          const prodDupV = photoProductOf.get(i) || prodDePathV.get(photos[i]) || null;
+          if (prodDupV) for (const w of webPool) { if (w.producto && clientDigest.sameItemName(w.producto, prodDupV)) usedV.add(w.path); }
+          const ctxV = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault, trialNoStock, vendeProducto });
+          const hitV = pickWebPhoto(topics[i], webPool, usedV, ctxV);
+          if (hitV) {
+            photos[i] = hitV.path; usedWeb.add(hitV.path);
+            if (hitV.producto && topics[i].digest_anchor && clientDigest.sameItemName(hitV.producto, topics[i].digest_anchor)) photoProductOf.set(i, hitV.producto);
+            else photoProductOf.delete(i);
+            variedadReg.resueltas++;
+          } else if (trialNoStock) {
+            posterAt.add(i); photos[i] = profilePicPath || null; photoSourceOf.set(i, 'brand-poster'); photoProductOf.delete(i);
+            variedadReg.a_poster++;
+          }
+        }
+      }
+    } catch (e) { /* la variedad jamás frena el spec */ }
   }
   // (v197) VARIEDAD ESTRUCTURAL: ningún esqueleto de render se repite
   // en la semana (garantía, no puntaje — ver enforceSkeletonVariety).
@@ -3064,6 +3120,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       });
     }
     fotoGate = {
+      // (LOTE FUNDAMENTO-QUE-DUDA) Variedad dura: cuántas piezas
+      // repetían foto/producto y cómo se resolvió (null = sin
+      // repeticiones detectadas en el spec).
+      variedad: variedadReg,
       fotos: fotosGate,
       piezas: specPosts.map((sp, i) => ({
         i,

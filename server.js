@@ -1581,6 +1581,30 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
     return _trialDigestBuilt;
   } catch (e) { console.error('[digest] build trial:', e.message); return null; }
 }
+/* (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 5)
+ * LA PUERTA DE LA PREGUNTA DE LA PRUEBA: con el fundamento ya
+ * compilado, si quedó una DUDA REAL sin responder (la candidata de
+ * question_candidates: estrella inferida sin confirmar o rubro sin
+ * confirmar), la generación NO arranca en silencio — devuelve la
+ * pregunta con opciones de un toque (clientDigest.trialQuestionFor)
+ * y el front la muestra ANTES de armar la semana, con el mismo
+ * patrón que falta_producto/falta_idioma_marca. Lo ya respondido no
+ * se repregunta: la estrella respondida viaja como producto_estrella
+ * (la palabra del dueño) y el rubro como rubro_src='pregunta'/'form';
+ * el «seguir sin responder» viaja como pregunta_<tipo>='skip' y la
+ * semana sigue SIN afirmar la estrella como hecho (la puerta de
+ * evidencia de client-digest ya la degradó a insignia/duda). */
+function trialPreguntaGate(digest, fields, ocAns, lang) {
+  try {
+    if (!digest) return null;
+    const f = fields || {};
+    const answered = {
+      estrella: !!((ocAns && ocAns.producto_estrella) || String(f.pregunta_estrella || '') === 'skip'),
+      rubro: ['pregunta', 'form'].includes(String(f.rubro_src || '')) || String(f.pregunta_rubro || '') === 'skip',
+    };
+    return clientDigest.trialQuestionFor(digest, { lang, answered });
+  } catch (e) { return null; }
+}
 // (v230) Lectura profunda de la prueba, cacheada por URL como el
 // contexto web (una web que se prueba dos veces no se re-crawlea):
 // catálogo profundo y link de bio corren con carrera — si la fuente es
@@ -1622,12 +1646,20 @@ const raceMs = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r
  * temas del spec se anclan en digest.productos, que SUMA los
  * nombrados de las captions: el mapa se clasifica también contra los
  * productos_nombrados del propio feed, filtrados por la corroboración
- * cruzada de C8 (namedEntryCorroborated) — el nombre suelto sin
- * evidencia NO entra: la puerta no se auto-valida. */
+ * cruzada de C8 — el nombre suelto sin evidencia NO entra: la puerta
+ * no se auto-valida.
+ * (LOTE FUNDAMENTO-QUE-DUDA) El filtro de ADMISIÓN a este vocabulario
+ * es namedEntryCandidata (la vara de C8: dos señales o fuente
+ * externa), NO la coronación: namedEntryCorroborated se endureció
+ * para estrella/insignia (exige fuente externa) y este vocabulario
+ * es justamente el camino por el que un nombre del feed CONSIGUE su
+ * fuente externa — la foto clasificada (itemHasProductEvidence).
+ * Usar la regla de coronación acá haría imposible el mapa para toda
+ * tienda sin catálogo legible: la evidencia no podría nacer. */
 function trialFeedItemNames({ captions, items, business, handle } = {}) {
   try {
     const named = clientDigest.extractNamedProducts({ captions: captions || [], items: items || [], business: business || '', handle: handle || '' });
-    return (named || []).filter((e) => e && e.nombre && clientDigest.namedEntryCorroborated(e)).map((e) => e.nombre);
+    return (named || []).filter((e) => e && e.nombre && clientDigest.namedEntryCandidata(e)).map((e) => e.nombre);
   } catch (e) { return []; }
 }
 /* Suma nombres a itemNames sin duplicar (match de ítem de C8) y
@@ -35229,6 +35261,17 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     if (!testMode && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       return res.status(400).json({ error: lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', falta_producto: true });
     }
+    // (LOTE FUNDAMENTO-QUE-DUDA) LA PREGUNTA DE LA PRUEBA, también en
+    // esta ruta: la duda real del fundamento (estrella o rubro sin
+    // confirmar) se pregunta con opciones de un toque ANTES de armar
+    // la semana — nunca se infiere en silencio. En modo test no se
+    // pregunta (los flujos automáticos no tienen a quién preguntarle).
+    if (!testMode) {
+      const preguntaG = trialPreguntaGate(trialDigest, fields, ocAns, lang);
+      if (preguntaG) {
+        return res.status(400).json({ error: preguntaG.texto, falta_pregunta: true, pregunta: preguntaG });
+      }
+    }
     // (LOTE L6) Medallón del perfil: la descarga arrancó en segundo plano
     // arriba; a esta altura ya está (o no llega: póster tipográfico).
     profilePicPath = await raceMs(profilePicPathP, 2000);
@@ -36554,6 +36597,20 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     if (!trialTestMode(req) && !trialHasEvidencedProducts({ mix: ocAns.producto_mix, estrella: ocAns.producto_estrella, servicios: webData && webData.services, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), detectados: ocDetectados, rubro_detectado: String(fields.rubro_detectado || '').trim() })) {
       fail(lang === 'en' ? 'I still don\'t know what you sell: tell me in your own words and I\'ll build your week around it.' : 'Todavía no sé qué vendés: decímelo con tus palabras y armo tu semana a medida.', { falta_producto: true });
       return;
+    }
+    // (LOTE FUNDAMENTO-QUE-DUDA) LA PREGUNTA DE LA PRUEBA: con el
+    // fundamento compilado y las puertas de idioma/producto ya
+    // pasadas, si quedó una duda real (estrella inferida sin
+    // confirmar o rubro sin confirmar), el stream se detiene con la
+    // pregunta y sus opciones de un toque — el front la muestra y
+    // reenvía con la respuesta como fields (mismo patrón que
+    // falta_producto). En modo test no se pregunta.
+    if (!trialTestMode(req)) {
+      const preguntaS = trialPreguntaGate(trialDigest, fields, ocAns, lang);
+      if (preguntaS) {
+        fail(preguntaS.texto, { falta_pregunta: true, pregunta: preguntaS });
+        return;
+      }
     }
     // (v379 · ítem 5 — reaplicado en v382) DIAGNÓSTICO EXPRESS: la paleta
     // completa del feed, su registro lumínico y su línea YA se calculan
@@ -39454,7 +39511,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1034';
+const BUILD_ID = '20261105-v1035';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -89,11 +89,20 @@ t('b3 «The Salar» trae sus clases de evidencia (frase + repetida + sujeto)',
 t('b4 las menciones de «The Salar» son las de frase completa (2, no infladas)',
   !!entSalar && entSalar.menciones === 2);
 const effV = cd.effectiveStarOf(dV);
-t('b5 la estrella efectiva es el modelo real corroborado «The Salar»',
-  !!effV && effV.item === 'The Salar' && effV.source === 'inferred');
+// RE-PIN (lote FUNDAMENTO-QUE-DUDA, diagnóstico Blind Barber): la
+// tienda de este fixture NO aportó catálogo legible (web.services
+// vacío, sin foto mapeada), así que la evidencia de «The Salar»
+// (frase + repetida + sujeto) es TODA intra-caption — la misma
+// circularidad que coronó a «Infused». Con la regla nueva ya no
+// corona: la inferida queda como DUDA (candidata debil, b7) y la
+// prueba la pregunta con opciones antes de afirmar nada.
+t('b5 RE-PIN fundamento-que-duda: sin fuente externa, «The Salar» ya NO es estrella efectiva',
+  effV === null);
 const wowV = cd.deriveFirstPostWow(dV, { lang: 'en' });
-t('b6 el wow vende «The Salar» como estrella (anchor + _star)',
-  !!wowV && wowV.digest_anchor === 'The Salar' && wowV._star === 1);
+t('b6 RE-PIN fundamento-que-duda: el wow degrada honesto (anchor temático + star_missing, sin _star)',
+  !!wowV && wowV.digest_anchor === 'The Salar' && wowV.star_missing === true && !wowV._star);
+t('b7 la inferida débil nace como candidata de pregunta marcada debil',
+  (dV.question_candidates || []).some((c) => c.tipo === 'estrella' && c.item === 'The Salar' && c.debil === true));
 
 // ---------------------------------------------------------------- (c) corroboración por catálogo
 const dC = mkVeja(cd, { catalog: { items: ['Salar', 'V-10', 'Esplar'], pages: 1, pdfs: 0, at: null } });
@@ -143,8 +152,14 @@ t('f2 solo «frase» (1 señal) no corrobora',
   cd.starNamedEvidenceOk(dg([{ nombre: 'The Salar', fuente: 'caption', clases: ['frase'] }]), 'The Salar') === false);
 t('f3 solo «sujeto» (1 señal) no corrobora',
   cd.starNamedEvidenceOk(dg([{ nombre: 'The Atlas', fuente: 'caption', clases: ['frase', 'sujeto'] }]), 'The Atlas') === false);
-t('f4 sujeto + repetida (2 señales del crudo) corrobora',
-  cd.starNamedEvidenceOk(dg([{ nombre: 'The Salar', fuente: 'caption', clases: ['frase', 'repetida', 'sujeto'] }]), 'The Salar') === true);
+// RE-PIN (lote FUNDAMENTO-QUE-DUDA): sujeto + repetida son dos
+// señales de las MISMAS captions — la corroboración circular que
+// coronó a «Infused» en Blind Barber. La coronación ahora exige
+// una fuente externa (f5/f6 siguen pasando); las dos señales
+// intra-caption quedan como ADMISIÓN al vocabulario de
+// clasificación de fotos (namedEntryCandidata), no como corona.
+t('f4 RE-PIN fundamento-que-duda: sujeto + repetida (intra-caption) ya NO corrobora',
+  cd.starNamedEvidenceOk(dg([{ nombre: 'The Salar', fuente: 'caption', clases: ['frase', 'repetida', 'sujeto'] }]), 'The Salar') === false);
 t('f5 catálogo + frase en el feed (2 superficies) corrobora',
   cd.starNamedEvidenceOk(dg([{ nombre: 'Salar', fuente: 'caption', clases: ['catalogo', 'frase'] }]), 'Salar') === true);
 t('f6 entrada de fuente fuerte sin clases (legada) corrobora',

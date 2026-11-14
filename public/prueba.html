@@ -126,6 +126,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <input id="fStar" type="text" autocomplete="off" placeholder="Ej.: café de especialidad" aria-label="Qué es lo que más vendés">
       <p class="hint">No lo pude ver en tu Instagram ni en tu web — decímelo con tus palabras y armo tu primer posteo con eso.</p>
     </div>
+    <div class="field" id="fAskWrap" hidden>
+      <label id="fAskQ"></label>
+      <div class="langrow" id="fAskOpts" style="flex-wrap:wrap"></div>
+      <p class="hint">Una sola duda antes de armar tu semana — tocala y sigo. Si no, seguí sin responder y la armo con lo que ya sé.</p>
+      <button type="button" class="btn btn-ghost" id="fAskSkip">Seguir sin responder</button>
+    </div>
     <div class="field" id="fLangWrap" hidden>
       <label>¿En qué idioma posteás? *</label>
       <p class="hint">Tu web está en otro idioma y no pude ver en qué idioma publicás — elegí uno y armo tu semana en ese idioma.</p>
@@ -159,6 +165,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   var $ = function (id) { return document.getElementById(id); };
   var igEl = $('fIg'), webEl = $('fWeb'), starEl = $('fStar'), starWrap = $('fStarWrap');
   var langWrap = $('fLangWrap');
+  // (LOTE FUNDAMENTO-QUE-DUDA) LA PREGUNTA DE LA PRUEBA: si el
+  // fundamento quedó con una duda real (estrella o rubro sin
+  // confirmar), el servidor detiene el stream con la pregunta y sus
+  // opciones de un toque (falta_pregunta); acá se muestra ANTES de
+  // armar la semana y la respuesta viaja en el reenvío como fields
+  // (la estrella elegida como producto_estrella; el rubro como
+  // category + rubro_src='pregunta'; el salteo como pregunta_<tipo>).
+  var askWrap = $('fAskWrap'), askQ = $('fAskQ'), askOpts = $('fAskOpts'), askSkipBtn = $('fAskSkip');
+  var pendingPregunta = null, askRubroAnswer = null, askSkipStar = false, askSkipRubro = false;
   // (LOTE L2 · FALLBACK HONESTO DE IDIOMA) La elección del idioma de la
   // marca, cuando el servidor la pide (falta_idioma_marca): queda pegada
   // para los reenvíos de esta visita, como la estrella.
@@ -216,6 +231,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       localStorage.setItem(PENDING_KEY, JSON.stringify({
         ig: ig, web: web, star: String(star || '').slice(0, 60),
         brandLang: brandLangChoice || '', ts: Date.now(),
+        // (LOTE FUNDAMENTO-QUE-DUDA) Las respuestas de la pregunta de
+        // la prueba también sobreviven la recarga: una respuesta ya
+        // dada no se vuelve a preguntar.
+        askRubro: askRubroAnswer || null, askSkipStar: !!askSkipStar, askSkipRubro: !!askSkipRubro,
       }));
     } catch (e) {}
   }
@@ -516,6 +535,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
             break;
           } else if (ev === 'error') {
             if (d && d.falta_producto) { outcome = 'need_star'; break; }
+            if (d && d.falta_pregunta) { outcome = 'need_question'; pendingPregunta = d.pregunta || null; break; }
             if (d && d.falta_idioma_marca) { outcome = 'need_lang'; break; }
             if (d && (d.trial_used || d.trial_locked)) { outcome = false; outcomeUsed = true; outcomeErr = (d && d.message) || ''; break; }
             outcome = false;
@@ -534,12 +554,61 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       try { reader.releaseLock(); } catch (e) {}
     }
     if (outcome === true) return true;
+    if (outcome === 'need_question') { showAsk(); showStatus('Una duda antes de armar tu semana — respondela con un toque y sigo.'); return 'need_question'; }
     if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('Todavía no sé qué vendés — decímelo arriba y armo tu semana a medida.'); return 'need_star'; }
     if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Tu web está en otro idioma y no veo en qué idioma posteás — elegí uno acá abajo y armo tu semana en ese idioma.'); return 'need_lang'; }
     if (outcomeUsed) { clearPending(); showErrHtml(usedHtml(outcomeErr || 'Este negocio ya usó su única prueba gratis 💛')); return false; }
     showErr(outcomeErr || 'No pudimos armar tu primer posteo. Probá de nuevo.');
     return false;
   }
+  // (LOTE FUNDAMENTO-QUE-DUDA) Muestra la pregunta que trajo el
+  // stream (falta_pregunta) con sus opciones de un toque. La
+  // respuesta se guarda en el estado y el formulario se reenvía
+  // solo: el servidor la lee como fields y no vuelve a preguntar.
+  function showAsk() {
+    var p = pendingPregunta;
+    if (!p) return;
+    askQ.textContent = p.texto || '';
+    askOpts.innerHTML = '';
+    if (p.tipo === 'rubro') {
+      (p.opciones || []).forEach(function (op) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-ghost'; b.textContent = op.label || op.rubro || '';
+        b.addEventListener('click', function () {
+          askRubroAnswer = { rubro: op.rubro || '', subrubro: op.subrubro || '' };
+          askWrap.hidden = true;
+          if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit'));
+        });
+        askOpts.appendChild(b);
+      });
+    } else {
+      (p.opciones || []).forEach(function (nombre) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-ghost'; b.textContent = nombre;
+        b.addEventListener('click', function () {
+          // La estrella elegida viaja como la palabra del dueño: el
+          // campo estrella que el flujo ya conoce (mix libre).
+          starEl.value = nombre; askSkipStar = false;
+          askWrap.hidden = true;
+          if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit'));
+        });
+        askOpts.appendChild(b);
+      });
+      var bOtro = document.createElement('button');
+      bOtro.type = 'button'; bOtro.className = 'btn btn-ghost'; bOtro.textContent = 'Otro';
+      bOtro.addEventListener('click', function () {
+        askWrap.hidden = true; starWrap.hidden = false; starEl.focus();
+        showStatus('Decime qué es lo que más vendés y armo tu semana con eso.');
+      });
+      askOpts.appendChild(bOtro);
+    }
+    askWrap.hidden = false;
+  }
+  askSkipBtn.addEventListener('click', function () {
+    if (pendingPregunta && pendingPregunta.tipo === 'rubro') askSkipRubro = true; else askSkipStar = true;
+    askWrap.hidden = true;
+    if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit'));
+  });
   // Arma el primer posteo (y la semana). Devuelve true | false | 'need_star' | 'need_lang'.
   async function buildFirstPost(ig, web, estrella, brandLang) {
     showStatus('Buscando tu Instagram…');
@@ -565,7 +634,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var fd = new FormData();
     fd.append('business', String(pf.j.name || '') || ig);
     fd.append('ig', ig);
-    fd.append('category', category || 'otro');
+    // (LOTE FUNDAMENTO-QUE-DUDA) La respuesta de rubro de la pregunta
+    // manda sobre la categoría del prefill (el servidor la lee como
+    // confirmación: rubro_src='pregunta').
+    fd.append('category', askRubroAnswer ? askRubroAnswer.rubro : (category || 'otro'));
+    if (askRubroAnswer) {
+      if (askRubroAnswer.subrubro) fd.append('subcat', askRubroAnswer.subrubro);
+      fd.append('rubro_src', 'pregunta');
+    } else if (askSkipRubro) fd.append('pregunta_rubro', 'skip');
+    if (askSkipStar) fd.append('pregunta_estrella', 'skip');
     fd.append('country', 'AR');
     fd.append('tone', 'vos');
     fd.append('lang', LANG);
@@ -606,7 +683,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     btn.disabled = true; btn.textContent = 'Armando…';
     try {
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
-      if (built === 'need_star' || built === 'need_lang' || !built) { btn.disabled = false; btn.textContent = 'Armar mi primer posteo'; return; }
+      if (built === 'need_star' || built === 'need_lang' || built === 'need_question' || !built) { btn.disabled = false; btn.textContent = 'Armar mi primer posteo'; return; }
       showStatus('Entrando a tu producto…');
       var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
@@ -647,6 +724,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (pend.web) webEl.value = pend.web;
       if (pend.star) starEl.value = pend.star;
       if (pend.brandLang) brandLangChoice = pend.brandLang;
+      if (pend.askRubro) askRubroAnswer = pend.askRubro;
+      if (pend.askSkipStar) askSkipStar = true;
+      if (pend.askSkipRubro) askSkipRubro = true;
       if (form.requestSubmit) form.requestSubmit();
       else form.dispatchEvent(new Event('submit'));
     } else {
