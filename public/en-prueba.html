@@ -365,7 +365,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (mt) mt.textContent = (waitState.espejo.caption ? waitState.espejo.caption + ' — ' : '') + 'your people love it.';
     }
   }
-  function showWait() { if (!waitEl) return; buildWait(); statusEl.hidden = true; previewEl.hidden = true; waitEl.hidden = false; }
+  function showWait() { if (!waitEl) return; if (!waitState.built) buildWait(); statusEl.hidden = true; previewEl.hidden = true; waitEl.hidden = false; }
+  // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) showWait no longer rebuilds an
+  // already-built wait: lit milestones survive the move from the
+  // pre-stream phase into the stream and the polling path (before,
+  // buildWait() reset them on every call). Each new run resets the
+  // wait explicitly in buildFirstPost, via resetWait().
+  function resetWait() { waitState = { built: false, lit: {}, nowText: '', hero: null, espejo: null, done: false }; }
   function setWaitNow(t) { waitState.nowText = String(t || ''); paintWait(); }
   function lightHito(k) { if (!waitState.built) showWait(); waitState.lit[k] = true; paintWait(); }
   function setWaitHero(src) { if (!src) return; waitState.hero = src; paintWait(); }
@@ -610,12 +616,29 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   });
   // Builds the first post (and the week). Returns true | false | 'need_star' | 'need_lang'.
   async function buildFirstPost(ig, web, estrella, brandLang) {
+    // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) The approved wait IS the
+    // screen from the FIRST phase, not only in the stream: the Blind
+    // Barber diagnosis proved the pre-stream phase (this prefill) and
+    // the polling/resume path showed the bare status line, and the
+    // run that reloaded 3 times lived in those phases. The wait is
+    // reset per run and mounted BEFORE the prefill; each phase's
+    // states enter as its "Now:" line via showStatus routing, with
+    // no invented milestones.
+    resetWait();
+    showWait();
     showStatus('Looking up your Instagram…');
     var pf = await postJSON('/api/trial/prefill' + TEST_KEY_QS, { ig: ig, lang: LANG });
     if (!pf.ok || !pf.j || !pf.j.ok) {
       showErr((pf.j && pf.j.error) || "We couldn't find that Instagram");
       return false;
     }
+    // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) The prefill READ their
+    // Instagram (embed + profile + category classification): the
+    // "ig" medallion lights with its real milestone, the same one
+    // the stream lights. The star does NOT light here: the
+    // generation chain decides it and its own milestone lights it —
+    // this path does not know it yet.
+    lightHito('ig');
     var det = (Array.isArray(pf.j.productos) ? pf.j.productos : []).map(function (p) {
       return String((p && (p.nombre || p)) || '').trim();
     }).filter(Boolean);
@@ -626,6 +649,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (estrella) { mix = 'libre'; star = String(estrella).trim().slice(0, 60); }
     else if (!det.length && !rubroOk) {
       starWrap.hidden = false; starEl.focus();
+      // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) The question lives in the
+      // form, not in the wait: the wait turns off and the note goes
+      // back to the usual status line.
+      if (waitEl) waitEl.hidden = true;
       showStatus('I can see your profile but not what you sell — tell me above and I’ll build your first post.');
       return 'need_star';
     }
@@ -657,6 +684,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // running for this @, the trial_cache is polled instead of duplicating
     // the work: the server keeps generating even if the earlier fetch was
     // aborted by the reload.
+    // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) The polling REUSES the wait
+    // already mounted from the start: its states enter as "Now:" and
+    // no new medallion lights on this path — gen-status reports no
+    // milestones, and what the path does not know stays unlit, as
+    // the approved design requires.
     var st0 = await trialStatus(ig);
     if (st0 && st0.generating && !st0.cached) {
       showStatus('I’m already building your first post — let me find it…');

@@ -365,7 +365,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (mt) mt.textContent = (waitState.espejo.caption ? waitState.espejo.caption + ' — ' : '') + 'tu gente la ama.';
     }
   }
-  function showWait() { if (!waitEl) return; buildWait(); statusEl.hidden = true; previewEl.hidden = true; waitEl.hidden = false; }
+  function showWait() { if (!waitEl) return; if (!waitState.built) buildWait(); statusEl.hidden = true; previewEl.hidden = true; waitEl.hidden = false; }
+  // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) showWait ya NO reconstruye una
+  // espera ya construida: los hitos encendidos sobreviven al paso del
+  // pre-stream al stream y al poleo (antes, buildWait() los reseteaba
+  // en cada llamada). Cada corrida nueva reinicia la espera de forma
+  // explícita en buildFirstPost, con resetWait().
+  function resetWait() { waitState = { built: false, lit: {}, nowText: '', hero: null, espejo: null, done: false }; }
   function setWaitNow(t) { waitState.nowText = String(t || ''); paintWait(); }
   function lightHito(k) { if (!waitState.built) showWait(); waitState.lit[k] = true; paintWait(); }
   function setWaitHero(src) { if (!src) return; waitState.hero = src; paintWait(); }
@@ -611,12 +617,28 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   });
   // Arma el primer posteo (y la semana). Devuelve true | false | 'need_star' | 'need_lang'.
   async function buildFirstPost(ig, web, estrella, brandLang) {
+    // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) La espera aprobada es la
+    // pantalla desde la PRIMERA fase, no solo en el stream: el
+    // diagnóstico Blind Barber probó que la fase previa (este
+    // prefill) y la de poleo/resume mostraban la línea de estado
+    // pelada, y la corrida que recargó 3 veces vivió en esas fases.
+    // La espera se reinicia por corrida y se monta ANTES del prefill;
+    // los estados de cada fase entran como su línea «Ahora:» por el
+    // ruteo de showStatus, sin inventar hitos.
+    resetWait();
+    showWait();
     showStatus('Buscando tu Instagram…');
     var pf = await postJSON('/api/trial/prefill' + TEST_KEY_QS, { ig: ig, lang: LANG });
     if (!pf.ok || !pf.j || !pf.j.ok) {
       showErr((pf.j && pf.j.error) || 'No encontramos ese Instagram');
       return false;
     }
+    // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) El prefill LEYÓ su Instagram
+    // (embed + perfil + clasificación de rubro): el medallón «ig» se
+    // enciende con su hito real, el mismo que enciende el stream. La
+    // estrella NO se enciende acá: la decide la cadena de generación
+    // y la enciende su propio hito — este camino todavía no la sabe.
+    lightHito('ig');
     var det = (Array.isArray(pf.j.productos) ? pf.j.productos : []).map(function (p) {
       return String((p && (p.nombre || p)) || '').trim();
     }).filter(Boolean);
@@ -627,6 +649,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (estrella) { mix = 'libre'; star = String(estrella).trim().slice(0, 60); }
     else if (!det.length && !rubroOk) {
       starWrap.hidden = false; starEl.focus();
+      // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) La pregunta vive en el
+      // formulario, no en la espera: la espera se apaga y el aviso
+      // vuelve a la línea de estado de siempre.
+      if (waitEl) waitEl.hidden = true;
       showStatus('Veo tu perfil pero no qué vendés — decímelo arriba y armo tu primer posteo.');
       return 'need_star';
     }
@@ -658,6 +684,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // curso para este @, se polea el trial_cache en vez de duplicar el
     // trabajo: el servidor sigue generando aunque el fetch anterior se
     // haya abortado con la recarga.
+    // (LOTE ESPERA-EN-TODOS-LOS-CAMINOS) El poleo REUSA la espera ya
+    // montada desde el arranque: sus estados entran como «Ahora:» y
+    // ningún medallón nuevo se enciende en este camino — gen-status
+    // no informa hitos, y lo que el camino no sabe queda apagado,
+    // como manda el diseño aprobado.
     var st0 = await trialStatus(ig);
     if (st0 && st0.generating && !st0.cached) {
       showStatus('Ya estoy armando tu primer posteo — lo busco…');
