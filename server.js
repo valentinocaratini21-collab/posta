@@ -2715,6 +2715,108 @@ function trialPostUsesClientPhoto(out, i) {
   return !!(out && out.screenshot);
 }
 
+// (LOTE FEED-REAL-PRUEBA · v1061) El feed REAL del cliente en la vista de la
+// prueba: los posteos reales del embed que la generación ya leyó viajan en el
+// payload (out.feed_recents) y la importación los siembra como snapshot del
+// invitado — la grilla de la prueba muestra SU feed con el posteo nuevo en su
+// lugar. Misma forma que homeProfileFromRead: img arranca con la URL de la
+// CDN y src la conserva (la unión re-localiza desde src); la siembra localiza
+// img a /media ANTES de escribir el snapshot, porque el contrato de lectura
+// vivo (el del lote localizar-recents, v975) descarta al leer todo recent
+// con img de cdninstagram. Solo primer nivel con thumb; tope 12 (feedMap).
+function trialFeedRecentsFromEmbed(posts) {
+  try {
+    const list = Array.isArray(posts) ? posts : [];
+    const out = [];
+    for (const post of list) {
+      if (!post || !post.thumb) continue;
+      if (!feedReconcile.isTopLevelReadPost(post)) continue;
+      const type = post.type === 'GraphVideo' ? 'video' : post.type === 'GraphSidecar' ? 'carousel' : 'image';
+      const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+      out.push({
+        img: String(post.thumb),
+        src: String(post.thumb),
+        type,
+        taken_at: (typeof post.taken_at === 'number' && post.taken_at > 0) ? post.taken_at : null,
+        shortcode: post.shortcode ? String(post.shortcode) : null,
+        likes: num(post.likes),
+        comments: num(post.comments),
+        pinned: post.pinned === true ? true : null,
+      });
+      if (out.length >= 12) break;
+    }
+    return out;
+  } catch (e) { return []; }
+}
+
+// (LOTE FEED-REAL-PRUEBA · v1061 · arreglo del freno de preparación)
+// Siembra el snapshot del invitado con el feed real de la prueba
+// (out.feed_recents): /api/home/profile lo sirve de inmediato y
+// homeGridCompose rinde los posteos reales junto al generado.
+// ASYNC, llamada sin await desde importTrialWeek (síncrono, con 7
+// llamadores que usan su conteo al instante): la importación nunca
+// espera ni se frena por esto, y la promesa nunca rechaza (todo el
+// cuerpo va en try/catch). La premisa original del lote («cero fetches
+// nuevos») queda SUPERADA por este arreglo: sembrar las URLs crudas de
+// la CDN era sembrar en vano — el contrato de lectura vivo (el del lote
+// localizar-recents, v975) descarta al leer todo recent con img de CDN,
+// porque esa URL no carga en el teléfono — así que la siembra LOCALIZA
+// las miniaturas a /media reusando feedAudit.localizeTrialPhotos: las
+// mismas descargas que la lectura real hace por su lado.
+// Orden: guardas → localizar → escribir UNA sola vez, ya localizado
+// (a la DB nunca llega un recent con URL de CDN). Fallo parcial:
+// fail-closed por foto, como homeProfileFromRead — la miniatura que no
+// localiza excluye solo a su recent; si ninguna localiza, no se siembra
+// nada y la lectura real puebla en su cadencia. Doble guarda: si una
+// lectura real aterriza mientras se descargaba, manda la real.
+// posts_count conserva el total real conocido (el del feedMap o, sin
+// él, la cantidad de posteos reales leídos), no la cantidad localizada:
+// como en homeProfileFromRead, el conteo es del perfil, no de la
+// ventana servida — y así homeRecentsUnion trata lo sembrado como
+// lectura parcial cuando corresponde. La unión conserva lo sembrado en
+// lecturas parciales re-localizando desde el src preservado, y el
+// snapshot vence con el TTL de 24 h de siempre: la lectura real lo
+// reemplaza (source pasa a 'read') sin resucitar ni duplicar nada.
+async function seedTrialFeedSnapshot(userId, igRaw, out) {
+  try {
+    const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
+    const recents = (out && Array.isArray(out.feed_recents)) ? out.feed_recents.filter((r) => r && r.img && r.shortcode) : [];
+    if (!ig || !userId || !recents.length) return false;
+    const prev = homeSnapshotGet(userId);
+    if (prev && prev.payload && Array.isArray(prev.payload.recents) && prev.payload.recents.length) return false;
+    // Localización de las miniaturas (la misma que hace la lectura real
+    // en homeProfileFromRead): cada foto queda '/media/...' o null.
+    const loc = { handle: ig, photos: recents.map((r) => r.src || r.img) };
+    try { await feedAudit.localizeTrialPhotos(loc, MEDIA_DIR); } catch (e) { /* quedan las que haya */ }
+    const localized = [];
+    recents.forEach((r, i) => {
+      const img = (loc.photos && loc.photos[i]) || null;
+      if (img) localized.push({ ...r, img });
+    });
+    if (!localized.length) return false;
+    // La ventana de descarga pudo dejar aterrizar una lectura real: si
+    // ya hay snapshot con recents, la real manda y no se pisa.
+    const prev2 = homeSnapshotGet(userId);
+    if (prev2 && prev2.payload && Array.isArray(prev2.payload.recents) && prev2.payload.recents.length) return false;
+    let total = null;
+    try { const fm = out && out.digest && out.digest.feedMap; if (fm && typeof fm.posts_count_total === 'number' && fm.posts_count_total > 0) total = fm.posts_count_total; } catch (e) {}
+    if (typeof total !== 'number') total = recents.length;
+    const payload = {
+      source: 'trial',
+      username: ig,
+      name: (out && out.business) ? String(out.business) : '',
+      pic: (out && out.ig_pic) ? String(out.ig_pic) : null,
+      bio: '', link: '',
+      followers: null, posts_count: total, following: null, is_verified: null,
+      highlights: [],
+      recents: localized,
+      captured_at: Date.now(),
+    };
+    homeSnapshotPut(userId, ig, payload);
+    return true;
+  } catch (e) { return false; }
+}
+
 // Importa la semana generada en /prueba a la cuenta nueva: los posteos quedan
 // como borradores (nada se publica sin su OK). Lee del trial_cache por @,
 // así no se re-suben los archivos desde el navegador.
@@ -2990,6 +3092,13 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
     try { evTrack(userId, 'trial_import_en_armado', { ig, en_armado: faltantesImp, total: postsAllImp.length, importados: n }); } catch (e) {}
     console.log(`[posta] importTrialWeek ig=${ig} user=${userId}: la semana sigue en armado — faltan los índices ${faltantesImp.join(',')} de ${postsAllImp.length} y el rescate de fondo los crea al pasar la vara (evento trial_import_en_armado)`);
   }
+  // (LOTE FEED-REAL-PRUEBA · v1061) El feed real en la vista de la prueba: se
+  // siembra el snapshot del invitado con los posteos reales que la generación
+  // ya leyó (out.feed_recents). La siembra es async (localiza las miniaturas
+  // a /media antes de escribir) y corre sin await acá: nunca frena ni demora
+  // la importación; su promesa nunca rechaza (try/catch interno total) y el
+  // catch de respaldo cubre cualquier rechazo inesperado.
+  try { const seedP = seedTrialFeedSnapshot(userId, ig, out); if (seedP && typeof seedP.catch === 'function') seedP.catch(() => {}); } catch (e) {}
   return n;
 }
 
@@ -37348,6 +37457,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       feedMap: (trialDigest && trialDigest.feedMap) || null, // (ESTUDIO-PROFUNDO · mejora 4) mapa del feed, también en el payload
+      feed_recents: trialFeedRecentsFromEmbed(_embedPostsVoz), // (LOTE FEED-REAL-PRUEBA · v1061) feed real del embed ya leído: la grilla de la prueba muestra los posteos reales junto al generado
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null), // (LOTE FOTOS-ELEGIBILIDAD · L2b) resultado del gate de fotos: auditable desde el payload, sin logs
@@ -39641,6 +39751,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       feedMap: (trialDigest && trialDigest.feedMap) || null, // (ESTUDIO-PROFUNDO · mejora 4) mapa del feed, también en el payload
+      feed_recents: trialFeedRecentsFromEmbed(trialData && trialData.posts), // (LOTE FEED-REAL-PRUEBA · v1061) feed real de la auditoría ya leída: la grilla de la prueba muestra los posteos reales junto al generado
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       onboarding: ocAns, // Onboarding un clic: las 5 respuestas (+ donde) viajan al caché y a la cuenta
@@ -41557,7 +41668,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1060';
+const BUILD_ID = '20261105-v1061';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
