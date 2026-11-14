@@ -287,11 +287,15 @@ function localFile(mediaDir, imagePath) {
 // Entrada principal: genera historias + reels como borradores de la semana.
 // feedDrafts: filas de posts ya creadas (media_type='image', status='draft').
 // No toca el autopilot de feed: si algo falla acá, la semana sigue igual.
-async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts, needsReview }) {
+async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts, needsReview, minReels }) {
   const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
   const plan = getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN);
   const nStories = Number(plan.storiesPerWeek) || 0;
-  const nReels = Number(plan.reelsPerWeek) || 0;
+  // (LOTE FORMATO-SEMANA) Piso de reels por el formato de la marca: solo
+  // lo pasa el planificador semanal cuando el feed del negocio es de
+  // reels (minReelsMarcaSemana en server.js). Los demás llamadores no lo
+  // mandan (undefined → 0) y el plan manda como siempre.
+  const nReels = Math.max(Number(plan.reelsPerWeek) || 0, Math.max(0, Number(minReels) || 0));
   if (!nStories && !nReels) return { stories: 0, reels: 0, plan: plan.id, need: { stories: 0, reels: 0 }, have: { stories: 0, reels: 0 } };
   const feed = (feedDrafts || []).filter(d => d && d.image_path && localFile(mediaDir, d.image_path));
   if (!feed.length) {

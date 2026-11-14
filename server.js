@@ -20842,6 +20842,49 @@ async function composeWeekFeed(uid, weekKey, tag) {
   }
 }
 
+// (LOTE FORMATO-SEMANA · follow-up del correctivo-5) El formato dominante
+// del feed del negocio, leído DEFENSIVO del digest: el campo `formatos`
+// lo siembra el correctivo-5 en client-digest (forma exacta:
+// { dominante: 'carrusel'|'reel'|'foto'|null, conteos, total, fuente }).
+// Si el digest no lo trae (ese lote aún no aterrizó en la cadena, o la
+// marca quedó «sin dato»), devuelve null y la semana registrada sale
+// exactamente como hoy. Nunca lanza.
+function formatoDominanteDeDigest(dg) {
+  const d = dg && dg.formatos && dg.formatos.dominante;
+  return (d === 'carrusel' || d === 'reel' || d === 'foto') ? d : null;
+}
+
+// (LOTE FORMATO-SEMANA) Aplica el dominante 'carrusel' sobre la elección
+// de carruseles de la semana registrada: TODAS las piezas de la tanda
+// quedan elegibles con razón 'formato-marca' (las que ya eligió la
+// estrategia conservan su razón) y el cupo efectivo cubre la tanda. El
+// pipeline de carrusel sigue mandando: si no puede producir sus placas
+// (mínimo 2), la pieza cae a foto con el fallback honesto de siempre —
+// jamás un carrusel de una sola foto ni un formato fingido. Con otro
+// dominante (o sin dato) no toca nada.
+function aplicarFormatoMarcaSemana(dominante, ctx) {
+  if (dominante !== 'carrusel' || !ctx || !Array.isArray(ctx.picks)) {
+    return { aplicado: false, carouselQuota: (ctx && ctx.carouselQuota) || 0, agregados: 0 };
+  }
+  let agregados = 0;
+  for (let ix = 0; ix < ctx.picks.length; ix++) {
+    if (!ctx.carouselSet.has(ix)) { ctx.carouselSet.add(ix); agregados++; }
+    if (!ctx.carouselReason[ix]) ctx.carouselReason[ix] = 'formato-marca';
+  }
+  const quota = Math.max(ctx.carouselQuota || 0, ctx.picks.length);
+  return { aplicado: agregados > 0 || quota !== (ctx.carouselQuota || 0), carouselQuota: quota, agregados };
+}
+
+// (LOTE FORMATO-SEMANA) Piso de reels de la semana cuando la marca es de
+// reels: el pipeline de extras (story-reel) recibe un piso igual a la
+// ventana de feed de esta corrida; el plan sigue mandando si da más.
+// Sin dominante 'reel', piso 0 = comportamiento de siempre.
+function minReelsMarcaSemana(dominante, deficit) {
+  if (dominante !== 'reel') return 0;
+  const d = Math.floor(Number(deficit) || 0);
+  return d > 0 ? d : 0;
+}
+
 async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // Kill-switch diario también para el pipeline en segundo plano: se aborta en
   // silencio (el usuario lo reintenta mañana; nada se rompe).
@@ -21374,6 +21417,25 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       }).filter((s) => s.score > 0).sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
       for (const s of scored.slice(0, carouselQuota)) { carouselSet.add(s.idx); carouselReason[s.idx] = s.reason; }
     } catch (e) {}
+    // (LOTE FORMATO-SEMANA) El formato sigue a la marca TAMBIÉN en la
+    // semana registrada (regla de Valentino 12/11 20:32; el correctivo-5
+    // la dejó andando en la prueba y en el primer posteo): si el digest
+    // trae el dominante del feed (client-digest `formatos`, siembra del
+    // correctivo-5), manda sobre la elección de formatos de esta corrida.
+    // Lectura defensiva y fail-open: sin el campo, semana como siempre.
+    let formatoMarcaSemana = null;
+    try { formatoMarcaSemana = formatoDominanteDeDigest(clientDigest.getDigest(db, uid)); } catch (e) { formatoMarcaSemana = null; }
+    if (formatoMarcaSemana === 'carrusel') {
+      try {
+        const apF = aplicarFormatoMarcaSemana(formatoMarcaSemana, { picks, carouselQuota, carouselSet, carouselReason });
+        if (apF.aplicado) {
+          carouselQuota = apF.carouselQuota;
+          console.log(`[formato-marca] usuario ${uid}: su feed es de carruseles — la semana se arma en carrusel (${apF.agregados} piezas por formato de la marca, cupo ${carouselQuota})`);
+        }
+      } catch (e) { console.error(`[formato-marca] aplicar carrusel falló (semana como siempre):`, e.message); }
+    } else if (formatoMarcaSemana === 'reel') {
+      console.log(`[formato-marca] usuario ${uid}: su feed es de reels — los extras de la semana piden el piso de reels de la marca (ventana ${deficit})`);
+    }
     // Reference lock: la primera foto de producto de la semana (si ya existe)
     // viaja como referencia para que el producto se vea idéntico en todos
     // los posteos. Se resuelve por worker justo antes de generar.
@@ -21513,6 +21575,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               console.log(`[pipeline:${tag}] carousel para "${idea.titulo || i}": ${carouselGen.slidePaths.length} placas`);
             } catch (e) {
               console.error(`[pipeline:${tag}] carousel falló, caigo a imagen simple:`, e.message);
+              // (LOTE FORMATO-SEMANA) El fallback de una pieza que la
+              // marca pedía en carrusel queda registrado como tal.
+              if (carouselReason[i] === 'formato-marca') console.log(`[formato-marca] usuario ${uid}: la pieza ${i + 1} no salió en carrusel (${e.message}); fallback honesto a foto`);
               carouselGen = null; isCarousel = false;
             }
           }
@@ -21735,7 +21800,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     try {
       const { generateWeekExtras } = require('./story-reel');
       const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'draft' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, weekKey);
-      const xr = await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
+      const xr = await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1, minReels: minReelsMarcaSemana(formatoMarcaSemana, deficit) });
       // Semana "ok" sin el reel/historias del plan = fallo de barrido: se
       // registra para que el sistema de reintentos la complete (antes el
       // resultado se ignoraba y el faltante era invisible).
@@ -41492,7 +41557,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1058';
+const BUILD_ID = '20261105-v1059';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
