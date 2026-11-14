@@ -16122,6 +16122,18 @@ async function albumPropuesta(uid, assetId, feedback, vision) {
 // (Gap 5): un video con issues NO se postea — se avisa amable y queda
 // en el álbum como referencia. Lock en memoria por usuario: un doble
 // toque (o el festejo + el toque a la vez) no duplica el reel.
+// (LOTE VIDEO-SUBIDO-INTACTO, 14/11) ESE «CONVERTIR» SE TERMINÓ: el
+// video del cliente es una pieza TERMINADA y queda como media del
+// posteo TAL CUAL, byte a byte — sin buildSingleClipReel, sin textos
+// dibujados encima, sin música agregada, sin recorte ni reescalado
+// (incidente 681: la subida re-renderizó un video ya corregido y le
+// volvió a pisar los subtítulos). Lo único derivado es la PORTADA:
+// un .jpg del mejor frame medido del propio archivo. Si el cliente
+// pidió una edición explícita en su pantalla (quitar silencios /
+// lenta → over.procesadoAbs), la media es ESE archivo, también tal
+// cual: la única transformación es la que el cliente eligió. La
+// receta se sigue guardando (fuente + textos) para el rehacer A
+// PEDIDO del ejecutor de rehacer-video de v1077.
 const videoReelLocks = new Set();
 async function buildClientVideoReelPost(uid, asset, source, over) {
   if (videoReelLocks.has(uid)) return { busy: true };
@@ -16161,31 +16173,51 @@ async function buildClientVideoReelPost(uid, asset, source, over) {
     const mood = (over && ['upbeat', 'chill', 'groove'].includes(String(over.mood || ''))) ? String(over.mood) : reelEngine.moodForCategory(profile.category);
     const weekKey = mondayKeyOf(tzToday(userTz(uid)));
     const srcFile = (over && over.procesadoAbs) ? String(over.procesadoAbs) : path.join(MEDIA_DIR, path.basename(String(asset.file_path)));
-    const built = await reelEngine.buildSingleClipReel({
-      mediaDir: MEDIA_DIR,
-      file: srcFile,
-      hook: headline || 'Mirá esto 👀',
-      cta: 'Escribinos y te contamos más 👇',
-      handle: igUser ? '@' + igUser : '',
-      brandHex, mood, musicSeed: `${uid}:${weekKey}`,
-    });
-    const coverPath = built.coverPath ? `/media/${path.basename(built.coverPath)}` : (asset.thumb_path || '');
+    // (LOTE VIDEO-SUBIDO-INTACTO) SIN RE-RENDER: la media del posteo es
+    // el archivo del cliente, byte a byte. Solo se lee su metadata
+    // (duración/audio) y se deriva la portada desde SU mejor frame.
+    const info = await reelEngine.mediaInfo(srcFile);
+    if (!info || !info.duration || info.duration < 1) throw new Error('no pude leer ese video');
+    const duration = Math.round(info.duration * 100) / 100;
+    const url = `/media/${path.basename(srcFile)}`;
+    let coverPath = '';
+    try {
+      const coverTag = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+      const coverName = `reel-subido-${coverTag}-cover.jpg`;
+      const coverAbs = path.join(MEDIA_DIR, coverName);
+      const tmpCover = path.join(MEDIA_DIR, '.tmp-cover-' + coverTag);
+      fs.mkdirSync(tmpCover, { recursive: true });
+      try {
+        const best = await reelEngine.bestFrameTimeIn(srcFile, info.duration, { samples: 5, tmpDir: tmpCover });
+        const tCover = best ? best.t : Math.min(0.5, info.duration / 2);
+        await new Promise((resolve, reject) => {
+          const { execFile } = require('child_process');
+          execFile('ffmpeg', ['-y', '-v', 'error', '-ss', String(tCover), '-i', srcFile, '-frames:v', '1', '-q:v', '3', coverAbs], { timeout: 60000 }, (err) => err ? reject(err) : resolve());
+        });
+      } finally { try { fs.rmSync(tmpCover, { recursive: true, force: true }); } catch (e) {} }
+      if (fs.existsSync(coverAbs)) coverPath = `/media/${coverName}`;
+    } catch (e) { /* la portada es un plus; el video manda */ }
+    if (!coverPath) coverPath = asset.thumb_path || '';
     // (LOTE PEDIDO-CHAT-SE-EJECUTA · pieza 1) La RECETA del reel queda
     // guardada en el posteo y el asset linkeado (asset_id + file): es lo
     // que el ejecutor de rehacer-video consume para re-renderizar fiel
     // cuando el cliente pida un cambio. Antes la receta se descartaba
     // al crear y el asset ni siquiera quedaba linkeado.
+    // (LOTE VIDEO-SUBIDO-INTACTO) sin_render: 1 deja asentado que la
+    // media NO es un render de esta receta: es el archivo del cliente
+    // intacto. La receta conserva fuente + textos para el rehacer A
+    // PEDIDO (único momento en que se vuelve a renderizar).
     const receta = JSON.stringify({
-      v: 1, kind: 'single-clip', file: srcFile, asset_id: asset && asset.id ? Number(asset.id) : null,
+      v: 1, kind: 'single-clip', sin_render: 1, file: srcFile, asset_id: asset && asset.id ? Number(asset.id) : null,
       hook: headline || 'Mirá esto 👀', cta: 'Escribinos y te contamos más 👇',
       handle: igUser ? '@' + igUser : '', brandHex, mood, musicSeed: `${uid}:${weekKey}`,
       source, created_at: new Date().toISOString(),
     });
     const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, cover_path, reel_receta)
       VALUES (?,?,?,?, 'draft', 'video', ?, ?, 1, ?, 'reel', 'Reel creado desde el video real que subió el cliente', ?, ?)`)
-      .run(uid, built.url, caption, hashtags, trainingWheelsActive(uid) ? 1 : 0, source, weekKey, coverPath, receta);
-    console.log(`[album-video] usuario ${uid}: video ${asset.id} → reel protagonista ${ins.lastInsertRowid} (${built.duration}s${built.clientAudio ? ', audio del cliente' : built.music ? ', con música' : ''}) 🎬`);
-    return { postId: ins.lastInsertRowid, url: built.url, cover: coverPath, duration: built.duration };
+      .run(uid, url, caption, hashtags, trainingWheelsActive(uid) ? 1 : 0, source, weekKey, coverPath, receta);
+    console.log(`[album-video] usuario ${uid}: video ${asset.id} → reel protagonista ${ins.lastInsertRowid} (${duration}s, archivo del cliente INTACTO, sin re-render) 🎬`);
+    return { postId: ins.lastInsertRowid, url, cover: coverPath, duration };
   } finally {
     videoReelLocks.delete(uid);
   }
@@ -42691,7 +42723,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1081';
+const BUILD_ID = '20261105-v1082';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1342,53 +1342,49 @@ async function buildSingleClipReel(opts) {
     const lumHook = await zoneLuminance(file, { isVideo: true, tSec: segStart + 0.3, yFrac: 0.08, hFrac: 0.40 });
     const lumClose = await zoneLuminance(file, { isVideo: true, tSec: segStart + Math.max(0.3, segDur - 1), yFrac: 0.36, hFrac: 0.28 });
     let dtN = 0;
-    const dt = (lines, { size, y0, lineH, alpha, enable, color = 'white' }) => lines.map((ln) => {
+    // (LOTE VIDEO-SUBIDO-INTACTO) dt respeta lineH: la línea i va a
+    // y0 + i·lineH. El dt histórico ignoraba lineH y dibujaba TODAS las
+    // líneas de un bloque a la misma altura — se pisaban (el defecto
+    // del video 653/681, probado en frames).
+    const dt = (lines, { size, y0, lineH, alpha, enable, color = 'white' }) => lines.map((ln, i) => {
       const f = path.join(tmpDir, `t${dtN++}.txt`);
       fs.writeFileSync(f, ln, 'utf8');
       return `drawtext=fontfile='${FONT}':textfile='${f}':fontsize=${size}:fontcolor=${color}:` +
         `box=1:boxcolor=black@${alpha}:boxborderw=22:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
-        `x=(w-text_w)/2:y=${Math.round(y0)}:enable='${enable}'`;
+        `x=(w-text_w)/2:y=${Math.round(y0 + i * lineH)}:enable='${enable}'`;
     }).join(',');
     const textFilters = [];
     const hookEnd = Math.min(2.6, total * 0.3);
-    // (LOTE PEDIDO-CHAT-SE-EJECUTA) Modo estricto: los textos salen como
-    // chunks secuenciales del plan (hook arriba, CTA en su banda), un
-    // solo texto por banda en cada instante — el re-render del ejecutor
-    // de rehacer-video usa este camino. Sin opts.strictSubtitles, el
-    // render es el histórico, byte a byte.
-    const strictPlan = opts.strictSubtitles ? planEstrictoParaClip({ hook: opts.hook, cta: opts.cta, total, hookEnd, closeStart: Math.round((total - 2.0) * 10) / 10 }) : null;
-    if (strictPlan) {
-      for (const ch of strictPlan) {
-        const tiers = ch.band === 'top'
-          ? [{ size: 88, ch: 17, lh: 106 }, { size: 74, ch: 20, lh: 92 }, { size: 64, ch: 23, lh: 80 }]
-          : [{ size: 62, ch: 22, lh: 78 }, { size: 54, ch: 25, lh: 68 }];
-        const fit = fitText(ch.text, tiers, 2);
-        if (!fit) continue;
-        textFilters.push(dt(fit.lines, { size: fit.size, y0: ch.band === 'top' ? 240 : 800, lineH: fit.lh, alpha: boxAlphaFor(ch.band === 'top' ? lumHook : lumClose), enable: `between(t,${ch.start.toFixed(2)},${ch.end.toFixed(2)})` }));
-      }
-      if (hookLines.length) {
-        const barY = Math.round(240 + hookLines.length * hookFit.lh + 28);
-        textFilters.push(`drawbox=x=465:y=${barY}:w=150:h=10:color=${brand}@0.95:t=fill:enable='between(t,0,${hookEnd})'`);
-      }
+    const closeStart = Math.round((total - 2.0) * 10) / 10;
+    // (LOTE VIDEO-SUBIDO-INTACTO) EL PLAN ESTRICTO ES EL ÚNICO RENDER DE
+    // TEXTOS de este motor — ya no es una opción del llamador. El render
+    // histórico dibujaba el bloque entero (todas sus líneas) durante
+    // toda la ventana, y con el dt viejo las líneas salían a la misma
+    // altura y se pisaban (defecto 653/681). Ahora hook y CTA salen
+    // SIEMPRE como chunks secuenciales del plan estricto: un solo texto
+    // por banda en cada instante, y si un chunk ocupa dos líneas, van
+    // apiladas con su lineH. opts.strictSubtitles se sigue aceptando
+    // pero ya no cambia nada: el ejecutor de rehacer-video (v1077) ya
+    // pedía este camino, así que su salida queda idéntica.
+    const strictPlan = planEstrictoParaClip({ hook: opts.hook, cta: opts.cta, total, hookEnd, closeStart });
+    for (const ch of strictPlan) {
+      const tiers = ch.band === 'top'
+        ? [{ size: 88, ch: 17, lh: 106 }, { size: 74, ch: 20, lh: 92 }, { size: 64, ch: 23, lh: 80 }]
+        : [{ size: 62, ch: 22, lh: 78 }, { size: 54, ch: 25, lh: 68 }];
+      const fit = fitText(ch.text, tiers, 2);
+      if (!fit) continue;
+      textFilters.push(dt(fit.lines, { size: fit.size, y0: ch.band === 'top' ? 240 : 800, lineH: fit.lh, alpha: boxAlphaFor(ch.band === 'top' ? lumHook : lumClose), enable: `between(t,${ch.start.toFixed(2)},${ch.end.toFixed(2)})` }));
     }
-    if (!strictPlan && hookLines.length) {
-      const y0 = 240;
-      textFilters.push(dt(hookLines, { size: hookFit.size, y0, lineH: hookFit.lh, alpha: boxAlphaFor(lumHook), enable: `between(t,0,${hookEnd})` }));
-      const barY = Math.round(y0 + hookLines.length * hookFit.lh + 28);
+    if (hookLines.length) {
+      const barY = Math.round(240 + hookLines.length * hookFit.lh + 28);
       textFilters.push(`drawbox=x=465:y=${barY}:w=150:h=10:color=${brand}@0.95:t=fill:enable='between(t,0,${hookEnd})'`);
     }
-    const closeStart = Math.round((total - 2.0) * 10) / 10;
-    if (ctaLines.length || handleLine) {
-      const parts = [];
-      if (!strictPlan && ctaLines.length) parts.push(dt(ctaLines, { size: ctaFit.size, y0: 800, lineH: ctaFit.lh, alpha: boxAlphaFor(lumClose), enable: `between(t,${closeStart},${total})` }));
-      if (handleLine) {
-        const f = path.join(tmpDir, `t${dtN++}.txt`);
-        fs.writeFileSync(f, handleLine, 'utf8');
-        parts.push(`drawtext=fontfile='${FONT}':textfile='${f}':fontsize=82:fontcolor=white:` +
-          `box=1:boxcolor=${brand}@0.92:boxborderw=24:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
-          `x=(w-text_w)/2:y=${ctaLines.length ? 800 + ctaLines.length * ctaFit.lh + 36 : 880}:enable='between(t,${closeStart},${total})'`);
-      }
-      textFilters.push(parts.join(','));
+    if (handleLine) {
+      const f = path.join(tmpDir, `t${dtN++}.txt`);
+      fs.writeFileSync(f, handleLine, 'utf8');
+      textFilters.push(`drawtext=fontfile='${FONT}':textfile='${f}':fontsize=82:fontcolor=white:` +
+        `box=1:boxcolor=${brand}@0.92:boxborderw=24:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
+        `x=(w-text_w)/2:y=${ctaLines.length ? 800 + ctaLines.length * ctaFit.lh + 36 : 880}:enable='between(t,${closeStart},${total})'`);
     }
 
     // ---------- Audio: el suyo manda; música solo si el video es mudo ----------
