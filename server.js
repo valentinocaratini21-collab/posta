@@ -407,6 +407,7 @@ const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD —
 const demo = require('./demo');
 const draftOnboarding = require('./draft-onboarding'); // DRAFT-ONBOARDING (4/11): gusto del draft
 const feedAudit = require('./feed-audit');
+const emailAudit = require('./email-audit'); // (LOTE AUDITORÍA-EN-EL-EMAIL) la auditoría del fundador que enlaza el email a negocios
 const studyFeedMap = require('./study-feedmap'); // ESTUDIO-PROFUNDO · mejora 4 MAPA DEL FEED (7/11): grilla 9-12 + huecos → la semana los tapa
 const studyCompetitorsMod = require('./study-competitors'); // ESTUDIO-PROFUNDO · M5 COMPETENCIA: 3-5 cuentas mismo rubro/ciudad + hueco, en fundamento.competitors
 const igFollows = require('./ig-follows');
@@ -9674,6 +9675,22 @@ app.get('/api/admin/alerts', requireAdminToken, (req, res) => {
 app.get('/api/admin/founder-letter', requireAdminToken, (req, res) => {
   try { res.json({ ok: true, letter: LA.founderLetter(db, ANALYTICS_OPTS, req.query) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// (LOTE AUDITORÍA-EN-EL-EMAIL) Genera a demanda la auditoría del
+// Instagram de un negocio para enlazarla en el email del fundador
+// (programa de representantes; el envío sigue gateado al 1/12 — esto
+// solo produce la pieza). Devuelve la URL pública con token, la
+// estrella de la misma lectura (el hueco de la línea de fan de la
+// carta v5) y el puente textual con el link llenado. Si el feed no da
+// hallazgos verificados, ok:false con el motivo — nunca relleno.
+app.post('/api/admin/email-audit', requireAdminToken, express.json(), async (req, res) => {
+  const b = req.body || {};
+  try {
+    const r = await emailAudit.generateEmailAudit({ ig: b.ig, domain: b.domain, lang: b.lang });
+    if (!r.ok) return res.json({ ok: false, motivo: r.motivo });
+    const abs = 'https://postycommunitymanager.com' + r.url;
+    res.json({ ok: true, url: abs, estrella: r.payload.estrella, puente: emailAudit.auditBridgeText(r.payload.lang, abs), findings: r.payload.findings.length });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // (Frente 4b) EVENTOS de desautorización de Meta: registro durable del
 // callback /api/meta/deauthorize, consultable por el dueño.
@@ -33495,6 +33512,17 @@ app.get('/panel', (req, res) => {
 // ---------- Feed Audit: auditoría IA del Instagram (lead magnet) ----------
 // Página pública /auditoria → POST /api/audit {ig} → reporte con score.
 // Cache 72h por @ (no consume intento), anti-spam 5/día por IP con reembolso.
+// (LOTE AUDITORÍA-EN-EL-EMAIL) La auditoría del fundador para UN
+// negocio, enlazada desde su email: URL con token no adivinable
+// (48 hex), noindex, sin listado ni forma de enumerar. Token que no
+// existe → 404.
+app.get('/a/:token', (req, res) => {
+  const p = emailAudit.getByToken(req.params.token);
+  if (!p) return res.status(404).send('No encontrada');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(emailAudit.renderAuditHtml(p));
+});
 app.get('/auditoria', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'auditoria.html'));
@@ -39511,7 +39539,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1042';
+const BUILD_ID = '20261105-v1043';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
