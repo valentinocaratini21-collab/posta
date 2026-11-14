@@ -1528,6 +1528,32 @@ async function classifyWithVision(signals, photoUrls, lang, photoShortcodes) {
   } catch (e) { return cls; }
 }
 
+// (LOTE PREGUNTA-SIN-REPETIR) La respuesta del formulario de la prueba
+// a «¿qué vende más?» viaja como onboarding.producto_estrella, pero la
+// máquina de preguntas (posty-questions.js) consulta el dato del dueño:
+// digest.dueno.mas_vendido y el ADN mas_vendido. Sin este mapeo, el
+// hueco nacía abierto aunque el cliente ya lo hubiera declarado y
+// Posty volvía a preguntar lo que ya sabía (diagnóstico Veja 3.ª,
+// causa 3). El mapeo SOLO completa si falta — jamás pisa un dato más
+// fuerte (la respuesta a la pregunta misma, las ventas, otro declarado)
+// — y usa el umbral de la propia máquina (≥3 caracteres). El valor
+// viaja literal, como queda registrado cuando el dueño responde la
+// pregunta: si es una categoría, la validación de estrella vigente
+// (duenoStarEvidenceMatch) decide al generar; acá solo se registra
+// que el dueño ya lo dijo.
+function applyTrialMasVendido(digest) {
+  try {
+    if (!digest || typeof digest !== 'object') return false;
+    const ob = (digest.onboarding && typeof digest.onboarding === 'object') ? digest.onboarding : null;
+    const declared = String((ob && ob.producto_estrella) || '').trim();
+    if (declared.length < 3) return false;
+    if (!digest.dueno || typeof digest.dueno !== 'object') digest.dueno = {};
+    if (String(digest.dueno.mas_vendido || '').trim().length >= 3) return false;
+    digest.dueno.mas_vendido = declared;
+    return true;
+  } catch (e) { return false; }
+}
+
 // Compila el digest de la prueba desde las fuentes que la ruta ya
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
@@ -1574,6 +1600,10 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       offerSheet: offerSheet || null,
     });
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
+    // (LOTE PREGUNTA-SIN-REPETIR) Lo declarado en el formulario cubre
+    // el hueco mas_vendido desde el nacimiento del digest: la semana
+    // de la prueba y la cuenta que hereda leen este mismo digest.
+    if (_trialDigestBuilt) applyTrialMasVendido(_trialDigestBuilt);
     // (ESTUDIO-PROFUNDO M1 · COMENTARIOS) El estudio de comentarios vive
     // en su propio espacio de nombres (fundamento.comments): FAQs, ganchos
     // en palabras exactas y quejas, cada uno con procedencia. No reescribe
@@ -2039,6 +2069,16 @@ function seedFromTrialDigest(userId, igRaw, opts) {
     // puerta ANTES de sembrar descripción/ADN: la siembra derivada
     // («Ofrece: …») se construye de estos ítems tal cual.
     digest = clientDigest.scrubDigestItems(digest);
+    // (LOTE PREGUNTA-SIN-REPETIR) Payloads cacheados sin el mapeo — o
+    // compilados desde partes acá arriba, que pierden el namespace
+    // onboarding —: la respuesta de la prueba vive también a nivel
+    // payload (out.onboarding). Se restaura el namespace y se aplica
+    // el mapeo ANTES de guardar: el hueco mas_vendido nace cubierto
+    // en el fundamento sembrado.
+    try {
+      if ((!digest.onboarding || typeof digest.onboarding !== 'object') && out && out.onboarding && typeof out.onboarding === 'object') digest.onboarding = out.onboarding;
+      applyTrialMasVendido(digest);
+    } catch (e) {}
     // (LOTE IDIOMA-MARCA-PIPELINE-IN-ACCOUNT · v959) El contentLang
     // del payload viaja al digest aunque el digest cacheado no lo
     // traiga (payloads de antes de v922) o se haya compilado desde
@@ -2074,6 +2114,14 @@ function seedFromTrialDigest(userId, igRaw, opts) {
         const empty = cur[k] == null || (Array.isArray(cur[k]) && !cur[k].length) || String(cur[k] || '').trim() === '';
         if (empty) merged[k] = frag[k];
       }
+      // (LOTE PREGUNTA-SIN-REPETIR) El ADN es el otro lugar que la
+      // máquina de preguntas mira (dna.mas_vendido) y el fragmento
+      // digest→ADN no lo trae: la siembra lo completa desde el dato
+      // del dueño ya mapeado, solo si el ADN no lo tiene (la
+      // respuesta a la pregunta escribe AMBOS lugares; la siembra
+      // del formulario ahora también).
+      const mvDna = (digest.dueno && String(digest.dueno.mas_vendido || '').trim().length >= 3) ? String(digest.dueno.mas_vendido).trim() : '';
+      if (mvDna && String(merged.mas_vendido || '').trim().length < 3) merged.mas_vendido = mvDna;
       if (JSON.stringify(merged) !== JSON.stringify(cur)) writeDna(userId, merged);
     } catch (e) { console.error('[digest] seed ADN:', e.message); }
     // Perfil: categoría real si la cuenta nació en 'otro'/vacía,
@@ -4341,7 +4389,12 @@ function applyTrialProfile(userId, tp) {
         for (const k of Object.keys(tp.onboarding)) {
           if (next[k] === undefined || next[k] === '') { next[k] = tp.onboarding[k]; changed = true; }
         }
-        if (changed) { cur.onboarding = next; clientDigest.saveDigest(db, userId, cur); }
+        if (changed) cur.onboarding = next;
+        // (LOTE PREGUNTA-SIN-REPETIR) Lo declarado en la prueba cubre
+        // también el hueco mas_vendido del fundamento ya guardado
+        // (esta vía funde el onboarding sin pasar por la siembra).
+        if (applyTrialMasVendido(cur)) changed = true;
+        if (changed) clientDigest.saveDigest(db, userId, cur);
       } catch (e) { console.error('[magic] trial onboarding:', e.message); }
     }
 
@@ -41754,7 +41807,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1066';
+const BUILD_ID = '20261105-v1067';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
