@@ -132,6 +132,7 @@ t(!has(ideasES, 'Comentarios'), 'ES ideas+crecimiento: sin Comentarios');
 t(!has(appSrc, 'function planDetailHTML'), 'ES app: sin planDetailHTML');
 
 // ---------- 2c. ES: Ads (copy honesto del mock, arriba del plan) ----------
+// re-pin LOTE COPY-SIN-BILLETERA (la home deja de describir la billetera, modelo descartado por la decisión de Ads del 13/11: la pauta va por la cuenta de Meta del cliente): los pins de esta seccion y de FAQ Ads (ES/EN) pinean el copy nuevo.
 ['Posty impulsa tus mejores posteos',
   'Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo.',
   'Tu mejor posteo, detectado solo.',
@@ -139,8 +140,8 @@ t(!has(appSrc, 'function planDetailHTML'), 'ES app: sin planDetailHTML');
   'Posty hace el resto.',
   'Tu posteo con más llegada',
   '2× tu promedio',
-  'Billetera $20',
-  'Automática ON',
+  'Tu cuenta de Meta · $20', // re-pin LOTE COPY-SIN-BILLETERA (la home deja de describir la billetera, modelo descartado por la decisión de Ads del 13/11: la pauta va por la cuenta de Meta del cliente)
+  'la gestión se cobra al impulsar con tu tarjeta guardada', // re-pin LOTE COPY-SIN-BILLETERA (la home deja de describir la billetera, modelo descartado por la decisión de Ads del 13/11: la pauta va por la cuenta de Meta del cliente)
   'Impulsar con $20 · 7 días',
   'Posty elige el público y lo gestiona.',
   'Probalo 3 días gratis →',
@@ -167,7 +168,7 @@ t(has(planCards, 'Nunca vemos tu contraseña'), 'ES contraseña: junto al plan (
 t(has(landing, 'No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos tu contraseña: ni la pedimos ni la guardamos.'),
   'ES FAQ contraseña: respuesta exacta');
 // FAQ Ads: la respuesta nueva, no la vieja.
-t(has(landing, 'Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.'),
+t(has(landing, 'Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: la pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.'),
   'ES FAQ Ads: respuesta nueva honesta');
 t(!has(landing, 'Todavía no: la publicidad'), 'ES FAQ Ads: fuera la respuesta vieja «Todavía no»');
 // Cómo trabaja: ritmo de la mañana plegado acá.
@@ -194,7 +195,7 @@ t(!has(indexSrc, 'responde comentarios y mensajes, cuida tus reseñas'),
 t(!has(indexSrc, '¿Posty también atiende a mis clientes?'), 'ES index JSON-LD: fuera «atiende a mis clientes»');
 t(!has(indexSrc, '¿Posty responde los comentarios y los mensajes de mi Instagram?'), 'ES index JSON-LD: fuera «responde los comentarios»');
 t(has(indexSrc, 'Nunca vemos tu contraseña: ni la pedimos ni la guardamos.'), 'ES index JSON-LD: contraseña nueva');
-t(has(indexSrc, 'Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.'), 'ES index JSON-LD: Ads nuevo');
+t(has(indexSrc, 'Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: la pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.'), 'ES index JSON-LD: Ads nuevo');
 t(!has(indexSrc, 'llega a mucha más gente'), 'ES index JSON-LD: fuera la promesa de alcance vieja');
 t(has(indexSrc, 'publicar — con tu aprobación en un toque cuando hace falta criterio humano'), 'ES index JSON-LD: CM sin «responder» (re-pin v837: sin «promocionar y cuidar»)');
 t(has(indexSrc, 'pienso las ideas, diseño y publico'), 'ES index JSON-LD: solo sin «respondo» (re-pin v837: sin «promociono»)');
@@ -260,8 +261,8 @@ AUDIT_EN.forEach((f) => t(has(enSrc, f), 'EN plan: línea presente «' + f + '»
   'Posty does the rest.',
   'Your top-performing post',
   '2× your average',
-  'Wallet $20',
-  'Auto top-up ON',
+  'Your Meta account · $20', // re-pin LOTE COPY-SIN-BILLETERA (la home deja de describir la billetera, modelo descartado por la decisión de Ads del 13/11: la pauta va por la cuenta de Meta del cliente)
+  "Posty's management is charged when you boost", // re-pin LOTE COPY-SIN-BILLETERA (la home deja de describir la billetera, modelo descartado por la decisión de Ads del 13/11: la pauta va por la cuenta de Meta del cliente)
   'Boost with $20 · 7 days',
   'Posty picks the audience and runs it.',
   'Try it free for 3 days →',
@@ -291,9 +292,9 @@ t(has(enSrc, "No. You connect your account with Meta's official login, just like
   'EN FAQ contraseña: respuesta exacta (visible + JSON-LD)');
 t(count(enSrc, "We never see your password — we never ask for it or store it.") >= 2,
   'EN FAQ contraseña: en FAQ visible Y en JSON-LD');
-t(has(enSrc, 'Yes. When a post takes off, Posty flags it and proposes boosting it: you load credit into your wallet — separate from the subscription — and Posty picks the post, the audience and runs it, always with your one-tap OK.'),
+t(has(enSrc, 'Yes. When a post takes off, Posty flags it and proposes boosting it: the ad spend is paid from your own Meta account, separate from the subscription, and Posty picks the post, the audience and runs it, always with your one-tap OK.'),
   'EN FAQ Ads: respuesta nueva honesta');
-t(count(enSrc, 'Yes. When a post takes off, Posty flags it and proposes boosting it: you load credit into your wallet — separate from the subscription — and Posty picks the post, the audience and runs it, always with your one-tap OK.') >= 2,
+t(count(enSrc, 'Yes. When a post takes off, Posty flags it and proposes boosting it: the ad spend is paid from your own Meta account, separate from the subscription, and Posty picks the post, the audience and runs it, always with your one-tap OK.') >= 2,
   'EN FAQ Ads: en FAQ visible Y en JSON-LD');
 t(!has(enSrc, 'Not yet: advertising with Meta'), 'EN FAQ Ads: fuera la respuesta vieja «Not yet»');
 t(has(enSrc, 'in the morning you see the post, approve it in one tap and at 7:00 PM it goes out on its own'),

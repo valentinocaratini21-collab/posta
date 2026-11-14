@@ -4885,21 +4885,21 @@ function lpAdsHTML() {
       <div class="cap-copy">
         <div class="cap-kick">Ads</div>
         <h2><span class="hl">Posty impulsa tus mejores posteos</span></h2>
-        <p class="cap-exp">Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo. Cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona. Podés dejar la carga en automático desde tu banco.</p>
+        <p class="cap-exp">Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo. La pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y Posty elige el posteo, el público y lo gestiona.</p>
         <ul class="cap-list">
           <li><b>Tu mejor posteo, detectado solo.</b> Posty marca el posteo que más rindió y te dice por qué funciona.</li>
-          <li><b>Vos ponés el monto, nada más.</b> $20, $50 o $100. La plata es tu billetera, aparte de los $199.</li>
+          <li><b>Vos ponés el monto, nada más.</b> $20, $50 o $100. La pauta va por tu cuenta de Meta, aparte de los $199.</li>
           <li><b>Posty hace el resto.</b> Público, pauta y gestión. Siempre con tu OK en un toque.</li>
         </ul>
         <a class="cap-cta" href="/prueba">Probalo 3 días gratis →</a>
       </div>
       <div class="cap-side">
         <div class="cap-sample"><div class="cap-grow">
-          <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo con más llegada</h4><div class="cap-grow-metric">2× tu promedio</div><div class="cap-grow-sub">Billetera $20 · Automática ON</div></div></div>
+          <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo con más llegada</h4><div class="cap-grow-metric">2× tu promedio</div><div class="cap-grow-sub">Tu cuenta de Meta · $20</div></div></div>
           <div class="cap-prop">🚀 <b>Impulsar con $20 · 7 días</b> — Posty elige el público y lo gestiona.</div>
           <div class="cap-sendrow"><span class="cap-send">Impulsar ✓</span><span class="cap-alt">Ahora no</span></div>
         </div></div>
-        <p class="cap-note">La plata es tu billetera, aparte de la suscripción. Nada se gasta sin tu OK.</p>
+        <p class="cap-note">La pauta va por tu cuenta de Meta, aparte de la suscripción, y la gestión se cobra al impulsar con tu tarjeta guardada. Nada se gasta sin tu OK.</p>
       </div>
     </div>
   </div></div>`;
@@ -5241,7 +5241,7 @@ function landingView(cfg) {
       <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
       <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
     </div>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo — no necesitás contratar a nadie más ni sumar ningún otro servicio. Si querés promocionar un posteo, lo impulsás por billetera, aparte del plan.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Posty trabaja completo por sí solo.</b> Todo lo que tu Instagram necesita lo hago yo — no necesitás contratar a nadie más ni sumar ningún otro servicio. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan.</p>
     <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 19:00 sale solo.</p>
     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
@@ -5287,8 +5287,8 @@ function landingView(cfg) {
       <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te aviso; si no decís nada, sale. Si algo no te cierra, lo frenás con un toque.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: hablás conmigo en el chat, estudio tu negocio y te pregunto solo lo que falta — 2 o 3 toques — y ves tu semana armada. Si no te sirve, no pagás nada.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis hablás conmigo en el chat — 2 o 3 toques — y ves tu semana armada. Al crear tu cuenta, cada mañana a las 9:00 ves el posteo del día y 30 minutos antes de que salga te aviso; si no decís nada, sale.</p></details>
-      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar — con tu aprobación en un toque cuando hace falta criterio humano. Si querés promocionar un posteo, lo impulsás por billetera, aparte del plan. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
-      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: cargás crédito en tu billetera —aparte de la suscripción— y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño y publico — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Si querés promocionar un posteo, lo impulsás por billetera, aparte del plan. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
+      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar — con tu aprobación en un toque cuando hace falta criterio humano. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
+      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo: la pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y Posty elige el posteo, el público y lo gestiona, siempre con tu OK en un toque.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño y publico — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan. Con Posty alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con Posty <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
     <div style="text-align:center;margin-top:44px">
