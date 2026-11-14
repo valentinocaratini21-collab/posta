@@ -1224,6 +1224,74 @@ async function buildReelPro(opts) {
   }
 }
 
+// ---------- (LOTE PEDIDO-CHAT-SE-EJECUTA) PLAN DE TEXTOS ESTRICTO ----------
+// El defecto de origen de los subtítulos pisados: dos textos de la MISMA
+// banda dibujados a la vez (el saliente y el entrante conviven en el
+// cambio de chunk y se pisan). El plan estricto parte hook y CTA en
+// chunks de 2–4 palabras con ventanas que se reparten el tiempo por
+// cantidad de palabras, y secuenciaEstricta garantiza la invariante:
+// por banda, un chunk NUNCA arranca antes de que termine el anterior
+// (el arranque se corre; el chunk que queda sin aire se descarta).
+// Sin fundidos cruzados entre textos: cada chunk vive solo en su ventana.
+function chunkWords(text, maxWords) {
+  const clean = String(text || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '')
+    .replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const words = clean.split(' ');
+  const max = Math.max(2, maxWords || 4);
+  const chunks = [];
+  for (let i = 0; i < words.length; i += max) chunks.push(words.slice(i, i + max).join(' '));
+  // Sin chunk huérfano de 1 palabra al final: si el anterior tiene más
+  // de 2, le cede su última palabra (4+1 → 3+2); si no, se pega entero.
+  if (chunks.length > 1) {
+    const lastW = chunks[chunks.length - 1].split(' ');
+    if (lastW.length === 1) {
+      const prevW = chunks[chunks.length - 2].split(' ');
+      if (prevW.length > 2) {
+        lastW.unshift(prevW.pop());
+        chunks[chunks.length - 2] = prevW.join(' ');
+        chunks[chunks.length - 1] = lastW.join(' ');
+      } else { chunks[chunks.length - 2] += ' ' + lastW[0]; chunks.pop(); }
+    }
+  }
+  return chunks;
+}
+function secuenciaEstricta(chunks) {
+  const list = (Array.isArray(chunks) ? chunks : []).map(c => ({ ...c }));
+  list.sort((a, b) => (a.start - b.start) || String(a.band).localeCompare(String(b.band)));
+  const freeAt = {};
+  const out = [];
+  for (const c of list) {
+    const band = c.band || 'top';
+    let start = Math.max(0, Number(c.start) || 0);
+    const end = Math.max(start, Number(c.end) || 0);
+    if (start < (freeAt[band] || 0)) start = freeAt[band];
+    if (end - start < 0.25) continue; // sin aire tras el corrimiento: no destella
+    freeAt[band] = end;
+    out.push({ text: String(c.text || ''), start: Math.round(start * 100) / 100, end: Math.round(end * 100) / 100, band, role: c.role || '' });
+  }
+  return out;
+}
+function planEstrictoParaClip({ hook, cta, total, hookEnd, closeStart }) {
+  const chunks = [];
+  const addText = (text, w0, w1, band, role) => {
+    const parts = chunkWords(text, 4);
+    if (!parts.length || !(w1 > w0)) return;
+    const counts = parts.map(t => t.split(' ').length);
+    const totalWords = counts.reduce((a, b) => a + b, 0) || 1;
+    let cursor = w0, acc = 0;
+    parts.forEach((t, i) => {
+      acc += counts[i];
+      const end = (i === parts.length - 1) ? w1 : Math.round((w0 + (w1 - w0) * (acc / totalWords)) * 100) / 100;
+      chunks.push({ text: t, start: Math.round(cursor * 100) / 100, end, band, role });
+      cursor = end;
+    });
+  };
+  addText(hook, 0, Math.max(0, Number(hookEnd) || 0), 'top', 'hook');
+  addText(cta, Math.max(0, Number(closeStart) || 0), Math.max(0, Number(total) || 0), 'bottom', 'cta');
+  return secuenciaEstricta(chunks);
+}
+
 // ---------- (Gap 2, 2026-10-25) EL VIDEO DEL CLIENTE COMO PROTAGONISTA ----------
 // buildSingleClipReel({ mediaDir, file, hook, cta, handle, brandHex,
 //   mood, musicSeed }) → { file, url, duration, coverPath, music,
@@ -1283,7 +1351,27 @@ async function buildSingleClipReel(opts) {
     }).join(',');
     const textFilters = [];
     const hookEnd = Math.min(2.6, total * 0.3);
-    if (hookLines.length) {
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA) Modo estricto: los textos salen como
+    // chunks secuenciales del plan (hook arriba, CTA en su banda), un
+    // solo texto por banda en cada instante — el re-render del ejecutor
+    // de rehacer-video usa este camino. Sin opts.strictSubtitles, el
+    // render es el histórico, byte a byte.
+    const strictPlan = opts.strictSubtitles ? planEstrictoParaClip({ hook: opts.hook, cta: opts.cta, total, hookEnd, closeStart: Math.round((total - 2.0) * 10) / 10 }) : null;
+    if (strictPlan) {
+      for (const ch of strictPlan) {
+        const tiers = ch.band === 'top'
+          ? [{ size: 88, ch: 17, lh: 106 }, { size: 74, ch: 20, lh: 92 }, { size: 64, ch: 23, lh: 80 }]
+          : [{ size: 62, ch: 22, lh: 78 }, { size: 54, ch: 25, lh: 68 }];
+        const fit = fitText(ch.text, tiers, 2);
+        if (!fit) continue;
+        textFilters.push(dt(fit.lines, { size: fit.size, y0: ch.band === 'top' ? 240 : 800, lineH: fit.lh, alpha: boxAlphaFor(ch.band === 'top' ? lumHook : lumClose), enable: `between(t,${ch.start.toFixed(2)},${ch.end.toFixed(2)})` }));
+      }
+      if (hookLines.length) {
+        const barY = Math.round(240 + hookLines.length * hookFit.lh + 28);
+        textFilters.push(`drawbox=x=465:y=${barY}:w=150:h=10:color=${brand}@0.95:t=fill:enable='between(t,0,${hookEnd})'`);
+      }
+    }
+    if (!strictPlan && hookLines.length) {
       const y0 = 240;
       textFilters.push(dt(hookLines, { size: hookFit.size, y0, lineH: hookFit.lh, alpha: boxAlphaFor(lumHook), enable: `between(t,0,${hookEnd})` }));
       const barY = Math.round(y0 + hookLines.length * hookFit.lh + 28);
@@ -1292,7 +1380,7 @@ async function buildSingleClipReel(opts) {
     const closeStart = Math.round((total - 2.0) * 10) / 10;
     if (ctaLines.length || handleLine) {
       const parts = [];
-      if (ctaLines.length) parts.push(dt(ctaLines, { size: ctaFit.size, y0: 800, lineH: ctaFit.lh, alpha: boxAlphaFor(lumClose), enable: `between(t,${closeStart},${total})` }));
+      if (!strictPlan && ctaLines.length) parts.push(dt(ctaLines, { size: ctaFit.size, y0: 800, lineH: ctaFit.lh, alpha: boxAlphaFor(lumClose), enable: `between(t,${closeStart},${total})` }));
       if (handleLine) {
         const f = path.join(tmpDir, `t${dtN++}.txt`);
         fs.writeFileSync(f, handleLine, 'utf8');
@@ -1345,7 +1433,7 @@ async function buildSingleClipReel(opts) {
 
     return {
       file: outPath, url: `/media/${outName}`, duration: total,
-      coverPath, music: !!musicFile, singleClip: true,
+      coverPath, music: !!musicFile, singleClip: true, textPlan: strictPlan || null,
       segmentStart: Math.round(segStart * 100) / 100, segmentDur: total,
       focus: foc, clientAudio: !!info.hasAudio,
     };
@@ -1354,4 +1442,4 @@ async function buildSingleClipReel(opts) {
   }
 }
 
-module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword, mediaInfo, genPlatePng };
+module.exports = { buildReelPro, buildReelV3, buildSingleClipReel, planEstrictoParaClip, secuenciaEstricta, chunkWords, detectFocus, bestFrameTimeIn, measureFrameQuality, moodForCategory, wrapLines, MUSIC_TRACKS, MUSIC_CATALOG, pickMusicFile, moodTracksFor, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword, mediaInfo, genPlatePng };

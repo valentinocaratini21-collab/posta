@@ -7582,8 +7582,14 @@ function pzTrabajoMarcarVencidos(db) {
       const up = db.prepare("UPDATE trabajos SET estado='fallo', error='tiempo_agotado', updated_at=datetime('now') WHERE id=? AND estado='creando'").run(j.id);
       if (!up || !up.changes) continue;
       const en = langOfUser(j.user_id) === 'en';
-      const msg = `[trabajo-fallo:${j.id}] ${pzTrabajoFalloAmable('tiempo_agotado', en)}`;
-      const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(j.user_id, 'assistant', msg.slice(0, 3000));
+      // (LOTE PEDIDO-CHAT-SE-EJECUTA) Un trabajo de CAMBIO vencido se
+      // salda con SU texto honesto y en SU hilo (el del posteo si nació
+      // del conserje), no con el texto de la imagen en el hilo principal.
+      const esCambio = j.tipo === 'chat_cambio';
+      const msg = `[trabajo-fallo:${j.id}] ${esCambio ? pzTrabajoCambioFalloAmable('tiempo_agotado', en) : pzTrabajoFalloAmable('tiempo_agotado', en)}`;
+      const ins = (esCambio && j.hilo === 'post' && j.post_id)
+        ? db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?,?,?,?,?)').run(j.user_id, 'assistant', msg.slice(0, 3000), 'post', Number(j.post_id))
+        : db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(j.user_id, 'assistant', msg.slice(0, 3000));
       db.prepare('UPDATE trabajos SET mensaje_final_id = ? WHERE id = ?').run(Number(ins.lastInsertRowid), j.id);
       n++;
     }
@@ -7792,6 +7798,449 @@ async function pzRegenParaPost({ uid, postId, capForImg, tipoForImg, pedido }) {
   }
   return { newPath, gate, issue: null, anclada: true };
 }
+// ── PEDIDO-CHAT-SE-EJECUTA (incidente 14/11, posteo 653) ──────────────
+// Valentino pidió por el chat del posteo rehacer el VIDEO con los
+// subtítulos perfectos; el cerebro respondió una promesa («lo rehago y
+// te aviso cuando esté listo») y nunca ejecutó nada: no emitió ningún
+// bloque, el ejecutor de rehacer frena el video por diseño
+// (redo_media), la red de v1027 solo caza preguntas sueltas y la red de
+// v847 solo conoce pedidos de imagen. El pedido murió con la respuesta.
+// Este bloque cierra el carril entero, sobre las piezas de v847:
+//   · Receta durable del reel en el posteo (buildClientVideoReelPost).
+//   · Ejecutor pzRegenVideoParaPost: re-render desde la receta con el
+//     plan de textos ESTRICTO (sin solape), verificación por frames
+//     fail-closed y reemplazo con la versión anterior guardada.
+//   · Red determinística anti-promesa pzChatCambioSiFalta: si el turno
+//     pidió un cambio sobre UN posteo (ancla o cita) y no se aplicó
+//     ningún trabajo, la prosa del cerebro NO se entrega — nace el
+//     trabajo durable «chat_cambio» con estado visible en el hilo y el
+//     resultado en el mismo chat; si el cambio es imposible, el trabajo
+//     nace y cierra en el acto con el recibo honesto + el registro en
+//     el conserje con el motivo.
+//   · Consumidor del conserje para hilo='post' (endpoint decidir):
+//     aprobar DISPARA este mismo ejecutor.
+// Invariante (regla 13/11): todo recibo de este bloque es comprobante
+// de trabajo real o de imposibilidad honesta — nunca una promesa.
+function pzPostTitulo(post) {
+  const t = String((post && post.caption) || '').split('\n')[0].trim();
+  return (t || 'tu posteo').slice(0, 80);
+}
+// Inserción de mensaje con contexto de hilo: hilo='post' + post_id para
+// que el resultado se vea en el hilo del posteo (y en el conserje); el
+// hilo principal usa la inserción histórica de siempre.
+function pzChatMsgInsert(uid, text, hilo, postId) {
+  const t = String(text || '').slice(0, 3000);
+  if (hilo === 'post' && postId) {
+    const r = db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?,?,?,?,?)').run(uid, 'assistant', t, 'post', Number(postId));
+    return Number(r.lastInsertRowid) || null;
+  }
+  const r = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', t);
+  return Number(r.lastInsertRowid) || null;
+}
+// Detector: ¿el pedido es sobre el VIDEO/la pieza audiovisual (no sobre
+// la foto ni solo el texto)? Espejo de pzChatPedidoSobreFoto.
+function pzChatPedidoSobreVideo(text) {
+  const t = ' ' + String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
+  // Un pedido SOLO sobre el texto del posteo («cambiá el caption del
+  // video») no es un pedido sobre el video: el medio se nombra como
+  // contexto, no como lo que hay que rehacer.
+  if (/(caption|titular|hashtag|descripcion)/.test(t) && !/(subtitulo|clip|quemad)/.test(t)) return false;
+  if (!/(video|reel|subtitulo|clip|quemad|letras del video|textos del video)/.test(t)) return false;
+  return /(rehac|correg|corrij|arregl|cambi|mejor|edit|ajust|retoc|sac|quit|borr|elimin|mov|agreg|pon|esta mal|estan mal|se ve mal|no se lee|pisad|superpuest|fix|change|correct|redo)/.test(t);
+}
+// Disparador de la red anti-promesa: ¿el turno es un PEDIDO DE CAMBIO
+// sobre un posteo? Determinístico, con la vara de pzChatPideImagen y
+// pzChatPedidoSobreFoto (verbo de cambio o queja-con-defecto + el medio
+// nombrado; la ancla/cita que exige la red hace el resto). Límites
+// declarados — falsos negativos aceptados: pedidos sin verbo ni queja
+// («los subtítulos!!!» suelto), cambios sobre la semana sin ancla ni
+// cita, y el pedido que el cerebro respondió con ```options (duda legal
+// con opciones: la red no lo toca). Falsos positivos aceptados: charla
+// con verbo de cambio sobre el posteo anclado que no pide ejecutar
+// (mitigado por la guarda de negación y porque el trabajo resultante
+// es reversible con la versión anterior a un toque).
+function pzChatPedidoDeCambio(text) {
+  const t = ' ' + String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
+  // Negación explícita: «no lo cambies» no es un pedido de cambio.
+  if (/\bno\b[^.\n]{0,24}\b(cambies|rehagas|toques|edites|borres|saques|muevas)\b/.test(t)) return false;
+  const medio = /(video|reel|imagen|foto|subtitulo|texto|caption|titular|clip|hashtag|posteo|post|photo|picture|image|subtitle|avatar|logo)/;
+  const verboFuerte = /(rehac|correg|corrij|arregl|hacelo|hacela|de nuevo|fix|redo)/;
+  const verbo = /(cambi|mejor|edit|ajust|retoc|actualiz|sac|quit|borr|elimin|mov|acomod|agreg|tap|cubr|recort|change|correct|adjust|remove)/;
+  const queja = /(esta mal|estan mal|se ve mal|no me gusta|no quedo bien|no quedo|pisad|superpuest|encima|arriba de|no se lee|ilegible|borroso|mal hecho)/;
+  if (verboFuerte.test(t)) return true;
+  if (verbo.test(t) && medio.test(t)) return true;
+  if (queja.test(t) && medio.test(t)) return true;
+  return false;
+}
+// Texto honesto de cada imposibilidad/fallo de un cambio (nunca jerga
+// técnica, nunca promesa: qué pasó y, cuando hay, el camino real).
+function pzTrabajoCambioFalloAmable(kind, en) {
+  const M = {
+    sin_receta: ['ese video se armó antes de que empezara a guardar su receta, así que no lo puedo rehacer desde acá: subilo de nuevo desde Subir y le aplico el cambio en el momento', 'that video was made before I started saving its recipe, so I can\'t redo it from here: upload it again from Upload and I\'ll apply the change on the spot'],
+    sin_fuente: ['no encuentro el material original de ese posteo para rehacerlo', 'I can\'t find the original material of that post to redo it'],
+    sin_rehaces: ['ya usaste los 3 rehaces de este posteo — podés volver a la versión anterior o usar material tuyo', 'you already used this post\'s 3 redos — you can go back to the previous version or use your own material'],
+    ya_salio: ['ese posteo ya salió, no lo puedo cambiar en su lugar', 'that post already went out, I can\'t change it in place'],
+    medio_no_soportado: ['ese tipo de posteo no lo puedo rehacer desde el chat', 'I can\'t redo that kind of post from the chat'],
+    sin_clave: ['no pude hacer el cambio, falta la clave — avisame y lo revisamos', 'I couldn\'t make the change, the key is missing — let me know and we\'ll check it'],
+    tope: ['por hoy llegamos al tope de IA 😅 probá mañana', 'we hit today\'s AI limit 😅 try again tomorrow'],
+    tiempo_agotado: ['el cambio tardó demasiado y lo corté para no dejarte esperando — tocá reintentar', 'the change took too long and I stopped it so you wouldn\'t wait forever — tap retry'],
+    revision: ['el cambio no pasó mi verificación y dejé el posteo como estaba — tocá reintentar', 'the change didn\'t pass my check and I left the post as it was — tap retry'],
+    regen_sin_cambio: ['el cambio no se aplicó sobre tu foto y dejé la actual', 'the change didn\'t apply over your photo and I left the current one'],
+    regen_no_verificada: ['la pieza nueva no pasó la verificación contra tu pedido y dejé la actual', 'the new piece didn\'t pass the check against your request and I left the current one'],
+    video_no_verificado: ['el video nuevo no pasó la verificación de subtítulos y dejé el actual — tocá reintentar', 'the new video didn\'t pass the subtitle check and I left the current one — tap retry'],
+    fallo: ['no pude hacer el cambio — tocá reintentar y lo hago de nuevo', 'I couldn\'t make the change — tap retry and I\'ll do it again'],
+  };
+  const par = M[kind] || M.fallo;
+  return en ? par[1] : par[0];
+}
+// La receta guardada del reel (pieza 1). Sin JSON válido con su fuente,
+// no hay receta: el re-render fiel es imposible.
+function pzRecetaDePost(post) {
+  try {
+    const raw = String((post && post.reel_receta) || '').trim();
+    if (!raw) return null;
+    const r = JSON.parse(raw);
+    if (!r || typeof r !== 'object' || !r.file) return null;
+    return r;
+  } catch (e) { return null; }
+}
+// Ruta del cambio según el medio y lo que el pedido nombra: texto
+// pelado (caption/titular sin nombrar la pieza) regenera el caption sea
+// el medio que sea; si no, manda el medio (foto → pzRegenParaPost,
+// video → pzRegenVideoParaPost).
+function pzChatCambioRuta(post, pedido) {
+  const media = String((post && post.media_type) || 'image');
+  if (media !== 'image' && media !== 'video') return null;
+  const t = ' ' + String(pedido || '').toLowerCase() + ' ';
+  const hablaTexto = /(caption|texto|titular|hashtag|descripcion|descripción)/.test(t);
+  const hablaPieza = /(foto|imagen|video|reel|subtitulo|subtítulo|clip|photo|picture|image|subtitle)/.test(t);
+  if (hablaTexto && !hablaPieza) return 'texto';
+  return media === 'video' ? 'video' : 'foto';
+}
+// Verificación del video nuevo ANTES de reemplazar (espejo de
+// verificarRehacerAnclado): se muestrean los fotogramas donde el
+// defecto se veía — justo después de cada cambio de chunk por banda —
+// más el medio de cada ventana, y visión juzga si hay dos textos
+// pisados en la misma zona. FAIL-CLOSED: sin clave, sin plan, sin
+// frames o veredicto dudoso ⇒ ok:false y el video vigente NO se toca.
+async function verificarVideoSinSolape({ uid, videoAbs, plan }) {
+  try {
+    const key = openaiKeyFor(uid);
+    if (!key) return { ok: false, motivo: 'sin_clave' };
+    if (!videoAbs || !fs.existsSync(videoAbs)) return { ok: false, motivo: 'sin_archivo' };
+    const chunks = Array.isArray(plan) ? plan : [];
+    const times = [];
+    const byBand = {};
+    for (const c of chunks) { (byBand[c.band] = byBand[c.band] || []).push(c); }
+    for (const band of Object.keys(byBand)) {
+      const list = byBand[band].slice().sort((a, b) => a.start - b.start);
+      list.forEach((c, i) => { if (i > 0) times.push(Math.min(c.start + 0.06, c.end - 0.02)); times.push((c.start + c.end) / 2); });
+    }
+    const uniq = [...new Set(times.map(t => Math.max(0.05, Math.round(t * 100) / 100)))].slice(0, 6);
+    if (!uniq.length) return { ok: false, motivo: 'sin_plan' };
+    const { execFile } = require('child_process');
+    const tmpDir = path.join(MEDIA_DIR, '.tmp-solape-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
+    fs.mkdirSync(tmpDir, { recursive: true });
+    try {
+      const imgs = [];
+      for (const t of uniq) {
+        const f = path.join(tmpDir, `f${imgs.length}.jpg`);
+        await new Promise((resolve, reject) => execFile('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', videoAbs, '-frames:v', '1', '-q:v', '4', f], { timeout: 20000 }, (err) => err ? reject(err) : resolve()));
+        if (!fs.existsSync(f)) return { ok: false, motivo: 'sin_frames' };
+        imgs.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${fs.readFileSync(f).toString('base64')}` } });
+      }
+      const prompt = 'Te muestro fotogramas de un video con textos quemados (gancho arriba, cierre abajo). '
+        + 'En cada fotograma puede haber UN texto por zona. El defecto a detectar: DOS textos distintos SUPERPUESTOS o PISADOS en la misma zona (uno fantasma o semitransparente sobre otro, letras encimadas que no se pueden leer). '
+        + 'Que un texto tenga dos líneas propias, una arriba de la otra bien separadas, NO es defecto. '
+        + 'Respondé SOLO con JSON: {"sin_solape": true|false, "motivo": "<breve>"} — sin_solape true solo si NINGÚN fotograma muestra textos pisados. Si dudás, false.';
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', max_tokens: 200, temperature: 0,
+          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, ...imgs] }],
+        }),
+        signal: AbortSignal.timeout(45000),
+      });
+      const j = await r.json().catch(() => null);
+      try { costs.trackUsage({ feature: 'vision-video-solape', userId: uid, model: 'gpt-4o-mini', json: j }); } catch (e) {}
+      const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (!m) return { ok: false, motivo: 'sin_veredicto' };
+      let v = null;
+      try { v = JSON.parse(m[0]); } catch (e) { v = null; }
+      if (!v) return { ok: false, motivo: 'sin_veredicto' };
+      return { ok: v.sin_solape === true, motivo: v.sin_solape === true ? 'verificado' : String(v.motivo || 'solape').slice(0, 120) };
+    } finally {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
+    }
+  } catch (e) { return { ok: false, motivo: 'error' }; }
+}
+// Ejecutor de rehacer-video: espejo de pzRegenParaPost para el medio
+// video. Re-renderiza desde la RECETA guardada con el plan de textos
+// estricto (el pedido de subtítulos se aplica como plan nuevo sin
+// solape), verifica los frames y devuelve la pieza nueva; el REEMPLAZO
+// lo hace el llamador (runner), guardando la versión anterior. Sin
+// receta/fuente/clave no hay pieza: issue honesto, nada se toca.
+async function pzRegenVideoParaPost({ uid, postId, pedido }) {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+  if (!post) return { issue: 'sin_fuente' };
+  if (post.status !== 'draft' && post.status !== 'scheduled') return { issue: 'ya_salio' };
+  const receta = pzRecetaDePost(post);
+  if (!receta) return { issue: 'sin_receta' };
+  let srcFile = String(receta.file || '');
+  if (!srcFile || !fs.existsSync(srcFile)) {
+    srcFile = '';
+    if (receta.asset_id) {
+      try {
+        const a = db.prepare('SELECT file_path FROM assets WHERE id = ? AND user_id = ?').get(Number(receta.asset_id), uid);
+        if (a && a.file_path) { const p = path.join(MEDIA_DIR, path.basename(String(a.file_path))); if (fs.existsSync(p)) srcFile = p; }
+      } catch (e) {}
+    }
+  }
+  if (!srcFile) return { issue: 'sin_fuente' };
+  // La verificación es fail-closed: sin clave no se reemplaza nada.
+  if (!openaiKeyFor(uid)) return { issue: 'sin_clave' };
+  const reelEngine = require('./reel-engine');
+  let built;
+  try {
+    built = await reelEngine.buildSingleClipReel({
+      mediaDir: MEDIA_DIR, file: srcFile,
+      hook: receta.hook || 'Mirá esto 👀', cta: receta.cta || 'Escribinos y te contamos más 👇',
+      handle: receta.handle || '', brandHex: receta.brandHex || '#2793C8',
+      mood: receta.mood || 'upbeat', musicSeed: receta.musicSeed || `${uid}:redo${postId}`,
+      strictSubtitles: true,
+    });
+  } catch (e) { console.error('[rehacer-video] render:', e.message); return { issue: 'fallo' }; }
+  if (!built || !built.url) return { issue: 'fallo' };
+  const ver = await verificarVideoSinSolape({ uid, videoAbs: built.file, plan: built.textPlan });
+  if (!ver.ok) {
+    console.log(`[rehacer-video] post ${postId}: verificación no aprobada (${ver.motivo}) — el video vigente no se toca`);
+    return { issue: 'video_no_verificado' };
+  }
+  return { newUrl: built.url, coverUrl: built.coverPath ? `/media/${path.basename(built.coverPath)}` : null, issue: null };
+}
+// Creador del trabajo durable «chat_cambio» (lo usan la red del chat,
+// el bloque redo y el consumidor del conserje): chequea la
+// imposibilidad DETERMINÍSTICA primero (medio no soportado, ya salió,
+// sin rehaces, sin receta) y, si el cambio es viable, crea el trabajo
+// + su estado visible en el hilo y lo ejecuta en background. Devuelve
+// { job } o { impossible: kind } — el llamador decide cómo se entrega
+// la imposibilidad en su superficie.
+function pzChatCambioCrearTrabajo({ uid, post, pedido, hilo }) {
+  try {
+    if (!uid || !post || !post.id) return null;
+    // Dedupe: un cambio ya en curso para este posteo es EL trabajo.
+    const reciente = db.prepare(`SELECT * FROM trabajos WHERE user_id = ? AND tipo = 'chat_cambio' AND post_id = ? AND estado = 'creando' AND datetime(created_at) > datetime('now', '-3 minutes') ORDER BY id DESC LIMIT 1`).get(uid, Number(post.id));
+    if (reciente) return { job: pzTrabajoPublico(reciente), jobId: Number(reciente.id), dedup: true };
+    const media = String(post.media_type || 'image');
+    if (media !== 'image' && media !== 'video') return { impossible: 'medio_no_soportado' };
+    if (post.status !== 'draft' && post.status !== 'scheduled') return { impossible: 'ya_salio' };
+    const ruta = pzChatCambioRuta(post, pedido);
+    if (ruta === 'foto') {
+      if (!String(post.image_path || '')) return { impossible: 'sin_fuente' };
+      const rl = redoLeftOf(post);
+      if (rl !== null && rl <= 0) return { impossible: 'sin_rehaces' };
+    }
+    if (ruta === 'video' && !pzRecetaDePost(post)) return { impossible: 'sin_receta' };
+    if (!ruta) return { impossible: 'medio_no_soportado' };
+    const en = langOfUser(uid) === 'en';
+    const estimado = ruta === 'video' ? 120 : ruta === 'foto' ? 60 : 45;
+    const ins = db.prepare(`INSERT INTO trabajos (user_id, tipo, estado, post_id, titulo, caption, estimado_seg, hilo) VALUES (?,?,?,?,?,?,?,?)`)
+      .run(uid, 'chat_cambio', 'creando', Number(post.id), pzPostTitulo(post), String(pedido || '').slice(0, 2000), estimado, hilo === 'post' ? 'post' : '');
+    const jobId = Number(ins.lastInsertRowid);
+    // El marcador es el de v847 ([creando-imagen:ID]): es el que el
+    // cliente ya sabe rendir como burbuja viva con poller — sin UI
+    // nueva; el texto visible es el del cambio, no el de la imagen.
+    const estadoTxt = en
+      ? `[creando-imagen:${jobId}] Making your change… usually takes ~1 minute`
+      : `[creando-imagen:${jobId}] Haciendo tu cambio… suele tardar ~1 minuto`;
+    const mId = pzChatMsgInsert(uid, estadoTxt, hilo === 'post' ? 'post' : '', Number(post.id));
+    if (mId) db.prepare('UPDATE trabajos SET mensaje_id = ? WHERE id = ?').run(mId, jobId);
+    setImmediate(() => { pzTrabajoChatCambioRun(jobId).catch(e => console.error('[trabajo-cambio] run:', e.message)); });
+    const row = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(jobId);
+    return { job: pzTrabajoPublico(row), jobId };
+  } catch (e) { console.error('[chat-cambio] crear:', e.message); return null; }
+}
+// Ejecuta un trabajo 'chat_cambio' en segundo plano. Mismo contrato
+// que pzTrabajoChatImagenRun: el settle es único (guarda de estado +
+// token de corrida en el éxito), el techo es 3 min (regla v851) y el
+// resultado — la pieza nueva o la línea honesta — queda en el MISMO
+// hilo donde se pidió (principal o el del posteo, según job.hilo).
+async function pzTrabajoChatCambioRun(jobId) {
+  const job = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(jobId);
+  if (!job || job.estado !== 'creando' || job.tipo !== 'chat_cambio') return;
+  const uid = job.user_id;
+  const en = langOfUser(uid) === 'en';
+  const runUpdatedAt = job.updated_at || '';
+  const hilo = job.hilo === 'post' ? 'post' : '';
+  const pedido = String(job.caption || '');
+  const insertMsg = (text) => pzChatMsgInsert(uid, text, hilo, Number(job.post_id) || 0);
+  const settleFallo = (kind) => {
+    try {
+      const up = db.prepare("UPDATE trabajos SET estado='fallo', error=?, updated_at=datetime('now') WHERE id=? AND estado='creando'").run(kind, job.id);
+      if (!up || !up.changes) return; // el barrido ya lo saldó
+      const mid = insertMsg(`[trabajo-fallo:${job.id}] ${pzTrabajoCambioFalloAmable(kind, en)}`);
+      if (mid) db.prepare('UPDATE trabajos SET mensaje_final_id = ? WHERE id = ?').run(mid, job.id);
+    } catch (e) { console.error('[trabajo-cambio] settle fallo:', e.message); }
+  };
+  const settleLista = (textoFinal) => {
+    try {
+      const up = db.prepare("UPDATE trabajos SET estado='lista', updated_at=datetime('now') WHERE id=? AND estado='creando' AND updated_at=?").run(job.id, runUpdatedAt);
+      if (!up || !up.changes) { console.log(`[trabajo-cambio] run ${job.id}: ya saldado por barrido/reintento, sin mensaje final`); return false; }
+      const mid = insertMsg(textoFinal);
+      if (mid) db.prepare('UPDATE trabajos SET mensaje_final_id=? WHERE id=?').run(mid, job.id);
+      return true;
+    } catch (e) { console.error('[trabajo-cambio] settle lista:', e.message); return false; }
+  };
+  const avisar = async (titulo) => {
+    try { await push.sendPush(uid, { title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo', body: titulo, url: '/#/app/chat', data: { trabajo_id: job.id } }); } catch (e) {}
+  };
+  const guardarVersion = (post) => {
+    try {
+      db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path, overlay_text) VALUES (?,?,?,?,?)`)
+        .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''), String(post.overlay_text || ''));
+    } catch (e) {}
+  };
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(Number(job.post_id) || 0, uid);
+    if (!post) { settleFallo('sin_fuente'); return; }
+    if (post.status !== 'draft' && post.status !== 'scheduled') { settleFallo('ya_salio'); return; }
+    const ruta = pzChatCambioRuta(post, pedido);
+    const timeoutP = new Promise((_, rej) => setTimeout(() => rej(new Error('tiempo_agotado')), 3 * 60 * 1000));
+    if (ruta === 'texto') {
+      const work = (async () => {
+        const key = openaiKeyFor(uid);
+        if (!key) return { issue: 'sin_clave' };
+        const input = contentInputFor(uid, pedido || pzPostTitulo(post), post.tipo || 'post', 0);
+        const content = await generateContent(input, key);
+        const cap = String((content && content.caption) || '').trim();
+        if (!cap) return { issue: 'fallo' };
+        guardarVersion(post);
+        db.prepare('UPDATE posts SET caption = ?, hashtags = ? WHERE id = ?').run(cap, String((content && content.hashtags) || post.hashtags || ''), post.id);
+        return { caption: cap };
+      })();
+      const r = await Promise.race([work, timeoutP]);
+      if (r.issue) { settleFallo(r.issue); return; }
+      if (settleLista((en ? 'Done: I gave your post a new text 👇\n' : 'Listo: le puse un texto nuevo a tu posteo 👇\n') + String(r.caption).slice(0, 400))) await avisar(pzPostTitulo(post));
+      return;
+    }
+    if (ruta === 'foto') {
+      const work = (async () => {
+        const rl = redoLeftOf(post);
+        if (rl !== null && rl <= 0) return { issue: 'sin_rehaces' };
+        const rr = await pzRegenParaPost({ uid, postId: post.id, capForImg: String(post.caption || ''), tipoForImg: post.tipo || '', pedido });
+        if (rr.issue) return { issue: rr.issue };
+        if (!rr.newPath) return { issue: 'fallo' };
+        if (rr.gate && rr.gate.qaGate && rr.gate.qaGate.outcome === 'bandeja') return { issue: 'revision' };
+        if (characterBlocksDelivery(rr.gate)) return { issue: 'revision' };
+        const cur = db.prepare('SELECT redo_left, media_type, image_path FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
+        guardarVersion(post);
+        if (redoLeftOf(cur) === null || consumeRedo(uid, post.id)) {
+          db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(String(rr.newPath), String((cur && cur.image_path) || ''), post.id);
+        }
+        return { newPath: String(rr.newPath) };
+      })();
+      const r = await Promise.race([work, timeoutP]);
+      if (r.issue) { settleFallo(r.issue); return; }
+      if (settleLista((en ? 'Done: here is your post with the change 💪' : 'Listo: acá está tu posteo con el cambio 💪') + ` [foto:${r.newPath}]`)) await avisar(pzPostTitulo(post));
+      return;
+    }
+    if (ruta === 'video') {
+      const work = (async () => {
+        const vr = await pzRegenVideoParaPost({ uid, postId: post.id, pedido });
+        if (vr.issue) return { issue: vr.issue };
+        guardarVersion(post);
+        if (vr.coverUrl) db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, cover_path = ? WHERE id = ?').run(vr.newUrl, String(post.image_path || ''), vr.coverUrl, post.id);
+        else db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(vr.newUrl, String(post.image_path || ''), post.id);
+        return { newUrl: vr.newUrl };
+      })();
+      const r = await Promise.race([work, timeoutP]);
+      if (r.issue) { settleFallo(r.issue); return; }
+      if (settleLista((en ? 'Done: I redid your post\'s video with the change you asked for 👇' : 'Listo: rehice el video de tu posteo con el cambio que pediste 👇') + ` [video-listo:${post.id}:${r.newUrl}]`)) await avisar(pzPostTitulo(post));
+      return;
+    }
+    settleFallo('medio_no_soportado');
+  } catch (e) {
+    const msg = String((e && e.message) || '');
+    if (/tiempo_agotado/.test(msg)) settleFallo('tiempo_agotado');
+    else if (/AiCapExceeded|tope/i.test(msg)) settleFallo('tope');
+    else if (/Sin clave de OpenAI/i.test(msg)) settleFallo('sin_clave');
+    else { console.error('[trabajo-cambio] run:', msg); settleFallo('fallo'); }
+  }
+}
+// LA RED ANTI-PROMESA (pieza central): corre DESPUÉS de aplicar los
+// bloques, ANTES del res.json — el espejo de pzChatImagenSiFalta para
+// CAMBIOS sobre un posteo. Si el turno pidió un cambio sobre UN posteo
+// (ancla o cita) y no se aplicó ningún trabajo, la prosa del cerebro
+// no se entrega: se crea el trabajo durable y el estado es la
+// respuesta; si el cambio es imposible, el trabajo nace y cierra en el
+// acto con el recibo honesto (la prosa guardada se REEMPLAZA por el
+// recibo) y el pedido queda registrado en el conserje con el motivo.
+function pzChatCambioSiFalta({ uid, clean, out, anchorId, anyWork, savedReplyId, proseSnap }) {
+  try {
+    if (anyWork) return null;
+    // Duda legal: el cerebro preguntó con opciones tocables — no es
+    // una promesa suelta y la red no lo toca (límite declarado).
+    if (out && Array.isArray(out.options) && out.options.length) return null;
+    const lastUser = (Array.isArray(clean) ? clean : []).filter(m => m && m.role === 'user').pop();
+    const lastText = lastUser ? String(lastUser.text || '') : '';
+    if (!pzChatPedidoDeCambio(lastText)) return null;
+    // Resolver el posteo SOLO con evidencia explícita (ancla de la
+    // tile o cita que matchea un posteo): sin evidencia no se inventa.
+    let post = null;
+    const anc = Number(anchorId || 0);
+    if (anc > 0) post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(anc, uid) || null;
+    if (!post) { try { post = chatQuotedPostMatch(db, uid, lastText) || null; } catch (e) { post = null; } }
+    if (!post) return null;
+    const en = langOfUser(uid) === 'en';
+    const r = pzChatCambioCrearTrabajo({ uid, post, pedido: lastText, hilo: '' });
+    if (r && r.job) {
+      // La promesa sale del hilo: se borra SOLO la fila que el turno
+      // guardó al inicio (id + texto exactos, verificados).
+      try {
+        if (savedReplyId) {
+          const row = db.prepare('SELECT id, text FROM chat_messages WHERE id = ?').get(Number(savedReplyId));
+          if (row && String(row.text) === String(proseSnap || '')) db.prepare('DELETE FROM chat_messages WHERE id = ?').run(Number(savedReplyId));
+        }
+      } catch (e) { console.error('[chat-cambio] borrar prosa:', e.message); }
+      if (out) out.reply = '';
+      return { trabajo: r.job, postId: Number(post.id) };
+    }
+    if (r && r.impossible) {
+      const honesto = pzTrabajoCambioFalloAmable(r.impossible, en);
+      const ins = db.prepare(`INSERT INTO trabajos (user_id, tipo, estado, post_id, titulo, caption, estimado_seg, hilo, error) VALUES (?,?,?,?,?,?,0,'',?)`)
+        .run(uid, 'chat_cambio', 'fallo', Number(post.id), pzPostTitulo(post), lastText.slice(0, 2000), r.impossible);
+      const jobId = Number(ins.lastInsertRowid);
+      const finalText = `[trabajo-fallo:${jobId}] ${honesto}`;
+      let mid = 0;
+      try {
+        if (savedReplyId) {
+          const row = db.prepare('SELECT id, text FROM chat_messages WHERE id = ?').get(Number(savedReplyId));
+          if (row && String(row.text) === String(proseSnap || '')) {
+            db.prepare('UPDATE chat_messages SET text = ? WHERE id = ?').run(finalText.slice(0, 3000), Number(savedReplyId));
+            mid = Number(savedReplyId);
+          }
+        }
+      } catch (e) {}
+      if (!mid) mid = pzChatMsgInsert(uid, finalText, '', 0) || 0;
+      if (mid) db.prepare('UPDATE trabajos SET mensaje_final_id = ? WHERE id = ?').run(mid, jobId);
+      if (out) out.reply = finalText;
+      // Registro en el conserje con el motivo: la copia del pedido en
+      // el hilo del posteo + el recibo honesto como su respuesta + la
+      // decisión del sistema (descartado) — visible en pedidos-voz.
+      try {
+        const uIns = db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?,?,?,?,?)').run(uid, 'user', lastText.slice(0, 3000), 'post', Number(post.id));
+        const copiaId = Number(uIns.lastInsertRowid);
+        db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?,?,?,?,?)').run(uid, 'assistant', honesto.slice(0, 3000), 'post', Number(post.id));
+        supportCases.decideVoiceRequest(db, { messageId: copiaId, decision: 'descartado' });
+      } catch (e) { console.error('[chat-cambio] registro conserje:', e.message); }
+      return { trabajo: null, postId: Number(post.id), imposible: r.impossible };
+    }
+    return null;
+  } catch (e) { console.error('[chat-cambio] net:', e.message); return null; }
+}
+
 // Red anti-silencio: corre DESPUÉS de aplicar los bloques, ANTES del res.json.
 // Si el cliente pidió la imagen explícita y el turno no produjo ninguna, el
 // SERVIDOR crea el trabajo + el estado en el hilo y lo ejecuta en segundo
@@ -8372,6 +8821,17 @@ app.post('/api/ideas/chat', async (req, res) => {
     // sesiones. Solo rutas /media/ reales, tope 10 (máximo de un carrusel).
     chatInsertUser(db, uid, clean[clean.length - 1].text, chatReply, JSON.stringify(userPhotos));
     pzChatSaveReply(db, uid, out.reply);
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA) Snapshot de la prosa que guardó el
+    // turno: si la red anti-promesa caza un pedido de cambio sin trabajo
+    // aplicado, esta fila se BORRA (trabajo en marcha) o su texto se
+    // REEMPLAZA por el recibo honesto (imposible) — la promesa nunca
+    // queda en el hilo como si fuera el resultado.
+    const pzProseSnap = String((out && out.reply) || '').slice(0, 3000);
+    let pzSavedReplyId = null;
+    try {
+      const lastReplyRow = db.prepare("SELECT id, text FROM chat_messages WHERE user_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1").get(uid);
+      if (lastReplyRow && String(lastReplyRow.text) === pzProseSnap) pzSavedReplyId = Number(lastReplyRow.id);
+    } catch (e) {}
     if (out.idea) {
       db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
       // Pedido de fotos/video (1 vez por semana): registrar cuándo se pidió
@@ -8858,6 +9318,10 @@ app.post('/api/ideas/chat', async (req, res) => {
     // Video/reel/carrusel: por chat solo se rehace el texto (la imagen no se
     // regenera sobre un video).
     let redoneApplied = null;
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA) Trabajo de cambio nacido del propio
+    // bloque redo (video con receta): cuenta como trabajo aplicado para
+    // el res.json y para la red anti-promesa.
+    let trabajoCambio = null;
     if (Array.isArray(out.redos) && out.redos.length) {
       const redone = [];
       // (REHACER-ANCLADO) El pedido literal del turno: decide si la
@@ -8924,7 +9388,18 @@ app.post('/api/ideas/chat', async (req, res) => {
           continue;
         }
         if (post.status !== 'draft' && post.status !== 'scheduled') continue;
-        if (media !== 'image' && !textChange) { editIssues.push({ kind: 'redo_media', title: chatTitle(post) }); continue; }
+        // (LOTE PEDIDO-CHAT-SE-EJECUTA) El VIDEO ya no se frena en
+        // silencio: con receta guardada nace el trabajo durable que lo
+        // re-renderiza (su estado vive en este mismo chat); sin receta
+        // queda la línea honesta redo_media de siempre. El resto de los
+        // medios no-image sigue cayendo ahí.
+        if (media !== 'image' && !textChange) {
+          if (media === 'video') {
+            const ct = pzChatCambioCrearTrabajo({ uid, post, pedido: redoPedidoTxt, hilo: '' });
+            if (ct && ct.job) { trabajoCambio = ct.job; cambioPostIds.push(post.id); continue; }
+          }
+          editIssues.push({ kind: 'redo_media', title: chatTitle(post) }); continue;
+        }
         // En su lugar: guardar versión anterior si cambia el texto o si se
         // rehace la imagen. Sin esto, un rehacer solo de imagen no deja
         // rastro y «volver atrás» pierde la imagen anterior (y la medición
@@ -8980,6 +9455,15 @@ app.post('/api/ideas/chat', async (req, res) => {
         // deja 'cambio' en cm_gusto y su línea visible en el recibo.
         try { cmGusto.registrar(db, uid, post, 'cambio'); } catch (e) {}
         try { learnedLines.push(sabeSiempre.lineaAprendi(chatTitle(post), 'cambio')); } catch (e) {}
+        // (LOTE PEDIDO-CHAT-SE-EJECUTA) El redo de un VIDEO cambió solo
+        // el texto (el executor histórico) — pero si el PEDIDO habla del
+        // video (subtítulos/textos quemados), ese medio no se tocó:
+        // nace el trabajo durable que lo re-renderiza.
+        if (media === 'video' && pzChatPedidoSobreVideo(redoPedidoTxt)) {
+          const ct = pzChatCambioCrearTrabajo({ uid, post, pedido: redoPedidoTxt, hilo: '' });
+          if (ct && ct.job) { trabajoCambio = ct.job; cambioPostIds.push(post.id); }
+          else editIssues.push({ kind: 'redo_media', title: chatTitle(post) });
+        }
         redone.push({ title: chatTitle(post), copy: false, image: media === 'image' ? imageDone : false });
         cambioPostIds.push(post.id); // (v849) rehacer en su lugar → avisa al dueño
       }
@@ -9071,6 +9555,17 @@ app.post('/api/ideas/chat', async (req, res) => {
     // el trabajo + el estado en el hilo. Nunca silencio.
     let trabajoImagen = null;
     try { trabajoImagen = pzChatImagenSiFalta({ uid, clean, out, createdApplied, editApplied, anchorId: Number(anchor_post_id || 0) }); } catch (e) { console.error('[chat-imagen] net:', e.message); }
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA) La red anti-promesa corre tras
+    // todos los caminos de trabajo: si el turno pidió un cambio sobre
+    // un posteo y nada se aplicó, la prosa del cerebro no sale — nace
+    // el trabajo o el recibo honesto (ver pzChatCambioSiFalta). El
+    // posteo tocado va a la notificación al dueño (v849).
+    const trabajoCambioNet = pzChatCambioSiFalta({
+      uid, clean, out, anchorId: anchorPostId,
+      anyWork: createdApplied || editApplied || publishApplied || revertApplied || approveApplied || (approveAllApplied !== null) || rejectApplied || duplicateApplied || redoneApplied || trabajoImagen || trabajoCambio || vozPost || (editIssues && editIssues.length > 0),
+      savedReplyId: pzSavedReplyId, proseSnap: pzProseSnap,
+    });
+    if (trabajoCambioNet && trabajoCambioNet.postId) cambioPostIds.push(trabajoCambioNet.postId);
     // (v849) NOTIFICACIÓN AL DUEÑO: el cliente pidió un cambio de posteo
     // (edit, rehacer o volver atrás aplicados en este turno). Una push por
     // turno, con el primer posteo cambiado; aprobaciones, publicaciones,
@@ -9088,7 +9583,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     // corre después de responder, nunca frena el chat; si falla (sin
     // clave, LLM caído, timeout), no se guarda nada y nada cambia.
     try { setImmediate(() => { try { memoriaCliente.extraerYGuardar(db, uid, openaiKeyFor(uid)).catch(() => {}); } catch (e) {} }); } catch (e) {}
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen || trabajoCambio || (trabajoCambioNet && trabajoCambioNet.trabajo) || null, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: FT('Uh, me trabé un segundo 😅 Dame otro intento que esta sale', 'Uh, I got stuck for a second 😅 Give me another try, this one will work') });
@@ -9120,12 +9615,19 @@ app.post('/api/trabajos/:id/reintentar', requireAuth, express.json(), (req, res)
     const en = langOfUser(uid) === 'en';
     const up = db.prepare("UPDATE trabajos SET estado='creando', error='', mensaje_final_id=NULL, updated_at=datetime('now') WHERE id=? AND estado IN ('fallo','creando')").run(t.id);
     if (!up || !up.changes) return res.status(409).json({ ok: false, error: 'no_reintentable', estado: t.estado });
-    const estadoTxt = en
-      ? `[creando-imagen:${t.id}] Creating your image again… usually takes ~1 minute`
-      : `[creando-imagen:${t.id}] Creando tu imagen de nuevo… suele tardar ~1 minuto`;
-    const mIns = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', estadoTxt.slice(0, 3000));
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA) El reintento despacha por tipo: un
+    // trabajo de CAMBIO se re-ejecuta con SU runner y su estado en SU
+    // hilo; el camino de la imagen queda byte-igual.
+    const esCambioR = t.tipo === 'chat_cambio';
+    const estadoTxt = esCambioR
+      ? (en ? `[creando-imagen:${t.id}] Making your change again… usually takes ~1 minute` : `[creando-imagen:${t.id}] Haciendo tu cambio de nuevo… suele tardar ~1 minuto`)
+      : (en ? `[creando-imagen:${t.id}] Creating your image again… usually takes ~1 minute` : `[creando-imagen:${t.id}] Creando tu imagen de nuevo… suele tardar ~1 minuto`);
+    const mIns = (esCambioR && t.hilo === 'post' && t.post_id)
+      ? db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?,?,?,?,?)').run(uid, 'assistant', estadoTxt.slice(0, 3000), 'post', Number(t.post_id))
+      : db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', estadoTxt.slice(0, 3000));
     db.prepare('UPDATE trabajos SET mensaje_id = ? WHERE id = ?').run(Number(mIns.lastInsertRowid), t.id);
-    setImmediate(() => { pzTrabajoChatImagenRun(t.id).catch(e => console.error('[trabajo] run:', e.message)); });
+    if (esCambioR) setImmediate(() => { pzTrabajoChatCambioRun(t.id).catch(e => console.error('[trabajo-cambio] run:', e.message)); });
+    else setImmediate(() => { pzTrabajoChatImagenRun(t.id).catch(e => console.error('[trabajo] run:', e.message)); });
     const row = db.prepare('SELECT * FROM trabajos WHERE id = ?').get(t.id);
     return res.json({ ok: true, trabajo: pzTrabajoPublico(row) });
   } catch (e) { console.error('[trabajo] reintentar:', e.message); return res.status(500).json({ ok: false, error: 'error' }); }
@@ -11133,6 +11635,31 @@ app.post('/api/admin/support/conserje/pedidos-voz/decidir', requireAdminToken, (
     const b = req.body || {};
     const r = supportCases.decideVoiceRequest(db, { messageId: b.message_id, decision: b.decision });
     if (!r.ok) return res.status(400).json(r);
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA · pieza 5) Consumidor del conserje
+    // para hilo='post': APROBAR un pedido de cambio sobre un posteo
+    // DISPARA el ejecutor correspondiente (el mismo camino que la red
+    // del chat: trabajo durable «chat_cambio» con estado y resultado en
+    // el hilo del posteo, visible también acá vía el bloque posteo).
+    // Si el cambio es imposible, el motivo honesto queda en el hilo.
+    // Antes aprobar solo persistía la decisión y nada pasaba.
+    if (b.decision === 'aprobado') {
+      try {
+        const msg = db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(Number(b.message_id) || 0);
+        if (msg && msg.hilo === 'post' && Number(msg.post_id) > 0) {
+          const uidC = Number(msg.user_id);
+          const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(Number(msg.post_id), uidC);
+          if (post) {
+            const ct = pzChatCambioCrearTrabajo({ uid: uidC, post, pedido: String(msg.text || ''), hilo: 'post' });
+            if (ct && ct.job) r.cambio = { trabajo: ct.job };
+            else if (ct && ct.impossible) {
+              const honesto = pzTrabajoCambioFalloAmable(ct.impossible, langOfUser(uidC) === 'en');
+              pzChatMsgInsert(uidC, honesto, 'post', Number(post.id));
+              r.cambio = { imposible: ct.impossible };
+            } else r.cambio = { imposible: 'fallo' };
+          } else r.cambio = { imposible: 'sin_fuente' };
+        }
+      } catch (e) { console.error('[conserje] disparar cambio:', e.message); }
+    }
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
@@ -15631,18 +16158,30 @@ async function buildClientVideoReelPost(uid, asset, source, over) {
     // catálogo CC0 de reels). Sin elección, el ánimo del rubro de siempre.
     const mood = (over && ['upbeat', 'chill', 'groove'].includes(String(over.mood || ''))) ? String(over.mood) : reelEngine.moodForCategory(profile.category);
     const weekKey = mondayKeyOf(tzToday(userTz(uid)));
+    const srcFile = (over && over.procesadoAbs) ? String(over.procesadoAbs) : path.join(MEDIA_DIR, path.basename(String(asset.file_path)));
     const built = await reelEngine.buildSingleClipReel({
       mediaDir: MEDIA_DIR,
-      file: (over && over.procesadoAbs) ? String(over.procesadoAbs) : path.join(MEDIA_DIR, path.basename(String(asset.file_path))),
+      file: srcFile,
       hook: headline || 'Mirá esto 👀',
       cta: 'Escribinos y te contamos más 👇',
       handle: igUser ? '@' + igUser : '',
       brandHex, mood, musicSeed: `${uid}:${weekKey}`,
     });
     const coverPath = built.coverPath ? `/media/${path.basename(built.coverPath)}` : (asset.thumb_path || '');
-    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, cover_path)
-      VALUES (?,?,?,?, 'draft', 'video', ?, ?, 1, ?, 'reel', 'Reel creado desde el video real que subió el cliente', ?)`)
-      .run(uid, built.url, caption, hashtags, trainingWheelsActive(uid) ? 1 : 0, source, weekKey, coverPath);
+    // (LOTE PEDIDO-CHAT-SE-EJECUTA · pieza 1) La RECETA del reel queda
+    // guardada en el posteo y el asset linkeado (asset_id + file): es lo
+    // que el ejecutor de rehacer-video consume para re-renderizar fiel
+    // cuando el cliente pida un cambio. Antes la receta se descartaba
+    // al crear y el asset ni siquiera quedaba linkeado.
+    const receta = JSON.stringify({
+      v: 1, kind: 'single-clip', file: srcFile, asset_id: asset && asset.id ? Number(asset.id) : null,
+      hook: headline || 'Mirá esto 👀', cta: 'Escribinos y te contamos más 👇',
+      handle: igUser ? '@' + igUser : '', brandHex, mood, musicSeed: `${uid}:${weekKey}`,
+      source, created_at: new Date().toISOString(),
+    });
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why, cover_path, reel_receta)
+      VALUES (?,?,?,?, 'draft', 'video', ?, ?, 1, ?, 'reel', 'Reel creado desde el video real que subió el cliente', ?, ?)`)
+      .run(uid, built.url, caption, hashtags, trainingWheelsActive(uid) ? 1 : 0, source, weekKey, coverPath, receta);
     console.log(`[album-video] usuario ${uid}: video ${asset.id} → reel protagonista ${ins.lastInsertRowid} (${built.duration}s${built.clientAudio ? ', audio del cliente' : built.music ? ', con música' : ''}) 🎬`);
     return { postId: ins.lastInsertRowid, url: built.url, cover: coverPath, duration: built.duration };
   } finally {
@@ -42039,7 +42578,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1076';
+const BUILD_ID = '20261105-v1077';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

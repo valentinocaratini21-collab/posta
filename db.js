@@ -192,6 +192,12 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN rg_producto TEXT DEFAULT ''`); } cat
 // promociona, escena, huella del prompt (hash) y el veredicto de la
 // comparación contra el posteo anterior de la cuenta.
 try { db.exec(`ALTER TABLE posts ADD COLUMN creatividad TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE PEDIDO-CHAT-SE-EJECUTA · pieza 1) Receta durable del reel de un
+// clip (JSON): fuente, hook, cta, handle, brandHex, mood y seed con los
+// que buildClientVideoReelPost rindió el video del posteo. Sin receta
+// no hay re-render fiel: el ejecutor de rehacer-video la consume y su
+// ausencia es la imposibilidad honesta «sin_receta».
+try { db.exec(`ALTER TABLE posts ADD COLUMN reel_receta TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN rg_procedencia TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
@@ -1501,6 +1507,10 @@ CREATE TABLE IF NOT EXISTS chat_seen_photos (
   PRIMARY KEY (user_id, photo_hash)
 );
 `);
+// (LOTE PEDIDO-CHAT-SE-EJECUTA) Contexto de hilo de un trabajo del chat:
+// '' = hilo principal; 'post' = el resultado se asienta en el hilo del
+// posteo (hilo='post' + post_id), visible en el conserje.
+try { db.exec(`ALTER TABLE trabajos ADD COLUMN hilo TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE CHAT-678 · 6 y 7) Posteo compartido al chat (post_id) y grupo de
 // fotos del mensaje (photos_json: ["/media/..."]): viajan con el mensaje
 // para que el chat los muestre y Posty sepa de qué posteo se habla.
