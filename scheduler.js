@@ -1188,6 +1188,23 @@ function startScheduler(db) {
     console.log('[posta] Regla 24h (auto-arm borradores viejos): cada hora y 17 (Buenos Aires)');
   } catch (e) { console.error('[auto-arm 24h] no se pudo programar:', e.message); }
 
+  // (LOTE SERIE-FEED-PROPIO) Alerta de la pieza de serie dormida: cada
+  // hora y 07 (no pisa el :17 de la regla 24h), el barrido mira las
+  // series gobernadas de las cuentas registradas y deja en el registro
+  // del equipo (support_team_log, visible en el conserje) la pieza que
+  // sigue en borrador al acercarse su día derivado — víspera / hoy /
+  // atrasada, una por episodio (idempotente). Mismo patrón de carga
+  // perezosa que la regla 24h.
+  try {
+    cron.schedule('7 * * * *', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.serieFeedSweep === 'function') srv.serieFeedSweep();
+      } catch (e) { console.error('[serie-feed]', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Alerta de serie (pieza dormida): cada hora y 07 (Buenos Aires)');
+  } catch (e) { console.error('[serie-feed] no se pudo programar:', e.message); }
+
   // --- Posty Pro: stories automáticas, community y contenido reactivo ---
   try {
     cron.schedule('0 12 * * *', () => {

@@ -30,6 +30,7 @@ const supportCases = require('./support-cases');
 const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
 const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + candados C1–C5
+const serieFeed = require('./serie-feed'); // (LOTE SERIE-FEED-PROPIO) el DÍA de cada pieza en la serie del feed registrado: mapa derivado + candado + alerta
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
 // Observabilidad dogfood (2026-10-05): los errores de imagen del dogfood van
@@ -17695,18 +17696,31 @@ function subirPlanDia(uid, kind, cuando, opts) {
   // un día libre para el desplazamiento: el posteo de Posty que cede su
   // día a un Subir salta los días frenados como salta los ocupados.
   const stops = dayStopsSet(uid);
+  // (LOTE SERIE-FEED-PROPIO) Los días RESERVADOS por la serie del feed
+  // (borradores gobernados con día derivado) tampoco son días libres
+  // para una subida — misma clase que los day_stops: la subida cae en
+  // el próximo día libre y el recibo honesto dice ese día, como
+  // siempre. Se piden las semanas que Subir toca: la actual y la
+  // siguiente.
+  let serieReservadosSubir = new Set();
+  try { serieReservadosSubir = serieFeed.diasReservadosSerie(db, uid, tz, [monday, shiftDays(monday, 7)]); } catch (e) { /* sin mapa: Subir sigue como siempre */ }
   const librePosteriorEnSemana = (k) => {
     const sun = shiftDays(mondayKeyOf(k), 6);
-    for (let d = shiftDays(k, 1); d <= sun; d = shiftDays(d, 1)) { if (d < todayK) continue; if (closed.has(weekdayOfYmd(d))) continue; if (stops.has(d)) continue; if (!taken.has(d)) return d; }
+    for (let d = shiftDays(k, 1); d <= sun; d = shiftDays(d, 1)) { if (d < todayK) continue; if (closed.has(weekdayOfYmd(d))) continue; if (stops.has(d)) continue; if (serieReservadosSubir.has(d)) continue; if (!taken.has(d)) return d; }
     return null;
   };
   const intentar = (k) => {
     if (k < todayK || closed.has(weekdayOfYmd(k))) return null;
+    if (serieReservadosSubir.has(k)) return null;
     if (k === todayK) { const isoT = zonedWallToUtc(k + ' ' + hhmm, tz); if (!isoT || new Date(isoT).getTime() <= Date.now()) return null; }
     if (kind === 'video' && !diaValido(k)) return null;
     const occ = taken.get(k);
     if (!occ) return { iso: zonedWallToUtc(k + ' ' + hhmm, tz), mover: null };
     if (subirEsDeCliente(occ) || occ.pinned) return null;
+    // (LOTE SERIE-FEED-PROPIO) Una pieza gobernada ya programada (el
+    // ANCLA de su serie) no se desplaza para hacerle lugar a una
+    // subida: se la trata como lo fijado — la subida busca otro día.
+    try { if (serieFeed.esPiezaGobernada(db, occ, tz)) return null; } catch (e) {}
     const occMs = Date.parse(String(occ.scheduled_at || '').replace(' ', 'T') + (String(occ.scheduled_at || '').endsWith('Z') ? '' : 'Z'));
     if (!occMs || occMs <= Date.now()) return null;
     const dest = librePosteriorEnSemana(k);
@@ -20565,6 +20579,32 @@ async function ensureTodayPost(uid, tz, now) {
       let sched = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
       let rec = morningPostPush.pickTodayPost(sched, tz, at);
       if (rec) return { ok: true, post: rec, fuente: 'programado' };
+      // 1.5) (LOTE SERIE-FEED-PROPIO) Borrador de la SERIE con día
+      // derivado HOY: en una semana gobernada de un registrado, el día
+      // de cada pieza es un patrón cerrado — si hoy es el día derivado
+      // de una pieza de la serie que sigue en borrador, ese día es DE
+      // ESA PIEZA. Se la coloca con programarHoy (su credencial es el
+      // mapa, no su nacimiento: no se le exige created_at de hoy ni
+      // formato imagen — la serie incluye el video). Si no es
+      // promovible (sin media utilizable o en revisión), el día queda
+      // bloqueado con el motivo honesto 'dia_de_serie' y NO se genera
+      // un extranjero: el 679 del 14/11 nació exactamente por este
+      // hueco, y la pieza dormida la levanta la alerta de serie
+      // (serieFeedSweep), no un reemplazo. Va DESPUÉS del paso 1 (lo
+      // ya programado manda) y DESPUÉS de los frenos (publishing_
+      // stopped y day_stop de hoy ya devolvieron arriba).
+      try {
+        const duena = serieFeed.piezaDuenaDelDia(db, uid, hoy, tz);
+        if (duena) {
+          const promovible = !!(duena.image_path && String(duena.image_path).trim())
+            && Number(duena.needs_review || 0) === 0;
+          if (promovible) {
+            const progS = programarHoy(uid, duena.id, tz, hoy);
+            if (progS) return { ok: true, post: progS, fuente: 'borrador_serie' };
+          }
+          return { ok: false, reason: 'dia_de_serie' };
+        }
+      } catch (e) { /* sin mapa legible: el ensure sigue su curso */ }
       // 2) Borrador de hoy (creado hoy, con imagen, no rechazado): se
       // programa a la best_hour. El contenido ya existe: no consume
       // generación ni se re-evalúa el cupo.
@@ -20585,8 +20625,17 @@ async function ensureTodayPost(uid, tz, now) {
         }
       } catch (e) { /* sin borrador: se genera */ }
       if (draft) {
-        const prog = programarHoy(uid, draft.id, tz, hoy);
-        if (prog) return { ok: true, post: prog, fuente: 'borrador' };
+        // (LOTE SERIE-FEED-PROPIO) Defensa en profundidad del paso
+        // 1.5: un borrador GOBERNADO cuyo día derivado es OTRO día no
+        // se promueve hoy aunque haya nacido hoy — promoverlo lo
+        // desliza fuera de su serie. (Si hoy fuera su día, el paso
+        // 1.5 ya lo trató.)
+        let diaSerieDraft = null;
+        try { diaSerieDraft = serieFeed.diaDerivadoDe(db, draft, tz); } catch (e) {}
+        if (!diaSerieDraft || diaSerieDraft === hoy) {
+          const prog = programarHoy(uid, draft.id, tz, hoy);
+          if (prog) return { ok: true, post: prog, fuente: 'borrador' };
+        }
       }
       // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) La
       // prueba NO se desplaza: si la secuencia de la prueba (días 1–3,
@@ -20607,6 +20656,11 @@ async function ensureTodayPost(uid, tz, now) {
       } catch (e) { /* sin lectura de prueba: el pipeline decide */ }
       // 3) Nada hoy: generar UNO. Cupo semanal de feed: sin cupo no se
       // genera (límite honesto del plan, igual que /api/ritual/elegir).
+      // (LOTE SERIE-FEED-PROPIO) Guarda de generación: si hoy quedó
+      // RESERVADO por la serie (el paso 1.5 ya trató a la dueña; esto
+      // cubre el mapa que cambió entre pasos), NO se genera un posteo
+      // extranjero para hoy.
+      try { if (serieFeed.piezaDuenaDelDia(db, uid, hoy, tz)) return { ok: false, reason: 'dia_de_serie' }; } catch (e) {}
       try {
         const q = quotaFor(uid, 'image');
         if (q && q.left <= 0) return { ok: false, reason: 'plan_limit' };
@@ -23908,6 +23962,45 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
   // resurgimiento del 586: el «no sale» del conserje volvía agendado
   // al primer hueco). Si no quedan días, el borrador espera.
   try { for (const dkStop of dayStopsSet(uid)) taken.add(dkStop); } catch (e) { /* no bloquea */ }
+  // (LOTE SERIE-FEED-PROPIO) Los días RESERVADOS por la serie de un
+  // feed registrado entran como días ocupados para toda pieza ajena, y
+  // cada pieza gobernada queda restringida a SU día derivado. El mapa
+  // se computa UNA vez por llamada, sobre las semanas presentes en los
+  // borradores recibidos (más la corriente); sin semana gobernada,
+  // ambos conjuntos quedan vacíos y esta función es la de siempre.
+  // takenAntesSerie guarda los ocupados REALES (programados + stops)
+  // antes de sumar las reservas: la dueña consulta ESE set para saber
+  // si su propio día sigue libre (su reserva no la bloquea a ella).
+  const takenAntesSerie = new Set(taken);
+  const serieReservados = new Set();
+  const serieDiaPorPost = new Map();
+  const serieDiaGanado = new Map();
+  try {
+    const semanasSerie = new Set([curMonday]);
+    for (const dS of drafts) {
+      if (dS && typeof dS.week_key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dS.week_key)) semanasSerie.add(mondayKeyOf(dS.week_key));
+    }
+    for (const wkS of semanasSerie) {
+      const mapaS = serieFeed.mapaDiasSerie(db, uid, wkS, tz);
+      if (!mapaS || !mapaS.gobernada) continue;
+      for (const dkS of mapaS.reservados) { serieReservados.add(dkS); taken.add(dkS); }
+      // ¿El día derivado de cada pieza es un día GANADO por la serie?
+      // (hay un ANCLA de esa semana en un día ANTERIOR: la serie ya
+      // fluyó por el feed y la pieza quedó del lado de atrás). Sin
+      // ancla anterior, un día derivado en el pasado es solo el frente
+      // vacío de una semana que nunca arrancó — no una pieza que
+      // perdió su día.
+      const diasAnclaS = [];
+      for (const [apidS, adkS] of mapaS.porPost) {
+        const apS = mapaS.porId.get(apidS);
+        if (apS && (apS.status === 'published' || apS.status === 'scheduled')) diasAnclaS.push(adkS);
+      }
+      for (const [pidS, dkS] of mapaS.porPost) {
+        if (!serieDiaPorPost.has(pidS)) serieDiaPorPost.set(pidS, dkS);
+        if (!serieDiaGanado.has(pidS)) serieDiaGanado.set(pidS, diasAnclaS.some((aS) => aS < dkS));
+      }
+    }
+  } catch (e) { /* sin mapa legible: el planificador sigue como siempre */ }
   // DIRECCIÓN DE FEED (v332): si el director compuso alguna de estas
   // semanas, el orden de salida de las piezas FEED es el compuesto (las
   // historias conservan el suyo). El mapa de slots no cambia — días y
@@ -23990,6 +24083,51 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
       waiting.push({ id: d.id, week_key: monday, reason: 'plan_limit' });
       continue;
     }
+    // (LOTE SERIE-FEED-PROPIO) La pieza GOBERNADA solo cae en SU día
+    // derivado: deslizarla al primer día libre rompería la serie en
+    // silencio (su día lo tomaría otro y ella saldría corrida). Si su
+    // día no está libre o no es válido (ocupado de verdad, cerrado,
+    // pasado, o hoy con la hora ya pasada), espera con su motivo y la
+    // alerta de serie la pone frente al operador. Única salida al
+    // escaneo normal: día derivado en el pasado SIN ancla anterior en
+    // su semana (serieDiaGanado) — ahí la semana nunca arrancó y no
+    // hay día perdido que proteger.
+    const diaSerieD = (!isStory && serieDiaPorPost.has(d.id)) ? serieDiaPorPost.get(d.id) : null;
+    let serieResuelta = false;
+    if (diaSerieD) {
+      const candS = zonedWallToUtc(`${diaSerieD} ${String(hour).padStart(2, '0')}:00`, tz);
+      const validaS = !takenAntesSerie.has(diaSerieD)
+        && !closedSet.has(weekdayOfYmd(diaSerieD))
+        && !!candS && ymdInTz(candS, tz) === diaSerieD
+        && !(diaSerieD < today)
+        && !(diaSerieD === today && Date.parse(candS) <= Date.now());
+      if (validaS) {
+        taken.add(diaSerieD);
+        pools.consume(monday, poolKey);
+        apply(candS, d);
+        if (opts && opts.signal === 'auto') {
+          try { recordAutoSignal(uid, d); } catch (e) { /* no bloquea */ }
+        } else {
+          try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
+        }
+        scheduled.push({ id: d.id, scheduled_at: candS, week_key: monday });
+        serieResuelta = true;
+      } else if (diaSerieD < today && !serieDiaGanado.get(d.id)) {
+        // Día derivado en el pasado pero SIN serie corrida detrás
+        // (ningún ancla de su semana en un día anterior): es el frente
+        // vacío de una semana que nunca arrancó — la composición que
+        // el propio schedule-all acaba de escribir gobierna la semana
+        // sin que el feed haya fluido —, no una pieza que perdió su
+        // día. Cae al escaneo normal de siempre; si la serie HUBIERA
+        // fluido (ancla anterior), esperaría con serie_dia_propio y
+        // la alerta atrasada la nombraría.
+        serieResuelta = false;
+      } else {
+        waiting.push({ id: d.id, week_key: monday, reason: 'serie_dia_propio', dia: diaSerieD });
+        serieResuelta = true;
+      }
+    }
+    if (serieResuelta) continue;
     // Primer día libre dentro de SU semana (desde mañana si es la actual).
     // 🚪 Los días de cierre se saltan siempre: si los abiertos no alcanzan,
     // la semana sale con menos posteos — jamás se viola un cierre.
@@ -24177,6 +24315,37 @@ function scheduleAllDrafts(uid) {
     return { ok: false, reason, scheduled: [], waiting, gateFailed };
   }
   return { ok: true, scheduled, waiting, gateFailed };
+}
+
+// (LOTE SERIE-FEED-PROPIO) Barrido de la ALERTA de serie: la pieza de
+// una serie gobernada que sigue en borrador al acercarse su día
+// derivado HABLA — registro del equipo (support_team_log vía
+// logTeamAction, visible en la sección «🗂 Eventos del equipo» del
+// conserje) — en vez de dormir en silencio hasta que el hueco se nota
+// en el feed (era la otra mitad del incidente del 14/11: nadie supo que
+// el 653 seguía en borrador). El núcleo de decisión es puro y
+// deduplicado (serie-feed.alertasSerie: una por pieza, nivel y día
+// derivado); acá se escribe, re-verificando que la pieza SIGA en
+// borrador al insertar. Sin push al dueño: la alerta es del operador.
+// El scheduler lo corre cada hora y 07 (patrón autoArmStaleDrafts).
+function serieFeedSweep() {
+  try {
+    const alertas = serieFeed.alertasSerie(db, new Date(), {
+      tzDe: (u) => userTz(u),
+      bestHourDe: (u) => bestHourDe(u),
+    });
+    let emitidas = 0;
+    for (const a of alertas) {
+      try {
+        const p = db.prepare('SELECT status FROM posts WHERE id = ?').get(a.post_id);
+        if (!p || p.status !== 'draft') continue;
+        supportCases.logTeamAction(db, { actor: 'sistema', action: a.action, userId: a.user_id, postId: a.post_id, detalle: a.detalle });
+        emitidas++;
+      } catch (e) { /* una alerta caída no frena el barrido */ }
+    }
+    if (emitidas) console.log(`[serie-feed] ${emitidas} alerta(s) de pieza de serie dormida`);
+    return { ok: true, emitidas };
+  } catch (e) { console.error('[serie-feed] sweep:', e.message); return { ok: false, emitidas: 0 }; }
 }
 
 // Arma la semana sola: genera historias/reels del plan sobre los borradores,
@@ -43386,7 +43555,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1093';
+const BUILD_ID = '20261105-v1094';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -44077,4 +44246,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
+module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, serieFeedSweep, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
