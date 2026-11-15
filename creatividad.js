@@ -124,9 +124,18 @@ function normNombre(s) {
 function estrellasDeDigest(digest, estrellaPrincipal) {
   const out = [];
   const seen = new Set();
+  // (LOTE SOULCYCLE-CIERRE-2) Un fragmento de precio («From USD»,
+  // «USD») jamás entra a la rotación de estrellas del diseño: es el
+  // resto de una línea de precio, no un producto. La guarda vive en
+  // client-digest (require perezoso, como el de sales-brain allá,
+  // para no crear un ciclo de módulos); sin la guarda disponible,
+  // la lista sale como siempre.
+  let esFragmentoPrecio = null;
+  try { const cd = require('./client-digest'); if (cd && typeof cd.isPriceFragmentName === 'function') esFragmentoPrecio = cd.isPriceFragmentName; } catch (e) { esFragmentoPrecio = null; }
   const push = (nombre) => {
     const n = String(nombre || '').trim();
     if (!n) return;
+    if (esFragmentoPrecio && esFragmentoPrecio(n)) return;
     const k = normNombre(n);
     if (!k || seen.has(k)) return;
     seen.add(k); out.push(n);

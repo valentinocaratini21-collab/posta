@@ -889,7 +889,9 @@ function itemHasProductEvidence(digest, itemName) {
 function starNamedEvidenceOk(digest, name) {
   const s = String(name || '').trim();
   if (!s) return false;
-  if (isGenericCategoryName(s) || isChromeDerivedName(s) || isCreditRoleName(s)) return false;
+  // (LOTE SOULCYCLE-CIERRE-2) Un fragmento de precio tampoco es
+  // evidencia de nombre propio: «From USD» no valida estrella.
+  if (isGenericCategoryName(s) || isChromeDerivedName(s) || isCreditRoleName(s) || isPriceFragmentName(s)) return false;
   if (!digest || !Array.isArray(digest.productos_nombrados)) return true;
   const tn = tnBlockOf(digest);
   if (tn) {
@@ -976,6 +978,41 @@ function isSiteLabelName(raw) {
   for (const p of SITE_LABEL_PREFIX) if (n === p.trim() || n.startsWith(p)) return true;
   return false;
 }
+/* (LOTE SOULCYCLE-CIERRE-2 — corrida SoulCycle, 15/11) CLASE
+ * «FRAGMENTO DE PRECIO»: una cadena con forma de precio NO es un
+ * producto — es el resto de una línea de precio de la tienda del que
+ * el minero separó el número («From $38.00» → nombre «From USD»,
+ * precio «$38.00») o la moneda pelada («USD» con precio «$47.00»).
+ * En la corrida, «From USD» entró a productos, ancló el slot 0 de la
+ * semana («Try From USD today») y el registro del primer posteo la
+ * coronó estrella sin confirmar. Gemelo del «Infused» de Blind
+ * Barber: basura minada que ninguna puerta reconocía como clase.
+ * La forma es de RESTO VACÍO: se tokeniza el nombre normalizado y
+ * cada token tiene que ser material de precio — dígitos puros,
+ * moneda (código o palabra) o pegamento de precio (from/desde/a
+ * partir de/to/hasta/starting/only…) — y tiene que haber al menos
+ * un token FUERTE (dígito o moneda). Si queda UN token de contenido,
+ * no es un fragmento: un producto real cuyo nombre contiene un
+ * número o una moneda como parte de su identidad («Air Max 90»,
+ * «212 VIP», «Peso Pluma», la cerveza «Sol») NO se toca — la guarda
+ * apunta a fragmentos minados de textos de precio, no a nombres. */
+const PRICE_FRAGMENT_CURRENCIES = new Set(['usd', 'eur', 'gbp', 'ars', 'mxn', 'clp', 'cop', 'uyu', 'brl', 'cad', 'aud', 'chf', 'jpy', 'cny', 'inr', 'nzd', 'hkd', 'sgd', 'sek', 'nok', 'dkk', 'pln', 'zar', 'krw',
+  'dollar', 'dollars', 'dolar', 'dolares', 'euro', 'euros', 'peso', 'pesos', 'soles', 'libra', 'libras', 'yen', 'yuan', 'reales']);
+const PRICE_FRAGMENT_GLUE = new Set(['from', 'desde', 'a', 'de', 'del', 'partir', 'to', 'hasta', 'starting', 'at', 'only', 'solo', 'por', 'per', 'x', 'us']);
+function isPriceFragmentName(raw) {
+  const s = String((raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : (raw || '')).trim();
+  if (!s) return false;
+  const n = norm(s);
+  if (!n) return false;
+  let strong = 0;
+  for (const t of n.split(' ').filter(Boolean)) {
+    if (/^\d+$/.test(t)) { strong++; continue; }
+    if (PRICE_FRAGMENT_CURRENCIES.has(t)) { strong++; continue; }
+    if (PRICE_FRAGMENT_GLUE.has(t)) continue;
+    return false; // queda contenido: es un nombre, no un fragmento
+  }
+  return strong > 0;
+}
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
   return String(v || '').replace(/\s+/g, ' ')
@@ -1029,6 +1066,11 @@ function isPlausibleOfferItem(raw) {
   // sección, navegación): jamás es un ítem de la oferta — la lista de
   // productos que alimenta la estrella sale limpia de rótulos.
   if (isSiteLabelName(s)) return false;
+  // (LOTE SOULCYCLE-CIERRE-2) Fragmento de precio («From USD»,
+  // «USD», «From $38.00»): es el resto de una línea de precio de la
+  // tienda, no algo que el negocio venda — jamás es un ítem de la
+  // oferta, así ninguna lista que alimenta a la estrella lo trae.
+  if (isPriceFragmentName(s)) return false;
   // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 3)
   // TRES CLASES DE BASURA que los filtros vigentes no cubrían y que
   // en la corrida entraron como «productos»:
@@ -1980,7 +2022,9 @@ function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
   // (LOTE INGESTA) Igual para un nombre de sección del sitio: un tema
   // que viene del cromo («Customer Services», «Dirty Soda Value Menu»)
   // nunca es estrella, aunque encabece el catálogo.
-  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)) && !isChromeDerivedName(String(x.nombre || x)) && !isCreditRoleName(String(x.nombre || x)));
+  // (LOTE SOULCYCLE-CIERRE-2) Ni un fragmento de precio: «From USD»
+  // encabezando el catálogo sumaba prominencia y coronaba.
+  const list = (items || []).filter((x) => x && (x.nombre || x) && !isGenericCategoryName(String(x.nombre || x)) && !isChromeDerivedName(String(x.nombre || x)) && !isCreditRoleName(String(x.nombre || x)) && !isPriceFragmentName(String(x.nombre || x)));
   if (!list.length) return null;
   const caps = (captions || []).slice(0, 20);
   const scored = list.map((it) => {
@@ -2368,6 +2412,31 @@ function brandCromoTextoOf(digest, key) {
   return (typeof bp.cromo_texto === 'string' && bp.cromo_texto) ? bp.cromo_texto : null;
 }
 
+/* (LOTE SOULCYCLE-CIERRE-2) EL ANCLA SIN CONFIRMAR: el ítem que el
+ * diseño usaría para abrir la semana si nadie preguntara — el
+ * primero de productos/servicios que pasa LA MISMA barra que la
+ * compilación de temas (admisión, sin cromo/rol/fragmento de precio,
+ * sin stock afuera, corroboración de nombre). Si la inferida existe
+ * y pasa la barra, el ancla es ella: es la hipótesis de estrella más
+ * cercana que el fundamento tiene. Sin ítem que pase, no hay ancla:
+ * el wow degrada honesto como siempre y no hay nada que confirmar. */
+function anclaSinConfirmarOf(d) {
+  if (!d || typeof d !== 'object') return '';
+  const name = (x) => String((x && (x.nombre || x)) || '').trim();
+  let items = [...(d.productos || []), ...(d.servicios || [])]
+    .filter((x) => x && (x.nombre || x));
+  items = items.filter((x) => !isVetoText(name(x), d.onboarding) && isPlausibleOfferItem(name(x)) && !isChromeDerivedName(name(x)) && !isCreditRoleName(name(x)));
+  const oos = tnOutOfStockNames(d);
+  if (oos.length) items = items.filter((x) => !tnNameMatch(name(x), oos));
+  items = items.filter((x) => namedItemCorroborated(d, name(x)));
+  const inf = d.inferred_star;
+  if (inf && inf.item) {
+    const hit = items.find((x) => sameItemName(name(x), String(inf.item)));
+    if (hit) return name(hit);
+  }
+  return items.length ? name(items[0]) : '';
+}
+
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
  * estrella inferido se CONFIRMA con un toque y cada contradicción se
  * resuelve preguntando — leer propone, el dueño valida. */
@@ -2428,13 +2497,41 @@ function questionCandidatesOf(d) {
   // VALIDA contra lo evidenciado (duenoStarEvidenceMatch): una
   // respuesta genérica descartada por L3 («proyecto») no la suprime.
   const starDelDueno = (d.dueno && d.dueno.estrella && duenoStarEvidenceMatch(d, d.dueno.estrella)) || (star && star.fuente === 'dueno');
+  let estrellaPreguntada = false;
   if (star && star.item && (star.confidence || 0) >= 0.5 && !starDelDueno) {
+    estrellaPreguntada = true;
     // (LOTE FUNDAMENTO-QUE-DUDA · diagnóstico Blind Barber, punto 5.3)
     // La candidata nace TAMBIÉN cuando la única evidencia es
     // intra-caption: evidencia débil = duda, no estrella silenciosa.
     // `debil` lo marca: la estrella no se afirma como hecho en
     // ninguna superficie hasta que el dueño la confirme.
     out.push({ tipo: 'estrella', item: star.item, debil: !starNamedEvidenceOk(d, star.item), texto: `tu producto estrella es ${star.item}?` });
+  }
+  // (LOTE SOULCYCLE-CIERRE-2) LA ESTRELLA SIN CONFIRMAR NO ABRE EN
+  // SILENCIO: en la corrida SoulCycle no había estrella inferida
+  // (la candidata de arriba nunca nació: question_candidates salió
+  // []) y aun así el diseño abrió la semana anclado en productos[0]
+  // — una estrella de hecho, sin confirmar y sin pregunta, y encima
+  // un fragmento de precio. Si no hay estrella CONFIRMADA
+  // (effectiveStarOf), ni INSIGNIA válida (insigniaOf), ni candidata
+  // de inferida, pero el diseño abriría anclado en un ítem
+  // (anclaSinConfirmarOf), ese ancla ES una estrella sin confirmar:
+  // nace esta candidata y la puerta de la prueba (trialPreguntaGate)
+  // pregunta ANTES de armar, con las opciones de un toque de siempre
+  // (el ancla + los ítems reales del fundamento). Con «seguir sin
+  // responder» la semana sigue degradada (star_missing), como hoy:
+  // lo que no vuelve a pasar es que abra sin que la duda exista.
+  if (!estrellaPreguntada && !starDelDueno) {
+    let eff = null;
+    try { eff = effectiveStarOf(d); } catch (e) { eff = null; }
+    if (!eff) {
+      let ins = null;
+      try { ins = insigniaOf(d); } catch (e) { ins = null; }
+      if (!ins) {
+        const ancla = anclaSinConfirmarOf(d);
+        if (ancla) out.push({ tipo: 'estrella', item: ancla, debil: true, sin_confirmar: true, motivo: 'ancla_sin_confirmar', texto: `tu producto estrella es ${ancla}?` });
+      }
+    }
   }
   const preciosDueno = (d.dueno && d.dueno.precios && typeof d.dueno.precios === 'object') ? d.dueno.precios : {};
   for (const c of (d.contradictions || []).slice(0, 2)) {
@@ -2507,10 +2604,15 @@ function trialQuestionFor(digest, opts) {
     }
     if (c.tipo === 'estrella') {
       if (answered.estrella) continue;
+      // (LOTE SOULCYCLE-CIERRE-2) La puerta jamás ofrece un fragmento
+      // de precio como respuesta de un toque (ni como candidata de un
+      // digest legado, ni como opción desde productos): el dueño no
+      // puede «confirmar» el resto de una línea de precio.
+      if (isPriceFragmentName(c.item)) continue;
       const opciones = [];
       const pushOp = (raw) => {
         const v = String((raw && (raw.nombre || raw)) || '').trim();
-        if (v && !opciones.some((x) => sameItemName(x, v))) opciones.push(v);
+        if (v && !isPriceFragmentName(v) && !opciones.some((x) => sameItemName(x, v))) opciones.push(v);
       };
       pushOp(c.item);
       for (const it of [...(digest.productos || []), ...(digest.servicios || [])]) {
@@ -4312,6 +4414,9 @@ module.exports = {
   isGenericAnchorName,
   // (LOTE INGESTA) Guarda de cromo: nombre de sección, no producto.
   isChromeDerivedName,
+  // (LOTE SOULCYCLE-CIERRE-2) Guarda de fragmento de precio: una
+  // cadena con forma de precio jamás corona (testeable).
+  isPriceFragmentName,
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
   lexDiceFor, voicePhraseFor,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible, sanitizeLogoIntegrado, logoIntegradoOf, sanitizeDigestLogo, digestLogoOf,
