@@ -29441,6 +29441,65 @@ async function rescuePieceWithSeal(opts) {
 // dentro de rescuePieceWithSeal) — el re-arme no abre gasto nuevo.
 const SEMANA_REARME_MAX_PASADAS = 6;
 const SEMANA_REARME_DELAY_MS = 60 * 1000;
+// (LOTE SOULCYCLE-CIERRE-7 · presupuesto que alcanza para la primera
+// imagen) EL DIAGNÓSTICO (re-corrida SoulCycle, guest 104): el tope
+// de gasto del demo es un pote GLOBAL diario (costs.demoAiCapOk,
+// USD 10/día para TODAS las pruebas), no un presupuesto por semana;
+// el día de la re-corrida el pote ya estaba agotado cuando la semana
+// nació (44 imágenes demo-ai en el ledger del día, USD 11,00 solo en
+// imágenes) y la cadena selló 'tope-de-gasto' en las 5 piezas durante
+// 5 cadenas observadas, quemando USD 0 en esos ciclos pero ciclando
+// para siempre — el barrido la seguía re-abriendo horas después, y
+// al renovarse el tope la misma semana (insumo sin confirmar) iba a
+// quemar el pote del día siguiente. Tres reglas nuevas:
+// (1) FIRMA DE INTENTO por pieza: si el insumo no cambió (mismo
+// digest, mismo archivo de logo, mismo titular), un veredicto que ya
+// costó generaciones declarar — 'logo-qa' · 'qa-concepto' — NO se
+// re-compra en la pasada siguiente: la pieza conserva su veredicto
+// sin llamar a la generación. (Los frenos gratuitos — sin archivo
+// de logo, sin insumos — no gastan y siguen su curso; los motivos
+// transitorios — generacion-fallo · compuesto-fallo · error-cadena —
+// reintentan como siempre.)
+// (2) EL TOPE NO SE CICLA: una pasada que no completó nada y selló
+// 'tope-de-gasto' (o piezas omitidas por firma) en TODAS las
+// pendientes cierra la cadena en esa pasada, sin espaciar las 6
+// pasadas en chequeos instantáneos; y el re-enganche (barrido,
+// resumidor, entrada del invitado) no re-abre la cadena mientras el
+// pote siga muerto y las piezas ya declaren ese tope.
+// (3) CAMINO Y ESCALACIÓN: cada cierre de cadena sin completar
+// ninguna pieza por un bloqueo declarado (tope o veredicto de
+// insumo) suma al contador de la semana (payload.rescate_cierres);
+// a los RESCATE_ESCALA_CIERRES cierres, la semana ESCALA: cada pieza
+// declara estado 'escalado' con su motivo y el payload registra la
+// escalación con su DESBLOQUEO nombrado. El barrido no la re-abre
+// mientras la firma global no cambie; si el insumo cambia (aparece
+// el logo, cambia el digest), la escalación se levanta y la cadena
+// re-abre — ese es el camino real de terminación. La semana nunca
+// se declara incompleta: la escalación es el estado interno del
+// equipo, con el motivo y el desbloqueo a la vista en el payload.
+const RESCATE_MOTIVOS_SIN_REGASTO = new Set(['logo-qa', 'qa-concepto']);
+const RESCATE_MOTIVOS_BLOQUEO = new Set(['tope-de-gasto', 'logo-qa', 'qa-concepto', 'sin-archivo-de-logo', 'sin-insumos']);
+const RESCATE_ESCALA_CIERRES = 3;
+function rescateFirmaPieza(digestHash, logoPath, headline) {
+  try {
+    return crypto.createHash('sha1').update(String(digestHash || '') + '|' + path.basename(String(logoPath || '')) + '|' + String(headline || '')).digest('hex').slice(0, 16);
+  } catch (e) { return ''; }
+}
+function rescateFirmaGlobal(digestHash, logoPath) {
+  try {
+    return crypto.createHash('sha1').update(String(digestHash || '') + '|' + path.basename(String(logoPath || ''))).digest('hex').slice(0, 16);
+  } catch (e) { return ''; }
+}
+function rescateDesbloqueoPara(motivo) {
+  switch (motivo) {
+    case 'sin-archivo-de-logo': return 'falta el logo real del negocio: cuando el archivo aparezca (la foto de perfil o el logo del sitio), la cadena se re-abre sola';
+    case 'tope-de-gasto': return 'el tope diario de IA del demo se agotó sin completar ninguna pieza: la semana se re-abre cuando el tope se renueve; si se repite, hay que revisar el tope o la quema previa del día';
+    case 'logo-qa': return 'el logo real no pasa la verificación sobre este diseño: hace falta el archivo correcto del logo o la confirmación del dueño';
+    case 'qa-concepto': return 'el concepto no pasa su QA con este insumo: hace falta material real del negocio o la respuesta del dueño';
+    case 'sin-insumos': return 'faltan insumos del diseño (prompt o directorio de trabajo): hace falta regenerar la semana desde el fundamento';
+    default: return 'el bloqueo sigue declarado en cada pieza: la cadena se re-abre cuando cambie el insumo (logo o fundamento)';
+  }
+}
 const semanaRearmeTokens = new Map(); // cacheKey -> token vigente
 // (LOTE LOGO-PRUEBA-REARME · puntos 1 y 4) Estado vivo de las cadenas:
 // qué semanas tienen una cadena TRABAJANDO ahora (para que el
@@ -29508,10 +29567,24 @@ async function scheduleWeekRescue(o) {
     // la cadena Detalle lo devuelve y acá se persiste en la pieza
     // (abajo) — nunca más un null pelado que deja la pieza sin causa.
     const motivosRescate = new Map(); // idx -> motivo
+    // (LOTE SOULCYCLE-CIERRE-7) Firma del insumo por pieza y piezas
+    // OMITIDAS de esta pasada: las que ya traen un veredicto que costó
+    // generaciones (logo-qa · qa-concepto) sobre ESTA misma firma no
+    // se re-compran — conservan su veredicto sin llamar a la cadena.
+    const firmasRescate = new Map(); // idx -> firma del insumo
+    const omitidasRescate = new Set(); // idx omitidos por firma idéntica
     try {
       for (const piece of o.pieces) {
         const idx = piece.idx | 0;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
+        const firmaIdx = rescateFirmaPieza(o.digestHash, o.logoPath, piece.headline || '');
+        if (firmaIdx) firmasRescate.set(idx, firmaIdx);
+        const rescatePrev = payload.posts[idx].rescate || null;
+        if (firmaIdx && rescatePrev && rescatePrev.firma === firmaIdx && RESCATE_MOTIVOS_SIN_REGASTO.has(rescatePrev.motivo)) {
+          motivosRescate.set(idx, rescatePrev.motivo);
+          omitidasRescate.add(idx);
+          continue;
+        }
         const rd = await rescuePieceWithSealDetalle({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '', textoFeed: (payload && payload.digest && payload.digest.texto_feed) || null }).catch(() => ({ ok: false, motivo: 'error-cadena' }));
         if (!rd || !rd.ok) { motivosRescate.set(idx, (rd && rd.motivo) || 'error-cadena'); continue; }
         const r = rd;
@@ -29522,7 +29595,7 @@ async function scheduleWeekRescue(o) {
         if (!fresh || !Array.isArray(fresh.posts)) break;
         payload = fresh;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
-        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) }, rescate: { estado: 'completada', motivo: null, at: Date.now() } };
+        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) }, rescate: { estado: 'completada', motivo: null, firma: firmasRescate.get(idx) || null, at: Date.now() } };
         if (payload.design && Array.isArray(payload.design.posts) && payload.design.posts[idx]) payload.design.posts[idx].photo_source = 'ai-generated';
         if (idx === 0 && payload.primer_posteo) {
           payload.primer_posteo.etapa = 'fondo';
@@ -29559,7 +29632,11 @@ async function scheduleWeekRescue(o) {
           let tocoM = false;
           for (const [idxM, motivoM] of motivosRescate) {
             if (finM.posts[idxM] && finM.posts[idxM].armando === true) {
-              finM.posts[idxM] = { ...finM.posts[idxM], rescate: { estado: 'trabajando', motivo: motivoM, at: Date.now() } };
+              // (LOTE SOULCYCLE-CIERRE-7) La pieza OMITIDA por firma
+              // no trabajó en esta pasada: queda 'detenido' con su
+              // veredicto (no 'trabajando'); y todo sello lleva la
+              // firma del insumo que lo produjo.
+              finM.posts[idxM] = { ...finM.posts[idxM], rescate: { estado: omitidasRescate.has(idxM) ? 'detenido' : 'trabajando', motivo: motivoM, firma: firmasRescate.get(idxM) || (finM.posts[idxM].rescate && finM.posts[idxM].rescate.firma) || null, at: Date.now() } };
               tocoM = true;
               if (Array.isArray(finM.rescate_semana)) {
                 const entM = finM.rescate_semana.find((x) => x && x.idx === idxM);
@@ -29706,12 +29783,51 @@ async function scheduleWeekRescue(o) {
               const idxD = pc.idx | 0;
               if (!finR.posts[idxD] || finR.posts[idxD].armando !== true) continue;
               const motivoD = motivosRescate.get(idxD) || motivoFallback;
-              finR.posts[idxD] = { ...finR.posts[idxD], rescate: { estado: 'detenido', motivo: motivoD, at: Date.now() } };
+              finR.posts[idxD] = { ...finR.posts[idxD], rescate: { estado: 'detenido', motivo: motivoD, firma: firmasRescate.get(idxD) || (finR.posts[idxD].rescate && finR.posts[idxD].rescate.firma) || null, at: Date.now() } };
               tocoD = true;
               if (Array.isArray(finR.rescate_semana)) {
                 const entD = finR.rescate_semana.find((x) => x && x.idx === idxD);
                 if (entD) { entD.estado = 'detenido'; entD.motivo = motivoD; tocoD = true; }
               }
+            }
+            // (LOTE SOULCYCLE-CIERRE-7) CONTADOR DE CIERRES Y
+            // ESCALACIÓN: un cierre cuenta solo si esta cadena no
+            // completó ninguna pieza (applied === 0) y TODAS las
+            // pendientes cerraron por un bloqueo declarado (tope o
+            // veredicto de insumo — los motivos transitorios no
+            // escalan: la infraestructura caída se reintenta, no se
+            // declara). Si alguna pieza se completó en la cadena, el
+            // contador vuelve a cero. Al llegar a
+            // RESCATE_ESCALA_CIERRES cierres sin completar ninguna
+            // pieza de la semana, la semana ESCALA: cada pendiente
+            // declara estado 'escalado' con su motivo y el payload
+            // registra la escalación con su desbloqueo nombrado y
+            // la firma global vigente — el barrido no la re-abre
+            // mientras esa firma no cambie.
+            const motivosPendD = pendR.map((pc) => motivosRescate.get(pc.idx | 0) || motivoFallback);
+            const cuentaCierreD = applied === 0 && motivosPendD.length > 0 && motivosPendD.every((m) => RESCATE_MOTIVOS_BLOQUEO.has(m));
+            let cierresD = (finR.rescate_cierres && finR.rescate_cierres.n | 0) || 0;
+            if (applied > 0) cierresD = 0;
+            else if (cuentaCierreD) cierresD += 1;
+            if (!finR.rescate_cierres || finR.rescate_cierres.n !== cierresD) { finR.rescate_cierres = { n: cierresD, at: Date.now() }; tocoD = true; }
+            const ningunaCompletadaD = finR.posts.every((p) => !(p && p.armando === false && p.image));
+            if (cuentaCierreD && cierresD >= RESCATE_ESCALA_CIERRES && ningunaCompletadaD && !finR.escalacion) {
+              const conteoMotivosD = {};
+              for (const m of motivosPendD) conteoMotivosD[m] = (conteoMotivosD[m] || 0) + 1;
+              const motivoDomD = Object.keys(conteoMotivosD).sort((a, b) => conteoMotivosD[b] - conteoMotivosD[a])[0] || motivoFallback;
+              for (const pc of pendR) {
+                const idxE = pc.idx | 0;
+                if (!finR.posts[idxE] || finR.posts[idxE].armando !== true) continue;
+                const motivoE = motivosRescate.get(idxE) || motivoFallback;
+                finR.posts[idxE] = { ...finR.posts[idxE], rescate: { estado: 'escalado', motivo: motivoE, firma: firmasRescate.get(idxE) || (finR.posts[idxE].rescate && finR.posts[idxE].rescate.firma) || null, at: Date.now() } };
+                if (Array.isArray(finR.rescate_semana)) {
+                  const entE = finR.rescate_semana.find((x) => x && x.idx === idxE);
+                  if (entE) { entE.estado = 'escalado'; entE.motivo = motivoE; }
+                }
+              }
+              finR.escalacion = { motivo: motivoDomD, desbloqueo: rescateDesbloqueoPara(motivoDomD), cierres: cierresD, firma: rescateFirmaGlobal(o.digestHash, o.logoPath), at: Date.now() };
+              tocoD = true;
+              console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: la semana ESCALA tras ${cierresD} cierres sin completar ninguna pieza — motivo ${motivoDomD}; desbloqueo: ${finR.escalacion.desbloqueo}`);
             }
             if (tocoD) db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(finR), Date.now());
           } catch (e) { /* la declaración jamás frena el rescate */ }
@@ -29720,6 +29836,21 @@ async function scheduleWeekRescue(o) {
           semanaRearmeToken(o.cacheKey, true); // semana completa: la cadena se cierra
           semanaCadenasVivas.delete(o.cacheKey);
           semanaRearmeEstado.delete(o.cacheKey);
+        } else if (applied === 0 && pendR.every((pc) => omitidasRescate.has(pc.idx | 0) || motivosRescate.get(pc.idx | 0) === 'tope-de-gasto')) {
+          // (LOTE SOULCYCLE-CIERRE-7) CIERRE SIN RE-GASTO: esta
+          // pasada no completó nada y ninguna pendiente puede
+          // cambiar de resultado en la pasada siguiente — todas
+          // sellaron 'tope-de-gasto' (el pote está muerto: los
+          // chequeos siguientes serían instantáneos e idénticos) o
+          // fueron omitidas por firma (su veredicto ya está
+          // declarado sobre este mismo insumo). La cadena se cierra
+          // ACÁ, en una pasada, con el motivo declarado por pieza;
+          // el re-enganche la re-abre cuando el pote vuelva o el
+          // insumo cambie — no espacia 6 pasadas de teatro.
+          semanaCadenasVivas.delete(o.cacheKey);
+          semanaRearmeEstado.delete(o.cacheKey);
+          declararRescateDetenido('tope-de-gasto');
+          console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: cierre sin re-gasto — ninguna pieza puede cambiar en la pasada siguiente (tope de gasto u omisión por firma); la cadena se detiene con el motivo declarado en ${pendR.length} pieza(s)`);
         } else {
           const logoR0 = trialLogoAbsPath(finR.digest) || o.logoPath || null;
           const sigR = pendR.map((p) => p.idx | 0).sort((a, b) => a - b).join(',') + '|' + (logoR0 ? 'con-logo' : 'sin-logo');
@@ -29848,6 +29979,41 @@ async function rearmarSemanaPruebaPorCacheKey(cacheKey) {
     if (!pendIdx.length) return { pendientes: 0, pendIdx: [], rearmada: false };
     if (semanaCadenasVivas.has(cacheKey)) return { pendientes: pendIdx.length, pendIdx, rearmada: false, viva: true };
     const logoPath = (await refrescarLogoPrueba(cacheKey).catch(() => null)) || trialLogoAbsPath(payload.digest);
+    // (LOTE SOULCYCLE-CIERRE-7) LA ESCALACIÓN SE LEVANTA SOLO CON
+    // INSUMO NUEVO: si la semana escaló y la firma global (digest +
+    // archivo de logo) es la misma que al escalar, no se re-abre —
+    // el barrido, el resumidor y la entrada devuelven el estado
+    // declarado sin teatro de cadena. Si la firma cambió (apareció
+    // el logo, cambió el digest), la escalación se levanta, el
+    // contador vuelve a cero y la cadena re-abre: el camino real.
+    const firmaGlobalR = rescateFirmaGlobal((payload.digest && payload.digest.hash) || '', logoPath);
+    if (payload.escalacion) {
+      if (payload.escalacion.firma === firmaGlobalR) {
+        return { pendientes: pendIdx.length, pendIdx, rearmada: false, escalada: true, motivo: payload.escalacion.motivo || null };
+      }
+      try {
+        delete payload.escalacion;
+        payload.rescate_cierres = { n: 0, at: Date.now() };
+        for (const i of pendIdx) {
+          if (payload.posts[i] && payload.posts[i].rescate && payload.posts[i].rescate.estado === 'escalado') {
+            payload.posts[i] = { ...payload.posts[i], rescate: { ...payload.posts[i].rescate, estado: 'detenido' } };
+          }
+        }
+        db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(cacheKey, JSON.stringify(payload), Date.now());
+        console.log(`[posta] re-enganche: la semana de ${cacheKey} cambió de insumo — la escalación se levanta y la cadena re-abre`);
+      } catch (e) { /* si el levantamiento no persiste, la firma nueva igual manda en la próxima lectura */ }
+    }
+    // (LOTE SOULCYCLE-CIERRE-7) EL POTE MUERTO NO SE CICLA: si el
+    // tope del demo está agotado y TODAS las pendientes ya declaran
+    // 'tope-de-gasto', re-abrir sería espaciar chequeos idénticos —
+    // no se abre. La semana queda con su motivo declarado y el
+    // barrido la re-abre cuando el pote vuelva (un día nuevo, o si
+    // el gasto baja del tope).
+    let capVivoR = true;
+    try { capVivoR = costs.demoAiCapOk(); } catch (e) { capVivoR = false; }
+    if (!capVivoR && pendIdx.every((i) => payload.posts[i].rescate && payload.posts[i].rescate.estado === 'detenido' && payload.posts[i].rescate.motivo === 'tope-de-gasto')) {
+      return { pendientes: pendIdx.length, pendIdx, rearmada: false, tope: true };
+    }
     const specPosts = (payload.design && Array.isArray(payload.design.posts)) ? payload.design.posts : [];
     const pieces = pendIdx.map((i) => {
       const spI = specPosts[i] || {};
@@ -43953,7 +44119,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1106';
+const BUILD_ID = '20261105-v1107';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
