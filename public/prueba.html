@@ -173,7 +173,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // (la estrella elegida como producto_estrella; el rubro como
   // category + rubro_src='pregunta'; el salteo como pregunta_<tipo>).
   var askWrap = $('fAskWrap'), askQ = $('fAskQ'), askOpts = $('fAskOpts'), askSkipBtn = $('fAskSkip');
-  var pendingPregunta = null, askRubroAnswer = null, askSkipStar = false, askSkipRubro = false;
+  var pendingPregunta = null, askRubroAnswer = null, askSkipStar = false, askSkipRubro = false, askConflictoVista = '';
   // (LOTE L2 · FALLBACK HONESTO DE IDIOMA) La elección del idioma de la
   // marca, cuando el servidor la pide (falta_idioma_marca): queda pegada
   // para los reenvíos de esta visita, como la estrella.
@@ -235,6 +235,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         // la prueba también sobreviven la recarga: una respuesta ya
         // dada no se vuelve a preguntar.
         askRubro: askRubroAnswer || null, askSkipStar: !!askSkipStar, askSkipRubro: !!askSkipRubro,
+        // (LOTE SOULCYCLE-CIERRE-5) La declaración que la pregunta
+        // del conflicto mostró también sobrevive la recarga.
+        askConflictoVista: askConflictoVista || '',
       }));
     } catch (e) {}
   }
@@ -590,6 +593,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   function showAsk() {
     var p = pendingPregunta;
     if (!p) return;
+    // (LOTE SOULCYCLE-CIERRE-5) Si la pregunta es el conflicto de la
+    // estrella del dueño, se guarda la declaración que mostró: el
+    // reenvío la devuelve como estrella_conflicto_vista y el
+    // servidor distingue la reafirmación (vuelve la misma palabra)
+    // de una respuesta nueva. Otra pregunta la limpia.
+    askConflictoVista = (p.motivo === 'estrella_dueno_sin_encaje' && p.declarada) ? String(p.declarada) : '';
     askQ.textContent = p.texto || '';
     askOpts.innerHTML = '';
     if (p.tipo === 'rubro') {
@@ -685,6 +694,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       fd.append('rubro_src', 'pregunta');
     } else if (askSkipRubro) fd.append('pregunta_rubro', 'skip');
     if (askSkipStar) fd.append('pregunta_estrella', 'skip');
+    // (LOTE SOULCYCLE-CIERRE-5) La vista del conflicto: la
+    // declaración que la pregunta del conflicto mostró, para que el
+    // servidor sepa que esta respuesta la vio.
+    if (askConflictoVista) fd.append('estrella_conflicto_vista', askConflictoVista);
     fd.append('country', 'AR');
     fd.append('tone', 'vos');
     fd.append('lang', LANG);
@@ -829,6 +842,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (pend.askRubro) askRubroAnswer = pend.askRubro;
       if (pend.askSkipStar) askSkipStar = true;
       if (pend.askSkipRubro) askSkipRubro = true;
+      if (pend.askConflictoVista) askConflictoVista = pend.askConflictoVista;
       if (form.requestSubmit) form.requestSubmit();
       else form.dispatchEvent(new Event('submit'));
     } else {

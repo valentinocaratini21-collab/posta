@@ -309,6 +309,23 @@ function tnQuietNames(digest) {
  * sin calce («proyecto», Veja 12/11) se trata como NO declarada. */
 function effectiveStarOf(digest) {
   if (!digest || typeof digest !== 'object') return null;
+  // (LOTE SOULCYCLE-CIERRE-5) LA ESTRELLA REAFIRMANTE DEL DUEÑO: la
+  // nombró en la puerta de duda, la puerta le declaró el conflicto
+  // (su estrella no calza con nada de lo leído) y el dueño la
+  // REAFIRMÓ con el conflicto a la vista — el sello
+  // (dueno.estrella_vinculante) lo escribe trialPreguntaGate en ese
+  // único camino. Su palabra, ya sin ambigüedad posible, ES la
+  // estrella: manda con su nombre-cabeza (starNameHeadOf), sin pasar
+  // por el calce de L3 (ese calce ya se le ofreció como pregunta y el
+  // dueño resolvió la duda en persona). Sin sello, nada cambia: la
+  // declaración suelta sigue validándose como siempre (L3).
+  const vinc = digest.dueno && digest.dueno.estrella_vinculante;
+  if (vinc && String(vinc).trim().length >= 3) {
+    const nombreV = starNameHeadOf(vinc);
+    if (nombreV && nombreV.length >= 3 && !isPriceFragmentName(nombreV) && !isGenericCategoryName(nombreV) && !isChromeDerivedName(nombreV) && !isCreditRoleName(nombreV)) {
+      return { item: nombreV, source: 'dueno', evidence: ['la palabra del dueño: nombró su estrella en la puerta y la reafirmó con el conflicto declarado'] };
+    }
+  }
   const duenoStar = digest.dueno && digest.dueno.estrella;
   if (duenoStar) {
     const matched = duenoStarEvidenceMatch(digest, duenoStar);
@@ -2437,6 +2454,97 @@ function anclaSinConfirmarOf(d) {
   return items.length ? name(items[0]) : '';
 }
 
+/* (LOTE SOULCYCLE-CIERRE-5 — LA PALABRA DEL DUEÑO MANDA) El NOMBRE
+ * de la estrella dentro de la declaración del dueño: su respuesta en
+ * la puerta (y en el formulario) suele venir como nombre + descriptor
+ * («The SoulCycle Ride — signature indoor cycling class»): el nombre
+ * es la cabeza antes del primer separador de descriptor (— / – /
+ * «: » / « - »); sin separador, la declaración entera. La cabeza
+ * demasiado corta no recorta nada (se devuelve el texto completo). */
+function starNameHeadOf(text) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const parts = s.split(/\s+[—–]\s+|\s+-\s+|:\s+/);
+  const head = String(parts[0] || '').replace(/[.\s]+$/, '').trim();
+  return head.length >= 3 ? head : s;
+}
+
+/* (LOTE SOULCYCLE-CIERRE-5) LA PALABRA DEL DUEÑO sobre su estrella,
+ * de la ranura más fuerte que la traiga: la confirmada en persona
+ * (dueno.estrella), lo que más vende según él (dueno.mas_vendido —
+ * en la prueba es donde applyTrialMasVendido deposita la respuesta
+ * de la puerta y del formulario), la del onboarding y la sembrada
+ * del fundamento. '' si el dueño nunca nombró una. */
+function duenoDeclaradaOf(d) {
+  if (!d || typeof d !== 'object') return '';
+  const cands = [
+    d.dueno && d.dueno.estrella,
+    d.dueno && d.dueno.mas_vendido,
+    d.onboarding && d.onboarding.producto_estrella,
+    d.producto_estrella,
+  ];
+  for (const c of cands) {
+    const s = String(c || '').trim();
+    if (s.length >= 3) return s;
+  }
+  return '';
+}
+
+/* (LOTE SOULCYCLE-CIERRE-5) ¿El nombre de la declaración es USABLE
+ * como estrella? La barra es la del TEXTO DEL DUEÑO, no la de
+ * admisión de ítems minados (esa exige ≤5 palabras y mató a la frase
+ * con descriptor hasta en la insignia): un nombre con cabeza
+ * concreta — ni categoría genérica (ni en la cabeza ni en la
+ * declaración entera), ni fragmento de precio, ni cromo, ni rol de
+ * créditos, ni rótulo del sitio, ni suscripción — y al menos una
+ * palabra distintiva. Lo que no pasa (una respuesta genérica como
+ * «proyecto» o «cafe», prosa, un fragmento) devuelve '': L3 lo sigue
+ * tratando como NO declarado, como siempre. */
+function duenoStarNombreUsable(declarada) {
+  const nombre = starNameHeadOf(declarada);
+  if (!nombre || nombre.length < 3 || nombre.length > 60) return '';
+  if (isGenericCategoryName(nombre) || isGenericCategoryName(declarada)) return '';
+  if (isPriceFragmentName(nombre) || isPriceFragmentName(declarada)) return '';
+  if (isChromeDerivedName(nombre) || isCreditRoleName(nombre) || isSiteLabelName(nombre)) return '';
+  if (isSubscriptionLikeName(nombre)) return '';
+  if (!distinctiveWords(nombre).length) return '';
+  return nombre;
+}
+
+/* (LOTE SOULCYCLE-CIERRE-5) EL CONFLICTO DE LA ESTRELLA DEL DUEÑO:
+ * el dueño nombró su estrella (en la puerta o en el formulario),
+ * esa estrella NO calza con nada de lo evidenciado (ni entera ni su
+ * nombre-cabeza: duenoStarEvidenceMatch en las dos formas) y el
+ * diseño, de no mediar pregunta, abriría la semana anclado en un
+ * ítem minado (la efectiva de effectiveStarOf o el ancla de
+ * anclaSinConfirmarOf). En la corrida SoulCycle 2 ese era el estado
+ * exacto — declaración guardada en onboarding y en dueno.mas_vendido,
+ * calce vacío, diseño sobre «Rotor Set Install» con star_missing —
+ * y ninguna superficie lo registraba: la sustitución fue silenciosa.
+ * Con conflicto, la resolución NO sustituye: nace la candidata
+ * estrella_dueno_sin_encaje y la puerta pregunta con el conflicto
+ * declarado; si el dueño reafirma su palabra con el conflicto a la
+ * vista, el sello estrella_vinculante la hace mandar (effectiveStarOf).
+ * Devuelve { declarada, nombre, ancla } o null (sin declaración, ya
+ * corroborada, nombre no usable — L3 manda —, ya reafirmada, o sin
+ * ancla que la sustituya: el diseño degrada honesto como siempre). */
+function duenoStarConflictoOf(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (d.dueno && String(d.dueno.estrella_vinculante || '').trim().length >= 3) return null;
+  const declarada = duenoDeclaradaOf(d);
+  if (declarada.length < 3) return null;
+  if (duenoStarEvidenceMatch(d, declarada)) return null;
+  const nombre = duenoStarNombreUsable(declarada);
+  if (!nombre) return null;
+  if (duenoStarEvidenceMatch(d, nombre)) return null;
+  let ancla = '';
+  try { const eff = effectiveStarOf(d); if (eff && eff.item) ancla = String(eff.item); } catch (e) { /* sin efectiva: el ancla de diseño */ }
+  if (!ancla) { try { ancla = anclaSinConfirmarOf(d); } catch (e) { ancla = ''; } }
+  if (!ancla) return null;
+  if (sameItemName(nombre, ancla)) return null;
+  return { declarada, nombre, ancla };
+}
+
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
  * estrella inferido se CONFIRMA con un toque y cada contradicción se
  * resuelve preguntando — leer propone, el dueño valida. */
@@ -2496,7 +2604,25 @@ function questionCandidatesOf(d) {
   // (LOTE L3 §7) La estrella del dueño solo suprime la pregunta si
   // VALIDA contra lo evidenciado (duenoStarEvidenceMatch): una
   // respuesta genérica descartada por L3 («proyecto») no la suprime.
-  const starDelDueno = (d.dueno && d.dueno.estrella && duenoStarEvidenceMatch(d, d.dueno.estrella)) || (star && star.fuente === 'dueno');
+  // (LOTE SOULCYCLE-CIERRE-5) La reafirmada con el conflicto a la
+  // vista (estrella_vinculante) también la suprime: ya es la estrella.
+  const starDelDueno = (d.dueno && d.dueno.estrella && duenoStarEvidenceMatch(d, d.dueno.estrella)) || (star && star.fuente === 'dueno')
+    || (d.dueno && String(d.dueno.estrella_vinculante || '').trim().length >= 3);
+  // (LOTE SOULCYCLE-CIERRE-5) EL CONFLICTO DE LA ESTRELLA DEL DUEÑO
+  // VA ANTES QUE LA CANDIDATA DEL ANCLA: si el dueño nombró su
+  // estrella y no calza con lo leído, la duda no es «¿el ancla es tu
+  // estrella?» sino «tu palabra y lo leído no coinciden — ¿cuál
+  // manda?». La candidata la subsume (sus opciones incluyen el
+  // ancla) y la del ancla no nace. La declaración genérica sin calce
+  // (L3) no es conflicto: duenoStarConflictoOf exige nombre usable.
+  const conflictoDueno = duenoStarConflictoOf(d);
+  if (conflictoDueno) {
+    out.push({
+      tipo: 'estrella', motivo: 'estrella_dueno_sin_encaje',
+      declarada: conflictoDueno.declarada, nombre: conflictoDueno.nombre, item: conflictoDueno.ancla, debil: true,
+      texto: `nos dijiste que tu estrella es ${conflictoDueno.nombre}, pero en lo que leímos de tu negocio el que manda es ${conflictoDueno.ancla} — ¿cuál es tu producto estrella?`,
+    });
+  }
   let estrellaPreguntada = false;
   if (star && star.item && (star.confidence || 0) >= 0.5 && !starDelDueno) {
     estrellaPreguntada = true;
@@ -2521,7 +2647,7 @@ function questionCandidatesOf(d) {
   // (el ancla + los ítems reales del fundamento). Con «seguir sin
   // responder» la semana sigue degradada (star_missing), como hoy:
   // lo que no vuelve a pasar es que abra sin que la duda exista.
-  if (!estrellaPreguntada && !starDelDueno) {
+  if (!estrellaPreguntada && !starDelDueno && !conflictoDueno) {
     let eff = null;
     try { eff = effectiveStarOf(d); } catch (e) { eff = null; }
     if (!eff) {
@@ -2603,6 +2729,34 @@ function trialQuestionFor(digest, opts) {
         : { tipo: 'rubro', texto, opciones };
     }
     if (c.tipo === 'estrella') {
+      // (LOTE SOULCYCLE-CIERRE-5) LA PREGUNTA DEL CONFLICTO: la
+      // declaración del dueño está presente (es la CAUSA de esta
+      // candidata), así que `answered.estrella` NO la marca
+      // respondida — la responde `answered.estrella_conflicto`, que
+      // la ruta computa cuando el dueño contesta con el conflicto a
+      // la vista (o sigue sin responder). El texto NOMBRA las dos
+      // estrellas en disputa y la primera opción es la palabra
+      // literal del dueño: un toque y su estrella queda reafirmada.
+      if (c.motivo === 'estrella_dueno_sin_encaje' && c.declarada) {
+        if (answered.estrella_conflicto) continue;
+        const opcionesC = [];
+        const pushOpC = (raw) => {
+          const v = String((raw && (raw.nombre || raw)) || '').trim();
+          if (v && !isPriceFragmentName(v) && !opcionesC.some((x) => sameItemName(x, v))) opcionesC.push(v);
+        };
+        pushOpC(c.declarada);
+        pushOpC(c.item);
+        for (const it of [...(digest.productos || []), ...(digest.servicios || [])]) {
+          if (opcionesC.length >= 4) break;
+          pushOpC(it);
+        }
+        if (!opcionesC.length) continue;
+        const nombreC = c.nombre || c.declarada;
+        const textoC = lang === 'en'
+          ? `You told us your star is ${nombreC} — but in what we read of your business, ${c.item} is the one that stands out. Which one is your star product?`
+          : `Nos dijiste que tu estrella es ${nombreC}, pero en lo que leímos de tu negocio el que manda es ${c.item} — ¿cuál es tu producto estrella?`;
+        return { tipo: 'estrella', motivo: 'estrella_dueno_sin_encaje', declarada: c.declarada, item: c.item, debil: true, texto: textoC, opciones: opcionesC.slice(0, 4) };
+      }
       if (answered.estrella) continue;
       // (LOTE SOULCYCLE-CIERRE-2) La puerta jamás ofrece un fragmento
       // de precio como respuesta de un toque (ni como candidata de un
@@ -4417,6 +4571,10 @@ module.exports = {
   // (LOTE SOULCYCLE-CIERRE-2) Guarda de fragmento de precio: una
   // cadena con forma de precio jamás corona (testeable).
   isPriceFragmentName,
+  // (LOTE SOULCYCLE-CIERRE-5) La palabra del dueño manda: su
+  // declaración, el nombre-cabeza y el conflicto contra el ancla
+  // minada (testeables; la ruta los consume en la puerta).
+  duenoDeclaradaOf, starNameHeadOf, duenoStarConflictoOf,
   // (LOTE PRIMER-POSTEO-MEJOR · idea 5) Voz de la marca en el wow.
   lexDiceFor, voicePhraseFor,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor, photoBrandVisible, sanitizeLogoIntegrado, logoIntegradoOf, sanitizeDigestLogo, digestLogoOf,

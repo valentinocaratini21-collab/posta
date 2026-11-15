@@ -1653,6 +1653,15 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
     // el hueco mas_vendido desde el nacimiento del digest: la semana
     // de la prueba y la cuenta que hereda leen este mismo digest.
     if (_trialDigestBuilt) applyTrialMasVendido(_trialDigestBuilt);
+    // (LOTE SOULCYCLE-CIERRE-5) Con la declaración del dueño ya
+    // mapeada, las candidatas a pregunta se RECOMPUTAN: en
+    // finalizeDigest (dentro de buildFromParts) su palabra todavía
+    // no vivía en el digest y la candidata del conflicto — su
+    // estrella contra el ancla minada que el diseño usaría — no
+    // podía nacer. Sin declaración, las de finalize quedan intactas.
+    if (_trialDigestBuilt && String((onboarding && onboarding.producto_estrella) || '').trim().length >= 3) {
+      try { _trialDigestBuilt.question_candidates = clientDigest.questionCandidatesOf(_trialDigestBuilt); } catch (e) { /* las de finalize quedan */ }
+    }
     // (ESTUDIO-PROFUNDO M1 · COMENTARIOS) El estudio de comentarios vive
     // en su propio espacio de nombres (fundamento.comments): FAQs, ganchos
     // en palabras exactas y quejas, cada uno con procedencia. No reescribe
@@ -1689,9 +1698,41 @@ function trialPreguntaGate(digest, fields, ocAns, lang) {
   try {
     if (!digest) return null;
     const f = fields || {};
+    // (LOTE SOULCYCLE-CIERRE-5) EL CONFLICTO DE LA ESTRELLA DEL
+    // DUEÑO se responde APARTE: la declaración presente es su causa,
+    // no su respuesta — con la regla de siempre (`estrella` por mera
+    // presencia), la respuesta del dueño cerraba la duda y el diseño
+    // sustituía su estrella por la minada sin confirmar, en silencio
+    // (corrida SoulCycle 2). La pregunta del conflicto se marca
+    // respondida solo cuando el dueño contesta CON EL CONFLICTO A
+    // LA VISTA: el front devuelve `estrella_conflicto_vista` (la
+    // declaración que la pregunta mostró) y la palabra que vuelve se
+    // compara con ella:
+    // · vuelve LA MISMA palabra → el dueño REAFIRMÓ su estrella
+    //   sabiendo que no calza con lo leído: queda sellada como
+    //   vinculante en el fundamento (dueno.estrella_vinculante) y el
+    //   diseño la consume como LA estrella (effectiveStarOf).
+    // · vuelve OTRA palabra (eligió el ancla u «Otro» nuevo) → esa
+    //   palabra es la declaración vigente y se juzga de nuevo: si
+    //   calza, manda; si no, el conflicto se declara por ella.
+    // · «seguir sin responder» (skip) → la semana sigue degradada
+    //   (star_missing) con el conflicto registrado en las candidatas.
+    const declaradaNow = String((ocAns && ocAns.producto_estrella) || '').trim();
+    const vistaConflicto = String(f.estrella_conflicto_vista || '').trim();
+    const skipStar = String(f.pregunta_estrella || '') === 'skip';
+    let conflicto = null;
+    try { conflicto = clientDigest.duenoStarConflictoOf(digest); } catch (e) { conflicto = null; }
+    const reafirmo = !!(conflicto && vistaConflicto && declaradaNow
+      && clientDigest.norm(vistaConflicto) === clientDigest.norm(declaradaNow));
+    if (reafirmo) {
+      if (!digest.dueno || typeof digest.dueno !== 'object') digest.dueno = {};
+      digest.dueno.estrella_vinculante = declaradaNow;
+      conflicto = null;
+    }
     const answered = {
       estrella: !!((ocAns && ocAns.producto_estrella) || String(f.pregunta_estrella || '') === 'skip'),
       rubro: ['pregunta', 'form'].includes(String(f.rubro_src || '')) || String(f.pregunta_rubro || '') === 'skip',
+      estrella_conflicto: skipStar || reafirmo || !conflicto,
     };
     return clientDigest.trialQuestionFor(digest, { lang, answered });
   } catch (e) { return null; }
@@ -43864,7 +43905,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1104';
+const BUILD_ID = '20261105-v1105';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

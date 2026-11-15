@@ -173,7 +173,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // producto_estrella; rubro as category + rubro_src='pregunta';
   // skip as pregunta_<tipo>).
   var askWrap = $('fAskWrap'), askQ = $('fAskQ'), askOpts = $('fAskOpts'), askSkipBtn = $('fAskSkip');
-  var pendingPregunta = null, askRubroAnswer = null, askSkipStar = false, askSkipRubro = false;
+  var pendingPregunta = null, askRubroAnswer = null, askSkipStar = false, askSkipRubro = false, askConflictoVista = '';
   // (LOTE L2 · HONEST LANGUAGE FALLBACK) The brand-language choice,
   // when the server asks for it (falta_idioma_marca): it sticks for
   // resubmits on this visit, like the star.
@@ -235,6 +235,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         // (LOTE FUNDAMENTO-QUE-DUDA) The trial question's answers also
         // survive a reload: an answered question is never re-asked.
         askRubro: askRubroAnswer || null, askSkipStar: !!askSkipStar, askSkipRubro: !!askSkipRubro,
+        // (LOTE SOULCYCLE-CIERRE-5) The declaration the conflict
+        // question displayed also survives the reload.
+        askConflictoVista: askConflictoVista || '',
       }));
     } catch (e) {}
   }
@@ -589,6 +592,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   function showAsk() {
     var p = pendingPregunta;
     if (!p) return;
+    // (LOTE SOULCYCLE-CIERRE-5) If the question is the owner's star
+    // conflict, keep the declaration it displayed: the resubmit
+    // returns it as estrella_conflicto_vista and the server can tell
+    // a reaffirmation (the same words come back) from a new answer.
+    // Any other question clears it.
+    askConflictoVista = (p.motivo === 'estrella_dueno_sin_encaje' && p.declarada) ? String(p.declarada) : '';
     askQ.textContent = p.texto || '';
     askOpts.innerHTML = '';
     if (p.tipo === 'rubro') {
@@ -685,6 +694,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       fd.append('rubro_src', 'pregunta');
     } else if (askSkipRubro) fd.append('pregunta_rubro', 'skip');
     if (askSkipStar) fd.append('pregunta_estrella', 'skip');
+    // (LOTE SOULCYCLE-CIERRE-5) The conflict view: the declaration
+    // the conflict question displayed, so the server knows this
+    // answer saw it.
+    if (askConflictoVista) fd.append('estrella_conflicto_vista', askConflictoVista);
     fd.append('country', 'US');
     fd.append('tone', 'vos');
     fd.append('lang', LANG);
@@ -830,6 +843,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (pend.askRubro) askRubroAnswer = pend.askRubro;
       if (pend.askSkipStar) askSkipStar = true;
       if (pend.askSkipRubro) askSkipRubro = true;
+      if (pend.askConflictoVista) askConflictoVista = pend.askConflictoVista;
       if (form.requestSubmit) form.requestSubmit();
       else form.dispatchEvent(new Event('submit'));
     } else {
