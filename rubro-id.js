@@ -639,9 +639,63 @@ function resolveRubro(input) {
   };
 }
 
+/* (LOTE SOULCYCLE-A · CIERRE 1) RECONCILIACIÓN IG↔WEB: el voto
+ * combinado de classifyBusiness SUMA las señales de las dos fuentes
+ * en un solo tally — si describen negocios distintos, la mezcla lo
+ * esconde (corrida SoulCycle 15/11: el @ leído fitness en el prefill
+ * y la web una tienda BMX de Ámsterdam; el digest se construyó entero
+ * desde la web y nadie comparó). Esta función clasifica CADA fuente
+ * por separado (los cls ya separados los pasa el llamador) y marca la
+ * CONTRADICCIÓN para el fundamento en vez de construir desde una
+ * sola en silencio.
+ * igPrefillRubro: el rubro que la lectura del @ ya había cerrado en
+ * el prefill (llega como fields.category sin rubro_src, o como
+ * rubro_detectado): es señal IG aunque el texto del feed no vote —
+ * en la corrida, «fitness» venía SOLO de la visión del prefill y al
+ * generar se perdía. Solo se usa si las señales IG de esta pasada no
+ * determinaron nada.
+ * Devuelve null (sin contradicción: las fuentes conviven o una sola
+ * habla) o el registro de la contradicción con los dos lados. */
+function rubroDeterminado(cls) {
+  if (!cls || cls.rubro === 'otro' || !Array.isArray(cls.candidatas) || !cls.candidatas.length) return '';
+  return (cls.candidatas[0].score >= 3) ? cls.rubro : '';
+}
+function reconcileSources(input) {
+  const { igCls, webCls, igPrefillRubro, web } = input || {};
+  const igDeSenales = rubroDeterminado(igCls);
+  const igRubro = igDeSenales || ((igPrefillRubro && RUBROS.includes(igPrefillRubro) && igPrefillRubro !== 'otro') ? igPrefillRubro : '');
+  if (!igRubro) return null; // sin lectura IG determinada no hay con qué contrastar: manda la web como hoy
+  const webRubro = rubroDeterminado(webCls);
+  const w = web || {};
+  const descripcion = String(w.descripcion || '').trim();
+  const webOferta = ((w.servicios || 0) >= 1 || (w.catalogo || 0) >= 1 || descripcion.length >= 40);
+  if (!webOferta) return null; // la web no describe oferta (landing vacía, sitio caído): no contradice, simplemente no aporta
+  // ¿La web apoya al rubro del IG con algún voto propio? Si lo apoya,
+  // las dos lecturas hablan del mismo negocio aunque la web también
+  // mencione otras cosas (un gimnasio con bar de jugos no es una
+  // contradicción: es un negocio con dos patas y el IG es una de ellas).
+  const webApoyaIg = !!(webCls && Array.isArray(webCls.candidatas)
+    && webCls.candidatas.some((c) => c.rubro === igRubro && c.score >= 2));
+  if (webApoyaIg) return null;
+  return {
+    contradiccion: true,
+    motivo: (webRubro && webRubro !== igRubro) ? 'rubros_distintos' : 'web_no_encaja',
+    ig: {
+      rubro: igRubro,
+      fuente: igDeSenales ? 'senales' : 'prefill',
+      confianza: igCls ? igCls.confianza : null,
+    },
+    web: {
+      rubro: webRubro || null,
+      nombre: String(w.nombre || '').slice(0, 80),
+      url: String(w.url || '').slice(0, 300),
+    },
+  };
+}
+
 module.exports = {
   RUBROS, SUBRUBROS, RUBRO_LABELS, SUBRUBRO_LABELS, RUBRO_LABELS_EN, SUBRUBRO_LABELS_EN, labelFor,
   JSONLD_MAP, jsonldVote, classifyBusiness, needsVisionTiebreak,
   needsVisionWhenNoSignals, visionOptionsAll,
-  questionOptions, resolveRubro,
+  questionOptions, resolveRubro, reconcileSources,
 };

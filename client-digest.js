@@ -1328,6 +1328,14 @@ function emptyDigest() {
     // anclas NO lo cubre y el refresco lo preserva (applyDeepBlocks).
     formatos: null,
     inferred_star: null, contradictions: [], question_candidates: [],
+    // (LOTE SOULCYCLE-A · CIERRE 1) RECONCILIACIÓN IG↔WEB: la marca
+    // de que las dos lecturas del negocio se contradicen (rubro u
+    // oferta), calculada por rubro-id.reconcileSources en la
+    // resolución de rubro de la prueba y adjunta acá por
+    // buildFromParts (parts.reconciliacion). null = sin contradicción
+    // detectada (o digest sin reconciliar). NO confundir con
+    // `contradictions`, que es de PRECIOS entre fuentes.
+    reconciliacion: null,
     // (LOTE CORRECTIVO-4) Productos CON NOMBRE evidenciados
     // [{nombre, fuente, menciones}]: minados de las captions del feed
     // y de los ítems de fuente fuerte (extractNamedProducts). La
@@ -1500,6 +1508,12 @@ function buildFromParts(parts) {
       };
     } catch (e) { /* la clasificación jamás rompe el digest */ }
   }
+  // (LOTE SOULCYCLE-A · CIERRE 1) La reconciliación IG↔WEB que la
+  // resolución de rubro ya calculó viaja al fundamento ANTES de
+  // finalizeDigest: questionCandidatesOf la lee y la convierte en la
+  // primera candidata a pregunta (la duda de fuentes va antes que la
+  // de rubro/estrella: de ella cuelga todo lo demás).
+  if (p.reconciliacion) d.reconciliacion = p.reconciliacion;
   const dna = (p.dna && typeof p.dna === 'object') ? p.dna : null;
 
   // --- productos / servicios / promos ---
@@ -2360,6 +2374,29 @@ function brandCromoTextoOf(digest, key) {
 function questionCandidatesOf(d) {
   if (!d || typeof d !== 'object') return [];
   const out = [];
+  // (LOTE SOULCYCLE-A · CIERRES 1+3) LA CONTRADICCIÓN DE FUENTES ES
+  // LA PRIMERA CANDIDATA: si la reconciliación marcó que Instagram y
+  // la web describen negocios distintos, esa duda va ANTES que la de
+  // rubro y la de estrella — el fundamento no se construye desde una
+  // sola fuente en silencio. Las opciones son los dos rubros en
+  // disputa (el del IG y, si la web clasificó a otro, el suyo): un
+  // toque y el dueño decide cuál es su negocio. La consume la puerta
+  // de la prueba (trialQuestionFor) y el loop «Posty pregunta».
+  const rec = d.reconciliacion;
+  if (rec && rec.contradiccion && rec.ig && rec.ig.rubro) {
+    const cand = [{ rubro: rec.ig.rubro, subrubro: '', score: 9 }];
+    if (rec.web && rec.web.rubro && rec.web.rubro !== rec.ig.rubro) cand.push({ rubro: rec.web.rubro, subrubro: '', score: 8 });
+    let opciones = [];
+    try { opciones = rubroId.questionOptions({ rubro: rec.ig.rubro, nivel_duda: 'rubro', candidatas: cand }); } catch (e) { opciones = []; }
+    if (!opciones.length) opciones = cand.map((c) => ({ rubro: c.rubro, subrubro: '', label: rubroId.labelFor(c.rubro, '') }));
+    if (opciones.length) {
+      out.push({
+        tipo: 'rubro', motivo: 'contradiccion_fuentes', rubro: rec.ig.rubro, subrubro: '', opciones,
+        contradiccion: { ig: rec.ig.rubro, web: (rec.web && rec.web.rubro) || null, motivo: rec.motivo || '' },
+        texto: `tu Instagram y tu web no describen el mismo negocio (Instagram: ${rubroId.labelFor(rec.ig.rubro, '')}${rec.web && rec.web.rubro ? ` · web: ${rubroId.labelFor(rec.web.rubro, '')}` : ''}) — ¿cuál es tu negocio?`,
+      });
+    }
+  }
   // (v235) RUBRO PRIMERO: es el primer dominó (de él cuelgan temas y
   // prompts). Si la identificación quedó sin confirmar, la pregunta va
   // con las candidatas reales y su evidencia — la consume "Posty
@@ -2435,21 +2472,38 @@ function trialQuestionFor(digest, opts) {
     if (c.tipo === 'rubro') {
       if (answered.rubro) continue;
       const rid = digest.rubro_id || {};
+      // (LOTE SOULCYCLE-A · CIERRES 1+3) La candidata de CONTRADICCIÓN
+      // manda con SUS opciones (los dos rubros en disputa, no las
+      // candidatas del voto combinado) y su texto nombra el conflicto:
+      // el dueño decide sabiendo que las fuentes no coinciden.
+      const esContradiccion = c.motivo === 'contradiccion_fuentes';
       let opciones = [];
       try {
         opciones = rubroId.questionOptions({
           rubro: rid.rubro || c.rubro,
           nivel_duda: rid.nivel_duda || 'rubro',
-          candidatas: (Array.isArray(rid.candidatas) && rid.candidatas.length) ? rid.candidatas : (c.opciones || []),
+          candidatas: (esContradiccion && Array.isArray(c.opciones) && c.opciones.length) ? c.opciones
+            : (Array.isArray(rid.candidatas) && rid.candidatas.length) ? rid.candidatas : (c.opciones || []),
         }, lang);
       } catch (e) { opciones = []; }
       if (!opciones.length) opciones = Array.isArray(c.opciones) ? c.opciones : [];
       if (!opciones.length) continue;
       const labels = opciones.map((x) => x.label);
-      const texto = lang === 'en'
-        ? (labels.length >= 2 ? `Is your business more ${labels[0]} or ${labels[1]}?` : `Is your business ${labels[0]}?`)
-        : (labels.length >= 2 ? `¿Tu negocio es más ${labels[0]} o ${labels[1]}?` : `¿Confirmás que tu rubro es ${labels[0]}?`);
-      return { tipo: 'rubro', texto, opciones };
+      let texto;
+      if (esContradiccion && c.contradiccion) {
+        const igLbl = rubroId.labelFor(c.contradiccion.ig, '', lang);
+        const webLbl = c.contradiccion.web ? rubroId.labelFor(c.contradiccion.web, '', lang) : '';
+        texto = lang === 'en'
+          ? `Your Instagram and your website don't describe the same business (Instagram: ${igLbl}${webLbl ? ` · website: ${webLbl}` : ''}) — which one is your business?`
+          : `Tu Instagram y tu web no describen el mismo negocio (Instagram: ${igLbl}${webLbl ? ` · web: ${webLbl}` : ''}) — ¿cuál es tu negocio?`;
+      } else {
+        texto = lang === 'en'
+          ? (labels.length >= 2 ? `Is your business more ${labels[0]} or ${labels[1]}?` : `Is your business ${labels[0]}?`)
+          : (labels.length >= 2 ? `¿Tu negocio es más ${labels[0]} o ${labels[1]}?` : `¿Confirmás que tu rubro es ${labels[0]}?`);
+      }
+      return esContradiccion
+        ? { tipo: 'rubro', texto, opciones, motivo: 'contradiccion_fuentes', contradiccion: c.contradiccion }
+        : { tipo: 'rubro', texto, opciones };
     }
     if (c.tipo === 'estrella') {
       if (answered.estrella) continue;

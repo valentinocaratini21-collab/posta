@@ -1300,10 +1300,52 @@ function resolveTrialRubro({ fields, webData, feed, formText, catalogItems, lang
     formText: [formText || '', f.business || ''].join(' '),
   };
   const cls = rubroId.classifyBusiness(signals);
+  // (LOTE SOULCYCLE-A · CIERRE 1) RECONCILIACIÓN IG↔WEB: el voto de
+  // arriba MEZCLA las dos fuentes en un solo tally y una contradicción
+  // queda invisible (corrida SoulCycle 15/11: el @ era la marca fitness
+  // y la web tipeada una tienda BMX de Ámsterdam; el digest se armó
+  // entero desde la web). Acá cada fuente se clasifica POR SEPARADO y
+  // se comparan: si describen negocios distintos, la marca queda en
+  // el resultado (viaja al digest como digest.reconciliacion) y la
+  // puerta de la pregunta la convierte en pregunta con opciones — el
+  // fundamento no se construye desde una sola fuente en silencio.
+  // El rubro del prefill (fields.category sin rubro_src: lo que la
+  // lectura del @ ya había cerrado, en la corrida SOLO por visión)
+  // entra como señal IG de respaldo: las señales de texto de esta
+  // pasada pueden no votar nada (bio ilegible, captions sin
+  // vocabulario) y sin ese puente la lectura del @ se perdía entera.
+  let reconciliacion = null;
+  try {
+    const igCls = rubroId.classifyBusiness({
+      bio: signals.bio, fullName: signals.fullName, handle: signals.handle,
+      captions: signals.captions, igCategory: signals.igCategory,
+    });
+    const webCls = rubroId.classifyBusiness({
+      jsonldType: signals.jsonldType, catalogText: signals.catalogText, webText: signals.webText,
+    });
+    const igPrefillRubro = (src !== 'pregunta' && src !== 'form' && catSel && catSel !== 'otro' && rubroId.RUBROS.includes(catSel)) ? catSel : '';
+    reconciliacion = rubroId.reconcileSources({
+      igCls, webCls, igPrefillRubro,
+      web: webData ? {
+        servicios: (webData.services || []).length,
+        catalogo: (catalogItems || []).length,
+        descripcion: webData.description || '',
+        nombre: webData.name || '',
+        url: webData.url || '',
+      } : null,
+    });
+    if (reconciliacion) console.log('[reconciliacion] contradiccion IG↔web:', JSON.stringify({ ig: reconciliacion.ig, web: reconciliacion.web, motivo: reconciliacion.motivo }));
+  } catch (e) { reconciliacion = null; }
   if ((src === 'pregunta' || src === 'form') && catSel && rubroId.RUBROS.includes(catSel)) {
-    return rubroId.resolveRubro({ confirmed: { rubro: catSel, subrubro: subSel, fuente: src }, cls, lang });
+    const resC = rubroId.resolveRubro({ confirmed: { rubro: catSel, subrubro: subSel, fuente: src }, cls, lang });
+    // Con confirmación del dueño la duda ya se resolvió en persona:
+    // la marca queda como registro (resuelta_por) y la puerta no
+    // repregunta (answered.rubro ya viaja true con rubro_src).
+    resC.reconciliacion = reconciliacion ? { ...reconciliacion, resuelta_por: 'confirmacion' } : null;
+    return resC;
   }
   const res = rubroId.resolveRubro({ cls, lang });
+  res.reconciliacion = reconciliacion;
   if (src === 'skip' && !cls.segura) {
     // Saltó la pregunta: se genera con el padre seguro y queda el
     // registro (la pregunta sigue viva en question_candidates).
@@ -1600,6 +1642,11 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // (M3 FICHA-OFERTA) La ficha del estudio viaja en su espacio de
       // nombres propio dentro del fundamento (digest.offerSheet).
       offerSheet: offerSheet || null,
+      // (LOTE SOULCYCLE-A · CIERRE 1) La reconciliación IG↔WEB de la
+      // resolución de rubro: buildFromParts la guarda en el fundamento
+      // (digest.reconciliacion) y la convierte en la primera candidata
+      // a pregunta si las fuentes se contradicen.
+      reconciliacion: rubro ? rubro.reconciliacion : null,
     });
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
     // (LOTE PREGUNTA-SIN-REPETIR) Lo declarado en el formulario cubre
@@ -39636,6 +39683,40 @@ function trialWebContext(rawUrl) {
   });
   return p;
 }
+/* (LOTE SOULCYCLE-A · CIERRE 1) LA WEB CANÓNICA: si el perfil de IG
+ * trae su propio link y ese link apunta a OTRO dominio que la web
+ * tipeada, la que manda es la del perfil — es la vidriera que el
+ * propio negocio declara; la tipeada puede ser de OTRA empresa con
+ * el mismo nombre (corrida SoulCycle 15/11: por soulcycle.com se leyó
+ * una tienda BMX de Ámsterdam mientras el @ era la marca fitness).
+ * Se re-lee el sitio canónico con la misma extracción determinística
+ * (memoizada por trialWebContext); si esa lectura no produce nada
+ * útil, queda la tipeada y la reconciliación IG↔web juzga lo que
+ * haya. Lo usado queda registrado en el webData (fuente_url /
+ * url_tipeada) y de ahí en el fundamento. */
+function trialWebDominio(raw) {
+  try {
+    const u = webExtract.normalizeSiteUrl(raw);
+    if (!u) return '';
+    return new URL(u).hostname.toLowerCase().replace(/^www\./, '');
+  } catch (e) { return ''; }
+}
+async function trialWebCanonica(webData, webRaw, igLink) {
+  try {
+    if (!webData || !igLink) return webData;
+    const domLink = trialWebDominio(igLink);
+    const domTipeada = trialWebDominio(webRaw || webData.url || '');
+    if (!domLink || !domTipeada || domLink === domTipeada) return webData;
+    const canon = await raceMs(trialWebContext(igLink), 9000);
+    if (canon && (canon.name || canon.description || (canon.services || []).length)) {
+      canon.fuente_url = 'ig-link';
+      canon.url_tipeada = webData.url || webRaw || '';
+      console.log('[web-canonica] el link del perfil de IG manda sobre la web tipeada:', canon.url_tipeada, '→', canon.url);
+      return canon;
+    }
+    return webData;
+  } catch (e) { return webData; }
+}
 async function trialWebPhotos(webData) {
   if (!webData || !Array.isArray(webData.photos) || !webData.photos.length) return [];
   try { return await webExtract.localizeSitePhotos(webData.photos, MEDIA_DIR, 6); }
@@ -40350,6 +40431,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let trialOfferSheetS = null; // (M3 FICHA-OFERTA)
     if (webRaw) {
       if (!webData) webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 9000))]).catch(() => null);
+      // (LOTE SOULCYCLE-A · CIERRE 1) WEB CANÓNICA antes de que nada
+      // se derive de la web (ficha, goal, paleta, fotos, fundamento):
+      // si el perfil de IG declara su propio link en otro dominio,
+      // esa lectura reemplaza a la tipeada.
+      if (webData) webData = await trialWebCanonica(webData, webRaw, trialProfile && trialProfile.link);
       if (webData) {
         trialOfferSheetS = trialOfferBuildSheet({
           webData, igText: [bioText, ...((trialProfile && trialProfile.captions) || [])].filter(Boolean).join('\n'),
@@ -43605,7 +43691,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1101';
+const BUILD_ID = '20261105-v1102';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
