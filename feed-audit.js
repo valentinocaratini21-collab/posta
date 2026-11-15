@@ -279,6 +279,89 @@ function parseProfilePageVerified(html, handle) {
   if (vals.every((v) => v === false)) return false;
   return null;
 }
+// (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA, parte a) EL LINK DEL
+// PERFIL DESDE LA PÁGINA: el embed NO trae external_url (verificado en
+// vivo, ver D1/D2 en fetchAuditData: 0 ocurrencias en 236 KB), así que
+// la lectura del link desde el embed muere en la fuente y link_unread
+// era el estado normal, sin reintento. La PÁGINA del perfil sí trae el
+// JSON completo del dueño (de ahí sale el verificado de TIC-FUENTE):
+// este parser extrae SU link con la MISMA guarda de identidad que
+// parseProfilePageVerified — la ocurrencia vale solo si el username
+// más cercano ANTES (ventana de 4000 caracteres) es el handle pedido.
+// Precedencia determinística: external_url primero; si no, el primer
+// bio_links guardado. Los links viajan envueltos por l.instagram.com:
+// se desenvuelven (parámetro u). Sin identidad clara o sin link: null
+// — jamás se afirma el link de otro perfil.
+function unwrapProfileLink(raw) {
+  let u = String(raw || '')
+    .replace(/\\\//g, '/')
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => { try { return String.fromCharCode(parseInt(h, 16)); } catch (e) { return ''; } })
+    .trim();
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    if (/^(l|lm)\.instagram\.com$/i.test(parsed.hostname)) {
+      const inner = parsed.searchParams.get('u');
+      if (inner) u = inner;
+    }
+  } catch (e) { return null; }
+  return /^https?:\/\//i.test(u) ? u.slice(0, 300) : null;
+}
+function parseProfilePageLink(html, handle) {
+  const h = String(handle || '').replace(/^@+/, '').trim().toLowerCase();
+  const s = String(html || '');
+  if (!h || !s) return null;
+  const rxUser = /"username\\?":\\?"([^"\\]+)\\?"/g;
+  const users = [];
+  let m;
+  while ((m = rxUser.exec(s)) !== null) users.push({ at: m.index, name: String(m[1]).toLowerCase() });
+  if (!users.some((u) => u.name === h)) return null;
+  const guarded = (at, raw) => {
+    let near = null;
+    for (let i = users.length - 1; i >= 0; i--) {
+      if (users[i].at < at && at - users[i].at <= 4000) { near = users[i]; break; }
+    }
+    if (!near || near.name !== h) return null;
+    return unwrapProfileLink(raw);
+  };
+  // El valor solo admite los escapes que una URL puede traer (\/ y
+  // \uXXXX, el mismo criterio que extractIgBiography): así la
+  // captura se detiene en el PRIMER cierre \" y no se come el resto
+  // del JSON escapado.
+  const rxExt = /external_url\\?":\\?"((?:\\\/|\\u[0-9a-fA-F]{4}|[^"\\]){1,300})\\?"/g;
+  while ((m = rxExt.exec(s)) !== null) {
+    const u = guarded(m.index, m[1]);
+    if (u) return u;
+  }
+  const rxBio = /bio_links\\?":\[(.{0,1200}?)\]/g;
+  while ((m = rxBio.exec(s)) !== null) {
+    const rxU = /"url\\?":\\?"((?:\\\/|\\u[0-9a-fA-F]{4}|[^"\\]){1,300})\\?"/g;
+    let um;
+    while ((um = rxU.exec(m[1])) !== null) {
+      const u = guarded(m.index, um[1]);
+      if (u) return u;
+    }
+  }
+  return null;
+}
+// (LOTE SOULCYCLE-CIERRE-6 · parte a) EL REINTENTO DE LA LECTURA DEL
+// LINK: si el link del perfil llegó SIN LEER (link_unread), se vuelve a
+// leer desde la página del perfil (demo.fetchIgProfilePageHtml, la
+// fuente con identidad verificada). Devuelve { link, fallo }: con
+// link, la lectura se recuperó; sin link, fallo=true — la falla queda
+// REGISTRADA para que la puerta la trate como señal de duda, nunca
+// saltada en silencio. pageFetch inyectable para las suites.
+async function retryProfileLink(handle, opts) {
+  const ig = sanitizeHandle(handle);
+  if (!ig) return { link: null, fallo: true };
+  const fetchPage = (opts && typeof opts.pageFetch === 'function')
+    ? opts.pageFetch
+    : ((hh) => demo.fetchIgProfilePageHtml(hh));
+  let html = null;
+  try { html = await fetchPage(ig); } catch (e) { html = null; }
+  const link = html ? parseProfilePageLink(html, ig) : null;
+  return link ? { link, fallo: false } : { link: null, fallo: true };
+}
 // (LOTE TIC-FUENTE) Precedencia del verificado para la home: la página
 // del perfil manda cuando trae un valor con identidad clara (true o
 // false); si no, se conserva el valor del embed. source dice de dónde
@@ -1444,6 +1527,8 @@ module.exports = {
   fetchAuditData,
   followersFromEmbedHtml,
   parseProfilePageVerified,
+  parseProfilePageLink,
+  retryProfileLink,
   resolveHomeVerified,
   trialProfileFromAudit,
   trialAuditFromData,

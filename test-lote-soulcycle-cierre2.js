@@ -155,9 +155,20 @@ seccion('C · la puerta de duda — la estrella sin confirmar pregunta antes de 
   ok(!!cand && cand.item === 'Rotor Set Install' && cand.sin_confirmar === true, 'C2 la candidata nombra el ancla corroborada y se marca sin confirmar', cand);
   d.question_candidates = cands;
   const q = cd.trialQuestionFor(d, { lang: 'en' });
-  ok(!!q && q.tipo === 'estrella' && q.item === 'Rotor Set Install', 'C3 la puerta devuelve la pregunta de estrella (EN)', q);
-  ok(!!q && Array.isArray(q.opciones) && q.opciones.length >= 2 && q.opciones.every((o) => !cd.isPriceFragmentName(o)), 'C4 las opciones de un toque son ítems reales — ningún fragmento', q && q.opciones);
-  const qSkip = cd.trialQuestionFor(d, { lang: 'en', answered: { estrella: true } });
+  // (ACTUALIZADO CON CAUSA — LOTE SOULCYCLE-CIERRE-6 · PISO DE LA
+  // DUDA) El fixture de la corrida es TAMBIÉN el estado cero de
+  // señal IG (rubro «otro», confianza 0, sin candidatas ni
+  // evidencia): desde el cierre 6 la puerta pregunta PRIMERO el
+  // rubro con opciones amplias (motivo sin_senal_ig) — preguntar la
+  // estrella de un negocio que no se sabe qué es fue el fallo de la
+  // re-corrida — y la pregunta de estrella de ESTE lote se sirve al
+  // responder el rubro. C3/C5 se ajustan a ese orden; la duda de
+  // estrella y su no-repregunta quedan verificadas un paso después.
+  ok(!!q && q.tipo === 'rubro' && q.motivo === 'sin_senal_ig', 'C3 la puerta pregunta primero el rubro (piso de la duda del cierre 6: el fixture es el estado cero)', q);
+  const qStar = cd.trialQuestionFor(d, { lang: 'en', answered: { rubro: true } });
+  ok(!!qStar && qStar.tipo === 'estrella' && qStar.item === 'Rotor Set Install', 'C3b respondido el rubro, la puerta devuelve la pregunta de estrella (EN)', qStar);
+  ok(!!qStar && Array.isArray(qStar.opciones) && qStar.opciones.length >= 2 && qStar.opciones.every((o) => !cd.isPriceFragmentName(o)), 'C4 las opciones de un toque son ítems reales — ningún fragmento', qStar && qStar.opciones);
+  const qSkip = cd.trialQuestionFor(d, { lang: 'en', answered: { rubro: true, estrella: true } });
   ok(qSkip === null, 'C5 lo respondido/salteado no se repregunta', qSkip);
   // Compat Lote A: con contradicción marcada, esa candidata sigue primera.
   const dRec = digestCorrida();

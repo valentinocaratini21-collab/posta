@@ -1573,6 +1573,18 @@ function buildFromParts(parts) {
   // primera candidata a pregunta (la duda de fuentes va antes que la
   // de rubro/estrella: de ella cuelga todo lo demás).
   if (p.reconciliacion) d.reconciliacion = p.reconciliacion;
+  // (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA) EL ESTADO DE LA
+  // LECTURA DEL LINK DEL PERFIL viaja al fundamento: el link es el
+  // insumo de la web canónica (Lote A) y su lectura falló en la
+  // corrida (llegó link_unread y nadie reintentó ni lo registró como
+  // duda). Con el hecho en el digest, la puerta lo trata como señal
+  // de duda (questionCandidatesOf, candidata sin_senal_ig): la falla
+  // escala, no se salta en silencio. Sin el dato, los campos no nacen
+  // y todo sigue como hoy.
+  if (p.igLink && typeof p.igLink === 'object') {
+    d.ig_link_unread = !!p.igLink.unread;
+    d.ig_link_reintento_fallo = !!p.igLink.reintentoFallo;
+  }
   const dna = (p.dna && typeof p.dna === 'object') ? p.dna : null;
 
   // --- productos / servicios / promos ---
@@ -2545,6 +2557,13 @@ function duenoStarConflictoOf(d) {
   return { declarada, nombre, ancla };
 }
 
+/* (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA) Los rubros AMPLIOS de
+ * la pregunta de piso: el subconjunto de la taxonomía que un dueño
+ * reconoce de un vistazo cuando el sistema no sabe NADA de su
+ * negocio. El orden es de presentación; la afirmación de la web, si
+ * su texto solo determina un rubro, va antes que todos. */
+const RUBROS_AMPLIOS_PISO = ['gastronomia', 'cafeteria', 'belleza', 'barberia', 'fitness', 'moda', 'salud', 'mascotas', 'hogar', 'servicios', 'profesionales', 'turismo'];
+
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
  * estrella inferido se CONFIRMA con un toque y cada contradicción se
  * resuelve preguntando — leer propone, el dueño valida. */
@@ -2597,6 +2616,69 @@ function questionCandidatesOf(d) {
         ? `tu negocio es más ${labels[0]} o ${labels[1]}?`
         : `confirmás que tu rubro es ${labels[0]}?`,
     });
+  }
+  // (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA) LA DUDA SIN
+  // CANDIDATAS TAMBIÉN FRENA: en la re-corrida SoulCycle la
+  // clasificación quedó en CERO (rubro «otro», confianza 0, sin
+  // candidatas, sin evidencia) y needs_question quedó en false
+  // porque resolveRubro lo ata a que existan candidatas — la duda
+  // «no sé qué es este negocio» no tenía forma consumible,
+  // reconcileSources no tuvo con qué contradecir (reconciliacion:
+  // null) y la web construyó el fundamento sola, un piso más abajo
+  // que en la corrida 1. Este piso nace de ese estado cero y
+  // pregunta con opciones AMPLIAS construidas desde lo poco que sí
+  // se sabe: primero el rubro que el texto de la web por sí solo
+  // determina (presentado en el texto como afirmación a confirmar,
+  // nunca como hecho) y después los rubros amplios de la taxonomía.
+  // La señal completa queda registrada en la candidata: la
+  // afirmación de la web, el link del perfil sin leer y su reintento
+  // fallido — la falla del link ESCALA como duda, no se salta en
+  // silencio. Con señal IG sana el piso no nace (no es preguntar
+  // siempre) y lo respondido/salteado lo respeta la puerta como a
+  // toda candidata de rubro (answered.rubro).
+  if (!out.some((c) => c.tipo === 'rubro')) {
+    const ridP = d.rubro_id;
+    const senalCero = !!ridP && !ridP.segura && (Number(ridP.confianza) || 0) === 0
+      && !(Array.isArray(ridP.candidatas) && ridP.candidatas.length)
+      && !(Array.isArray(ridP.evidencia) && ridP.evidencia.length)
+      && String(ridP.fuente || 'deteccion') === 'deteccion';
+    if (senalCero) {
+      const opcionesPiso = [];
+      const pushPiso = (r) => {
+        if (r && r !== 'otro' && rubroId.RUBROS.includes(r) && !opcionesPiso.some((o) => o.rubro === r)) {
+          opcionesPiso.push({ rubro: r, subrubro: '', label: rubroId.labelFor(r, '') });
+        }
+      };
+      let webRubroPiso = '';
+      try {
+        const webClsPiso = rubroId.classifyBusiness({
+          webText: String(d.diferencial || ''),
+          catalogText: [...(d.productos || []), ...(d.servicios || [])].map((x) => (x && x.nombre) || '').join(' · '),
+        });
+        const topPiso = (webClsPiso.candidatas || [])[0];
+        if (topPiso && topPiso.rubro !== 'otro' && topPiso.score >= 3) webRubroPiso = topPiso.rubro;
+      } catch (e) { webRubroPiso = ''; }
+      if (webRubroPiso) pushPiso(webRubroPiso);
+      for (const r of RUBROS_AMPLIOS_PISO) {
+        if (opcionesPiso.length >= 6) break;
+        pushPiso(r);
+      }
+      if (opcionesPiso.length) {
+        const afirmacionWeb = (d.fuentes && d.fuentes.web)
+          ? String(d.diferencial || '').replace(/\s+/g, ' ').trim().slice(0, 160)
+          : '';
+        const linkSinLeer = !!d.ig_link_unread;
+        out.push({
+          tipo: 'rubro', motivo: 'sin_senal_ig', rubro: 'otro', subrubro: '', opciones: opcionesPiso,
+          sin_senal: {
+            web: afirmacionWeb ? { afirmacion: afirmacionWeb, url: String((d.fuentes && d.fuentes.web && d.fuentes.web.url) || '').slice(0, 200) } : null,
+            link_sin_leer: linkSinLeer,
+            link_reintento_fallo: !!d.ig_link_reintento_fallo,
+          },
+          texto: `no pudimos determinar qué es tu negocio desde tu Instagram${afirmacionWeb ? ` — tu web dice: «${afirmacionWeb}»` : ''}${linkSinLeer ? ' — tampoco pudimos abrir el link de tu perfil' : ''} — ¿cuál es tu negocio?`,
+        });
+      }
+    }
   }
   const star = d.inferred_star;
   // (v238) Si el dueño ya confirmó su estrella (Posty pregunta), no hay
@@ -2694,6 +2776,26 @@ function trialQuestionFor(digest, opts) {
     if (!c || !c.tipo) continue;
     if (c.tipo === 'rubro') {
       if (answered.rubro) continue;
+      // (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA) LA PREGUNTA SIN
+      // SEÑAL: el texto dice la verdad completa — no supimos qué es
+      // el negocio desde el Instagram, la web afirma esto otro (a
+      // confirmar, no como hecho) y el link del perfil no se pudo
+      // abrir — y las opciones son las amplias de la candidata,
+      // re-rotuladas al idioma de la prueba. Sin esta forma, la
+      // candidata de piso moría como las dudas de antes: registrada
+      // en el digest y jamás preguntada.
+      if (c.motivo === 'sin_senal_ig') {
+        const opsPiso = (Array.isArray(c.opciones) ? c.opciones : [])
+          .filter((x) => x && x.rubro)
+          .map((x) => ({ rubro: x.rubro, subrubro: x.subrubro || '', label: rubroId.labelFor(x.rubro, x.subrubro || '', lang) }));
+        if (!opsPiso.length) continue;
+        const sn = c.sin_senal || {};
+        const afirm = sn.web && sn.web.afirmacion ? String(sn.web.afirmacion).slice(0, 120) : '';
+        const textoPiso = lang === 'en'
+          ? `We couldn't tell what your business is from your Instagram${afirm ? ` — your website says: "${afirm}"` : ''}.${sn.link_sin_leer ? ' We also couldn\'t open the link in your profile.' : ''} What is your business?`
+          : `No pudimos determinar qué es tu negocio desde tu Instagram${afirm ? ` — tu web dice: «${afirm}»` : ''}.${sn.link_sin_leer ? ' Tampoco pudimos abrir el link de tu perfil.' : ''} ¿Cuál es tu negocio?`;
+        return { tipo: 'rubro', texto: textoPiso, opciones: opsPiso, motivo: 'sin_senal_ig', sin_senal: sn };
+      }
       const rid = digest.rubro_id || {};
       // (LOTE SOULCYCLE-A · CIERRES 1+3) La candidata de CONTRADICCIÓN
       // manda con SUS opciones (los dos rubros en disputa, no las

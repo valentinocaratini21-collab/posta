@@ -106,10 +106,21 @@ seccion('A · sin declaración: la puerta pregunta por el ancla, como hoy');
 {
   const d = conCandidatas(digestCorrida());
   const motivos = d.question_candidates.map((c) => c.motivo || c.tipo);
-  ok(d.question_candidates.length === 1 && d.question_candidates[0].motivo === 'ancla_sin_confirmar' && d.question_candidates[0].item === 'Rotor Set Install',
-    'A1 candidatas = solo el ancla sin confirmar (Rotor Set Install)', motivos);
+  // (ACTUALIZADO CON CAUSA — LOTE SOULCYCLE-CIERRE-6 · PISO DE LA
+  // DUDA) El fixture de la corrida es TAMBIÉN el estado cero de
+  // señal IG (rubro «otro», confianza 0, sin candidatas ni
+  // evidencia): desde el cierre 6 nace PRIMERO la candidata de piso
+  // (sin_senal_ig) y la puerta la sirve antes que la del ancla —
+  // preguntar la estrella de un negocio que no se sabe qué es fue
+  // el fallo de la re-corrida. A1/A2/B5/B6/D3 se ajustan a ese
+  // orden; el ancla, el conflicto y su no-repregunta quedan
+  // verificados un paso después, como en el cierre 2.
+  ok(d.question_candidates.length === 2 && d.question_candidates[0].motivo === 'sin_senal_ig' && d.question_candidates[1].motivo === 'ancla_sin_confirmar' && d.question_candidates[1].item === 'Rotor Set Install',
+    'A1 candidatas = el piso (sin_senal_ig) y el ancla sin confirmar (Rotor Set Install)', motivos);
   const q = cd.trialQuestionFor(d, { lang: 'en', answered: {} });
-  ok(!!q && q.tipo === 'estrella' && q.item === 'Rotor Set Install' && !q.motivo, 'A2 la pregunta servida es la del ancla', q);
+  ok(!!q && q.tipo === 'rubro' && q.motivo === 'sin_senal_ig', 'A2 la pregunta servida primero es la del piso (cierre 6)', q);
+  const qAncla = cd.trialQuestionFor(d, { lang: 'en', answered: { rubro: true } });
+  ok(!!qAncla && qAncla.tipo === 'estrella' && qAncla.item === 'Rotor Set Install' && !qAncla.motivo, 'A2b respondido el rubro, la pregunta servida es la del ancla', qAncla);
   eq(cd.duenoStarConflictoOf(digestCorrida()), null, 'A3 sin declaración no hay conflicto');
 }
 
@@ -127,8 +138,8 @@ seccion('B · la declaración del dueño no calza: el conflicto se declara y se 
   // las candidatas se recomputan y nace la del conflicto.
   const antes = cd.questionCandidatesOf(digestCorrida());
   const despues = cd.questionCandidatesOf(d);
-  ok(antes.length === 1 && antes[0].motivo === 'ancla_sin_confirmar', 'B5 antes de mapear la declaración: solo el ancla');
-  ok(despues.length === 1 && despues[0].motivo === 'estrella_dueno_sin_encaje', 'B6 tras mapearla: solo el conflicto (el ancla no nace, queda subsumida)', despues.map((c) => c.motivo));
+  ok(antes.length === 2 && antes[0].motivo === 'sin_senal_ig' && antes[1].motivo === 'ancla_sin_confirmar', 'B5 antes de mapear la declaración: el piso y el ancla (con causa, cierre 6)');
+  ok(despues.length === 2 && despues[0].motivo === 'sin_senal_ig' && despues[1].motivo === 'estrella_dueno_sin_encaje', 'B6 tras mapearla: el piso y el conflicto (el ancla no nace, queda subsumida)', despues.map((c) => c.motivo));
   conCandidatas(d);
   // La declaración presente NO marca la pregunta respondida (es su causa):
   const q = cd.trialQuestionFor(d, { lang: 'en', answered: { estrella: true, rubro: true } });
@@ -182,7 +193,11 @@ seccion('D · casos sanos: el flujo de hoy, sin frenos nuevos');
   const wowSin = cd.deriveFirstPostWow(dSin, { category: 'otro', lang: 'en' });
   if (cdB) {
     const candsSinB = cdB.questionCandidatesOf(digestCorrida());
-    eq(JSON.stringify(candsSin), JSON.stringify(candsSinB), 'D3 sin declaración: candidatas idénticas a la base');
+    // (ACTUALIZADO CON CAUSA — cierre 6) la única diferencia contra
+    // la base es la candidata de piso que abre la lista; el resto,
+    // idéntico y en el mismo orden.
+    eq(JSON.stringify(candsSin.slice(1)), JSON.stringify(candsSinB), 'D3 sin declaración: candidatas idénticas a la base salvo el piso del cierre 6 que abre');
+    ok(candsSin.length === candsSinB.length + 1 && candsSin[0].motivo === 'sin_senal_ig', 'D3b la diferencia es exactamente la candidata de piso, primera');
     const wowSinB = cdB.deriveFirstPostWow(digestCorrida(), { category: 'otro', lang: 'en' });
     ok(!!wowSin && !!wowSinB && wowSin.digest_anchor === wowSinB.digest_anchor && !!wowSin.star_missing === !!wowSinB.star_missing,
       'D4 sin declaración: el wow de la base y el del lote coinciden', { rel: wowSin && wowSin.digest_anchor, base: wowSinB && wowSinB.digest_anchor });

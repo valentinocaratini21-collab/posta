@@ -1602,7 +1602,7 @@ function applyTrialMasVendido(digest) {
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap, starSignals, feedPosts }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro, onboarding, draft, comments, offerSheet, feedMap, starSignals, feedPosts, igLinkState }) {
   try {
     const _trialDigestBuilt = clientDigest.buildFromParts({
       business,
@@ -1647,6 +1647,13 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // (digest.reconciliacion) y la convierte en la primera candidata
       // a pregunta si las fuentes se contradicen.
       reconciliacion: rubro ? rubro.reconciliacion : null,
+      // (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA) El estado de la
+      // lectura del link del perfil: buildFromParts lo guarda en el
+      // fundamento (ig_link_unread / ig_link_reintento_fallo) y la
+      // puerta lo trata como señal de duda. Las rutas lo arman desde
+      // el perfil/audit que ya leyeron (stream: tras el reintento de
+      // la lectura; sync: del audit en vuelo).
+      igLink: igLinkState || null,
     });
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
     // (LOTE PREGUNTA-SIN-REPETIR) Lo declarado en el formulario cubre
@@ -39302,7 +39309,18 @@ async function trialGenerateHandler(req, res) {
         }
       } catch (e) { /* sin embed: la estrella se infiere como hoy */ }
     }
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet, starSignals: _trialStarSignals, feedPosts: _embedPostsVoz || null });
+    // (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA) El estado de la
+    // lectura del link del perfil, del audit que ya está en vuelo
+    // (sin fetch nuevo; la misma promesa que abajo alimenta el
+    // payload), viaja al fundamento también en esta ruta: la puerta
+    // lo trata como señal de duda. Si la lectura no llegó en la
+    // gracia, el fundamento queda sin el dato y el piso nace igual
+    // del rubro en cero.
+    const _auditLinkSync = await raceMs(auditPromise, 1500);
+    const igLinkStateSync = (_auditLinkSync && _auditLinkSync.profile)
+      ? { unread: !!_auditLinkSync.profile.link_unread, reintentoFallo: !!_auditLinkSync.profile.link_reintento_fallo }
+      : null;
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: formTextBase, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialComments, offerSheet: trialOfferSheet, starSignals: _trialStarSignals, feedPosts: _embedPostsVoz || null, igLinkState: igLinkStateSync });
     // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) La señal de texto del
     // feed viaja DENTRO del digest de la prueba (la firma validada
     // del estilo la trae): el spec la lee de acá, y el digest
@@ -40560,6 +40578,32 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         new Promise((r) => setTimeout(() => r(null), 4000)),
       ]).catch(() => null);
       if (prof) {
+        // (LOTE SOULCYCLE-CIERRE-6 · PISO DE LA DUDA, parte a) EL LINK
+        // DEL PERFIL SE LEE DE VERDAD: el embed no trae external_url
+        // (la lectura moría en la fuente y link_unread era el estado
+        // normal, sin reintento), así que si el link llegó sin leer
+        // se REINTENTA desde la página del perfil — la fuente con
+        // identidad verificada — con carrera acotada, ANTES de que el
+        // link se consuma (link de bio profundo, web canónica,
+        // fundamento). Si se recupera, el perfil queda completo y es
+        // el que sigue viaje (trialProfile = prof cuando la carrera
+        // corta de la proyección no lo había fijado: el mismo objeto
+        // se completa, no se reemplaza). Si el reintento también
+        // falla, la falla queda REGISTRADA en el perfil
+        // (link_reintento_fallo) y de ahí en el fundamento: escala
+        // como señal de duda en la puerta, nunca se salta en
+        // silencio.
+        if (prof.link_unread) {
+          const reLink = await raceMs(feedAudit.retryProfileLink(ig), 5000);
+          if (reLink && reLink.link) {
+            prof.link = reLink.link;
+            prof.link_unread = false;
+            prof.link_fuente = 'perfil-reintento';
+          } else {
+            prof.link_reintento_fallo = true;
+          }
+        }
+        if (!trialProfile) trialProfile = prof;
         bioText = String(prof.bio || '');
         // (v196) Medallón de los pósters de marca: la foto de perfil ya
         // localizada por la cadena de la proyección (mismo archivo).
@@ -40824,6 +40868,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig, pic: trialProfile.pic || igPic || '' } : null,
       formText: formTextBaseS, feedPalette, registro: feedRegister, deep, rubro: rubroRes, onboarding: ocAns, draft: ocDraft, comments: trialCommentsS, offerSheet: trialOfferSheetS, feedMap: trialFeedMap, starSignals: _trialStarSignalsS,
       feedPosts: (trialData && Array.isArray(trialData.posts)) ? trialData.posts : null,
+      // (LOTE SOULCYCLE-CIERRE-6) El estado de la lectura del link
+      // tras el reintento: el fundamento lo guarda y la puerta lo
+      // trata como señal de duda.
+      igLinkState: trialProfile ? { unread: !!trialProfile.link_unread, reintentoFallo: !!trialProfile.link_reintento_fallo } : null,
     });
     // (LOTE TEXTO-SEGÚN-EL-FEED · pieza 1) Igual que en generate: la
     // señal de texto del feed viaja dentro del digest.
@@ -43905,7 +43953,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1105';
+const BUILD_ID = '20261105-v1106';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
