@@ -29307,15 +29307,23 @@ async function generateNoPhotoFirstPostImage({ prompt, topicText, apiKey, gemini
 // tope de gasto entre intentos (addendum 4: el límite real es el
 // gasto de IA, no el tiempo). Devuelve { buf, engine, qa, logoQa } o
 // null si no se logró (la pieza queda en armado honesto).
-async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logoPath = null, headline = '', textMode = '', accent = null, workDir, index = 0, apiKey = '', geminiKey = '', textoFeed = null } = {}) {
-  if (!workDir || !prompt) return null;
+// (LOTE SOULCYCLE-CIERRE-4 · rescate que no abandona) La cadena de
+// rescate devuelve su resultado CON MOTIVO: cada salida que antes era
+// un null pelado (el motivo se perdía y la pieza quedaba en «armando»
+// sin explicación — corrida SoulCycle 15/11) ahora declara su causa
+// ('sin-insumos' · 'sin-archivo-de-logo' · 'tope-de-gasto' ·
+// 'generacion-fallo' · 'qa-concepto' · 'compuesto-fallo' · 'logo-qa')
+// para que scheduleWeekRescue lo persista EN LA PIEZA. La firma vieja
+// (rescuePieceWithSeal → pieza o null) queda como wrapper.
+async function rescuePieceWithSealDetalle({ prompt, topicText = '', business = '', logoPath = null, headline = '', textMode = '', accent = null, workDir, index = 0, apiKey = '', geminiKey = '', textoFeed = null } = {}) {
+  if (!workDir || !prompt) return { ok: false, motivo: 'sin-insumos' };
   // (LOTE TARTINE-FRENOS · P7) SIN ARCHIVO DE LOGO = FRENO, fail-closed
   // y ANTES de gastar generación: esta cadena existe para sellar con el
   // logo REAL; sin el archivo, el sello es imposible y el QA de logo se
   // salteaba en silencio — la pieza salía «sellada» sin logo y con
   // veredicto de éxito (corrida Tartine, posteo 671). Sin logoPath no
   // hay pieza: la pieza queda en armado honesto con su motivo.
-  if (!logoPath) return null;
+  if (!logoPath) return { ok: false, motivo: 'sin-archivo-de-logo' };
   const key = apiKey || process.env.OPENAI_API_KEY || '';
   // (LOTE TEXTO-SEGÚN-EL-FEED · piezas 4+6) DEFENSA EN EL COMPUESTO:
   // si una pieza con texto llega a componerse sobre un feed LIMPIO
@@ -29331,28 +29339,28 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
   let promptNow = prompt;
   let lastLogoQa = null;
   for (let att = 1; att <= 3; att++) {
-    try { if (!costs.demoAiCapOk()) return null; } catch (e) { return null; }
+    try { if (!costs.demoAiCapOk()) return { ok: false, motivo: 'tope-de-gasto' }; } catch (e) { return { ok: false, motivo: 'tope-de-gasto' }; }
     const gen = await generateNoPhotoFirstPostImage({ prompt: promptNow, topicText, apiKey: key || undefined, geminiKey: geminiKey || undefined }).catch(() => null);
-    if (!gen || !gen.b64) return null;
+    if (!gen || !gen.b64) return { ok: false, motivo: 'generacion-fallo' };
     if (gen.qa && gen.qa.passed === false) {
       // El concepto no pasó su propio QA (con su reintento interno):
       // no se sella una escena mala — la cadena sigue en fondo.
-      return null;
+      return { ok: false, motivo: 'qa-concepto' };
     }
     const buf = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: headlineRes, gradeHex: accent, workDir, index, headlineScale: scaleRes, inkHex: null, zone: 'top', logoPath: logoPath || null }).catch(() => null);
-    if (!buf) return null;
+    if (!buf) return { ok: false, motivo: 'compuesto-fallo' };
     if (headlineRes) {
       const tqa = await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: key }).catch(() => null);
       if (tqa && !tqa.passed) {
         // Titular compuesto ilegible: se re-compone SIN titular (la
         // pieza limpia de la casa) en vez de descartar la escena.
         const bufClean = await demoAi.compositeDemoPiece({ b64: gen.b64, headline: '', gradeHex: accent, workDir, index, headlineScale: 1, inkHex: null, logoPath: logoPath || null }).catch(() => null);
-        if (!bufClean) return null;
+        if (!bufClean) return { ok: false, motivo: 'compuesto-fallo' };
         if (logoPath) {
           lastLogoQa = await demoAi.qaGeneratedLogo({ b64: bufClean.toString('base64'), business, apiKey: key }).catch(() => null);
           if (!lastLogoQa || !lastLogoQa.ok) { promptNow = prompt + '\n\n' + demoAi.logoQaRetryDirective(lastLogoQa, business); continue; }
         }
-        return { buf: bufClean, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa, texto: 'sin-titular' };
+        return { ok: true, buf: bufClean, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa, texto: 'sin-titular' };
       }
     }
     if (logoPath) {
@@ -29362,9 +29370,17 @@ async function rescuePieceWithSeal({ prompt, topicText = '', business = '', logo
         continue;
       }
     }
-    return { buf, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa, ...(feedLimpioRes && textMode === 'text' ? { texto: 'sin-titular-feed-limpio' } : {}) };
+    return { ok: true, buf, engine: gen.engine || null, qa: gen.qa || null, logoQa: lastLogoQa, ...(feedLimpioRes && textMode === 'text' ? { texto: 'sin-titular-feed-limpio' } : {}) };
   }
-  return null;
+  // Los 3 intentos murieron en el QA de logo: ese es el motivo, con el
+  // último veredicto adjunto para el registro de la pieza.
+  return { ok: false, motivo: 'logo-qa', logoQa: lastLogoQa };
+}
+// Wrapper de la firma histórica: pieza sellada o null (el llamador de
+// la ruta de generación no cambia). El motivo vive en la Detalle.
+async function rescuePieceWithSeal(opts) {
+  const d = await rescuePieceWithSealDetalle(opts).catch(() => null);
+  return d && d.ok ? d : null;
 }
 // (LOTE SEMANA-NUNCA-INCOMPLETA) Cadena de pasadas del rescate de
 // semana: cada cadena tiene un token; una invocación fresca (desde
@@ -29440,12 +29456,17 @@ async function scheduleWeekRescue(o) {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-rescate-'));
     let applied = 0;
     const appliedIdxs = [];
+    // (LOTE SOULCYCLE-CIERRE-4) Motivo real por pieza de ESTA pasada:
+    // la cadena Detalle lo devuelve y acá se persiste en la pieza
+    // (abajo) — nunca más un null pelado que deja la pieza sin causa.
+    const motivosRescate = new Map(); // idx -> motivo
     try {
       for (const piece of o.pieces) {
         const idx = piece.idx | 0;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
-        const r = await rescuePieceWithSeal({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '', textoFeed: (payload && payload.digest && payload.digest.texto_feed) || null }).catch(() => null);
-        if (!r) continue;
+        const rd = await rescuePieceWithSealDetalle({ prompt: piece.prompt, topicText: piece.topicText || '', business: o.business || '', logoPath: o.logoPath || null, headline: piece.headline || '', textMode: piece.textMode || '', accent: o.accent || null, workDir, index: idx, apiKey: o.apiKey || '', geminiKey: o.geminiKey || '', textoFeed: (payload && payload.digest && payload.digest.texto_feed) || null }).catch(() => ({ ok: false, motivo: 'error-cadena' }));
+        if (!rd || !rd.ok) { motivosRescate.set(idx, (rd && rd.motivo) || 'error-cadena'); continue; }
+        const r = rd;
         const fresh = readCache();
         // (LOTE TARTINE-FRENOS · P1) Una importación a mitad de cadena
         // ya no corta el rescate: las piezas siguen (la creación de
@@ -29453,7 +29474,7 @@ async function scheduleWeekRescue(o) {
         if (!fresh || !Array.isArray(fresh.posts)) break;
         payload = fresh;
         if (!payload.posts[idx] || payload.posts[idx].armando !== true) continue;
-        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) } };
+        payload.posts[idx] = { ...payload.posts[idx], type: 'image', image: 'data:image/jpeg;base64,' + r.buf.toString('base64'), armando: false, ai: true, engine: r.engine, qa: { ...(r.qa || {}), logo: r.logoQa || null, ...(r.texto ? { texto: r.texto } : {}) }, rescate: { estado: 'completada', motivo: null, at: Date.now() } };
         if (payload.design && Array.isArray(payload.design.posts) && payload.design.posts[idx]) payload.design.posts[idx].photo_source = 'ai-generated';
         if (idx === 0 && payload.primer_posteo) {
           payload.primer_posteo.etapa = 'fondo';
@@ -29474,6 +29495,33 @@ async function scheduleWeekRescue(o) {
       }
     } finally {
       try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (e) {}
+    }
+    // (LOTE SOULCYCLE-CIERRE-4) EL MOTIVO QUEDA EN LA PIEZA: cada
+    // pieza que esta pasada no completó declara su causa real en su
+    // propio estado (posts[idx].rescate, espejado en el motivo de su
+    // entrada de rescate_semana — el placeholder 'cadena-en-fondo' de
+    // la generación no sobrevive a la primera pasada). La pieza sigue
+    // en armado honesto mientras la cadena trabaje; cuando la cadena
+    // se cierre, la declaración final (en el re-arme, abajo) reusa
+    // este mismo motivo. El registro jamás frena el rescate.
+    if (motivosRescate.size) {
+      try {
+        const finM = readCache();
+        if (finM && Array.isArray(finM.posts)) {
+          let tocoM = false;
+          for (const [idxM, motivoM] of motivosRescate) {
+            if (finM.posts[idxM] && finM.posts[idxM].armando === true) {
+              finM.posts[idxM] = { ...finM.posts[idxM], rescate: { estado: 'trabajando', motivo: motivoM, at: Date.now() } };
+              tocoM = true;
+              if (Array.isArray(finM.rescate_semana)) {
+                const entM = finM.rescate_semana.find((x) => x && x.idx === idxM);
+                if (entM && entM.motivo !== motivoM) { entM.motivo = motivoM; tocoM = true; }
+              }
+            }
+          }
+          if (tocoM) db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(finM), Date.now());
+        }
+      } catch (e) { /* el registro jamás frena el rescate */ }
     }
     // (LOTE TARTINE-FRENOS · P7, corregido por LOTE SEMANA-NUNCA-
     // INCOMPLETA) Sin archivo de logo, las piezas que siguen en
@@ -29594,6 +29642,32 @@ async function scheduleWeekRescue(o) {
       const finR = readCache();
       if (finR && Array.isArray(finR.posts)) {
         const pendR = o.pieces.filter((pc) => finR.posts[pc.idx | 0] && finR.posts[pc.idx | 0].armando === true);
+        // (LOTE SOULCYCLE-CIERRE-4) DECLARACIÓN AL CIERRE DE LA
+        // CADENA: si esta cadena se detiene (en espera o agotada),
+        // ninguna pieza queda en «armando» huérfano — cada una
+        // declara su motivo final EN LA PIEZA (y en su entrada de
+        // rescate_semana). Es el motivo por pieza, no una declaración
+        // sobre la semana: la semana sigue en armado honesto y el
+        // barrido (rescateSemanaSweep) o la entrada del invitado
+        // pueden re-abrir la cadena; al re-abrir, el estado vuelve a
+        // 'trabajando' con el motivo de la pasada nueva.
+        const declararRescateDetenido = (motivoFallback) => {
+          try {
+            let tocoD = false;
+            for (const pc of pendR) {
+              const idxD = pc.idx | 0;
+              if (!finR.posts[idxD] || finR.posts[idxD].armando !== true) continue;
+              const motivoD = motivosRescate.get(idxD) || motivoFallback;
+              finR.posts[idxD] = { ...finR.posts[idxD], rescate: { estado: 'detenido', motivo: motivoD, at: Date.now() } };
+              tocoD = true;
+              if (Array.isArray(finR.rescate_semana)) {
+                const entD = finR.rescate_semana.find((x) => x && x.idx === idxD);
+                if (entD) { entD.estado = 'detenido'; entD.motivo = motivoD; tocoD = true; }
+              }
+            }
+            if (tocoD) db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(finR), Date.now());
+          } catch (e) { /* la declaración jamás frena el rescate */ }
+        };
         if (!pendR.length) {
           semanaRearmeToken(o.cacheKey, true); // semana completa: la cadena se cierra
           semanaCadenasVivas.delete(o.cacheKey);
@@ -29609,7 +29683,8 @@ async function scheduleWeekRescue(o) {
           if (semanaRearmeEstado.get(o.cacheKey) !== estR && (identicaR || (!logoR0 && applied === 0))) semanaRearmeEstado.set(o.cacheKey, estR);
           if (identicaR && estR.sinProgreso >= 2) {
             semanaCadenasVivas.delete(o.cacheKey);
-            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: bloqueo idéntico tras el refresco (sin archivo de logo) — la cadena queda EN ESPERA con ${pendR.length} pieza(s) en armado; el resumidor la re-abre cuando el dueño vuelva`);
+            declararRescateDetenido('sin-archivo-de-logo');
+            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: bloqueo idéntico tras el refresco (sin archivo de logo) — la cadena queda EN ESPERA con ${pendR.length} pieza(s) en armado, cada una con su motivo declarado; el barrido o el resumidor la re-abren si el bloqueo cambia`);
           } else if (identicaR || (o.intento | 0) + 1 <= SEMANA_REARME_MAX_PASADAS) {
             const intentoR = identicaR ? (o.intento | 0) : (o.intento | 0) + 1;
             const timerR = setTimeout(async () => {
@@ -29626,7 +29701,8 @@ async function scheduleWeekRescue(o) {
             if (timerR && typeof timerR.unref === 'function') timerR.unref();
           } else {
             semanaCadenasVivas.delete(o.cacheKey);
-            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: pasadas de esta cadena agotadas (${SEMANA_REARME_MAX_PASADAS}) — la semana sigue en armado, pendientes ${pendR.map((p) => p.idx | 0).join(',')}`);
+            declararRescateDetenido('pasadas-agotadas');
+            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: pasadas de esta cadena agotadas (${SEMANA_REARME_MAX_PASADAS}) — la semana sigue en armado con el motivo declarado por pieza, pendientes ${pendR.map((p) => p.idx | 0).join(',')}; el barrido la re-abre`);
           }
         }
       }
@@ -29703,6 +29779,43 @@ const semanaResumidorEnVuelo = new Set();
 // (crearPosteoRescateTardio, P1 de Tartine): el rescate tardío corre
 // también desde esta reanudación, no solo desde el stream. Nunca
 // tira; lo llama /api/week/ensure en segundo plano.
+// (LOTE SOULCYCLE-CIERRE-4) EL RE-ENGANCHE POR FILA DE CACHÉ: el
+// núcleo que el resumidor hacía solo para usuarios registrados,
+// extraído para que lo compartan el resumidor, el barrido y la
+// entrada del invitado (guest/start) — el invitado de la corrida
+// SoulCycle nunca tuvo cuenta y nadie re-abría su cadena. Lee la
+// semana del trial_cache por su clave, refresca el bloqueo (el logo
+// puede existir ahora), reconstruye las piezas en armado y abre una
+// cadena fresca de scheduleWeekRescue. Si ya hay una cadena viva
+// para la clave, no duplica: devuelve viva:true. Nunca tira.
+async function rearmarSemanaPruebaPorCacheKey(cacheKey) {
+  try {
+    if (!cacheKey) return { pendientes: 0, pendIdx: [], rearmada: false };
+    const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
+    let payload = null;
+    try { payload = row && row.payload ? JSON.parse(row.payload) : null; } catch (e) { payload = null; }
+    if (!payload || !Array.isArray(payload.posts)) return { pendientes: 0, pendIdx: [], rearmada: false };
+    const pendIdx = [];
+    payload.posts.forEach((p, i) => { if (p && p.armando === true) pendIdx.push(i); });
+    if (!pendIdx.length) return { pendientes: 0, pendIdx: [], rearmada: false };
+    if (semanaCadenasVivas.has(cacheKey)) return { pendientes: pendIdx.length, pendIdx, rearmada: false, viva: true };
+    const logoPath = (await refrescarLogoPrueba(cacheKey).catch(() => null)) || trialLogoAbsPath(payload.digest);
+    const specPosts = (payload.design && Array.isArray(payload.design.posts)) ? payload.design.posts : [];
+    const pieces = pendIdx.map((i) => {
+      const spI = specPosts[i] || {};
+      return {
+        idx: i,
+        prompt: demo.buildNoPhotoBrandPrompt({ business: payload.business || '', category: payload.category || 'otro', subcat: (payload.design && payload.design.subcat) || payload.subcat || '', paletteHex: [payload.accent, payload.btn].filter(Boolean), paletteNames: [], description: (payload.web_info && payload.web_info.description) || '', star: (payload.digest && (payload.digest.producto_estrella || payload.digest.protagonista)) || (payload.onboarding && payload.onboarding.producto_estrella) || null }),
+        topicText: [spI.tema, spI.headline, spI.subline].filter(Boolean).join(' '),
+        headline: spI.headline || '',
+        textMode: spI.text_mode || '',
+      };
+    });
+    console.log(`[posta] re-enganche: la semana de ${cacheKey} sigue en armado — se re-abre la cadena con ${pieces.length} pieza(s)`);
+    scheduleWeekRescue({ cacheKey, digestHash: (payload.digest && payload.digest.hash) || '', pieces, business: payload.business || '', logoPath, accent: payload.accent || null, apiKey: process.env.OPENAI_API_KEY || '', geminiKey: process.env.GEMINI_API_KEY || '' }).catch(() => {});
+    return { pendientes: pendIdx.length, pendIdx, rearmada: true };
+  } catch (e) { return { pendientes: 0, pendIdx: [], rearmada: false }; }
+}
 async function rearmarSemanaPruebaDeUsuario(uid) {
   try {
     if (!uid || semanaResumidorEnVuelo.has(uid)) return { pendientes: 0, rearmada: false };
@@ -29711,31 +29824,57 @@ async function rearmarSemanaPruebaDeUsuario(uid) {
     if (semanaCadenasVivas.has(info.ig)) return { pendientes: info.pendientes, rearmada: false };
     semanaResumidorEnVuelo.add(uid);
     try {
-      const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(info.ig);
-      let payload = null;
-      try { payload = row && row.payload ? JSON.parse(row.payload) : null; } catch (e) { payload = null; }
-      if (!payload || !Array.isArray(payload.posts)) return { pendientes: info.pendientes, rearmada: false };
-      const pendIdx = [];
-      payload.posts.forEach((p, i) => { if (p && p.armando === true) pendIdx.push(i); });
-      if (!pendIdx.length) return { pendientes: 0, rearmada: false };
-      const logoPath = (await refrescarLogoPrueba(info.ig).catch(() => null)) || trialLogoAbsPath(payload.digest);
-      const specPosts = (payload.design && Array.isArray(payload.design.posts)) ? payload.design.posts : [];
-      const pieces = pendIdx.map((i) => {
-        const spI = specPosts[i] || {};
-        return {
-          idx: i,
-          prompt: demo.buildNoPhotoBrandPrompt({ business: payload.business || '', category: payload.category || 'otro', subcat: (payload.design && payload.design.subcat) || payload.subcat || '', paletteHex: [payload.accent, payload.btn].filter(Boolean), paletteNames: [], description: (payload.web_info && payload.web_info.description) || '', star: (payload.digest && (payload.digest.producto_estrella || payload.digest.protagonista)) || (payload.onboarding && payload.onboarding.producto_estrella) || null }),
-          topicText: [spI.tema, spI.headline, spI.subline].filter(Boolean).join(' '),
-          headline: spI.headline || '',
-          textMode: spI.text_mode || '',
-        };
-      });
-      console.log(`[posta] resumidor: la semana de @${info.ig} (usuario ${uid}) sigue en armado — se re-abre la cadena con ${pieces.length} pieza(s)`);
-      try { evTrack(uid, 'trial_rescate_reanudado', { ig: info.ig, pendientes: pendIdx }); } catch (e) {}
-      scheduleWeekRescue({ cacheKey: info.ig, digestHash: (payload.digest && payload.digest.hash) || '', pieces, business: payload.business || '', logoPath, accent: payload.accent || null, apiKey: process.env.OPENAI_API_KEY || '', geminiKey: process.env.GEMINI_API_KEY || '' }).catch(() => {});
-      return { pendientes: pendIdx.length, rearmada: true };
+      const r = await rearmarSemanaPruebaPorCacheKey(info.ig);
+      if (r.rearmada) { try { evTrack(uid, 'trial_rescate_reanudado', { ig: info.ig, pendientes: r.pendIdx || [] }); } catch (e) {} }
+      return { pendientes: r.pendientes, rearmada: r.rearmada };
     } finally { semanaResumidorEnVuelo.delete(uid); }
   } catch (e) { return { pendientes: 0, rearmada: false }; }
+}
+// (LOTE SOULCYCLE-CIERRE-4) EL BARRIDO DEL RESCATE — el patrón de
+// serieFeedSweep aplicado a la cadena que no puede morir en silencio:
+// la cadena vive en memoria (timers + mapas), así que un reinicio o
+// un deploy la mataba sin dejar rastro y la semana quedaba en armado
+// para siempre (en la corrida SoulCycle, ~13 min de relecturas con
+// generating:false y nadie trabajando; el invitado ni siquiera tenía
+// cuenta para que el resumidor lo reabriera). El barrido (cron */5 en
+// scheduler.js) recorre el trial_cache vigente (<72 h) y re-abre la
+// cadena de toda semana con piezas en armado y SIN cadena viva. El
+// gasto no se abre: cada intento sigue gateado por el tope vigente
+// dentro de la cadena (costs.demoAiCapOk), y el bloqueo idéntico sin
+// logo no se re-intenta hasta que el refresco encuentre el archivo.
+// Nunca tira.
+const RESCATE_SWEEP_MAX_SEMANAS = 10;
+async function rescateSemanaSweep() {
+  try {
+    const rows = db.prepare('SELECT ig, payload, created_at FROM trial_cache WHERE created_at >= ? ORDER BY created_at DESC').all(Date.now() - 72 * 3600 * 1000);
+    let reabiertas = 0;
+    let revisadas = 0;
+    for (const row of rows) {
+      if (reabiertas >= RESCATE_SWEEP_MAX_SEMANAS) break;
+      const ig = row && row.ig;
+      if (!ig || semanaCadenasVivas.has(ig)) continue;
+      let payload = null;
+      try { payload = row.payload ? JSON.parse(row.payload) : null; } catch (e) { payload = null; }
+      if (!payload || !Array.isArray(payload.posts)) continue;
+      const pend = [];
+      payload.posts.forEach((p, i) => { if (p && p.armando === true) pend.push(i); });
+      if (!pend.length) continue;
+      revisadas++;
+      // Guarda anti-quema: si TODAS las pendientes están detenidas
+      // por falta de logo, solo se re-abre si el refresco encuentra
+      // el archivo ahora (algo cambió); si no, la firma es la misma
+      // y la pasada no podría sellar nada.
+      const todoSinLogo = pend.every((i) => payload.posts[i].rescate && payload.posts[i].rescate.estado === 'detenido' && payload.posts[i].rescate.motivo === 'sin-archivo-de-logo');
+      if (todoSinLogo) {
+        const lg = await refrescarLogoPrueba(ig).catch(() => null);
+        if (!lg) continue;
+      }
+      const r = await rearmarSemanaPruebaPorCacheKey(ig).catch(() => ({ rearmada: false }));
+      if (r && r.rearmada) reabiertas++;
+    }
+    if (reabiertas) console.log(`[rescate-semana] barrido: ${reabiertas} cadena(s) re-abierta(s) (${revisadas} semana(s) en armado revisadas)`);
+    return { ok: true, reabiertas, revisadas };
+  } catch (e) { console.error('[rescate-semana] sweep:', e.message); return { ok: false, reabiertas: 0, revisadas: 0 }; }
 }
 // Devuelve SOLO el prompt expandido para un concepto. Útil para previsualizar
 // el brief antes de gastar una generación de imagen.
@@ -37598,10 +37737,29 @@ app.post('/api/guest/start', async (req, res) => {
     // magic link, con límite 3 y sin los extras de stories/reels).
     const nImp = importTrialWeek(g.userId, igK, null, { limit: 3, cacheKey });
     if (!nImp) {
-      // (LOTE PRUEBA-CHAT) La fila reusada del chat NO se borra: tiene el
-      // hilo del conserje; solo se limpia la fila recién creada.
-      if (!reuseGuest) { try { db.prepare('DELETE FROM users WHERE id = ?').run(g.userId); } catch (e) {} }
-      return res.status(500).json({ error: lang === 'en' ? 'We could not open your feed yet — try again in a minute.' : 'No pudimos abrir tu feed todavía — intentá de nuevo en un minuto.' });
+      // (LOTE SOULCYCLE-CIERRE-4 · ENTRADA HONESTA) La importación en
+      // 0 ya NO muere en un 500 pelado que invita a reintentar contra
+      // el mismo muro (corrida SoulCycle 15/11: dos 500 idénticos con
+      // la semana trabada en armado y la cadena muerta). Si la semana
+      // sigue EN ARMADO, la entrada re-engancha la cadena de rescate
+      // sobre la caché — trabajo de verdad, no un cartel — y responde
+      // el estado honesto con la vuelta posible: la fila invitada
+      // QUEDA (con 0 posteos, la próxima entrada la reusa, como la
+      // del chat) y la prueba NO se consume, porque la entrega se
+      // registra solo cuando la importación trae posteos.
+      const pendGS = (Array.isArray(payload.posts) ? payload.posts : [])
+        .map((p, i) => (p && p.armando === true) ? i : -1).filter((x) => x >= 0);
+      if (pendGS.length) {
+        try { await rearmarSemanaPruebaPorCacheKey(cacheKey); } catch (e) {}
+        try { evTrack(g.userId, 'trial_entrada_en_armado', { ig: cacheKey, pendientes: pendGS }); } catch (e) {}
+        return res.status(202).json({ ok: false, week_pending: true, pending: pendGS.length, error: lang === 'en' ? 'Your week is still being built — Posty is working on it right now. Come back in a few minutes and it will open right here.' : 'Tu semana todavía se está armando — Posty está trabajando en ella ahora. Volvé en unos minutos y se abre acá mismo.' });
+      }
+      // Sin piezas en armado y sin nada importable (la semana quedó
+      // sin medio y esta entrada no tiene cadena que re-enganchar):
+      // el estado también se dice — sin 500 y sin prometer un
+      // reintento contra el mismo resultado.
+      try { evTrack(g.userId, 'trial_entrada_sin_medio', { ig: cacheKey }); } catch (e) {}
+      return res.status(202).json({ ok: false, week_pending: false, week_unavailable: true, error: lang === 'en' ? 'We could not finish your week yet — tell me your @ in the chat and I will build it with you.' : 'Todavía no pudimos terminar tu semana — contame tu @ en el chat y la armamos juntos.' });
     }
     try { applyTrialLang(g.userId, igK); } catch (e) {}
     try { seedFromTrialDigest(g.userId, igK, { cacheKey }); } catch (e) {}
@@ -38452,7 +38610,22 @@ app.get('/api/trial/gen-status', (req, res) => {
     const hit = db.prepare('SELECT created_at FROM trial_cache WHERE ig = ?').get(ig);
     cached = !!(hit && Date.now() - hit.created_at < 72 * 3600 * 1000);
   } catch (e) { /* sin caché: se genera igual */ }
-  res.json({ ok: true, ig, cached, generating: trialGenIsInflight(ig) });
+  // (LOTE SOULCYCLE-CIERRE-4) La espera también se entera de la
+  // CADENA: `generating` sigue siendo solo la generación en curso
+  // (contrato intacto), pero el estado suma `rescuing` (hay una
+  // cadena de rescate viva para este @) y `arming` (piezas que
+  // siguen en armado en la semana cacheada) — antes la espera veía
+  // generating:false con la semana a medio armar y lo leía como
+  // terminado, y la entrada reventaba contra la importación en 0.
+  let arming = 0;
+  try {
+    const rowP = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
+    if (rowP && rowP.payload) {
+      const pl = JSON.parse(rowP.payload);
+      if (pl && Array.isArray(pl.posts)) for (const p of pl.posts) if (p && p.armando === true) arming++;
+    }
+  } catch (e) { /* sin lectura: la espera sigue con lo que tiene */ }
+  res.json({ ok: true, ig, cached, generating: trialGenIsInflight(ig), rescuing: semanaCadenasVivas.has(ig), arming });
 });
 // (LOTE IMAGEN-PRUEBA-TEMPRANA) Web con la que corrió la última
 // generación temprana por @: solo en memoria, 30 min. Si el envío trae
@@ -43691,7 +43864,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1103';
+const BUILD_ID = '20261105-v1104';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -44382,4 +44555,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, serieFeedSweep, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
+module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, serieFeedSweep, rescateSemanaSweep, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };

@@ -94,9 +94,12 @@ seccion('B · re-arme de pasadas del rescate de fondo');
   ok(cuerpoRescate.includes("semanaRearmeToken(o.cacheKey, true); // semana completa"), 'B9 con la semana completa la cadena se cierra (token invalidado)');
   // El gasto sigue gateado por el tope vigente y el freno de logo es
   // previo a cualquier generación (fail-closed intacto de Tartine).
-  ok(cuerpoPieza.includes('if (!logoPath) return null;'), 'B10 sin archivo de logo el rescate frena ANTES de generar (fail-closed)');
+  // (RE-PIN LOTE SOULCYCLE-CIERRE-4) El freno es el mismo y en el
+  // mismo lugar (antes de generar, sin gastar); la salida dejó de
+  // ser un null pelado y ahora DECLARA el motivo en la Detalle.
+  ok(cuerpoPieza.includes("if (!logoPath) return { ok: false, motivo: 'sin-archivo-de-logo' };"), 'B10 sin archivo de logo el rescate frena ANTES de generar (fail-closed, con motivo)');
   ok(cuerpoPieza.includes('costs.demoAiCapOk()'), 'B11 cada intento sigue gateado por el tope de gasto vigente (demoAiCapOk)');
-  ok(cuerpoPieza.indexOf('if (!logoPath) return null;') < cuerpoPieza.indexOf('generateNoPhotoFirstPostImage'), 'B12 el freno de logo precede a la generación: sin logo, la pasada no gasta');
+  ok(cuerpoPieza.indexOf("if (!logoPath) return { ok: false, motivo: 'sin-archivo-de-logo' };") < cuerpoPieza.indexOf('generateNoPhotoFirstPostImage'), 'B12 el freno de logo precede a la generación: sin logo, la pasada no gasta');
 
   // Unidad de los helpers de token (extraídos del fuente real y
   // evaluados en VM): la guarda anti-doble-cadena funciona.

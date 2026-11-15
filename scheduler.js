@@ -1205,6 +1205,22 @@ function startScheduler(db) {
     console.log('[posta] Alerta de serie (pieza dormida): cada hora y 07 (Buenos Aires)');
   } catch (e) { console.error('[serie-feed] no se pudo programar:', e.message); }
 
+  // (LOTE SOULCYCLE-CIERRE-4) Barrido del rescate de la semana de
+  // prueba: la cadena vive en memoria y un reinicio la mataba en
+  // silencio — cada 5 minutos el barrido re-abre la cadena de toda
+  // semana cacheada con piezas en armado y sin cadena viva (mismo
+  // patrón de carga perezosa que la alerta de serie). La cadena
+  // re-abierta trabaja con los bornes y el tope de gasto de siempre.
+  try {
+    cron.schedule('*/5 * * * *', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.rescateSemanaSweep === 'function') srv.rescateSemanaSweep();
+      } catch (e) { console.error('[rescate-semana]', e.message); }
+    });
+    console.log('[posta] Barrido del rescate de prueba: cada 5 minutos');
+  } catch (e) { console.error('[rescate-semana] no se pudo programar:', e.message); }
+
   // --- Posty Pro: stories automáticas, community y contenido reactivo ---
   try {
     cron.schedule('0 12 * * *', () => {
