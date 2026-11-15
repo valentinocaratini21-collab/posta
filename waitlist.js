@@ -7,7 +7,7 @@
  *  - 29–31/1/2027 SOLO lista de espera, sobre el diseño de la página de prueba
  *    (misma lengua visual, sin arrancar de cero), sin timer, sin número de
  *    posición, sin botón de prueba, sin cara de Posty.
- *  - Textos: «Posty abre el 1 de febrero» + «Sumate a la lista fundadora y
+ *  - Textos: «Posty abre el 1 de diciembre» + «Sumate a la lista fundadora y
  *    quedate con el precio fundador congelado.» (sin monto) + email + botón.
  *  - El 31/1 agrega «Mañana se abre.». Espejo EN con los textos equivalentes.
  *  - 1/2/2027 apertura total (web normal + prueba + app).

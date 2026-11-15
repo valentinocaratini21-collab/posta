@@ -71,19 +71,19 @@ const gate31 = WL.createWaitlistGate({ nowFn: () => new Date('2027-01-31T15:00:0
 const gateNormal = WL.createWaitlistGate({ nowFn: () => new Date('2027-01-15T15:00:00Z') });
 
 let t = runGate(gate29, fakeReq('/'));
-ok(t.res.sent && stripTags(t.res.body).includes('Posty abre el 1 de febrero'), 'ventana + visitante + /: sirve la lista ES');
+ok(t.res.sent && stripTags(t.res.body).includes('Posty abre el 1 de diciembre'), 'ventana + visitante + /: sirve la lista ES');
 ok(t.res.sent && !t.res.body.includes('<!--WAITLIST_MANANA-->'), '29/1: sin placeholder sin reemplazar');
 ok(t.res.sent && !stripTags(t.res.body).includes('Mañana se abre.'), '29/1: sin línea de mañana');
 ok(t.res.headers['Cache-Control'] === 'no-cache', 'la página de ventana sale sin caché');
 t = runGate(gate31, fakeReq('/'));
 ok(t.res.sent && stripTags(t.res.body).includes('Mañana se abre.'), '31/1: agrega «Mañana se abre.»');
 t = runGate(gate31, fakeReq('/en/'));
-ok(t.res.sent && stripTags(t.res.body).includes('Posty opens on February 1'), 'ventana + visitante + /en/: sirve la lista EN');
+ok(t.res.sent && stripTags(t.res.body).includes('Posty opens on December 1'), 'ventana + visitante + /en/: sirve la lista EN');
 ok(t.res.sent && stripTags(t.res.body).includes('Opens tomorrow.'), '31/1 EN: «Opens tomorrow.»');
 t = runGate(gate29, fakeReq('/prueba'));
-ok(t.res.sent && stripTags(t.res.body).includes('Posty abre el 1 de febrero'), 'ventana + visitante + /prueba: sin prueba, solo lista');
+ok(t.res.sent && stripTags(t.res.body).includes('Posty abre el 1 de diciembre'), 'ventana + visitante + /prueba: sin prueba, solo lista');
 t = runGate(gate29, fakeReq('/en/prueba'));
-ok(t.res.sent && stripTags(t.res.body).includes('Posty opens on February 1'), 'ventana + visitante + /en/prueba: solo lista EN');
+ok(t.res.sent && stripTags(t.res.body).includes('Posty opens on December 1'), 'ventana + visitante + /en/prueba: solo lista EN');
 t = runGate(gate29, fakeReq('/', { userId: 12 }));
 ok(!t.res.sent && t.nexted, 'ventana + cliente con sesión + /: pasa a la app normal');
 t = runGate(gateNormal, fakeReq('/'));
@@ -100,10 +100,10 @@ t = runGate(gate29, fakeReq('/fundadores'));
 ok(!t.res.sent && t.nexted, 'ventana + /fundadores: no se toca (fuera del alcance)');
 
 // ---- 3. Las páginas: textos exactos, y nada de lo prohibido ----
-for (const s of ['Posty abre el 1 de febrero', 'Sumate a la lista fundadora y quedate con el precio fundador congelado.', 'Tu email', 'Sumarme a la lista', 'Listo, ya estás en la lista.', 'Revisá tu email', 'Algo falló, probá de nuevo']) {
+for (const s of ['Posty abre el 1 de diciembre', 'Sumate a la lista fundadora y quedate con el precio fundador congelado.', 'Tu email', 'Sumarme a la lista', 'Listo, ya estás en la lista.', 'Revisá tu email', 'Algo falló, probá de nuevo']) {
   ok(ES.includes(s), 'ES contiene: ' + s);
 }
-for (const s of ['Posty opens on February 1', 'Join the founder list and lock in the founder price.', 'Your email', 'Join the list', "You're on the list.", 'Check your email', 'Something went wrong, try again']) {
+for (const s of ['Posty opens on December 1', 'Join the founder list and lock in the founder price.', 'Your email', 'Join the list', "You're on the list.", 'Check your email', 'Something went wrong, try again']) {
   ok(EN.includes(s), 'EN contiene: ' + s);
 }
 for (const page of [ES, EN]) {
