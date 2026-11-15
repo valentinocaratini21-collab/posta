@@ -118,6 +118,45 @@ function starOf({ profile, posts, items, captions }) {
 }
 
 // ---------------------------------------------------------------------------
+// (LOTE ARREGLOS-AUDITORÍA · a) EL PORQUÉ DE LA ESTRELLA, VISIBLE: la
+// auditoría nombraba la estrella pero nunca decía por qué lo es. La
+// razón ya existe — es la evidencia con la que inferStar o la vía
+// corroborada la eligió — pero vivía solo en el payload interno. Acá se
+// compone la línea pública desde ESA evidencia, plantilla por
+// plantilla: la evidencia que no se reconoce no se muestra (antes que
+// traducir mal o afirmar de más, se omite), y sin ninguna razón legible
+// no hay línea (la sección no sale).
+// ---------------------------------------------------------------------------
+function starWhyLine(star, T) {
+  if (!star || !star.name) return null;
+  const reasons = [];
+  for (const ev of (star.evidence || [])) {
+    const s = String(ev || '').trim();
+    let m;
+    if ((m = s.match(/^aparece en (\d+) de sus últimos (\d+) posteos$/))) {
+      reasons.push(T('aparece en ' + m[1] + ' de tus últimos ' + m[2] + ' posteos', 'it shows up in ' + m[1] + ' of your last ' + m[2] + ' posts'));
+    } else if (s === 'es lo primero que muestra su catálogo') {
+      reasons.push(T('es lo primero que muestra tu catálogo', 'it is the first thing your catalog shows'));
+    } else if (s === 'está entre lo primero de su catálogo') {
+      reasons.push(T('está entre lo primero de tu catálogo', 'it is among the first things in your catalog'));
+    } else if (s === 'su posteo con más alcance lo menciona') {
+      reasons.push(T('tu posteo con más alcance lo menciona', 'your widest-reaching post mentions it'));
+    } else if ((m = s.match(/^es el más querido de su feed \((\d+) interacciones en su posteo con más cariño\)$/))) {
+      reasons.push(T('es el más querido de tu feed (' + m[1] + ' interacciones en su posteo con más cariño)', 'it is the most loved on your feed (' + m[1] + ' interactions on its most-loved post)'));
+    } else if (s === 'figura como estrella en la ficha del negocio') {
+      reasons.push(T('figura como estrella en la ficha de tu negocio', 'it is listed as the star in your business profile'));
+    } else if ((m = s.match(/^aparece nombrado con nombre propio en su feed y corroborado por dos señales independientes \((.+)\)$/))) {
+      reasons.push(T('aparece con nombre propio en tu feed, corroborado por dos señales independientes (' + m[1] + ')', 'it appears by name on your feed, backed by two independent signals (' + m[1] + ')'));
+    }
+  }
+  if (!reasons.length) return null;
+  return {
+    name: star.name,
+    line: T(star.name + ' es tu estrella: ', star.name + ' is your star: ') + reasons.join('; ') + '.',
+  };
+}
+
+// ---------------------------------------------------------------------------
 // (1) LO QUE NOS GUSTÓ — la línea de fan. La carta v5 nombra en SU
 // línea de fan la estrella del negocio: esta sección sale de la MISMA
 // lectura y la nombra con la misma estrella, con un hecho positivo y
@@ -392,6 +431,7 @@ function buildAudit(input) {
     fan: { text: fan.text },
     findings: top.map((f) => ({ eje: f.eje, titulo: f.titulo, texto: f.texto })),
     evidence,
+    star_why: starWhyLine(star, T),
     signals: {
       n_posts: signals.n_posts,
       posteos_por_semana: trialSignals.posts_per_week != null ? trialSignals.posts_per_week : signals.posts_per_week,
@@ -461,6 +501,9 @@ function renderAuditHtml(p) {
         'Valentino and Posty built it looking at your real Instagram, post by post. No strings attached: it is yours.')) + '</p>\n'
     + '  <h2>' + escHtml(T('Primero, lo que nos gustó', 'First, what we liked')) + '</h2>\n'
     + '  <p class="bien">' + escHtml(p.fan && p.fan.text) + '</p>\n'
+    + (p.estrella_porque && p.estrella_porque.line
+      ? '  <h2>' + escHtml(T('Tu estrella', 'Your star')) + '</h2>\n  <p class="bien">' + escHtml(p.estrella_porque.line) + '</p>\n'
+      : '')
     + '  <h2>' + escHtml(T('Lo que vimos para mejorar', 'What we saw to improve')) + '</h2>\n'
     + findingsHtml + '\n'
     + '  <div class="hariamos">\n    <b>' + escHtml(T('Lo que haríamos nosotros', 'What we would do')) + '</b>\n    <p>' + escHtml(T(
@@ -532,6 +575,7 @@ async function generateEmailAudit(input, io = {}) {
     // La estrella de ESTA lectura: la plantilla de la carta v5 nombra
     // esta misma en su línea de fan («[su producto estrella]»).
     estrella: built.signals.estrella,
+    estrella_porque: built.star_why || null,
     fan: built.fan,
     findings: built.findings,
     evidence: built.evidence,

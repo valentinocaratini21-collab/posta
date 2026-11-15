@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1097';
+const PZ_BUILD = '20261105-v1098';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -13279,11 +13279,13 @@ function weekCardHTML(d, o) {
   // (v251) El porqué TAMBIÉN en Día/Semana: mismo tratamiento que la tarjeta
   // de revisión (reviewCardHTML) — ya venía en el payload de /api/posts.
   const whyHTML = d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : '';
+  const fmtHTML = pzFormatoLineaHTML(d);
   const foot = o.dia
     ? `<div class="igmock-foot">
         <div class="igmock-chrome">${igChrome}</div>
         ${capFull ? capHTML : '<div class="igmock-cap" aria-hidden="true"></div>'}
         ${acts}
+        ${fmtHTML}
         ${whyHTML}
       </div>`
     : `<div class="igmock-foot">
@@ -13292,6 +13294,7 @@ function weekCardHTML(d, o) {
         ${commentsLine}
         ${timeHTML}
         ${acts}
+        ${fmtHTML}
         ${whyHTML}
       </div>`;
   // (v326) En Día el encabezado de la pantalla ya dice el día: la etiqueta de
@@ -15051,6 +15054,26 @@ function pcParseDate(s0) {
 function pcFmtDay(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
 function pcFmtDayLong(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
 function pcFmtHour(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
+// (LOTE ARREGLOS-AUDITORÍA · b) El formato de la pieza como TEXTO en la
+// tarjeta: hasta acá el formato vivía solo en el payload y, con suerte,
+// en un badge con ícono (pcBadge) — la auditoría de las corridas
+// (Veja #7 / Mejuri) pidió la línea «Formato:» legible en el detalle del
+// posteo, para cada pieza y en el idioma de la cuenta.
+function pzFormatoLineaHTML(p) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const mt = String((p && p.media_type) || '');
+  let name = en ? 'Photo' : 'Foto';
+  let extra = '';
+  if (mt === 'video') name = 'Reel';
+  else if (mt === 'story') name = en ? 'Story' : 'Historia';
+  else if (mt === 'carousel') {
+    name = en ? 'Carousel' : 'Carrusel';
+    let n = 0;
+    try { const c = JSON.parse((p && p.carousel_paths) || '[]'); if (Array.isArray(c)) n = c.length; } catch (e) {}
+    if (n > 1) extra = ' · ' + n + (en ? ' photos' : ' fotos');
+  }
+  return `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere"><b>${en ? 'Format' : 'Formato'}:</b> ${name}${extra}</div>`;
+}
 function pcBadge(p) {
   if (pzIsPubReal(p)) return '<span class="pcard-badge pcard-badge-done">' + pzIc('checkCircle', 12) + ' Salió</span>';
   const mt = String(p.media_type || '');
@@ -15094,6 +15117,7 @@ function postCardHTML(p, opts) {
       <div class="pcard-meta"><b>${esc(when)}</b>${pcBadge(p)}</div>
       <div class="pcard-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>
       ${p.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">${pzIc('idea', 15)} <b>Por qué:</b> ${esc(p.strategy_why)}</div>` : ''}
+      ${pzFormatoLineaHTML(p)}
       ${actions}${ttActs}
     </div>
   </div>`;
