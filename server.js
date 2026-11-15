@@ -13743,7 +13743,16 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     // ausentes) + el día de publicación. Sin el flag, la respuesta es
     // byte-idéntica a la de antes (el picker del tab Ads no los ve).
     const incluirImp = String(req.query.incluir_impulsados || '') === '1';
-    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
+    // (LOTE CAMINO-CLIENTE-ADS) Si lo que falta es la conexión
+    // publicitaria DEL CLIENTE y el login unificado está configurado,
+    // la URL del flujo viaja en la respuesta: la tarjeta de Impulsar
+    // convierte su aviso en el botón que abre ese mismo flujo en el
+    // acto. Sin config_id en el entorno no viaja nada: el flujo queda
+    // inerte y la tarjeta muestra el motivo honesto, sin prometer un
+    // paso que no existe.
+    const faltaConexionAds = !gate.ready && (gate.code === 'ads_not_connected' || gate.code === 'page_not_authorized');
+    const connectUrlAds = gate.connect_url || (faltaConexionAds && unifiedReady(uid) ? '/api/ig/unified/go' : '');
+    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? {} : { motivo: gate.code || 'page_not_authorized' }), ...(connectUrlAds ? { connect_url: connectUrlAds } : {}), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
 });
 
@@ -43377,7 +43386,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1092';
+const BUILD_ID = '20261105-v1093';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1092';
+const PZ_BUILD = '20261105-v1093';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -17874,31 +17874,81 @@ function pzAdsRecLinea(p) {
 // reducida es un estado principal, no un borde. Otros motivos
 // (Instagram sin conectar, pauta sin configurar, sin datos) NO
 // reducen: la tarjeta completa sigue mostrando su aviso de siempre.
+// (LOTE CAMINO-CLIENTE-ADS) La función pasa a nombrar el estado
+// completo «sin conexión publicitaria del cliente»: suma el motivo
+// 'sin_cuenta_publicitaria' (el server lo manda como
+// 'ads_not_connected' en /elegibles), que es el de la captura de
+// Valentino 14/11 — la tarjeta pintaba completa, con montos y el
+// texto rojo al pie, y ningún camino terminaba. Los dos motivos son
+// el mismo paso que falta (conectar la cuenta en el flujo unificado),
+// así que los dos reducen la tarjeta a ese único paso.
 function pzAdsPaginaSinAutorizar() {
   const gate = pzBoostGate();
-  return !!(gate.cerrado && gate.motivo === 'sin_autorizacion_publicitaria');
+  return !!(gate.cerrado && (gate.motivo === 'sin_autorizacion_publicitaria' || gate.motivo === 'sin_cuenta_publicitaria'));
 }
 
-// (LOTE TARJETA-IMPULSAR) ÚNICO punto de entrada del botón «Autorizar
-// mi Página» de la tarjeta reducida. El mecanismo que este toque tiene
-// que disparar lo define el lote de conexión de Página, que va DEBAJO
-// de este en la cadena: cuando exista, se cambia SOLO el cuerpo de
-// esta función y la tarjeta no se rehace. Hoy ningún acto del cliente
-// otorga la Página (auditoría 13/11): el toque re-verifica el estado
-// real contra el servidor (pzBoostLoad trae elegibles + ads_ready
-// frescos) y re-pinta — si la autorización ya está, la tarjeta vuelve
-// completa en el acto; si no, queda el motivo honesto inline. Nunca
-// gasta nada.
+// (LOTE TARJETA-IMPULSAR) ÚNICO punto de entrada del botón de la
+// tarjeta reducida. El mecanismo que este toque tiene que disparar lo
+// define el lote de conexión de Página, que va DEBAJO de este en la
+// cadena: cuando exista, se cambia SOLO el cuerpo de esta función y
+// la tarjeta no se rehace.
+// (LOTE CAMINO-CLIENTE-ADS) Ese lote es este: el cuerpo pasa a ser el
+// mecanismo real. El toque re-verifica el estado contra el servidor
+// (pzBoostLoad trae elegibles + ads_ready + connect_url frescos):
+// si la conexión ya está, la tarjeta vuelve completa en el acto; si
+// sigue faltando y el servidor ofreció el flujo (connect_url), el
+// toque lo abre en el acto — el login unificado de Meta, el mismo
+// que se encadena a la conexión de Instagram — y la vuelta cae en
+// esta misma tarjeta (next validado del lado servidor); si el flujo
+// no está habilitado, queda el motivo honesto inline. Nunca gasta
+// nada: conectar no crea campañas ni cobra.
 async function pzAdsAutorizarPagina(btn) {
   const txt0 = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = gzT('Verificando…', 'Checking…'); }
   try { await pzBoostLoad(); } catch (e) {}
+  if (!pzAdsPaginaSinAutorizar()) {
+    if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; }
+    pzAdsPintar();
+    return;
+  }
+  const urlAds = (pzBoostState && pzBoostState.connectUrl) || '';
+  if (urlAds) {
+    try { window.location.href = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent('/#/app/ads'); return; } catch (e) {}
+  }
   if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; }
   pzAdsPintar();
   if (pzAdsPaginaSinAutorizar()) {
     const el = document.getElementById('pzAdsRecMsg');
-    if (el && !el.textContent) el.textContent = pzBoostMotivo('sin_autorizacion_publicitaria', 0);
+    if (el && !el.textContent) el.textContent = pzBoostMotivo(pzBoostGate().motivo, 0);
   }
+}
+
+// (LOTE CAMINO-CLIENTE-ADS) El botón «Conectar mi cuenta
+// publicitaria» de la HOJA de Impulsar (la que se abre desde Hoy y el
+// detalle): mismo mecanismo que el de la tarjeta del tab Ads
+// (pzAdsAutorizarPagina) — re-verifica, si la conexión ya está
+// re-pinta la hoja completa, si el servidor ofreció el flujo lo abre
+// en el acto y la vuelta cae en la pantalla donde estaba el cliente
+// (next validado del lado servidor, con la tarjeta de Ads como
+// destino seguro), y si el flujo no está habilitado deja el motivo
+// honesto en el mensaje de la hoja. Nunca gasta nada.
+async function pzBoostConectarCuenta(btn) {
+  if (btn) btn.disabled = true;
+  try { await pzBoostLoad(); } catch (e) {}
+  const g = pzBoostGate();
+  if (!g.cerrado) { pzBoostPintarBoost(); return; }
+  const urlAds = (pzBoostState && pzBoostState.connectUrl) || '';
+  if (urlAds) {
+    let nextAds = '/#/app/ads';
+    try {
+      const hAds = '/' + String(location.hash || '');
+      if (/^\/#\/[^\s"'\\<>]*$/.test(hAds)) nextAds = hAds;
+    } catch (e) {}
+    try { window.location.href = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent(nextAds); return; } catch (e) {}
+  }
+  if (btn) btn.disabled = false;
+  const msgEl = document.getElementById('pzBoostMsg');
+  if (msgEl) msgEl.textContent = pzBoostMotivo(g.motivo, Number((pzBoostState || {}).selMonto) || 50);
 }
 
 // (LOTE TARJETA-IMPULSAR) Las recomendaciones chicas: otros posteos
@@ -18025,16 +18075,23 @@ function pzAdsHTML() {
     recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><p class="pz-ads-credito">${esc(garantiaTxt)}</p></div></section>`;
   } else if (pzAdsPaginaSinAutorizar()) {
     // (LOTE TARJETA-IMPULSAR) Página sin autorizar: la tarjeta ENTERA
-    // se reduce a ese único paso — foto + una línea + «Autorizar mi
-    // Página» + «No se gastó nada.». Sin montos, sin botón de impulso
+    // se reduce a ese único paso — foto + una línea + el botón de
+    // conexión + «No se gastó nada.». Sin montos, sin botón de impulso
     // y sin párrafo de error. Es el estado principal de todo cliente
     // externo hoy (auditoría de autorización 13/11). La billetera y el
     // historial son secciones hermanas y quedan como están.
+    // (LOTE CAMINO-CLIENTE-ADS · solución aprobada por Valentino
+    // 14/11) El botón pasa a ser «Conectar mi cuenta publicitaria» y
+    // abre el flujo unificado en el acto (pzAdsAutorizarPagina): es
+    // el paso que de verdad falta desde el modelo del 13/11 — la
+    // cuenta publicitaria del cliente, no solo su Página — y el
+    // estado reducido ahora cubre también 'ads_not_connected', que
+    // antes pintaba la tarjeta completa con el texto rojo al pie.
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
     const lineaAut = p.recomendado
-      ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: authorize your Facebook Page.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: autorizar tu Página de Facebook.')
-      : (en ? 'One tap is all it takes to boost it: authorize your Facebook Page.' : 'Para impulsarlo falta un solo toque: autorizar tu Página de Facebook.');
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Authorize my Page' : 'Autorizar mi Página')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
+      ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: connect your ad account.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.')
+      : (en ? 'One tap is all it takes to boost it: connect your ad account.' : 'Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.');
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
@@ -18480,7 +18537,7 @@ let pzBoostState = null; // { elegibles, billetera, adsReady, motivoGate, boostH
 let pzBoostImpulsados = new Set(); // claves pzBoostKey impulsadas en esta sesión (además de ya_impulsado del servidor)
 
 function pzBoostNewState() {
-  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
+  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
 }
 
 function pzBoostSaldoUSD() {
@@ -18736,6 +18793,10 @@ async function pzBoostLoad() {
   s.elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles.map((e) => pzBoostNormPost(e)).filter(Boolean) : [];
   s.adsReady = (elig && elig.ok) ? !!elig.ads_ready : null;
   s.motivoGate = (elig && elig.ok && !elig.ads_ready) ? String(elig.motivo || 'page_not_authorized') : '';
+  // (LOTE CAMINO-CLIENTE-ADS) La URL del flujo de conexión, cuando el
+  // servidor la ofrece (login unificado configurado y falta la
+  // conexión del cliente): es lo que abre el botón de la tarjeta.
+  s.connectUrl = (elig && elig.ok && !elig.ads_ready) ? String(elig.connect_url || '') : '';
   s.boostHabilitado = (bil && bil.ok && bil.boostHabilitado !== undefined) ? bil.boostHabilitado : undefined;
   s.adsPermiso = (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : undefined;
   s.conversionPendiente = (bil && bil.ok) ? !!bil.conversion_pendiente : undefined;
@@ -18856,6 +18917,25 @@ function pzBoostPintarBoost() {
   // «saldo viejo en pesos» solo frena cuando el riel NO es MP.
   const saldoViejoARS = monedaARS && !railMP;
   const gate = pzBoostGate();
+  // (LOTE CAMINO-CLIENTE-ADS) Sin conexión publicitaria del cliente,
+  // la hoja se reduce al paso de conexión, igual que la tarjeta del
+  // tab Ads: foto + una línea + «Conectar mi cuenta publicitaria» +
+  // «No se gastó nada.». Sin montos (eran botones que no podían
+  // terminar), sin el aviso en rojo al pie y sin Cargar.
+  if (gate.cerrado && (gate.motivo === 'sin_cuenta_publicitaria' || gate.motivo === 'sin_autorizacion_publicitaria')) {
+    const imgNc = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    body.innerHTML = `<div class="pz-boost-3d3">${xBtn}
+    <div class="pz-boost-3d3-title">${esc(gzT('Impulsar posteo', 'Boost post'))} <span>${esc(gzT('con Ads', 'with Ads'))}</span></div>
+    <div class="pz-boost-3d3-row">
+      <div class="pz-boost-3d3-thumb">${imgNc}</div>
+      <div><p style="margin:4px 0;font-size:14.5px;line-height:1.45">${esc(gzT('Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.', 'One tap is all it takes to boost it: connect your ad account.'))}</p></div>
+    </div>
+    <button type="button" class="btn btn-primary btn-block" onclick="pzBoostConectarCuenta(this)">${esc(gzT('Conectar mi cuenta publicitaria', 'Connect my ad account'))}</button>
+    <p class="pz-boost-note">${esc(gzT('No se gastó nada.', 'Nothing was spent.'))}</p>
+    <p class="pz-boost-msg" id="pzBoostMsg"></p>
+  </div>`;
+    return;
+  }
   const conv = !!s.conversionPendiente;
   const falta = saldo < monto;
   const warn = saldoViejoARS
@@ -19995,6 +20075,30 @@ function igPopupShow(wowSub, wowEn) {
     };
   } catch (e) {}
 }
+/* ---------- resultado de la conexión publicitaria (?igads=) ---------- */
+// (LOTE CAMINO-CLIENTE-ADS) La vuelta del login unificado deja
+// ?igads=ok|sin_cuenta|error en el hash y hasta este lote NADIE lo
+// leía: el cliente volvía de Meta sin saber si su cuenta quedó
+// conectada. El estado honesto se dice en el acto: conectada,
+// conectó la Página pero falta la cuenta (la tarjeta de Ads vuelve
+// al botón), o el error que devolvió Meta. El parámetro se limpia
+// siempre, como en handleIgResult.
+function handleIgAdsResult() {
+  let q = '';
+  try { q = location.hash.split('?')[1] || ''; } catch (e) {}
+  const hq = new URLSearchParams(q);
+  const r = hq.get('igads');
+  if (!r) return;
+  try { history.replaceState(null, '', location.pathname + location.hash.split('?')[0]); } catch (e) {}
+  if (r === 'ok') {
+    toast('✅ <b>¡Cuenta publicitaria conectada!</b><br>Ya podés impulsar tus posteos: la pauta sale de tu cuenta y Posty la gestiona.');
+  } else if (r === 'sin_cuenta') {
+    toast('⚠️ <b>Falta la cuenta publicitaria.</b><br>Conectaste tu Página, pero no elegiste una cuenta publicitaria. En Ads, tocá «Conectar mi cuenta publicitaria» y elegila — o creala — en el paso de Facebook.');
+  } else if (r === 'error') {
+    toast('❌ ' + esc(hq.get('msg') || 'No se pudo conectar tu cuenta publicitaria.'));
+  }
+}
+
 /* ---------- toast global ---------- */
 function toast(html) {
   try {
@@ -20486,6 +20590,7 @@ function pzPrefetchKick() {
   // (ARMA TODO ítem 1) Retorno post-pago: ?plan=ok aterriza en LA SEMANA con su tarjeta de bienvenida.
   try { if (tab === 'schedule') maybePostPayWelcome(); } catch (e) {}
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
+  handleIgAdsResult(); // (LOTE CAMINO-CLIENTE-ADS) toast de la conexión publicitaria (?igads=)
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
   maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso; el gate ig_pending vive adentro: el wow lo atraviesa)
   try { pzIgMomAutoChecks(tab); } catch (e) {} // (MOMENTOS-CLAVE) hora19 / semana3 según el estado ya cargado
