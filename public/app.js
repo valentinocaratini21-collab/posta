@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1107';
+const PZ_BUILD = '20261105-v1109';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27468,13 +27468,13 @@ async function subirView() {
       <div class="q"><p>${en ? 'Is it an event with a date?' : '¿Es un evento con fecha?'}</p><div class="chips"><button type="button" class="chip" data-ev-es="si">${en ? 'Yes, it is an event' : 'Sí, es un evento'}</button><button type="button" class="chip on" data-ev-es="no">✓ No</button></div></div>
       <div id="pzEvPanel" hidden>
         <div class="q"><p>${en ? "What's the event called?" : '¿Cómo se llama el evento?'}</p>
-          <div id="pzEvLeido" hidden><div class="pz-ev-leido-txt">${en ? 'I read from your flyer:' : 'Del flyer leí:'} <b id="pzEvLeidoNom"></b></div><div class="chips"><button type="button" class="chip" id="pzEvLeidoOk">✓ ${en ? "That's it" : 'Es ese'}</button><button type="button" class="chip" id="pzEvLeidoNo">${en ? "I'll write it" : 'Lo escribo yo'}</button></div></div>
+          <div id="pzEvLeido" hidden><div class="pz-ev-leido-txt">${pzEvTxtLeido()} <b id="pzEvLeidoNom"></b></div><div class="chips"><button type="button" class="chip" id="pzEvLeidoOk">✓ ${en ? "That's it" : 'Es ese'}</button><button type="button" class="chip" id="pzEvLeidoNo">${en ? "I'll write it" : 'Lo escribo yo'}</button></div></div>
           <input type="text" id="pzEvNombre" maxlength="60" placeholder="${en ? 'Name of the event' : 'Nombre del evento'}" hidden>
-          <button type="button" class="fbtn pz-ev-leer" id="pzEvLeer" hidden>${en ? 'Read the name from my flyer' : 'Leer el nombre de mi flyer'}</button>
-          <div class="pz-ev-nota">${en ? 'If you uploaded the flyer, Posty reads the name and you confirm it with one tap. If not, write it here — it is the only thing typed in the whole app: a proper name cannot be tapped or invented.' : 'Si subiste el flyer, Posty lee el nombre y lo confirmás con un toque. Si no, escribilo acá: es lo único que se tipea en toda la app — un nombre propio no se puede tocar ni inventar.'}</div>
+          <button type="button" class="fbtn pz-ev-leer" id="pzEvLeer" hidden>${pzEvTxtLeer()}</button>
+          <div class="pz-ev-nota">${pzEvTxtNotaNombre()}</div>
         </div>
         <div class="q"><p>${en ? 'What day is it?' : '¿Qué día es?'}</p><div class="pz-ev-cal" id="pzEvCal"></div><div class="pz-ev-sel" id="pzEvSel"></div></div>
-        <div class="q"><p>${en ? "Add the person's photo if you want" : 'Sumá la foto de la persona si querés'} <span class="pz-ev-nota">${en ? '— e.g. the DJ. The photo goes in as a photo, as it is: Posty builds the flyer around it. It is never redrawn or AI-generated.' : '— ej. el DJ. La foto entra tal cual, como foto: Posty arma el flyer alrededor. Nunca se redibuja ni se genera con IA.'}</span></p>
+        <div class="q"><p>${en ? "Add the person's photo if you want" : 'Sumá la foto de la persona si querés'} <span class="pz-ev-nota">${pzEvTxtNotaFoto()}</span></p>
           <button type="button" class="fbtn" id="pzEvCaraBtn">${en ? "Add the person's photo" : 'Sumar la foto de la persona'}</button>
           <input type="file" id="pzEvCaraFile" accept="image/*" hidden>
           <div id="pzEvCaraUp"></div>
@@ -27486,7 +27486,7 @@ async function subirView() {
     <div class="preg-card pz-cero" id="pzCeroCard" hidden>
       <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'BUILD IT FROM SCRATCH?' : '¿LO ARMAMOS DE CERO?'}</div>
       <p class="pz-cero-t">${en ? 'Tell me an idea in one line — by voice or in writing — and Posty shows you what it understood so you can confirm it. Nothing is built on unconfirmed data.' : 'Contame una idea en una frase — por voz o escrita — y Posty te devuelve lo que entendió para que lo confirmes. Nada se arma con datos sin confirmar.'}</p>
-      <textarea id="pzCeroIdea" rows="2" maxlength="400" placeholder="${en ? 'E.g.: DJ Martín plays at the bar on Friday' : 'Ej.: el viernes toca DJ Martín en el bar'}"></textarea>
+      <textarea id="pzCeroIdea" rows="2" maxlength="400" placeholder="${pzEvTxtEjemploIdea()}"></textarea>
       <section class="pz-voz pz-cero-voz" data-pz-voz="cero">
         <div class="pz-voz-bar"><span class="pz-voz-hint">${en ? 'Or say it: <b>hold down</b> and tell me the idea' : 'O decila: <b>mantené apretado</b> y contame la idea'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>
         <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
@@ -27732,6 +27732,126 @@ function bindSubir() {
 // del evento ya se tocó (sí o no): desde ahí el flujo evento/cero es LA
 // puerta de idea de la vista y la tarjeta de voz opcional se oculta —
 // una sola puerta de idea visible a la vez en Subir.
+/* ---------- LOTE EVENTOS-RUBRO (15/11): el ejemplo y la pieza hablan
+   el rubro del cliente ----------
+   Hallazgo de Valentino: el flujo decía «— ej. el DJ… Posty arma el
+   flyer alrededor» a TODOS los negocios. La figura del ejemplo y la
+   palabra de la pieza salen del fundamento y del rubro del negocio
+   (PROFILE, el mismo perfil de /api/profile):
+   (1) si el fundamento nombra a su figura (su chef, su instructora,
+   su DJ), ESA palabra manda sobre el mapa genérico;
+   (2) mapa por rubro: el DJ SOLO en nocturnidad (boliche), el chef en
+   gastronomía y cafetería, el barbero en barbería, la estilista en
+   belleza, el instructor en fitness, el disertante en educación y
+   eventos;
+   (3) sin figura canónica (servicios y demás) el texto va NEUTRO, sin
+   ejemplo — jamás cae a un default de otro rubro.
+   La pieza: «flyer» es palabra de la nocturnidad; fuera de ella la
+   subida se nombra «imagen» y la pieza armada «posteo». */
+const PZ_EV_FIG_FUNDAMENTO = [
+  [/\bdj\b/i, 'el', 'DJ', 'DJ'],
+  [/\bchef\b/i, 'el', 'chef', 'chef'],
+  [/\bcocinera\b/i, 'la', 'cocinera', 'cook'],
+  [/\bcocinero\b/i, 'el', 'cocinero', 'cook'],
+  [/\binstructora\b/i, 'la', 'instructora', 'instructor'],
+  [/\binstructor\b/i, 'el', 'instructor', 'instructor'],
+  [/\bentrenadora\b/i, 'la', 'entrenadora', 'trainer'],
+  [/\bentrenador\b/i, 'el', 'entrenador', 'trainer'],
+  [/\bprofesora\b/i, 'la', 'profesora', 'teacher'],
+  [/\bprofesor\b/i, 'el', 'profesor', 'teacher'],
+  [/\bbarbero\b/i, 'el', 'barbero', 'barber'],
+  [/\bestilista\b/i, 'la', 'estilista', 'stylist'],
+  [/\bpeluquera\b/i, 'la', 'peluquera', 'hairdresser'],
+  [/\bpeluquero\b/i, 'el', 'peluquero', 'hairdresser'],
+  [/\bdisertante\b/i, 'el', 'disertante', 'speaker'],
+  [/\boradora\b/i, 'la', 'oradora', 'speaker'],
+  [/\borador\b/i, 'el', 'orador', 'speaker'],
+  [/\bmúsico\b/i, 'el', 'músico', 'musician'],
+  [/\bmusico\b/i, 'el', 'musico', 'musician'],
+  [/\bcantante\b/i, 'el', 'cantante', 'singer'],
+  [/\banimadora\b/i, 'la', 'animadora', 'host'],
+  [/\banimador\b/i, 'el', 'animador', 'host'],
+  [/\bbartender\b/i, 'el', 'bartender', 'bartender'],
+  [/\btatuadora\b/i, 'la', 'tatuadora', 'tattoo artist'],
+  [/\btatuador\b/i, 'el', 'tatuador', 'tattoo artist'],
+  [/\bmaquilladora\b/i, 'la', 'maquilladora', 'makeup artist'],
+  [/\bmaquillador\b/i, 'el', 'maquillador', 'makeup artist'],
+];
+const PZ_EV_FIG_RUBRO = {
+  boliche: ['el', 'DJ', 'DJ'],
+  gastronomia: ['el', 'chef', 'chef'],
+  cafeteria: ['el', 'chef', 'chef'],
+  barberia: ['el', 'barbero', 'barber'],
+  belleza: ['la', 'estilista', 'stylist'],
+  fitness: ['el', 'instructor', 'instructor'],
+  educacion: ['el', 'disertante', 'speaker'],
+  eventos: ['el', 'disertante', 'speaker'],
+};
+function pzEvPerfil() { try { return (typeof PROFILE !== 'undefined' && PROFILE) || null; } catch (e) { return null; } }
+function pzEvCategoria() { const p = pzEvPerfil(); return String((p && p.category) || ''); }
+function pzEvBoliche() { return pzEvCategoria() === 'boliche'; }
+function pzEvFigura() {
+  const p = pzEvPerfil();
+  const texto = String(((p && p.description) || '') + ' ' + ((p && p.business_name) || ''));
+  for (const f of PZ_EV_FIG_FUNDAMENTO) if (f[0].test(texto)) return { art: f[1], es: f[2], en: f[3], fuente: 'fundamento' };
+  const m = PZ_EV_FIG_RUBRO[pzEvCategoria()];
+  if (m) return { art: m[0], es: m[1], en: m[2], fuente: 'rubro' };
+  return null;
+}
+function pzEvPiezaES() { return pzEvBoliche() ? 'el flyer' : 'el posteo'; }
+function pzEvPiezaEN() { return pzEvBoliche() ? 'the flyer' : 'the post'; }
+function pzEvTxtLeido() {
+  const en = pzVozEn();
+  return pzEvBoliche() ? (en ? 'I read from your flyer:' : 'Del flyer leí:') : (en ? 'I read from your image:' : 'De tu imagen leí:');
+}
+function pzEvTxtLeer() {
+  const en = pzVozEn();
+  return pzEvBoliche() ? (en ? 'Read the name from my flyer' : 'Leer el nombre de mi flyer') : (en ? 'Read the name from my image' : 'Leer el nombre de mi imagen');
+}
+function pzEvTxtNotaNombre() {
+  const en = pzVozEn();
+  if (pzEvBoliche()) return en ? 'If you uploaded the flyer, Posty reads the name and you confirm it with one tap. If not, write it here — it is the only thing typed in the whole app: a proper name cannot be tapped or invented.' : 'Si subiste el flyer, Posty lee el nombre y lo confirmás con un toque. Si no, escribilo acá: es lo único que se tipea en toda la app — un nombre propio no se puede tocar ni inventar.';
+  return en ? 'If you uploaded the image, Posty reads the name and you confirm it with one tap. If not, write it here — it is the only thing typed in the whole app: a proper name cannot be tapped or invented.' : 'Si subiste la imagen, Posty lee el nombre y lo confirmás con un toque. Si no, escribilo acá: es lo único que se tipea en toda la app — un nombre propio no se puede tocar ni inventar.';
+}
+function pzEvTxtNotaFoto() {
+  const en = pzVozEn();
+  const fig = pzEvFigura();
+  if (en) return (fig ? '— e.g. the ' + fig.en + '. ' : '') + 'The photo goes in as a photo, as it is: Posty builds ' + pzEvPiezaEN() + ' around it. It is never redrawn or AI-generated.';
+  return (fig ? '— ej. ' + fig.art + ' ' + fig.es + '. ' : '') + 'La foto entra tal cual, como foto: Posty arma ' + pzEvPiezaES() + ' alrededor. Nunca se redibuja ni se genera con IA.';
+}
+function pzEvTxtNotaFotoCero() {
+  const en = pzVozEn();
+  return en ? 'It goes in as a photo, as it is — ' + pzEvPiezaEN() + ' is built around it, never redrawn.' : 'Entra como foto, tal cual: ' + pzEvPiezaES() + ' se arma alrededor. Nunca se redibuja.';
+}
+function pzEvTxtReciboCara() {
+  const en = pzVozEn();
+  return en ? 'You can still add the person\'s photo: ' + pzEvPiezaEN() + ' is rebuilt around it, as a photo.' : 'Todavía podés sumar la foto de la persona: ' + pzEvPiezaES() + ' se rearma alrededor de la foto.';
+}
+function pzEvTxtCaraSumada() {
+  const en = pzVozEn();
+  return en ? (pzEvBoliche() ? 'The flyer was rebuilt around the photo' : 'The post was rebuilt around the photo') : (pzEvBoliche() ? 'El flyer se rearmó alrededor de la foto' : 'El posteo se rearmó alrededor de la foto');
+}
+function pzEvTxtEjemploIdea() {
+  const en = pzVozEn();
+  const fig = pzEvFigura();
+  if (fig && fig.fuente === 'fundamento') return en ? 'E.g.: the ' + fig.en + ' is coming on Friday' : 'Ej.: el viernes viene ' + fig.art + ' ' + fig.es;
+  const cat = pzEvCategoria();
+  if (cat === 'boliche') return en ? 'E.g.: DJ Martín plays at the bar on Friday' : 'Ej.: el viernes toca DJ Martín en el bar';
+  if (cat === 'gastronomia' || cat === 'cafeteria') return en ? 'E.g.: a guest chef is cooking on Saturday' : 'Ej.: el sábado cocina un chef invitado';
+  if (cat === 'fitness') return en ? 'E.g.: the instructor leads a special class on Saturday' : 'Ej.: el sábado hay una clase especial del instructor';
+  if (cat === 'barberia') return en ? 'E.g.: a guest barber is coming on Friday' : 'Ej.: el viernes viene un barbero invitado';
+  if (cat === 'belleza') return en ? 'E.g.: a guest stylist is coming on Saturday' : 'Ej.: el sábado viene una estilista invitada';
+  if (cat === 'educacion' || cat === 'eventos') return en ? 'E.g.: a guest speaker is giving a talk on Friday' : 'Ej.: el viernes hay una charla de un disertante invitado';
+  return en ? 'E.g.: we have a special event on Friday' : 'Ej.: el viernes tenemos un evento especial';
+}
+function pzEvTipos() {
+  const base = ['Fiesta', 'Show en vivo', 'Clase', 'Degustación', 'Feria', 'Karaoke', 'Cumpleaños', 'Aniversario', 'Inauguración', 'Evento'];
+  const cat = pzEvCategoria();
+  if (cat === 'boliche') return ['DJ set'].concat(base);
+  const propia = (cat === 'fitness' || cat === 'educacion') ? 'Clase' : (cat === 'gastronomia' || cat === 'cafeteria') ? 'Degustación' : '';
+  if (!propia) return base;
+  return [propia].concat(base.filter((x) => x !== propia));
+}
 const PZ_EVENTO = { es: false, respondida: false, nombre: '', nombreOk: false, leido: '', fecha: '', caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
 const PZ_CERO = { idea: '', ent: null, conf: { quien: false, fecha: false, que: false }, datos: { nombre: '', quien: '', fecha: '', que: '' }, caraAsset: 0, caraThumb: '', postId: 0, pedidoId: 0, busy: false };
 function pzEvFechaLinda(ymd) {
@@ -27785,7 +27905,7 @@ function pzEvReciboPintar(r, caraPendiente) {
   const dl = String(r.dia_label || '');
   div.innerHTML = `<div class="item"><div><div class="q">🎉 ${esc(r.nombre || (en ? 'Your event' : 'Tu evento'))}</div><div class="w">✓ ${en ? 'Goes out' : 'Se postea el'} ${esc(dl)}${r.hora ? ' · ' + esc(r.hora) : ''}</div></div></div>`
     + (r.desplazado ? `<div class="r-note">${en ? 'I moved Posty\'s post from that day to ' : 'Moví el posteo de Posty de ese día al '}${esc(r.desplazado.dia_label || '')}${r.desplazado.hora ? ' · ' + esc(r.desplazado.hora) : ''}${en ? ': one post per day.' : ': un posteo por día.'}</div>` : '')
-    + (caraPendiente ? `<div class="r-note">${en ? 'You can still add the person\'s photo: the flyer is rebuilt around it, as a photo.' : 'Todavía podés sumar la foto de la persona: el flyer se rearma alrededor de la foto.'}</div>` : '')
+    + (caraPendiente ? `<div class="r-note">${pzEvTxtReciboCara()}</div>` : '')
     + `<button type="button" class="ver" data-ev-ver="${r.post_id}">${en ? 'See it in your week' : 'Verlo en tu semana'}</button>`;
   items.appendChild(div);
   const ver = div.querySelector('[data-ev-ver]');
@@ -27823,7 +27943,7 @@ async function pzEvLeerNombre() {
     const inp = document.getElementById('pzEvNombre');
     if (inp) inp.hidden = false;
   }
-  if (btn) { btn.disabled = false; btn.textContent = en ? 'Read the name from my flyer' : 'Leer el nombre de mi flyer'; }
+  if (btn) { btn.disabled = false; btn.textContent = pzEvTxtLeer(); }
 }
 async function pzEvCaraElegida(file, destino) {
   const en = pzVozEn();
@@ -27839,7 +27959,7 @@ async function pzEvCaraElegida(file, destino) {
       if (!r || !r.ok) throw new Error((r && r.error) || 'sumar');
       st.caraAsset = d.id;
       const up = document.getElementById(destino === 'cero' ? 'pzCeroCaraUp' : 'pzEvCaraUp');
-      if (up) up.innerHTML = `<div class="up"><img src="${esc(d.thumb || d.path || '')}" alt=""><div><div class="n">${en ? 'Photo added to the post' : 'Foto sumada al posteo'}</div><div class="e">✓ ${en ? 'The flyer was rebuilt around the photo' : 'El flyer se rearmó alrededor de la foto'}</div></div></div>`;
+      if (up) up.innerHTML = `<div class="up"><img src="${esc(d.thumb || d.path || '')}" alt=""><div><div class="n">${en ? 'Photo added to the post' : 'Foto sumada al posteo'}</div><div class="e">✓ ${pzEvTxtCaraSumada()}</div></div></div>`;
     } else {
       st.caraAsset = d.id; st.caraThumb = d.thumb || d.path || '';
       const up = document.getElementById(destino === 'cero' ? 'pzCeroCaraUp' : 'pzEvCaraUp');
@@ -27914,7 +28034,7 @@ function pzCeroConfPintar() {
   const cont = document.getElementById('pzCeroConf');
   if (!cont || !PZ_CERO.ent) return;
   const d = PZ_CERO.datos, c = PZ_CERO.conf;
-  const tipos = ['DJ set', 'Fiesta', 'Show en vivo', 'Clase', 'Degustación', 'Feria', 'Karaoke', 'Cumpleaños', 'Aniversario', 'Inauguración', 'Evento'];
+  const tipos = pzEvTipos();
   let html = `<div class="pz-cero-conf-t">${en ? 'This is what I understood — confirm it with one tap each:' : 'Esto es lo que entendí — confirmalo con un toque cada uno:'}</div>`;
   // Quién: con valor se confirma/cambia; sin valor se puede confirmar
   // «sin invitado» (un evento sin quién es válido) o agregarlo a la frase.
@@ -27927,7 +28047,7 @@ function pzCeroConfPintar() {
   html += pzCeroFilaDato('que', en ? 'What it is' : 'Qué es', d.que, c.que,
     (!c.que) ? `<div class="chips">${tipos.map(tp => `<button type="button" class="chip${d.que === tp ? ' on' : ''}" data-cero-tipo="${esc(tp)}">${esc(tp)}</button>`).join('')}</div>` : '');
   const listoDatos = c.fecha && c.que;
-  html += `<div class="q"><p>${en ? 'The person\'s photo (optional)' : 'La foto de la persona (si querés)'} <span class="pz-ev-nota">${en ? 'It goes in as a photo, as it is — the flyer is built around it, never redrawn.' : 'Entra como foto, tal cual: el flyer se arma alrededor. Nunca se redibuja.'}</span></p>
+  html += `<div class="q"><p>${en ? 'The person\'s photo (optional)' : 'La foto de la persona (si querés)'} <span class="pz-ev-nota">${pzEvTxtNotaFotoCero()}</span></p>
     <button type="button" class="fbtn" id="pzCeroCaraBtn">${en ? 'Add the photo' : 'Sumar la foto'}</button>
     <input type="file" id="pzCeroCaraFile" accept="image/*" hidden>
     <div id="pzCeroCaraUp">${PZ_CERO.caraThumb ? `<div class="up"><img src="${esc(PZ_CERO.caraThumb)}" alt=""><div><div class="n">${en ? 'The person\'s photo' : 'La foto de la persona'}</div><div class="e">✓ ${en ? 'Goes in as a photo' : 'Entra como foto'}</div></div></div>` : ''}</div></div>`;

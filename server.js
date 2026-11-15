@@ -18689,7 +18689,7 @@ async function subirEventoCrearPost(uid, datos) {
   const caraAsset = datos.caraAssetId ? sftAssetPropio(uid, datos.caraAssetId) : null;
   const caraAbs = caraAsset && caraAsset.kind !== 'video' ? subirEventoAbs(caraAsset.file_path) : null;
   const imagePath = await subirEventoComponer(uid, { ...datos, fecha: v.fecha }, caraAbs);
-  if (!imagePath) return { ok: false, status: 500, error: 'No pude armar el flyer — probá de nuevo', codigo: 'sin_imagen' };
+  if (!imagePath) return { ok: false, status: 500, error: 'No pude armar la pieza del evento — probá de nuevo', codigo: 'sin_imagen' };
   const negocio = subirEventoNegocio(uid);
   const caption = subirEvento.captionEvento({ ...datos, fechaISO: v.fecha }, negocio);
   const info = db.prepare(`INSERT INTO posts (user_id, caption, hashtags, image_path, media_type, status, scheduled_at, client_photo, foto_asset_id, source, week_key, subir_nuevo, created_at) VALUES (?,?,?,?,?, 'draft', ?, 1, ?, 'subir', ?, 1, datetime('now'))`)
@@ -18754,7 +18754,7 @@ app.post('/api/subir/evento/leer-nombre', requireAuth, async (req, res) => {
     } catch (e) { nombre = null; }
     clearTimeout(to);
     return res.json({ ok: true, nombre });
-  } catch (e) { console.error('[subir-evento-leer]', e.message); return res.status(500).json({ ok: false, error: 'No pude leer el flyer' }); }
+  } catch (e) { console.error('[subir-evento-leer]', e.message); return res.status(500).json({ ok: false, error: 'No pude leer la imagen' }); }
 });
 
 // Crea el posteo de un EVENTO CON FECHA (nombre confirmado + fecha
@@ -18840,7 +18840,7 @@ app.post('/api/subir/evento/sumar-cara', requireAuth, async (req, res) => {
       if (post.status === 'published') return res.status(409).json({ ok: false, error: 'Ese posteo ya salió — la foto no se puede sumar ahora' });
       const caraAbs = subirEventoAbs(asset.file_path);
       const imagePath = await subirEventoComponer(uid, datos, caraAbs);
-      if (!imagePath) return res.status(500).json({ ok: false, error: 'No pude recomponer el flyer — probá de nuevo' });
+      if (!imagePath) return res.status(500).json({ ok: false, error: 'No pude recomponer la pieza del evento — probá de nuevo' });
       db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?').run(imagePath, String(post.image_path || ''), post.id);
       db.prepare(`UPDATE subir_pedidos SET asset_cara_id = ?, updated_at = datetime('now') WHERE id = ?`).run(asset.id, ped.id);
       return res.json({ ok: true, post_id: post.id, pedido_id: ped.id, image_path: imagePath, actualizada: true });
@@ -44119,7 +44119,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1108';
+const BUILD_ID = '20261105-v1109';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
