@@ -159,6 +159,12 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN video_listo_aviso INTEGER DEFAULT 0`
 try { db.exec(`ALTER TABLE profiles ADD COLUMN profile_name TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN profile_bio TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN profile_link TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE FOUNDERS-500 · QA nocturna 5/11, re-bases v744 6/11 y v1097 14/11) /api/founders seleccionaba
+// p.industry y p.city pero profiles no tenía esas columnas: el endpoint
+// devolvía 500 founders_unavailable siempre (el contador de /fundadores
+// quedaba en "– / 200"). Migración liviana, mismo patrón que las de arriba.
+try { db.exec(`ALTER TABLE profiles ADD COLUMN industry TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE profiles ADD COLUMN city TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN timezone TEXT DEFAULT 'America/Argentina/Buenos_Aires'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_issued_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
