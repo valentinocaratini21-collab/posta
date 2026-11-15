@@ -1785,6 +1785,29 @@ function captionPassesEn(caption, input) {
       return { ok: false, reason: 'generic star: the opening crowns a category word ("bar", "cafe") as the star — the star is a real product with a name, or there is no post' };
     }
   }
+  // CROMO-WEB + TIP-ESQUELETO (Juli, 2026-11-15 — ids reales 662/668 y
+  // 661/664/667/672, trials del 13-15/11): dos cuerpos que no son copy.
+  // (1) El cuerpo copia el cromo del sitio: el rótulo de navegación
+  // "Shop All Jewelry – Solid Gold, Silver, Diamonds & More." como
+  // cuerpo entero (662, MEJURI, PUBLICADO) y la meta-descripción
+  // "The Ordinary is your destination for Skincare, Makeup, Hair, and
+  // Body solutions." (668, PUBLICADO) — texto horneado de la web, no
+  // una oración sobre el producto. La firma es angosta: un bloque que
+  // ARRANCA con "Shop All" (el rótulo de nav; "come shop…" en el medio
+  // de una oración no se toca) o la frase de meta "is your destination
+  // for". (2) La fórmula del tip anuncia llaves y entrega virtudes:
+  // "Quality, detail and the [negocio] standard: that's how we do X"
+  // corrió idéntica en VEJA/MEJURI/Jeni's/Tartine (661/664/667/672;
+  // 672 PUBLICADO hoy) — si el tip anuncia 3 keys, las keys son datos
+  // concretos del producto (fit, suela, cómo envejece), no quality/
+  // detail/standard. La firma es el esqueleto literal del cuerpo, no
+  // la fórmula del gancho: un tip con llaves concretas pasa.
+  {
+    const chromeLine = c.split('\n').map((s) => s.trim()).find((l) => /^shop all\b/i.test(l));
+    if (chromeLine) return { ok: false, reason: 'web chrome: a block opens with the site navigation label ("Shop All …") — that is baked website text, not caption copy; say one concrete thing about the product' };
+    if (/\bis your destination for\b/i.test(c)) return { ok: false, reason: 'web chrome: "…is your destination for…" is the site meta description pasted as body — write a sentence about the product, not the store slogan' };
+    if (/quality,\s*detail and the\b[^.\n]*\bstandard:\s*that'?s how we do\b/i.test(c)) return { ok: false, reason: 'empty tip skeleton: the tip announces keys and delivers virtues ("Quality, detail and the … standard") — the same body across businesses; name concrete keys of this product or do not announce a number' };
+  }
   const trimmedLen = c.trim().length;
   if (trimmedLen < 40) return { ok: false, reason: 'too short (under 40 characters)' };
   if (trimmedLen > 320) return { ok: false, reason: `too long: ${trimmedLen} characters (max 320; target 100-280 in 3 short blocks: hook / body / CTA)` };
