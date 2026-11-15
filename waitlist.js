@@ -2,25 +2,28 @@
 /* ---------- CUENTA REGRESIVA CORTADA (decisión Valentino 26/10, «dale! armalo asi») ----------
  * REEMPLAZA la cuenta regresiva 1/12–31/1 del mismo día: esa spec (mock navy +
  * brote, tramo diciembre) queda SUPERSEDED y no se resucita.
+ * VENTANA MOVIDA (decisión Valentino 15/11): la ventana pasa a 28–30/11/2026
+ * con apertura el 1/12/2026, acompañando el lanzamiento; la ventana del
+ * 26/10 (29–31/1/2027, apertura 1/2/2027) queda SUPERSEDED.
  * Reglas vigentes, exactas:
- *  - Sin tramo 1/12–28/1: la web queda como está hasta el 29/1, SIN switch del 1/12.
- *  - 29–31/1/2027 SOLO lista de espera, sobre el diseño de la página de prueba
+ *  - Sin tramo previo: la web queda como está hasta el 28/11, SIN switch antes de la ventana.
+ *  - 28–30/11/2026 SOLO lista de espera, sobre el diseño de la página de prueba
  *    (misma lengua visual, sin arrancar de cero), sin timer, sin número de
  *    posición, sin botón de prueba, sin cara de Posty.
  *  - Textos: «Posty abre el 1 de diciembre» + «Sumate a la lista fundadora y
  *    quedate con el precio fundador congelado.» (sin monto) + email + botón.
- *  - El 31/1 agrega «Mañana se abre.». Espejo EN con los textos equivalentes.
- *  - 1/2/2027 apertura total (web normal + prueba + app).
+ *  - El 30/11 agrega «Mañana se abre.». Espejo EN con los textos equivalentes.
+ *  - 1/12/2026 apertura total (web normal + prueba + app).
  *  - La lista de espera existe como registro, sin revelar posición ni
  *    urgencia inventada.
  * Alcance del gate: SOLO visitantes sin sesión. Los clientes con sesión
  * siguen usando la app normal durante la ventana (su semana no se frena).
  * PENDIENTES DE VALENTINO (no inventados): la hora exacta de apertura del
- * 1/2 y el destino de los emails. Los emails solo se GUARDAN en la tabla
+ * 1/12 y el destino de los emails. Los emails solo se GUARDAN en la tabla
  * waitlist (registro durable); no se envía nada a ningún destino.
  * Zona de la ventana: días calendario de Argentina (America/Argentina/
- * Buenos_Aires, UTC-3 sin horario de verano). La ventana abre el 29/1 a las
- * 00:00 ART y cierra el 1/2 a las 00:00 ART.
+ * Buenos_Aires, UTC-3 sin horario de verano). La ventana abre el 28/11 a las
+ * 00:00 ART y cierra el 1/12 a las 00:00 ART.
  * Módulo sin dependencias externas (solo fs/path de Node) para poder
  * testear la ventana con fechas fijas sin bootear el servidor.
  */
@@ -28,9 +31,9 @@ const fs = require('fs');
 const path = require('path');
 
 const WAITLIST_TZ = 'America/Argentina/Buenos_Aires';
-const WAITLIST_START_KEY = 20270129; // 29/1/2027
-const WAITLIST_END_KEY = 20270131; // 31/1/2027
-const WAITLIST_LAST_DAY_KEY = 20270131; // 31/1/2027: «Mañana se abre.»
+const WAITLIST_START_KEY = 20261128; // 28/11/2026
+const WAITLIST_END_KEY = 20261130; // 30/11/2026
+const WAITLIST_LAST_DAY_KEY = 20261130; // 30/11/2026: «Mañana se abre.»
 
 // Mismo patrón que ideas-email.js (captura simple de email).
 const WAITLIST_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;

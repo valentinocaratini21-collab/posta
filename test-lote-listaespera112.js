@@ -6,9 +6,11 @@
  * que cada superficie ya usa. Alcance: SOLO las superficies que DICEN la
  * fecha vieja ligada a la espera — las dos páginas servidas (title, og:title
  * y h1), la cita del texto en el comentario de waitlist.js y los pins de la
- * suite de la superficie. La VENTANA del gate (29–31/1/2027, decisión del
- * 26/10) NO se re-fecha: es el mecanismo de encendido, no el texto, y esta
- * suite lo pina intacto. Fundadores ya decía 1 de diciembre (no se toca).
+ * suite de la superficie. La VENTANA del gate NO se re-fechó en este
+ * lote (es el mecanismo de encendido, no el texto); la movió después el
+ * lote VENTANA-GATE por decisión de Valentino del 15/11 (28–30/11/2026,
+ * apertura 1/12/2026), y la sección 3 de esta suite se actualizó con ese
+ * movimiento. Fundadores ya decía 1 de diciembre (no se toca).
  */
 'use strict';
 const fs = require('fs');
@@ -51,13 +53,13 @@ ok(occ(EN, 'February') === 0, 'EN: «February» x0');
 ok(occ(WLJS, 'Posty abre el 1 de febrero') === 0, 'waitlist.js: cita vieja x0');
 ok(occ(WLJS, '«Posty abre el 1 de diciembre»') === 1, 'waitlist.js: cita del texto actualizada x1');
 
-// ---- 3. La ventana del gate NO se re-fechó (mecanismo, no texto) ----
-ok(WLJS.includes('const WAITLIST_START_KEY = 20270129;'), 'ventana intacta: START 20270129');
-ok(WLJS.includes('const WAITLIST_END_KEY = 20270131;'), 'ventana intacta: END 20270131');
-ok(WLJS.includes('const WAITLIST_LAST_DAY_KEY = 20270131;'), 'ventana intacta: LAST_DAY 20270131');
+// ---- 3. La ventana del gate: la movió VENTANA-GATE (15/11), no este lote ----
+ok(WLJS.includes('const WAITLIST_START_KEY = 20261128;'), 'ventana movida (15/11): START 20261128');
+ok(WLJS.includes('const WAITLIST_END_KEY = 20261130;'), 'ventana movida (15/11): END 20261130');
+ok(WLJS.includes('const WAITLIST_LAST_DAY_KEY = 20261130;'), 'ventana movida (15/11): LAST_DAY 20261130');
 const WL = require('./waitlist');
-ok(WL.waitlistPhaseOf(new Date('2027-01-30T12:00:00Z')) === 'waitlist', 'la ventana sigue abriendo el 30/1/2027');
-ok(WL.waitlistPhaseOf(new Date('2026-12-01T12:00:00Z')) === 'normal', 'el 1/12/2026 la web sigue normal (sin switch nuevo)');
+ok(WL.waitlistPhaseOf(new Date('2026-11-29T12:00:00Z')) === 'waitlist', 'la ventana abre el 29/11/2026');
+ok(WL.waitlistPhaseOf(new Date('2026-12-01T12:00:00Z')) === 'normal', 'el 1/12/2026 es la apertura: web normal');
 
 // ---- 4. Lo servido por el módulo trae la fecha nueva ----
 const servedEs = WL.renderWaitlistPage('es', false);

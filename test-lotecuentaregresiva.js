@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /* LOTE CUENTA-REGRESIVA-CORTADA — test del lote.
  * Decisión Valentino 26/10 («dale! armalo asi»): REEMPLAZA la cuenta
- * regresiva 1/12–31/1. Sin tramo diciembre; 29–31/1/2027 SOLO lista de
- * espera sobre el diseño de /prueba (sin timer, sin posición, sin botón
- * de prueba, sin cara); 31/1 agrega «Mañana se abre.»; 1/2 apertura total.
+ * regresiva 1/12–31/1. SOLO lista de espera sobre el diseño de /prueba
+ * (sin timer, sin posición, sin botón de prueba, sin cara); el último
+ * día agrega «Mañana se abre.»; al día siguiente, apertura total.
+ * La ventana era 29–31/1/2027 (apertura 1/2/2027) y la movió la decisión
+ * de Valentino del 15/11: 28–30/11/2026, apertura 1/12/2026, acompañando
+ * el lanzamiento.
  * Verifica sin bootear el servidor: la ventana es una función pura con
  * fecha inyectable (ART), y el gate se prueba con req/res/next falsos.
  */
@@ -25,23 +28,23 @@ function ok(cond, name) {
 }
 function stripTags(s) { return s.replace(/<[^>]*>/g, ''); }
 
-// ---- 1. La ventana: solo 29–31/1/2027, en días ART (no UTC, no diciembre) ----
-// ART = UTC-3. 2027-01-29T03:00Z = 29/1 00:00 ART (abre); 02:00Z = 28/1 23:00 ART (todavía normal).
-ok(WL.waitlistPhaseOf(new Date('2026-12-01T12:00:00Z')) === 'normal', 'diciembre: web normal, sin switch del 1/12');
-ok(WL.waitlistPhaseOf(new Date('2027-01-15T12:00:00Z')) === 'normal', 'enero antes del 29: web normal');
-ok(WL.waitlistPhaseOf(new Date('2027-01-29T02:00:00Z')) === 'normal', '28/1 23:00 ART: todavía normal (no abre por UTC)');
-ok(WL.waitlistPhaseOf(new Date('2027-01-29T03:00:00Z')) === 'waitlist', '29/1 00:00 ART: abre la lista de espera');
-ok(WL.waitlistPhaseOf(new Date('2027-01-30T15:00:00Z')) === 'waitlist', '30/1: lista de espera');
-ok(WL.waitlistPhaseOf(new Date('2027-01-31T12:00:00Z')) === 'waitlist', '31/1: lista de espera');
-ok(WL.waitlistPhaseOf(new Date('2027-02-01T02:00:00Z')) === 'waitlist', '31/1 23:00 ART: sigue lista (no cierra por UTC)');
-ok(WL.waitlistPhaseOf(new Date('2027-02-01T03:00:00Z')) === 'normal', '1/2 00:00 ART: apertura total, web normal');
-ok(WL.waitlistPhaseOf(new Date('2027-02-05T12:00:00Z')) === 'normal', 'después del 1/2: web normal');
-ok(WL.isWaitlistWindow(new Date('2027-01-30T12:00:00Z')) === true, 'isWaitlistWindow true dentro');
-ok(WL.isWaitlistWindow(new Date('2027-01-28T12:00:00Z')) === false, 'isWaitlistWindow false fuera');
-// Solo el 31/1 lleva «Mañana se abre.»
-ok(WL.isWaitlistLastDay(new Date('2027-01-31T12:00:00Z')) === true, '31/1 es el último día');
-ok(WL.isWaitlistLastDay(new Date('2027-01-30T12:00:00Z')) === false, '30/1 no es el último día');
-ok(WL.isWaitlistLastDay(new Date('2027-02-01T12:00:00Z')) === false, '1/2 no es el último día');
+// ---- 1. La ventana: solo 28–30/11/2026, en días ART (no UTC) ----
+// ART = UTC-3. 2026-11-28T03:00Z = 28/11 00:00 ART (abre); 02:00Z = 27/11 23:00 ART (todavía normal).
+ok(WL.waitlistPhaseOf(new Date('2026-11-15T12:00:00Z')) === 'normal', 'noviembre antes del 28: web normal');
+ok(WL.waitlistPhaseOf(new Date('2026-11-28T02:00:00Z')) === 'normal', '27/11 23:00 ART: todavía normal (no abre por UTC)');
+ok(WL.waitlistPhaseOf(new Date('2026-11-28T03:00:00Z')) === 'waitlist', '28/11 00:00 ART: abre la lista de espera');
+ok(WL.waitlistPhaseOf(new Date('2026-11-29T15:00:00Z')) === 'waitlist', '29/11: lista de espera');
+ok(WL.waitlistPhaseOf(new Date('2026-11-30T12:00:00Z')) === 'waitlist', '30/11: lista de espera');
+ok(WL.waitlistPhaseOf(new Date('2026-12-01T02:00:00Z')) === 'waitlist', '30/11 23:00 ART: sigue lista (no cierra por UTC)');
+ok(WL.waitlistPhaseOf(new Date('2026-12-01T03:00:00Z')) === 'normal', '1/12 00:00 ART: apertura total, web normal');
+ok(WL.waitlistPhaseOf(new Date('2026-12-05T12:00:00Z')) === 'normal', 'después del 1/12: web normal');
+ok(WL.waitlistPhaseOf(new Date('2027-01-30T12:00:00Z')) === 'normal', 'la ventana vieja (29–31/1/2027) ya no abre: web normal');
+ok(WL.isWaitlistWindow(new Date('2026-11-29T12:00:00Z')) === true, 'isWaitlistWindow true dentro');
+ok(WL.isWaitlistWindow(new Date('2026-11-27T12:00:00Z')) === false, 'isWaitlistWindow false fuera');
+// Solo el 30/11 lleva «Mañana se abre.»
+ok(WL.isWaitlistLastDay(new Date('2026-11-30T12:00:00Z')) === true, '30/11 es el último día');
+ok(WL.isWaitlistLastDay(new Date('2026-11-29T12:00:00Z')) === false, '29/11 no es el último día');
+ok(WL.isWaitlistLastDay(new Date('2026-12-01T12:00:00Z')) === false, '1/12 no es el último día');
 // Emails: mismo patrón que ideas-email.js.
 ok(WL.isWaitlistEmail('hola@negocio.com') === true, 'email válido pasa');
 ok(WL.isWaitlistEmail('  Hola@Negocio.COM  ') === true, 'email con espacios/mayúsculas pasa (se normaliza en la ruta)');
@@ -66,37 +69,37 @@ function runGate(gate, req) {
   gate(req, res, () => { nexted = true; });
   return { res, nexted };
 }
-const gate29 = WL.createWaitlistGate({ nowFn: () => new Date('2027-01-29T15:00:00Z') });
-const gate31 = WL.createWaitlistGate({ nowFn: () => new Date('2027-01-31T15:00:00Z') });
-const gateNormal = WL.createWaitlistGate({ nowFn: () => new Date('2027-01-15T15:00:00Z') });
+const gate28 = WL.createWaitlistGate({ nowFn: () => new Date('2026-11-28T15:00:00Z') });
+const gate30 = WL.createWaitlistGate({ nowFn: () => new Date('2026-11-30T15:00:00Z') });
+const gateNormal = WL.createWaitlistGate({ nowFn: () => new Date('2026-11-15T15:00:00Z') });
 
-let t = runGate(gate29, fakeReq('/'));
+let t = runGate(gate28, fakeReq('/'));
 ok(t.res.sent && stripTags(t.res.body).includes('Posty abre el 1 de diciembre'), 'ventana + visitante + /: sirve la lista ES');
-ok(t.res.sent && !t.res.body.includes('<!--WAITLIST_MANANA-->'), '29/1: sin placeholder sin reemplazar');
-ok(t.res.sent && !stripTags(t.res.body).includes('Mañana se abre.'), '29/1: sin línea de mañana');
+ok(t.res.sent && !t.res.body.includes('<!--WAITLIST_MANANA-->'), '28/11: sin placeholder sin reemplazar');
+ok(t.res.sent && !stripTags(t.res.body).includes('Mañana se abre.'), '28/11: sin línea de mañana');
 ok(t.res.headers['Cache-Control'] === 'no-cache', 'la página de ventana sale sin caché');
-t = runGate(gate31, fakeReq('/'));
-ok(t.res.sent && stripTags(t.res.body).includes('Mañana se abre.'), '31/1: agrega «Mañana se abre.»');
-t = runGate(gate31, fakeReq('/en/'));
+t = runGate(gate30, fakeReq('/'));
+ok(t.res.sent && stripTags(t.res.body).includes('Mañana se abre.'), '30/11: agrega «Mañana se abre.»');
+t = runGate(gate30, fakeReq('/en/'));
 ok(t.res.sent && stripTags(t.res.body).includes('Posty opens on December 1'), 'ventana + visitante + /en/: sirve la lista EN');
-ok(t.res.sent && stripTags(t.res.body).includes('Opens tomorrow.'), '31/1 EN: «Opens tomorrow.»');
-t = runGate(gate29, fakeReq('/prueba'));
+ok(t.res.sent && stripTags(t.res.body).includes('Opens tomorrow.'), '30/11 EN: «Opens tomorrow.»');
+t = runGate(gate28, fakeReq('/prueba'));
 ok(t.res.sent && stripTags(t.res.body).includes('Posty abre el 1 de diciembre'), 'ventana + visitante + /prueba: sin prueba, solo lista');
-t = runGate(gate29, fakeReq('/en/prueba'));
+t = runGate(gate28, fakeReq('/en/prueba'));
 ok(t.res.sent && stripTags(t.res.body).includes('Posty opens on December 1'), 'ventana + visitante + /en/prueba: solo lista EN');
-t = runGate(gate29, fakeReq('/', { userId: 12 }));
+t = runGate(gate28, fakeReq('/', { userId: 12 }));
 ok(!t.res.sent && t.nexted, 'ventana + cliente con sesión + /: pasa a la app normal');
 t = runGate(gateNormal, fakeReq('/'));
 ok(!t.res.sent && t.nexted, 'fuera de ventana + visitante + /: pasa a la web normal');
-t = runGate(gate29, fakeReq('/app.js'));
+t = runGate(gate28, fakeReq('/app.js'));
 ok(!t.res.sent && t.nexted, 'ventana + asset (no listado): pasa, no interfiere');
-t = runGate(gate29, { method: 'POST', path: '/', session: {} });
+t = runGate(gate28, { method: 'POST', path: '/', session: {} });
 ok(!t.res.sent && t.nexted, 'solo GET se gatea; POST pasa');
-t = runGate(gate29, fakeReq('/index.html'));
+t = runGate(gate28, fakeReq('/index.html'));
 ok(t.res.sent, 'ventana + /index.html directo: también lista (no se esquiva)');
-t = runGate(gate29, fakeReq('/prueba.html'));
+t = runGate(gate28, fakeReq('/prueba.html'));
 ok(t.res.sent, 'ventana + /prueba.html directo: también lista (no se esquiva)');
-t = runGate(gate29, fakeReq('/fundadores'));
+t = runGate(gate28, fakeReq('/fundadores'));
 ok(!t.res.sent && t.nexted, 'ventana + /fundadores: no se toca (fuera del alcance)');
 
 // ---- 3. Las páginas: textos exactos, y nada de lo prohibido ----
@@ -136,11 +139,12 @@ ok(WLJS.includes('already: r.changes === 0'), 'duplicado devuelve already sin re
 ok(WLJS.includes("app.get('/lista-espera'") && WLJS.includes("app.get('/en/lista-espera'"), 'rutas directas ES/EN de la lista');
 ok(!WLJS.includes('ideas_subscribers'), 'la lista NO mezcla con el newsletter de ideas');
 ok(!WLJS.includes("require('nodemailer')") && !WLJS.includes('sendMail') && !WLJS.includes('resend'), 'la lista no envía emails (destino pendiente, no inventado)');
-ok(!WLJS.includes('2026-12') && !WLJS.includes('2027-12'), 'ningún tramo de diciembre en la ventana');
+ok(WLJS.includes('const WAITLIST_START_KEY = 20261128;') && WLJS.includes('const WAITLIST_END_KEY = 20261130;') && WLJS.includes('const WAITLIST_LAST_DAY_KEY = 20261130;'), 'ventana 28–30/11/2026 pineada en el módulo (decisión 15/11)');
+ok(!WLJS.includes('20270129') && !WLJS.includes('20270131'), 'la ventana vieja de enero no queda en el módulo');
 
 // ---- 5. Intacto: lo que no se toca ----
 ok(fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').includes('Mi feed queda a medias y no me trae clientes'), 'hero problema-primero intacto en la home');
-ok(SRV.includes("app.get('/prueba'"), 'la ruta /prueba sigue registrada (vuelve el 1/2)');
+ok(SRV.includes("app.get('/prueba'"), 'la ruta /prueba sigue registrada (vuelve el 1/12)');
 ok(SRV.includes("app.get('/en/prueba'"), 'la ruta /en/prueba sigue registrada');
 ok(!APP.includes('waitlist'), 'app.js sin tocar por este lote');
 ok(!SRV.includes('WAITLIST_BYPASS') && !WLJS.includes('process.env.WAITLIST'), 'sin atajos por env: la ventana es fecha real, no flag');
