@@ -12019,6 +12019,56 @@ app.post('/api/admin/posts/:id/set-image', requireAdminToken, (req, res) => {
   res.json({ ok: true, id: dest.id, user_id: dest.user_id, status: dest.status, scheduled_at: dest.scheduled_at, from_post_id: src.id, ...media, cambiado });
 });
 
+// POST /api/admin/posts/:id/descartar?token=ADMIN_TOKEN  body {motivo?, actor?}
+// (LOTE DESCARTE-ADMIN) Descarte TERMINAL de un posteo por la vía admin:
+// status='cancelled', el estado de descarte de la casa. Hasta este lote,
+// cancelar en forma terminal vivía SOLO detrás de la sesión del dueño
+// (PATCH /api/posts/:id action='cancel' y DELETE /api/posts/:id, ambos
+// requireAuth de sesión; el token admin es un chequeo separado que no
+// crea sesión) y por admin solo se llegaba a borrador: el rehacer de
+// soporte (sin user_stopped: el auto-arm de 24 h lo puede re-programar
+// solo) o el no_sale del conserje (borrador re-agendable). El caso real:
+// el posteo 653 (user 12) guarda un video roto y quedó frenado al 30/12
+// en scheduled — riesgo contenido, no eliminado, sin vía terminal.
+// 'cancelled' es terminal para la agenda: el publicador solo toma
+// status='scheduled' (scheduler.js, processDuePosts) y la ocupación de
+// días se deriva de status='scheduled' con scheduled_at — el día del
+// posteo descartado queda libre SIN escribir day_stops: el descarte es
+// de la PIEZA, no del día (espejo exacto del cancel del dueño, que
+// tampoco marca el día). El dedup de captions y de temas excluye
+// 'cancelled' (status != 'cancelled'), y ninguna ruta de agenda lo
+// acepta como origen (schedule y set-image lo rechazan).
+// Guardas: inexistente → 404 · published/publishing → rechazo (lo
+// publicado no se descarta) · ya cancelled/dismissed → idempotente
+// (mismo resultado, sin error y sin duplicar el registro del equipo).
+// El descarte queda en support_team_log (supportCases.logTeamAction),
+// como toda acción del equipo en la consola. No toca ningún otro posteo
+// ni la agenda de otros días. La respuesta devuelve el estado final
+// re-leído de la base, para verificación.
+app.post('/api/admin/posts/:id/descartar', requireAdminToken, (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const motivo = String(body.motivo || '').slice(0, 500);
+  const post = db.prepare(`SELECT id, user_id, status, scheduled_at FROM posts WHERE id = ?`).get(id);
+  if (!post) return res.status(404).json({ ok: false, error: 'no_existe' });
+  if (post.status === 'published' || post.status === 'publishing') {
+    const m = post.status === 'published' ? 'ya_publicado' : 'publicando';
+    return res.status(400).json({ ok: false, motivo: m, error: 'este posteo no se puede descartar (status: ' + post.status + ')' });
+  }
+  if (post.status === 'cancelled' || post.status === 'dismissed') {
+    return res.json({ ok: true, id: post.id, user_id: post.user_id, status: post.status, scheduled_at: post.scheduled_at, descartado: false, ya_descartado: true });
+  }
+  db.prepare(`UPDATE posts SET status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  try {
+    supportCases.logTeamAction(db, { actor: String(body.actor || 'equipo').slice(0, 80), action: 'descartar_posteo', userId: post.user_id, postId: post.id,
+      detalle: 'Descarte admin del posteo ' + post.id + ' (estaba ' + post.status + (post.scheduled_at ? ', salía ' + post.scheduled_at : ', sin fecha') + ')' + (motivo ? ': ' + motivo : '') });
+  } catch (e) { /* el registro del equipo no frena el descarte */ }
+  const fin = db.prepare(`SELECT id, user_id, status, scheduled_at FROM posts WHERE id = ?`).get(post.id);
+  console.log(`[admin] descartar: post ${post.id} (usuario ${post.user_id}) ${post.status} → cancelled`);
+  res.json({ ok: true, id: fin.id, user_id: fin.user_id, status: fin.status, scheduled_at: fin.scheduled_at, status_anterior: post.status, descartado: true, ya_descartado: false });
+});
+
 // POST /api/admin/review/:id/reject?token=ADMIN_TOKEN  body {note}
 // Rechaza con nota: alimenta el aprendizaje (señal + style_rule), borra el
 // borrador y regenera uno con otro enfoque en segundo plano.
@@ -43555,7 +43605,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1094';
+const BUILD_ID = '20261105-v1095';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
