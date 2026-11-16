@@ -3342,6 +3342,53 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   return n;
 }
 
+/* (LOTE REIMPORTACIÓN DEL INVITADO) EL CIERRE DE LA IMPORTACIÓN
+ * TARDÍA: el mismo cierre que guest/start corre cuando su importación
+ * trae posteos (idioma, siembra del fundamento, registro, entrega,
+ * perfil y agenda), para que la semana re-importada quede EXACTAMENTE
+ * como si hubiera importado en la entrada. Todo fail-soft y todo
+ * trabajo de base de datos sobre datos ya cosechados: ninguna IA,
+ * ninguna generación, ningún re-enganche de la cadena de rescate —
+ * el bote del demo no se toca. */
+function cierreReimportInvitado(userId, ig, cacheKey, nImp) {
+  try { applyTrialLang(userId, ig); } catch (e) {}
+  try { seedFromTrialDigest(userId, ig, { cacheKey }); } catch (e) {}
+  try { recordTrialImport(userId, ig, nImp, false); } catch (e) {}
+  try {
+    const uDom = db.prepare('SELECT guest_domain FROM users WHERE id = ?').get(userId);
+    trialLockRecordDeliveredFor(ig, (uDom && uDom.guest_domain) || '', userId);
+  } catch (e) {}
+  try { streakFromTrialImport(userId); } catch (e) {}
+  // Perfil: su @, su nombre y su rubro, desde el payload — la misma
+  // escritura de guest/start, con su misma guarda (solo invitados).
+  try {
+    const rowC = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
+    const pl = rowC && rowC.payload ? JSON.parse(rowC.payload) : null;
+    if (pl) {
+      db.prepare(`UPDATE profiles SET ig_username = ?, business_name = ?, category = ? WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND is_guest = 1)`)
+        .run(ig || '', String(pl.business || '').trim(), String(pl.category || '').trim(), userId, userId);
+    }
+  } catch (e) {}
+  try { scheduleAllDrafts(userId); } catch (e) {}
+}
+
+/* (LOTE REIMPORTACIÓN DEL INVITADO) EL GANCHO: si la cuenta es de un
+ * invitado con semana a mano marcada y piezas solo en el payload, la
+ * importación corre AHORA. La decisión vive en guest-reimport.js; acá
+ * se inyecta la maquinaria. Nunca tira: cualquier falla deja la cuenta
+ * exactamente como estaba. */
+function reimportInvitadoSiAplica(userId) {
+  try {
+    if (!guestReimport) return null;
+    return guestReimport.reimportSiAplica(db, userId, {
+      lineaMano,
+      importTrialWeek,
+      alImportar: cierreReimportInvitado,
+      evTrack,
+    });
+  } catch (e) { return null; }
+}
+
 /* (LOTE TARTINE-FRENOS · P1) CREACIÓN TARDÍA DE UNA PIEZA RESCATADA:
  * espejo de UNA iteración de importTrialWeek para cuando la semana YA
  * se importó (importTrialWeek no puede re-correr: aborta si la cuenta
@@ -19962,6 +20009,13 @@ app.post('/api/evento/:id/cancelar', requireAuth, express.json(), (req, res) => 
 });
 // FIN MODO EVENTO
 app.get('/api/posts', requireAuth, (req, res) => {
+  // (LOTE REIMPORTACIÓN DEL INVITADO · gatillo b) La apertura de la app
+  // con sesión de invitado: su primera lectura de posteos. Si su semana
+  // a mano quedó solo en el payload, la importación corre ACÁ, antes de
+  // la consulta — esta misma respuesta ya trae sus piezas. La puerta
+  // del módulo deja afuera a toda cuenta registrada y a todo invitado
+  // sin marca o ya importado: para ellos esta línea no hace nada.
+  try { reimportInvitadoSiAplica(req.session.userId); } catch (e) {}
   // (LOTE FEED) Sin tope de 100: la grilla rinde TODO lo conocido; el tope cortaba posteos viejos en silencio.
   const { status } = req.query;
   const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id LEFT JOIN post_metrics pm ON pm.post_id = p.id';
@@ -38977,6 +39031,11 @@ app.get('/api/guest/return', (req, res) => {
     return req.session.regenerate((err) => {
       if (err) return res.redirect(302, (row.lang === 'en' ? '/en/prueba' : '/prueba') + '?return=expired');
       req.session.userId = Number(row.user_id);
+      // (LOTE REIMPORTACIÓN DEL INVITADO · gatillo a) El aterrizaje por
+      // la puerta de regreso: si su semana a mano quedó solo en el
+      // payload, la importación corre ANTES del redirect — aterriza en
+      // su semana, con sus piezas. Fail-soft: nunca frena el regreso.
+      try { reimportInvitadoSiAplica(Number(row.user_id)); } catch (e) {}
       res.redirect(302, '/#/app/inicio');
     });
   } catch (e) {
@@ -39159,6 +39218,11 @@ try { guestStartLock = require('./guest-start-lock'); } catch (e) { console.erro
 // (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
 let guestSetIgMod = null;
 try { guestSetIgMod = require('./guest-set-ig'); } catch (e) { console.error('[init] guest-set-ig no disponible:', e.message); }
+// (LOTE REIMPORTACIÓN DEL INVITADO) El gancho que importa la semana a
+// mano cuando el invitado vuelve (puerta de regreso) o abre su app con
+// la semana todavía solo en el payload. La decisión vive en el módulo.
+let guestReimport = null;
+try { guestReimport = require('./guest-reimport'); } catch (e) { console.error('[init] guest-reimport no disponible:', e.message); }
 
 // Identidad del negocio para el candado, desde los campos crudos del form
 // (la normalización robusta vive en el módulo: URL pegada, mayúsculas, @).
@@ -45466,7 +45530,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1134';
+const BUILD_ID = '20261105-v1135';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
