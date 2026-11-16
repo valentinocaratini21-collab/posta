@@ -11279,7 +11279,19 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
       trial_used: nUsed, trial_locks: nLocks, posts: nPosts, trial_cache: nCache, chat_messages: nChat,
       guest_id: guestId, guest_is_guest: guestIsGuest, total,
     };
-    if (total === 0) return res.json({ ...base, sin_registro: true });
+    if (total === 0) {
+      // (LOTE EXCLUSIÓN-SIN-REGISTRO · v1120) Sin registro y CON confirm:
+      // la exclusión durable se escribe igual que en la rama confirmada
+      // de abajo — una clave fresca confirmada (la candidata del gate
+      // antes de su primera corrida: no hay nada que borrar) tiene que
+      // nacer excluida de la línea a mano. Sin confirm no se escribe
+      // nada, igual que siempre: el dry-run no escribe.
+      let exclusionRegistrada = false;
+      if (confirm) {
+        try { lineaMano.registrarReseteo(db, igKey, domainKey, Date.now()); exclusionRegistrada = true; } catch (e) {}
+      }
+      return res.json({ ...base, sin_registro: true, ...(exclusionRegistrada ? { exclusion_registrada: true } : {}) });
+    }
     if (!confirm) return res.json({ ...base, dry_run: true });
     const usedDeleted = trialLock.purgeUsed ? trialLock.purgeUsed(db, igKey, domainKey) : 0;
     const locksDeleted = trialLock.purgeLock ? trialLock.purgeLock(db, igKey, domainKey) : 0;
@@ -45159,7 +45171,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1119';
+const BUILD_ID = '20261105-v1120';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
