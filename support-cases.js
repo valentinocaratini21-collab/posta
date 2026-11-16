@@ -69,6 +69,7 @@ const CASE_TYPES = {
   defecto_caption: { label: 'Defecto en caption', severidad: 'ambar' },
   prueba_trabada: { label: 'Prueba trabada', severidad: 'ambar' },
   prueba_linea_mano: { label: 'Prueba a mano (línea bamboo)', severidad: 'ambar' },
+  prueba_retorno_dm: { label: 'Retorno: mandar el link por DM', severidad: 'ambar' },
   integridad_prepublicacion: { label: 'Integridad pre-publicación', severidad: 'rojo' },
   sin_aprobar: { label: 'Sin aprobar', severidad: 'ambar' },
   ayuda: { label: 'Ayuda pedida', severidad: 'ambar' },
@@ -1345,6 +1346,10 @@ function pendingConcierge(db, opts) {
   // caso_id es el número del caso (la clave estable caso-<id> que el
   // cron del operador deduplica). Un invitado sin fila en profiles lee
   // su identidad de users (guest_ig), como hace el resto del módulo.
+  // (LOTE RETORNO DEL INVITADO) La misma suma levanta los casos
+  // prueba_retorno_dm: el DM del link de regreso lo manda la línea a
+  // mano (la API no abre conversaciones frías) y el operador tiene que
+  // verlo en esta misma superficie desde el acto, no descubrirlo.
   const casosMano = safe(() => db.prepare(
     `SELECT c.id, c.user_id, c.titulo, c.created_at,
             u.email AS u_email, u.guest_ig AS u_guest_ig,
@@ -1352,7 +1357,7 @@ function pendingConcierge(db, opts) {
      FROM support_cases c
      LEFT JOIN users u ON u.id = c.user_id
      LEFT JOIN profiles p ON p.user_id = c.user_id
-     WHERE c.tipo = 'prueba_linea_mano' AND c.estado <> 'cerrado'
+     WHERE c.tipo IN ('prueba_linea_mano', 'prueba_retorno_dm') AND c.estado <> 'cerrado'
      ORDER BY c.id ASC`).all(), []);
   for (const c of casosMano) {
     pendientes.push({

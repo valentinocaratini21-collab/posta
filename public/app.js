@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1123';
+const PZ_BUILD = '20261105-v1125';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -5430,6 +5430,7 @@ const AUTH_STR = {
     resetFoot: '<a href="#/forgot" style="color:var(--cel)">¿El link venció? Pedí uno nuevo</a> · <a href="#/login" style="color:var(--cel)">Volver a entrar</a>',
     resetBadLink: 'Este link no sirve. <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí uno nuevo</a>',
     resetNewLink: 'Pedí un link nuevo',
+    retDoor: '¿Viniste por tu prueba gratis?', retDoorSub: 'Volver a mi semana', retDoorHint: 'Nunca creaste una contraseña: te mandamos un link de un toque a tu DM de Instagram, y a tu email si querés.', retIgPh: '@tu_negocio', retEmailPh: 'Tu email (opcional)', retBtn: 'Mandame mi link', retSending: 'Mandando…', retOk: 'Tu link está en camino 💛 Fijate en tus DMs de Instagram', retOkEmail: ' y en tu email', retOkTail: ' — un toque y entrás.', retNeedIg: 'Contanos tu @ de Instagram 🙂', retFail: 'No pudimos mandar tu link todavía. Probá de nuevo.',
   },
   en: {
     navCreate: 'Create account', navLogin: 'Log in',
@@ -5456,9 +5457,67 @@ const AUTH_STR = {
     resetFoot: '<a href="#/forgot" style="color:var(--cel)">Link expired? Request a new one</a> · <a href="#/login" style="color:var(--cel)">Back to log in</a>',
     resetBadLink: 'This link is no good <a href="#/forgot" style="color:var(--cel);font-weight:700">Request a new one</a>',
     resetNewLink: 'Request a new link',
+    retDoor: 'Here for your free trial?', retDoorSub: 'Back to my week', retDoorHint: 'You never made a password: we’ll send you a one-tap link to your Instagram DM, and to your email too if you want.', retIgPh: '@your_business', retEmailPh: 'Your email (optional)', retBtn: 'Send me my link', retSending: 'Sending…', retOk: 'Your link is on its way 💛 Check your Instagram DMs', retOkEmail: ' and your email', retOkTail: ' — one tap and you’re in.', retNeedIg: 'Tell us your Instagram @ 🙂', retFail: 'We couldn’t send your link yet. Try again.',
   },
 };
 function authStr() { return AUTH_STR[authLang()] || AUTH_STR.es; }
+
+// (LOTE RETORNO DEL INVITADO) El título de la pestaña sigue al idioma
+// de la ENTRADA: las cáscaras traen su <title> fijo (la raíz en
+// español, /en en inglés) y nada lo actualizaba — llegando desde
+// /en/prueba, el login se veía en inglés con el título en español
+// («Posty — Tu community manager»). authLang() ES la resolución de
+// idioma de estas vistas (sello de la superficie → navegador): el
+// título sale de la misma fuente, con las cadenas exactas de las dos
+// cáscaras.
+function pzAuthDocTitle() {
+  try {
+    document.title = authLang() === 'en'
+      ? 'Posty — Your community manager on autopilot'
+      : 'Posty — Tu community manager 🤖';
+  } catch (e) {}
+}
+
+// (LOTE RETORNO DEL INVITADO) La puerta «Volver a mi semana» bajo el
+// login: el invitado de la prueba nunca creó contraseña y su vuelta no
+// puede ser este formulario. Un paso (@ + email opcional) y el link de
+// un solo uso sale por los canales que prueban que es el dueño — lo
+// decide el servidor (POST /api/guest/return-request).
+function pzGuestReturnHtml(S) {
+  return '<div style="margin-top:14px;border-top:1px solid #E3ECF3;padding-top:14px">' +
+    '<p style="text-align:center;font-size:12.5px;color:var(--dim);margin:0 0 8px">' + S.retDoor + ' <a href="#" onclick="pzGuestReturnToggle(event)" style="color:var(--cel);font-weight:700">' + S.retDoorSub + '</a></p>' +
+    '<div id="pzRetDoor" hidden>' +
+      '<p style="font-size:12.5px;color:var(--dim);margin:0 0 10px">' + S.retDoorHint + '</p>' +
+      '<div class="field"><label>Instagram</label><input id="pzRetIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + S.retIgPh + '"></div>' +
+      '<div class="field"><label>Email</label><input id="pzRetEmail" type="email" autocomplete="off" spellcheck="false" placeholder="' + S.retEmailPh + '"></div>' +
+      '<div id="pzRetMsg" style="font-size:12.5px;margin:8px 0" hidden></div>' +
+      '<button class="btn btn-primary btn-block" id="pzRetBtn" onclick="pzGuestReturnSend()">' + S.retBtn + '</button>' +
+    '</div></div>';
+}
+function pzGuestReturnToggle(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  var d = document.getElementById('pzRetDoor');
+  if (d) d.hidden = !d.hidden;
+}
+async function pzGuestReturnSend() {
+  var S = authStr();
+  var igEl = document.getElementById('pzRetIg');
+  var emEl = document.getElementById('pzRetEmail');
+  var msg = document.getElementById('pzRetMsg');
+  var btn = document.getElementById('pzRetBtn');
+  var ig = String((igEl && igEl.value) || '').trim().replace(/^@/, '');
+  var em = String((emEl && emEl.value) || '').trim();
+  var show = function (t) { if (msg) { msg.textContent = t; msg.hidden = false; } };
+  if (!ig) { show(S.retNeedIg); if (igEl) igEl.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = S.retSending; }
+  try {
+    var r = await fetch('/api/guest/return-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ig: ig, email: em, lang: authLang() }) });
+    var j = await r.json().catch(function () { return {}; });
+    if (r.ok && j && j.ok) show(S.retOk + ((j.sent && (j.sent.email || j.sent.typed)) ? S.retOkEmail : '') + S.retOkTail);
+    else show((j && j.error) || S.retFail);
+  } catch (e) { show(S.retFail); }
+  if (btn) { btn.disabled = false; btn.textContent = S.retBtn; }
+}
 const SAVED_STR = {
   es: { cont: 'Continuar como', other: 'Usar otra cuenta', remove: 'Quitar', savedTitle: 'Tus cuentas en este dispositivo', soft: 'Esa entrada ya no sirve en este dispositivo Entrá con tu contraseña y queda guardada de nuevo.', net: 'Sin conexión justo ahora Probá de nuevo en un toque.' },
   en: { cont: 'Continue as', other: 'Use another account', remove: 'Remove', savedTitle: 'Your accounts on this device', soft: 'That sign-in no longer works on this device Log in with your password and it will be saved again.', net: 'No connection right now Try again in a sec.' },
@@ -5728,6 +5787,7 @@ function bindSavedAccounts() {
 function authView(mode) {
   const isLogin = mode === 'login';
   const S = authStr();
+  pzAuthDocTitle();
   const homeHref = authLang() === 'en' ? '/en/' : '/';
   return `
   <div class="nav"><div class="wrap">
@@ -5751,6 +5811,7 @@ function authView(mode) {
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
       ${isLogin ? S.footLogin : S.footReg}
     </p>
+    ${isLogin ? pzGuestReturnHtml(S) : ''}
     </div>
   </div></div>`;
 }

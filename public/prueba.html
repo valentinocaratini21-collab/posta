@@ -147,6 +147,23 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <button id="btnGo" class="btn btn-primary" type="submit">Armar mi primer posteo</button>
     <p class="tiny">¿Ya tenés cuenta? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrá</a></p>
   </form>
+  <div class="card" id="returnDoor" style="margin-top:14px">
+    <div class="field" style="margin-bottom:6px">
+      <label>Volver a mi semana</label>
+      <p class="hint" style="margin-top:2px">¿Ya empezaste tu prueba gratis? Nunca creaste una contraseña — te mandamos un link de un toque a tu DM de Instagram, y también a tu email si querés.</p>
+    </div>
+    <div class="field">
+      <label for="rIg">Tu Instagram</label>
+      <input id="rIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+    </div>
+    <div class="field">
+      <label for="rEmail">Tu email <small>(opcional — te lo mandamos también ahí)</small></label>
+      <input id="rEmail" type="email" autocomplete="off" spellcheck="false" placeholder="vos@tunegocio.com" aria-label="Tu email (opcional)">
+    </div>
+    <div id="rErr" class="err" hidden></div>
+    <div id="rOk" class="status" hidden></div>
+    <button id="btnReturn" class="btn btn-primary" type="button" style="width:100%">Mandame mi link →</button>
+  </div>
   <p class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</p>
 </div>
 <script>
@@ -316,7 +333,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     waitEl.innerHTML =
       '<div class="wait-hero" id="wHero">' +
         '<span class="wait-pill">✨ Revelando tu posteo…</span><span class="wait-spark">✨</span>' +
-        '<img class="wblur" id="wHeroBlur" alt="" hidden><img class="wsharp" id="wHeroSharp" alt="" hidden>' +
+        '<img class="wblur" id="wHeroBlur" alt="" hidden onerror="this.hidden=true"><img class="wsharp" id="wHeroSharp" alt="" hidden onerror="this.hidden=true">' +
       '</div>' +
       '<div class="wait-body">' +
         '<img class="wait-badge" src="/ai-avatar.png" alt="Posty">' +
@@ -325,7 +342,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         '<div class="wait-steps">' + steps + '</div>' +
         '<p class="wait-now"><b>Ahora:</b> <span id="wNow">leyendo tu cuenta…</span></p>' +
         '<div class="wait-mirror" id="wMirror" hidden>' +
-          '<img id="wMirrorImg" alt="">' +
+          '<img id="wMirrorImg" alt="" onerror="this.closest('.wait-mirror').hidden=true">' +
           '<div><div class="mk">MIENTRAS TANTO, ALGO TUYO</div><div class="mt">Este fue tu posteo con más me gusta</div><div class="ms" id="wMirrorTxt"></div></div>' +
         '</div>' +
         '<div class="wait-exit">¿Tarda un poco? <b>Andá tranquilo</b> — te aviso cuando esté listo.</div>' +
@@ -823,6 +840,40 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // (LOTE L2) Un toque por idioma, y el formulario se reenvía solo
   // con brand_lang: el resto de los datos ya está en el formulario.
   $('fLangEn').addEventListener('click', function () { brandLangChoice = 'en'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
+  // (LOTE RETORNO DEL INVITADO) La puerta de regreso: un solo paso,
+  // @ + email opcional; el link de un solo uso viaja por los canales
+  // que prueban que es el dueño (lo decide el servidor: DM de
+  // Instagram + el email público del negocio; el email escrito solo
+  // recibe el aviso).
+  var rBtn = $('btnReturn');
+  if (rBtn) rBtn.addEventListener('click', async function () {
+    var ig = cleanIg($('rIg').value);
+    var em = String($('rEmail').value || '').trim();
+    var rErr = $('rErr'), rOk = $('rOk');
+    rErr.hidden = true; rOk.hidden = true;
+    if (!ig) { rErr.textContent = 'Contanos tu @ de Instagram \u{1F642}'; rErr.hidden = false; $('rIg').focus(); return; }
+    rBtn.disabled = true; rBtn.textContent = 'Mandando\u{2026}';
+    try {
+      var rr = await postJSON('/api/guest/return-request' + TEST_KEY_QS, { ig: ig, email: em, lang: LANG });
+      if (rr.ok && rr.j && rr.j.ok) {
+        rOk.textContent = 'Tu link está en camino \u{1F49B} Fijate en tus DMs de Instagram' + ((rr.j.sent && (rr.j.sent.email || rr.j.sent.typed)) ? ' y en tu email' : '') + ' \u{2014} un toque y entrás.';
+        rOk.hidden = false;
+      } else {
+        rErr.textContent = (rr.j && rr.j.error) || 'No pudimos mandar tu link todavía. Probá de nuevo.';
+        rErr.hidden = false;
+      }
+    } catch (e) {
+      rErr.textContent = 'No pudimos mandar tu link todavía. Probá de nuevo.';
+      rErr.hidden = false;
+    }
+    rBtn.disabled = false; rBtn.textContent = 'Mandame mi link \u{2192}';
+  });
+  if (qs.get('return') === 'expired') {
+    var rOkX = $('rOk');
+    if (rOkX) { rOkX.textContent = 'Ese link venció o ya se usó \u{2014} pedí uno nuevo acá mismo \u{1F447}'; rOkX.hidden = false; }
+    var rdX = $('returnDoor');
+    if (rdX && rdX.scrollIntoView) { try { rdX.scrollIntoView(); } catch (e) {} }
+  }
   $('fLangEs').addEventListener('click', function () { brandLangChoice = 'es'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
   // Auto-arranque desde el hero (?ig=): si ya viene el @, arranca solo.
   if (qIg) {

@@ -969,6 +969,59 @@ function magicLinkEmail(email, link, lang) {
   return sendEmail({ to: email, subject, html });
 }
 
+// (LOTE RETORNO DEL INVITADO) El link de regreso a la semana de la
+// prueba: un solo uso, 24 h. Viaja SOLO a canales que prueban que el
+// receptor es el dueño (este email es el público del negocio, cosechado
+// de su perfil/web). Espejo de magicLinkEmail con la vida del token de
+// retorno.
+function returnLinkEmail(email, link, lang) {
+  if (lang === 'en') {
+    const subject = 'Your Posty week — one tap and you’re in ✨';
+    const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tap it and you're in — no password needed 👇 (valid for 24 hours)<br>
+      <span style="font-size:13px">Sent to you by ${founderSignLine('en')}</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Open my week ✨</a>
+    </p>`, 'en');
+    return sendEmail({ to: email, subject, html });
+  }
+  const subject = 'Tu semana de Posty — un toque y entrás ✨';
+  const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tocalo y entrás directo, sin contraseña 👇 (vale 24 horas)<br>
+      <span style="font-size:13px">Te lo manda ${founderSignLine('es')}</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Abrir mi semana ✨</a>
+    </p>`);
+  return sendEmail({ to: email, subject, html });
+}
+
+// (LOTE RETORNO DEL INVITADO) El aviso al email que el visitante ESCRIBIÓ
+// en la puerta: ese canal no prueba identidad, así que este email NO
+// lleva el link de acceso — avisa que el link salió por los canales
+// seguros (DM de Instagram + email público del negocio).
+function returnNoticeEmail(email, lang) {
+  if (lang === 'en') {
+    const subject = 'Your Posty week link is on its way ✨';
+    const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      We just sent the link to your week to your Instagram DMs and to your business's public email. Tap it there and you're in — no password needed.<br>
+      <span style="font-size:13px">Not there in a few minutes? Ask for a new one from the “Back to my week” door. Sent to you by ${founderSignLine('en')}</span>
+    </p>`, 'en');
+    return sendEmail({ to: email, subject, html });
+  }
+  const subject = 'Tu link de Posty ya está en camino ✨';
+  const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Acabamos de mandar el link de tu semana a tus DMs de Instagram y al email público de tu negocio. Tocalo ahí y entrás directo, sin contraseña.<br>
+      <span style="font-size:13px">¿En unos minutos no está? Pedí uno nuevo desde la puerta «Volver a mi semana». Te lo manda ${founderSignLine('es')}</span>
+    </p>`);
+  return sendEmail({ to: email, subject, html });
+}
+
 // Ritual semanal de fotos (v183): el pedido de 3 a 5 fotos para los posteos
 // de la semana. Lo dispara albumRitualSweep (server.js) los lunes ~10:00 hora
 // local del cliente, junto con el push de la misión, con dedupe semanal.
@@ -1068,4 +1121,4 @@ function trialClosedEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html: emailFounderShell(inner), from: FOUNDER_FROM });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, emailFounderHeader, emailFounderShell, founderSignLine, FOUNDER_FROM, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, emailFounderHeader, emailFounderShell, founderSignLine, FOUNDER_FROM, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, returnLinkEmail, returnNoticeEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };

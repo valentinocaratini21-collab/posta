@@ -778,6 +778,25 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
   // en IG). La tira de la prueba sigue capada en su propio sitio
   // (trialProfileFromAudit: photos .slice(0, 9)); acá se localiza todo lo
   // que llega, sin ventana que corte: TODOS los posteos tienen que aparecer.
+
+  // (LOTE RETORNO DEL INVITADO) Los bytes tienen que ser una imagen de
+  // verdad: la CDN de IG responde los errores (URL vencida, 403) con un
+  // cuerpo HTML/JSON que puede pasar los 200 bytes del chequeo de
+  // tamaño, y hasta este lote ese cuerpo se guardaba como .jpg, se
+  // servía con 200 y el navegador lo mostraba como imagen rota — así
+  // salía el panel de la pantalla de armado con las fotos que no
+  // cargan (el espejo de su posteo con más me gusta). La firma manda:
+  // JPEG/PNG/WebP/GIF o no es imagen; lo que no es imagen es null (el
+  // bloque no se muestra, como ya manda el diseño: nunca una URL muerta).
+  const esImagen = (buf) => {
+    if (!buf || buf.length < 12) return false;
+    if (buf[0] === 0xFF && buf[1] === 0xD8) return true; // JPEG
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true; // PNG
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return true; // GIF
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+      && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true; // WebP
+    return false;
+  };
   const locOne = async (rawUrl) => {
     try {
       if (!rawUrl || typeof rawUrl !== 'string') return null;
@@ -791,9 +810,21 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
       const hash = crypto.createHash('sha256').update(handle + '|' + url).digest('hex').slice(0, 24);
       const name = 'igthumb-' + hash + '.jpg';
       const abs = path.join(mediaDir, name);
-      try { const st = fs.statSync(abs); if (st.isFile() && st.size > 1024) return '/media/' + name; } catch (e) {}
+      try {
+        const st = fs.statSync(abs);
+        if (st.isFile() && st.size > 1024) {
+          // La caché también se valida: un cuerpo de error guardado por
+          // una corrida vieja no se sigue sirviendo como foto.
+          const head = Buffer.alloc(12);
+          const fd = fs.openSync(abs, 'r');
+          try { fs.readSync(fd, head, 0, 12, 0); } finally { fs.closeSync(fd); }
+          if (esImagen(head)) return '/media/' + name;
+          try { fs.unlinkSync(abs); } catch (e) {}
+        }
+      } catch (e) {}
       const buf = await get(url);
       if (!buf || !buf.length) return null;
+      if (!esImagen(buf)) return null;
       fs.writeFileSync(abs, buf);
       if (buf.length > THUMB_SOFT_CAP) await shrinkThumb(abs);
       const st = fs.statSync(abs);

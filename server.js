@@ -468,7 +468,7 @@ const onboarding = require('./onboarding'); // ✨ BIENVENIDA MÁGICA POST-PAGO 
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
-const { sendEmail, magicLinkEmail, ventyCodeEmail, setSendLogger, emailFaceHeader } = require('./email');
+const { sendEmail, magicLinkEmail, returnLinkEmail, returnNoticeEmail, ventyCodeEmail, setSendLogger, emailFaceHeader } = require('./email');
 // (P0 2026-10-24) Todo envío queda registrado en email_send_log (tabla en
 // db.js): el motivo literal del rechazo de Resend deja de vivir solo en los
 // logs efímeros de Railway. Lectura: GET /api/admin/email-log.
@@ -38593,6 +38593,25 @@ app.post('/api/guest/start', async (req, res) => {
     // (LOTE C13) La zona del visitante se persiste ANTES de importar y
     // programar: los 3 posteos salen a SU 19:00, no a la de Argentina.
     try { applyGuestBrowserTz(g.userId, tzK); } catch (e) {}
+    // (LOTE RETORNO DEL INVITADO) Las salidas 202 de esta entrada (la
+    // semana sigue en armado, o sin medio importable) abren la sesión
+    // del invitado ANTES de responder. Hasta este lote respondían sin
+    // sesión: la página de la prueba lee el 202 como éxito (el res.ok
+    // de fetch cubre 200–299) y navega a la app, que sin sesión cae al
+    // login pelado — el invitado con la semana EN ARMADO no tenía
+    // vuelta, mientras el de la semana completa sí (su importación abre
+    // la sesión, y su re-entrada sin sesión frena antes en la puerta de
+    // prueba usada: dos ramas, dos destinos). Con la sesión abierta, la
+    // app muestra SU semana en el estado en que está — en armado, con
+    // su chat: el «contame tu @ en el chat» de la salida sin medio por
+    // fin tiene dónde pasar. La identidad que selecciona esta fila ya
+    // pasó los candados de arriba (consumido / invitado con posteos),
+    // la misma base de confianza que la salida de éxito.
+    const responder202Invitado = (payload202) => req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
+      req.session.userId = g.userId;
+      res.status(202).json({ ...payload202, session: true });
+    });
     // Importar exactamente 3 posteos (misma maquinaria que el alta por
     // magic link, con límite 3 y sin los extras de stories/reels).
     const nImp = importTrialWeek(g.userId, igK, null, { limit: 3, cacheKey });
@@ -38612,14 +38631,14 @@ app.post('/api/guest/start', async (req, res) => {
       if (pendGS.length) {
         try { await rearmarSemanaPruebaPorCacheKey(cacheKey); } catch (e) {}
         try { evTrack(g.userId, 'trial_entrada_en_armado', { ig: cacheKey, pendientes: pendGS }); } catch (e) {}
-        return res.status(202).json({ ok: false, week_pending: true, pending: pendGS.length, error: lang === 'en' ? 'Your week is still being built — Posty is working on it right now. Come back in a few minutes and it will open right here.' : 'Tu semana todavía se está armando — Posty está trabajando en ella ahora. Volvé en unos minutos y se abre acá mismo.' });
+        return responder202Invitado({ ok: false, week_pending: true, pending: pendGS.length, error: lang === 'en' ? 'Your week is still being built — Posty is working on it right now. Come back in a few minutes and it will open right here.' : 'Tu semana todavía se está armando — Posty está trabajando en ella ahora. Volvé en unos minutos y se abre acá mismo.' });
       }
       // Sin piezas en armado y sin nada importable (la semana quedó
       // sin medio y esta entrada no tiene cadena que re-enganchar):
       // el estado también se dice — sin 500 y sin prometer un
       // reintento contra el mismo resultado.
       try { evTrack(g.userId, 'trial_entrada_sin_medio', { ig: cacheKey }); } catch (e) {}
-      return res.status(202).json({ ok: false, week_pending: false, week_unavailable: true, error: lang === 'en' ? 'We could not finish your week yet — tell me your @ in the chat and I will build it with you.' : 'Todavía no pudimos terminar tu semana — contame tu @ en el chat y la armamos juntos.' });
+      return responder202Invitado({ ok: false, week_pending: false, week_unavailable: true, error: lang === 'en' ? 'We could not finish your week yet — tell me your @ in the chat and I will build it with you.' : 'Todavía no pudimos terminar tu semana — contame tu @ en el chat y la armamos juntos.' });
     }
     try { applyTrialLang(g.userId, igK); } catch (e) {}
     try { seedFromTrialDigest(g.userId, igK, { cacheKey }); } catch (e) {}
@@ -38702,6 +38721,140 @@ app.post('/api/guest/start', async (req, res) => {
     // éxito, guardas (409/404) o error — para que la llamada siguiente
     // del mismo negocio nunca quede esperando un candado muerto.
     if (unlockGuestStart) { try { unlockGuestStart(); } catch (e) {} }
+  }
+});
+
+// (LOTE RETORNO DEL INVITADO) LA PUERTA «Volver a mi semana / Back to
+// my week»: el invitado que vuelve sin la sesión de su navegador pide su
+// link con su @ (+ un email opcional) y el link de UN SOLO USO (24 h,
+// re-pedible por la misma puerta) le sale por todos los canales que
+// haya. GUARDA DE IDENTIDAD (decisión de Valentino, 16/11): el link que
+// abre la semana viaja solo por canales que prueban que el receptor es
+// el dueño — el DM a su cuenta de Instagram y el email público del
+// negocio si existe. El email que el visitante ESCRIBE en la puerta no
+// prueba identidad: recibe el aviso (sin el link) y queda guardado como
+// email de contacto de la prueba cuando se confirma desde un canal que
+// prueba (el consumo de este token). La contraseña, si un día la
+// quiere, la crea adentro de su semana — nunca es requisito para
+// volver. Módulo: guest-return.js. El aterrizaje NO reusa
+// /api/guest/resume (v929): ese canje es por @ pelado porque su canal
+// (el email de «tu posteo de mañana») ya era la prueba; esta puerta
+// necesita la prueba DENTRO del link (token), y su semana puede estar
+// todavía en armado (resume exige posteos y cae a /prueba).
+app.post('/api/guest/return-request', async (req, res) => {
+  try {
+    if (!guestReturn || !guestTrial || !trialLock) return res.status(503).json({ error: 'Servicio no disponible' });
+    const body = req.body || {};
+    const lang = (body.lang === 'en' || body.lang === 'es') ? body.lang : 'es';
+    const igK = trialLock.normalizeIg(String(body.ig || '').trim().replace(/^@/, '').toLowerCase());
+    if (!igK) return res.status(400).json({ error: lang === 'en' ? 'Tell us your Instagram @ 🙂' : 'Contanos tu @ de Instagram 🙂' });
+    const typedEmail = String(body.email || '').trim().toLowerCase();
+    if (typedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(typedEmail)) {
+      return res.status(400).json({ error: lang === 'en' ? 'That email doesn’t look right — check it or leave it empty.' : 'Ese email no parece válido — revisalo o dejalo vacío.' });
+    }
+    // Rate limit espejo del magic-request: máx 5 pedidos por hora por @.
+    if (guestReturn.recentCount(db, igK) >= guestReturn.RATE_MAX) {
+      return res.status(429).json({ error: lang === 'en' ? 'We already sent a few links — wait a little and ask again.' : 'Ya mandamos varios links — esperá un rato y pedí de nuevo.' });
+    }
+    const entered = guestTrial.findGuestByIdentity(db, igK, '');
+    if (!entered) {
+      return res.status(404).json({ error: lang === 'en' ? 'We don’t have a trial week for that @ yet — start your free trial and it will be right here.' : 'Todavía no hay una semana de prueba para ese @ — empezá tu prueba gratis y queda acá.', no_week: true });
+    }
+    const uid = Number(entered.id);
+    const urow = db.prepare('SELECT lang, guest_domain FROM users WHERE id = ?').get(uid) || {};
+    const doorLang = (urow.lang === 'en' || urow.lang === 'es') ? urow.lang : lang;
+    if (typedEmail) guestReturn.saveTypedEmail(db, igK, typedEmail);
+    const issued = guestReturn.issueToken(db, { userId: uid, ig: igK, lang: doorLang, typedEmail });
+    const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
+    const link = `${base}/api/guest/return?token=${issued.token}`;
+    const channels = { dm: 'linea_mano', email: false, typed: false };
+    // Email público del negocio (canal que prueba): el link completo.
+    const harvested = guestReturn.harvestedEmailFor(db, igK, urow.guest_domain || '');
+    if (harvested) {
+      try { const mr = await returnLinkEmail(harvested, link, doorLang); if (mr && mr.ok) channels.email = true; }
+      catch (e) { console.error('[retorno] email público:', e.message); }
+    }
+    // Email escrito (canal que NO prueba): solo el aviso, sin el link.
+    if (typedEmail && typedEmail !== harvested) {
+      try { const mr = await returnNoticeEmail(typedEmail, doorLang); if (mr && mr.ok) channels.typed = true; }
+      catch (e) { console.error('[retorno] aviso al email escrito:', e.message); }
+    }
+    // DM: si el negocio ya conversó con una cuenta conectada, su IGSID
+    // vive en dm_queue y la API lo manda ahora (insights.sendDM). Si no
+    // hay conversación previa, la API no puede abrirla (verificado en
+    // guest-return.js): el DM lo trabaja la línea a mano desde la app
+    // de Instagram, con el caso visible en el Conserje desde este acto.
+    let dmSent = false;
+    try {
+      const dmRow = db.prepare('SELECT user_id, ig_sender_id FROM dm_queue WHERE LOWER(username) = ? ORDER BY id DESC LIMIT 1').get(igK);
+      if (dmRow && dmRow.ig_sender_id) {
+        const { sendDM } = require('./insights');
+        await sendDM(db, dmRow.user_id, dmRow.ig_sender_id, guestReturn.dmMessage(doorLang, link));
+        dmSent = true;
+      }
+    } catch (e) { console.error('[retorno] DM por API:', e.message); }
+    if (dmSent) channels.dm = 'api';
+    else {
+      try {
+        const prof = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid) || {};
+        const vence = new Date(issued.expiresAt).toISOString().slice(0, 16).replace('T', ' ');
+        supportCases.openCase(db, {
+          userId: uid,
+          tipo: 'prueba_retorno_dm',
+          titulo: (doorLang === 'en' ? 'Send the return link by DM to @' : 'Mandar el link de regreso por DM a @') + igK,
+          detalle: [
+            'Negocio: ' + (prof.business_name || igK) + ' (@' + igK + ')',
+            'Link de regreso (un solo uso, vence ' + vence + ' UTC):',
+            link,
+            '',
+            'Texto sugerido:',
+            guestReturn.dmMessage(doorLang, link),
+            '',
+            'Mandalo por DM de Instagram desde la cuenta de la casa: la API no abre conversaciones frías, este envío es a mano (cae en las solicitudes del negocio). Cuando el dueño toque el link, entra solo a su semana.',
+          ].join('\n'),
+          siguientePaso: doorLang === 'en' ? 'Send the DM with the link and close the case.' : 'Mandar el DM con el link y cerrar el caso.',
+          dedupKey: 'retorno-dm:' + uid + ':' + issued.token.slice(0, 8),
+        });
+      } catch (e) { console.error('[retorno] caso DM:', e.message); }
+    }
+    try { evTrack(uid, 'trial_retorno_pedido', { ig: igK, dm: channels.dm, email: channels.email ? 1 : 0, typed: channels.typed ? 1 : 0 }); } catch (e) {}
+    return res.json({ ok: true, sent: channels });
+  } catch (e) {
+    console.error('[retorno] return-request falló:', e.message);
+    return res.status(500).json({ error: 'No pudimos mandar el link todavía.' });
+  }
+});
+
+// El aterrizaje del link: consume el token (un solo uso), confirma el
+// email escrito si el token lo traía (el toque llegó de un canal que
+// prueba) y abre la sesión sobre LA fila del invitado — en armado o
+// completa, aterriza en su semana, nunca en el login pelado. Vencido,
+// usado o inventado: a la puerta de su idioma a pedir otro.
+app.get('/api/guest/return', (req, res) => {
+  const raw = String((req.query && req.query.token) || '');
+  let row = null;
+  try { row = guestReturn ? guestReturn.consumeToken(db, raw) : null; } catch (e) { row = null; }
+  if (!row) {
+    let l = 'es';
+    try {
+      const peek = db.prepare('SELECT lang FROM guest_return_tokens WHERE token_hash = ?').get(guestReturn ? guestReturn.hashToken(raw) : '');
+      if (peek && peek.lang === 'en') l = 'en';
+    } catch (e) {}
+    return res.redirect(302, (l === 'en' ? '/en/prueba' : '/prueba') + '?return=expired');
+  }
+  try {
+    const u = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(row.user_id));
+    if (!u) return res.redirect(302, (row.lang === 'en' ? '/en/prueba' : '/prueba') + '?return=expired');
+    if (row.typed_email) { try { guestReturn.confirmTypedEmail(db, row.ig, row.typed_email); } catch (e) {} }
+    try { evTrack(Number(row.user_id), 'trial_retorno_entra', { ig: row.ig }); } catch (e) {}
+    return req.session.regenerate((err) => {
+      if (err) return res.redirect(302, (row.lang === 'en' ? '/en/prueba' : '/prueba') + '?return=expired');
+      req.session.userId = Number(row.user_id);
+      res.redirect(302, '/#/app/inicio');
+    });
+  } catch (e) {
+    console.error('[retorno] return falló:', e.message);
+    return res.redirect(302, '/prueba?return=expired');
   }
 });
 
@@ -38869,6 +39022,11 @@ try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] t
 // El esquema vive en el módulo y se asegura en el arranque (idempotente).
 let guestTrial = null;
 try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catch (e) { console.error('[init] guest-trial no disponible:', e.message); }
+// (LOTE RETORNO DEL INVITADO) La puerta «Volver a mi semana»: tokens de
+// un solo uso (24 h) para que el invitado vuelva a su semana sin la
+// sesión original. El esquema vive en el módulo (idempotente).
+let guestReturn = null;
+try { guestReturn = require('./guest-return'); guestReturn.ensureSchema(db); } catch (e) { console.error('[init] guest-return no disponible:', e.message); }
 let guestStartLock = null;
 try { guestStartLock = require('./guest-start-lock'); } catch (e) { console.error('[init] guest-start-lock no disponible:', e.message); }
 // (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
@@ -45181,7 +45339,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1124';
+const BUILD_ID = '20261105-v1125';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

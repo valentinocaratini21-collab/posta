@@ -147,6 +147,23 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <button id="btnGo" class="btn btn-primary" type="submit">Build my first post</button>
     <p class="tiny">Already have an account? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
   </form>
+  <div class="card" id="returnDoor" style="margin-top:14px">
+    <div class="field" style="margin-bottom:6px">
+      <label>Back to my week</label>
+      <p class="hint" style="margin-top:2px">Already started your free trial? You never made a password — we’ll send you a one-tap link to your Instagram DM, and to your email too if you want.</p>
+    </div>
+    <div class="field">
+      <label for="rIg">Your Instagram</label>
+      <input id="rIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
+    </div>
+    <div class="field">
+      <label for="rEmail">Your email <small>(optional — we’ll send it there too)</small></label>
+      <input id="rEmail" type="email" autocomplete="off" spellcheck="false" placeholder="you@yourbusiness.com" aria-label="Your email (optional)">
+    </div>
+    <div id="rErr" class="err" hidden></div>
+    <div id="rOk" class="status" hidden></div>
+    <button id="btnReturn" class="btn btn-primary" type="button" style="width:100%">Send me my link →</button>
+  </div>
   <p class="hero-note">✓ No card · ✓ Free for 3 days · ✓ Cancel anytime</p>
 </div>
 <script>
@@ -316,7 +333,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     waitEl.innerHTML =
       '<div class="wait-hero" id="wHero">' +
         '<span class="wait-pill">✨ Revealing your post…</span><span class="wait-spark">✨</span>' +
-        '<img class="wblur" id="wHeroBlur" alt="" hidden><img class="wsharp" id="wHeroSharp" alt="" hidden>' +
+        '<img class="wblur" id="wHeroBlur" alt="" hidden onerror="this.hidden=true"><img class="wsharp" id="wHeroSharp" alt="" hidden onerror="this.hidden=true">' +
       '</div>' +
       '<div class="wait-body">' +
         '<img class="wait-badge" src="/ai-avatar.png" alt="Posty">' +
@@ -325,7 +342,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         '<div class="wait-steps">' + steps + '</div>' +
         '<p class="wait-now"><b>Now:</b> <span id="wNow">reading your account…</span></p>' +
         '<div class="wait-mirror" id="wMirror" hidden>' +
-          '<img id="wMirrorImg" alt="">' +
+          '<img id="wMirrorImg" alt="" onerror="this.closest('.wait-mirror').hidden=true">' +
           '<div><div class="mk">MEANWHILE, SOMETHING OF YOURS</div><div class="mt">This was your most-liked post</div><div class="ms" id="wMirrorTxt"></div></div>' +
         '</div>' +
         '<div class="wait-exit">Taking a while? <b>Go easy</b> — I\'ll let you know when it\'s ready.</div>' +
@@ -824,6 +841,39 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // (LOTE L2) One tap per language, and the form resubmits itself
   // with brand_lang: the rest of the data is already in the form.
   $('fLangEn').addEventListener('click', function () { brandLangChoice = 'en'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
+  // (LOTE RETORNO DEL INVITADO) The return door: one step, @ +
+  // optional email; the one-use link travels via the channels that
+  // prove ownership (the server decides: IG DM + the business's
+  // public email; the typed email only gets the notice).
+  var rBtn = $('btnReturn');
+  if (rBtn) rBtn.addEventListener('click', async function () {
+    var ig = cleanIg($('rIg').value);
+    var em = String($('rEmail').value || '').trim();
+    var rErr = $('rErr'), rOk = $('rOk');
+    rErr.hidden = true; rOk.hidden = true;
+    if (!ig) { rErr.textContent = 'Tell us your Instagram @ \u{1F642}'; rErr.hidden = false; $('rIg').focus(); return; }
+    rBtn.disabled = true; rBtn.textContent = 'Sending\u{2026}';
+    try {
+      var rr = await postJSON('/api/guest/return-request' + TEST_KEY_QS, { ig: ig, email: em, lang: LANG });
+      if (rr.ok && rr.j && rr.j.ok) {
+        rOk.textContent = 'Your link is on its way \u{1F49B} Check your Instagram DMs' + ((rr.j.sent && (rr.j.sent.email || rr.j.sent.typed)) ? ' and your email' : '') + ' \u{2014} one tap and you\u{2019}re in.';
+        rOk.hidden = false;
+      } else {
+        rErr.textContent = (rr.j && rr.j.error) || 'We couldn\u{2019}t send your link yet. Try again.';
+        rErr.hidden = false;
+      }
+    } catch (e) {
+      rErr.textContent = 'We couldn\u{2019}t send your link yet. Try again.';
+      rErr.hidden = false;
+    }
+    rBtn.disabled = false; rBtn.textContent = 'Send me my link \u{2192}';
+  });
+  if (qs.get('return') === 'expired') {
+    var rOkX = $('rOk');
+    if (rOkX) { rOkX.textContent = 'That link expired or was already used \u{2014} ask for a new one right here \u{1F447}'; rOkX.hidden = false; }
+    var rdX = $('returnDoor');
+    if (rdX && rdX.scrollIntoView) { try { rdX.scrollIntoView(); } catch (e) {} }
+  }
   $('fLangEs').addEventListener('click', function () { brandLangChoice = 'es'; if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit')); });
   // Auto-start from the hero (?ig=): if the @ already came in, go.
   if (qIg) {
