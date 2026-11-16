@@ -377,8 +377,8 @@ t(!has(pruebaEN, 'looks after your reviews'), 'meta: EN sin «looks after your r
 const serverSrc = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 t(count(serverSrc, 'growth y atención al cliente') === 0, 'chat: ES cero «growth y atención al cliente» en el resumen del plan');
 t(count(serverSrc, 'growth and customer care') === 0, 'chat: EN cero «growth and customer care» en el resumen del plan');
-t(count(serverSrc, 'con todo incluido — community manager y growth, $6.63 por día') === 2, 'chat: ES resumen «community manager y growth» x2 (editor + público)');
-t(count(serverSrc, 'everything included — community manager and growth, $6.63 a day') === 2, 'chat: EN resumen «community manager and growth» x2 (editor + público)');
+t(count(serverSrc, 'con todo incluido — community manager y growth, $9.97 por día') === 2, 'chat: ES resumen «community manager y growth» x2 (editor + público)');
+t(count(serverSrc, 'everything included — community manager and growth, $9.97 a day') === 2, 'chat: EN resumen «community manager and growth» x2 (editor + público)');
 t(has(pruebaES, 'Un community manager cobra desde $1.000.000 por mes'), 'precio: línea del CM queda (Valentino 24/10)');
 t(has(plansSrc, 'price: 199999'), 'precio: PLANS_AR.price sigue 199999 ARS (cobro intacto)');
 t(has(plansSrc, "desde: '$199.999'"), 'precio: PLAN_ANCHOR AR sigue $199.999 (app intacta)');
@@ -487,7 +487,7 @@ t(has(stylesSrc, '@media(max-width:760px){.logo-img{height:28px}'), 'logo: style
       const pruebaENPage = await (await fetch(BASE + '/en/prueba')).text(); // ruta /en/prueba (sin .html)
       t(!has(pruebaENPage, '199,999'), 'boot: /en/prueba.html servida sin «199,999»');
       t(has(pruebaENPage, 'from USD 199'), 'boot: /en/prueba.html servida con USD 199');
-      t(plansRes.anchor && plansRes.anchor.desde === 'USD 199', 'boot: /api/billing/plans?unico=1 anchor.desde USD 199');
+      t(plansRes.anchor && plansRes.anchor.desde === 'USD 299', 'boot: /api/billing/plans?unico=1 anchor.desde USD 299');
     } catch (e) {
       t(false, 'boot: excepción ' + e.message);
     } finally {

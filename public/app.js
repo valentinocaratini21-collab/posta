@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1130';
+const PZ_BUILD = '20261105-v1131';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -4940,7 +4940,7 @@ function lpAdsHTML() {
         <p class="cap-exp">Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo. La pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y Posty elige el posteo, el público y lo gestiona.</p>
         <ul class="cap-list">
           <li><b>Tu mejor posteo, detectado solo.</b> Posty marca el posteo que más rindió y te dice por qué funciona.</li>
-          <li><b>Vos ponés el monto, nada más.</b> $20, $50 o $100. La pauta va por tu cuenta de Meta, aparte de los $199.</li>
+          <li><b>Vos ponés el monto, nada más.</b> $20, $50 o $100. La pauta va por tu cuenta de Meta, aparte de los $299.</li>
           <li><b>Posty hace el resto.</b> Público, pauta y gestión. Siempre con tu OK en un toque.</li>
         </ul>
         <a class="cap-cta" href="/prueba">Probalo 3 días gratis →</a>
@@ -5044,8 +5044,8 @@ function landingView(cfg) {
   const lpFmt = (n) => lpSym + Math.round(n).toLocaleString('es-AR');
   const lpDefCost = Math.round(6 * 4.33 * lpDefRate);
   const lpHorasMes = Math.round(6 * 4.33);
-  const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || 'USD 199';
-  const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 7;
+  const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || 'USD 299';
+  const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 10;
   const lpPerDaySym = lpEsencial ? pzSimbolo(lpEsencial) : 'USD ';
   LP_CALC_RATE = lpDefRate;
   LP_ESENCIAL_OBJ = lpEsencial;
@@ -21083,7 +21083,7 @@ async function pzPostpayTray() {
 async function showExpiredModal() {
   if (document.getElementById('pzExpOverlay')) return;
   trackOnce('expmodal', 'trial_expired_view');
-  // (LOTE PLAN-ÚNICO-PAYWALL) El paywall ofrece EL plan único (USD 199) con
+  // (LOTE PLAN-ÚNICO-PAYWALL) El paywall ofrece EL plan único (USD 299) con
   // el país guardado de la cuenta, no el catálogo de 3 tiers. Textos ES/EN
   // según el idioma de la cuenta (antes todo hardcodeado en español y el
   // fetch pedía el catálogo AR por default).
@@ -21138,7 +21138,7 @@ async function trialExpiredBannerHTML() {
   try { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return ''; } catch (e) {}
   if (!(typeof ME !== 'undefined' && ME && ME.trial_expired && ME.plan_status === 'trial')) return '';
   if (typeof document !== 'undefined' && document.getElementById('pzExpOverlay')) return ''; // modal abierto: no competir
-  // (LOTE PLAN-ÚNICO-PAYWALL) El banner ofrece el plan único (USD 199) con
+  // (LOTE PLAN-ÚNICO-PAYWALL) El banner ofrece el plan único (USD 299) con
   // el país guardado, y el texto sigue el idioma de la cuenta (antes pedía
   // el catálogo de tiers y el texto era solo en español).
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');

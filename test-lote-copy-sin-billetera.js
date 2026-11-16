@@ -41,7 +41,7 @@ const en = read(path.join(ROOT, 'public', 'en', 'index.html'));
 t(count(app, ES_CORTA_NEW) === 3, 'ES app: frase corta nueva ×3 (cierre + 2 FAQ), vino ' + count(app, ES_CORTA_NEW));
 t(count(app, ES_FAQ_NEW) === 1, 'ES app: FAQ publicidad nueva ×1');
 t(count(app, 'La pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y Posty elige el posteo, el público y lo gestiona.') === 1, 'ES app: cap-exp nueva ×1');
-t(count(app, 'La pauta va por tu cuenta de Meta, aparte de los $199.') === 1, 'ES app: li monto nuevo ×1');
+t(count(app, 'La pauta va por tu cuenta de Meta, aparte de los $299.') === 1, 'ES app: li monto nuevo ×1');
 t(count(app, 'Tu cuenta de Meta · $20') === 1, 'ES app: mock nuevo ×1');
 t(count(app, 'la gestión se cobra al impulsar con tu tarjeta guardada') === 1, 'ES app: cap-note con gestión al impulsar ×1');
 // ---------- B. ES app.js: frases viejas fuera ----------
@@ -56,7 +56,7 @@ t(count(idx, 'billetera') === 0, 'ES index: «billetera» ×0 (solo vivía en el
 t(count(en, EN_CORTA_NEW) === 4, 'EN: frase corta nueva ×4 (JSON-LD ×2 + FAQ ×2), vino ' + count(en, EN_CORTA_NEW));
 t(count(en, EN_FAQ_NEW) === 2, 'EN: FAQ publicidad nueva ×2 (JSON-LD + visible), vino ' + count(en, EN_FAQ_NEW));
 t(count(en, 'The ad spend is paid from your own Meta account, separate from the subscription, and Posty picks the post, the audience and runs it.') === 1, 'EN: cap-exp nueva ×1');
-t(count(en, 'The spend runs on your Meta account, separate from the $199.') === 1, 'EN: li monto nuevo ×1');
+t(count(en, 'The spend runs on your Meta account, separate from the $299.') === 1, 'EN: li monto nuevo ×1');
 t(count(en, 'Your Meta account · $20') === 1, 'EN: mock nuevo ×1');
 t(count(en, "Posty's management is charged when you boost, on your saved card") === 1, 'EN: cap-note con gestión al impulsar ×1');
 t(count(en, 'it runs on your own Meta account and you pick the post') === 1, 'EN: cierre nuevo ×1');

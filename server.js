@@ -7623,7 +7623,7 @@ const PZ_CHAT_PUBLIC_SYS = [
   '',
   'HECHOS REALES (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana, escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
-  '- Precio: USD 199 por mes. Prueba gratis completa de 3 días, sin tarjeta. Lanzamiento: 1 de diciembre de 2026.',
+  '- Precio: USD 299 por mes. Prueba gratis completa de 3 días, sin tarjeta. Lanzamiento: 1 de diciembre de 2026.',
   '- Entrar a una cuenta existente: desde el botón Entrar. Probar gratis: desde el botón de prueba de 3 días.',
   '',
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba. Nunca digas que conocés la cuenta, el negocio o los datos del visitante: no los tenés y no los inventás.',
@@ -7640,7 +7640,7 @@ const PZ_CHAT_PUBLIC_SYS_EN = [
   '',
   'REAL FACTS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week, writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
-  '- Price: USD 199 per month. Full free 3-day trial, no card required. Launch: December 1, 2026.',
+  '- Price: USD 299 per month. Full free 3-day trial, no card required. Launch: December 1, 2026.',
   '- Logging into an existing account: from the Log in button. Trying free: from the 3-day trial button.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Never invent features, integrations, prices or discounts that are not listed above. Never say you know the visitor\'s account, business or data: you do not have them and you never invent them.',
@@ -27511,14 +27511,14 @@ app.get('/api/billing/plans', (req, res) => {
   const anchor = PLAN_ANCHOR[country];
   const meta = COUNTRY_META[country] || COUNTRY_META.AR;
   // (PLAN ÚNICO, Valentino 2026-11-06) La vidriera sirve UN SOLO plan
-  // (Posty, USD 199/mes) vía ?unico=1. (LOTE PLAN-ÚNICO-PAYWALL) La app
+  // (Posty, USD 299/mes) vía ?unico=1. (LOTE PLAN-ÚNICO-PAYWALL) La app
   // también: Mi plan, el paywall y el modal/banner de trial piden el plan
   // único con el mismo parámetro. El catálogo de 3 tiers sin el parámetro
   // queda SOLO como facturación interna (usuarios existentes, founder) y
   // para los deep links con agente/nivel de los otros poderes.
   if (req.query.unico === '1') {
     const p = { ...PLAN_UNICO, price_label: formatPrice(PLAN_UNICO) };
-    const anchorU = PLAN_ANCHOR[country] ? { cm: PLAN_ANCHOR[country].cm, desde: 'USD 199' } : null;
+    const anchorU = PLAN_ANCHOR[country] ? { cm: PLAN_ANCHOR[country].cm, desde: 'USD 299' } : null;
     return res.json({
       country,
       currency: 'USD',
@@ -27603,11 +27603,11 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   if (guestBackstop(req, res)) return;
   const { plan: planIdRaw, country, payer_email, agente: agenteRaw } = req.body || {};
   // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty') se cobra SOLO por
-  // Stripe en USD 199 para todos los países: no tiene precio en pesos (la
+  // Stripe en USD 299 para todos los países: no tiene precio en pesos (la
   // tasa USD→ARS no está decidida y no se inventa). Sin esta guarda,
   // contratoTier lo degradaba a 'esencial' y MP cobraba el tier en ARS.
   if (String(planIdRaw || '').trim().toLowerCase() === PLAN_UNICO.id) {
-    return res.status(400).json({ error: 'El plan Posty se paga con tarjeta en USD 199: volvé a Mi plan y tocá Suscribirse.' });
+    return res.status(400).json({ error: 'El plan Posty se paga con tarjeta en USD 299: volvé a Mi plan y tocá Suscribirse.' });
   }
   // (Pagos lado app, 2026-10-25) Riel MP: SOLO AR + UY. BR/MX/CL/CO/PE
   // pasaron a Stripe (tarjeta en USD); si llegan acá, caen a AR como
@@ -27876,7 +27876,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
   // (estos últimos con planes USD). Sin país válido, US. CA no entra acá
   // (solo API): un country CA cae a US como antes.
   const stripeCountry = ['US', 'GB', 'EU', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
-  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty') es global: USD 199
+  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty') es global: USD 299
   // para TODOS los países, incluida Argentina (que por este endpoint antes
   // caía a US solo para los tiers). No pasa por contratoTier ni por el
   // catálogo por país: el plan que viaja es PLAN_UNICO, su precio en Stripe
@@ -43691,7 +43691,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
   });
   const hist = Array.isArray(history) ? history.slice(-6).map((h) => `${h.role === 'user' ? (en ? 'Owner' : 'Dueño') : (en ? 'Posty' : 'Posta')}: ${String(h.text || '').slice(0, 200)}`).join('\n') : '';
   // (v274 · MODO EN) System prompt del chat EN: mismo rol y mismas reglas,
-  // en inglés US y con el precio EN (USD 199, plan único — ver config/plans.js,
+  // en inglés US y con el precio EN (USD 299, plan único — ver config/plans.js,
   // bloque PLANS_US: el cobro US va por Stripe, todavía sin alta; el chat
   // solo informa precios, nunca cobra).
   const sysEn =
@@ -43709,9 +43709,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
     'If the request applies to several posts, include all of them. If it is unclear which post they mean, apply the edit to the one that best matches the conversation; if none matches, edits: [] and "reply": "" — never ask an open question. ' +
     'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
-    'Free 3-day trial, no card. One plan: Posty $199/month, everything included — community manager and growth, $6.63 a day. ' +
+    'Free 3-day trial, no card. One plan: Posty $299/month, everything included — community manager and growth, $9.97 a day. ' +
     'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
-    'If they say no, do not insist. Objections: "too expensive" → Posty works out to $6.63 a day; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
+    'If they say no, do not insist. Objections: "too expensive" → Posty works out to $9.97 a day; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
     '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
   const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
@@ -43728,9 +43728,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
     'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende a qué posteo se refiere, aplicá el cambio al que mejor matchee con la conversación; si ninguno matchea, edits: [] y "reply": "" — jamás pidas aclaración con una pregunta abierta. ' +
     'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
-    'Prueba gratis de 3 días, sin tarjeta. Plan único: Posty USD 199 por mes, con todo incluido — community manager y growth, $6.63 por día. ' +
+    'Prueba gratis de 3 días, sin tarjeta. Plan único: Posty USD 299 por mes, con todo incluido — community manager y growth, $9.97 por día. ' +
     'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
-    'Si dice que no, no insistas. Objeciones: "es caro" → Posty sale $6.63 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
+    'Si dice que no, no insistas. Objeciones: "es caro" → Posty sale $9.97 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
     // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
     (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
   let sys = en ? sysEn : sysEs;
@@ -43806,12 +43806,12 @@ const POSTY_CHAT_SYS = [
   '',
   'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Nunca devolvés una pregunta vacía: siempre proponés un paso concreto. La prueba gratis de 3 días (sin tarjeta) se ofrece cuando encaja en la conversación — NO en cada mensaje.',
   'FORMATO: texto plano, SIN markdown: nada de asteriscos, almohadillas ni negritas. Si enumerás planes o puntos, escribilos en frases corridas o en líneas simples empezando con "• ".',
-  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale USD 199 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
+  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale USD 299 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
   '',
   'QUÉ ES POSTY (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana (7 posteos por semana), escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
   '- EL ANÁLISIS: al poner tu @ en la prueba, Posty lee tu Instagram real y te escribe una carta con qué mejorar, qué incrementar y qué reducir, más su plan de ejecución (esta semana / la que viene / de acá en más).',
-  '- Plan único: Posty USD 199 por mes, con todo incluido — community manager y growth, $6.63 por día.',
+  '- Plan único: Posty USD 299 por mes, con todo incluido — community manager y growth, $9.97 por día.',
   '- Prueba gratis completa de 3 días, sin tarjeta. Referidos: si 2 amigos se suman, 50% de descuento.',
   '',
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. La constancia y el trabajo los pone Posty; los resultados dependen de cada negocio. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba.',
@@ -43823,7 +43823,7 @@ const POSTY_CHAT_SYS = [
 ].join('\n');
 
 // (v276) System prompt EN del chat público: espejo del ES, en inglés US y
-// con el precio EN (USD 199, plan único; el chat
+// con el precio EN (USD 299, plan único; el chat
 // solo informa precios, nunca cobra). Se usa solo si el cliente manda
 // lang:'en' (website /en); el default sigue siendo el ES de arriba.
 const POSTY_CHAT_SYS_EN = [
@@ -43831,12 +43831,12 @@ const POSTY_CHAT_SYS_EN = [
   '',
   'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
   'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
-  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $199 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
+  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $299 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
   '',
   'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts per week), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
   '- THE ANALYSIS: when you enter your @ in the trial, Posty reads your real Instagram and writes you a letter with what to improve, what to increase and what to reduce, plus its execution plan (this week / next week / from here on).',
-  '- One plan: Posty $199 a month, everything included — community manager and growth, $6.63 a day.',
+  '- One plan: Posty $299 a month, everything included — community manager and growth, $9.97 a day.',
   '- Full free 3-day trial, no card required. Referrals: if 2 friends join, 50% off.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
@@ -45466,7 +45466,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1130';
+const BUILD_ID = '20261105-v1131';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

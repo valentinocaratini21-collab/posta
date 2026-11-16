@@ -110,7 +110,7 @@
         {
           "@type": "Offer",
           "name": "Posty",
-          "price": "199",
+          "price": "299",
           "priceCurrency": "USD",
           "url": "https://postycommunitymanager.com/en/"
         }
@@ -699,7 +699,7 @@
         <p class="cap-exp">When a post takes off, Posty flags it and proposes boosting it. The ad spend is paid from your own Meta account, separate from the subscription, and Posty picks the post, the audience and runs it.</p>
         <ul class="cap-list">
           <li><b>Your best post, spotted on its own.</b> Posty flags your top-performing post and tells you why it works.</li>
-          <li><b>You set the amount, that's it.</b> $20, $50 or $100. The spend runs on your Meta account, separate from the $199.</li>
+          <li><b>You set the amount, that's it.</b> $20, $50 or $100. The spend runs on your Meta account, separate from the $299.</li>
           <li><b>Posty does the rest.</b> Audience, ads and management. Always with your one-tap OK.</li>
         </ul>
         <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
@@ -731,13 +731,13 @@
       <button type="button" data-country="EU" onclick="switchPlansCountry('EU')" title="Eurozone" aria-label="Eurozone" aria-pressed="false">🇪🇺</button>
     </div>
     <p class="lp-pais-nota" id="plansCountryNote">Prices in USD.</p>
-    <div class="anchor-line" id="anchorLine">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$199</b>.</div>
+    <div class="anchor-line" id="anchorLine">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$299</b>.</div>
     <div id="lpSocialEn"></div>
 <div class="plans-row" id="plansRow">
     <div class="price-card hot" data-plan-card="posty">
       <h3>Posty</h3>
-      <div class="price">$199<small>/mo</small></div>
-      <div class="pz-perday">≈ $6.63 per day</div>
+      <div class="price">$299<small>/mo</small></div>
+      <div class="pz-perday">≈ $9.97 per day</div>
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Your business looked after and selling — with your one-tap OK</p>
       <ul><li>7 posts a week, automatic</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Automatic scheduled posting</li><li>Weekly insight in Today + the Sunday Letter</li><li>Weekly strategy for your business</li><li>Weekly results report</li></ul>
       <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
@@ -1460,8 +1460,8 @@ function lpCalcUpdate() {
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  var postyBase = (typeof LP_CALC_BASE !== 'undefined' && LP_CALC_BASE) ? LP_CALC_BASE : '$199';
-  var postyDia = (typeof LP_CALC_PERDAY !== 'undefined' && LP_CALC_PERDAY) ? LP_CALC_PERDAY : '$6.63';
+  var postyBase = (typeof LP_CALC_BASE !== 'undefined' && LP_CALC_BASE) ? LP_CALC_BASE : '$299';
+  var postyDia = (typeof LP_CALC_PERDAY !== 'undefined' && LP_CALC_PERDAY) ? LP_CALC_PERDAY : '$9.97';
   out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: <b>${postyBase} per month</b> (≈ ${postyDia} per day) and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
 }
 function lpCalcRate(btn) {
@@ -1577,8 +1577,8 @@ var PZ_META_EN = {
   EU: { nota: 'Pay by card.' }
 };
 var PZ_PAIS_EN = 'US';
-var LP_CALC_BASE = '$199';
-var LP_CALC_PERDAY = '$6.63';
+var LP_CALC_BASE = '$299';
+var LP_CALC_PERDAY = '$9.97';
 function pzFmtEN(p) {
   var usd5 = ['BR', 'MX', 'CL', 'CO', 'PE'].indexOf(PZ_PAIS_EN) >= 0;
   var sym = { ARS: '$', UYU: '$U ', USD: usd5 ? 'USD ' : '$', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' }[p.currency] || '$';

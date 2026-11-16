@@ -129,7 +129,7 @@ for (const f of EXP_EN_FALSAS) {
 }
 
 // ---------- 5. Lo que NO cambia (guards) ----------
-t(PLANS.PLAN_UNICO.price === 199 && PLANS.PLAN_UNICO.currency === 'USD', 'plan único sigue USD 199');
+t(PLANS.PLAN_UNICO.price === 299 && PLANS.PLAN_UNICO.currency === 'USD', 'plan único sigue USD 299');
 t(PLANS.PLANS_AR.total.reelsPerWeek === 2, 'Total reelsPerWeek sigue 2 (capacidad = promesa)');
 t(PLANS.PLANS_AR.total.carouselsPerWeek === 2, 'Total carouselsPerWeek sigue 2 (cupo, no promesa)');
 t(PLANS.PLANS_AR.pro.features.length === 8, 'Pro intacto (8 ítems, catálogo interno)');

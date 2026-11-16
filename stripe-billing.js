@@ -56,7 +56,7 @@ async function ensureCatalog(client) {
   if (!client) throw new Error('Stripe no configurado');
   const out = {};
   // (LOTE PLAN-ÚNICO-PAYWALL) El catálogo incluye el plan único (id 'posty',
-  // USD 199): su precio vive bajo el mismo lookup_key posty_us_posty_monthly.
+  // USD 299): su precio vive bajo el mismo lookup_key posty_us_posty_monthly.
   for (const plan of [...Object.values(getPlans('US')), PLAN_UNICO]) {
     if (priceIdCache.has(plan.id)) { out[plan.id] = priceIdCache.get(plan.id); continue; }
     const found = await client.prices.list({ lookup_keys: [lookupKeyFor(plan.id)], active: true, limit: 1 });
