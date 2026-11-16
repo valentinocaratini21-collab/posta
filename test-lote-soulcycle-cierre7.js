@@ -101,7 +101,7 @@ seccion('A · camino y escalación');
   ok(cuerpoRescate.includes("estado: 'escalado'") && cuerpoRescate.includes('finR.escalacion = {'), 'A9 al tercer cierre la semana escala: estado escalado por pieza + registro de escalación');
   ok(SERVER.includes('function rescateDesbloqueoPara') && SERVER.includes('tope diario de IA del demo') && SERVER.includes('falta el logo real del negocio'), 'A10 la escalación nombra su desbloqueo por motivo');
   ok(cuerpoRearmar.includes('escalada: true') && cuerpoRearmar.includes('la escalación se levanta'), 'A11 el re-enganche no re-abre una semana escalada con la misma firma; con firma nueva la levanta y re-abre');
-  ok(cuerpoRescate.includes('RESCATE_MOTIVOS_BLOQUEO.has(m)'), 'A12 solo los cierres por bloqueo declarado cuentan para escalar (los transitorios no)');
+  ok(cuerpoRescate.includes('const cuentaCierreD = applied === 0 && motivosPendD.length > 0;'), 'A12 (re-pin LOTE DESTRABE-RESTO · R4) todo cierre sin completar ninguna pieza cuenta para escalar — la clase del motivo ya no filtra: un rescate trabado por fallos transitorios repetidos sobre el mismo insumo tambien escala y avisa (la corrida contestada del destrabe ciclo 25+ min sin declarar detencion con la regla anterior)');
 }
 seccion('A · marcadores de los lotes anteriores y stamps');
 {

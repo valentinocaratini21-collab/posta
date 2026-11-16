@@ -1670,7 +1670,21 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
         }
         const recQ = _trialDigestBuilt.reconciliacion;
         if (recQ && recQ.contradiccion) {
-          const nombresWebQ = new Set(((webData && webData.services) || []).map((s) => trialTextoNorm((s && (s.name || s.title)) || '')).filter(Boolean));
+          // (LOTE DESTRABE-RESTO · R1) El set de nombres de la web
+          // se arma de TODAS sus superficies (home + catalogo
+          // profundo + link de bio) y leyendo el nombre como venga
+          // (string u objeto): en v1112 el set nacia vacio porque
+          // webData.services son strings y se leia .name/.title —
+          // la cuarentena solo veia la fuente, y productos la
+          // pierde al armarse (itemList descarta la fuente).
+          const nombresWebQ = new Set();
+          const sumarNombreWebQ = (x) => {
+            const n = trialTextoNorm(typeof x === 'string' ? x : ((x && (x.nombre || x.name || x.titulo || x.title)) || ''));
+            if (n) nombresWebQ.add(n);
+          };
+          ((webData && webData.services) || []).forEach(sumarNombreWebQ);
+          (((deep && deep.catalog && deep.catalog.items) || [])).forEach(sumarNombreWebQ);
+          (((deep && deep.bioLink && deep.bioLink.items) || [])).forEach(sumarNombreWebQ);
           trialDigestCuarentenaWeb(_trialDigestBuilt, recQ.motivo || 'contradiccion', nombresWebQ);
         }
       } catch (e) { /* la cuarentena jamas frena el armado del digest */ }
@@ -25253,6 +25267,32 @@ function trialLogoAbsPath(digest) {
     return fs.existsSync(abs) ? abs : null;
   } catch (e) { return null; }
 }
+// (LOTE DESTRABE-RESTO · R2) LA PROYECCION DEL PRIMER POSTEO SE
+// REFRESCA TRAS LA MATERIALIZACION: el registro primer_posteo nace
+// en el spec de generateDemo — cuando digest.logo_file todavia
+// estaba vacio, porque la cosecha del archivo (trialLogoMateria-
+// lizar) corre DESPUES en el stream — y su estado del logo
+// («sin-archivo») quedaba servido para siempre si la cadena de
+// rescate no completaba el slot 0, aunque el digest ya sellaba el
+// archivo y /media lo servia con 200 (grieta de la evidencia del
+// destrabe: la semana servida decia sin-archivo con el logo vivo).
+// El refresco recomputa SOLO el estado del ARCHIVO del logo contra
+// el digest sellado — el mismo valor que el spec da con el archivo
+// presente — y anota el archivo; el veredicto de la pieza no se
+// toca (describe su cadena y su rescate, que siguen mandando).
+// Sin archivo real no cambia nada. Nunca tira.
+function trialPayloadLogoRefresh(payload) {
+  try {
+    if (!payload || typeof payload !== 'object') return false;
+    const pp = payload.primer_posteo;
+    if (!pp || !pp.logo) return false;
+    if (pp.logo.estado !== 'sin-archivo' && pp.logo.estado !== 'sin-archivo-de-logo') return false;
+    if (!trialLogoAbsPath(payload.digest)) return false;
+    pp.logo.estado = 'sellado-pendiente-de-qa';
+    if (payload.digest && payload.digest.logo_file) pp.logo.file = String(payload.digest.logo_file);
+    return true;
+  } catch (e) { return false; }
+}
 // ---------- 🏠 HOME (v331): el perfil literal del cliente ----------
 // La home de la app es el perfil de Instagram del cliente TAL CUAL es:
 // encabezado fiel (foto, @, nombre, bio, link, conteos) + sus posteos
@@ -29679,6 +29719,15 @@ const SEMANA_REARME_DELAY_MS = 60 * 1000;
 const RESCATE_MOTIVOS_SIN_REGASTO = new Set(['logo-qa', 'qa-concepto']);
 const RESCATE_MOTIVOS_BLOQUEO = new Set(['tope-de-gasto', 'logo-qa', 'qa-concepto', 'sin-archivo-de-logo', 'sin-insumos']);
 const RESCATE_ESCALA_CIERRES = 3;
+// (LOTE DESTRABE-RESTO · R4) LIBRO DE PASADAS POR SEMANA: el
+// presupuesto de pasadas de una semana vive en el payload
+// (payload.rescate_libro, en base) y NO en la memoria del proceso:
+// una cadena interrumpida por un deploy se reanuda por el barrido
+// CONTINUANDO la cuenta, y al agotar el libro la semana declara su
+// detención y escala con el motivo real — nunca se evapora. Dos
+// presupuestos completos de cadena (2 × SEMANA_REARME_MAX_PASADAS)
+// sin completar ninguna pieza = semana trabada.
+const RESCATE_LIBRO_TOPE_PASADAS = 12;
 function rescateFirmaPieza(digestHash, logoPath, headline) {
   try {
     return crypto.createHash('sha1').update(String(digestHash || '') + '|' + path.basename(String(logoPath || '')) + '|' + String(headline || '')).digest('hex').slice(0, 16);
@@ -29696,6 +29745,10 @@ function rescateDesbloqueoPara(motivo) {
     case 'logo-qa': return 'el logo real no pasa la verificación sobre este diseño: hace falta el archivo correcto del logo o la confirmación del dueño';
     case 'qa-concepto': return 'el concepto no pasa su QA con este insumo: hace falta material real del negocio o la respuesta del dueño';
     case 'sin-insumos': return 'faltan insumos del diseño (prompt o directorio de trabajo): hace falta regenerar la semana desde el fundamento';
+    case 'generacion-fallo':
+    case 'compuesto-fallo':
+    case 'error-cadena': return 'la generación falla de forma repetida sobre el mismo fundamento: revisar el motor de imágenes y el fundamento; la cadena se re-abre cuando cambie el insumo (logo o fundamento)';
+    case 'pasadas-agotadas': return 'la cadena agotó sus pasadas sin completar ninguna pieza: el motivo real quedó declarado por pieza en el payload; la cadena se re-abre cuando cambie el insumo (logo o fundamento)';
     default: return 'el bloqueo sigue declarado en cada pieza: la cadena se re-abre cuando cambie el insumo (logo o fundamento)';
   }
 }
@@ -30000,6 +30053,34 @@ async function scheduleWeekRescue(o) {
       const finR = readCache();
       if (finR && Array.isArray(finR.posts)) {
         const pendR = o.pieces.filter((pc) => finR.posts[pc.idx | 0] && finR.posts[pc.idx | 0].armando === true);
+        // (LOTE DESTRABE-RESTO · R4 — propiedades del diagnóstico
+        // del rescate clavado) LIBRO DE PASADAS DE LA SEMANA: cada
+        // pasada que termina sin completar ninguna pieza suma UNA
+        // al libro persistido en el payload (rescate_libro, con la
+        // firma global de insumos: si el insumo cambia, el libro
+        // nace de cero, como la escalación). Completar una pieza lo
+        // reinicia. El conteo sobrevive a la muerte del proceso
+        // (deploy incluido) y no depende de que una cadena llegue a
+        // su cierre natural: al agotar el libro, ESTA pasada declara
+        // la detención y sella la escalación con el motivo dominante
+        // real, y el aviso llega al conserje. Lo único que queda en
+        // memoria es el atajo de pasadas idénticas sin logo
+        // (semanaRearmeEstado): perderlo cuesta una re-verificación,
+        // nunca la cuenta.
+        const firmaLibroR = rescateFirmaGlobal(o.digestHash, o.logoPath);
+        let libroR = (finR.rescate_libro && finR.rescate_libro.firma === firmaLibroR)
+          ? { firma: firmaLibroR, pasadas: finR.rescate_libro.pasadas | 0, at: finR.rescate_libro.at || 0 }
+          : { firma: firmaLibroR, pasadas: 0, at: 0 };
+        if (applied > 0) libroR = { firma: firmaLibroR, pasadas: 0, at: Date.now() };
+        else if (pendR.length) libroR = { firma: firmaLibroR, pasadas: libroR.pasadas + 1, at: Date.now() };
+        const libroAgotadoR = pendR.length > 0 && applied === 0 && libroR.pasadas >= RESCATE_LIBRO_TOPE_PASADAS;
+        const conteoMotLibro = {};
+        for (const pc of pendR) { const mL = motivosRescate.get(pc.idx | 0) || 'pasadas-agotadas'; conteoMotLibro[mL] = (conteoMotLibro[mL] || 0) + 1; }
+        const motivoDomR = Object.keys(conteoMotLibro).sort((a, b) => conteoMotLibro[b] - conteoMotLibro[a])[0] || 'pasadas-agotadas';
+        if (JSON.stringify(finR.rescate_libro || null) !== JSON.stringify(libroR)) {
+          finR.rescate_libro = libroR;
+          try { db.prepare('INSERT INTO trial_cache(ig, payload, created_at) VALUES(?,?,?) ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at').run(o.cacheKey, JSON.stringify(finR), Date.now()); } catch (e) {}
+        }
         // (LOTE SOULCYCLE-CIERRE-4) DECLARACIÓN AL CIERRE DE LA
         // CADENA: si esta cadena se detiene (en espera o agotada),
         // ninguna pieza queda en «armando» huérfano — cada una
@@ -30029,8 +30110,11 @@ async function scheduleWeekRescue(o) {
             // pendientes cerraron por un bloqueo declarado (tope o
             // veredicto de insumo — los motivos transitorios no
             // escalan: la infraestructura caída se reintenta, no se
-            // declara). Si alguna pieza se completó en la cadena, el
-            // contador vuelve a cero. Al llegar a
+            // declara). (LOTE DESTRABE-RESTO · R4: el conteo se
+            // amplía a TODO cierre sin completar ninguna pieza —
+            // ver la nota junto a cuentaCierreD.) Si alguna pieza
+            // se completó en la cadena, el contador vuelve a cero.
+            // Al llegar a
             // RESCATE_ESCALA_CIERRES cierres sin completar ninguna
             // pieza de la semana, la semana ESCALA: cada pendiente
             // declara estado 'escalado' con su motivo y el payload
@@ -30038,13 +30122,30 @@ async function scheduleWeekRescue(o) {
             // la firma global vigente — el barrido no la re-abre
             // mientras esa firma no cambie.
             const motivosPendD = pendR.map((pc) => motivosRescate.get(pc.idx | 0) || motivoFallback);
-            const cuentaCierreD = applied === 0 && motivosPendD.length > 0 && motivosPendD.every((m) => RESCATE_MOTIVOS_BLOQUEO.has(m));
+            // (LOTE DESTRABE-RESTO · R4) EL CONTEO YA NO EXIGE LA
+            // CLASE DEL MOTIVO: el Cierre 7 solo contaba los
+            // cierres por bloqueo declarado (tope/veredicto) y un
+            // rescate trabado por fallos de generacion repetidos
+            // sobre el mismo insumo NUNCA acumulaba cierres — cada
+            // cadena fresca (barrido, resumidor o el reinicio de un
+            // deploy) reponia sus 6 pasadas y el ciclo quemaba demo
+            // sin declarar detencion ni sellar la escalacion
+            // (corrida contestada del destrabe: 25+ min ciclando,
+            // demo-ai 163→187, cero casos prueba_trabada). Ahora
+            // TODO cierre de cadena que no completo ninguna pieza
+            // cuenta, con el motivo real de sus piezas: a los
+            // RESCATE_ESCALA_CIERRES la semana sella su escalacion
+            // (cualquier clase de motivo, con su desbloqueo) y el
+            // re-enganche no la re-abre mientras la firma no
+            // cambie — el ciclo tiene tope y la detencion le llega
+            // a un humano por el aviso de la pieza C.
+            const cuentaCierreD = applied === 0 && motivosPendD.length > 0;
             let cierresD = (finR.rescate_cierres && finR.rescate_cierres.n | 0) || 0;
             if (applied > 0) cierresD = 0;
             else if (cuentaCierreD) cierresD += 1;
             if (!finR.rescate_cierres || finR.rescate_cierres.n !== cierresD) { finR.rescate_cierres = { n: cierresD, at: Date.now() }; tocoD = true; }
             const ningunaCompletadaD = finR.posts.every((p) => !(p && p.armando === false && p.image));
-            if (cuentaCierreD && cierresD >= RESCATE_ESCALA_CIERRES && ningunaCompletadaD && !finR.escalacion) {
+            if (cuentaCierreD && (cierresD >= RESCATE_ESCALA_CIERRES || libroAgotadoR) && ningunaCompletadaD && !finR.escalacion) {
               const conteoMotivosD = {};
               for (const m of motivosPendD) conteoMotivosD[m] = (conteoMotivosD[m] || 0) + 1;
               const motivoDomD = Object.keys(conteoMotivosD).sort((a, b) => conteoMotivosD[b] - conteoMotivosD[a])[0] || motivoFallback;
@@ -30098,7 +30199,16 @@ async function scheduleWeekRescue(o) {
           else if (!logoR0 && applied === 0) { estR.sig = sigR; estR.sinProgreso = 0; }
           else semanaRearmeEstado.delete(o.cacheKey);
           if (semanaRearmeEstado.get(o.cacheKey) !== estR && (identicaR || (!logoR0 && applied === 0))) semanaRearmeEstado.set(o.cacheKey, estR);
-          if (identicaR && estR.sinProgreso >= 2) {
+          if (libroAgotadoR) {
+            // (LOTE DESTRABE-RESTO · R4) El libro de pasadas de la
+            // semana se agotó: esta pasada declara la detención con
+            // el motivo dominante real y la escalación queda sellada
+            // en el payload — la cadena no programa otra pasada.
+            semanaCadenasVivas.delete(o.cacheKey);
+            semanaRearmeEstado.delete(o.cacheKey);
+            declararRescateDetenido(motivoDomR);
+            console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: libro de pasadas de la semana agotado (${libroR.pasadas}/${RESCATE_LIBRO_TOPE_PASADAS} sin completar ninguna pieza) — detención declarada y escalada con motivo «${motivoDomR}»`);
+          } else if (identicaR && estR.sinProgreso >= 2) {
             semanaCadenasVivas.delete(o.cacheKey);
             declararRescateDetenido('sin-archivo-de-logo');
             console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: bloqueo idéntico tras el refresco (sin archivo de logo) — la cadena queda EN ESPERA con ${pendR.length} pieza(s) en armado, cada una con su motivo declarado; el barrido o el resumidor la re-abren si el bloqueo cambia`);
@@ -30227,11 +30337,19 @@ async function rearmarSemanaPruebaPorCacheKey(cacheKey) {
     const firmaGlobalR = rescateFirmaGlobal((payload.digest && payload.digest.hash) || '', logoPath);
     if (payload.escalacion) {
       if (payload.escalacion.firma === firmaGlobalR) {
+        // (LOTE DESTRABE-RESTO · R4) El aviso al conserje se
+        // re-dispara en cada re-enganche sobre la semana escalada:
+        // si el proceso murió entre el sello y el aviso original,
+        // el caso igual llega; el dedup por clave+motivo lo
+        // mantiene en UN solo caso (la declaración vive en base,
+        // no en memoria del proceso).
+        avisoRescateHumano(cacheKey, payload.escalacion.motivo || 'rescate-detenido', payload.escalacion.desbloqueo || rescateDesbloqueoPara(payload.escalacion.motivo || ''));
         return { pendientes: pendIdx.length, pendIdx, rearmada: false, escalada: true, motivo: payload.escalacion.motivo || null };
       }
       try {
         delete payload.escalacion;
         payload.rescate_cierres = { n: 0, at: Date.now() };
+        delete payload.rescate_libro;
         for (const i of pendIdx) {
           if (payload.posts[i] && payload.posts[i].rescate && payload.posts[i].rescate.estado === 'escalado') {
             payload.posts[i] = { ...payload.posts[i], rescate: { ...payload.posts[i].rescate, estado: 'detenido' } };
@@ -38867,6 +38985,23 @@ function trialLockServePayload(lock) {
   if (!lock || !lock.payload) return null;
   let out = null;
   try { out = JSON.parse(lock.payload); } catch (e) { return null; }
+  // (LOTE DESTRABE-RESTO · R3) EL CAMINO DEL LOCK TAMBIEN FRENA:
+  // este snapshot se servia SIN pasar por el guarda A4 y un
+  // invitado que vuelve cae exactamente aca — recibia la semana
+  // contradictoria en 0,7 s (caveat verificado del destrabe). Si
+  // el fundamento del snapshot contradice al Instagram, no se
+  // sirve ni se rehidrata el trial_cache con el: la fila cacheada
+  // de la misma clave se borra y el llamador sigue su camino sin
+  // snapshot (el 409 del candado o la regeneracion, segun la ruta).
+  const contraLock = trialFundamentoContradice(out);
+  if (contraLock) {
+    console.log(`[posta] trial-lock: el fundamento del candado de @${(lock && lock.ig) || '?'} contradice a su Instagram (${contraLock}) — no se sirve`);
+    if (lock.ig) { try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(lock.ig); } catch (e) {} }
+    return null;
+  }
+  // (LOTE DESTRABE-RESTO · R2) El snapshot servido (y la copia que
+  // se rehidrata en trial_cache) muestra el estado real del logo.
+  trialPayloadLogoRefresh(out);
   out = trialLock.decorateSnapshot(lock, out, { spotsLeft, buildWeek: buildTrialWeek });
   if (out && lock.ig) {
     try {
@@ -39159,6 +39294,18 @@ function trialReconciliacionEfectiva(o) {
 // el fundamento limpio (la minada de la web actuaba de estrella de
 // la semana sin que la pregunta vinculante se disparara nunca,
 // porque la puerta solo mira inferred_star y venia null).
+// (LOTE DESTRABE-RESTO · R1) La corrida contestada del destrabe
+// repitio el pecado por la via de productos: la cuarentena vacio
+// servicios (sus items conservan la fuente) pero los 6 items de la
+// web quedaron en productos — itemList descarta la fuente al armar
+// la lista principal y el set de nombres del llamador nacia vacio
+// (webData.services son strings y se leia .name/.title) — y la
+// estrella en cuarentena tematizo el primer posteo. Por eso la
+// cuarentena ahora PROPAGA por nombre: el set (los nombres de la
+// web + los removidos) sale tambien de cada lista derivada que la
+// generacion consume (productos_nombrados, catalogo completo,
+// items del link de bio, photo_map y lexicon), y la estrella o el
+// protagonista que nombran un item en cuarentena no tematizan.
 function trialDigestCuarentenaWeb(digest, motivo, webNombres) {
   try {
     if (!digest || typeof digest !== 'object') return 0;
@@ -39179,10 +39326,43 @@ function trialDigestCuarentenaWeb(digest, motivo, webNombres) {
         });
       }
     }
+    // Propagacion por nombre a las listas derivadas (R1).
+    const nombresFuera = new Set(nombresWeb);
+    for (const n of fuera) { const nn = trialTextoNorm(n); if (nn) nombresFuera.add(nn); }
+    const salePorNombre = (nombre) => { const nn = trialTextoNorm(nombre || ''); return !!nn && nombresFuera.has(nn); };
+    const registrar = (nombre) => { const s = String(nombre || ''); if (s && !fuera.includes(s)) fuera.push(s); };
+    if (Array.isArray(digest.productos_nombrados)) {
+      digest.productos_nombrados = digest.productos_nombrados.filter((it) => {
+        if (it && (fuentesWeb.has(String(it.fuente || '')) || salePorNombre(it.nombre))) { registrar(it.nombre); return false; }
+        return true;
+      });
+    }
+    if (digest.catalog && Array.isArray(digest.catalog.items)) {
+      digest.catalog.items = digest.catalog.items.filter((it) => {
+        if (it && salePorNombre(it.nombre)) { registrar(it.nombre); return false; }
+        return true;
+      });
+    }
+    if (digest.bio_link && Array.isArray(digest.bio_link.items)) {
+      digest.bio_link.items = digest.bio_link.items.filter((it) => {
+        if (it && salePorNombre(it.nombre)) { registrar(it.nombre); return false; }
+        return true;
+      });
+    }
+    if (digest.photo_map && digest.photo_map.entries && typeof digest.photo_map.entries === 'object') {
+      for (const url of Object.keys(digest.photo_map.entries)) {
+        const ent = digest.photo_map.entries[url];
+        if (ent && salePorNombre(ent.item)) { registrar(ent.item); delete digest.photo_map.entries[url]; }
+      }
+    }
+    if (digest.lexicon && Array.isArray(digest.lexicon.entries)) {
+      digest.lexicon.entries = digest.lexicon.entries.filter((en) => !(en && salePorNombre(en.item)));
+    }
     if (digest.inferred_star && digest.inferred_star.nombre
-      && fuera.some((n) => trialTextoNorm(n) === trialTextoNorm(digest.inferred_star.nombre))) {
+      && salePorNombre(digest.inferred_star.nombre)) {
       digest.inferred_star = null;
     }
+    if (digest.protagonista && salePorNombre(digest.protagonista)) digest.protagonista = '';
     if (fuera.length) {
       digest.web_cuarentena = { motivo: String(motivo || 'contradiccion'), items: fuera.slice(0, 20), at: Date.now() };
     }
@@ -39245,6 +39425,10 @@ function trialCacheServe(igKey, business, category, lang, webDomain) {
       try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey); } catch (e) {}
       return null;
     }
+    // (LOTE DESTRABE-RESTO · R2) Lo servido muestra el estado real
+    // del logo: si el fundamento ya sello el archivo, la proyeccion
+    // del primer posteo no puede seguir diciendo «sin-archivo».
+    trialPayloadLogoRefresh(probe);
     return probe;
   } catch (e) { return null; }
 }
@@ -42517,6 +42701,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // ya aplicados, el registro se cierra en etapa «final»: el
     // veredicto del spec se conserva en veredicto_spec y el vigente
     // describe la pieza que efectivamente se entrega.
+    // (LOTE DESTRABE-RESTO · R2) Con el logo ya cosechado en esta
+    // misma corrida, la proyeccion del primer posteo se refresca
+    // antes de cerrar el registro y cachear la semana: su estado
+    // del logo nacio en el spec sin el archivo.
+    if (ppRecS && trialDigest) trialPayloadLogoRefresh({ digest: trialDigest, primer_posteo: ppRecS });
     if (ppRecS) {
       try {
         const p0F = posts[0];
@@ -44493,7 +44682,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1113';
+const BUILD_ID = '20261105-v1114';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
