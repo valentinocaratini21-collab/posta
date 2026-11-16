@@ -858,6 +858,87 @@ async function localizeTrialPic(profile, mediaDir, fetchImpl) {
 }
 
 // ---------------------------------------------------------------------------
+// (LOTE ADOPCIÓN QUE SANA EL MEDIO) Video LOCAL de un medio adoptado de
+// Instagram: la misma tubería de las miniaturas, para el archivo de
+// video. La media_url de IG es firmada y vence; la fila adoptada tiene
+// que guardar el mp4 en MEDIA_DIR (nombre determinístico
+// igvideo-<hash>.mp4; el hash sale de la SEMILLA — el id del medio —
+// que no rota, a diferencia de la URL firmada) y la miniatura como
+// portada (igthumb-*, por localizeTrialPhotos). Sin esto, la adopción
+// guardaba la miniatura EN el lugar del video y el detalle del posteo
+// renderizaba un <video> con una foto de src: rectángulo negro.
+// NUNCA lanza: lo que no se pudo bajar queda null y el llamador decide
+// su respaldo (la guarda del detalle muestra la portada, nunca negro).
+// fetchImpl inyectable para tests (misma convención que el resto).
+// ---------------------------------------------------------------------------
+const VIDEO_DL_CAP = 80 * 1024 * 1024; // descarga máxima aceptada por video
+const IG_VIDEO_HOSTS = /^https:\/\/[a-z0-9.-]*(cdninstagram\.com|fbcdn\.net)\//i;
+
+function fetchVideoBuf(url, timeoutMs, hops) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (e) { return reject(e); }
+    const req = https.get({
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      headers: { 'User-Agent': IG_THUMB_UA, 'Accept-Language': 'es-AR,es;q=0.9' },
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if ((hops || 0) >= 3) return reject(new Error('redirects'));
+        return fetchVideoBuf(res.headers.location, timeoutMs, (hops || 0) + 1).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('http ' + res.statusCode)); }
+      const ct = String(res.headers['content-type'] || '');
+      if (!ct.startsWith('video/') && ct !== 'application/octet-stream') { res.resume(); return reject(new Error('no-video')); }
+      const chunks = [];
+      let bytes = 0;
+      res.on('data', (c) => {
+        bytes += c.length;
+        if (bytes > VIDEO_DL_CAP) { req.destroy(new Error('too-big')); return; }
+        chunks.push(c);
+      });
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
+  });
+}
+
+async function localizeIgVideo(videoUrl, thumbUrl, seed, mediaDir, fetchImpl) {
+  const out = { video: null, cover: null };
+  if (!mediaDir) return out;
+  try { fs.mkdirSync(mediaDir, { recursive: true }); } catch (e) {}
+  // La portada: si ya es un archivo local, es ella; si es una URL de la
+  // CDN, la baja la tubería de miniaturas de siempre.
+  const thumb = String(thumbUrl || '').replace(/\\/g, '');
+  if (thumb.startsWith('/media/')) out.cover = thumb;
+  else if (thumb) {
+    try {
+      const prof = { handle: 'igadopt', photos: [thumb] };
+      await localizeTrialPhotos(prof, mediaDir, fetchImpl);
+      if (prof.photos && prof.photos[0]) out.cover = prof.photos[0];
+    } catch (e) { /* sin portada localizada: queda null */ }
+  }
+  const url = String(videoUrl || '').replace(/\\/g, '');
+  if (!url || !IG_VIDEO_HOSTS.test(url)) return out;
+  const hash = crypto.createHash('sha256').update('igvideo|' + String(seed || url)).digest('hex').slice(0, 24);
+  const name = 'igvideo-' + hash + '.mp4';
+  const abs = path.join(mediaDir, name);
+  try { const st = fs.statSync(abs); if (st.isFile() && st.size > 10240) { out.video = '/media/' + name; return out; } } catch (e) {}
+  try {
+    const get = fetchImpl || ((u) => fetchVideoBuf(u, 20000));
+    const buf = await get(url);
+    if (!buf || buf.length < 10240) return out;
+    fs.writeFileSync(abs, buf);
+    const st = fs.statSync(abs);
+    if (!st.isFile() || st.size < 10240) { try { fs.unlinkSync(abs); } catch (e) {} return out; }
+    out.video = '/media/' + name;
+  } catch (e) { /* sin video local: queda null */ }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Señales heurísticas (números concretos que el LLM debe citar como evidencia)
 // ---------------------------------------------------------------------------
 const CTA_RE = /escribime|escribinos|whatsapp|wsp|link en (la )?bio|comentá|comenta|reservá|reservá tu|reserva tu|turno|escribime por|por dm|mensaje directo|visitanos|visítanos|te esperamos|pedidos|pedí|pedi tu|hacé tu pedido/i;
@@ -1574,5 +1655,6 @@ module.exports = {
   firmaGoalLines,
   localizeTrialPhotos,
   localizeTrialPic,
+  localizeIgVideo,
   AUDIT_LIMIT_PER_DAY,
 };

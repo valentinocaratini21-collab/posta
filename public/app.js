@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1117';
+const PZ_BUILD = '20261105-v1119';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22449,6 +22449,28 @@ function hfCoverState(p) {
   pos = Math.max(0, Math.min(100, Math.round(pos)));
   return { has: !!path, path, origin, pos, user: origin.indexOf('frame@') === 0 };
 }
+// (LOTE ADOPCIÓN QUE SANA EL MEDIO) ¿El src es un archivo de video
+// reproducible? Una fila video cuyo image_path es una imagen quieta
+// (la miniatura que la adopción vieja guardaba en el lugar del video)
+// no se puede reproducir: el detalle la muestra como póster, nunca
+// como un <video> muerto en negro. Pura y testeable.
+function hfEsArchivoVideo(src) {
+  const s = String(src || '').split('?')[0].split('#')[0].toLowerCase();
+  return /\.(mp4|mov|webm|m4v)$/.test(s);
+}
+// Póster de una fila video sin video local reproducible: su miniatura
+// o portada con la insignia de reproducción y, si hay permalink de
+// Instagram, la salida a verlo allá. Nunca un rectángulo negro.
+function hfPosterVideoHTML(p, poster) {
+  const img = poster
+    ? `<img src="${esc(poster)}" alt="" onerror="__imgFb(this)">`
+    : '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>';
+  const badge = '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:34px;text-shadow:0 1px 10px rgba(0,0,0,.5);pointer-events:none">▶</span>';
+  const link = String((p && p.ig_permalink) || '');
+  return link
+    ? `<a href="${esc(link)}" target="_blank" rel="noopener" style="display:block">${img}${badge}</a>`
+    : `${img}${badge}`;
+}
 // Tamaño del canvas de captura: el frame completo del video, con el
 // ancho topeado a 1080 (la grilla jamás muestra más). Pura y testeable.
 function hfCoverGeom(vw, vh) {
@@ -23447,7 +23469,9 @@ function hfDetailHTML(p, opts) {
   const mediaInner = !slides.length
     ? '<span class="hf-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV
-      ? `<video src="${esc(slides[0])}"${covD.has ? ` poster="${esc(covD.path)}"` : ''} autoplay muted loop playsinline></video>`
+      ? (hfEsArchivoVideo(slides[0])
+        ? `<video src="${esc(slides[0])}"${covD.has ? ` poster="${esc(covD.path)}"` : ''} autoplay muted loop playsinline></video>`
+        : hfPosterVideoHTML(p, covD.has ? covD.path : slides[0]))
       : isCar
         ? `<div class="hf-d-track">${slides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" onerror="__imgFb(this)"></span>`).join('')}</div><button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${en ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${en ? 'Next photo' : 'Foto siguiente'}">›</button><span class="hf-d-count">1/${slides.length}</span>`
         : `<img src="${esc(slides[0])}" alt="" onerror="__imgFb(this)">`;

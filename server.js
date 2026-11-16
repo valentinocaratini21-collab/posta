@@ -12508,7 +12508,7 @@ app.post('/api/admin/ig/adopt', requireAdminToken, async (req, res) => {
   try {
     const ad = await adoptarRecienteIg(db, uid, mid);
     if (!ad || !ad.ok) return res.status((ad && ad.status) || 502).json({ ok: false, motivo: (ad && ad.motivo) || 'no_se_pudo' });
-    res.json({ ok: true, user_id: uid, ig_media_id: mid, post_id: ad.post_id, ya_existia: !!ad.ya_existia });
+    res.json({ ok: true, user_id: uid, ig_media_id: mid, post_id: ad.post_id, ya_existia: !!ad.ya_existia, ...(ad.medio_curado ? { medio_curado: true } : {}) });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 
@@ -14152,11 +14152,26 @@ function filtrarPosteosVivos(rows, vivo) {
 // shortcode: no rinde dos veces). Después el impulso sigue el flujo de
 // siempre. Si ya existe fila con ese ig_media_id, se adopta la
 // existente (idempotente).
+// (LOTE ADOPCIÓN QUE SANA EL MEDIO) El invariante de las filas video:
+// image_path guarda el archivo de video reproducible. Una imagen quieta
+// (o una URL) en ese campo es la fila rota cuyo detalle caía a negro.
+function adoptMedioEsVideo(p) {
+  const s = String(p || '').split('?')[0].split('#')[0].toLowerCase();
+  return /\.(mp4|mov|webm|m4v)$/.test(s);
+}
+
 async function adoptarRecienteIg(db, uid, igMediaId) {
-  try {
-    const ex = db.prepare('SELECT id FROM posts WHERE user_id = ? AND ig_media_id = ?').get(uid, igMediaId);
-    if (ex) return { ok: true, post_id: ex.id, ya_existia: true };
-  } catch (e) {}
+  let ex = null;
+  try { ex = db.prepare('SELECT id, image_path, media_type FROM posts WHERE user_id = ? AND ig_media_id = ?').get(uid, igMediaId); } catch (e) {}
+  // (LOTE ADOPCIÓN QUE SANA EL MEDIO) La rama idempotente también cura:
+  // una fila de video adoptada con una imagen quieta en image_path (la
+  // miniatura que la adopción vieja guardaba en el lugar del video)
+  // rompe el invariante de las filas video y su detalle cae a negro —
+  // la 691 fue la primera, no una excepción. Si la fila existente está
+  // sana, la existencia se devuelve sin tocar nada ni gastar una
+  // llamada, como siempre.
+  const exRota = !!(ex && String(ex.media_type || '') === 'video' && !adoptMedioEsVideo(ex.image_path));
+  if (ex && !exRota) return { ok: true, post_id: ex.id, ya_existia: true };
   let media = [];
   try {
     const { fetchUserMedia } = require('./insights');
@@ -14166,7 +14181,12 @@ async function adoptarRecienteIg(db, uid, igMediaId) {
     ]);
   } catch (e) { media = []; }
   const m = (Array.isArray(media) ? media : []).find((x) => x && String(x.id) === String(igMediaId));
-  if (!m) return { ok: false, status: 404, motivo: 'posteo_no_encontrado' };
+  if (!m) {
+    // Sin el medio en los recientes no hay con qué adoptar ni con qué
+    // curar: la fila existente queda como está (nada se toca a ciegas).
+    if (ex) return { ok: true, post_id: ex.id, ya_existia: true };
+    return { ok: false, status: 404, motivo: 'posteo_no_encontrado' };
+  }
   let img = '';
   const sc = igShortcodeDePermalink(m.permalink || '');
   try {
@@ -14175,14 +14195,46 @@ async function adoptarRecienteIg(db, uid, igMediaId) {
     const hit = recents.find((r) => r && r.shortcode && String(r.shortcode) === sc && r.img);
     if (hit) img = hit.img;
   } catch (e) {}
-  if (!img) { const tipo = String(m.media_type || '').toLowerCase(); img = tipo === 'video' ? (m.thumbnail_url || m.media_url || '') : (m.media_url || m.thumbnail_url || ''); }
-  if (!img) return { ok: false, status: 503, motivo: 'sin_datos' };
+  const tipo = String(m.media_type || '').toLowerCase();
+  if (!img) { img = tipo === 'video' ? (m.thumbnail_url || m.media_url || '') : (m.media_url || m.thumbnail_url || ''); }
+  if (!img) {
+    if (ex) return { ok: true, post_id: ex.id, ya_existia: true };
+    return { ok: false, status: 503, motivo: 'sin_datos' };
+  }
+  // (LOTE ADOPCIÓN QUE SANA EL MEDIO) El video adoptado guarda el mp4
+  // local reproducible y su portada: la adopción sana el medio, no
+  // solo el puntero.
+  let cover = '';
+  if (tipo === 'video') {
+    let loc = null;
+    try { loc = await feedAudit.localizeIgVideo(m.media_url || '', img, String(m.id), MEDIA_DIR); } catch (e) { loc = null; }
+    if (loc && loc.video) {
+      cover = loc.cover || (String(img).startsWith('/media/') ? img : '');
+      if (ex) {
+        // La cura de la fila ya adoptada, por esta misma palanca.
+        try {
+          db.prepare('UPDATE posts SET image_path = ?, cover_path = ? WHERE id = ?').run(loc.video, cover || String(ex.image_path || ''), ex.id);
+          return { ok: true, post_id: ex.id, ya_existia: true, medio_curado: true };
+        } catch (e) { return { ok: true, post_id: ex.id, ya_existia: true }; }
+      }
+      img = loc.video;
+    } else {
+      // Sin descarga no hay video local: la fila nace como nacía (con
+      // su miniatura) y el detalle la muestra como póster, nunca
+      // negro; la cura queda para una próxima adopción con descarga.
+      if (ex) return { ok: true, post_id: ex.id, ya_existia: true };
+      cover = (loc && loc.cover) || (String(img).startsWith('/media/') ? img : '');
+    }
+  } else if (ex) {
+    // La fila existe y el medio ya no se lee como video: esta vía no
+    // cura lo que no es su rotura; la existencia queda como estaba.
+    return { ok: true, post_id: ex.id, ya_existia: true };
+  }
   const tz = userTz(uid);
   const ymd = ymdInTz(m.timestamp, tz);
-  const tipo = String(m.media_type || '').toLowerCase();
   try {
-    const info = db.prepare(`INSERT INTO posts (user_id, image_path, caption, status, published_at, ig_media_id, ig_permalink, week_key, media_type)
-      VALUES (?,?,?,?,?,?,?,?,?)`).run(uid, img, String(m.caption || ''), 'published', m.timestamp || new Date().toISOString(), String(m.id), String(m.permalink || ''), ymd ? mondayKeyOf(ymd) : null, tipo === 'video' ? 'video' : (tipo === 'carousel_album' ? 'carousel' : 'image'));
+    const info = db.prepare(`INSERT INTO posts (user_id, image_path, caption, status, published_at, ig_media_id, ig_permalink, week_key, media_type, cover_path)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(uid, img, String(m.caption || ''), 'published', m.timestamp || new Date().toISOString(), String(m.id), String(m.permalink || ''), ymd ? mondayKeyOf(ymd) : null, tipo === 'video' ? 'video' : (tipo === 'carousel_album' ? 'carousel' : 'image'), cover);
     return { ok: true, post_id: Number(info.lastInsertRowid) };
   } catch (e) { return { ok: false, status: 500, motivo: 'sin_datos' }; }
 }
@@ -45107,7 +45159,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1118';
+const BUILD_ID = '20261105-v1119';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
