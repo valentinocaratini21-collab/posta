@@ -19771,6 +19771,28 @@ app.get('/api/posts', requireAuth, (req, res) => {
   for (const p of rows) {
     try { if (p.image_path && String(p.image_path).startsWith('/media/') && p.media_type !== 'video') p.caption_on = photoCliente.captionState(MEDIA_DIR, p.image_path) === 'on' ? 1 : 0; } catch (e) {}
   }
+  // 🛡️ INTEGRIDAD PRE-PUBLICACIÓN (LOTE INTEGRIDAD-PRE-PUBLICACIÓN ·
+  // orden permanente de Valentino 15/11): la proyección que Inicio
+  // muestra — el próximo posteo y el posteo de hoy — pasa por el mismo
+  // chequeo que frena en el scheduler. Una fila que contradice la
+  // realidad (duplicado de un publicado · puntero archivado · puntero
+  // de otra pieza) viaja anotada con integridad_freno y la app la
+  // rinde FRENADA, nunca como próximo válido ni como publicado sano;
+  // la primera superficie que la detecta abre el caso en el conserje
+  // (dedup por posteo + motivo: un solo caso). El chequeo es función
+  // del dato actual — corregido el dato, la anotación desaparece
+  // sola — y fail-open: un error propio nunca rompe la agenda.
+  try {
+    const integridadProy = require('./integridad-prepublicacion');
+    for (const p of rows) {
+      if (!p || (p.status !== 'scheduled' && p.status !== 'published')) continue;
+      const v = integridadProy.chequeoIntegridad(db, p, { mediaDir: MEDIA_DIR });
+      if (!v.ok) {
+        p.integridad_freno = { motivo: v.motivo, detalle: v.detalle, contra_id: v.contra_id || null };
+        integridadProy.avisoIntegridad(db, p, v);
+      }
+    }
+  } catch (e) { /* la integridad nunca frena la agenda */ }
   res.json(rows);
 });
 
@@ -44765,7 +44787,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1116';
+const BUILD_ID = '20261105-v1117';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

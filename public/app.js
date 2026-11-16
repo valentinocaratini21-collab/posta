@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1109';
+const PZ_BUILD = '20261105-v1117';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -21730,7 +21730,12 @@ function homeGridCompose(input) {
       const cands = [];
       for (const it of upcoming) {
         const p = it && it.p;
-        if (!p || isStory(p) || p.status !== 'scheduled' || p.pinned || !p.scheduled_at) continue;
+        // (LOTE INTEGRIDAD-PRE-PUBLICACIÓN) Una fila frenada por
+        // integridad (integridad_freno del servidor: duplicado de un
+        // publicado o puntero que contradice) NUNCA es la carta del
+        // próximo: la carta pasa al siguiente programado sano; si no
+        // hay ninguno, no hay carta (fail-closed, el patrón de esta UI).
+        if (!p || isStory(p) || p.status !== 'scheduled' || p.pinned || !p.scheduled_at || p.integridad_freno) continue;
         let d = null;
         if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
         if (!d) { const s = String(p.scheduled_at).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
@@ -21756,7 +21761,7 @@ function homeGridCompose(input) {
       // Caso real: la carta mostraba la historia 553 («Hoy · 22:00»)
       // en vez del próximo posteo (518, mañana). Sin próximo de feed,
       // no hay carta (fail-closed, igual que antes).
-      if (!p || isStory(p) || p.status !== 'scheduled' || p.pinned || !p.scheduled_at) continue;
+      if (!p || isStory(p) || p.status !== 'scheduled' || p.pinned || !p.scheduled_at || p.integridad_freno) continue;
       let d = null;
       if (typeof pcParseDate === 'function') d = pcParseDate(p.scheduled_at);
       if (!d) { const s = String(p.scheduled_at).replace(' ', 'T'); d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'); }
@@ -24091,6 +24096,25 @@ function pzHoyTiraDetalleHTML(d, o) {
       // de hoy lo mandaba a un chat que no arma el día; el ensure
       // corre con su sesión (verificado con boot en la suite).
       return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — Posty can build it, or upload something of yours.' : 'Hoy todavía no hay posteo — Posty te lo arma, o subí algo tuyo.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="btn btn-soft btn-sm" data-pz-hoy-subir="1">${en ? 'Upload my own' : 'Subir algo mío'}</button></div></div>`;
+    }
+    // (LOTE INTEGRIDAD-PRE-PUBLICACIÓN) Fila frenada por el chequeo de
+    // integridad del servidor (p.integridad_freno): la tarjeta NO la
+    // presenta como publicada ni como próximo válido — la muestra
+    // frenada, con el motivo honesto y sin botón de impulsar ni enlace
+    // a Instagram (el caso 582: la tarjeta decía «Publicado» mientras
+    // su publicación estaba archivada). El equipo ya tiene el caso
+    // abierto en el conserje; corregido el dato, la tarjeta vuelve
+    // sola a su estado real porque el freno es función del dato.
+    if (p.integridad_freno) {
+      const fImg = p.image_path
+        ? `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
+      const fMotivo = String(p.integridad_freno.motivo || '');
+      const fMsg = fMotivo === 'duplicado'
+        ? (en ? 'Posty put this post on hold: it is the same image as a post that already went out on your account. The team is already looking into it.' : 'Posty frenó este posteo: es la misma imagen de un posteo que ya salió publicado en tu cuenta. El equipo ya lo está revisando.')
+        : fMotivo === 'puntero_archivado'
+          ? (en ? 'Posty put this post on hold: its Instagram publication is no longer live. The team is already looking into it.' : 'Posty frenó este posteo: su publicación en Instagram ya no está viva. El equipo ya lo está revisando.')
+          : (en ? 'Posty put this post on hold: its Instagram link belongs to another post on your account. The team is already looking into it.' : 'Posty frenó este posteo: su enlace de Instagram pertenece a otro posteo de tu cuenta. El equipo ya lo está revisando.');
+      return `<div class="pz-hoy-tira-detalle">${fImg}<div class="t"><b>${esc(nombre)}</b><small>${esc(fMsg)}</small></div><div class="side"><span class="pill">${en ? 'On hold' : 'Frenado'}</span></div></div>`;
     }
     const img = (p && p.image_path)
       ? `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';

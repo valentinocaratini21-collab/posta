@@ -90,6 +90,29 @@ async function publishSinglePost(db, post, opts = {}) {
       return { ok: true, already_published: true, permalink: post.ig_permalink || fresh.ig_permalink || '' };
     }
   } catch (e) { /* sin fila: seguir como antes */ }
+  // 🛡️ INTEGRIDAD PRE-PUBLICACIÓN (LOTE INTEGRIDAD-PRE-PUBLICACIÓN ·
+  // orden permanente de Valentino 15/11: «No puede volver a suceder
+  // esto»): antes de que el posteo salga — por CUALQUIER camino que
+  // desemboque acá, incluida la cuenta propia (opts.house: el caso 658
+  // fue en la cuenta de la casa) — se verifica que NO sea duplicado de
+  // una pieza ya publicada de la misma cuenta y que su puntero a
+  // Instagram, si trae uno, esté vivo y sea suyo. Si contradice: la
+  // fila queda 'paused' con el motivo honesto, se abre el caso en el
+  // conserje y NO se publica. El chequeo es fail-open ante error
+  // propio (integridad-prepublicacion.js): solo frena ante las dos
+  // contradicciones probadas.
+  try {
+    const integridad = require('./integridad-prepublicacion');
+    const filaFresca = db.prepare('SELECT * FROM posts WHERE id = ?').get(post.id);
+    if (filaFresca) {
+      const v = integridad.chequeoIntegridad(db, filaFresca);
+      if (!v.ok) {
+        integridad.frenarPosteo(db, filaFresca, v);
+        console.log(`[posta] publishSinglePost frenado por integridad: ${v.motivo} (user ${post.user_id}, post ${post.id})`);
+        return { blocked: 'integridad', motivo: v.motivo };
+      }
+    }
+  } catch (e) { console.error('[integridad] chequeo previo:', e && e.message); }
   // Red de seguridad FINAL: ningún camino (endpoint, chat, scheduler, links de
   // aprobación) puede publicar si la prueba del usuario venció. El posteo se
   // pausa con mensaje amable en vez de publicarse gratis. Excepción: dogfood

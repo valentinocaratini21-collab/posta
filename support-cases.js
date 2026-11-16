@@ -68,6 +68,7 @@ const CASE_TYPES = {
   defecto_imagen: { label: 'Defecto en imagen', severidad: 'ambar' },
   defecto_caption: { label: 'Defecto en caption', severidad: 'ambar' },
   prueba_trabada: { label: 'Prueba trabada', severidad: 'ambar' },
+  integridad_prepublicacion: { label: 'Integridad pre-publicación', severidad: 'rojo' },
   sin_aprobar: { label: 'Sin aprobar', severidad: 'ambar' },
   ayuda: { label: 'Ayuda pedida', severidad: 'ambar' },
   conserje: { label: 'Mensaje en modo conserje', severidad: 'ambar' },

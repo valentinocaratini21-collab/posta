@@ -19,7 +19,13 @@ function check(name, cond, extra) {
 
 // Media scratch real para assertPublishable
 const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pg-media-'));
-for (const f of ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg']) fs.writeFileSync(path.join(mediaDir, f), 'x');
+// (LOTE INTEGRIDAD-PRE-PUBLICACIÓN · fixture honesto) Cada archivo con
+// bytes DISTINTOS: a.jpg…e.jpg representan imágenes distintas y el
+// contenido es su identidad — con el mismo byte 'x' en todos, la huella
+// sha256 de «imágenes distintas» era idéntica y el chequeo de
+// integridad frenaba el escenario 4 como duplicado (correctamente:
+// bytes idénticos = la misma imagen).
+for (const f of ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg']) fs.writeFileSync(path.join(mediaDir, f), 'x-' + f);
 process.env.MEDIA_DIR = mediaDir;
 process.env.PUBLISH_DAILY_CAP = '3'; // techo chico para el test
 
