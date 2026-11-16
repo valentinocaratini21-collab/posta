@@ -5995,6 +5995,62 @@ app.post('/api/venty/representantes/oleadas/:id/verificar-salida', requireAuthOr
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- VENTY SLICE 5: medición real (un solo bloque aditivo) ----------
+// Módulo nuevo venty-medicion.js: parte semanal real, comparación con la
+// semana anterior, métrica norte medida, niveles solo por hechos,
+// alertas de canal caído y jobs de agregación. Todo se computa desde el
+// registro (venty_partidas / venty_mensajes / venty_eventos /
+// venty_jugadas / venty_leads); la semilla de Café Aroma queda como
+// contenido de Modo Prueba de venty.js y no se mezcla con esta medición.
+// Rutas bajo requireAuthOrWebToken, como el resto de /api/venty/*.
+const ventyMedicion = require('./venty-medicion'); // VENTY SLICE 5: medición real de la métrica norte.
+try { ventyMedicion.ensureSchema(db); } catch (e) { console.error('[venty-medicion] init:', e.message); }
+try { ventyMedicion.registrarJobs(require('node-cron'), db); } catch (e) { console.error('[venty-medicion] jobs:', e.message); }
+app.get('/api/venty/medicion/parte', requireAuthOrWebToken, (req, res) => {
+  try {
+    const semana = String(req.query.semana || '');
+    if (semana && !/^\d{4}-\d{2}-\d{2}$/.test(semana)) return res.status(400).json({ ok: false, error: 'semana_invalida' });
+    res.json({ ok: true, ...ventyMedicion.computarParteReal(db, ventyUid(req), semana || undefined) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/medicion/frase', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, ...ventyMedicion.computarFraseReal(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/medicion/nivel', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, ...ventyMedicion.computarNivel(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/medicion/alertas', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const alertas = ventyMedicion.detectarSinResponder(db, uid);
+    res.json({ ok: true, modo: 'prueba', fuente: 'registro', alertas, cantidad: alertas.length });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/medicion/resumen', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const semana = String(req.query.semana || '');
+    if (semana && !/^\d{4}-\d{2}-\d{2}$/.test(semana)) return res.status(400).json({ ok: false, error: 'semana_invalida' });
+    res.json({ ok: true, modo: 'prueba', fuente: 'registro',
+      frase: ventyMedicion.computarFraseReal(db, uid),
+      parte: ventyMedicion.computarParteReal(db, uid, semana || undefined),
+      nivel: ventyMedicion.computarNivel(db, uid),
+      alertas: ventyMedicion.detectarSinResponder(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/medicion/jobs/frase', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, ...ventyMedicion.jobFraseDiaria(db, { userId: ventyUid(req) }) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/medicion/jobs/parte', requireAuthOrWebToken, (req, res) => {
+  try {
+    const semana = String(((req.body || {}).semana) || req.query.semana || '');
+    if (semana && !/^\d{4}-\d{2}-\d{2}$/.test(semana)) return res.status(400).json({ ok: false, error: 'semana_invalida' });
+    res.json({ ok: true, ...ventyMedicion.jobParteSemanal(db, { userId: ventyUid(req), semana: semana || undefined }) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // ---------- VENTY SLICE 3: cierre real (pago/seña + agenda anti no-show) ----------
 // UN solo bloque aditivo (require + rutas) para que el preparador re-base
 // por hunks sin tocar los bloques de los otros lotes. Maquinaria GENÉRICA
@@ -44169,7 +44225,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1110';
+const BUILD_ID = '20261105-v1111';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
