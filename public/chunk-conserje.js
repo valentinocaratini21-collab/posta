@@ -14,7 +14,7 @@
 // capa extra del dueño: nunca publica por sí sola y nunca veta el ritual
 // del cliente de las 9:00. La ficha de cada cliente está en su detalle,
 // ahí mismo donde se decide.
-var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0, conteos: null, eventos: null };
+var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0, conteos: null, eventos: null, numeros: null, alertas: null, vivo: null, focoUid: null };
 // (v849) Deep link de la push de cambio de posteo: #/app/conserje?user=<uid>
 // abre el detalle de ese cliente. Parser puro: 0 si no hay ?user= válido.
 // Un uid que no está en la revisión de esa noche no abre nada (fail-soft:
@@ -468,6 +468,376 @@ function conserjeConteoSeccionActualizar(clave, n) {
   conserjeConteosPintar();
 }
 
+/* ---------- 🏠 HOME · FLUJO ÚNICO (LOTE CONSERJE-FLUJO-UNICO) ----------
+ * La home del Conserje es UNA sola columna, en este orden (diseño
+ * cerrado por Valentino, mock vivo-1-flujo + embudo-final-v3 +
+ * opcion-2-foco):
+ *   1 · el panel de números (el embudo real, /api/admin/funnel?era=all);
+ *   2 · EN VIVO AHORA: solo mientras hay una corrida corriendo; sin
+ *       corrida la sección no existe (sin estados vacíos) y la cola sube;
+ *   3 · la cola en MODO FOCO: un posteo por vez, grande, con las dos
+ *       decisiones grandes y avance automático al decidir.
+ * Las secciones de trabajo del equipo (pedidos por voz, pedidos desde
+ * Subir, eventos) siguen debajo, sin cambios. Nada de lo que se pinta
+ * acá se inventa: cada número y cada paso sale de un endpoint real; si
+ * una fuente falla, su sección no se pinta (fail-soft), nunca se
+ * rellena. */
+
+// Número con separador de miles es-AR (17.313), como la vista admin.
+function conserjeFmtNum(n) {
+  const v = Math.round(Number(n) || 0);
+  return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+// Tasa pelada con coma decimal y un solo decimal: «3,5%», «18%».
+function conserjeFmtTasa(x) {
+  const v = Math.round((Number(x) || 0) * 10) / 10;
+  return String(v).replace('.', ',').replace(/,0$/, '') + '%';
+}
+
+// ---------- 1 · EL PANEL DE NÚMEROS (embudo-final-v3) ----------
+// Cuatro trapecios reales del funnel: visitaron → completaron →
+// pruebas (crearon cuenta) → PAGOS en amarillo #FEC14D. Los chips de
+// tasa van PELADOS (solo el número, sin subtítulo): el de arriba es la
+// conversión a prueba desde el inicio (pct_first de prueba_register);
+// el de abajo, pagos sobre pruebas. Las tres mini-tarjetas salen del
+// goal del mismo endpoint (nuevos del mes · MRR · suscriptores). La
+// línea fina de salud aparece SOLO si hay una alerta real cruzando un
+// umbral (familia /api/admin/alerts: sev high, o med si no hay high).
+function conserjeNumerosHTML() {
+  const n = conserjeEstado.numeros;
+  if (!n || !Array.isArray(n.funnel)) return '';
+  const byKey = {};
+  for (const s of n.funnel) byKey[s.key] = s;
+  const pasos = [
+    { key: 'prueba_view', label: 'VISITARON', w: 100, bg: 'linear-gradient(180deg,#2E9BD6,#1B6FA8)', color: '#fff' },
+    { key: 'prueba_complete', label: 'COMPLETARON', w: 84, bg: 'linear-gradient(180deg,#2793C8,#1F74A6)', color: '#fff' },
+    { key: 'prueba_register', label: 'PRUEBAS', w: 68, bg: 'linear-gradient(180deg,#93C6E7,#5E9CC9)', color: '#fff' },
+    { key: 'payment_ok', label: 'PAGOS', w: 52, bg: 'linear-gradient(180deg,#FFD97A,#FEC14D)', color: '#0A1E33' },
+  ];
+  const users = (k) => (byKey[k] ? Number(byKey[k].users) || 0 : 0);
+  const trap = (p) => '<div style="width:' + p.w + '%;margin:6px auto 0;background:' + p.bg + ';clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,16px 100%);padding:13px 10px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:10px;color:' + p.color + '"><span style="font-size:12px;font-weight:800;letter-spacing:.14em">' + p.label + '</span><span style="font-size:21px;font-weight:800">' + conserjeFmtNum(users(p.key)) + '</span></div>';
+  const chip = (txt) => '<div class="cj-tasa" style="position:relative;z-index:2;width:fit-content;margin:-9px auto -3px;background:#0A1E33;color:#fff;font-size:12.5px;font-weight:800;border-radius:999px;padding:3px 12px">' + esc(txt) + '</div>';
+  const reg = byKey.prueba_register || {};
+  const chipA = users('prueba_view') > 0 ? chip(conserjeFmtTasa(reg.pct_first)) : '';
+  const chipB = users('prueba_register') > 0 ? chip(conserjeFmtTasa(users('payment_ok') / users('prueba_register') * 100)) : '';
+  const g = n.goal || {};
+  const mini = (label, val, color) => '<div style="flex:1;border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center"><div style="font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--mut)">' + label + '</div><div style="font-size:20px;font-weight:800;margin-top:3px' + (color ? ';color:' + color : '') + '">' + val + '</div></div>';
+  const alertas = Array.isArray(conserjeEstado.alertas) ? conserjeEstado.alertas : [];
+  const alerta = alertas.find((a) => a && a.sev === 'high') || alertas.find((a) => a && a.sev === 'med');
+  return '<div class="card" style="padding:16px">'
+    + '<div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:#2793C8;text-align:center">EMBUDO DE HOY</div>'
+    + trap(pasos[0]) + trap(pasos[1]) + chipA + trap(pasos[2]) + chipB + trap(pasos[3])
+    + '<div style="display:flex;gap:10px;margin-top:14px">'
+    + mini('MES', conserjeFmtNum(g.new_30d || 0))
+    + mini('INGRESOS DEL MES', '$' + conserjeFmtNum(g.mrr || 0))
+    + mini('TOTAL', conserjeFmtNum(g.subscribers || 0), '#2793C8')
+    + '</div>'
+    + (alerta ? '<div style="margin-top:12px;background:#FDECEC;border:1px solid #F5C6C6;color:#B3261E;border-radius:10px;padding:7px 10px;font-size:12.5px;font-weight:700;text-align:center">⚠ ' + esc(alerta.title || '') + '</div>' : '')
+    + '</div>';
+}
+
+// ---------- 2 · EN VIVO AHORA ----------
+// Las corridas salen de los casos abiertos del Conserje (la línea a
+// mano del vigilante, v1118, y las frenadas declaradas de DESTRABE) y
+// los pasos se derivan de la semana real del invitado (/api/trial/week)
+// y su gen-status: hitos, no texto libre. La única pregunta que se
+// muestra es la del freno de duda cuando está abierta en la lectura.
+function conserjePreguntaAbierta(week) {
+  if (!week) return null;
+  const rc = week.rubro_check || {};
+  const dg = week.digest || {};
+  const rid = dg.rubro_id || {};
+  if (!rc.needed && !rid.needs_question) return null;
+  const qc = Array.isArray(dg.question_candidates) ? dg.question_candidates : [];
+  const texto = (qc[0] && qc[0].texto) ? String(qc[0].texto) : 'Posty tiene una duda antes de seguir con esta prueba.';
+  return { texto };
+}
+
+function conserjeCorridaArmar(o) {
+  const week = (o.week && Array.isArray(o.week.posts)) ? o.week : null;
+  const st = (o.status && o.status.ok) ? o.status : {};
+  const digest = (week && week.digest) || null;
+  const posts = week ? week.posts : [];
+  const piezas = [0, 1, 2].map((i) => {
+    const p = posts[i] || null;
+    if (!p) return { dia: i + 1, estado: 'espera' };
+    if (p.armando) return { dia: i + 1, estado: 'armando' };
+    const cap = String(p.caption || '').split('\n').map((s) => s.trim()).filter(Boolean)[0] || '';
+    return { dia: i + 1, estado: 'lista', tipo: String(p.type || 'image'), cita: cap.slice(0, 64), imagen: (typeof p.image === 'string' && (p.image.indexOf('data:') === 0 || p.image.indexOf('/') === 0)) ? p.image : '' };
+  });
+  const listas = piezas.filter((p) => p.estado === 'lista').length;
+  const algunaArmando = piezas.some((p) => p.estado === 'armando');
+  const pregunta = conserjePreguntaAbierta(week);
+  const activa = !!(st.generating || st.rescuing || (Number(st.arming) || 0) > 0 || algunaArmando || pregunta);
+  if (!o.frenada && !activa) return null;
+  const estrella = digest ? String((digest.onboarding && digest.onboarding.producto_estrella) || (digest.inferred_star && digest.inferred_star.item) || digest.protagonista || '') : '';
+  const rubro = week ? String(week.category || (digest && digest.category) || '') : '';
+  const pasos = [
+    { titulo: 'Leyó el Instagram y la web', estado: (digest || week) ? 'ok' : (st.generating ? 'actual' : 'espera'), detalle: digest ? ((rubro ? rubro + ', ' : '') + 'confirmado en las dos fuentes.') : '' },
+    { titulo: 'Fundamento armado', estado: digest ? 'ok' : 'espera', detalle: estrella ? ('Estrella: ' + estrella + '. Tono y paleta de su feed.') : '' },
+  ];
+  for (const pz of piezas) {
+    if (pz.estado === 'lista') pasos.push({ titulo: 'Posteo ' + pz.dia + ' de 3 · listo', estado: 'ok', minicard: { etiqueta: (pz.tipo === 'video' ? 'VIDEO' : 'IMAGEN') + ' · DÍA ' + pz.dia, cita: pz.cita, imagen: pz.imagen } });
+    else if (pz.estado === 'armando') pasos.push({ titulo: 'Posteo ' + pz.dia + ' de 3 · generando ahora', estado: 'actual', barra: Math.round(((listas + 0.5) / 3) * 100) });
+    else pasos.push({ titulo: 'Posteo ' + pz.dia + ' de 3 · en espera', estado: 'espera' });
+  }
+  let minutos = null;
+  try {
+    const t = Date.parse(String(o.desde || '').replace(' ', 'T') + 'Z');
+    if (isFinite(t)) minutos = Math.max(0, Math.round((Date.now() - t) / 60000));
+  } catch (e) {}
+  return {
+    user_id: o.user_id, business: o.business || '', ig: o.ig || '',
+    pic: (week && typeof week.ig_pic === 'string' && week.ig_pic.indexOf('data:') === 0) ? week.ig_pic : '',
+    frenada: o.frenada || null, pregunta, pasos, minutos,
+  };
+}
+
+async function conserjeVivoCargar() {
+  const corridas = [];
+  try {
+    const pedir = async (tipo) => {
+      try { const r = await adminApi('support/cases?tipo=' + tipo + '&estado=abierto&limit=20', 'GET'); return (r && r.casos) || []; }
+      catch (e) { return []; }
+    };
+    const casos = [].concat(await pedir('prueba_linea_mano'), await pedir('prueba_trabada'));
+    const porUser = {};
+    for (const c of casos) {
+      const k = String(c.user_id);
+      if (!porUser[k]) porUser[k] = { casos: [], desde: c.created_at || '' };
+      porUser[k].casos.push(c);
+      if (String(c.created_at || '') && String(c.created_at) < String(porUser[k].desde || '￿')) porUser[k].desde = c.created_at;
+    }
+    for (const k of Object.keys(porUser)) {
+      const g = porUser[k];
+      const c0 = g.casos[0];
+      const ig = String(c0.ig_username || '').replace(/^@/, '').toLowerCase();
+      const casoFreno = g.casos.find((c) => c.tipo === 'prueba_trabada') || null;
+      let week = null, status = null;
+      if (ig && typeof api !== 'undefined' && api && typeof api.get === 'function') {
+        try { week = await api.get('/api/trial/week?ig=' + encodeURIComponent(ig)); } catch (e) { week = null; }
+        try { status = await api.get('/api/trial/gen-status?ig=' + encodeURIComponent(ig)); } catch (e) { status = null; }
+      }
+      const corrida = conserjeCorridaArmar({
+        user_id: Number(k), business: c0.business_name || '', ig, desde: g.desde,
+        frenada: casoFreno ? { titulo: casoFreno.titulo || '', detalle: casoFreno.detalle || '', paso: casoFreno.siguiente_paso || '' } : null,
+        week, status,
+      });
+      if (corrida) corridas.push(corrida);
+    }
+  } catch (e) {}
+  return { corridas };
+}
+
+function conserjeCorridaHTML(c) {
+  const ini = String(c.business || c.ig || '?').trim().charAt(0).toUpperCase() || '?';
+  const avatar = c.pic
+    ? '<img src="' + esc(c.pic) + '" alt="" style="width:46px;height:46px;border-radius:12px;object-fit:cover;display:block">'
+    : '<div style="width:46px;height:46px;border-radius:12px;background:#FEC14D;color:#0A1E33;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800">' + esc(ini) + '</div>';
+  const tiempo = c.frenada
+    ? '<div style="text-align:right"><div style="font-size:16px;font-weight:800;color:#B3261E">Frenada</div><div style="font-size:12px;color:var(--mut)">espera al equipo</div></div>'
+    : (c.minutos != null
+      ? '<div style="text-align:right"><div style="font-size:16px;font-weight:800;color:#2793C8">' + (c.minutos < 60 ? c.minutos + ' min' : Math.floor(c.minutos / 60) + ' h' + (c.minutos % 60 ? ' ' + (c.minutos % 60) + ' min' : '')) + '</div><div style="font-size:12px;color:var(--mut)">en curso</div></div>'
+      : '');
+  let h = '<div class="card" style="padding:16px;margin-bottom:12px;border:1.5px solid #2793C8">'
+    + '<div style="display:flex;align-items:center;gap:10px">' + avatar
+    + '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px">' + esc(c.business || ('@' + c.ig)) + '</div>'
+    + '<div style="font-size:12.5px;color:var(--mut)">Prueba' + (c.frenada ? ' · frenada' : ' · línea a mano') + (c.ig ? ' · @' + esc(c.ig) : '') + '</div></div>' + tiempo + '</div>';
+  if (c.frenada) {
+    h += '<div style="margin-top:12px;background:#FDECEC;border:1px solid #F5C6C6;border-radius:12px;padding:10px 12px"><div style="font-weight:800;font-size:13.5px;color:#B3261E">' + esc(c.frenada.titulo || 'La corrida se frenó') + '</div>'
+      + (c.frenada.detalle ? '<div style="font-size:13px;line-height:1.5;margin-top:3px">' + esc(c.frenada.detalle) + '</div>' : '')
+      + (c.frenada.paso ? '<div style="font-size:12.5px;color:var(--mut);margin-top:4px">' + esc(c.frenada.paso) + '</div>' : '') + '</div>';
+  }
+  if (c.pregunta) {
+    h += '<div style="margin-top:12px;background:#FFF6D6;border:1px solid #FEC14D;border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.5"><b>❓ La duda que frena esta corrida:</b> ' + esc(c.pregunta.texto) + '</div>';
+  }
+  h += '<div style="margin-top:14px">' + c.pasos.map((p, i) => {
+    const dot = p.estado === 'ok'
+      ? '<span style="width:26px;height:26px;border-radius:50%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none">✓</span>'
+      : (p.estado === 'actual'
+        ? '<span style="width:26px;height:26px;border-radius:50%;background:#FEC14D;color:#0A1E33;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none">◌</span>'
+        : '<span style="width:26px;height:26px;border-radius:50%;background:#E2EDF5;color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">' + (i + 1) + '</span>');
+    const linea = i < c.pasos.length - 1 ? '<span style="width:2px;flex:1;min-height:12px;background:#E2EDF5;margin:3px 0"></span>' : '';
+    let s = '<div style="display:flex;gap:10px"><div style="display:flex;flex-direction:column;align-items:center">' + dot + linea + '</div>'
+      + '<div style="flex:1;min-width:0;padding-bottom:12px"><div style="font-weight:700;font-size:14.5px' + (p.estado === 'espera' ? ';color:var(--mut)' : '') + '">' + esc(p.titulo) + '</div>'
+      + (p.detalle ? '<div style="font-size:13px;color:var(--mut);line-height:1.5">' + esc(p.detalle) + '</div>' : '');
+    if (p.minicard) {
+      s += '<div style="display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:6px">'
+        + (p.minicard.imagen ? '<img src="' + esc(p.minicard.imagen) + '" alt="" style="width:44px;height:44px;border-radius:9px;object-fit:cover;display:block">' : '<div style="width:44px;height:44px;border-radius:9px;background:#FEC14D;display:flex;align-items:center;justify-content:center;font-size:17px">✿</div>')
+        + '<div style="min-width:0"><span class="pill" style="background:#E8F4FB;color:#1B6FA8;margin:0;font-size:11px">' + esc(p.minicard.etiqueta) + '</span>'
+        + (p.minicard.cita ? '<div style="font-size:13px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">«' + esc(p.minicard.cita) + '»</div>' : '') + '</div></div>';
+    }
+    if (p.barra != null) {
+      s += '<div style="height:7px;border-radius:999px;background:#E2EDF5;margin-top:8px;overflow:hidden"><div style="width:' + p.barra + '%;height:100%;border-radius:999px;background:linear-gradient(90deg,#2793C8,#FEC14D)"></div></div>';
+    }
+    return s + '</div></div>';
+  }).join('') + '</div></div>';
+  return h;
+}
+
+function conserjeVivoHTML() {
+  const corridas = (conserjeEstado.vivo && conserjeEstado.vivo.corridas) || [];
+  if (!corridas.length) return '';
+  return '<div style="font-size:12.5px;font-weight:800;letter-spacing:.08em;color:var(--mut);margin:18px 0 8px">EN VIVO AHORA</div>'
+    + corridas.map(conserjeCorridaHTML).join('');
+}
+
+// ---------- 3 · LA COLA EN MODO FOCO (opcion-2-foco) ----------
+// La cola son los posteos de la revisión: primero los que necesitan
+// atención, después el resto (el mismo orden en que la lista los
+// mostraba). Un posteo por vez; el caption se lee UNA sola vez, entero.
+function conserjeColaFoco(d) {
+  const items = d.items || [];
+  return items.filter((i) => i.necesita_atencion && i.post).concat(items.filter((i) => !i.necesita_atencion && i.post));
+}
+
+// Siguiente pendiente de la cola DESPUÉS del actual (con wrap al
+// primero si el actual era el último); null si no queda ninguno.
+function conserjeSiguienteFoco(d, uidActual) {
+  const cola = conserjeColaFoco(d || {});
+  const pend = cola.filter((i) => !i.decision);
+  if (!pend.length) return null;
+  const idx = pend.findIndex((i) => String(i.user_id) === String(uidActual));
+  if (idx >= 0 && idx < pend.length - 1) return pend[idx + 1];
+  if (idx === pend.length - 1) return pend.length > 1 ? pend[0] : null;
+  return pend[0];
+}
+
+function conserjeTipoTxt(p) {
+  const t = String((p && (p.tipo || p.media_type)) || '').toLowerCase();
+  if (t === 'video' || t === 'reel' || t === 'reels') return 'video';
+  if (t === 'carousel' || t === 'carrusel') return 'carrusel';
+  return 'foto';
+}
+
+// La foto del foco: protagonista, a todo el ancho de la tarjeta. Video
+// → su póster con la marca ▶ (nunca el .mp4 en un <img>); sin foto, la
+// inicial del negocio a lo grande, como en el resto del Conserje.
+function conserjeFocoFotoHTML(it) {
+  const post = (it && it.post) || null;
+  const H = 320;
+  if (post && conserjeEsVideo(post.media_type)) {
+    if (post.poster_url) {
+      return '<div style="position:relative;background:#0A1E33"><img src="' + esc(post.poster_url) + '" alt="" data-cj-img style="width:100%;height:' + H + 'px;object-fit:cover;display:block;cursor:zoom-in">' + conserjeBadgeVideoHTML() + '</div>';
+    }
+    return '<div style="background:#0A1E33;display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;height:' + H + 'px;color:#fff;font-size:16px;font-weight:800"><span style="font-size:30px">▶</span>Video</div>';
+  }
+  const url = post && post.image_url ? post.image_url : '';
+  if (url) {
+    return '<div style="background:#0A1E33"><img src="' + esc(url) + '" alt="" data-cj-img style="width:100%;height:' + H + 'px;object-fit:cover;display:block;cursor:zoom-in"></div>';
+  }
+  const ini = String((it && it.business_name) || '?').trim().charAt(0).toUpperCase() || '?';
+  return '<div style="background:#2793C8;display:flex;align-items:center;justify-content:center;height:' + H + 'px;color:#fff;font-size:52px;font-weight:800">' + esc(ini) + '</div>';
+}
+
+function conserjeFocoCardHTML(it, d) {
+  const p = it.post;
+  const f = it.ficha || {};
+  const pal0 = (f.paleta && f.paleta[0] && f.paleta[0].hex) || '#2793C8';
+  const ini = String(it.business_name || '?').trim().charAt(0).toUpperCase() || '?';
+  return '<div class="card" style="padding:0;overflow:hidden">'
+    + '<div style="display:flex;align-items:center;gap:10px;padding:13px 16px">'
+    + '<span style="width:38px;height:38px;border-radius:50%;background:' + esc(pal0) + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex:none">' + esc(ini) + '</span>'
+    + '<div style="flex:1;min-width:0"><span style="font-weight:800;font-size:15.5px">' + esc(it.business_name || '') + '</span> ' + conserjeEtapaDot(f.etapa) + '</div>'
+    + '<span class="pill" style="background:#F5EFE2;color:#6b5d43;margin:0;flex:none">' + esc(p.cuando || 'Mañana · hora por confirmar') + ' · ' + conserjeTipoTxt(p) + '</span></div>'
+    + (it.necesita_atencion && it.motivo_atencion ? '<div style="background:#FFF6D6;border-top:1px solid #FEC14D;border-bottom:1px solid #FEC14D;padding:8px 16px;font-size:13px;line-height:1.5"><b>⚠ Qué pasó:</b> ' + esc(it.motivo_atencion) + '</div>' : '')
+    + conserjeFocoFotoHTML(it)
+    + '<div style="padding:14px 16px 16px">'
+    + '<div style="font-size:18px;font-weight:800;line-height:1.35">' + esc(p.titulo || '') + '</div>'
+    + (p.caption
+      ? '<div class="cj-foco-cap" style="font-size:14.5px;line-height:1.6;white-space:pre-wrap;margin-top:6px">' + esc(p.caption) + '</div>'
+      : '<div style="font-size:13.5px;color:var(--mut);margin-top:6px">Sin texto todavía.</div>')
+    + '<div style="display:flex;gap:10px;margin-top:14px">'
+    + '<button class="btn" style="flex:1.2;min-height:54px;font-size:16px;background:#14743F;color:#fff" data-cj="decidir" data-decision="sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(String(d.fecha || '')) + '">✓ Sale así</button>'
+    + '<button class="btn" style="flex:1;min-height:54px;font-size:16px;background:#fff;color:#B3261E;border:1.5px solid #E8B4B0" data-cj="decidir" data-decision="no_sale" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(String(d.fecha || '')) + '">✕ No sale</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:18px;justify-content:center;margin-top:12px">'
+    + '<button type="button" data-cj="arreglar" data-user="' + esc(String(it.user_id)) + '" style="background:none;border:0;color:#2793C8;font-size:14px;font-weight:700;cursor:pointer;padding:4px 0">✎ Editar</button>'
+    + '<button type="button" data-cj="feed" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" style="background:none;border:0;color:#2793C8;font-size:14px;font-weight:700;cursor:pointer;padding:4px 0">Ver en el feed</button>'
+    + '</div>'
+    + '<div class="cj-arreglo" style="display:none;margin-top:12px"><label style="font-size:13px;font-weight:700">Qué hay que arreglar</label>'
+    + '<textarea class="cj-arreglo-nota" rows="2" placeholder="Ej.: que no hable del precio, que el producto se vea entero" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;margin-top:6px"></textarea>'
+    + '<button class="btn btn-primary" style="margin-top:8px;min-height:48px;font-size:15px" data-cj="decidir" data-decision="arreglar" data-user="' + esc(String(it.user_id)) + '" data-post="' + esc(String(p.id)) + '" data-fecha="' + esc(String(d.fecha || '')) + '" data-nota="1">Enviar arreglo</button></div>'
+    + '</div></div>';
+}
+
+function conserjeSigueHTML(sig) {
+  const ini = String(sig.business_name || '?').trim().charAt(0).toUpperCase() || '?';
+  return '<div style="display:flex;align-items:center;gap:10px;border:1.5px dashed var(--line);border-radius:14px;padding:10px 14px;margin-top:12px">'
+    + '<span style="width:34px;height:34px;border-radius:9px;background:#0A1E33;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex:none">' + esc(ini) + '</span>'
+    + '<div style="flex:1;min-width:0"><div style="font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--mut)">SIGUE</div>'
+    + '<div style="font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(sig.business_name || '') + (sig.post && sig.post.titulo ? ' · ' + esc(sig.post.titulo) : '') + '</div></div>'
+    + '<button type="button" data-cj="foco-saltear" data-user="' + esc(String(sig.user_id)) + '" style="background:none;border:0;color:var(--mut);font-size:13.5px;font-weight:700;cursor:pointer;flex:none">Saltear →</button></div>';
+}
+
+function conserjeDecididosHTML(decididos) {
+  return '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Ya decididos</div>'
+    + decididos.map((it) => '<div class="card" style="padding:11px 14px;margin-bottom:8px;cursor:pointer" data-cj="ver" data-user="' + esc(String(it.user_id)) + '">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800;font-size:14px;flex:1;min-width:0">' + esc(it.business_name || '') + '</div>'
+      + '<span class="pill" style="background:#2793C8;color:#fff;margin:0;flex:none">' + esc(conserjeEtiquetaCorta(it.decision)) + '</span></div>'
+      + (it.decision && it.decision.nota ? '<div style="font-size:12.5px;color:var(--mut);margin-top:4px">' + esc(String(it.decision.nota).slice(0, 90)) + '</div>' : '')
+      + '</div>').join('');
+}
+
+function conserjeSinPosteoHTML(d) {
+  const sinPosteo = d.sin_posteo || [];
+  if (!sinPosteo.length) return '';
+  return '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Sin posteo para mañana</div>'
+    + sinPosteo.map((it) => {
+      // Un cliente ya decidido (p. ej. "No sale", cuyo posteo rechazado
+      // ya no está en la cola) muestra su decisión, no "Posty lo arma".
+      const decTxt = it.decision ? conserjeEtiquetaCorta(it.decision) : '';
+      return '<div class="card" style="padding:14px;cursor:pointer" data-cj="ver" data-user="' + esc(String(it.user_id)) + '">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:15px">' + esc(it.business_name || '') + '</div>' + conserjeEtapaDot(it.ficha && it.ficha.etapa) + '</div>'
+      + '<div style="font-size:13.5px;color:var(--mut);margin-top:8px">No tiene posteo programado para mañana.</div>'
+      + (it.decision
+        ? '<div style="margin-top:8px"><span class="pill" style="background:#2793C8;color:#fff;margin:0">' + esc(decTxt) + '</span>' + (it.decision.nota ? '<span style="font-size:12.5px;color:var(--mut);margin-left:8px">' + esc(String(it.decision.nota).slice(0, 90)) + '</span>' : '') + '</div>'
+        : '<div style="font-size:13.5px;margin-top:8px;font-weight:700">Posty lo arma →</div>')
+      + '</div>';
+    }).join('');
+}
+
+function conserjeFocoSeccionHTML(d) {
+  const r = d.resumen || {};
+  const cola = conserjeColaFoco(d);
+  const pendientes = cola.filter((i) => !i.decision);
+  const decididos = cola.filter((i) => i.decision);
+  const total = cola.length;
+  let h = '<div style="font-size:12.5px;font-weight:800;letter-spacing:.08em;color:var(--mut);margin:18px 0 8px">COLA · MODO FOCO</div>';
+  if (!total && !(d.sin_posteo || []).length) {
+    return h + '<div class="card" style="padding:18px"><p style="font-size:14px;line-height:1.6;margin:0">Nada para revisar esta noche: no hay clientes con posteo para mañana.</p></div>';
+  }
+  if (!pendientes.length) {
+    h += '<div class="card" style="padding:18px"><div style="font-size:16px;font-weight:800;color:#14743f">✓ Todo decidido — la noche está cerrada</div>'
+      + '<div style="font-size:13.5px;color:var(--mut);margin-top:4px">Mañana salen ' + esc(String(r.total || 0)) + ' posteos.</div></div>';
+  } else {
+    const actual = pendientes.find((i) => String(i.user_id) === String(conserjeEstado.focoUid)) || pendientes[0];
+    const pos = decididos.length + 1;
+    const pct = total ? Math.round((pos / total) * 100) : 0;
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px"><span><b>' + pos + ' de ' + total + '</b> <span style="color:var(--mut)">pendientes</span></span><span style="color:var(--mut)">Te quedan ' + (pendientes.length - 1) + '</span></div>'
+      + '<div style="height:8px;border-radius:999px;background:#EFE7D8;margin-top:6px;overflow:hidden"><div style="width:' + pct + '%;height:100%;border-radius:999px;background:#FEC14D"></div></div>'
+      + '<div style="font-size:13px;color:var(--mut);margin-top:8px">Mañana salen ' + esc(String(r.total || 0)) + ' posteos' + (r.necesitan_atencion ? ' · ' + esc(String(r.necesitan_atencion)) + ' necesitan atención' : ' · ninguno necesita atención') + '</div>'
+      + '<div style="margin-top:10px">' + conserjeFocoCardHTML(actual, d) + '</div>';
+    const sig = conserjeSiguienteFoco(d, actual.user_id);
+    if (sig && String(sig.user_id) !== String(actual.user_id)) h += conserjeSigueHTML(sig);
+  }
+  if (decididos.length) h += conserjeDecididosHTML(decididos);
+  h += conserjeSinPosteoHTML(d);
+  return h;
+}
+
+function conserjeHomeHeadHTML(d) {
+  const corridas = (conserjeEstado.vivo && conserjeEstado.vivo.corridas) || [];
+  const ventana = d.ventana || {};
+  const estadoVentana = ventana.estado === 'abierta' ? 'Abierta ahora · ' + esc(ventana.ahora || '') : 'Abre a las 19:00';
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+    + '<div style="font-size:13px;color:var(--mut)">Tu consola · solo vos ves esto</div>'
+    + (corridas.length ? '<span class="pill" style="background:#FFF3D6;color:#8a6d00;border:1px solid #FEC14D;margin:0;flex:none">● ' + corridas.length + ' EN CURSO</span>' : '')
+    + '</div>'
+    + '<div style="font-size:13px;color:var(--mut);margin-top:2px">Revisión de la noche · ' + esc(conserjeFechaLinda(d.fecha)) + ' · 19:00–00:00 · ' + estadoVentana + '</div>';
+}
+
 function conserjeRender() {
   const card = $('#conserjeCard');
   if (!card) return;
@@ -476,59 +846,18 @@ function conserjeRender() {
     card.innerHTML = '<div class="d">No se pudo cargar la revisión. Probá de nuevo.</div>';
     return;
   }
-  const r = d.resumen || {};
-  const ventana = d.ventana || {};
-  const fechaTxt = conserjeFechaLinda(d.fecha);
   if (conserjeEstado.vistaId) {
     const it = (d.items || []).concat(d.sin_posteo || []).find((x) => String(x.user_id) === String(conserjeEstado.vistaId));
     if (it) { card.innerHTML = conserjeDetalleHTML(it, d); conserjeCapAjustar(); return; }
     conserjeEstado.vistaId = null;
   }
-  const atencion = (d.items || []).filter((i) => i.necesita_atencion);
-  const resto = (d.items || []).filter((i) => !i.necesita_atencion);
-  const sinPosteo = d.sin_posteo || [];
-  const estadoVentana = ventana.estado === 'abierta' ? 'Abierta ahora · ' + esc(ventana.ahora || '') : 'Abre a las 19:00';
-  // El conteo es local: cuenta TODOS los clientes (también los sin
-  // posteo), como en el mock aprobado. La barra crece con cada decisión.
-  const conteo = conserjeConteo(d);
-  const pct = conteo.total ? Math.round((conteo.decididos / conteo.total) * 100) : 0;
-  let html = '<div class="card" style="padding:16px"><div style="font-size:15px;font-weight:800">Revisión de la noche · ' + esc(fechaTxt) + '</div>'
-    + '<div style="font-size:13.5px;color:var(--mut);margin-top:4px">19:00–00:00 · ' + estadoVentana + '</div>'
-    + '<div style="font-size:13.5px;font-weight:700;margin-top:10px">' + conteo.decididos + ' de ' + conteo.total + ' revisados</div>'
-    + '<div class="cj-progreso" style="height:8px;border-radius:999px;background:#E2EDF5;margin-top:6px;overflow:hidden"><div style="width:' + pct + '%;height:100%;border-radius:999px;background:#2793C8"></div></div>'
-    + '<div style="font-size:13.5px;margin-top:8px">Mañana salen ' + esc(String(r.total || 0)) + ' posteos' + (r.necesitan_atencion ? ' · ' + esc(String(r.necesitan_atencion)) + ' necesitan atención' : ' · ninguno necesita atención') + '</div>'
-    + (conteo.todo ? '<div style="font-size:14px;font-weight:800;color:#14743f;margin-top:8px">✓ Todo decidido — la noche está cerrada</div>' : '')
-    + '</div>';
-  if (!d.items.length && !sinPosteo.length) {
-    html += '<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Nada para revisar esta noche: no hay clientes con posteo para mañana.</p></div>';
-  }
-  // (v906) El clamp del caption vive acá, una sola vez para toda la lista
-  // (mismo patrón que el <style> del detalle): sin esto, las tarjetas de
-  // la lista no recortarían el caption a 3 líneas.
-  if (atencion.length || resto.length) {
-    html += '<style>.cj-cap-txt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.cj-cap-txt.cj-cap-full{display:block;-webkit-line-clamp:unset;overflow:visible}</style>';
-  }
-  if (atencion.length) {
-    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">⚠ Necesitan atención primero</div><div class="cj-lista">' + atencion.map((it) => conserjeCardHTML(it, d.fecha)).join('') + '</div>';
-  }
-  if (resto.length) {
-    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Listos</div><div class="cj-lista">' + resto.map((it) => conserjeCardHTML(it, d.fecha)).join('') + '</div>';
-  }
-  if (sinPosteo.length) {
-    html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">Sin posteo para mañana</div><div class="cj-lista">'
-      + sinPosteo.map((it) => {
-        // Un cliente ya decidido (p. ej. "No sale", cuyo posteo rechazado
-        // ya no está en la cola) muestra su decisión, no "Posty lo arma".
-        const decTxt = it.decision ? conserjeEtiquetaCorta(it.decision) : '';
-        return '<div class="card" style="padding:14px;cursor:pointer" data-cj="ver" data-user="' + esc(String(it.user_id)) + '">'
-        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:800;font-size:15px">' + esc(it.business_name || '') + '</div>' + conserjeEtapaDot(it.ficha && it.ficha.etapa) + '</div>'
-        + '<div style="font-size:13.5px;color:var(--mut);margin-top:8px">No tiene posteo programado para mañana.</div>'
-        + (it.decision
-          ? '<div style="margin-top:8px"><span class="pill" style="background:#2793C8;color:#fff;margin:0">' + esc(decTxt) + '</span>' + (it.decision.nota ? '<span style="font-size:12.5px;color:var(--mut);margin-left:8px">' + esc(String(it.decision.nota).slice(0, 90)) + '</span>' : '') + '</div>'
-          : '<div style="font-size:13.5px;margin-top:8px;font-weight:700">Posty lo arma →</div>')
-        + '</div>';
-      }).join('') + '</div>';
-  }
+  // (LOTE CONSERJE-FLUJO-UNICO) La home es el flujo único: números →
+  // en vivo (solo si hay una corrida) → la cola en modo foco. Las
+  // secciones del equipo (pedidos, eventos) siguen debajo, intactas.
+  let html = conserjeHomeHeadHTML(d)
+    + conserjeNumerosHTML()
+    + conserjeVivoHTML()
+    + conserjeFocoSeccionHTML(d);
   // (LOTE CONSERJE-PEDIDOS-VOZ) Sección propia, fuera de la revisión de
   // la noche: los pedidos por voz de los clientes con lo que salió.
   html += '<div style="font-size:14px;font-weight:800;margin:16px 0 8px">🎙 Pedidos por voz · cambios a un posteo' + conserjeBadgePendientesHTML('cjBadgeVoz', (conserjeEstado.conteos || {}).voz) + '</div>'
@@ -554,7 +883,6 @@ function conserjeRender() {
     + '<div style="font-size:13.5px;color:var(--mut);line-height:1.55">Todo lo que el equipo hizo en soporte, en orden: qué pasó, sobre qué cliente o posteo y cuándo. Es el registro real (support_team_log); esta vista solo lo lee, no cambia nada.</div>'
     + '<button class="btn btn-secondary" data-cj="eventos" style="margin-top:10px">' + (conserjeEstado.eventos ? 'Actualizar los eventos' : 'Ver los eventos') + '</button>'
     + '<div id="cjEventos" style="margin-top:12px"></div></div>';
-  html += '<style>@media (min-width:720px){.cj-lista{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cj-lista .card{margin:0}}</style>';
   card.innerHTML = html;
   conserjeCapAjustar();
   conserjePedidosVozPintar();
@@ -992,6 +1320,13 @@ async function conserjeCargar() {
     // pedidos por audio viaja con la revisión: queda en el estado y
     // los encabezados de sección lo muestran desde esta misma carga.
     if (d && d.pedidos_pendientes) conserjeEstado.conteos = d.pedidos_pendientes;
+    // (LOTE CONSERJE-FLUJO-UNICO) Las fuentes de la home nueva: el
+    // embudo, las alertas de salud y las corridas en vivo. Cada una es
+    // fail-soft: si una falla, su sección no se pinta — la revisión
+    // (la fuente principal) ya cargó y manda.
+    try { conserjeEstado.numeros = await adminApi('funnel?era=all', 'GET'); } catch (e) { conserjeEstado.numeros = null; }
+    try { const al = await adminApi('alerts', 'GET'); conserjeEstado.alertas = (al && al.alerts) || []; } catch (e) { conserjeEstado.alertas = null; }
+    conserjeEstado.vivo = await conserjeVivoCargar();
     conserjeRender();
   } catch (e) {
     if (e && e.adminAuthFailed) return;
@@ -1143,7 +1478,15 @@ async function bindConserje() {
       return;
     }
     if (acc === 'pedido-subir-decidir') { await conserjePedidoSubirDecidir(t); return; }
+    if (acc === 'foco-saltear') {
+      // (LOTE CONSERJE-FLUJO-UNICO) Saltear: el posteo en foco queda
+      // pendiente y la cola muestra el que sigue (la tira «SIGUE»).
+      conserjeEstado.focoUid = uid;
+      conserjeRender();
+      return;
+    }
     if (acc === 'decidir' || acc === 'armar') {
+      const enDetalle = !!conserjeEstado.vistaId;
       const decision = acc === 'armar' ? 'pedir' : t.getAttribute('data-decision');
       let nota = '';
       if (t.getAttribute('data-nota') === '1') {
@@ -1164,14 +1507,23 @@ async function bindConserje() {
           : await adminApi('support/conserje/revision/decidir', 'POST', body);
         if (!r || !r.ok) throw new Error((r && r.error) || 'error');
         await conserjeCargar();
-        // Avanzar SOLO al siguiente cliente pendiente (un toque por
-        // decisión, sin volver a la lista a buscar el siguiente). Si no
-        // queda ninguno, la lista muestra "la noche está cerrada".
         conserjeEstado.notaGuardada = null;
-        const sig = conserjeSiguientePendiente(conserjeEstado.datos, uid);
-        if (sig) { conserjeEstado.vistaId = String(sig.user_id); conserjeRender(); }
-        else { conserjeEstado.vistaId = null; conserjeRender(); }
-        window.scrollTo(0, 0);
+        if (enDetalle) {
+          // Avanzar SOLO al siguiente cliente pendiente (un toque por
+          // decisión, sin volver a la lista a buscar el siguiente). Si no
+          // queda ninguno, la lista muestra "la noche está cerrada".
+          const sig = conserjeSiguientePendiente(conserjeEstado.datos, uid);
+          if (sig) { conserjeEstado.vistaId = String(sig.user_id); conserjeRender(); }
+          else { conserjeEstado.vistaId = null; conserjeRender(); }
+          window.scrollTo(0, 0);
+        } else {
+          // (LOTE CONSERJE-FLUJO-UNICO) Desde la home manda el foco:
+          // al decidir, la cola avanza sola al siguiente posteo
+          // pendiente, sin salir de la home ni abrir el detalle.
+          const sigF = conserjeSiguienteFoco(conserjeEstado.datos, uid);
+          conserjeEstado.focoUid = sigF ? String(sigF.user_id) : null;
+          conserjeRender();
+        }
       } catch (e) {
         t.disabled = false;
         if (card) {
