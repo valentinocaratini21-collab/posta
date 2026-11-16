@@ -12376,6 +12376,56 @@ app.post('/api/admin/posts/:id/descartar', requireAdminToken, (req, res) => {
   res.json({ ok: true, id: fin.id, user_id: fin.user_id, status: fin.status, scheduled_at: fin.scheduled_at, status_anterior: post.status, descartado: true, ya_descartado: false });
 });
 
+// POST /api/admin/posts/:id/set-ig?token=<redacted>  body {ig_media_id, ig_permalink}
+// (LOTE TARJETA-HOY-REAPUNTE) Re-apunta un posteo PUBLICADO a su publicación
+// viva de Instagram. El hueco: cuando la publicación real se reemplaza fuera
+// de la app (la versión vieja se archiva y la corregida se publica por el
+// conector, caso medialuna 15/11), la fila queda apuntando a la media
+// archivada (ig_state='archived_ext') y la tarjeta de hoy lo muestra «no
+// disponible» aunque el posteo vivo existe. Ninguna palanca existente lo
+// re-apunta: el reconcile del espejo solo marca/restaura por el shortcode
+// PROPIO de la fila (el archivado nunca vuelve a la grilla, así que nunca
+// se cura solo) y edit-caption/schedule/set-image no tocan los campos ig_*.
+// Esta palanca escribe ig_media_id + ig_permalink y deja ig_state='live'
+// (la reconciliación posterior lo sostiene: el shortcode nuevo SÍ está en
+// la grilla). Guardas: no publicado → rechazo; sin media o sin permalink
+// → 400. La respuesta devuelve el estado re-leído y el puntero anterior.
+app.post('/api/admin/posts/:id/set-ig', requireAdminToken, (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const mid = String(body.ig_media_id || '').trim();
+  const perma = String(body.ig_permalink || '').trim();
+  if (!mid || !perma) return res.status(400).json({ ok: false, error: 'faltan ig_media_id / ig_permalink' });
+  const post = db.prepare(`SELECT id, user_id, status, ig_media_id, ig_permalink, ig_state FROM posts WHERE id = ?`).get(id);
+  if (!post) return res.status(404).json({ ok: false, error: 'no_existe' });
+  if (post.status !== 'published') return res.status(400).json({ ok: false, motivo: 'no_publicado', error: 'solo posteos publicados (status: ' + post.status + ')' });
+  db.prepare(`UPDATE posts SET ig_media_id = ?, ig_permalink = ?, ig_state = 'live', ig_state_at = datetime('now') WHERE id = ?`).run(mid, perma, id);
+  const fin = db.prepare(`SELECT id, user_id, status, ig_media_id, ig_permalink, ig_state FROM posts WHERE id = ?`).get(id);
+  console.log(`[admin] set-ig: post ${id} (usuario ${post.user_id}) ${post.ig_media_id || '—'} → ${mid}`);
+  res.json({ ok: true, ...fin, anterior: { ig_media_id: post.ig_media_id, ig_permalink: post.ig_permalink, ig_state: post.ig_state } });
+});
+
+// POST /api/admin/ig/adopt?token=<redacted>  body {user_id, ig_media_id}
+// (MISMO LOTE) Registra como fila publicada un medio de IG que salió FUERA
+// de la app (publicación directa por conector, caso reel del sábado 14/11:
+// vivo en Instagram y la tira de la semana lo mostraba vacío porque la fila
+// local estaba descartada y ninguna fila adoptaba el medio). La primitiva
+// adoptarRecienteIg ya existe pero solo se alcanza desde el flujo de
+// Impulsar; esta palanca la expone sola, sin entrar a pauta. Idempotente:
+// si ya hay fila con ese ig_media_id, la devuelve sin duplicar.
+app.post('/api/admin/ig/adopt', requireAdminToken, async (req, res) => {
+  const body = req.body || {};
+  const uid = Number(body.user_id) || 0;
+  const mid = String(body.ig_media_id || '').trim();
+  if (!uid || !mid) return res.status(400).json({ ok: false, error: 'faltan user_id / ig_media_id' });
+  try {
+    const ad = await adoptarRecienteIg(db, uid, mid);
+    if (!ad || !ad.ok) return res.status((ad && ad.status) || 502).json({ ok: false, motivo: (ad && ad.motivo) || 'no_se_pudo' });
+    res.json({ ok: true, user_id: uid, ig_media_id: mid, post_id: ad.post_id, ya_existia: !!ad.ya_existia });
+  } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
+
 // POST /api/admin/review/:id/reject?token=ADMIN_TOKEN  body {note}
 // Rechaza con nota: alimenta el aprendizaje (señal + style_rule), borra el
 // borrador y regenera uno con otro enfoque en segundo plano.
@@ -44715,7 +44765,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1115';
+const BUILD_ID = '20261105-v1116';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
