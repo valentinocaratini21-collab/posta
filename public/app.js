@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1129';
+const PZ_BUILD = '20261105-v1130';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24099,6 +24099,15 @@ function pzHoyTiraDias(sem, posts, hoyKey, tz) {
     const porDia = {};
     for (const p of lista) {
       if (!p || String((p && p.media_type) || '') === 'story') continue;
+      // (LOTE TARJETA-FANTASMA) El posteo del día se elige SOLO entre los
+      // estados que la tira puede presentar con verdad — borrador,
+      // programado, publicado: un estado terminal (cancelado/descartado)
+      // jamás es el posteo de su día, sea cual sea su scheduled_at. El
+      // hueco: esta selección no filtraba por estado y un cancelado de
+      // hoy 00:53 le ganaba el día al programado de las 19:00 y se rendía
+      // como tarjeta sana sobre «EL POSTEO DE HOY».
+      const stDia = String(p.status || '');
+      if (stDia !== 'published' && stDia !== 'scheduled' && stDia !== 'draft') continue;
       const k = pzHoyPostDiaKey(p, tz);
       if (!k) continue;
       const cur = porDia[k];
