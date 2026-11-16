@@ -1666,6 +1666,12 @@ const BANNED_PHRASES_EN = [
   'game changer', 'game-changer', 'elevate your', 'take it to the next level', 'world-class',
   'best in town', 'best in the city', 'you deserve the best', 'makes all the difference',
   'did you know', 'in today\'s post', 'welcome to our page', 'hello everyone', 'hey guys',
+  // (Juli, 2026-11-16 — id 687 real, Jeni's Splendid Ice Creams, draft con
+  // fecha 17/11): 'share the love' es el cliché vacío de la promo genérica
+  // EN — no dice qué se comparte ni con quién; el caption del 687 pasaba
+  // captionPassesEn entero (ok=true) sin nombrar un solo producto. La
+  // firma es la frase exacta: "share this post" (CTA concreto) NO se toca.
+  'share the love',
 ];
 const CTA_SIGNALS_EN = ['dm us', 'dm me', 'message us', 'comment', 'save this', 'save it', 'save these', 'book', 'stop by', 'come by', 'link in bio', 'tap the link', 'order', 'call us', 'text us', 'tag ', 'share this', 'grab yours', 'get yours', 'reserve', 'schedule', 'sign up', 'join us', 'try it', 'visit us', 'shop now', 'tell us'];
 const GENERIC_OPENINGS_EN = [
@@ -1807,6 +1813,18 @@ function captionPassesEn(caption, input) {
     if (chromeLine) return { ok: false, reason: 'web chrome: a block opens with the site navigation label ("Shop All …") — that is baked website text, not caption copy; say one concrete thing about the product' };
     if (/\bis your destination for\b/i.test(c)) return { ok: false, reason: 'web chrome: "…is your destination for…" is the site meta description pasted as body — write a sentence about the product, not the store slogan' };
     if (/quality,\s*detail and the\b[^.\n]*\bstandard:\s*that'?s how we do\b/i.test(c)) return { ok: false, reason: 'empty tip skeleton: the tip announces keys and delivers virtues ("Quality, detail and the … standard") — the same body across businesses; name concrete keys of this product or do not announce a number' };
+    // CROMO-CTA (Juli, 2026-11-16 — id 687 real, Jeni's Splendid Ice
+    // Creams, draft con fecha 17/11, pasaba la puerta entera): el cierre
+    // "Visit our website to explore all flavors and get your favorites
+    // today!" es el CTA de folleto del sitio, no del posteo — la misma
+    // familia de cromo que "Shop All …": texto que le sirve a cualquier
+    // negocio y no nombra un producto ni una acción concreta (el CTA de
+    // Posty es DM, comentario, guardado o pasar por el local). La firma
+    // es angosta, como la del rótulo de nav: un bloque que ARRANCA con
+    // "Visit our website" — mencionar la web en el medio de una oración
+    // ("the full menu lives on our website, order by DM") NO se toca.
+    const chromeCta = c.split('\n').map((s) => s.trim()).find((l) => /^visit our website\b/i.test(l));
+    if (chromeCta) return { ok: false, reason: 'web chrome: a block opens with the brochure CTA ("Visit our website …") — that is the site talking, not the post; close with one concrete action (DM, comment, save, stop by)' };
   }
   const trimmedLen = c.trim().length;
   if (trimmedLen < 40) return { ok: false, reason: 'too short (under 40 characters)' };
