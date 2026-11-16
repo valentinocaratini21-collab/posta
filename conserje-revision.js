@@ -273,6 +273,16 @@ function logRevision(db, userId, postId, action, detalle) {
 // propuesta (el borrador más reciente con foto, sin rechazar, sin frenar).
 // Los borradores marcados para revisar SÍ se proponen (la revisión es
 // justamente el lugar para decidirlos) y salen primeros por atención.
+// (LOTE FILTRO-DÍAS-PASADOS — regla de Valentino 16/11: «los posteos que
+// ya pasaron el día no deberían aparecer más en el conserje») La rama
+// programada ya exigía dayKey == fecha (la fecha que se revisa es
+// mañana: un programado vencido nunca entra). La rama de propuesta NO
+// aplicaba ningún criterio de fecha y un borrador con fecha vieja
+// entraba como propuesta mostrando «dom 8/11» / «dom 1/11» con atención
+// (la captura viva del 16/11): ahora la propuesta salta los borradores
+// cuyo día ya pasó, en la zona de la cuenta — un posteo cuyo día pasó
+// sale de la cola aunque nunca se haya revisado ni publicado; su
+// destino se lee en la semana/feed del cliente.
 function posteoDeManana(db, uid, fecha, tz) {
   const sched = safe(() => db.prepare(
     `SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL ORDER BY scheduled_at ASC`).all(Number(uid)), []);
@@ -281,13 +291,28 @@ function posteoDeManana(db, uid, fecha, tz) {
     try { k = dayKeyInTz(new Date(String(p.scheduled_at).replace(' ', 'T')), tz); } catch (e) {}
     if (k === fecha) return { post: p, origen: 'programado' };
   }
-  const draft = safe(() => db.prepare(
-    `SELECT * FROM posts WHERE user_id = ? AND status = 'draft'
+  const hoyKey = safe(() => dayKeyInTz(new Date(), tz), '');
+  const diaPasado = (schedAt) => {
+    if (!schedAt || !hoyKey) return false;
+    let k = '';
+    try { k = dayKeyInTz(new Date(String(schedAt).replace(' ', 'T')), tz); } catch (e) { return false; }
+    return !!(k && k < hoyKey);
+  };
+  // La propuesta: el borrador más reciente con foto, SALTANDO los cuyo
+  // día ya pasó. El borrador sin fecha, o con fecha de hoy en adelante,
+  // sí es propuesta viva; si el más reciente está vencido, se sigue con
+  // el siguiente candidato en vez de tapar la cola con un día pasado.
+  const candidatos = safe(() => db.prepare(
+    `SELECT id, scheduled_at FROM posts WHERE user_id = ? AND status = 'draft'
      AND image_path LIKE '/media/%' AND media_type IN ('image', 'carousel')
      AND COALESCE(approval, 'pending') != 'rejected'
      AND COALESCE(user_stopped, 0) = 0
-     ORDER BY id DESC LIMIT 1`).get(Number(uid)), null);
-  if (draft) return { post: draft, origen: 'propuesta' };
+     ORDER BY id DESC LIMIT 200`).all(Number(uid)), []);
+  for (const cand of candidatos) {
+    if (diaPasado(cand.scheduled_at)) continue;
+    const draft = safe(() => db.prepare('SELECT * FROM posts WHERE id = ?').get(cand.id), null);
+    if (draft) return { post: draft, origen: 'propuesta' };
+  }
   return { post: null, origen: 'sin_posteo' };
 }
 
