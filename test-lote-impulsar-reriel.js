@@ -128,6 +128,10 @@ async function main() {
     NODE_OPTIONS: '--require ' + path.join(SUITE_DIR, 'test-lote-impulsar-reriel.stub.js'),
     META_STUB_AUTOINSTALL: '1', META_STUB_LOG: STUB_LOG, STRIPE_STUB_LOG: STRIPE_LOG,
     META_FLB_CONFIG_ID: 'CFG_TEST_123',
+    // (LOTE ADS-CREDENCIALES) El login unificado lee las dedicadas
+    // META_FLB_APP_ID/SECRET; sin ellas unifiedReady = false y el
+    // connect_url de F3 no viajaría.
+    META_FLB_APP_ID: 'APP_TEST', META_FLB_APP_SECRET: 'SECRET_TEST',
     IG_APP_ID: 'APP_TEST', IG_APP_SECRET: 'SECRET_TEST',
     META_ADS_TOKEN: 'TOKEN_POSTY', META_AD_ACCOUNT_ID: '29027789776849841',
     STRIPE_SECRET_KEY: 'sk_test_stub_reriel_123456',

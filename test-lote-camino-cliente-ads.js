@@ -297,6 +297,9 @@ async function main() {
     MEDIA_DIR: path.join(tmpDir, 'media'), NODE_PATH: NM,
     OPENAI_API_KEY: '', ADMIN_TOKEN: 'boot-test-token-camino-ads',
     META_FLB_CONFIG_ID: 'test-config-flb', IG_APP_ID: '123456', IG_APP_SECRET: 'test-secret',
+    // (LOTE ADS-CREDENCIALES) El login unificado ya no resuelve la app
+    // desde IG_APP_ID: lee las dedicadas META_FLB_APP_ID/SECRET.
+    META_FLB_APP_ID: '123456', META_FLB_APP_SECRET: 'test-secret',
   };
   const child = spawn(process.execPath, ['server.js'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let bootLog = '';

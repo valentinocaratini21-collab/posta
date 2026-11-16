@@ -15100,15 +15100,26 @@ function adsConnectionReady(userId) {
   const c = getAdsConnection(userId);
   return !!(c && c.suat && c.primary_ad_account_id);
 }
-// Configuración del login unificado: el config_id es del dashboard de
-// Meta (env); la app y su secreto se resuelven igual que en el
-// callback de Instagram (settings por usuario → env).
+// Configuración del login unificado (LOTE ADS-CREDENCIALES): el
+// config_id y la app forman una pareja inseparable del dashboard de
+// Meta — el config_id «Posty clientes» se creó bajo la app de
+// Facebook «Posty», así que el diálogo FLB se abre SIEMPRE con las
+// credenciales dedicadas de ESA app (env META_FLB_APP_ID /
+// META_FLB_APP_SECRET). Antes la app se resolvía igual que en el
+// callback de Instagram (settings por usuario → IG_APP_ID →
+// META_APP_ID) y en producción ganaba la app de INSTAGRAM: Meta
+// rechazaba el diálogo con «Invalid App ID» porque el config_id no
+// pertenece a esa app. Tampoco vale el override por settings del
+// usuario: su app propia jamás es la dueña del config_id de Posty.
+// Sin las variables dedicadas, el flujo queda NO listo
+// (unifiedReady = false), la compuerta no ofrece la conexión y un
+// hit directo a /api/ig/unified/go responde el error claro de
+// buildUnifiedAuth: falla cerrado, jamás cae a la app de IG.
 function unifiedCfgFor(userId) {
-  const s = getSettings(userId);
   return {
     configId: (process.env.META_FLB_CONFIG_ID || '').trim(),
-    appId: s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID || '',
-    appSecret: s.meta_app_secret || process.env.IG_APP_SECRET || process.env.META_APP_SECRET || '',
+    appId: (process.env.META_FLB_APP_ID || '').trim(),
+    appSecret: (process.env.META_FLB_APP_SECRET || '').trim(),
   };
 }
 function unifiedReady(userId) {
@@ -45530,7 +45541,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1135';
+const BUILD_ID = '20261105-v1136';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
