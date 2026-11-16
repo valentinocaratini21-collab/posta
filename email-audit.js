@@ -511,8 +511,8 @@ function renderAuditHtml(p) {
         "One quality post every day, with your star up front and your products named, all scheduled and going out on its own. You don't touch a thing: you just watch how your feed looks and how the clients come in.")) + '</p>\n  </div>\n'
     + '  <a class="cta" href="' + TRIAL_URL + '">' + escHtml(T('Probalo 3 días gratis con tu Instagram', 'Try it free for 3 days with your Instagram')) + '</a>\n'
     + '  <p class="precio">' + escHtml(T(
-        'El primer posteo te llega en el momento. Después, USD 299 por mes, sin compromiso.',
-        'Your first post reaches you right away. After that, USD 299 a month, no strings attached.')) + '</p>\n'
+        'El primer posteo te llega en el momento. Después, USD 199 por mes, sin compromiso.',
+        'Your first post reaches you right away. After that, USD 199 a month, no strings attached.')) + '</p>\n'
     // (CARTA v6 · 13/11 23:10) El email sale SIN foto incrustada (spam):
     // la foto aprobada del equipo vive ACÁ, sobre la firma, en el lugar
     // de la muestra. El asset es la copia aprobada de la carpeta de la

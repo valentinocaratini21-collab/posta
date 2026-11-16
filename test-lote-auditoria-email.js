@@ -209,7 +209,7 @@ function vozLimpia(s, name) {
     ok(idx('Lo que vimos para mejorar') < idx('Lo que haríamos nosotros'), 'F3 orden: hallazgos antes de lo que haríamos');
     ok(idx('Lo que haríamos nosotros') < idx('Probalo 3 días gratis con tu Instagram'), 'F4 orden: el cierre a la prueba va después de lo que haríamos (carta v5: es la única puerta)');
     ok(html.includes('https://postycommunitymanager.com/prueba'), 'F5 el cierre enlaza a /prueba');
-    ok(html.includes('USD 299 por mes'), 'F6 el cierre lleva el precio');
+    ok(html.includes('USD 199 por mes'), 'F6 el cierre lleva el precio');
     ok(html.includes('1. Tu estrella casi no aparece') && html.includes('2. El ritmo se corta') && html.includes('3. Ningún posteo invita a comprar'), 'F7 los tres hallazgos numerados y en orden');
     ok(html.includes('Hola, Ligre. Esto fue lo que vimos.'), 'F8 saluda al negocio por su nombre real');
     ok(html.includes('#2793C8') && html.includes('#FEC14D') && html.includes('#0A1E33'), 'F9 colores de marca de la vara visual');
@@ -219,7 +219,7 @@ function vozLimpia(s, name) {
     ok(html.includes('Valentino Caratini') && html.includes('Founder de Posty'), 'F13 firma del fundador');
     vozLimpia(html, 'F14 voz en la página entera');
     ok(html.includes('<img class="foto" src="/foto-equipo.jpg" alt="Valentino y Posty, espalda con espalda">'), 'F15 (carta v6) la foto aprobada del equipo va en la página, sobre la firma');
-    ok(idx('USD 299 por mes') < idx('class="foto"') && idx('class="foto"') < idx('<p class="firma">'), 'F16 la foto queda entre el precio y la firma, como la muestra');
+    ok(idx('USD 199 por mes') < idx('class="foto"') && idx('class="foto"') < idx('<p class="firma">'), 'F16 la foto queda entre el precio y la firma, como la muestra');
     ok(html.includes('img.foto { width:100%; border-radius:12px; margin:26px 0 14px; display:block; }'), 'F17 el estilo de la foto es el de la muestra');
   }
 

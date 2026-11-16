@@ -41,7 +41,7 @@ console.log('§U unit (plans + stripe-billing)');
 {
   const plans = require('./config/plans');
   const pu = plans.getPlan('posty', 'AR');
-  ok(pu && pu.id === 'posty' && pu.price === 299 && pu.currency === 'USD', 'U1 getPlan(posty) = USD 299', pu);
+  ok(pu && pu.id === 'posty' && pu.price === 199 && pu.currency === 'USD', 'U1 getPlan(posty) = USD 199', pu);
   ok(pu && pu.postsPerWeek === 7 && pu.reelsPerWeek === 2 && pu.storiesPerWeek === 7, 'U1 límites del plan único (7 posteos, 2 reels, 7 historias)', pu);
   const es = plans.getPlan('esencial', 'AR');
   ok(es && es.price === 199999 && es.currency === 'ARS', 'U1 el tier esencial AR sigue intacto (facturación interna)', es);
@@ -77,7 +77,7 @@ console.log('§U unit (plans + stripe-billing)');
       ok(cat && cat.posty && cat.esencial && cat.pro && cat.total, 'U3 ensureCatalog resuelve los 3 tiers + el plan único', Object.keys(cat || {}));
       const pp = created.prices.find((p) => p.lookup_key === 'posty_us_posty_monthly');
       ok(!!pp, 'U3 se creó el precio posty_us_posty_monthly', created.prices.map((p) => p.lookup_key));
-      ok(pp && pp.unit_amount === 29900 && pp.currency === 'usd', 'U3 el precio del único es USD 299.00', pp && { a: pp.unit_amount, c: pp.currency });
+      ok(pp && pp.unit_amount === 19900 && pp.currency === 'usd', 'U3 el precio del único es USD 199.00', pp && { a: pp.unit_amount, c: pp.currency });
       ok(pp && pp.metadata && pp.metadata.plan_id === 'posty', 'U3 metadata plan_id=posty en el precio', pp && pp.metadata);
       const prod = created.products.find((p) => p.id === (pp && pp.product));
       ok(prod && prod.metadata && prod.metadata.plan_id === 'posty', 'U3 el producto del único lleva plan_id=posty', prod && prod.metadata);
@@ -121,7 +121,7 @@ const APP = fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8');
   const b = APP.indexOf('/* ---------- SCHEDULE:', a);
   ok(a > 0 && b > a, 'C0 tramo modal/banner delimitado en app.js');
   const TRAMO = APP.slice(a, b);
-  const UNICO = { plans: [{ id: 'posty', name: 'Posty', price: 299, currency: 'USD', price_label: '$299', postsPerWeek: 7, reelsPerWeek: 2, storiesPerWeek: 7, highlighted: true }] };
+  const UNICO = { plans: [{ id: 'posty', name: 'Posty', price: 199, currency: 'USD', price_label: '$199', postsPerWeek: 7, reelsPerWeek: 2, storiesPerWeek: 7, highlighted: true }] };
   const mkSandbox = (lang, pais) => {
     const state = { urls: [], appended: [], handlers: {} };
     const mkEl = () => {
@@ -168,7 +168,7 @@ const APP = fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8');
       const hEs = es.state.appended.length ? es.state.appended[0].innerHTML : '';
       ok(es.state.appended.length === 1, 'C1 el modal se monta una vez');
       ok(hEs.includes('Se terminó tu prueba'), 'C1 modal ES: título');
-      ok(hEs.includes('$299/mes') && hEs.includes('USD 10 por día'), 'C1 modal ES: USD 299/mes y por-día en USD', hEs.slice(0, 400));
+      ok(hEs.includes('$199/mes') && hEs.includes('USD 7 por día'), 'C1 modal ES: USD 299/mes y por-día en USD', hEs.slice(0, 400));
       ok(hEs.includes('7 posteos + 2 reels + 7 historias por semana'), 'C1 modal ES: mix del plan único');
       ok((hEs.match(/data-exp-plan=/g) || []).length === 1 && hEs.includes('data-exp-plan="posty"'), 'C1 modal: UNA sola tarjeta, la del plan único');
       ok(!hEs.includes('EL MÁS ELEGIDO') && !hEs.includes('Esencial'), 'C1 modal: sin etiqueta de catálogo ni tiers viejos');
@@ -177,16 +177,16 @@ const APP = fs.readFileSync(path.join(__dirname, 'public', 'app.js'), 'utf8');
       await en.sbx.showExpiredModal();
       const hEn = en.state.appended.length ? en.state.appended[0].innerHTML : '';
       ok(en.state.urls.some((u) => u.includes('unico=1') && u.includes('country=US')), 'C2 modal pide el plan único con país US', en.state.urls);
-      ok(hEn.includes('Your trial ended') && hEn.includes('$299/mo') && hEn.includes('$10 per day'), 'C2 modal EN: título, /mo y por-día', hEn.slice(0, 400));
+      ok(hEn.includes('Your trial ended') && hEn.includes('$199/mo') && hEn.includes('$7 per day'), 'C2 modal EN: título, /mo y por-día', hEn.slice(0, 400));
       ok(hEn.includes('7 posts + 2 reels + 7 stories per week') && hEn.includes('Choose'), 'C2 modal EN: mix y botón en inglés');
       // Banner ES / EN
       const bEs = mkSandbox('es', 'AR');
       const htmlBEs = await bEs.sbx.trialExpiredBannerHTML();
-      ok(htmlBEs.includes('Tu prueba terminó') && htmlBEs.includes('USD 10/día') && htmlBEs.includes('pzTrialBanner'), 'C3 banner ES: plan único en USD por día', htmlBEs);
+      ok(htmlBEs.includes('Tu prueba terminó') && htmlBEs.includes('USD 7/día') && htmlBEs.includes('pzTrialBanner'), 'C3 banner ES: plan único en USD por día', htmlBEs);
       ok(bEs.state.urls.some((u) => u.includes('unico=1')), 'C3 banner pide ?unico=1', bEs.state.urls);
       const bEn = mkSandbox('en', 'US');
       const htmlBEn = await bEn.sbx.trialExpiredBannerHTML();
-      ok(htmlBEn.includes('Your trial ended') && htmlBEn.includes('$10/day'), 'C4 banner EN: texto y por-día en inglés', htmlBEn);
+      ok(htmlBEn.includes('Your trial ended') && htmlBEn.includes('$7/day'), 'C4 banner EN: texto y por-día en inglés', htmlBEn);
       // Banner sin vencimiento: nada
       const bNo = mkSandbox('es', 'AR');
       bNo.ME.trial_expired = false;
@@ -253,9 +253,9 @@ const cookieDe = (headers) => {
     const pSin = await apiH('', 'GET', '/api/billing/plans?country=AR');
     ok(pSin.status === 200 && pSin.data.plans.length === 3, 'H1 sin unico: el catálogo de 3 tiers sigue (facturación interna)', pSin.data && pSin.data.plans.length);
     const pAr = await apiH('', 'GET', '/api/billing/plans?country=AR&unico=1');
-    ok(pAr.status === 200 && pAr.data.plans.length === 1 && pAr.data.plans[0].id === 'posty' && pAr.data.plans[0].price === 299 && pAr.data.currency === 'USD', 'H2 AR ?unico=1: un solo plan, USD 299', pAr.data && pAr.data.plans);
+    ok(pAr.status === 200 && pAr.data.plans.length === 1 && pAr.data.plans[0].id === 'posty' && pAr.data.plans[0].price === 199 && pAr.data.currency === 'USD', 'H2 AR ?unico=1: un solo plan, USD 199', pAr.data && pAr.data.plans);
     const pUs = await apiH('', 'GET', '/api/billing/plans?country=US&unico=1');
-    ok(pUs.status === 200 && pUs.data.plans.length === 1 && pUs.data.plans[0].price === 299, 'H3 US ?unico=1: un solo plan, USD 299');
+    ok(pUs.status === 200 && pUs.data.plans.length === 1 && pUs.data.plans[0].price === 199, 'H3 US ?unico=1: un solo plan, USD 199');
 
     // Usuario fresco
     const rr = await fetch(`${BASE}/api/auth/register`, {
@@ -283,7 +283,7 @@ const cookieDe = (headers) => {
     ok(coUs.status === 400 && /not configured/i.test(String(coUs.data && coUs.data.error || '')), 'H7 checkout único US: llega al gate de Stripe', coUs.data);
     // Guarda MP: el plan único NO se cobra en pesos.
     const subU = await apiH(ckF, 'POST', '/api/billing/subscribe', { plan: 'posty', country: 'AR', payer_email: 'paywall@example.com', agente: 'posty' });
-    ok(subU.status === 400 && /tarjeta en USD 299/.test(String(subU.data && subU.data.error || '')), 'H8 subscribe con plan único: rechazado con el motivo del lote (no cae a Esencial ARS)', subU.data);
+    ok(subU.status === 400 && /tarjeta en USD 199/.test(String(subU.data && subU.data.error || '')), 'H8 subscribe con plan único: rechazado con el motivo del lote (no cae a Esencial ARS)', subU.data);
     const subT = await apiH(ckF, 'POST', '/api/billing/subscribe', { plan: 'esencial', country: 'AR', payer_email: 'paywall@example.com', agente: 'posty' });
     ok(subT.status === 400 && /no configurados/i.test(String(subT.data && subT.data.error || '')), 'H9 subscribe con tier: riel MP intacto (gate de config)', subT.data);
 

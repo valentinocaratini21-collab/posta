@@ -223,7 +223,7 @@ const PLANS_AR = {
 
 // ─────────────────────────────────────────────────────────────────────────
 // PLAN ÚNICO (decisión Valentino 2026-11-06): Posty tiene UN SOLO plan:
-// Posty, USD 299/mes, prueba 3 días gratis, sin tarjeta. Los 3 tiers
+// Posty, USD 199/mes, prueba 3 días gratis, sin tarjeta. Los 3 tiers
 // viejos (Esencial/Pro/Total) quedan SOLO como catálogo interno de
 // facturación (usuarios existentes, founder_price congelado, límites de IA)
 // y NUNCA se muestran en la vidriera. La vidriera (landing ES/EN, JSON-LD)
@@ -233,7 +233,7 @@ const PLANS_AR = {
 const PLAN_UNICO = {
   id: 'posty',
   name: 'Posty',
-  price: 299,
+  price: 199,
   currency: 'USD',
   postsPerWeek: 7,
   carouselsPerWeek: 2,
@@ -485,7 +485,7 @@ function getPlan(id, country) {
     const t = getPlans(country).total;
     return { ...t, id: 'free', name: 'Founder', price: 0, tagline: 'Cuenta del fundador' };
   }
-  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty', USD 299) es un plan
+  // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty', USD 199) es un plan
   // real del sistema: los límites de una cuenta que lo contrató son los
   // suyos (los del Total), no los del tier de prueba por default.
   if (id === PLAN_UNICO.id) return { ...PLAN_UNICO };

@@ -53,7 +53,7 @@ ok(/approve each one/i.test(usT), 'US Total detail: comment/message replies with
 ok(/competition|competitor/i.test(P.PLANS_US.pro.detail.join(' ')), 'US Pro detail: competitor breakdown');
 ok(serverJs.includes('...p, price_label'), 'la API /api/billing/plans sigue esparciendo el plan entero (detail viaja solo)');
 // PLAN ÚNICO (2026-11-06): la vidriera sirve UN SOLO plan, Posty USD 199
-ok(P.PLAN_UNICO && P.PLAN_UNICO.id === 'posty' && P.PLAN_UNICO.price === 299 && P.PLAN_UNICO.currency === 'USD', 'PLAN_UNICO: id posty, USD 299');
+ok(P.PLAN_UNICO && P.PLAN_UNICO.id === 'posty' && P.PLAN_UNICO.price === 199 && P.PLAN_UNICO.currency === 'USD', 'PLAN_UNICO: id posty, USD 199');
 ok(P.PLAN_UNICO.detail === P.PLANS_AR.total.detail, 'PLAN_UNICO: detail = el del tier Total (producto completo)');
 ok(P.PLAN_UNICO.ai && P.PLAN_UNICO.ai.chatPerDay === 150 && P.PLAN_UNICO.ai.regensPerDay === 8, 'PLAN_UNICO: límites de IA = los del tier Total (150 chats/día, 8 regens/día)');
 ok(serverJs.includes("req.query.unico === '1'"), 'API: rama ?unico=1 presente');

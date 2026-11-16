@@ -39,7 +39,7 @@ for (const t of TITLES_ES) ok(termES.includes('<h2>' + t + '</h2>'), 'ES: secci�
 ok(termES.includes('Versión 1.0'), 'ES: Versión 1.0');
 ok(termES.includes('9 de noviembre de 2026'), 'ES: fecha 9 de noviembre de 2026');
 ok(termES.includes('Bambooty LLC'), 'ES: Bambooty LLC');
-ok(termES.includes('USD 299'), 'ES: USD 299');
+ok(termES.includes('USD 199'), 'ES: USD 199');
 ok(termES.includes('La prueba dura 3 días'), 'ES: prueba 3 días');
 ok(termES.includes('Silencio = publicación'), 'ES: regla 6.3 Silencio = publicación');
 ok(termES.includes('No se hacen reembolsos parciales por el período en curso'), 'ES: §10.3 como redactada');
@@ -61,7 +61,7 @@ for (const t of TITLES_EN) ok(termEN.includes('<h2>' + t + '</h2>'), 'EN: secci�
 ok(termEN.includes('Version 1.0'), 'EN: Version 1.0');
 ok(termEN.includes('November 9, 2026'), 'EN: fecha November 9, 2026');
 ok(termEN.includes('Bambooty LLC'), 'EN: Bambooty LLC');
-ok(termEN.includes('USD 299'), 'EN: USD 299');
+ok(termEN.includes('USD 199'), 'EN: USD 199');
 ok(termEN.includes('The trial lasts 3 days'), 'EN: trial 3 days');
 ok(termEN.includes('Silence = publication'), 'EN: regla 6.3 Silence = publication');
 ok(termEN.includes('There are no partial refunds for the current period'), 'EN: §10.3 como redactada');
