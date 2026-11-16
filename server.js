@@ -3355,13 +3355,44 @@ function crearPosteoRescateTardio(userId, out, idx) {
     const p = (out && Array.isArray(out.posts)) ? out.posts[idx] : null;
     if (!p || !(p.image || p.video)) return null;
     const isVideo = p.type === 'video' && p.video;
-    const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
-    if (!m) return null;
-    const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
-    const buf = Buffer.from(m[3], 'base64');
-    if (!buf.length || buf.length > 15 * 1024 * 1024) return null;
-    const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-    fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+    let name = null;
+    let mediaType = isVideo ? 'video' : 'image';
+    let carouselPaths = '';
+    // (LOTE PALANCA-CARRUSEL) Espejo de importTrialWeek: la pieza
+    // carrusel rescatada tarde también nace carrusel — se escriben
+    // TODAS las láminas (la ilegible se salta) y el posteo nace
+    // media_type='carousel' (image_path = portada, carousel_paths =
+    // el álbum). Si el álbum válido queda en <2, se cae al camino de
+    // foto única de abajo — nunca un carrusel de una sola foto.
+    if (!isVideo && p.type === 'carousel' && Array.isArray(p.images) && p.images.length >= 2) {
+      const dec = [];
+      for (const s of p.images) {
+        const mm = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(String(s || ''));
+        if (!mm) continue;
+        const b = Buffer.from(mm[3], 'base64');
+        if (!b.length || b.length > 15 * 1024 * 1024) continue;
+        dec.push({ buf: b, ext: mm[2] === 'jpeg' ? 'jpg' : mm[2] });
+      }
+      if (dec.length >= 2) {
+        const names = dec.map((f) => {
+          const nm = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${f.ext}`;
+          fs.writeFileSync(path.join(MEDIA_DIR, nm), f.buf);
+          return nm;
+        });
+        name = names[0];
+        mediaType = 'carousel';
+        carouselPaths = JSON.stringify(names.map((nm) => `/media/${nm}`));
+      }
+    }
+    if (!name) {
+      const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
+      if (!m) return null;
+      const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
+      const buf = Buffer.from(m[3], 'base64');
+      if (!buf.length || buf.length > 15 * 1024 * 1024) return null;
+      name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+      fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+    }
     // (LOTE CONSERJE-FOTO-VIDEO) Espejo de importTrialWeek: la pieza
     // de video rescatada también nace con su póster en cover_path.
     let coverRes = '';
@@ -3385,7 +3416,7 @@ function crearPosteoRescateTardio(userId, out, idx) {
     } catch (e) {}
     const ins = db.prepare(
       'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code, rg_producto, rg_procedencia, carousel_paths, strategy_why, cover_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-    ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, '', String(p.why || '').slice(0, 500), coverRes);
+    ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', mediaType, (trainingWheelsActive(userId) || rgSin) ? 1 : 0, 'trial', clientPhoto, styleCode, rgP, rgProc, carouselPaths, String(p.why || '').slice(0, 500), coverRes);
     const postId = Number(ins.lastInsertRowid);
     try {
       db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo, auto_signal)
@@ -11418,7 +11449,25 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
   if (!Number.isInteger(dia) || dia < 1 || dia > 3) return res.status(400).json({ ok: false, error: 'dia fuera de rango (1..3)' });
   const media = String(body.media || body.image || '');
   const mm = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(media);
-  if (!mm) return res.status(400).json({ ok: false, error: 'media inválida (data URL de imagen o video mp4)' });
+  // (LOTE PALANCA-CARRUSEL) EL SET COMPLETO: campo nuevo `medias`
+  // (array de data URLs de imagen, 2..10 placas) — la pieza del día
+  // nace carrusel con la forma que importTrialWeek ya consume
+  // (type 'carousel' + images[], image = portada). Sin `medias`, la
+  // llamada es la de siempre, byte-idéntica. La validación del set
+  // vive acá, en el mismo punto que la de la media única (antes de
+  // la marca): un set inválido cae 400 igual que una media inválida,
+  // y un set válido sobre clave sin marca cae 409 como siempre.
+  let setMedias = null;
+  if (body.medias != null) {
+    if (!Array.isArray(body.medias) || body.medias.length < 2 || body.medias.length > 10)
+      return res.status(400).json({ ok: false, error: 'set inválido (medias: entre 2 y 10 placas)' });
+    setMedias = [];
+    for (const s of body.medias) {
+      const sm = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(String(s || ''));
+      if (!sm) return res.status(400).json({ ok: false, error: 'media inválida en el set (cada placa: data URL de imagen)' });
+      setMedias.push({ media: String(s), ext: sm[2] === 'jpeg' ? 'jpg' : sm[2], b64: sm[3] });
+    }
+  } else if (!mm) return res.status(400).json({ ok: false, error: 'media inválida (data URL de imagen o video mp4)' });
   try {
     const marca = lineaMano.marcaActiva(db, cacheKey);
     if (!marca) return res.status(409).json({ ok: false, error: 'sin_marca', detalle: 'La prueba no está marcada como línea a mano: la palanca no toca semanas del software ni del gate.' });
@@ -11429,9 +11478,11 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
     if (!Array.isArray(out.posts)) out.posts = [];
     const idx = dia - 1;
     const prev = out.posts[idx] || {};
-    const esVideo = mm[1] === 'video/mp4';
-    const pieza = { ...prev, type: esVideo ? 'video' : 'image', armando: false, mano: { cargada_at: Date.now(), dia } };
-    if (esVideo) { pieza.video = media; delete pieza.image; } else { pieza.image = media; delete pieza.video; }
+    const esVideo = !setMedias && mm[1] === 'video/mp4';
+    const pieza = { ...prev, type: setMedias ? 'carousel' : (esVideo ? 'video' : 'image'), armando: false, mano: { cargada_at: Date.now(), dia } };
+    if (setMedias) { pieza.images = setMedias.map((x) => x.media); pieza.image = setMedias[0].media; delete pieza.video; }
+    else if (esVideo) { pieza.video = media; delete pieza.image; delete pieza.images; }
+    else { pieza.image = media; delete pieza.video; delete pieza.images; }
     if (body.caption != null) pieza.caption = String(body.caption);
     if (body.hashtags != null) pieza.hashtags = String(body.hashtags);
     if (body.headline != null) pieza.headline = String(body.headline);
@@ -11454,13 +11505,32 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
         }
       } else if (yaImportada && postId) {
         try {
-          const buf = Buffer.from(mm[3], 'base64');
-          if (buf.length && buf.length <= 15 * 1024 * 1024) {
-            const ext = esVideo ? 'mp4' : (mm[2] === 'jpeg' ? 'jpg' : mm[2]);
-            const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-            fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
-            db.prepare('UPDATE posts SET image_path = ?, caption = ?, hashtags = ?, media_type = ? WHERE id = ? AND user_id = ?')
-              .run(`/media/${name}`, String(pieza.caption || ''), String(pieza.hashtags || ''), esVideo ? 'video' : 'image', postId, uid);
+          if (setMedias) {
+            // (LOTE PALANCA-CARRUSEL) La recarga del set actualiza el
+            // MISMO posteo como carrusel: todas las láminas a disco,
+            // image_path = portada, carousel_paths = el álbum.
+            const names = [];
+            let setOk = true;
+            for (const x of setMedias) {
+              const buf = Buffer.from(x.b64, 'base64');
+              if (!buf.length || buf.length > 15 * 1024 * 1024) { setOk = false; break; }
+              const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${x.ext}`;
+              fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+              names.push(name);
+            }
+            if (setOk && names.length >= 2) {
+              db.prepare('UPDATE posts SET image_path = ?, caption = ?, hashtags = ?, media_type = ?, carousel_paths = ? WHERE id = ? AND user_id = ?')
+                .run(`/media/${names[0]}`, String(pieza.caption || ''), String(pieza.hashtags || ''), 'carousel', JSON.stringify(names.map((nm) => `/media/${nm}`)), postId, uid);
+            }
+          } else {
+            const buf = Buffer.from(mm[3], 'base64');
+            if (buf.length && buf.length <= 15 * 1024 * 1024) {
+              const ext = esVideo ? 'mp4' : (mm[2] === 'jpeg' ? 'jpg' : mm[2]);
+              const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+              fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+              db.prepare('UPDATE posts SET image_path = ?, caption = ?, hashtags = ?, media_type = ?, carousel_paths = ? WHERE id = ? AND user_id = ?')
+                .run(`/media/${name}`, String(pieza.caption || ''), String(pieza.hashtags || ''), esVideo ? 'video' : 'image', '', postId, uid);
+            }
           }
         } catch (e) {}
       }
@@ -11468,7 +11538,7 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
     const payload = JSON.stringify(out);
     if (payload.length >= 12 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'payload demasiado grande' });
     db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(payload, cacheKey);
-    return res.json({ ok: true, cache_key: cacheKey, dia, idx, post_id: postId || null, user_id: uid || null });
+    return res.json({ ok: true, cache_key: cacheKey, dia, idx, post_id: postId || null, user_id: uid || null, ...(setMedias ? { placas: setMedias.length } : {}) });
   } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 // Hold a nivel usuario (v864, M185-hold): congela la cuenta para el sweep
@@ -45368,7 +45438,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1127';
+const BUILD_ID = '20261105-v1128';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
