@@ -10250,11 +10250,21 @@ app.post('/api/ideas/chat', async (req, res) => {
     // un posteo y nada se aplicó, la prosa del cerebro no sale — nace
     // el trabajo o el recibo honesto (ver pzChatCambioSiFalta). El
     // posteo tocado va a la notificación al dueño (v849).
-    const trabajoCambioNet = pzChatCambioSiFalta({
-      uid, clean, out, anchorId: anchorPostId,
-      anyWork: createdApplied || editApplied || publishApplied || revertApplied || approveApplied || (approveAllApplied !== null) || rejectApplied || duplicateApplied || redoneApplied || trabajoImagen || trabajoCambio || vozPost || (editIssues && editIssues.length > 0),
-      savedReplyId: pzSavedReplyId, proseSnap: pzProseSnap,
-    });
+    // (LOTE VOZ-C1) La red NUNCA puede matar el turno: va envuelta
+    // como su red hermana (pzChatImagenSiFalta) y el ancla se lee del
+    // body (anchor_post_id). Hasta v1111 esta llamada pasaba un
+    // identificador inexistente (anchorPostId) sin try/catch: TODO
+    // turno con respuesta del cerebro moría en el catch externo con
+    // HTTP 500 DESPUÉS de aplicar su trabajo — o sin aplicar nada si
+    // el turno no traía trabajo (batería de voz 15/11, casos 1/3/4/5/6).
+    let trabajoCambioNet = null;
+    try {
+      trabajoCambioNet = pzChatCambioSiFalta({
+        uid, clean, out, anchorId: Number(anchor_post_id || 0),
+        anyWork: createdApplied || editApplied || publishApplied || revertApplied || approveApplied || (approveAllApplied !== null) || rejectApplied || duplicateApplied || redoneApplied || trabajoImagen || trabajoCambio || vozPost || (editIssues && editIssues.length > 0),
+        savedReplyId: pzSavedReplyId, proseSnap: pzProseSnap,
+      });
+    } catch (e) { console.error('[chat-cambio] net:', e.message); }
     if (trabajoCambioNet && trabajoCambioNet.postId) cambioPostIds.push(trabajoCambioNet.postId);
     // (v849) NOTIFICACIÓN AL DUEÑO: el cliente pidió un cambio de posteo
     // (edit, rehacer o volver atrás aplicados en este turno). Una push por
@@ -44483,7 +44493,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1112';
+const BUILD_ID = '20261105-v1113';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
