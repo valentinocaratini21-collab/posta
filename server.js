@@ -4205,8 +4205,35 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   const key = openaiKeyFor(uid);
   if (!key) return { ok: false, reason: 'no_key' };
   try { costs.assertAiOk(uid); } catch (e) { return { ok: false, reason: 'ai_cap' }; }
+  // (LOTE REHACER-CONSERVA-DIA) El día del posteo NO es del rehacer: si el
+  // posteo estaba programado, la pieza rehecha hereda su día y su hora
+  // (regla de Valentino 15/11: «si rehacés un posteo que sale mañana, la
+  // nueva imagen debería salir mañana también — así no quedan días sin
+  // postear»). Se captura ANTES de tocar nada y se restaura en la
+  // escritura final; sin día (borrador), vuelve a borrador como siempre.
+  const diaOriginal = (post && post.status === 'scheduled' && post.scheduled_at) ? String(post.scheduled_at) : null;
+  // (MISMO LOTE · pieza ESTRATEGIA) El rehacer lee la línea del feed antes
+  // de generar: los temas de las dos piezas ya publicadas anteriores de la
+  // cuenta y el tema PROPIO de esta pieza. Sin esto, el regenerado sale
+  // genérico y rompe la estrategia del feed (caso real 15/11, cuenta
+  // propia: la pieza que abría la tira nueva de 3 por rubro volvió como
+  // foto genérica del avatar con un café — «el producto todavía no estudia
+  // la estrategia de cada feed», Valentino). La línea viaja en el topic.
+  let lineaFeed = '';
+  try {
+    const previas = db.prepare(`SELECT titulo, source_topic, caption FROM posts
+      WHERE user_id = ? AND status = 'published' AND id != ?
+      ORDER BY COALESCE(published_at, scheduled_at) DESC LIMIT 2`).all(uid, post.id);
+    const temas = previas.map(p => String(p.titulo || p.source_topic || String(p.caption || '').split('\n')[0] || '').trim().slice(0, 80)).filter(Boolean).reverse();
+    const propio = String(post.titulo || post.source_topic || '').trim().slice(0, 120);
+    if (temas.length || propio) {
+      lineaFeed = 'Línea del feed (la estrategia en curso de esta cuenta — respetala: esta pieza CONTINÚA la secuencia, no la reinicia ni sale genérica): '
+        + (temas.length ? 'el feed viene de: ' + temas.join(' → ') + '. ' : '')
+        + (propio ? 'El tema propio de esta pieza es «' + propio + '»: si el tema dirigido no lo reemplaza expresamente, la pieza nueva sigue siendo de ese tema y de esa línea.' : '');
+    }
+  } catch (e) {}
   const tipo = post.tipo || 'social';
-  const topic = [title, brief].filter(Boolean).join('. ');
+  const topic = [title, brief, lineaFeed].filter(Boolean).join('. ');
   // DEDUP-EXACTA (Juli, 2026-10-24): el reemplazo 1-a-1 genera contra
   // los demás captions de SU semana (él mismo excluido: su texto
   // anterior no cuenta como previo).
@@ -4263,7 +4290,10 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   // real: el tema dirigido se compara con el fundamento; sin calce,
   // queda en revisión (nunca se programa en silencio). needs_review
   // previo NO se baja acá: el regenerado vuelve a borrador y el
-  // cliente lo re-aprueba por el camino normal.
+  // cliente lo re-aprueba por el camino normal. (LOTE
+  // REHACER-CONSERVA-DIA: «volver a borrador» ya no incluye perder el
+  // día — si el posteo estaba programado, la escritura de abajo restaura
+  // su status y su scheduled_at: rehacer no mueve el día.)
   let rgP2 = ''; let rgProc2 = ''; let rgSin2 = 0;
   try {
     const dgP3 = clientDigest.getDigest(db, uid);
@@ -4274,11 +4304,12 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
     }
   } catch (e) {}
   db.prepare(`UPDATE posts SET image_path = ?, prev_image_path = ?, caption = ?, hashtags = ?,
-      status = 'draft', scheduled_at = NULL, source_topic = ?, source_angle = ?, strategy_why = ?,
+      status = ?, scheduled_at = ?, source_topic = ?, source_angle = ?, strategy_why = ?,
       style_code = ?, style_reason = ?, intent = ?, product_ref = ?, hook_id = ?, image_prompt = ?, error = '',
       rg_producto = ?, rg_procedencia = ?
     WHERE id = ?`)
     .run(imagePath, post.image_path || '', caption, hashtags,
+      diaOriginal ? 'scheduled' : 'draft', diaOriginal,
       String(title || '').slice(0, 200), 'regen:mapa-sitio', String(brief || '').slice(0, 500),
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath), rgP2, rgProc2, post.id);
@@ -4289,7 +4320,7 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   if (genOut.qaGate && genOut.qaGate.outcome === 'bandeja') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: QA gate agotado — bandeja (needs_review)`); } catch (e) {} }
   stampPostDigest(post.id, uid, content && content._anchored === false); // (v229) el reemplazo hereda el fundamento vigente
   try { track(uid, 'admin_regen_post', String(post.id)); } catch (e) {}
-  return { ok: true, post_id: post.id, headline, textMode: mode };
+  return { ok: true, post_id: post.id, headline, textMode: mode, dia_conservado: diaOriginal, linea_feed: !!lineaFeed };
 }
 
 // (v236) FRESCURA al leer: las pending vencidas expiran en el acto y
@@ -10975,8 +11006,9 @@ app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, 
 // regenera UN borrador con tema dirigido (titular + brief ancla) por el
 // pipeline normal, en el mismo id/semana (ver regenDirectedDraft). Guardas:
 // publicado jamás se regenera (409); otro estado que no sea borrador o
-// programado también 409; un programado se desprograma primero y la
-// respuesta lo declara (unscheduled: true). Reemplazo 1-a-1: no consume
+// programado también 409; un programado CONSERVA su día y su hora
+// (LOTE REHACER-CONSERVA-DIA) y la respuesta lo declara
+// (dia_conservado). Reemplazo 1-a-1: no consume
 // cupo neto. Pensada para operaciones puntuales (ej. anclar los borradores
 // de la cuenta propia al mapa canónico del sitio).
 // 👎 NO ME GUSTA → 3 OPCIONES (POSTY-DISLIKE, aprobado 30/10): un toque
@@ -11016,19 +11048,20 @@ app.post('/api/admin/regen-post', requireAdminToken, express.json(), async (req,
   if (!post) return res.status(404).json({ ok: false, error: 'posteo no encontrado' });
   if (post.status === 'published') return res.status(409).json({ ok: false, error: 'posteo publicado: no se regenera' });
   if (post.status !== 'draft' && post.status !== 'scheduled') return res.status(409).json({ ok: false, error: 'estado no regenerable: ' + post.status });
-  let unscheduled = false;
-  if (post.status === 'scheduled') {
-    db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL WHERE id = ?`).run(postId);
-    post.status = 'draft'; post.scheduled_at = null; unscheduled = true;
-  }
+  // (LOTE REHACER-CONSERVA-DIA) Ya no se desprograma antes de regenerar:
+  // regenDirectedDraft conserva el día y la hora del posteo programado
+  // (la pieza rehecha hereda el día del original). unscheduled queda en
+  // false por compatibilidad de la respuesta.
+  const unscheduled = false;
+  const diaConservado = post.status === 'scheduled' ? (post.scheduled_at || null) : null;
   try {
     const r = await regenDirectedDraft(post.user_id, post, { title, brief });
     if (!r.ok) {
       if (r.reason === 'ai_cap') return res.status(429).json({ ok: false, error: 'tope de IA alcanzado (assertAiOk)' });
       return res.status(502).json({ ok: false, error: 'no se pudo regenerar: ' + r.reason });
     }
-    console.log(`[admin] regen-post ${postId} (usuario ${post.user_id}) → "${title}"${unscheduled ? ' [estaba programado: desprogramado]' : ''}`);
-    res.json({ ok: true, post_id: post.id, user_id: post.user_id, status: 'draft', week_key: post.week_key, unscheduled, title, headline: r.headline || null, text_mode: r.textMode || 'text' });
+    console.log(`[admin] regen-post ${postId} (usuario ${post.user_id}) → "${title}"${diaConservado ? ' [día conservado: ' + diaConservado + ']' : ''}`);
+    res.json({ ok: true, post_id: post.id, user_id: post.user_id, status: diaConservado ? 'scheduled' : 'draft', scheduled_at: diaConservado, week_key: post.week_key, unscheduled, dia_conservado: diaConservado, title, headline: r.headline || null, text_mode: r.textMode || 'text' });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 // (v884) Captions APROBADOS por Valentino 12:19 («Claro, así sí») para la
@@ -44682,7 +44715,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1114';
+const BUILD_ID = '20261105-v1115';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
