@@ -26678,7 +26678,14 @@ app.get('/api/ig/unified/callback', async (req, res) => {
   try {
     const uid = req.session.userId;
     const c = unifiedCfgFor(uid);
-    const suat = await metaAds.exchangeUnifiedCode({ appId: c.appId, appSecret: c.appSecret, code });
+    // (LOTE ADS-CONEXION-PERSISTE) El canje reusa el redirect_uri que
+    // buildUnifiedAuth persistió en la sesión al componer el diálogo
+    // (igAdsRedirect y el state viven en la misma sesión y se validan
+    // juntos arriba: si el state coincide, el redirect guardado es el
+    // del diálogo, byte a byte, venga la vuelta por el host que
+    // venga). Sin él Meta rechazaba el canje y la conexión no se
+    // guardaba nunca.
+    const suat = await metaAds.exchangeUnifiedCode({ appId: c.appId, appSecret: c.appSecret, code, redirectUri: req.session.igAdsRedirect });
     const assets = await metaAds.fetchClientAssets(suat);
     const s = getSettings(uid);
     // La Página capturada: la del IG conectado; si compartió una sola, esa.
@@ -45541,7 +45548,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1136';
+const BUILD_ID = '20261105-v1137';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -249,9 +249,20 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
 // cliente). Nada de esto usa el token del system user de Posty.
 
 // Canje del code del diálogo (config_id) por el SUAT.
-async function exchangeUnifiedCode({ appId, appSecret, code }) {
-  if (!appId || !appSecret || !code) throw new Error('Faltan datos para conectar tu cuenta publicitaria');
-  const q = new URLSearchParams({ client_id: String(appId), client_secret: String(appSecret), code: String(code) });
+// (LOTE ADS-CONEXION-PERSISTE) El canje manda el redirect_uri
+// BYTE-IDÉNTICO al del diálogo: Meta lo exige y sin él (o con otro)
+// rechaza con «Error validating verification code. Please make sure
+// your redirect_uri is identical to the one you used in the OAuth
+// dialog request» — el canje moría ahí, la captura de activos nunca
+// corría y la conexión jamás se guardaba (caso Valentino, 16/11: el
+// diálogo FLB completaba del lado de Meta y la app volvía a mostrar
+// «Conectar mi cuenta publicitaria»). El valor lo persiste
+// buildUnifiedAuth en la sesión al componer el diálogo y el callback
+// lo pasa textual, igual que el flujo de Instagram pasa
+// req.session.igRedirect a su canje.
+async function exchangeUnifiedCode({ appId, appSecret, code, redirectUri }) {
+  if (!appId || !appSecret || !code || !redirectUri) throw new Error('Faltan datos para conectar tu cuenta publicitaria');
+  const q = new URLSearchParams({ client_id: String(appId), client_secret: String(appSecret), code: String(code), redirect_uri: String(redirectUri) });
   let res;
   try {
     res = await fetch(`${GRAPH}/oauth/access_token?${q.toString()}`, { signal: AbortSignal.timeout(25000) });
