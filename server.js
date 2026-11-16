@@ -1668,7 +1668,20 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       try {
         if (!_trialDigestBuilt.reconciliacion) {
           const recLocal = trialReconciliacionEfectiva({ feed, webData, category, catalogo: (deep && deep.catalog && Array.isArray(deep.catalog.items)) ? deep.catalog.items.length : 0 });
-          if (recLocal) _trialDigestBuilt.reconciliacion = recLocal;
+          if (recLocal) {
+            // (LOTE SUPERFICIE-INVITADO) La recomputación usa la
+            // categoría confirmada como puente (la reconciliación sale
+            // con fuente 'prefill') y perdía la resolución que la
+            // pasada de la pregunta sí estampaba: si el dueño confirmó
+            // el rubro en la puerta (fuente pregunta/form), la
+            // reconciliación recomputada nace RESUELTA por su
+            // confirmación — es la misma contradicción que él ya
+            // decidió. Sin confirmación, queda viva como siempre.
+            const fuenteRec = (rubro && rubro.rubroId && String(rubro.rubroId.fuente || '')) || '';
+            _trialDigestBuilt.reconciliacion = (fuenteRec === 'pregunta' || fuenteRec === 'form')
+              ? { ...recLocal, resuelta_por: 'confirmacion' }
+              : recLocal;
+          }
         }
         const recQ = _trialDigestBuilt.reconciliacion;
         if (recQ && recQ.contradiccion) {
@@ -26070,13 +26083,18 @@ function homeProfileRefreshOnce(uid, handle) {
 function homeProfileKit(uid, prof) {
   let kit = null;
   let digest = null;
+  // (LOTE SUPERFICIE-INVITADO) El kit de nacimiento habla el idioma de
+  // la CUENTA (users.lang, el de su entrada): venía fijo en español y
+  // un invitado que entró por /en veía su perfil en español.
+  let kitLang = 'es';
+  try { const uL = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (uL && uL.lang) kitLang = String(uL.lang); } catch (e) {}
   try {
     digest = clientDigest.getDigest(db, uid);
     kit = analysisEngine.profileKit({
       business: { name: (prof && prof.business_name) || '', category: (prof && prof.category) || '', ig_username: (prof && prof.ig_username) || '' },
       digest,
       reviews: null,
-      lang: 'es',
+      lang: kitLang,
     });
   } catch (e) { kit = null; }
   return {
@@ -40035,6 +40053,18 @@ function trialFundamentoContradice(payload) {
   try {
     if (!payload || typeof payload !== 'object') return null;
     const dg = payload.digest || {};
+    // (LOTE SUPERFICIE-INVITADO) LA PALABRA DEL DUEÑO EN LA PUERTA ES
+    // LA RESOLUCIÓN DE LA DUDA DE IDENTIDAD: si el rubro del digest
+    // nació de su confirmación (fuente pregunta/form), el fundamento
+    // no contradice — aunque su reconciliación haya quedado guardada
+    // sin la marca resuelta_por (la recomputación local de
+    // buildTrialDigest la perdía y la importación moría para siempre:
+    // corrida ×10 #1, @sottosottoatl — el dueño respondió la duda, la
+    // semana se armó y el guarda la rechazaba en cada importación).
+    // Sin confirmación (deteccion/prefill/skip), el DESTRABE queda
+    // intacto: la contradicción frena igual que siempre.
+    const fuenteDg = String((dg.rubro_id && dg.rubro_id.fuente) || '');
+    if (fuenteDg === 'pregunta' || fuenteDg === 'form') return null;
     const rec = dg.reconciliacion || null;
     if (rec && rec.contradiccion && !rec.resuelta_por) return 'reconciliacion-' + (rec.motivo || 'contradiccion');
     const cat = String(payload.category || '');
@@ -45548,7 +45578,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1138';
+const BUILD_ID = '20261105-v1139';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

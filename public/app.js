@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1136';
+const PZ_BUILD = '20261105-v1139';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -13431,14 +13431,29 @@ function homeWeekHTML(posts, quota, generating, noDna, trialArming) {
     // porque no hay nada en camino. Tarjeta honesta con camino a Ajustes.
     // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
     // no corra en este caso.
+    // (LOTE SUPERFICIE-INVITADO) Invitado que YA entró con su @: la
+    // tarjeta «decime tu Instagram» no existe para él — su semana se
+    // está armando (o su fundamento se está sembrando) y la tarjeta es
+    // la de armado, en el idioma de su entrada. En la corrida ×10 #1
+    // el invitado veía «decime tu Instagram» en su propio Inicio
+    // porque el no_dna se juzgaba antes de mirar su identidad.
+    const enHw = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const guestIgHw = (noDna && pzIsGuest() && typeof pzGuestIg === 'function') ? String(pzGuestIg() || '') : '';
+    if (noDna && guestIgHw) return `<div class="hs-generating" id="hsGenerating">
+    <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
+    <b>${enHw ? 'Posty is finishing your week' : 'Posty está terminando de armar tu semana'} ${pzIc('sparkle', 16)}</b>
+    <p>${enHw ? 'Designs, captions and hashtags in your business style.<br>They appear right here in a few seconds' : 'Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá'} ${pzIc('arrowDown', 14)}</p>
+    <div class="hs-gen-dots"><i></i><i></i><i></i></div>
+  </div>`;
     // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Invitado sin @: el camino es el
     // chat, no Ajustes ni un formulario — Posty pregunta el @ ahí y arma
-    // la semana desde lo que publican.
+    // la semana desde lo que publican. (SUPERFICIE-INVITADO: bilingüe,
+    // el idioma de la entrada; en español, byte-idéntica.)
     if (noDna && pzIsGuest()) return `<div class="hs-nodna" id="hsNoDna">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>Para armar tus posteos decime tu Instagram ${pzIc('arrowDown', 13)}</b>
-    <p>Posty arma tu semana con lo que ya publicás</p>
-    <a class="btn btn-primary btn-block" href="#/app/chat" style="margin-top:4px">Decirle mi @ a Posty</a>
+    <b>${enHw ? 'Tell me your Instagram so I can build your posts' : 'Para armar tus posteos decime tu Instagram'} ${pzIc('arrowDown', 13)}</b>
+    <p>${enHw ? 'Posty builds your week from what you already post' : 'Posty arma tu semana con lo que ya publicás'}</p>
+    <a class="btn btn-primary btn-block" href="#/app/chat" style="margin-top:4px">${enHw ? 'Tell Posty my @' : 'Decirle mi @ a Posty'}</a>
   </div>`;
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
@@ -20113,29 +20128,35 @@ function maybeShowIgPopup(tab) {
 }
 function igPopupShow(wowSub, wowEn) {
   try {
+    // (LOTE SUPERFICIE-INVITADO) El modal habla el idioma de la
+    // entrada SIEMPRE: la rama wow ya lo traía (wowEn) pero la rama
+    // genérica venía entera en español y un invitado que entró por
+    // /en/prueba la veía en español (corrida ×10 #1). Sin wow, el
+    // idioma es el de la cuenta (ME.lang). En español, byte-idéntico.
+    const enM = wowSub ? !!wowEn : (typeof ME !== 'undefined' && ME && ME.lang === 'en');
     const ov = document.createElement('div');
     ov.id = 'igFirstOverlay';
     ov.className = 'pz-exp-overlay';
     ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <div style="font-size:46px;line-height:1">${pzIc('camera', 46)}</div>
-      <h2>${wowSub ? (wowEn ? 'Connect your Instagram' : 'Conectá tu Instagram') : 'Conectá tu Instagram'}</h2>
-      <p class="pz-exp-sub">${wowSub || 'Así Posty deja tu semana lista para publicar.'}</p>
-      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">${wowSub ? (wowEn ? 'Connect Instagram' : 'Conectar Instagram') : 'Conectar Instagram'}</button>
+      <h2>${enM ? 'Connect your Instagram' : 'Conectá tu Instagram'}</h2>
+      <p class="pz-exp-sub">${wowSub || (enM ? 'So Posty can get your week ready to publish.' : 'Así Posty deja tu semana lista para publicar.')}</p>
+      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">${enM ? 'Connect Instagram' : 'Conectar Instagram'}</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
-      <div class="hint" style="margin-top:10px">${pzIc('lock', 13)} Nunca vemos ni guardamos tu contraseña.</div>
-      <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">${pzIc('idea', 14)} Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.</div>
+      <div class="hint" style="margin-top:10px">${pzIc('lock', 13)} ${enM ? 'We never see or store your password.' : 'Nunca vemos ni guardamos tu contraseña.'}</div>
+      <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">${pzIc('idea', 14)} ${enM ? 'It looks like you are in private browsing: Instagram usually asks for an extra verification code there. In a regular window it takes 2 taps.' : 'Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.'}</div>
       <details style="margin:12px 0 4px;text-align:left">
-        <summary style="font-weight:700;cursor:pointer;font-size:12.5px;color:var(--mut)">¿Cómo hago mi cuenta profesional?</summary>
+        <summary style="font-weight:700;cursor:pointer;font-size:12.5px;color:var(--mut)">${enM ? 'How do I make my account professional?' : '¿Cómo hago mi cuenta profesional?'}</summary>
         <ol style="margin:10px 0 0 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
-          <li>Abrí Instagram y andá a tu perfil</li>
-          <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
-          <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
-          <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
+          <li>${enM ? 'Open Instagram and go to your profile' : 'Abrí Instagram y andá a tu perfil'}</li>
+          <li>${enM ? 'Tap <b>☰</b> → <b>Settings and privacy</b>' : 'Tocá <b>☰</b> → <b>Configuración y privacidad</b>'}</li>
+          <li>${enM ? '<b>Account type and tools</b> → <b>Switch to professional account</b>' : '<b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b>'}</li>
+          <li>${enM ? 'Choose <b>Creator</b> or <b>Business</b> and finish the steps' : 'Elegí <b>Creator</b> o <b>Business</b> y completá los pasos'}</li>
         </ol>
-        <div class="hint" style="margin-top:6px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
+        <div class="hint" style="margin-top:6px">${enM ? 'Instagram does not let any other app make this change: it happens inside Instagram.' : 'Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.'}</div>
       </details>
-      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">${wowSub ? (wowEn ? "I'll do it later" : 'Lo hago después') : 'Lo hago después'} ${pzIc('arrowRight', 13)}</a></div>
+      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">${enM ? "I'll do it later" : 'Lo hago después'} ${pzIc('arrowRight', 13)}</a></div>
     </div>`;
     document.body.appendChild(ov);
     try {
