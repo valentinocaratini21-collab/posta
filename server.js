@@ -27,6 +27,7 @@ const morningPostPush = require('./morning-post-push');
 // abren casos, casos con cierre solo con confirmación del cliente, y
 // acciones del equipo con registro. La consola NUNCA publica.
 const supportCases = require('./support-cases');
+const lineaMano = require('./linea-mano'); // (LOTE VIGILANTE-ENTRADAS) marca de línea a mano de las pruebas self-serve + su barrido
 const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
 const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + candados C1–C5
@@ -10811,6 +10812,7 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), async (
     return res.json({ ok: true, mode, user_id: uid, ig: igKey, domain: domainKey, locks_deleted: locksDeleted, trial_cache_deleted: cacheDeleted, digest_deleted: digestDeleted, dna_items_before: dnaBefore, dna_items_after: dnaAfter });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
+
 // (v363) REFRESCO DE SNAPSHOT DE PERFIL — remediación admin del
 // encabezado de la home (/api/home/profile). Caso cuenta 12
 // (2026-10-24): profiles.ig_username quedó en el handle viejo
@@ -11336,6 +11338,13 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
       memoriaInvalidada = true;
     } catch (e) {}
     console.log(`[admin] trial-reset @${igKey || '—'} (${domainKey || '—'}): used=${usedDeleted} locks=${locksDeleted} posts=${postsDeleted} cache=${cacheDeleted} chat=${chatDeleted} meta=${chatMetaDeleted} guest=${guestId || '—'}`);
+    // (LOTE VIGILANTE-ENTRADAS) El reseteo confirmado deja su exclusión
+    // durable (trial_reset_log): la primera generación posterior de la
+    // clave NO se marca como línea a mano — es la forma exacta de una
+    // corrida del gate, que siempre arranca reseteando sus claves — y
+    // cualquier marca activa de la clave se levanta (el operador retomó
+    // la clave). Solo en el camino confirmado: el dry-run no escribe.
+    try { lineaMano.registrarReseteo(db, igKey, domainKey, Date.now()); } catch (e) {}
     return res.json({
       ...base,
       trial_used: usedDeleted, trial_locks: locksDeleted, posts: postsDeleted,
@@ -11343,6 +11352,83 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
       fundamento_borrado: fundamentoBorrado, memoria_invalidada: memoriaInvalidada,
     });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
+
+// (LOTE VIGILANTE-ENTRADAS) LA PALANCA DE CARGA DE LA LÍNEA A MANO.
+// Verificado contra el código: las palancas existentes (set-image /
+// edit-caption) actúan sobre filas de `posts`, y la semana de un
+// invitado vive en el payload de trial_cache — antes de importar no
+// hay filas que tocar. Por eso esta palanca chica: carga UNA pieza
+// hecha a mano en la semana de un invitado, en SU día (dia 1..3 →
+// posts[dia-1]), solo sobre una prueba MARCADA (sin marca, 409: la
+// palanca jamás toca semanas del software ni del gate). Si el invitado
+// todavía no importó, la pieza queda en el payload y la importación
+// normal la levanta; si ya importó, la pieza nace como posteo por el
+// mismo camino del rescate tardío (crearPosteoRescateTardio +
+// scheduleAllDrafts) y su post_id queda guardado en la pieza; una
+// re-carga actualiza ese mismo posteo.
+app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit: '16mb' }), (req, res) => {
+  const body = req.body || {};
+  const igKey = trialLock ? trialLock.normalizeIg(body.ig || '') : String(body.ig || '').trim().replace(/^@/, '').toLowerCase();
+  const domainKey = trialLock ? trialLock.normalizeDomain(body.domain || '') : '';
+  const cacheKey = lineaMano.claveCache(igKey, domainKey);
+  const dia = parseInt(body.dia, 10);
+  if (!cacheKey) return res.status(400).json({ ok: false, error: 'falta ig o domain' });
+  if (!Number.isInteger(dia) || dia < 1 || dia > 3) return res.status(400).json({ ok: false, error: 'dia fuera de rango (1..3)' });
+  const media = String(body.media || body.image || '');
+  const mm = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(media);
+  if (!mm) return res.status(400).json({ ok: false, error: 'media inválida (data URL de imagen o video mp4)' });
+  try {
+    const marca = lineaMano.marcaActiva(db, cacheKey);
+    if (!marca) return res.status(409).json({ ok: false, error: 'sin_marca', detalle: 'La prueba no está marcada como línea a mano: la palanca no toca semanas del software ni del gate.' });
+    const row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey);
+    if (!row || !row.payload) return res.status(404).json({ ok: false, error: 'sin_semana' });
+    let out;
+    try { out = JSON.parse(row.payload); } catch (e) { return res.status(500).json({ ok: false, error: 'payload ilegible' }); }
+    if (!Array.isArray(out.posts)) out.posts = [];
+    const idx = dia - 1;
+    const prev = out.posts[idx] || {};
+    const esVideo = mm[1] === 'video/mp4';
+    const pieza = { ...prev, type: esVideo ? 'video' : 'image', armando: false, mano: { cargada_at: Date.now(), dia } };
+    if (esVideo) { pieza.video = media; delete pieza.image; } else { pieza.image = media; delete pieza.video; }
+    if (body.caption != null) pieza.caption = String(body.caption);
+    if (body.hashtags != null) pieza.hashtags = String(body.hashtags);
+    if (body.headline != null) pieza.headline = String(body.headline);
+    if (prev.mano && prev.mano.post_id) pieza.mano.post_id = prev.mano.post_id;
+    out.posts[idx] = pieza;
+    let uid = Number(marca.user_id) || 0;
+    if (!uid && guestTrial && guestTrial.findGuestByIdentity) {
+      try { const g = guestTrial.findGuestByIdentity(db, igKey, domainKey); if (g && g.id) uid = Number(g.id) || 0; } catch (e) {}
+    }
+    let postId = pieza.mano.post_id || null;
+    if (uid) {
+      let yaImportada = false;
+      try { yaImportada = !!db.prepare('SELECT 1 FROM posts WHERE user_id = ? LIMIT 1').get(uid); } catch (e) {}
+      if (yaImportada && !postId) {
+        postId = crearPosteoRescateTardio(uid, out, idx);
+        if (postId) {
+          pieza.mano.post_id = postId;
+          out.posts[idx] = pieza;
+          try { scheduleAllDrafts(uid); } catch (e) {}
+        }
+      } else if (yaImportada && postId) {
+        try {
+          const buf = Buffer.from(mm[3], 'base64');
+          if (buf.length && buf.length <= 15 * 1024 * 1024) {
+            const ext = esVideo ? 'mp4' : (mm[2] === 'jpeg' ? 'jpg' : mm[2]);
+            const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+            fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+            db.prepare('UPDATE posts SET image_path = ?, caption = ?, hashtags = ?, media_type = ? WHERE id = ? AND user_id = ?')
+              .run(`/media/${name}`, String(pieza.caption || ''), String(pieza.hashtags || ''), esVideo ? 'video' : 'image', postId, uid);
+          }
+        } catch (e) {}
+      }
+    }
+    const payload = JSON.stringify(out);
+    if (payload.length >= 12 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'payload demasiado grande' });
+    db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(payload, cacheKey);
+    return res.json({ ok: true, cache_key: cacheKey, dia, idx, post_id: postId || null, user_id: uid || null });
+  } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 // Hold a nivel usuario (v864, M185-hold): congela la cuenta para el sweep
 // semanal y los avisos de semana lista, aunque el trial siga vigente.
@@ -29923,6 +30009,13 @@ function avisoRescateHumano(cacheKey, motivo, desbloqueo) {
 }
 async function scheduleWeekRescue(o) {
   try {
+    // (LOTE VIGILANTE-ENTRADAS) LA MARCA DE LÍNEA A MANO: sobre una
+    // prueba marcada, la cadena del software NO entrega sus versiones
+    // de las piezas — las carga bamboo a mano por la palanca admin. El
+    // freno vive en la cabeza de la cadena, así cubre a TODOS sus
+    // llamadores (las rutas al generar, el barrido de re-apertura y los
+    // reintentos). El fundamento no pasa por acá: sigue corriendo igual.
+    try { if (o && o.cacheKey && lineaMano.marcaActiva(db, o.cacheKey)) return { applied: false, reason: 'linea-mano' }; } catch (e) {}
     if (!o || !o.cacheKey || !Array.isArray(o.pieces) || !o.pieces.length) return { applied: false, reason: 'sin-datos' };
     // (LOTE SEMANA-NUNCA-INCOMPLETA) Token de ESTA cadena de pasadas:
     // la invocación fresca (sin intento, desde las rutas) abre cadena
@@ -30519,6 +30612,24 @@ async function rearmarSemanaPruebaDeUsuario(uid) {
 // logo no se re-intenta hasta que el refresco encuentre el archivo.
 // Nunca tira.
 const RESCATE_SWEEP_MAX_SEMANAS = 10;
+// (LOTE VIGILANTE-ENTRADAS) EL BARRIDO DEL VIGILANTE: el despertar de
+// la línea a mano y su seguimiento por prueba. Corre con el mismo
+// patrón */5 del rescate (scheduler.js): ata el invitado de cada marca
+// activa, levanta la marca al convertir o vencer, y abre los casos del
+// Conserje (entrada = producir el día 1; día 2 y día 3 = producir y
+// cargar esa pieza en su día, solo si todavía no fue cargada a mano).
+// La lógica vive en linea-mano.js; acá se inyectan las dependencias de
+// la casa (invitado, reloj de prueba, casos). Nunca tira.
+function lineaManoSweep() {
+  try {
+    return lineaMano.barrido(db, {
+      findGuest: (d, ig, domain) => (guestTrial && guestTrial.findGuestByIdentity) ? guestTrial.findGuestByIdentity(d, ig, domain) : null,
+      getUser: (d, id) => { try { return d.prepare('SELECT * FROM users WHERE id = ?').get(id) || null; } catch (e) { return null; } },
+      guestEnd: (u, now) => (guestTrial && guestTrial.guestTrialEnd) ? guestTrial.guestTrialEnd(u, now) : 0,
+      openCase: (d, fields) => supportCases.openCase(d, fields),
+    }, Date.now());
+  } catch (e) { return null; }
+}
 async function rescateSemanaSweep() {
   try {
     const rows = db.prepare('SELECT ig, payload, created_at FROM trial_cache WHERE created_at >= ? ORDER BY created_at DESC').all(Date.now() - 72 * 3600 * 1000);
@@ -39648,6 +39759,53 @@ app.post('/api/trial/pregenerate', express.json({ limit: '16kb' }), async (req, 
   });
   return res.json({ ok: true, started: true });
 });
+// (LOTE VIGILANTE-ENTRADAS) Las piezas-esqueleto de una semana marcada
+// como línea a mano: el spec y los captions que el software ya
+// determinó (su lectura es la base sobre la que bamboo trabaja) con
+// cada pieza en ARMADO HONESTO — sin render, sin generación de
+// imágenes, sin video. Los captions se arman igual que en la ruta
+// stream (mismo resolveTrialCaption) y pasan por la misma puerta de
+// precios. La pieza real la carga bamboo en su día por la palanca
+// admin /api/admin/trial/pieza-mano.
+function piezasEsqueletoMano(spec, ctx) {
+  const specPosts = (spec && spec.specPosts) || [];
+  const topics = (spec && spec.topics) || [];
+  const cat = demo.CATEGORIES.includes(ctx.category) ? ctx.category : 'otro';
+  const prevCaps = [];
+  const made = topics.map((t, i) => {
+    const r = demo.resolveTrialCaption(topics, cat, {
+      business: ctx.business, tone: ctx.tone, country: ctx.country, idx: i, goalLine: spec.goalLine, lang: ctx.lang, prevCaptions: prevCaps,
+      voiceLine: demo.trialVoiceEcho(spec.voiceMarkers, i, ctx.lang),
+      subcat: spec.subcat || '',
+    });
+    const cleanPiece = !!(specPosts[i] && specPosts[i].text_mode === 'clean');
+    const baseCaption = demo.appendOfferTerms(r.caption, topics[r.topicIndex] || t, ctx.lang);
+    const finalCaption = cleanPiece ? demo.closeTrialCaption(baseCaption, topics[r.topicIndex] || t, ctx.tone, ctx.lang) : baseCaption;
+    prevCaps.push(finalCaption);
+    return { caption: finalCaption, hashtags: r.hashtags };
+  });
+  try {
+    if (ctx.digest) {
+      made.forEach((m, i) => {
+        const anchorI = (topics[i] && topics[i].digest_anchor) || '';
+        const sourcedI = clientDigest.sourcedPricesOf(ctx.digest, anchorI);
+        const stripI = clientDigest.stripPriceSentences(m.caption, sourcedI, (v) => clientDigest.priceQualifierOf(ctx.digest, anchorI, v));
+        if (stripI.quitados.length) m.caption = stripI.text;
+      });
+    }
+  } catch (e) { /* la puerta jamás frena la prueba */ }
+  return specPosts.map((sp, i) => ({
+    type: 'image',
+    armando: true,
+    caption: (made[i] && made[i].caption) || '',
+    hashtags: (made[i] && made[i].hashtags) || '',
+    headline: (sp && sp.headline) || '',
+    style: sp && sp.style,
+    style_name: sp && sp.style_name,
+    text_mode: (sp && sp.text_mode) || 'text',
+  }));
+}
+
 async function trialGenerateHandler(req, res) {
   let fields, file;
   try {
@@ -40219,6 +40377,75 @@ async function trialGenerateHandler(req, res) {
     // (LOTE L6) Medallón del perfil: la descarga arrancó en segundo plano
     // arriba; a esta altura ya está (o no llega: póster tipográfico).
     profilePicPath = await raceMs(profilePicPathP, 2000);
+    // (LOTE VIGILANTE-ENTRADAS) LA MARCA DE LÍNEA A MANO (ruta sync):
+    // el fundamento ya corrió entero hasta acá (lectura del Instagram,
+    // digest, puertas de producto y de pregunta, idioma) — eso NO se
+    // toca: es la base de trabajo de bamboo. Lo que no arranca es la
+    // fase de medios del software: la semana nace con sus piezas en
+    // armado honesto (spec + captions, sin render ni generación) y
+    // cada pieza la carga bamboo en su día por la palanca admin. La
+    // marca nace en este mismo punto; lineaMano.nace aplica las
+    // exclusiones de la frontera con el gate (test-mode, allowlist y
+    // el reseteo del operador que precede a toda corrida del gate).
+    const _lmDomS = (trialLock && fields && fields.web) ? trialLock.normalizeDomain(fields.web) : '';
+    const _lmNaceS = lineaMano.nace(db, { ig: igKey, domain: _lmDomS, testMode: !!testMode, allowlisted: !!(trialLock && trialLock.isAllowlisted(db, igKey, _lmDomS)) });
+    if (_lmNaceS.marcada) {
+      const specM = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText: webData ? (webData.description || '') : '', profilePicPath, extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
+      const postsM = piezasEsqueletoMano(specM, { business, tone, country: effCountry, category: effCategory, lang: contentLang, digest: trialDigest });
+      let screenshotM = null;
+      if (photoPath) { try { const extM = photoPath.split('.').pop().toLowerCase(); screenshotM = `data:${TRIAL_IMG_MIME[extM] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64'); } catch (e) {} }
+      const outM = {
+        ok: true,
+        engine: demo.DEMO_ENGINE_V,
+        lang,
+        content_lang: contentLang,
+        business, ig, category: effCategory,
+        subcat: rubroRes.subcat || '',
+        rubro_check: rubroRes.rubroCheck,
+        accent, btn, color_source: colorSource,
+        feed_register: specM.feedRegister || null,
+        feedMap: (trialDigest && trialDigest.feedMap) || null,
+        feed_recents: trialFeedRecentsFromEmbed(_embedPostsVoz),
+        web_info: trialWebInfo(webData, trialWebPhotosUsed(specM.photos)),
+        digest: trialDigest,
+        foto_gate: trialGateInfo ? { ...(specM.foto_gate || {}), ...trialGateInfo } : (specM.foto_gate || null),
+        primer_posteo: (specM && specM.primer_posteo) || null,
+        juicio_final: null,
+        continuidad_serie: null,
+        rescate_semana: (specM && specM.rescate_semana) || [],
+        onboarding: ocAns,
+        espejo: fundamentoLiteral.espejoFromFields(fields),
+        ig_pic: igPic, ig_name: igName,
+        analysis: null,
+        competition_line: null,
+        ideas: ((await raceMs(ideasPromise, 5000)) || []).slice(0, 6),
+        posts: postsM,
+        formato_diag: specM.formato_diag || null,
+        design: specM,
+        week: buildTrialWeek(postsM.length, lang),
+        screenshot: screenshotM,
+        spots_left: spotsLeft(),
+        video_ok: false,
+        render_fallback: false,
+        linea_mano: true,
+      };
+      if (!testMode && igKey) {
+        try {
+          const payloadM = JSON.stringify(outM);
+          if (payloadM.length < 12 * 1024 * 1024) {
+            db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+              ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`).run(igKey, payloadM, Date.now());
+          }
+        } catch (e) { console.error('[posta] no se pudo cachear la prueba a mano:', e.message); }
+      }
+      if (!testMode) trialCacheWriteWeb(fields.web, outM, testMode);
+      if (!testMode) trialLockRecordFor(fields, webData, business, lang, outM);
+      trialFormatoDiagLog(ig, specM.formato_diag);
+      track(null, 'prueba_done', igKey);
+      ok = true;
+      res.json(outM);
+      return;
+    }
     const { posts, spec, timedOut: genTimedOut, formato_diag: genFormatoDiag } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual, generateImage: (a) => generateNoPhotoFirstPostImage({ prompt: a.prompt, topicText: a.topicText }), logoPath: trialLogoAbsPath(trialDigest), verifySealedPiece: (a) => demoAi.qaGeneratedLogo({ b64: a.b64, business: a.business, apiKey: process.env.OPENAI_API_KEY || '' }) });
     // (LOTE ETIQUETA-Y-TEXTO · pieza C3) QA DE ENCAJE SOBRE LA
     // IMAGEN FINAL DEL WOW (ruta sync): la pieza 0 ya compuesta
@@ -41874,6 +42101,95 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         });
       }
     } catch (e) { /* la puerta jamás frena la prueba */ }
+    // (LOTE VIGILANTE-ENTRADAS) LA MARCA DE LÍNEA A MANO (ruta stream):
+    // hasta acá corrió el fundamento entero (lectura del Instagram y de
+    // la web, digest, puertas) y el spec con sus captions ya gateados —
+    // la lectura del software, que es la base de trabajo de bamboo. La
+    // fase de medios NO arranca (ni render, ni piezas IA, ni video): la
+    // semana nace en armado honesto y cada pieza la carga bamboo en su
+    // día por la palanca admin. La marca nace en este mismo punto;
+    // lineaMano.nace aplica las exclusiones de la frontera con el gate
+    // (test-mode, allowlist, reseteo del operador previo).
+    const _lmDom = (trialLock && fields && fields.web) ? trialLock.normalizeDomain(fields.web) : '';
+    const _lmNace = lineaMano.nace(db, { ig: igKey, domain: _lmDom, testMode: !!testMode, allowlisted: !!(trialLock && trialLock.isAllowlisted(db, igKey, _lmDom)) });
+    if (_lmNace.marcada) {
+      const postsMano = specPosts.map((sp, i) => ({
+        type: 'image',
+        armando: true,
+        caption: (made[i] && made[i].caption) || '',
+        hashtags: (made[i] && made[i].hashtags) || '',
+        headline: (sp && sp.headline) || '',
+        style: sp && sp.style,
+        style_name: sp && sp.style_name,
+        text_mode: (sp && sp.text_mode) || 'text',
+      }));
+      send('meta', { total: n });
+      postsMano.forEach((p, i) => { try { send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: p }); } catch (e) {} });
+      let screenshotM = null;
+      if (photoPath) { try { const extM = photoPath.split('.').pop().toLowerCase(); screenshotM = `data:${TRIAL_IMG_MIME[extM] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64'); } catch (e) {} }
+      const ideasM = (await raceMs(ideasPromiseS, 5000)) || [];
+      const outM = {
+        ok: true,
+        engine: demo.DEMO_ENGINE_V,
+        lang,
+        content_lang: contentLangS,
+        business, ig, category: effCategory,
+        subcat: rubroRes.subcat || '',
+        rubro_check: rubroRes.rubroCheck,
+        accent, btn, color_source: colorSource,
+        feed_register: spec.feedRegister || null,
+        feedMap: (trialDigest && trialDigest.feedMap) || null,
+        feed_recents: trialFeedRecentsFromEmbed(trialData && trialData.posts),
+        web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
+        digest: trialDigest,
+        onboarding: ocAns,
+        espejo: fundamentoLiteral.espejoFromFields(fields),
+        foto_gate: trialGateInfo ? { ...(spec.foto_gate || {}), ...trialGateInfo } : (spec.foto_gate || null),
+        primer_posteo: spec.primer_posteo || null,
+        juicio_final: null,
+        continuidad_serie: null,
+        rescate_semana: [],
+        precio_gate: precioGateS.length ? { piezas: precioGateS } : null,
+        feed_kind: feedKind,
+        feed_clasificacion: feedClasificacion,
+        feed_formula: feedFormula,
+        feed_palette: feedPalette,
+        diagnosis: trialDiagnosis,
+        upload_product: uploadProduct,
+        demo_ai: { used: false, pieces: 0, cost_usd: 0, engines: [], qa: [] },
+        ig_pic: igPic, ig_name: igName,
+        profile: trialProfile,
+        audit: trialAudit,
+        analysis: null,
+        competition_line: null,
+        grid_extra: [],
+        ideas: ideasM.slice(0, 6),
+        posts: postsMano,
+        formato_diag: spec.formato_diag || null,
+        design: { posts: specPosts, styles: spec.styles, photos: spec.photos, videoIdx, count: n, engine: demo.DEMO_ENGINE_V, subcat: spec.subcat || null },
+        week,
+        screenshot: screenshotM,
+        spots_left: spotsLeft(),
+        video_ok: false,
+        linea_mano: true,
+      };
+      if (!testMode && igKey) {
+        try {
+          const payloadM = JSON.stringify(outM);
+          if (payloadM.length < 12 * 1024 * 1024) {
+            db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+              ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`).run(igKey, payloadM, Date.now());
+          }
+        } catch (e) { console.error('[posta] no se pudo cachear la prueba a mano:', e.message); }
+      }
+      if (!testMode) trialCacheWriteWeb(fields.web, outM, testMode);
+      if (!testMode) trialLockRecordFor(fields, webData, business, lang, outM);
+      trialFormatoDiagLog(ig, spec.formato_diag);
+      track(null, 'prueba_done', igKey);
+      if (!closed) { send('done', { out: outM }); doneSent = true; }
+      finish();
+      return;
+    }
     // (LOTE PRIMER-POSTEO-PERFECTO · piezas 2/6A + addendum 3A) Las
     // piezas que entran a la cadena de rescate: todo ganador-póster de
     // la semana + el slot 0 si su foto real no trae el logo en escena.
@@ -43350,6 +43666,10 @@ app.post('/api/trial/redesign', express.json({ limit: '12mb' }), async (req, res
   if (!trialRedesignAllowed(ip)) return res.status(429).json({ error: 'redesign_limit' });
   const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
   if (!hit) return res.status(404).json({ error: 'No encontramos tu semana. Generala de nuevo 🙂' });
+  // (LOTE VIGILANTE-ENTRADAS) Sobre una prueba marcada como línea a
+  // mano, el rediseño del software no corre: sus piezas las produce y
+  // las carga bamboo. El fundamento queda como está.
+  try { if (lineaMano.marcaActiva(db, igKey)) return res.status(409).json({ error: 'linea_mano', detalle: 'Esta prueba la está armando una persona del equipo: los cambios se hacen a mano.' }); } catch (e) {}
   let out;
   try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'No pudimos leer tu semana' }); }
   if (!out.design || !Array.isArray(out.design.posts) || !out.design.posts.length) {
@@ -44787,7 +45107,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1117';
+const BUILD_ID = '20261105-v1118';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -45478,4 +45798,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, serieFeedSweep, rescateSemanaSweep, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };
+module.exports = { trialLogoIntegracion, LOGO_INT_PROMPT, LOGO_INT_REF_NOTE, logoSuperficieParaRubro, logoIntPromptEstrategico, nextWeekSweep, generateWeekDrafts, nextWeekEligible, planOrTrialOk, userOnHold, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, bilingualWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, albumRefsForPiece, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep, runPostpayIdea24Sweep, characterBlocksDelivery, ensureTodayPost, serieFeedSweep, rescateSemanaSweep, lineaManoSweep, trustLevel2Sweep, normalizarEstrategia, leerEstrategiaSemana, estrategiaSemanaParaBrief, estrategiaPorqueParaPos, aplicarEstrategiaAPicks, qaHeadlineFallbacks, homeRecentsUnion, homeLiveGridComplete };

@@ -1244,6 +1244,19 @@ function startScheduler(db) {
     console.log('[posta] Barrido del rescate de prueba: cada 5 minutos');
   } catch (e) { console.error('[rescate-semana] no se pudo programar:', e.message); }
 
+  // (LOTE VIGILANTE-ENTRADAS) El vigilante de la línea a mano: mismo
+  // patrón */5 — despierta a bamboo ante cada entrada self-serve nueva
+  // (caso del Conserje) y sigue cada prueba marcada en su día 2 y 3.
+  try {
+    cron.schedule('*/5 * * * *', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.lineaManoSweep === 'function') srv.lineaManoSweep();
+      } catch (e) { console.error('[linea-mano]', e.message); }
+    });
+    console.log('[posta] Vigilante de entradas de prueba (línea a mano): cada 5 minutos');
+  } catch (e) { console.error('[linea-mano] no se pudo programar:', e.message); }
+
   // --- Posty Pro: stories automáticas, community y contenido reactivo ---
   try {
     cron.schedule('0 12 * * *', () => {
