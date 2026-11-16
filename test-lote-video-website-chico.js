@@ -48,14 +48,16 @@ t('B2: el comentario de trazabilidad está presente',
 
 // C. No se tocó nada más del hero: título y video intactos.
 t('C1: h1 ES intacto en app.js (frase problema + solución)',
-  APPJS.includes('«Mi feed queda a medias y no me trae clientes», <span class="hl">Posty postea por vos todos los días con tu producto real.</span>'));
+  APPJS.includes('«Mi feed queda a medias y no me trae clientes», <span class="hl">nosotros posteamos por tu negocio todos los días, con tu producto real.</span>'));
 t('C2: h1 ES intacto en index.html (shell)',
-  INDEX.includes('«Mi feed queda a medias y no me trae clientes», <span class="hl">Posty postea por vos todos los días con tu producto real.</span>'));
+  INDEX.includes('«Mi feed queda a medias y no me trae clientes», <span class="hl">nosotros posteamos por tu negocio todos los días, con tu producto real.</span>'));
 t('C3: h1 EN intacto en en/index.html',
   ENINDEX.includes('My feed is half-done and brings me no customers'));
-t('C4: video src intacto (mismo video, solo más chico)',
-  APPJS.includes('src="/videos/posty-presentacion.mp4"') &&
-  ENINDEX.includes('src="/videos/posty-presentacion.mp4"'));
+t('C4: hero = foto del equipo, sin video (LOTE WEBSITE 16/11)',
+  APPJS.includes('valentino-posty-fundador.jpg') &&
+  ENINDEX.includes('valentino-posty-fundador.jpg') &&
+  !APPJS.includes('posty-presentacion.mp4') &&
+  !ENINDEX.includes('posty-presentacion.mp4'));
 t('C5: la pill y el resto del hero no se tocan (pill presente)',
   APPJS.includes('Tu community manager'));
 

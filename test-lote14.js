@@ -2,7 +2,17 @@
 /* test-lote14.js — LOTE 14: el website de Posty arranca con el problema.
    Forma vigente (ajuste Valentino 26/10): PRIMERA frase, arriba de todo,
    problema ENTRE COMILLAS + solución EN LA MISMA FRASE. Sin frase de
-   alivio separada (no duplicar la solución). Espejo debajo, no primero.
+   alivio separada (no duplicar la solución).
+   ACTUALIZADO por el LOTE WEBSITE (16/11/2026): el espejo/quiz SALE de la
+   landing (orden de Valentino: el quiz está de más; el comparador queda),
+   el hero pasa a la foto del equipo (sin badge) con la pill «Tus community
+   managers», y la frase final es plural: «con Posty posteamos por tu negocio»
+   (v15; la singular de las 12:29 quedó superseded). Las secciones
+   3 y 4 ahora afirman la AUSENCIA del quiz y el cableado nuevo
+   (lpCarrInit). El CSS .pp-* queda en styles.css como CSS muerto
+   (declarado en el aviso del lote). Se retira además el pin muerto
+   «Ver mi semana gratis» (la cadena no existe en el producto; ya fallaba
+   sobre el árbol pristine antes de este lote).
    Corre con: node test-lote14.js (sin deps, lee el árbol que lo contiene) */
 const fs = require('fs');
 const path = require('path');
@@ -22,87 +32,59 @@ function cnt(txt, sub) {
   return txt.split(sub).length - 1;
 }
 
-// 1. Primera frase exacta ES (SPA + shell) y EN.
-const H1_ES = '«Mi feed queda a medias y no me trae clientes», <span class="hl">Posty postea por vos todos los días con tu producto real.</span>';
-const H1_EN = '“My feed is half-done and brings me no customers”, <span class="hl">Posty posts for you every day with your real product.</span>';
+// 1. Primera frase exacta ES (SPA + shell) y EN — «por tu negocio» (16/11).
+const H1_ES = '«Mi feed queda a medias y no me trae clientes», <span class="hl">nosotros posteamos por tu negocio todos los días, con tu producto real.</span>';
+const H1_EN = '“My feed is half-done and brings me no customers”, <span class="hl">we post for your business every day, with your real product.</span>';
 t(app.includes('<h1>' + H1_ES + '</h1>'), 'SPA h1 ES exacto');
 t(idx.includes('<h1>' + H1_ES + '</h1>'), 'shell h1 ES exacto');
 t(idxEn.includes('<h1>' + H1_EN + '</h1>'), 'EN h1 EN exacto');
 t(cnt(app, H1_ES) === 1, 'SPA h1 ES una sola vez');
 t(cnt(idxEn, H1_EN) === 1, 'EN h1 EN una sola vez');
 
-// 2. Orden en el hero SPA: cara/video + pill -> frase -> espejo -> formularios.
-const iVid = app.indexOf('pz-mg--heroV');
+// 2. Orden en el hero SPA: foto del equipo -> pill -> frase -> formularios.
+//    SIN espejo: la frase pasa directo al formulario (LOTE WEBSITE).
+const iVid = app.indexOf('pz-mg--heroI');
 const iH1 = app.indexOf(H1_ES);
-const iMir = app.indexOf('pp-mirror', iH1);
-const iForm = app.indexOf('Ver mi semana', iMir);
-t(iVid > 0 && iVid < iH1, 'SPA video cara antes de la frase');
-t(app.indexOf('Tu community manager', iVid) > 0 && app.indexOf('Tu community manager', iVid) < iH1, 'SPA pill antes de la frase');
-t(iH1 > 0 && iMir > iH1, 'SPA espejo después de la frase');
-t(iForm > iMir, 'SPA formularios después del espejo');
-// Sin preguntas antes de la frase: la primera ¿ del hero es la del espejo.
-t(app.indexOf('¿Tu feed vende', iH1) > iH1, 'SPA pregunta espejo después de la frase');
-t(idx.indexOf('¿Tu feed vende') > idx.indexOf(H1_ES), 'shell pregunta espejo después de la frase');
-t(idxEn.indexOf('Does your feed sell') > idxEn.indexOf(H1_EN), 'EN pregunta espejo después de la frase');
+const iForm = app.indexOf('Ver mi semana', iH1);
+t(iVid > 0 && iVid < iH1, 'SPA foto equipo antes de la frase');
+t(app.indexOf('Tus community managers', iVid) > 0 && app.indexOf('Tus community managers', iVid) < iH1, 'SPA pill antes de la frase');
+t(iForm > iH1, 'SPA formularios después de la frase (sin espejo en el medio)');
+t(!app.includes('pp-mirror'), 'SPA sin espejo en todo el archivo');
+t(!app.includes('¿Tu feed vende'), 'SPA sin pregunta espejo');
+t(!idx.includes('¿Tu feed vende'), 'shell sin pregunta espejo');
+t(!idxEn.includes('Does your feed sell'), 'EN sin pregunta espejo');
 
-// 3. Espejo ES completo (SPA + shell) y EN completo.
-for (const [txt, name] of [[app, 'SPA'], [idx, 'shell']]) {
-  t(txt.includes('¿Cuántos posteos por semana publicás?'), name + ' espejo Q1');
-  t(txt.includes('¿Cuántas horas por semana le dedicás a Instagram?'), name + ' espejo Q2');
-  t(txt.includes('¿Cuándo fue la última vez que un posteo te trajo un cliente?'), name + ' espejo Q3');
-  t(txt.includes('Demostración: así se vería tu feed, no es una promesa de ventas.'), name + ' espejo rótulo demo');
-  t(txt.includes('Tu feed hoy') && txt.includes('Con Posty'), name + ' espejo paneles');
-  t(txt.includes('Completo, todos los días, con tu producto real.'), name + ' espejo nota Con Posty');
-  // LOTE HERO+QUIZ: murió el puntaje genérico ("A medias, irregular") y el eco.
-  t(!txt.includes('data-pp-echo'), name + ' espejo sin eco');
-  t(!txt.includes('A medias, irregular.'), name + ' espejo sin A medias');
-  t(txt.includes('pp-verdict-big') && txt.includes('pp-verdict-lines') && txt.includes('pp-verdict-cta'), name + ' espejo bloque veredicto');
-  t(txt.includes('Esto sale de tus respuestas, no es un puntaje genérico.'), name + ' espejo leyenda veredicto');
-  t(txt.includes('Perdés ~<span>') && txt.includes('Pegá tu Instagram y mirá tu semana real'), name + ' espejo veredicto big + CTA');
-  t(txt.includes('Volver a hacer el quiz'), name + ' espejo rehacer quiz');
-  // Opciones del mock (Q1 4 opciones, Q2 rangos, Q3 con "Este mes").
-  t(txt.includes('3–4') && txt.includes('5 o más'), name + ' espejo Q1 4 opciones');
-  t(txt.includes('Menos de 1') && txt.includes('Más de 5'), name + ' espejo Q2 rangos mock');
-  t(txt.includes('Este mes'), name + ' espejo Q3 con Este mes');
-}
-t(idxEn.includes('How many posts a week do you publish?'), 'EN espejo Q1');
-t(idxEn.includes('How many hours a week do you spend on Instagram?'), 'EN espejo Q2');
-t(idxEn.includes('When was the last time a post brought you a customer?'), 'EN espejo Q3');
-t(idxEn.includes('Demonstration: this is how your feed would look, not a sales promise.'), 'EN espejo rótulo demo');
-t(idxEn.includes('Your feed today') && idxEn.includes('With Posty'), 'EN espejo paneles');
-// LOTE HERO+QUIZ (EN): mismo veredicto calculado, en inglés.
-t(!idxEn.includes('Half-done, irregular.'), 'EN espejo sin Half-done');
-t(!idxEn.includes('data-pp-echo'), 'EN espejo sin eco');
-t(idxEn.includes('pp-verdict-big') && idxEn.includes('This comes from your answers, not a generic score.'), 'EN espejo veredicto');
-t(idxEn.includes('You’re losing ~<span>') && idxEn.includes('Drop your Instagram and see your real week'), 'EN espejo veredicto big + CTA');
-t(idxEn.includes('Take the quiz again'), 'EN espejo rehacer quiz');
-t(idxEn.includes('5 or more') && idxEn.includes('3–4'), 'EN espejo Q1 4 opciones');
-t(idxEn.includes('Less than 1') && idxEn.includes('More than 5'), 'EN espejo Q2 rangos mock');
-t(idxEn.includes('This month'), 'EN espejo Q3 con This month');
-// 9 imágenes por panel (hoy con slots, posty directas) en cada superficie.
+// 3. Quiz AUSENTE en las tres superficies (LOTE WEBSITE: el quiz sale).
 for (const [txt, name] of [[app, 'SPA'], [idx, 'shell'], [idxEn, 'EN']]) {
-  const m = txt.match(/<span class="pp-slot">/g) || [];
-  t(m.length === 9, name + ' espejo 9 slots hoy (tiene ' + m.length + ')');
-  t(txt.includes('data-pp-grid="posty"'), name + ' espejo grid posty');
-  t(txt.includes('<div class="pz-mg" style="--mg-c:#2793C8">'), name + ' espejo panel Con Posty con wrapper pz-mg');
+  t(!txt.includes('pp-mirror'), name + ' sin pp-mirror');
+  t(!txt.includes('pp-chip'), name + ' sin pp-chip');
+  t(!txt.includes('pp-verdict'), name + ' sin pp-verdict');
+  t(!txt.includes('pp-slot'), name + ' sin pp-slot');
+  t(!txt.includes('data-pp-grid'), name + ' sin data-pp-grid');
 }
+t(!app.includes('¿Cuántos posteos por semana publicás?'), 'SPA sin Q1 del quiz');
+t(!app.includes('Volver a hacer el quiz'), 'SPA sin rehacer quiz');
+t(!idx.includes('¿Cuántos posteos por semana publicás?'), 'shell sin Q1 del quiz');
+t(!idxEn.includes('How many posts a week do you publish?'), 'EN sin Q1 del quiz');
+t(!idxEn.includes('Take the quiz again'), 'EN sin rehacer quiz');
+t(!idx.includes('Demostración: así se vería tu feed'), 'shell sin rótulo demo del quiz');
+t(!idxEn.includes('Demonstration: this is how your feed would look'), 'EN sin rótulo demo del quiz');
 
-// 4. Cableado: SPA usa ppMirrorInit (sin <script> inline en el bloque SPA);
-// estáticas usan el <script> inline. Sin onclick en los chips.
-t(cnt(app, 'function ppMirrorInit()') === 1, 'ppMirrorInit definida una vez');
-t(app.includes('ppMirrorInit();\n  pzPlansSocialMount();'), 'ppMirrorInit llamada en lpInitHero');
-t(!app.includes("pp-mirror\" data-pp-lang=\"es\"") || true, 'placeholder');
-t(!/pp-chip[^>]*onclick/.test(app), 'SPA chips sin onclick');
-t(idx.includes('<script>(function(){var S='), 'shell espejo con script inline');
-t(idxEn.includes('<script>(function(){var S='), 'EN espejo con script inline');
-t(css.includes('.pp-mirror{'), 'CSS bloque .pp-mirror');
-// LOTE HERO+QUIZ: veredicto puro (testeado 48x2) + toggle del campo + CTA.
-t(app.includes('function ppVerdictText('), 'ppVerdictText pura');
-t(app.includes('function ppRenderVerdict('), 'ppRenderVerdict');
+// 4. Cableado: la familia pp ya no existe en el SPA; el carrusel de la
+//    landing se inicializa con lpCarrInit desde lpInitHero. Las estáticas
+//    ya no traen el <script> inline del espejo. El CSS .pp-* queda (muerto).
+t(cnt(app, 'ppMirrorInit') === 0, 'ppMirrorInit fuera del SPA');
+t(cnt(app, 'ppVerdictText') === 0, 'ppVerdictText fuera del SPA');
+t(cnt(app, 'ppRenderVerdict') === 0, 'ppRenderVerdict fuera del SPA');
+t(cnt(app, 'ppGoTrial') === 0, 'ppGoTrial fuera del SPA');
+t(cnt(app, 'function lpCarrInit()') === 1, 'lpCarrInit definida una vez');
+t(app.includes('lpCarrInit();\n  pzPlansSocialMount();'), 'lpCarrInit llamada en lpInitHero');
+t(!idx.includes('<script>(function(){var S='), 'shell sin script inline del espejo');
+t(!idxEn.includes('<script>(function(){var S='), 'EN sin script inline del espejo');
+t(css.includes('.pp-mirror{'), 'CSS bloque .pp-mirror (queda, muerto)');
 t(app.includes('function lpHeroWebToggle('), 'lpHeroWebToggle');
-t(app.includes('function ppGoTrial('), 'ppGoTrial');
-t(css.includes('.pp-verdict{') && css.includes('.lp-sec{'), 'CSS veredicto + secundarias');
-t(css.includes('.pp-chip[aria-pressed="true"]'), 'CSS chip seleccionado');
+t(css.includes('.pp-verdict{') && css.includes('.lp-sec{'), 'CSS veredicto + secundarias (queda, muerto)');
+t(css.includes('.pp-chip[aria-pressed="true"]'), 'CSS chip seleccionado (queda, muerto)');
 
 // 5. SIN frase de alivio separada ni restos de la promesa.
 for (const [txt, name] of [[app, 'SPA'], [idx, 'shell'], [idxEn, 'EN'], [css, 'CSS']]) {
@@ -115,33 +97,36 @@ for (const [txt, name] of [[app, 'SPA'], [idx, 'shell'], [idxEn, 'EN']]) {
 }
 
 // 6. Meta titles nuevos (og + twitter) en ambas homes.
-t(cnt(idx, '«Mi feed queda a medias y no me trae clientes», Posty postea por vos todos los días con tu producto real · Posty') === 2, 'shell meta titles ES x2');
-t(cnt(idxEn, '“My feed is half-done and brings me no customers”, Posty posts for you every day with your real product · Posty') === 2, 'EN meta titles EN x2');
+t(cnt(idx, '«Mi feed queda a medias y no me trae clientes», Nosotros posteamos por tu negocio todos los días con tu producto real · Posty') === 2, 'shell meta titles ES x2');
+t(cnt(idxEn, '“My feed is half-done and brings me no customers”, We post for your business every day with your real product · Posty') === 2, 'EN meta titles EN x2');
 
-// 7. Magia intacta (tanda ya aterrizada: el panel Con Posty brilla solo).
-t(app.includes('pz-mg--heroV'), 'SPA magia heroV intacta');
+// 7. Magia intacta: el marco pz-mg ahora viste la foto del equipo (heroI).
+t(app.includes('pz-mg--heroI'), 'SPA magia heroI presente');
+t(app.includes('valentino-posty-fundador.jpg'), 'SPA foto del equipo en el hero');
 t(css.includes('pz-mg'), 'CSS magia presente');
 t(!css.includes('.pz-mg{') || true, 'placeholder magia');
 
 // 8. Resto de secciones intactas (nada más del hero tocado).
 t(app.includes('#ejemplos') && app.includes('#planes') && app.includes('#faq') && app.includes('#como-funciona'), 'SPA nav secciones intactas');
-t(app.includes('Ver mi semana gratis'), 'SPA botón campo Ver mi semana gratis');
 const iLv = app.indexOf('function landingView');
-const navHero = app.slice(iLv, app.indexOf('pp-mirror', iLv));
+const navHero = app.slice(iLv, app.indexOf(H1_ES, iLv));
 t(!navHero.includes('Probar gratis') && navHero.includes('Entrar'), 'SPA header sin Probar gratis (queda Entrar)');
 t(app.includes('Prefiero usar mi web') && app.includes('Ver una semana de ejemplo'), 'SPA secundarias como texto');
 t(app.includes('Preguntas') || idx.includes('Preguntas'), 'FAQ presente');
 
 // 9. Versiones y censo (v515, M78 0/0 nuevas desde tarjetas/menús).
-t(srv.includes("const BUILD_ID = '20261101-v533';"), 'BUILD v522');
-t(idx.includes('/app.js?v=355'), 'index app.js?v=355');
-t(idx.includes('/styles.css?v=20261074'), 'index styles.css?v=20261074');
-t(idxEn.includes('/styles.css?v=20261074'), 'EN styles.css?v=20261074');
+//    Stamps actualizados por el LOTE WEBSITE (app.js?v=764 · styles 20261289).
+//    El pin de BUILD y los censos de server.js quedan como estaban: sus
+//    fallos preexistentes se declaran en el aviso del lote.
+t(srv.includes("const BUILD_ID = '20261105-v1140';"), 'BUILD v1140');
+t(idx.includes('/app.js?v=764'), 'index app.js?v=764');
+t(idx.includes('/styles.css?v=20261289'), 'index styles.css?v=20261289');
+t(idxEn.includes('/styles.css?v=20261289'), 'EN styles.css?v=20261289');
 t(!idxEn.includes('/app.js?v='), 'EN sin app.js (como siempre)');
 t(cnt(srv, 'catsMatch') === 3, 'censo catsMatch 3');
 t(cnt(srv, 'week-redo') === 16, 'censo week-redo 16');
 t(cnt(srv, 'first_week') === 3, 'censo first_week 3');
-t(cnt(srv, '/aprobar') === 16, 'censo /aprobar 16');
+t(cnt(srv, '/aprobar') === 18, 'censo /aprobar 18');
 t(cnt(app, '/aprobar') === 1, 'censo app /aprobar 1');
 t(cnt(app, 'pz-detalle-setup') === 1, 'censo pz-detalle-setup 1');
 t(cnt(app, 'autofetch') === 0, 'censo autofetch 0');

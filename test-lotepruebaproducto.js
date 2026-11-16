@@ -17,7 +17,7 @@ function check(name, cond, extra) {
 
 // 1) Nombre web: el hero problema-primero NO es nombre; <title> manda.
 check('pickName hero rechazado, title Posty',
-  webExtract.pickName(['', '', 'Posty — Tu community manager 🤖', '«Mi feed queda a medias y no me trae clientes», Posty postea por vos todos los días con tu producto real · Posty']) === 'Posty');
+  webExtract.pickName(['', '', 'Posty — Tu community manager 🤖', '«Mi feed queda a medias y no me trae clientes», Nosotros posteamos por tu negocio todos los días con tu producto real · Posty']) === 'Posty');
 check('pickName og:title nombre real',
   webExtract.pickName(['', '', 'Inicio | Café Aurora', 'Café Aurora — Café de especialidad']) === 'Café Aurora');
 check('pickName sin candidato = vacio (no inventa)',
@@ -25,7 +25,7 @@ check('pickName sin candidato = vacio (no inventa)',
 check('pickName JSON-LD manda',
   webExtract.pickName(['Café Aurora', 'Otro', 'Tercero', 'Cuarto']) === 'Café Aurora');
 check('isNameLike frase larga = false',
-  webExtract.isNameLike('Posty postea por vos todos los días con tu producto real') === false);
+  webExtract.isNameLike('Nosotros posteamos por tu negocio todos los días con tu producto real') === false);
 check('isNameLike Inicio = false', webExtract.isNameLike('Inicio') === false);
 check('isNameLike Posty = true', webExtract.isNameLike('Posty') === true);
 
