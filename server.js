@@ -38580,6 +38580,16 @@ app.post('/api/guest/start', async (req, res) => {
     if (reuseGuest) {
       try { db.prepare('UPDATE users SET guest_ig = ?, guest_domain = ? WHERE id = ? AND is_guest = 1').run(igK || '', domK || '', g.userId); } catch (e) {}
     }
+    // (LOTE DESPERTAR-INMEDIATO) El alta del invitado puede ser la
+    // última precondición del despertar de la línea a mano: la marca
+    // nace en la generación, que en el flujo de la puerta precede a
+    // esta alta — hasta este lote el caso de entrada esperaba al
+    // próximo tick del barrido (corrida Rosehip 16/11: alta 02:25:19,
+    // caso recién en el tick de las 02:30). Con el invitado ya en pie,
+    // una pasada del barrido ata la marca y abre el caso en esta misma
+    // respuesta; el barrido por minuto queda como respaldo. La pasada
+    // es la misma del cron y nunca tira.
+    try { lineaManoSweep(); } catch (e) {}
     // (LOTE C13) La zona del visitante se persiste ANTES de importar y
     // programar: los 3 posteos salen a SU 19:00, no a la de Argentina.
     try { applyGuestBrowserTz(g.userId, tzK); } catch (e) {}
@@ -45171,7 +45181,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1120';
+const BUILD_ID = '20261105-v1121';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

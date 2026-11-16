@@ -1332,6 +1332,40 @@ function pendingConcierge(db, opts) {
     mensajes_pendientes: c.mensajes_pendientes,
     caso_id: c.caso_conserje ? c.caso_conserje.numero : null,
   }));
+  // (LOTE DESPERTAR-INMEDIATO) Los casos del vigilante de la línea a
+  // mano (tipo prueba_linea_mano: entrada / día 2 / día 3) TAMBIÉN son
+  // pendientes del operador: son su despertador. Hasta este lote esta
+  // proyección listaba solo clientes en modo conserje con mensajes de
+  // chat sin responder — el caso del vigilante vive en support_cases y
+  // jamás aparecía acá (corrida Rosehip 16/11: el caso #44 existía y
+  // estaba abierto desde las 02:30 EST, y los chequeos del operador de
+  // las 02:31 y 02:43 devolvían total 1, solo el caso viejo de chat).
+  // Se suman los casos ABIERTOS de ese tipo con la misma forma: el
+  // título del caso es el «mensaje», su fecha es la de creación y el
+  // caso_id es el número del caso (la clave estable caso-<id> que el
+  // cron del operador deduplica). Un invitado sin fila en profiles lee
+  // su identidad de users (guest_ig), como hace el resto del módulo.
+  const casosMano = safe(() => db.prepare(
+    `SELECT c.id, c.user_id, c.titulo, c.created_at,
+            u.email AS u_email, u.guest_ig AS u_guest_ig,
+            p.business_name AS bn, p.ig_username AS igu
+     FROM support_cases c
+     LEFT JOIN users u ON u.id = c.user_id
+     LEFT JOIN profiles p ON p.user_id = c.user_id
+     WHERE c.tipo = 'prueba_linea_mano' AND c.estado <> 'cerrado'
+     ORDER BY c.id ASC`).all(), []);
+  for (const c of casosMano) {
+    pendientes.push({
+      user_id: c.user_id,
+      business_name: c.bn || c.u_guest_ig || '',
+      ig_username: c.igu || c.u_guest_ig || '',
+      email: c.u_email || '',
+      ultimo_mensaje: c.titulo,
+      ultimo_mensaje_en: c.created_at,
+      mensajes_pendientes: 1,
+      caso_id: c.id,
+    });
+  }
   return { ok: true, generado_en: nowUtc(), pendientes, total: pendientes.length };
 }
 

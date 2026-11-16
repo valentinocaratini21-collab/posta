@@ -1244,17 +1244,25 @@ function startScheduler(db) {
     console.log('[posta] Barrido del rescate de prueba: cada 5 minutos');
   } catch (e) { console.error('[rescate-semana] no se pudo programar:', e.message); }
 
-  // (LOTE VIGILANTE-ENTRADAS) El vigilante de la línea a mano: mismo
-  // patrón */5 — despierta a bamboo ante cada entrada self-serve nueva
-  // (caso del Conserje) y sigue cada prueba marcada en su día 2 y 3.
+  // (LOTE VIGILANTE-ENTRADAS) El vigilante de la línea a mano: despierta
+  // a bamboo ante cada entrada self-serve nueva (caso del Conserje) y
+  // sigue cada prueba marcada en su día 2 y 3.
+  // (LOTE DESPERTAR-INMEDIATO) La cadencia pasa de */5 a cada minuto:
+  // la promesa de la prueba es el primer posteo en menos de 3 minutos
+  // desde la entrada, y un barrido de 5 minutos solo ya se come el
+  // presupuesto entero (corrida Rosehip 16/11: marca→caso ≈ 14 min
+  // entre la espera del alta y la fase del tick). El barrido es liviano
+  // (lee trial_linea_mano + trial_cache de las marcas activas) y además
+  // el alta del invitado lo gatilla en la misma respuesta (server.js,
+  // /api/guest/start): este cron es el respaldo, no el camino.
   try {
-    cron.schedule('*/5 * * * *', () => {
+    cron.schedule('* * * * *', () => {
       try {
         const srv = require('./server');
         if (srv && typeof srv.lineaManoSweep === 'function') srv.lineaManoSweep();
       } catch (e) { console.error('[linea-mano]', e.message); }
     });
-    console.log('[posta] Vigilante de entradas de prueba (línea a mano): cada 5 minutos');
+    console.log('[posta] Vigilante de entradas de prueba (línea a mano): cada minuto');
   } catch (e) { console.error('[linea-mano] no se pudo programar:', e.message); }
 
   // --- Posty Pro: stories automáticas, community y contenido reactivo ---
