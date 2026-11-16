@@ -160,15 +160,20 @@ ok(!!candR && candR.item === 'Infused' && candR.debil === true,
   'C4 la candidata de estrella nace marcada débil (evidencia intra-caption)', candR);
 {
   const q = cd.trialQuestionFor(dR, { lang: 'es' });
-  ok(!!q && q.tipo === 'estrella' && q.item === 'Infused' && q.debil === true,
-    'C5 la prueba consume la candidata: pregunta por «Infused» marcada débil', q);
-  ok(!!q && q.opciones.includes('Infused') && q.opciones.includes('Eau De Parfum - Speakeasy') && q.opciones.length >= 2 && q.opciones.length <= 4,
-    'C6 las opciones de un toque salen del fundamento (la candidata + servicios y producto reales)', q && q.opciones);
-  ok(!!q && /Infused/.test(q.texto), 'C7 el texto de la pregunta nombra la duda', q && q.texto);
+  // Pins C5/C6/C7/C9 ACTUALIZADOS por el lote ANTI-FRAGMENTO (tablero §5.1):
+  // la candidata débil sin corroborar ya NO se ofrece — ni encabeza ni es
+  // opción —; la pregunta encabeza con el primer candidato que pasa la
+  // puerta positiva (starOptionOk) o degrada a texto libre. La duda sigue
+  // naciendo débil, frenando y sin coronar (C1–C4 y el resto, intactos).
+  ok(!!q && q.tipo === 'estrella' && q.item === 'Corte de pelo' && q.debil === true,
+    'C5 la candidata débil sin corroborar no se ofrece: encabeza el primer candidato real que pasa la puerta, marcada débil', q);
+  ok(!!q && !q.opciones.includes('Infused') && q.opciones.includes('Corte de pelo') && q.opciones.length >= 2 && q.opciones.length <= 4 && q.opciones.every((o) => cd.starOptionOk(dR, o)),
+    'C6 las opciones de un toque salen del fundamento SOLO por la puerta positiva (la débil «Infused» no es opción)', q && q.opciones);
+  ok(!!q && /Corte de pelo/.test(q.texto) && !/Infused/.test(q.texto), 'C7 el texto de la pregunta nombra la duda real (el candidato que pasó la puerta), no el fragmento débil', q && q.texto);
   ok(cd.trialQuestionFor(dR, { lang: 'es', answered: { estrella: true } }) === null,
     'C8 lo ya respondido no se repregunta');
   const qEn = cd.trialQuestionFor(dR, { lang: 'en' });
-  ok(!!qEn && /^Is Infused your star product\?$/.test(qEn.texto), 'C9 la pregunta sale en el idioma de la prueba (EN)', qEn && qEn.texto);
+  ok(!!qEn && /^Is Corte de pelo your star product\?$/.test(qEn.texto), 'C9 la pregunta sale en el idioma de la prueba (EN), encabezada por el candidato real', qEn && qEn.texto);
 }
 {
   // Sin respuesta, la estrella débil no se afirma como hecho en la

@@ -629,6 +629,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         });
         askOpts.appendChild(b);
       });
+    } else if (p.libre) {
+      // (LOTE ANTI-FRAGMENTO) La duda sin opciones reales: el
+      // servidor filtró los candidatos cosechados y ninguno era un
+      // producto de verdad — la pregunta va directa al campo de
+      // texto libre (la misma salida que ya vive detrás de «Otro»),
+      // sin botones de un toque. El «Seguir sin responder» queda
+      // vivo: saltear también es una respuesta.
+      starWrap.hidden = false; starEl.focus();
     } else {
       (p.opciones || []).forEach(function (nombre) {
         var b = document.createElement('button');
@@ -759,7 +767,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var web = cleanWeb(webEl.value);
     if (!ig) { showErr('Contanos tu @ de Instagram 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
-    if (!starWrap.hidden && !star) { showErr('Contame qué es lo que más vendés 🙂'); starEl.focus(); return; }
+    if (!starWrap.hidden && !star && !askSkipStar) { showErr('Contame qué es lo que más vendés 🙂'); starEl.focus(); return; }
     // (LOTE REANUDAR-TRAS-RECARGA) La intención en curso se persiste
     // ANTES de armar: si esta pestaña se recarga o se cierra a mitad de
     // camino, la próxima carga reanuda sola con estos mismos datos.

@@ -231,6 +231,14 @@ function itemNamesOf(digest, max) {
   for (const x of [...((digest && digest.productos) || []), ...((digest && digest.servicios) || [])]) {
     const n = String((x && (x.nombre || x)) || '').replace(/\s+/g, ' ').trim();
     if (n.length < 3) continue;
+    // (LOTE ANTI-FRAGMENTO DE ANCLAS) Los nombres que este helper
+    // devuelve son OPCIONES de un toque de los huecos (estrella /
+    // más vendido): pasan la misma puerta positiva de la duda de la
+    // prueba (clientDigest.starOptionOk) — un fragmento cosechado
+    // no se ofrece como respuesta ni en esta superficie; si ninguno
+    // sobrevive, el hueco queda con sus opciones vacías y el texto
+    // libre (allow_text) como única salida, como manda la regla.
+    if (!clientDigest.starOptionOk(digest, n)) continue;
     const k = norm(n);
     if (seen.has(k)) continue;
     seen.add(k); out.push(n);
@@ -262,7 +270,12 @@ function candidatesFor(digest, dna, opts) {
         allow_text: false,
         ref: { rubro: c.rubro || '', opciones: c.opciones },
       });
-    } else if (c.tipo === 'estrella' && c.item) {
+    } else if (c.tipo === 'estrella' && c.item && clientDigest.starOptionOk(d, c.item)) {
+      // (LOTE ANTI-FRAGMENTO DE ANCLAS) La confirmación «Sí, es X»
+      // solo se ofrece si X pasa la puerta positiva: un fragmento
+      // cosechado no se le presenta al dueño como su estrella ni en
+      // el loop semanal — la duda de ese negocio cae a los huecos
+      // (texto libre), que es la salida honesta.
       out.push({
         kind: 'estrella',
         qkey: `estrella-inf:${norm(c.item)}`,

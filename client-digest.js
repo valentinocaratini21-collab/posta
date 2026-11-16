@@ -2564,6 +2564,97 @@ function duenoStarConflictoOf(d) {
  * su texto solo determina un rubro, va antes que todos. */
 const RUBROS_AMPLIOS_PISO = ['gastronomia', 'cafeteria', 'belleza', 'barberia', 'fitness', 'moda', 'salud', 'mascotas', 'hogar', 'servicios', 'profesionales', 'turismo'];
 
+/* (LOTE ANTI-FRAGMENTO DE ANCLAS — orden directa de Valentino,
+ * 16/11/2026, corrida ×10 #1) LA DUDA NO OFRECE FRAGMENTOS: la duda
+ * de la estrella de @sottosottoatl ofreció como opciones de un toque
+ * «Easter», «Dinner», «Easter Sunday April» y «Melanosporum Vitt» —
+ * fragmentos del texto cosechado (el banner de Pascua con su fecha,
+ * el rótulo de sección de la carta, el nombre latino TRUNCADO de la
+ * trufa «Tuber melanosporum Vitt.») — y en @chipotle, «BOGO»,
+ * «Canada» y «ANY» (la mecánica de la promo y el selector de país de
+ * su tienda). Ninguno nombra un producto de ESE negocio: la estrella
+ * real (Tortelli di Michelangelo) hubo que escribirla por «Other».
+ * La puerta de opciones solo conocía UNA clase negativa (fragmento
+ * de precio, cierre-2). Esta es la puerta POSITIVA de las opciones
+ * de la duda — el criterio: la opción nombra un producto vendible de
+ * ESE negocio, y eso se sabe por UNA de dos vías:
+ * · BRAZO A — CORROBORACIÓN (la vara de la casa desde C8 y
+ *   FUNDAMENTO-QUE-DUDA): starNamedEvidenceOk — el nombre calza con
+ *   un producto nombrado CORROBORADO, es decir, el nombre vive en
+ *   una superficie independiente de la que lo minó (catálogo, ADN,
+ *   foto mapeada, Tiendanube). La evidencia intra-caption sola NO
+ *   corrobora a nadie: los cuatro fragmentos de la corrida viven
+ *   solo en las captions (fuente 'caption', clases frase/repetida)
+ *   y este brazo los frena a todos.
+ * · BRAZO B — FORMA DE NOMBRE DE PRODUCTO (isProductNameForm): la
+ *   frase TIENE la forma de un nombre de producto y ningún token de
+ *   fragmento: sin palabras de calendario (un banner con fecha no
+ *   es un plato), sin palabra de promo, sin palabra de función
+ *   cerrando la frase («Friends It»), sin rótulo de sección pelado
+ *   («Dinner»), sin sigla en mayúsculas («BOGO»), sin forma verbal
+ *   suelta («Infused»), sin nombre científico truncado (género
+ *   latino + cita de autor abreviada: «Melanosporum Vitt»).
+ * El costo de frenar de más es honesto y está diseñado: sin 2
+ * candidatos reales la duda cae a TEXTO LIBRE («¿Qué es lo que más
+ * vendés?», la salida que el front ya conoce detrás de «Otro») —
+ * nunca a una opción inventada ni a silencio. */
+const STAR_OPTION_CALENDAR = new Set(('enero febrero marzo abril mayo junio julio agosto septiembre setiembre octubre noviembre diciembre january february march april may june july august september october november december lunes martes miercoles jueves viernes sabado domingo monday tuesday wednesday thursday friday saturday sunday navidad christmas halloween easter pascua thanksgiving verano invierno primavera otono summer winter spring autumn fall').split(' '));
+const STAR_OPTION_PROMO = new Set(('bogo sale promo promos deal deals discount discounts offer offers oferta ofertas descuento descuentos rebaja rebajas').split(' '));
+const STAR_OPTION_TAIL = new Set(('any all it its per every some none each both').split(' '));
+const STAR_OPTION_SECTION_SINGLE = new Set(('dinner lunch breakfast brunch supper menu carta catering entree appetizer appetizers dessert desserts almuerzo cena desayuno merienda').split(' '));
+const STAR_OPTION_CONNECTORS = new Set(('de el la los las the of con y and di da e un una').split(' '));
+const STAR_OPTION_LATIN_SUFFIX = /(um|us|is|ae|ii)$/;
+function isProductNameForm(raw) {
+  const s = cleanOfferName(raw);
+  if (!s) return false;
+  const words = s.split(' ').filter(Boolean);
+  if (!words.length || words.length > 5) return false;
+  const nw = words.map((w) => norm(w)).filter(Boolean);
+  if (nw.length !== words.length) return false;
+  // Calendario o promo en cualquier posición: la frase es un banner
+  // con fecha o una mecánica comercial, no un producto.
+  if (nw.some((w) => STAR_OPTION_CALENDAR.has(w))) return false;
+  if (nw.some((w) => STAR_OPTION_PROMO.has(w))) return false;
+  if (nw.length === 1) {
+    const w = nw[0];
+    if (STAR_OPTION_SECTION_SINGLE.has(w)) return false; // rótulo de sección pelado
+    if (STAR_OPTION_TAIL.has(w)) return false; // palabra de función suelta («ANY»)
+    if (words[0].length >= 2 && words[0] === words[0].toUpperCase() && words[0] !== words[0].toLowerCase()) return false; // sigla («BOGO»)
+    if (/(ed|ing)$/.test(w) || /(ando|iendo|ado|ada|ados|adas)$/.test(w)) return false; // forma verbal suelta («Infused»)
+    // Una palabra sola solo tiene forma de producto si es un
+    // sustantivo común en plural («Bouquets», «Croissants»): el
+    // nombre propio singular («Canada») sin corroboración no es
+    // ofrecible — cae al brazo A o a texto libre.
+    return w.length >= 4 && /s$/.test(w);
+  }
+  // Multi-palabra: conectores solo adentro, jamás cerrando.
+  for (let i = 0; i < nw.length; i++) {
+    if (STAR_OPTION_CONNECTORS.has(nw[i]) && i === nw.length - 1) return false;
+  }
+  if (STAR_OPTION_TAIL.has(nw[nw.length - 1])) return false; // cierra en palabra de función («Friends It»)
+  // Nombre científico truncado: una cita de autor abreviada (token
+  // final capitalizado, ≤5 letras, ≤1 vocal) tras un género latino.
+  const lastOrig = words[words.length - 1];
+  const lastNorm = nw[nw.length - 1];
+  const esCitaAbreviada = lastOrig.length <= 5 && /^[A-ZÁÉÍÓÚÑ]/.test(lastOrig)
+    && lastNorm.replace(/[^aeiou]/g, '').length <= 1;
+  if (esCitaAbreviada && nw.slice(0, -1).some((w) => w.length >= 6 && STAR_OPTION_LATIN_SUFFIX.test(w))) return false;
+  return true;
+}
+/* LA PUERTA POSITIVA DE LAS OPCIONES DE LA DUDA (ver el bloque de
+ * arriba): ¿esta cadena puede ofrecerse como respuesta de un toque
+ * a «¿cuál es tu producto estrella?»? Barras negativas de siempre
+ * (admisión, cromo, rol de créditos — que ya incluyen fragmento de
+ * precio y rótulo de sitio) Y al menos un brazo positivo. */
+function starOptionOk(digest, raw) {
+  const name = cleanOfferName(raw);
+  if (!name) return false;
+  if (!isPlausibleOfferItem(name)) return false;
+  if (isChromeDerivedName(name) || isCreditRoleName(name)) return false;
+  if (starNamedEvidenceOk(digest, name)) return true; // BRAZO A — corroboración
+  return isProductNameForm(name); // BRAZO B — forma de nombre de producto
+}
+
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
  * estrella inferido se CONFIRMA con un toque y cada contradicción se
  * resuelve preguntando — leer propone, el dueño valida. */
@@ -2842,15 +2933,20 @@ function trialQuestionFor(digest, opts) {
       if (c.motivo === 'estrella_dueno_sin_encaje' && c.declarada) {
         if (answered.estrella_conflicto) continue;
         const opcionesC = [];
-        const pushOpC = (raw) => {
+        // (LOTE ANTI-FRAGMENTO DE ANCLAS) La palabra del dueño
+        // (c.declarada) NO se filtra: es su declaración, no texto
+        // cosechado. El ancla minada y los rellenos sí pasan la
+        // puerta positiva (starOptionOk): un fragmento no compite
+        // contra la palabra del dueño como si fuera un producto.
+        const pushOpC = (raw, esDeclarada) => {
           const v = String((raw && (raw.nombre || raw)) || '').trim();
-          if (v && !isPriceFragmentName(v) && !opcionesC.some((x) => sameItemName(x, v))) opcionesC.push(v);
+          if (v && (esDeclarada || starOptionOk(digest, v)) && !opcionesC.some((x) => sameItemName(x, v))) opcionesC.push(v);
         };
-        pushOpC(c.declarada);
-        pushOpC(c.item);
+        pushOpC(c.declarada, true);
+        pushOpC(c.item, false);
         for (const it of [...(digest.productos || []), ...(digest.servicios || [])]) {
           if (opcionesC.length >= 4) break;
-          pushOpC(it);
+          pushOpC(it, false);
         }
         if (!opcionesC.length) continue;
         const nombreC = c.nombre || c.declarada;
@@ -2864,20 +2960,37 @@ function trialQuestionFor(digest, opts) {
       // de precio como respuesta de un toque (ni como candidata de un
       // digest legado, ni como opción desde productos): el dueño no
       // puede «confirmar» el resto de una línea de precio.
-      if (isPriceFragmentName(c.item)) continue;
+      // (LOTE ANTI-FRAGMENTO DE ANCLAS) Esa clase era UNA: la puerta
+      // ahora es POSITIVA (starOptionOk — corroboración o forma de
+      // nombre de producto) y filtra la candidata y los rellenos por
+      // igual: un fragmento no entra ni encabezando la pregunta ni
+      // rellenándola. Y la salida cambió de silencio a texto libre:
+      // con menos de 2 candidatos reales la duda NO inventa opciones
+      // ni se salta — pregunta «¿qué es lo que más vendés?» en texto
+      // libre (libre: true; la salida que el front ya conoce detrás
+      // de «Otro»), con la duda viva y frenando igual.
       const opciones = [];
       const pushOp = (raw) => {
         const v = String((raw && (raw.nombre || raw)) || '').trim();
-        if (v && !isPriceFragmentName(v) && !opciones.some((x) => sameItemName(x, v))) opciones.push(v);
+        if (v && starOptionOk(digest, v) && !opciones.some((x) => sameItemName(x, v))) opciones.push(v);
       };
       pushOp(c.item);
       for (const it of [...(digest.productos || []), ...(digest.servicios || [])]) {
         if (opciones.length >= 4) break;
         pushOp(it);
       }
-      if (!opciones.length) continue;
-      const texto = lang === 'en' ? `Is ${c.item} your star product?` : `¿Tu producto estrella es ${c.item}?`;
-      return { tipo: 'estrella', item: c.item, debil: !!c.debil, texto, opciones: opciones.slice(0, 4) };
+      if (opciones.length < 2) {
+        return {
+          tipo: 'estrella', libre: true, debil: true, motivo: 'sin_opciones_reales',
+          item: opciones.length ? opciones[0] : '',
+          texto: lang === 'en'
+            ? "I couldn't see your star product on your Instagram or your website — what do you sell the most?"
+            : 'No pude ver tu producto estrella en tu Instagram ni en tu web — ¿qué es lo que más vendés?',
+          opciones: [],
+        };
+      }
+      const texto = lang === 'en' ? `Is ${opciones[0]} your star product?` : `¿Tu producto estrella es ${opciones[0]}?`;
+      return { tipo: 'estrella', item: opciones[0], debil: !!c.debil, texto, opciones: opciones.slice(0, 4) };
     }
   }
   return null;
@@ -4695,6 +4808,10 @@ module.exports = {
   // (LOTE FUNDAMENTO-QUE-DUDA) La pregunta de la prueba: la candidata
   // a pregunta en su forma consumible (opciones de un toque).
   trialQuestionFor,
+  // (LOTE ANTI-FRAGMENTO DE ANCLAS) La puerta positiva de las
+  // opciones de la duda: ninguna superficie ofrece un fragmento como
+  // respuesta de un toque (testeables).
+  starOptionOk, isProductNameForm,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
   rubroId,
 };

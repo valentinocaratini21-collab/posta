@@ -628,6 +628,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         });
         askOpts.appendChild(b);
       });
+    } else if (p.libre) {
+      // (LOTE ANTI-FRAGMENTO) The doubt with no real options: the
+      // server filtered the harvested candidates and none was a
+      // real product — the question goes straight to the free-text
+      // field (the same exit that already lives behind "Other"),
+      // with no one-tap buttons. "Continue without answering"
+      // stays alive: skipping is also an answer.
+      starWrap.hidden = false; starEl.focus();
     } else {
       (p.opciones || []).forEach(function (nombre) {
         var b = document.createElement('button');
@@ -760,7 +768,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var web = cleanWeb(webEl.value);
     if (!ig) { showErr('Tell us your Instagram @ 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
-    if (!starWrap.hidden && !star) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
+    if (!starWrap.hidden && !star && !askSkipStar) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
     // (LOTE REANUDAR-TRAS-RECARGA) The in-progress intent is persisted
     // BEFORE building: if this tab reloads or closes halfway, the next
     // load resumes by itself with this same data.
