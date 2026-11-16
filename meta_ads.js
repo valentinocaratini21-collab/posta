@@ -294,26 +294,94 @@ async function gToken(path, token, params = {}) {
   return data;
 }
 
-// Los activos que el cliente compartió con la app, leídos con su SUAT:
-// cuentas publicitarias (me/adaccounts), páginas (me/accounts, con su
-// IG vinculado) y el negocio dueño (business de las cuentas; /me da el
-// usuario de integración). Las lecturas secundarias fallan suave: sin
-// páginas o sin /me, la captura sigue con lo que haya.
-async function fetchClientAssets(suat) {
-  if (!suat) throw new Error('Falta el token de la conexión publicitaria');
-  const [ads, pages, me] = await Promise.all([
-    gToken('/me/adaccounts', suat, { fields: 'id,account_id,name,currency,account_status,business', limit: '100' }).catch(() => ({ data: [] })),
-    gToken('/me/accounts', suat, { fields: 'id,name,instagram_business_account', limit: '100' }).catch(() => ({ data: [] })),
-    gToken('/me', suat, { fields: 'id,name' }).catch(() => ({})),
-  ]);
-  const adAccounts = (ads.data || []).map(a => ({
+// ---------- (LOTE ADS-CAPTURA-CUENTA) Enumeración de cuentas ----------
+// La cuenta que el cliente ELIGE en el diálogo FLB tiene que ser la
+// que queda guardada. Hasta este lote la captura la re-derivaba de
+// UNA sola fuente — GET /me/adaccounts con el SUAT — y cualquier
+// error de Graph en esa llamada se tragaba en silencio
+// (.catch(() => ({ data: [] })), sin log en todo el camino): la
+// cuenta concedida que no aparece en ese borde clásico (fenómeno
+// documentado de Meta: los activos que viven dentro de un portfolio
+// no siempre se reflejan en la enumeración /me/*) y un error de
+// lectura eran indistinguibles, y ambos terminaban en una fila
+// 'sin_cuenta' que le decía al cliente «no elegiste una cuenta
+// publicitaria» cuando el diálogo de Meta había confirmado su
+// elección (caso Valentino, 16/11 14:47: eligió la cuenta «Posty»
+// 29027789776849841 de su portfolio Posty CM, la Página SÍ se
+// capturó por /me/accounts, y la app le mostró «Falta la cuenta
+// publicitaria»). La enumeración confiable de un portfolio son sus
+// propios bordes: /{business}/owned_ad_accounts y
+// /{business}/client_ad_accounts. Esta enumeración es la ÚNICA
+// fuente de cuentas de la captura y del re-chequeo al impulsar:
+// dos rutas, unión sin duplicados, y los errores NO se tragan —
+// se loguean y se devuelven para que el llamador distinga «no hay
+// cuentas» (salteo genuino) de «no se pudieron leer» (error).
+const AD_ACCOUNT_FIELDS = 'id,account_id,name,currency,account_status,business';
+function mapAdAccount(a, businessHint) {
+  return {
     id: String(a.id || ''),
     account_id: String(a.account_id || String(a.id || '').replace(/^act_/, '')),
     name: String(a.name || ''),
     currency: String(a.currency || ''),
     account_status: a.account_status,
-    business_id: (a.business && a.business.id) ? String(a.business.id) : '',
-  })).filter(a => a.account_id);
+    business_id: (a.business && a.business.id) ? String(a.business.id) : (businessHint || ''),
+  };
+}
+async function enumerateAdAccounts(suat) {
+  const errors = [];
+  const businessIds = [];
+  const byId = new Map();
+  const addAll = (list, hint) => {
+    for (const a of list || []) {
+      const m = mapAdAccount(a, hint);
+      if (m.account_id && !byId.has(m.account_id)) byId.set(m.account_id, m);
+    }
+  };
+  const note = (where, e) => {
+    errors.push(e.message);
+    console.error(`[meta_ads] enumeración de cuentas — ${where}:`, e.message);
+  };
+  // Ruta 1: el borde clásico del usuario de integración.
+  try {
+    const d = await gToken('/me/adaccounts', suat, { fields: AD_ACCOUNT_FIELDS, limit: '100' });
+    addAll(d.data);
+  } catch (e) { note('/me/adaccounts', e); }
+  // Ruta 2: los negocios donde vive el usuario de integración y las
+  // cuentas de cada uno (las propias del portfolio y las de clientes).
+  try {
+    const bs = await gToken('/me/businesses', suat, { fields: 'id,name', limit: '100' });
+    for (const b of bs.data || []) {
+      const bid = b && b.id ? String(b.id) : '';
+      if (!bid) continue;
+      businessIds.push(bid);
+      for (const edge of ['owned_ad_accounts', 'client_ad_accounts']) {
+        try {
+          const d = await gToken(`/${bid}/${edge}`, suat, { fields: AD_ACCOUNT_FIELDS, limit: '100' });
+          addAll(d.data, bid);
+        } catch (e) { note(`/${bid}/${edge}`, e); }
+      }
+    }
+  } catch (e) { note('/me/businesses', e); }
+  return { accounts: [...byId.values()], businessIds, errors };
+}
+
+// Los activos que el cliente compartió con la app, leídos con su SUAT:
+// cuentas publicitarias (enumerateAdAccounts: /me/adaccounts + los
+// bordes de sus negocios), páginas (me/accounts, con su IG vinculado)
+// y el negocio dueño (business de las cuentas o el primer negocio
+// enumerado; /me da el usuario de integración). Las lecturas
+// secundarias fallan suave: sin páginas o sin /me, la captura sigue
+// con lo que haya. Las cuentas, no: sin cuentas Y con errores de
+// enumeración, el resultado trae adAccountsError y el callback NO
+// afirma «sin_cuenta» — «no se pudieron leer» no es «no eligió».
+async function fetchClientAssets(suat) {
+  if (!suat) throw new Error('Falta el token de la conexión publicitaria');
+  const [enumRes, pages, me] = await Promise.all([
+    enumerateAdAccounts(suat),
+    gToken('/me/accounts', suat, { fields: 'id,name,instagram_business_account', limit: '100' }).catch(() => ({ data: [] })),
+    gToken('/me', suat, { fields: 'id,name' }).catch(() => ({})),
+  ]);
+  const adAccounts = enumRes.accounts;
   const pageList = (pages.data || []).map(p => ({
     id: String(p.id || ''),
     name: String(p.name || ''),
@@ -322,11 +390,12 @@ async function fetchClientAssets(suat) {
   const igSet = new Set(pageList.map(p => p.ig_user_id).filter(Boolean));
   const biz = adAccounts.find(a => a.business_id);
   return {
-    businessId: biz ? biz.business_id : '',
+    businessId: biz ? biz.business_id : (enumRes.businessIds[0] || ''),
     adAccounts,
     pages: pageList,
     igAccountIds: [...igSet],
     suatUserId: (me && me.id) ? String(me.id) : '',
+    adAccountsError: (adAccounts.length === 0 && enumRes.errors.length) ? enumRes.errors[0] : null,
   };
 }
 
@@ -336,14 +405,23 @@ async function fetchClientAssets(suat) {
 async function checkClientAdsAccess(suat, adAccountId) {
   if (!suat || !adAccountId) return { ok: false, hasAdsManagement: false, reason: 'sin_conexion' };
   try {
-    const d = await gToken('/me/adaccounts', suat, { fields: 'account_id', limit: '100' });
+    // (LOTE ADS-CAPTURA-CUENTA) El re-chequeo lee la MISMA
+    // enumeración que la captura (enumerateAdAccounts): una cuenta
+    // capturada por los bordes del negocio no puede volver a fallar
+    // acá porque el borde clásico /me/adaccounts no la liste.
     // (LOTE IMPULSAR-DIRECTO-RE-RIELADO, composición) La captura guarda
     // el id pelado (account_id), pero la comparación normaliza igual:
     // así el chequeo vale también si alguna fila quedó con el id
     // crudo «act_…» de /me/adaccounts.
     const bare = String(adAccountId || '').replace(/^act_/, '');
-    const has = (d.data || []).some(a => String(a.account_id) === bare || String(a.id) === `act_${bare}`);
-    return { ok: true, hasAdsManagement: has, reason: has ? '' : 'cuenta_no_compartida' };
+    const r = await enumerateAdAccounts(suat);
+    const has = r.accounts.some(a => a.account_id === bare);
+    if (has) return { ok: true, hasAdsManagement: true, reason: '' };
+    // Sin la cuenta y con rutas caídas, no se pudo verificar (el
+    // llamador frena); sin la cuenta y con la enumeración sana, la
+    // cuenta ya no está compartida.
+    if (r.errors.length) return { ok: false, hasAdsManagement: false, reason: 'verificacion_fallida' };
+    return { ok: true, hasAdsManagement: false, reason: 'cuenta_no_compartida' };
   } catch (e) {
     return { ok: false, hasAdsManagement: false, reason: 'verificacion_fallida' };
   }
@@ -472,4 +550,4 @@ async function findLookalikeAudienceId() {
   } catch (e) { return null; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId };

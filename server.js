@@ -26711,6 +26711,20 @@ app.get('/api/ig/unified/callback', async (req, res) => {
       || (assets.pages.length === 1 ? assets.pages[0] : null);
     // La cuenta publicitaria principal: la primera activa compartida.
     const primary = assets.adAccounts.find(a => Number(a.account_status) === 1) || assets.adAccounts[0] || null;
+    // (LOTE ADS-CAPTURA-CUENTA) Sin cuenta primaria Y con la
+    // enumeración caída (Meta no dejó leer las cuentas por ninguna
+    // ruta): la conexión NO se guarda como 'sin_cuenta' — ese estado
+    // le diría al cliente que no eligió una cuenta publicitaria
+    // cuando el diálogo de Meta confirmó su elección (la captura
+    // vieja leía solo /me/adaccounts con el error tragado en
+    // silencio y la cuenta concedida no aparecía: fila 'sin_cuenta'
+    // con la Página capturada, caso Valentino 16/11 14:47). La
+    // vuelta honesta es el error, con el mensaje de Meta, y la fila
+    // queda como estaba: «no se pudieron leer» no es «no eligió».
+    if (!primary && assets.adAccountsError) {
+      console.error('[ig/unified/callback] enumeración de cuentas sin resultado y con error:', assets.adAccountsError);
+      return res.redirect(adsWithQs(dest(), 'igads=error&msg=' + encodeURIComponent(assets.adAccountsError)));
+    }
     const igIds = new Set(assets.igAccountIds);
     if (s.ig_user_id) igIds.add(String(s.ig_user_id));
     // Sin cuenta publicitaria compartida (la salteó en el diálogo), la
@@ -45578,7 +45592,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1140';
+const BUILD_ID = '20261105-v1141';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
