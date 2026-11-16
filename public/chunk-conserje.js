@@ -14,7 +14,7 @@
 // capa extra del dueño: nunca publica por sí sola y nunca veta el ritual
 // del cliente de las 9:00. La ficha de cada cliente está en su detalle,
 // ahí mismo donde se decide.
-var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0, conteos: null, eventos: null, numeros: null, alertas: null, vivo: null, focoUid: null };
+var conserjeEstado = { datos: null, vistaId: null, notaGuardada: null, pedidosVoz: null, pedidoAbierto: 0, pedidosSubir: null, pedidoSubirAbierto: 0, conteos: null, eventos: null, numeros: null, alertas: null, emails: null, vivo: null, focoUid: null };
 // (v849) Deep link de la push de cambio de posteo: #/app/conserje?user=<uid>
 // abre el detalle de ese cliente. Parser puro: 0 si no hay ?user= válido.
 // Un uid que no está en la revisión de esa noche no abre nada (fail-soft:
@@ -525,6 +525,19 @@ function conserjeNumerosHTML() {
   const mini = (label, val, color) => '<div style="flex:1;border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center"><div style="font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--mut)">' + label + '</div><div style="font-size:20px;font-weight:800;margin-top:3px' + (color ? ';color:' + color : '') + '">' + val + '</div></div>';
   const alertas = Array.isArray(conserjeEstado.alertas) ? conserjeEstado.alertas : [];
   const alerta = alertas.find((a) => a && a.sev === 'high') || alertas.find((a) => a && a.sev === 'med');
+  // (LOTE CONSERJE-EMAILS) La línea de emails del programa, debajo de las
+  // tres mini-tarjetas: SOLO dos números — los mandados del mes y la meta
+  // del mes (decisión de Valentino 2026-11-16; sin abiertos, sin tasas).
+  // Fail-soft como el resto del panel: sin respuesta del endpoint la línea
+  // no se pinta; sin meta configurada, la tarjeta muestra «—» — nunca un
+  // número inventado.
+  const em = conserjeEstado.emails;
+  const emailsRow = (em && isFinite(Number(em.mandados)))
+    ? '<div style="display:flex;gap:10px;margin-top:10px">'
+      + mini('EMAILS DEL MES', conserjeFmtNum(em.mandados))
+      + mini('META DEL MES', (em.meta != null && isFinite(Number(em.meta))) ? conserjeFmtNum(em.meta) : '—', '#2793C8')
+      + '</div>'
+    : '';
   return '<div class="card" style="padding:16px">'
     + '<div style="font-size:12px;font-weight:800;letter-spacing:.14em;color:#2793C8;text-align:center">EMBUDO DE HOY</div>'
     + trap(pasos[0]) + trap(pasos[1]) + chipA + trap(pasos[2]) + chipB + trap(pasos[3])
@@ -533,6 +546,7 @@ function conserjeNumerosHTML() {
     + mini('INGRESOS DEL MES', '$' + conserjeFmtNum(g.mrr || 0))
     + mini('TOTAL', conserjeFmtNum(g.subscribers || 0), '#2793C8')
     + '</div>'
+    + emailsRow
     + (alerta ? '<div style="margin-top:12px;background:#FDECEC;border:1px solid #F5C6C6;color:#B3261E;border-radius:10px;padding:7px 10px;font-size:12.5px;font-weight:700;text-align:center">⚠ ' + esc(alerta.title || '') + '</div>' : '')
     + '</div>';
 }
@@ -1326,6 +1340,7 @@ async function conserjeCargar() {
     // (la fuente principal) ya cargó y manda.
     try { conserjeEstado.numeros = await adminApi('funnel?era=all', 'GET'); } catch (e) { conserjeEstado.numeros = null; }
     try { const al = await adminApi('alerts', 'GET'); conserjeEstado.alertas = (al && al.alerts) || []; } catch (e) { conserjeEstado.alertas = null; }
+    try { conserjeEstado.emails = await adminApi('conserje/emails-mes', 'GET'); } catch (e) { conserjeEstado.emails = null; }
     conserjeEstado.vivo = await conserjeVivoCargar();
     conserjeRender();
   } catch (e) {

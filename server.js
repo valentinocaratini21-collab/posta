@@ -10879,6 +10879,35 @@ app.get('/api/admin/email-log', requireAdminToken, (req, res) => {
     res.json({ ok: true, count: rows.length, last_error: lastError, rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// (LOTE CONSERJE-EMAILS) Los dos números de emails del panel del Conserje:
+// cuántos emails del PROGRAMA de representantes se mandaron este mes y
+// cuál es la meta de envíos del mes. SOLO esos dos números (decisión de
+// Valentino 2026-11-16): sin abiertos — Resend no tiene webhook de eventos
+// configurado en este servidor y la apertura viene inflada por Apple Mail.
+// · mandados: filas de programa_email_envios (db.js) dentro del mes
+//   calendario del servidor. Esa tabla la escribe el camino de envío de
+//   representantes cuando arranque (re-cableado con
+//   RESEND_API_KEY_REPRESENTANTES); hoy nadie escribe → 0, el real.
+// · meta: config del servidor EMAILS_META_MES (entero positivo), la carga
+//   el dueño desde la tabla de rampa del programa de representantes
+//   (programa-lanzamiento-representantes.md: rampa 90→300/día por dominio
+//   hasta el norte de 50.000/mes). Sin config válida → meta null y el
+//   panel muestra «—»: jamás un número inventado ni hardcodeado.
+app.get('/api/admin/conserje/emails-mes', requireAdminToken, (req, res) => {
+  try {
+    const ahora = new Date();
+    const ini = new Date(ahora.getFullYear(), ahora.getMonth(), 1).getTime();
+    const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1).getTime();
+    const row = db.prepare('SELECT COUNT(*) AS n FROM programa_email_envios WHERE ts >= ? AND ts < ?').get(ini, fin);
+    const metaNum = Number(process.env.EMAILS_META_MES);
+    const meta = Number.isFinite(metaNum) && metaNum > 0 ? Math.floor(metaNum) : null;
+    res.json({ ok: true,
+      mes: ahora.getFullYear() + '-' + String(ahora.getMonth() + 1).padStart(2, '0'),
+      mandados: row ? Number(row.n) || 0 : 0,
+      meta,
+      meta_fuente: meta != null ? 'config EMAILS_META_MES (tabla de rampa del programa de representantes)' : null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // ---------- Push: salud de la config + prueba a demanda (LOTE PUSH-FUNCIONANDO) ----------
 // GET /api/admin/push/health — estado de la config APNs/VAPID/FCM (solo
 // booleanos, nunca secretos) + suscripciones por transporte. La clave APNs
@@ -45339,7 +45368,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1126';
+const BUILD_ID = '20261105-v1127';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

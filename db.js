@@ -1781,6 +1781,27 @@ db.exec(`CREATE TABLE IF NOT EXISTS email_send_log (
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_email_send_log_ts ON email_send_log(ts)`); } catch (e) { /* ya existe */ }
 
+// (LOTE CONSERJE-EMAILS) Registro de envíos del PROGRAMA de representantes
+// (la salida de la casa, no el correo del producto): una fila por email del
+// programa ACEPTADO por Resend. Contrato de escritura: lo alimenta el camino
+// de envío de representantes cuando arranque (el re-cableado que manda con
+// RESEND_API_KEY_REPRESENTANTES registra acá cada envío aceptado, con el
+// mismo criterio que email_send_log: ts en ms). Hoy NADA escribe en esta
+// tabla — el envío del programa desde el servidor todavía no existe — así
+// que el conteo del mes es 0, el número real. Lectura: GET
+// /api/admin/conserje/emails-mes. NO mezclar con email_send_log (correo del
+// producto y de clientes) ni con venty_email_envios (envíos de clientes
+// Venty): son tres familias distintas y el número del Conserje es SOLO el
+// del programa.
+db.exec(`CREATE TABLE IF NOT EXISTS programa_email_envios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  to_email TEXT DEFAULT '',
+  from_addr TEXT DEFAULT '',
+  provider_id TEXT DEFAULT ''
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_programa_email_envios_ts ON programa_email_envios(ts)`); } catch (e) { /* ya existe */ }
+
 // 4 PUNTOS (2026-10-02): autopiloto + proactivo + insights + resumen semanal.
 // Filtro de calidad: score 0-100 y detalle de checks en JSON.
 try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_enabled INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
