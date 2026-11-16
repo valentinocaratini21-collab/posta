@@ -5945,6 +5945,56 @@ app.post('/api/venty/piloto/fitswapp/email/enviar', requireAuthOrWebToken, async
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- SLICE 4: representantes, oleadas en espejo, ingesta, piloto ----------
+// Bloque aditivo único del lote S4 (server.js no se toca en ningún otro
+// punto). Nada de esto envía nada real: las oleadas nacen en espejo y se
+// proponen en Bandeja; la verificación de salida solo dictamina puertas
+// (espejo aceptado + cupo del gobernador + dominio de envío + permiso de
+// Instagram, hoy cerradas). La ingesta de buzón es pública pero exige el
+// secreto compartido VENTY_INGESTA_SECRET (comparación en tiempo
+// constante; sin secreto configurado la ruta queda cerrada, 503).
+const ventyOleadasS4 = require('./venty-oleadas');
+const ventyIngestaS4 = require('./venty-ingesta-buzon');
+const ventyPilotoCargaS4 = require('./venty-piloto-carga');
+try { ventyOleadasS4.ensureSchema(db); ventyIngestaS4.ensureSchema(db); ventyPilotoCargaS4.ensureSchema(db); } catch (e) { console.error('[venty-s4] init:', e.message); }
+app.post('/api/venty/email/ingesta', (req, res) => {
+  try {
+    const v = ventyIngestaS4.verificarSecreto(req.headers || {});
+    if (!v.ok) return res.status(v.error === 'ingesta_cerrada' ? 503 : 401).json({ ok: false, error: v.error });
+    const r = ventyIngestaS4.procesarIngesta(db, req.body || {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    return res.json({ ok: true, ...r });
+  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/piloto/fitswapp/carga', requireAuthOrWebToken, (req, res) => {
+  try { const uid = ventyUid(req); res.json({ ok: true, modo: 'prueba', ...ventyPilotoCargaS4.censo(db, uid) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/piloto/fitswapp/cargar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventyPilotoCargaS4.cargarPiloto(db, uid, {});
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/representantes/oleada-diaria', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventyOleadasS4.prepararOleadaDiaria(db, uid, { detalleDeLead: ventyPilotoCargaS4.detalleDeLead(db, uid), piloto: 'fitswapp' });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/representantes/oleadas/:id/verificar-salida', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const puertasExtra = [];
+    try { const pil = ventyFitswapp.leerPiloto(db, uid); if (!pil.dominio_envio) puertasExtra.push({ error: 'falta_dominio_envio', detalle: ventyFitswapp.MOTIVO_DOMINIO_FALTA }); } catch (e) {}
+    try { const ig = ventyConexiones.estadoCanal(db, uid, 'instagram'); if (!ig || !ig.viva) puertasExtra.push({ error: 'falta_permiso_instagram', detalle: ventyFitswapp.MOTIVO_IG_FALTA }); } catch (e) {}
+    const r = ventyOleadasS4.verificarSalida(db, uid, Number(req.params.id), { puertasExtra });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // ---------- VENTY SLICE 3: cierre real (pago/seña + agenda anti no-show) ----------
 // UN solo bloque aditivo (require + rutas) para que el preparador re-base
 // por hunks sin tocar los bloques de los otros lotes. Maquinaria GENÉRICA
@@ -44119,7 +44169,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1109';
+const BUILD_ID = '20261105-v1110';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
