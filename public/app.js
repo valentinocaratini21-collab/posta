@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1128';
+const PZ_BUILD = '20261105-v1129';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24968,6 +24968,157 @@ function pzTrialAvisoBind(root) {
     }
   };
 }
+// (LOTE CONEXIÓN POST-WOW · decisión de Valentino 16/11: «perfecto.
+// con un click se les tiene que conectar el producto de posty a su
+// instagram! hace que suceda») La pantalla que revela el primer posteo
+// ES la pantalla de conexión: en Inicio, justo debajo del posteo de
+// hoy, la pieza grande con una línea — el próximo horario REAL de
+// publicación (hoy a las 19:00 si en la zona de la cuenta todavía no
+// pasó; mañana a las 19:00 si ya pasó: nunca un «hoy» falso) —, UN
+// botón principal con su @ y la salida tranquila «Ahora no». El toque
+// abre el OAuth de Instagram directo (sin formulario, sin crear
+// contraseña de Posty): al volver conectado, el servidor ya agendó
+// las piezas a las 19:00 (wow-connect.js) y esta misma tarjeta
+// confirma con la hora real de la agenda. Si saltea, la tarjeta queda
+// quieta en su semana («Sin problema…» + botón secundario): la prueba
+// sigue por email/DM, sin castigo y sin insistencia.
+function pzWowSkipKey() {
+  try { const id = (typeof ME !== 'undefined' && ME && (ME.id || ME.email)) || 'anon'; return 'pz_wow_skip_' + id; } catch (e) { return 'pz_wow_skip_anon'; }
+}
+// La palabra del día del próximo slot de las 19:00 en la zona de la
+// cuenta: 'hoy' si todavía no son las 19:00, 'mañana' si ya pasaron
+// (a las 19:00 en punto el slot ya se considera pasado). Pura —
+// nowMs y tz entran por parámetro — y en espejo exacto de la regla
+// del servidor (wow-connect.js wowDayWord): la suite la pincha a
+// ambos lados de las 19:00.
+function pzWowDayWord(nowMs, tz) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz || undefined, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(new Date(nowMs));
+    const hp = parts.find((x) => x.type === 'hour');
+    const mp = parts.find((x) => x.type === 'minute');
+    if (!hp) return 'hoy';
+    const mins = (Number(hp.value) % 24) * 60 + (mp ? Number(mp.value) : 0);
+    return mins < 19 * 60 ? 'hoy' : 'mañana';
+  } catch (e) { return 'hoy'; }
+}
+// La pieza del wow: la primera de feed con imagen que la semana ya
+// tiene en borrador o programada, en orden de creación — el orden de
+// la semana (la importación crea las filas en el orden de los días;
+// las retenidas por el gate no se prometen: no entran). Es la misma
+// selección que la agenda del servidor (wow-connect.js piezasWow),
+// en espejo.
+function pzWowTargetPost(posts) {
+  try {
+    const list = (Array.isArray(posts) ? posts : []).filter((p) => p
+      && String(p.media_type || '') !== 'story'
+      && String(p.image_path || '') !== ''
+      && !p.needs_review
+      && (String(p.status || '') === 'draft' || String(p.status || '') === 'scheduled'));
+    list.sort((a, b) => {
+      const ca = String(a.created_at || ''), cb = String(b.created_at || '');
+      if (ca !== cb) return ca < cb ? -1 : 1;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+    return list[0] || null;
+  } catch (e) { return null; }
+}
+// La caída tranquila (pantalla 4 del mock aprobado): queda en la
+// semana como puerta quieta, con su botón secundario.
+function pzWowQuietHTML(en) {
+  return `<div class="card pz-wow pz-wow-quiet" id="pzWowConnect">`
+    + `<p class="pz-wow-quiet-txt">${en ? '<b>No problem</b> — we’ll send you each morning’s post to publish yourself. Connect anytime and they start posting on their own.' : '<b>Sin problema</b> — te mandamos cada mañana el posteo para que lo publiques vos. Conectá cuando quieras y empiezan a salir solos.'}</p>`
+    + `<button type="button" class="btn btn-ghost pz-wow-quiet-btn" data-pz-wow-go>${en ? 'Connect Instagram' : 'Conectar Instagram'}</button>`
+    + `</div>`;
+}
+function pzWowConnectHTML(o) {
+  try {
+    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return '';
+    if (typeof pzIsGuest !== 'function' || !pzIsGuest()) return '';
+    const en = !!(o && o.en);
+    const tz = (o && o.tz) || undefined;
+    const connected = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected);
+    // Confirmación: la vuelta del OAuth con la conexión hecha. La
+    // palabra del día sale de la agenda REAL de la primera pieza
+    // (su scheduled_at contra hoy/mañana en la zona de la cuenta) —
+    // si la agenda no dejó una primera pieza en hoy o mañana, la
+    // tarjeta calla antes que prometer una hora que no existe.
+    if (o && o.justConnected) {
+      if (!connected) return '';
+      const first = pzWowTargetPost((o && o.posts) || []);
+      if (!first || !first.scheduled_at) return '';
+      const k = (typeof pzHoyDiaKey === 'function') ? pzHoyDiaKey(first.scheduled_at, tz) : '';
+      const hoyK = (typeof pzHoyDiaKey === 'function') ? pzHoyDiaKey(new Date(), tz) : '';
+      const manK = (hoyK && typeof pzHoyMoverKey === 'function') ? pzHoyMoverKey(hoyK, 1) : '';
+      let dw = '', tail = '';
+      if (k && hoyK && k === hoyK) { dw = en ? 'today' : 'hoy'; tail = en ? 'Tomorrow’s and the next day’s go out on their own.' : 'Y los de mañana y pasado salen solos.'; }
+      else if (k && manK && k === manK) { dw = en ? 'tomorrow' : 'mañana'; tail = en ? 'The next two go out on their own.' : 'Y los dos que siguen salen solos.'; }
+      if (!dw) return '';
+      const hora = en ? '7:00 PM' : '19:00';
+      const txt = en
+        ? `Done — <b>${dw} at ${hora}</b> this post goes out on your profile. ${tail}`
+        : `Listo — <b>${dw} a las ${hora}</b> sale en tu perfil. ${tail}`;
+      return `<div class="card pz-wow pz-wow-done" id="pzWowConnect"><p class="pz-wow-done-txt">✔ ${txt}</p></div>`;
+    }
+    if (connected) return '';
+    const post = (o && o.post) || null;
+    if (!post) return '';
+    let skipped = null;
+    try { skipped = localStorage.getItem(pzWowSkipKey()); } catch (e) {}
+    if (skipped) return pzWowQuietHTML(en);
+    const word = pzWowDayWord(Date.now(), tz);
+    const dw = en ? (word === 'hoy' ? 'today' : 'tomorrow') : word;
+    const hora = en ? '7:00 PM' : '19:00';
+    const ig = (typeof pzGuestIg === 'function') ? pzGuestIg() : '';
+    const at = ig ? '@' + String(ig).replace(/^@/, '') : '';
+    const img = String(post.image_path || '');
+    const head = String(post.headline || '').trim();
+    const cap = String(post.caption || '').trim();
+    const capPrev = cap ? esc(cap.split('\n')[0].slice(0, 90)) : '';
+    const line = en
+      ? `Want it on your Instagram? Connect it and this post goes out <b>${dw} at ${hora} — on its own.</b>`
+      : `¿Lo querés en tu Instagram? Conectalo y este posteo sale <b>${dw} a las ${hora}, solo.</b>`;
+    const btn = en
+      ? `Post it on ${esc(at || 'your Instagram')} ${dw}`
+      : `Publicalo en ${esc(at || 'tu Instagram')} ${dw}`;
+    return `<div class="card pz-wow" id="pzWowConnect">`
+      + (img ? `<img class="pz-wow-img" src="${esc(img)}" alt="">` : '')
+      + `<div class="pz-wow-body">`
+      + (head ? `<p class="pz-wow-head">${esc(head)}</p>` : '')
+      + (capPrev ? `<p class="pz-wow-cap">${capPrev}${cap.length > 90 ? '…' : ''}</p>` : '')
+      + `<p class="pz-wow-ask">${line}</p>`
+      + `<button type="button" class="btn btn-primary btn-block pz-wow-btn" data-pz-wow-go>${btn}</button>`
+      + `<button type="button" class="pz-wow-skip" data-pz-wow-skip>${en ? 'Not now' : 'Ahora no'}</button>`
+      + `</div></div>`;
+  } catch (e) { return ''; }
+}
+// El toque del wow: deja la marca de sesión (la confirmación se
+// pinta al volver) y abre el OAuth por la puerta de siempre con la
+// marca del wow — el callback agenda y vuelve a esta pantalla.
+function pzWowGo() {
+  try { sessionStorage.setItem('pz_wow_pending', '1'); } catch (e) {}
+  location.href = '/api/ig/go?next=' + encodeURIComponent('/#/app/inicio') + '&wow=1';
+}
+function pzWowConnectBind(root) {
+  if (!root) return;
+  const card = root.querySelector('#pzWowConnect');
+  if (!card) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const go = card.querySelector('[data-pz-wow-go]');
+  if (go) go.onclick = () => { try { pzWowGo(); } catch (e) { try { igConnect('/#/app/inicio'); } catch (e2) {} } };
+  const skip = card.querySelector('[data-pz-wow-skip]');
+  if (skip) skip.onclick = () => {
+    try { localStorage.setItem(pzWowSkipKey(), '1'); } catch (e) {}
+    try {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = pzWowQuietHTML(en);
+      const nueva = tmp.firstElementChild;
+      if (nueva && card.parentNode) {
+        card.parentNode.replaceChild(nueva, card);
+        pzWowConnectBind(root);
+      } else { card.remove(); }
+    } catch (e) { try { card.remove(); } catch (e2) {} }
+  };
+}
 function pzHoyHoyHTML(p, o) {
   try {
     const en = !!(o && o.en);
@@ -25407,6 +25558,7 @@ function pzHoyBind(root) {
   try { pzHoyConserjeFill(); } catch (e) {}
   try { pzPostWowEmailBind(root); } catch (e) {}
   try { pzTrialAvisoBind(root); } catch (e) {}
+  try { pzWowConnectBind(root); } catch (e) {}
 }
 
 // (LOTE REDISENO-R6) Entrada al conserje desde Hoy, solo en ventana
@@ -25674,6 +25826,15 @@ async function inicioView() {
       if (Number.isFinite(tR1) && tR1 < btR1) { btR1 = tR1; hoyPostR1 = p; }
     }
   } catch (e) { hoyPostR1 = null; }
+  // (LOTE CONEXIÓN POST-WOW) La vuelta del OAuth del wow: el toque
+  // dejó su marca en sessionStorage (pzWowGo) y la confirmación se
+  // pinta UNA vez, al volver — la marca se consume acá. La pieza del
+  // wow es la primera pendiente de la semana (pzWowTargetPost): la
+  // misma que la agenda del servidor acaba de dejar a las 19:00.
+  let wowJustConnectedR1 = false;
+  try { wowJustConnectedR1 = sessionStorage.getItem('pz_wow_pending') === '1'; if (wowJustConnectedR1) sessionStorage.removeItem('pz_wow_pending'); } catch (e) {}
+  let wowPostR1 = null;
+  try { wowPostR1 = pzWowTargetPost(allPosts); } catch (e) { wowPostR1 = null; }
   const haySemanaR1 = allPosts.length > 0;
   // (LOTE SIMPLIFICAR-APP · PARTE 6 · 9/11: el saludo dice lo que pasa EN
   // ESTE ESTADO. manual = GET /api/autopilot cacheado (f3ApprovalMode).
@@ -25759,6 +25920,7 @@ async function inicioView() {
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: needOKR1, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
+      + pzWowConnectHTML({ post: wowPostR1, posts: allPosts, tz, en: enHome, justConnected: wowJustConnectedR1 })
       + pzTrialAvisoHTML({ hoyPost: hoyPostR1, posts: allPosts, hoyKey: hoyKeyR1, tz, en: enHome })
       + pzPostWowEmailHTML({ hoyPost: hoyPostR1, en: enHome })
       + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')

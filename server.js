@@ -28,6 +28,7 @@ const morningPostPush = require('./morning-post-push');
 // acciones del equipo con registro. La consola NUNCA publica.
 const supportCases = require('./support-cases');
 const lineaMano = require('./linea-mano'); // (LOTE VIGILANTE-ENTRADAS) marca de línea a mano de las pruebas self-serve + su barrido
+const wowConnect = require('./wow-connect'); // (LOTE CONEXIÓN POST-WOW) la agenda del wow: al conectar IG desde la revelación, la prueba queda agendada a las 19:00 de su zona
 const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
 const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + candados C1–C5
@@ -26322,6 +26323,14 @@ function buildIgAuth(req) {
   const nx = String(req.query.next || '');
   if (/^\/#\/[^\s"'\\<>]*$/.test(nx)) req.session.igNext = nx;
   else delete req.session.igNext;
+  // (LOTE CONEXIÓN POST-WOW) El toque que nace en la pantalla del wow
+  // marca la sesión: el callback cumple la promesa de esa pantalla
+  // (agenda la prueba a las 19:00 y vuelve a la misma pantalla a
+  // confirmar, sin encadenar el diálogo publicitario). Un arranque
+  // sin la marca la apaga: la bandera nunca queda pegada de un flujo
+  // a otro.
+  if (String(req.query.wow || '') === '1') req.session.igWow = 1;
+  else delete req.session.igWow;
   return { url: getAuthUrl(authUrl, state) };
 }
 app.get('/api/ig/start', requireAuth, (req, res) => {
@@ -26457,7 +26466,26 @@ app.get('/api/ig/callback', async (req, res) => {
     evTrack(req.session.userId, 'ig_connect', {});
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
     delete req.session.igInterruptedAt; // (CORRECTIVO-6) conectado: la señal se apaga
-    const igDestFinal = withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : ''));
+    // (LOTE CONEXIÓN POST-WOW) Si el toque nació en la pantalla del
+    // wow, la conexión cumple la promesa de esa pantalla EN EL ACTO:
+    // las piezas de la prueba quedan agendadas a las 19:00 de su zona
+    // (la primera en el próximo slot de las 19:00 — hoy si todavía no
+    // pasó, mañana si ya pasó — y las dos siguientes en los dos días
+    // que siguen; wow-connect.js) y la vuelta aterriza en la misma
+    // pantalla a confirmar, SIN encadenar el diálogo publicitario
+    // unificado (la confirmación del wow es inmediata; la conexión
+    // publicitaria se ofrece en su momento, no en el del wow). Sin la
+    // marca de sesión, este camino no se toca: todo sigue como
+    // siempre, byte a byte.
+    const wowFlow = !!req.session.igWow;
+    if (wowFlow) {
+      delete req.session.igWow;
+      try {
+        const wr = wowConnect.agendarAlConectar(db, req.session.userId, { timezone: userTz(req.session.userId) });
+        if (wr && wr.scheduled) { try { evTrack(req.session.userId, 'ig_connect_wow', { n: wr.scheduled, first_at: wr.first_at }); } catch (e) {} }
+      } catch (e) { console.error('[ig/callback] wow agenda:', e.message); }
+    }
+    const igDestFinal = withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '') + (wowFlow ? '&wow=1' : ''));
     // (LOTE CONEXIÓN-PÁGINA) LA MISMA SENTADA: si el login unificado
     // está configurado y todavía no hay conexión publicitaria
     // capturada, el flujo SIGUE SOLO al diálogo unificado — el cliente
@@ -26465,7 +26493,7 @@ app.get('/api/ig/callback', async (req, res) => {
     // medio. La vuelta del unificado aterriza en igDestFinal. Si el
     // unificado no está configurado o ya hay captura, el regreso es el
     // de siempre, byte a byte.
-    if (unifiedReady(req.session.userId) && !adsConnectionReady(req.session.userId)) {
+    if (!wowFlow && unifiedReady(req.session.userId) && !adsConnectionReady(req.session.userId)) {
       req.session.igAdsDest = igDestFinal;
       return res.redirect('/api/ig/unified/go?chained=1');
     }
@@ -45438,7 +45466,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1128';
+const BUILD_ID = '20261105-v1129';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
