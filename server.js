@@ -1655,6 +1655,26 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       // la lectura; sync: del audit en vuelo).
       igLink: igLinkState || null,
     });
+    // (LOTE DESTRABE-SOULCYCLE · piezas A1/A2) LA RESPUESTA DE LA
+    // PUERTA MANDA SOBRE EL FUNDAMENTO: si la reconciliacion que
+    // viajo en `rubro` vino vacia, se recomputa desde las partes
+    // (feed + web + rubro confirmado) y queda guardada en el
+    // digest; si hay contradiccion, la web contradicha entra en
+    // cuarentena ANTES de que el digest alimente spec, temas o
+    // captions — en la pasada de la pregunta y en la respondida.
+    if (_trialDigestBuilt) {
+      try {
+        if (!_trialDigestBuilt.reconciliacion) {
+          const recLocal = trialReconciliacionEfectiva({ feed, webData, category, catalogo: (deep && deep.catalog && Array.isArray(deep.catalog.items)) ? deep.catalog.items.length : 0 });
+          if (recLocal) _trialDigestBuilt.reconciliacion = recLocal;
+        }
+        const recQ = _trialDigestBuilt.reconciliacion;
+        if (recQ && recQ.contradiccion) {
+          const nombresWebQ = new Set(((webData && webData.services) || []).map((s) => trialTextoNorm((s && (s.name || s.title)) || '')).filter(Boolean));
+          trialDigestCuarentenaWeb(_trialDigestBuilt, recQ.motivo || 'contradiccion', nombresWebQ);
+        }
+      } catch (e) { /* la cuarentena jamas frena el armado del digest */ }
+    }
     if (_trialDigestBuilt && onboarding) _trialDigestBuilt.onboarding = onboarding;
     // (LOTE PREGUNTA-SIN-REPETIR) Lo declarado en el formulario cubre
     // el hueco mas_vendido desde el nacimiento del digest: la semana
@@ -3038,6 +3058,13 @@ function importTrialWeek(userId, igRaw, expectedBusiness, opts) {
   // semana tiene que regenerarse con el motor actual antes de registrarse.
   if (Number((out && out.engine) || 0) < demo.DEMO_ENGINE_V) {
     console.log(`[posta] importTrialWeek: semana de @${ig} es de un motor viejo (engine=${out && out.engine}) — no se importa`);
+    return 0;
+  }
+  // (LOTE DESTRABE-SOULCYCLE · pieza A4) La importacion tampoco trae
+  // una semana cuyo fundamento contradice al Instagram del invitado.
+  const contraImp = trialFundamentoContradice(out);
+  if (contraImp) {
+    console.log(`[posta] importTrialWeek: la semana de @${ig} contradice a su Instagram (${contraImp}) — no se importa`);
     return 0;
   }
   const exp = String(expectedBusiness || '').trim().toLowerCase();
@@ -11199,6 +11226,7 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
     const locksDeleted = trialLock.purgeLock ? trialLock.purgeLock(db, igKey, domainKey) : 0;
     let postsDeleted = 0, clockRefreshed = false;
     let chatDeleted = 0, chatMetaDeleted = 0;
+    let fundamentoBorrado = false, memoriaInvalidada = false;
     if (guestId && guestIsGuest) {
       try {
         const r = db.prepare('DELETE FROM posts WHERE user_id = ?').run(guestId);
@@ -11222,6 +11250,11 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
         const r = db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(guestId);
         chatDeleted = (r && r.changes) || 0;
       } catch (e) {}
+      // (LOTE DESTRABE-SOULCYCLE · pieza A4) El reseteo tambien
+      // limpia el FUNDAMENTO persistido del invitado (client_
+      // digest): la semana se regenera desde cero, no desde el
+      // fundamento cacheado de la corrida anterior.
+      try { if (clientDigest.deleteDigest(db, guestId)) fundamentoBorrado = true; } catch (e) {}
     }
     let cacheDeleted = 0;
     for (const k of cacheKeys) {
@@ -11230,11 +11263,27 @@ app.post('/api/admin/trial-reset', requireAdminToken, express.json(), (req, res)
         cacheDeleted += (r && r.changes) || 0;
       } catch (e) {}
     }
+    // (LOTE DESTRABE-SOULCYCLE · pieza A4) Y el estado EN MEMORIA de
+    // cada clave: la web temprana cacheada, la marca de generacion
+    // en curso y la cadena de rescate viva — sin esto, una cadena
+    // viva re-escribia la semana vieja sobre el reseteo y la
+    // siguiente lectura la servia cached:true (corrida SoulCycle 3).
+    try {
+      for (const k of cacheKeys) {
+        trialGenEarlyWebClear(k);
+        if (typeof trialGenMarkDone === 'function') trialGenMarkDone(k);
+        semanaRearmeToken(k, true);
+        semanaCadenasVivas.delete(k);
+        semanaRearmeEstado.delete(k);
+      }
+      memoriaInvalidada = true;
+    } catch (e) {}
     console.log(`[admin] trial-reset @${igKey || '—'} (${domainKey || '—'}): used=${usedDeleted} locks=${locksDeleted} posts=${postsDeleted} cache=${cacheDeleted} chat=${chatDeleted} meta=${chatMetaDeleted} guest=${guestId || '—'}`);
     return res.json({
       ...base,
       trial_used: usedDeleted, trial_locks: locksDeleted, posts: postsDeleted,
       trial_cache: cacheDeleted, chat_messages: chatDeleted, reset_hecho: true, trial_ends_refrescado: clockRefreshed,
+      fundamento_borrado: fundamentoBorrado, memoria_invalidada: memoriaInvalidada,
     });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
@@ -25100,6 +25149,40 @@ async function logoDelSitioYArchivo(siteUrl, fileBase) {
     return null;
   } catch (e) { return null; }
 }
+// (LOTE DESTRABE-SOULCYCLE · pieza B) MATERIALIZAR EL LOGO DE LA
+// PRUEBA AL NACER EL FUNDAMENTO: la ruta generate cosechaba el
+// archivo (logoTrialPromise) pero la ruta STREAM — la del invitado —
+// jamas lo pedia: el digest nacia con logo_file '' y la primera
+// pasada del rescate caia entera con «sin-archivo-de-logo» aunque la
+// foto de perfil (data: o https) estuviera en el payload (Blind
+// Barber · corrida SoulCycle 3, 15/11: ~17 minutos de freno). Este
+// es el embudo unico: corre ANTES de que el digest se cachee y de
+// que se calcule la ruta del logo para el rescate. Fuentes en
+// orden: la foto de perfil (data:/https via logoPaletaYArchivo) y
+// el logo del sitio. Sella digest.logo_file / digest.logo /
+// logo_paleta. Nunca tira: sin logo, la puerta decide como hoy.
+async function trialLogoMaterializar(digest, opts) {
+  try {
+    if (!digest || typeof digest !== 'object') return null;
+    const o = opts || {};
+    const ya = trialLogoAbsPath(digest);
+    if (ya) return ya;
+    const fileBase = String(o.fileBase || 'logo-trial').slice(0, 80);
+    let got = null;
+    const pic = String(o.pic || digest.logo_url || '').trim();
+    if (pic) got = await logoPaletaYArchivo(pic, fileBase).catch(() => null);
+    if (!got && o.webUrl) got = await logoDelSitioYArchivo(o.webUrl, fileBase).catch(() => null);
+    if (!got) return null;
+    if (pic && !digest.logo_url) digest.logo_url = pic;
+    digest.logo_file = got.file;
+    if (got.paleta && got.paleta.length >= 2) digest.logo_paleta = got.paleta;
+    try {
+      const s = clientDigest.sanitizeDigestLogo({ url: digest.logo_url || pic || '', file: got.file, fuente: pic ? 'ig' : 'web', at: Date.now() });
+      if (s) digest.logo = s;
+    } catch (e) {}
+    return trialLogoAbsPath(digest);
+  } catch (e) { return null; }
+}
 // Refresca el logo de una cuenta con fundamento: paleta desde el logo +
 // archivo local para el sello. Solo si hay logo_url y falta paleta o
 // archivo. Best-effort, nunca frena al llamador.
@@ -29636,6 +29719,40 @@ function semanaRearmeVigente(cacheKey, token) {
 // se declara incompleto en ninguna superficie: la semana queda en
 // armado honesto y el re-arme de pasadas (al final de esta función)
 // mantiene la cadena trabajando hasta completarla. Nunca tira.
+// (LOTE DESTRABE-SOULCYCLE · pieza C) LA CADENA QUE SE DETIENE LE
+// HABLA A UN HUMANO: la escalacion del Cierre 7 ya declaraba motivo
+// y desbloqueo y congelaba el gasto, pero el aviso quedaba SOLO en
+// el payload del trial_cache y en el log — la corrida SoulCycle 3
+// murio a las 19:31 EST en silencio y nadie se entero hasta mirar
+// el snapshot. Este es el ultimo tramo: la detencion abre (o
+// actualiza, por dedup) un caso en support_cases tipo
+// «prueba_trabada» — la superficie viva del equipo (consola de
+// soporte / pendientes del conserje) — con el motivo y el
+// desbloqueo. Un caso por clave+firma: si el insumo cambia, la
+// firma cambia y nace un caso nuevo. Nunca tira: el rescate no
+// depende del aviso.
+function avisoRescateHumano(cacheKey, motivo, desbloqueo) {
+  try {
+    if (!cacheKey || typeof supportCases === 'undefined' || !supportCases || typeof supportCases.openCase !== 'function') return null;
+    let uid = 0;
+    try {
+      const g = (typeof guestTrial !== 'undefined' && guestTrial && typeof guestTrial.findGuestByIdentity === 'function') ? guestTrial.findGuestByIdentity(db, cacheKey, '') : null;
+      if (g && g.id) uid = Number(g.id) || 0;
+    } catch (e) {}
+    if (!uid) {
+      try { const u = db.prepare('SELECT id FROM users WHERE guest_ig = ? ORDER BY id DESC').get(String(cacheKey)); if (u && u.id) uid = Number(u.id) || 0; } catch (e) {}
+    }
+    if (!uid) return null;
+    const r = supportCases.openCase(db, {
+      userId: uid, tipo: 'prueba_trabada',
+      titulo: 'Prueba trabada: la cadena de armado se detuvo',
+      detalle: `La semana de @${cacheKey} quedo en armado: la cadena de rescate se detuvo con motivo «${motivo || 'sin-motivo'}». Desbloqueo: ${desbloqueo || 'revisar el fundamento y re-abrir la cadena'}.`,
+      siguientePaso: 'Revisar el fundamento de la prueba (logo, contradiccion de fuentes) y re-correr o asistir al invitado.',
+      dedupKey: 'trial-rescate:' + cacheKey + ':' + String(motivo || 'sin-motivo'),
+    });
+    return r && r.ok ? r : null;
+  } catch (e) { return null; }
+}
 async function scheduleWeekRescue(o) {
   try {
     if (!o || !o.cacheKey || !Array.isArray(o.pieces) || !o.pieces.length) return { applied: false, reason: 'sin-datos' };
@@ -29936,6 +30053,11 @@ async function scheduleWeekRescue(o) {
               console.log(`[posta] scheduleWeekRescue ig=${o.cacheKey}: la semana ESCALA tras ${cierresD} cierres sin completar ninguna pieza — motivo ${motivoDomD}; desbloqueo: ${finR.escalacion.desbloqueo}`);
             }
             if (tocoD) db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at').run(o.cacheKey, JSON.stringify(finR), Date.now());
+            // (LOTE DESTRABE-SOULCYCLE · pieza C) La detencion —
+            // espera, pasadas agotadas o escalacion — le llega a
+            // un humano por la consola de soporte, no solo al
+            // snapshot de la semana.
+            if (tocoD) avisoRescateHumano(o.cacheKey, (finR.escalacion && finR.escalacion.motivo) || motivoFallback, finR.escalacion && finR.escalacion.desbloqueo);
           } catch (e) { /* la declaración jamás frena el rescate */ }
         };
         if (!pendR.length) {
@@ -38980,6 +39102,109 @@ function trialWebDomain(webRaw) {
 // regenera con la web nueva (la fila vieja se borra acá mismo). Sin
 // registro temprano, la caché se sirve como hoy. Devuelve el payload o
 // null; nunca lanza.
+// (LOTE DESTRABE-SOULCYCLE · piezas A1/A2/A4) LA RECONCILIACION
+// MANDA SOBRE EL FUNDAMENTO. La corrida SoulCycle 3 (15/11) lo dejo
+// probado: la puerta declaro la contradiccion IG<->web
+// (web_no_encaja: el Instagram es Fitness / Gym y la web tipeada,
+// soulcycle.com, es la tienda BMX de Amsterdam — la web real del
+// negocio, soul-cycle.com, vive en el link del perfil), el dueno
+// respondio «Fitness / Gym», y el fundamento igual se armo entero
+// con los servicios de la web equivocada: en la pasada respondida,
+// el atajo de la respuesta recomputo la reconciliacion sin las
+// clasificaciones y digest.reconciliacion quedo null — sin
+// reconciliacion no hay candidata de contradiccion, la puerta no
+// frena y la web perdedora alimenta servicios, productos y temas.
+function trialTextoNorm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+// La reconciliacion efectiva del fundamento: la que viaja en el
+// digest si existe; si no, se recomputa desde las partes que el
+// fundamento SI tiene (feed del IG + web leida + el rubro ya
+// confirmado), con el mismo reconcileSources de la puerta.
+function trialReconciliacionEfectiva(o) {
+  try {
+    const oo = o || {};
+    if (typeof rubroId === 'undefined' || !rubroId || typeof rubroId.reconcileSources !== 'function' || typeof rubroId.classifyBusiness !== 'function') return null;
+    const feed = oo.feed || {};
+    const igCls = rubroId.classifyBusiness({ bio: feed.bio || '', fullName: feed.name || '', captions: Array.isArray(feed.captions) ? feed.captions : [], handle: feed.handle || '' });
+    const webData = oo.webData || {};
+    const webCls = rubroId.classifyBusiness({
+      jsonldType: webData.categoryHint || '',
+      catalogText: ((webData.services || []).map((s) => (s && (s.name || s.title)) || '')).filter(Boolean).join(' · '),
+      webText: [webData.name || '', webData.description || ''].filter(Boolean).join(' '),
+    });
+    return rubroId.reconcileSources({
+      igCls, webCls, igPrefillRubro: oo.category || null,
+      web: { descripcion: webData.description || '', servicios: (webData.services || []).length, catalogo: oo.catalogo || 0, nombre: webData.name || '', url: webData.url || '' },
+    }) || null;
+  } catch (e) { return null; }
+}
+// CUARENTENA WEB: con contradiccion declarada, los items minados de
+// la web contradicha salen de los campos que alimentan la semana
+// (servicios/productos) y quedan registrados en digest.web_
+// cuarentena. Vale resuelta o no la duda: la respuesta del dueno
+// confirma el lado IG — la web que perdio no alimenta el fundamento
+// en ninguna pasada. (A2) La estrella inferida que ES uno de esos
+// items se des-infiere: la puerta de estrella vuelve a juzgar con
+// el fundamento limpio (la minada de la web actuaba de estrella de
+// la semana sin que la pregunta vinculante se disparara nunca,
+// porque la puerta solo mira inferred_star y venia null).
+function trialDigestCuarentenaWeb(digest, motivo, webNombres) {
+  try {
+    if (!digest || typeof digest !== 'object') return 0;
+    const nombresWeb = (webNombres && typeof webNombres.has === 'function') ? webNombres : new Set();
+    const fuentesWeb = new Set(['web', 'web-catalog', 'bio-link', 'home']);
+    const fuera = [];
+    const esDeLaWeb = (it) => {
+      if (!it) return false;
+      if (fuentesWeb.has(String(it.fuente || ''))) return true;
+      const n = trialTextoNorm(it.nombre || '');
+      return !!n && nombresWeb.has(n);
+    };
+    for (const campo of ['servicios', 'productos']) {
+      if (Array.isArray(digest[campo])) {
+        digest[campo] = digest[campo].filter((it) => {
+          if (esDeLaWeb(it)) { fuera.push(String((it && it.nombre) || '')); return false; }
+          return true;
+        });
+      }
+    }
+    if (digest.inferred_star && digest.inferred_star.nombre
+      && fuera.some((n) => trialTextoNorm(n) === trialTextoNorm(digest.inferred_star.nombre))) {
+      digest.inferred_star = null;
+    }
+    if (fuera.length) {
+      digest.web_cuarentena = { motivo: String(motivo || 'contradiccion'), items: fuera.slice(0, 20), at: Date.now() };
+    }
+    return fuera.length;
+  } catch (e) { return 0; }
+}
+// EL GUARDA DE LA SEMANA CACHEADA (A4): un payload cuyo fundamento
+// contradice al Instagram no se sirve ni se importa — se regenera.
+// Cubre la reconciliacion sin resolver y, por contenido, los
+// payloads viejos sin reconciliacion (el rubro del payload contra
+// la oferta que la web metio en el fundamento).
+function trialFundamentoContradice(payload) {
+  try {
+    if (!payload || typeof payload !== 'object') return null;
+    const dg = payload.digest || {};
+    const rec = dg.reconciliacion || null;
+    if (rec && rec.contradiccion && !rec.resuelta_por) return 'reconciliacion-' + (rec.motivo || 'contradiccion');
+    const cat = String(payload.category || '');
+    const wi = payload.web_info || {};
+    const servs = Array.isArray(dg.servicios) ? dg.servicios : [];
+    if (cat && servs.length && typeof rubroId !== 'undefined' && rubroId && typeof rubroId.reconcileSources === 'function' && typeof rubroId.classifyBusiness === 'function') {
+      const webCls = rubroId.classifyBusiness({
+        jsonldType: wi.categoryHint || '',
+        catalogText: servs.map((s) => (s && s.nombre) || '').filter(Boolean).join(' · '),
+        webText: [wi.name || '', wi.description || ''].filter(Boolean).join(' '),
+      });
+      const r = rubroId.reconcileSources({ igCls: null, webCls, igPrefillRubro: cat, web: { descripcion: wi.description || '', servicios: servs.length, catalogo: 0, nombre: wi.name || '', url: wi.url || '' } });
+      if (r && r.contradiccion) return 'contenido-' + (r.motivo || 'contradiccion');
+    }
+    return null;
+  } catch (e) { return null; }
+}
 function trialCacheServe(igKey, business, category, lang, webDomain) {
   try {
     const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
@@ -38998,6 +39223,16 @@ function trialCacheServe(igKey, business, category, lang, webDomain) {
     if (trialGenEarlyWebMismatch(igKey, webDomain)) {
       console.log(`[posta] trial_cache: la semana temprana de @${igKey} es de otra web — regenerando`);
       db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      return null;
+    }
+    // (LOTE DESTRABE-SOULCYCLE · pieza A4) Una semana cacheada cuyo
+    // fundamento contradice al Instagram NO se sirve: se borra y se
+    // regenera (la corrida SoulCycle 3 sirvio cached:true la semana
+    // armada con la web de otro negocio).
+    const contraServe = trialFundamentoContradice(probe);
+    if (contraServe) {
+      console.log(`[posta] trial_cache: el fundamento cacheado de @${igKey} contradice a su Instagram (${contraServe}) — se borra y se regenera`);
+      try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey); } catch (e) {}
       return null;
     }
     return probe;
@@ -40872,7 +41107,21 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             prof.link_unread = false;
             prof.link_fuente = 'perfil-reintento';
           } else {
-            prof.link_reintento_fallo = true;
+            // (LOTE DESTRABE-SOULCYCLE · pieza A3) SEGUNDA FUENTE
+            // DEL LINK: la bio SI se leyo (viaja en el embed) y el
+            // dueno suele escribir ahi su dominio — si la bio trae
+            // la web, esa web compite con la tipeada en
+            // trialWebCanonica como manda la precedencia (la real
+            // de SoulCycle, soul-cycle.com, vive en su bio; la
+            // tipeada soulcycle.com es otro negocio).
+            const bioLinkS = (feedAudit && typeof feedAudit.linkFromBioText === 'function') ? feedAudit.linkFromBioText(prof.bio) : null;
+            if (bioLinkS) {
+              prof.link = bioLinkS;
+              prof.link_unread = false;
+              prof.link_fuente = 'bio';
+            } else {
+              prof.link_reintento_fallo = true;
+            }
           }
         }
         if (!trialProfile) trialProfile = prof;
@@ -41775,6 +42024,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // Sin clave o sin tope de gasto, las piezas van directo a armado
     // y el rescate de fondo (tras el done, sobre trial_cache) sigue.
     const rescateSemanaS = [];
+    // (LOTE DESTRABE-SOULCYCLE · pieza B) EL LOGO NACE CON EL
+    // FUNDAMENTO tambien en el stream: la cosecha corre aca — antes
+    // de la primera pasada del rescate y de cachear la semana — con
+    // la foto de perfil (data: o https) y el logo del sitio de
+    // respaldo. Sin esto, digest.logo_file quedaba '' y cada pieza
+    // caia con «sin-archivo-de-logo» (Blind Barber · SoulCycle 3).
+    if (trialDigest && !testMode) {
+      await raceMs(trialLogoMaterializar(trialDigest, { pic: (trialProfile && trialProfile.pic) || igPic || '', webUrl: (webData && webData.url) || '', fileBase: `logo-trial-${String(ig || '').toLowerCase().replace(/[^a-z0-9._]/g, '')}` }), 6000).catch(() => null);
+    }
     const trialLogoPathS = trialLogoAbsPath(trialDigest);
     if (rescueIdxS.size) {
       const idxsRescue = [...rescueIdxS].sort((a, b) => a - b);
@@ -44225,7 +44483,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1111';
+const BUILD_ID = '20261105-v1112';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

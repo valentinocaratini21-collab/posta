@@ -344,6 +344,30 @@ function parseProfilePageLink(html, handle) {
   }
   return null;
 }
+// (LOTE DESTRABE-SOULCYCLE · pieza A3) EL LINK ESCRITO EN LA BIO: la
+// pagina del perfil es la unica fuente del link y desde produccion
+// muere seguido (el embed no trae external_url — verificado — y el
+// reintento de la pagina volvio fallido en la corrida SoulCycle 3:
+// la web real, soul-cycle.com, nunca compitio con la tipeada
+// soulcycle.com, que es OTRO negocio). La bio SI se lee (viaja en el
+// embed) y los duenos suelen escribir ahi su dominio o su linkera:
+// ese texto es del dueno, publicado en su propio perfil — una
+// fuente con identidad. Se extrae el primer dominio/URL con pinta
+// de sitio propio; se descartan las redes sociales (no son la web
+// del negocio).
+function linkFromBioText(bio) {
+  const s = String(bio || '');
+  if (!s) return null;
+  const m = s.match(/((?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9-]*\.[a-z]{2,}(?:\.[a-z]{2,})?(?:\/[^\s]*)?)/i);
+  if (!m) return null;
+  let u = m[1].replace(/[.,;!?)]+$/, '');
+  const host = u.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase();
+  if (!host) return null;
+  if (/(^|\.)(instagram|facebook|fb|tiktok|youtube|youtu|twitter|x|whatsapp|wa|telegram|t|linkedin|pinterest|spotify|google)\.(com|me|co)$/.test(host)) return null;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { new URL(u); } catch (e) { return null; }
+  return u.slice(0, 300);
+}
 // (LOTE SOULCYCLE-CIERRE-6 · parte a) EL REINTENTO DE LA LECTURA DEL
 // LINK: si el link del perfil llegó SIN LEER (link_unread), se vuelve a
 // leer desde la página del perfil (demo.fetchIgProfilePageHtml, la
@@ -1529,6 +1553,7 @@ module.exports = {
   parseProfilePageVerified,
   parseProfilePageLink,
   retryProfileLink,
+  linkFromBioText,
   resolveHomeVerified,
   trialProfileFromAudit,
   trialAuditFromData,
