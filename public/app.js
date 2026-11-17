@@ -33494,15 +33494,11 @@ function apvMoreHTML(p, st, canMenu, isDraft, editPrompt) {
   if (st === 'scheduled') b += `<button class="apv-sec-btn" id="apvHold" data-apvid="${id}">⏸<span>${en ? 'Hold' : 'Frenar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvDelete" data-apvid="${id}">${pzIc('trash', 20)}<span>${en ? 'Delete' : 'Eliminar'}</span></button>`;
   b += `<button class="apv-sec-btn" id="apvRedo" data-apvid="${id}">↻<span>${en ? 'Redo' : 'Rehacer'}</span></button>`;
-  // (FUNDAMENTO-LITERAL · pieza 5) Veto desde el posteo en revisión: el
-  // cliente escribe el tema que NO vende y queda vetado para siempre en
-  // su fundamento (puerta dura en todos los caminos de generación).
-  // (RUBRO-GARANTÍAS ×6 · pieza 2) «No es mi rubro» en un toque: veta el
-  // tema DEL posteo (sin escribir nada) y regenera el hueco. Va en la
-  // MISMA fila del veto, no es un sexto botón del menú: el menú sigue
-  // con sus 5 opciones.
-  const rgTopic = esc(String(p.titulo || String(p.caption || '').split('\n')[0] || '').slice(0, 60));
-  b += `<div class="apv-veto-row" style="display:flex;gap:6px;margin-top:8px"><input id="apvVetoInput" class="apv-veto-input" style="flex:1;min-width:0;font-size:14px;padding:8px 10px;border:1px solid #DCEFFF;border-radius:10px" placeholder="${en ? 'What do you NOT sell? e.g. flowers' : '¿Qué NO vendés? ej: flores'}"><button class="apv-veto-btn" id="apvVetoBtn" type="button" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit">🚫<span>${en ? 'I don\'t sell this' : 'Esto no lo vendo'}</span></button><button class="apv-veto-btn" id="apvNoRubroBtn" type="button" data-apvid="${id}" data-topic="${rgTopic}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;color:var(--cel);font-size:10.5px;font-weight:700;line-height:1.2;padding:8px 2px;cursor:pointer;font-family:inherit">🚫<span>${en ? 'Not my niche' : 'No es mi rubro'}</span></button></div>`;
+  // (LOTE SIN-VETO · 17/11 · orden Valentino) La fila de veto del
+  // detalle salió: las correcciones de rubro llegan por audio y las
+  // atiende bamboo a mano. Los endpoints quedan dormidos en el
+  // servidor y el guarda de rubro no se toca; el menú sigue con
+  // sus opciones de siempre.
   return `<div class="apv-actions apv-more" id="apvMore"><button type="button" class="apv-menu-btn" id="apvMenuBtn" aria-expanded="false" aria-controls="apvMenu" aria-label="${en ? 'More actions' : 'Más acciones'}">•••</button><div class="apv-menu" id="apvMenu" hidden>${b}</div></div>`;
 }
 function pzApvMenuToggle() {
@@ -33597,34 +33593,6 @@ function bindApprovalPost() {
   // mensaje (post_id) y el chat se abre con el posteo anclado.
   const apvShareChat = document.getElementById('apvShareChat');
   if (apvShareChat) apvShareChat.onclick = () => pzCompartirPosteoChat(apvShareChat.dataset.apvid);
-  // (FUNDAMENTO-LITERAL · pieza 5) Veto desde el posteo en revisión.
-  const apvEn = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const vb = document.getElementById('apvVetoBtn');
-  if (vb) vb.onclick = async () => {
-    const inp = document.getElementById('apvVetoInput');
-    const t = (inp && inp.value || '').trim();
-    if (!t) { toast('✏️ ' + (apvEn ? 'Write the topic you do not sell' : 'Escribí el tema que no vendés')); return; }
-    try {
-      await api.post('/api/fundamento/veto', { termino: t });
-      toast('✅ ' + (apvEn ? 'Vetoed: it will never generate again' : 'Vetado: nunca más se genera'));
-      if (inp) inp.value = '';
-    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo vetar')); }
-  };
-  // (RUBRO-GARANTÍAS ×6 · pieza 2) «No es mi rubro» en un toque: un solo
-  // llamado veta el tema y regenera el hueco desde un producto real
-  // (el servidor aplica el veto antes de generar). Si no hay idea con
-  // producto real, el veto igual queda y se avisa con honestidad.
-  const nrb = document.getElementById('apvNoRubroBtn');
-  if (nrb) nrb.onclick = async () => {
-    const t = (nrb.dataset.topic || '').trim();
-    if (!t) { toast('✏️ ' + (apvEn ? 'Write the topic you do not sell' : 'Escribí el tema que no vendés')); return; }
-    try {
-      const r = await api.post('/api/posts/' + encodeURIComponent(nrb.dataset.apvid) + '/no-es-mi-rubro', { termino: t });
-      if (r && r.ok) toast('✅ ' + (apvEn ? 'Not your niche: vetoed and regenerated from ' : 'No es tu rubro: vetado y regenerado desde ') + esc(r.producto || '') + '. ' + (apvEn ? 'Review it and approve it again.' : 'Revisalo y volvé a aprobarlo.'));
-      else toast('ℹ️ ' + esc((r && r.error) || (apvEn ? 'Veto saved.' : 'Veto guardado.')));
-    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo vetar')); }
-    try { render(); } catch (e) {}
-  };
   // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
   // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
 
