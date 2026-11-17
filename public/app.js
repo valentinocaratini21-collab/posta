@@ -18083,6 +18083,37 @@ function pzAdsElegirBtnHTML() {
   return `<button type="button" onclick="pzAdsPickOpen()" style="width:100%;box-sizing:border-box;padding:12px;border-radius:14px;border:2px solid #DCEFFF;background:#fff;font-weight:800;font-size:14.5px;color:var(--txt);cursor:pointer;margin:2px 0 14px">${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
 }
 
+// (LOTE ADS-GUÍA-CUENTA) La guía corta del caso sin cuenta: la
+// compuerta quedó en 'sin_cuenta_publicitaria' — o el cliente salteó
+// la elección de la cuenta en el diálogo de Meta, o su negocio
+// TODAVÍA NO TIENE cuenta publicitaria. Para el segundo, el botón
+// «Conectar» solo no alcanza: la cuenta se crea en Meta y después el
+// MISMO toque de conexión la captura — la detección ya existe (el
+// callback de la vuelta vuelve a enumerar las cuentas del cliente y
+// adsReadiness lee la fila fresca en cada carga de la tarjeta): no
+// se construyó detección nueva. El enlace abre la sección exacta de
+// la configuración de Meta Business donde se crea (Configuración →
+// Cuentas → Cuentas publicitarias; ahí el botón «+ Agregar» ofrece
+// «Crear una cuenta publicitaria nueva»). La guía cierra con el
+// segundo muro silencioso: sin un medio de pago cargado en Meta, la
+// pauta no puede correr. Se pinta SOLO con ese motivo, dentro de las
+// dos superficies reducidas del flujo de impulso (la tarjeta del tab
+// Ads y la hoja de Impulsar); con cualquier otro motivo — o con la
+// compuerta abierta — ninguna de las dos pantallas cambia.
+function pzAdsGuiaSinCuentaHTML() {
+  const urlCrear = 'https://business.facebook.com/latest/settings/ad_accounts';
+  return `<div class="pz-ads-guia" style="margin-top:14px;padding-top:13px;border-top:1px solid #e3edf5;text-align:left">
+    <b style="font-size:14.5px">${esc(gzT('¿Todavía no tenés una cuenta publicitaria?', 'No ad account yet?'))}</b>
+    <p style="margin:6px 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(gzT('Si ya tenés una, no crees otra: al reconectar, elegila en el paso de Facebook. Si no tenés, creala en Meta — tarda un minuto:', 'If you already have one, don’t create another: when you reconnect, pick it in the Facebook step. If you don’t, create it in Meta — it takes a minute:'))}</p>
+    <a class="btn btn-ghost btn-block" href="${urlCrear}" target="_blank" rel="noopener">${esc(gzT('Crear mi cuenta publicitaria en Meta', 'Create my ad account in Meta'))}</a>
+    <ol style="margin:11px 0 0;padding-left:19px;font-size:13.5px;line-height:1.55;color:#33475b">
+      <li>${esc(gzT('En Meta, tocá «+ Agregar» y elegí «Crear una cuenta publicitaria nueva»: nombre, zona horaria y moneda.', 'In Meta, tap “+ Add” and choose “Create a new ad account”: name, time zone and currency.'))}</li>
+      <li>${esc(gzT('Volvé acá y tocá «Conectar mi cuenta publicitaria»: Posty la detecta sola.', 'Come back here and tap “Connect my ad account”: Posty detects it on its own.'))}</li>
+      <li>${esc(gzT('Y en Meta cargá un medio de pago en tu cuenta: sin medio de pago, la pauta no puede correr.', 'And in Meta, add a payment method to your account: without one, ads can’t run.'))}</li>
+    </ol>
+  </div>`;
+}
+
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
@@ -18166,7 +18197,7 @@ function pzAdsHTML() {
     const lineaAut = p.recomendado
       ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: connect your ad account.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.')
       : (en ? 'One tap is all it takes to boost it: connect your ad account.' : 'Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.');
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p>${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
@@ -19052,6 +19083,7 @@ function pzBoostPintarBoost() {
     </div>
     <button type="button" class="btn btn-primary btn-block" onclick="pzBoostConectarCuenta(this)">${esc(gzT('Conectar mi cuenta publicitaria', 'Connect my ad account'))}</button>
     <p class="pz-boost-note">${esc(gzT('No se gastó nada.', 'Nothing was spent.'))}</p>
+    ${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}
     <p class="pz-boost-msg" id="pzBoostMsg"></p>
   </div>`;
     return;
