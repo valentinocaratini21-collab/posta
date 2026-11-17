@@ -19335,6 +19335,7 @@ function pzAdsAudienciaHTML() {
     ${grupo(en ? 'AGES' : 'EDADES', edades)}
     ${grupo(en ? 'WHO' : 'QUIÉNES', generos)}
     ${grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
+    <div id="pzAdsAudienciaError">${(s.boostError ? pzBoostErrorHTML(s.boostError.motivo, s.boostError.monto, s.boostError.cobroId) : '')}</div>
     <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Go with this 🚀' : 'Sale así 🚀')}</button>
     <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Go with this”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».')}</p>
   </div>`;
@@ -19365,6 +19366,7 @@ async function pzAdsAudienciaMostrar() {
       if (!s.chipExtra && j.propuesta.pendiente && j.propuesta.pendiente.chip) s.chipExtra = j.propuesta.pendiente.chip;
     }
     s.audienciaVisible = true;
+    s.boostError = null; // (LOTE ADS-CREACIÓN-2) tarjeta fresca: no hereda el error de un intento anterior
     const pinte = pzAdsAudienciaPintar();
     // (LOTE ADS-PANTALLA-2) Si el paso de audiencia vive en la hoja de
     // impulso, la hoja arranca desde su tope con la tarjeta entera a
@@ -19423,7 +19425,10 @@ async function pzAdsAudienciaSale(btn) {
   const j = await pzBoostConfirmar(btn);
   if (j && j.ok) {
     try { if (document.getElementById('pzAdsRoot')) await pzAdsRefrescar(); } catch (e) {}
-  } else if (j && j.motivo && j.motivo !== 'audiencia_pendiente') {
+  } else if (j && j.motivo && j.motivo !== 'audiencia_pendiente' && !s.boostError) {
+    // (LOTE ADS-CREACIÓN-2) Si pzBoostConfirmar ya dejó el bloque de
+    // error visible (boostError), este fallback no lo pisa con el
+    // texto chico de antes.
     const m = document.getElementById('pzAdsRecMsg');
     if (m) m.textContent = pzBoostMotivo(j.motivo, monto, j.cobroId);
   }
@@ -19515,6 +19520,35 @@ function pzAdsAudienciaDescartarExtra() {
   try { api.post('/api/ads/billetera/audiencia/pendiente', { accion: 'descartar' }).catch(() => {}); } catch (e) {}
   pzAdsAudienciaPintar();
 }
+// (LOTE ADS-CREACIÓN-2) El bloque de error del impulso: VISIBLE y
+// persistente, en palabras de cliente — qué pasó y la garantía de
+// que no se cobró nada. Sin jerga de Meta: el detalle técnico vive
+// solo en el registro de admin (la fila 'error' de ad_boosts). Antes
+// el motivo caía como texto chico en un <p> que en el camino del
+// «Sale así» ni siquiera estaba en la pantalla visible (el mensaje
+// de la hoja, con la hoja cerrada): el cliente tocaba y «no pasaba
+// nada» (reporte del dueño, 17/11).
+function pzBoostErrorHTML(motivo, monto, cobroId) {
+  const paso = (motivo === 'anuncio_fallido')
+    ? gzT('Meta no aceptó la campaña.', 'Meta didn’t accept the campaign.')
+    : pzBoostMotivo(motivo, monto, cobroId);
+  const yaDice = /no se (cobró|gastó)|nothing was (charged|spent)/i.test(paso);
+  const garantia = yaDice ? '' : gzT('No se cobró nada.', 'Nothing was charged.');
+  return `<div role="alert" style="border:1.5px solid #E5A3A3;background:#FDF0F0;border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.5;color:#7A1F1F"><b>${esc(paso)}</b>${garantia ? `<br>${esc(garantia)}` : ''}</div>`;
+}
+
+// Pinta el error guardado en la ranura de la tarjeta de audiencia
+// (donde el cliente está mirando: arriba del «Sale así») y lo trae
+// a la vista. Devuelve true si lo pintó.
+function pzBoostPintarError() {
+  const s = pzBoostState || {};
+  const slot = document.getElementById('pzAdsAudienciaError');
+  if (!slot || !s.boostError) return false;
+  slot.innerHTML = pzBoostErrorHTML(s.boostError.motivo, s.boostError.monto, s.boostError.cobroId);
+  try { slot.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  return true;
+}
+
 async function pzBoostConfirmar(btn, enTarjeta) {
   const s = pzBoostState || {};
   const p = s.selPost || null;
@@ -19535,6 +19569,10 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     if (mostrada) return { ok: false, motivo: 'audiencia_pendiente' };
   }
   if (btn) btn.disabled = true;
+  // (LOTE ADS-CREACIÓN-2) Un intento nuevo limpia el error anterior
+  // de la tarjeta (el mensaje de la hoja/tarjeta se reescribe con el
+  // resultado de este intento).
+  if (s.boostError) { s.boostError = null; const be = document.getElementById('pzAdsAudienciaError'); if (be) be.innerHTML = ''; }
   let j = null;
   // (v846) El reciente sin fila se impulsa por ig_media_id: el servidor
   // lo adopta y devuelve el posteoId nuevo.
@@ -19555,6 +19593,7 @@ async function pzBoostConfirmar(btn, enTarjeta) {
   try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
   if (j && j.ok) {
+    s.boostError = null; // (LOTE ADS-CREACIÓN-2) éxito: no queda error de un intento anterior
     const key = pzBoostKey(p);
     pzBoostImpulsados.add(key);
     if (pzBoostState) {
@@ -19571,7 +19610,15 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     try { toast(gzT('✓ Posteo impulsado por 7 días', '✓ Post boosted for 7 days')); } catch (e) {}
   } else {
     const motivo = (j && j.motivo) || '';
-    decir(pzBoostMotivo(motivo, monto, j && j.cobroId));
+    // (LOTE ADS-CREACIÓN-2) El error se VE: queda guardado en el
+    // estado y pintado como bloque donde el cliente está mirando —
+    // la ranura de la tarjeta de audiencia (sobre el «Sale así») y
+    // el mensaje de la hoja/tarjeta — en vez del texto chico que se
+    // perdía. El botón ya quedó rehabilitado arriba: puede
+    // reintentar en el acto.
+    s.boostError = { motivo, monto, cobroId: (j && j.cobroId) || null };
+    if (msgEl) msgEl.innerHTML = pzBoostErrorHTML(motivo, monto, j && j.cobroId);
+    pzBoostPintarError();
     if (enTarjeta && (motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada')) pzAdsImpulsarAdjuntarTarjeta(msgEl);
   }
   return j;

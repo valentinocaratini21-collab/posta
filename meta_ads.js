@@ -226,8 +226,16 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   };
 
   // 1. Campaña (pausada hasta tener todo listo)
+  // (LOTE ADS-CREACIÓN-2) El presupuesto vive en el CONJUNTO
+  // (lifetime_budget, paso 2), nunca en la campaña: sin presupuesto
+  // de campaña, Meta exige declarar is_adset_budget_sharing_enabled
+  // en el cuerpo de la campaña — sin el campo rechazó la creación
+  // del dueño (17/11, paso campaña · code 100 · subcode 4834011).
+  // false = los conjuntos no comparten presupuesto entre sí: el
+  // comportamiento de un impulso simple de un solo conjunto.
   const camp = await pasoBoost('campaña', () => g(`${A}/campaigns`, { method: 'POST', ctx: gctx, params: {
     name, objective: objective || 'OUTCOME_ENGAGEMENT', status: 'PAUSED', special_ad_categories: [],
+    is_adset_budget_sharing_enabled: false,
   }}));
 
   // 2. Conjunto de anuncios: presupuesto total en `days` días. Sin
@@ -235,6 +243,23 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   const now = Date.now();
   const start = new Date(now + 30 * 60000).toISOString();
   const end = new Date(now + days * 86400000).toISOString();
+  // (LOTE ADS-CREACIÓN-2) targeting_automation.advantage_audience
+  // declarado SIEMPRE, en una copia (el targeting del llamador no se
+  // muta): desde v23.0 la creación de un conjunto con segmentación
+  // no-default — edades explícitas del estudio + intereses y/o
+  // audiencias, sin relajación — ERRORA si el flag no viene
+  // explícito (ADS_TARGETING__REQUIRE_EXPLICIT_ADVANTAGE_AUDIENCE_
+  // FLAG); es la misma clase de error que el de la campaña. Vale 0:
+  // el público estudiado que el cliente confirmó manda como
+  // restricción. Con 1, las edades e intereses pasan a ser «señales»
+  // que Meta puede expandir y las edades duras fuera de 18–25 con
+  // techo 65 revientan — contradice el diseño. Si el targeting ya
+  // lo declara, se respeta su valor.
+  const targetingIn = targeting || { geo_locations: { countries: [country] }, age_min: 18, age_max: 65 };
+  const targetingFinal = {
+    ...targetingIn,
+    targeting_automation: { advantage_audience: 0, ...((targetingIn && targetingIn.targeting_automation) || {}) },
+  };
   const adsetParams = {
     name: `${name} · conjunto`,
     campaign_id: camp.id,
@@ -242,7 +267,7 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
     billing_event: 'IMPRESSIONS',
     optimization_goal: optimizationGoal || 'POST_ENGAGEMENT',
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-    targeting: targeting || { geo_locations: { countries: [country] }, age_min: 18, age_max: 65 },
+    targeting: targetingFinal,
     start_time: start, end_time: end, status: 'PAUSED',
   };
   if (destinationType) adsetParams.destination_type = destinationType;
@@ -254,7 +279,16 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   // riel del cliente (objetivo «comprar» de la tarjeta, 17/11): el
   // conjunto salía sin promoted_object. Sin Página no se fabrica:
   // queda el rechazo de Meta, ahora registrado entero.
-  if (destinationType === 'INSTAGRAM_DIRECT' && pageId) {
+  // (LOTE ADS-CREACIÓN-2) El promoted_object se declara con CUALQUIER
+  // destino de engagement si hay Página: las fuentes vigentes del
+  // boost de posteo existente (la doc del conector oficial de Meta y
+  // implementaciones en producción) describen el conjunto de
+  // engagement con la Página nombrada en promoted_object, y hay
+  // registro del paso del anuncio fallando sin él (subcode 1885154);
+  // es la misma Página que el creativo ya referencia (object_id) y
+  // declararlo no cambia la entrega cuando no se exige. Sin Página
+  // no se fabrica.
+  if (pageId) {
     adsetParams.promoted_object = { page_id: String(pageId) };
   }
   const adset = await pasoBoost('conjunto', () => g(`${A}/adsets`, { method: 'POST', ctx: gctx, params: adsetParams }));
