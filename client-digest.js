@@ -2655,6 +2655,34 @@ function starOptionOk(digest, raw) {
   return isProductNameForm(name); // BRAZO B — forma de nombre de producto
 }
 
+/* (LOTE CONFIRMACIÓN-CORROBORADA — corrida ×10 #2, @tamalehouseatx,
+ * 16/11/2026) LA PUERTA DE LA CONFIRMACIÓN: la duda que confirma una
+ * estrella YA DECLARADA por el dueño (el conflicto
+ * estrella_dueno_sin_encaje) no es la duda regular. En la regular,
+ * Posty todavía no tiene la palabra del dueño y ofrecer un nombre
+ * con forma de producto (brazo B) es la apuesta honesta de
+ * ANTI-FRAGMENTO. En la confirmación, el dueño YA habló («Texas
+ * Sized Tamales», en texto libre) y cada opción minada que compite
+ * contra su palabra se le presenta como «lo que leímos de tu
+ * negocio»: una frase del collage promocional de su único posteo
+ * («World Cup», «Celebrate Father's Day», «Match that length.»)
+ * pasa el brazo B — es multi-palabra capitalizada sin palabras de
+ * las listas — y salió ofrecida como si fuera lectura del negocio.
+ * Fallo del tablero (16/11): en la confirmación se exige la pata de
+ * CORROBORACIÓN o se filtran las frases de evento. Esta puerta es
+ * eso: las mismas barras negativas de starOptionOk y SOLO el brazo
+ * A (starNamedEvidenceOk) — sin superficie externa que nombre al
+ * ítem (catálogo, web, ADN, foto mapeada, Tiendanube), la opción
+ * minada NO compite contra la palabra del dueño. La declarada no
+ * pasa por ninguna puerta: es su declaración, no texto cosechado. */
+function starOptionConfirmadaOk(digest, raw) {
+  const name = cleanOfferName(raw);
+  if (!name) return false;
+  if (!isPlausibleOfferItem(name)) return false;
+  if (isChromeDerivedName(name) || isCreditRoleName(name)) return false;
+  return starNamedEvidenceOk(digest, name); // SOLO BRAZO A — corroboración
+}
+
 /* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
  * estrella inferido se CONFIRMA con un toque y cada contradicción se
  * resuelve preguntando — leer propone, el dueño valida. */
@@ -2935,12 +2963,22 @@ function trialQuestionFor(digest, opts) {
         const opcionesC = [];
         // (LOTE ANTI-FRAGMENTO DE ANCLAS) La palabra del dueño
         // (c.declarada) NO se filtra: es su declaración, no texto
-        // cosechado. El ancla minada y los rellenos sí pasan la
-        // puerta positiva (starOptionOk): un fragmento no compite
-        // contra la palabra del dueño como si fuera un producto.
+        // cosechado. El ancla minada y los rellenos sí pasan una
+        // puerta positiva: un fragmento no compite contra la
+        // palabra del dueño como si fuera un producto.
+        // (LOTE CONFIRMACIÓN-CORROBORADA) Esa puerta ya no es la de
+        // la duda regular: en la confirmación la opción minada
+        // exige CORROBORACIÓN (starOptionConfirmadaOk — solo el
+        // brazo A), porque se le presenta al dueño como «lo que
+        // leímos de tu negocio» contra su propia palabra. La forma
+        // de nombre (brazo B) alcanzó para que el collage
+        // promocional de @tamalehouseatx compitiera contra «Texas
+        // Sized Tamales» (corrida ×10 #2). Si solo sobrevive la
+        // declarada, la duda sale con esa sola opción válida: el
+        // front suma su salida de siempre («Otro» / texto libre).
         const pushOpC = (raw, esDeclarada) => {
           const v = String((raw && (raw.nombre || raw)) || '').trim();
-          if (v && (esDeclarada || starOptionOk(digest, v)) && !opcionesC.some((x) => sameItemName(x, v))) opcionesC.push(v);
+          if (v && (esDeclarada || starOptionConfirmadaOk(digest, v)) && !opcionesC.some((x) => sameItemName(x, v))) opcionesC.push(v);
         };
         pushOpC(c.declarada, true);
         pushOpC(c.item, false);
@@ -4812,6 +4850,10 @@ module.exports = {
   // opciones de la duda: ninguna superficie ofrece un fragmento como
   // respuesta de un toque (testeables).
   starOptionOk, isProductNameForm,
+  // (LOTE CONFIRMACIÓN-CORROBORADA) La puerta de la confirmación del
+  // conflicto: la opción minada que compite contra la palabra ya
+  // declarada del dueño exige corroboración (solo brazo A).
+  starOptionConfirmadaOk,
   // (v235) Identificación de rubro (rubro-id.js re-exportado)
   rubroId,
 };
