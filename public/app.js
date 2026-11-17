@@ -5030,7 +5030,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pz-mg pz-mg--heroI"><img class="hero-posty" src="valentino-posty-fundador.jpg?v=2" alt="Valentino y Posty, tus community managers"></div>
     <div class="pill">Tus community managers</div>
-    <h1>«Mi feed queda a medias y no me trae clientes», <span class="hl">nosotros posteamos por tu negocio todos los días, con tu producto real.</span></h1>
+    <h1>«No tengo tiempo de postear en Instagram todos los días», <span class="hl">nosotros posteamos por tu negocio todos los días, con tu producto real.</span></h1>
     
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
