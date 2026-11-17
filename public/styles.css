@@ -445,6 +445,17 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .set-row:last-child{border-bottom:none}
 .set-row .t{font-weight:700;font-size:13px}
 .set-row .d{font-size:11.5px;color:var(--dim);margin-top:4px;max-width:520px;line-height:1.55}
+/* (LOTE AJUSTES-MÓVIL) En pantallas angostas la fila de Ajustes se apila:
+   el texto ocupa todo el ancho y los controles quedan debajo, visibles
+   enteros. Sin esto, en la fila de la cuenta conectada los botones
+   «Verificar conexión» / «Desconectar» se salían por el borde derecho y
+   el texto se aplastaba a una palabra por línea (captura de Valentino en
+   su iPhone, 17/11). El corte 760px es el de esta hoja para filas y
+   tarjetas (.row2, #planList, .mtop). */
+@media(max-width:760px){
+  .set-row{flex-direction:column;align-items:stretch;gap:10px}
+  .set-row .d{max-width:none}
+}
 
 /* ---------- Mi plan en Ajustes: tarjetas pro ---------- */
 #planList{padding-top:16px}
