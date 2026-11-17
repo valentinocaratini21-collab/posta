@@ -21406,7 +21406,7 @@ async function ensureTodayPost(uid, tz, now) {
           try { d = new Date(String(c.created_at || '').replace(' ', 'T') + 'Z'); } catch (e) {}
           if (d && !isNaN(d) && morningPostPush.dayKeyInTz(d, tz) === hoy) { draft = c; break; }
         }
-      } catch (e) { /* sin borrador: se genera */ }
+      } catch (e) { /* sin borrador: se genera (para un invitado marcado, la generación frena en la marca más abajo — CORTE-ASEGURADOR) */ }
       if (draft) {
         // (LOTE SERIE-FEED-PROPIO) Defensa en profundidad del paso
         // 1.5: un borrador GOBERNADO cuyo día derivado es OTRO día no
@@ -21414,11 +21414,48 @@ async function ensureTodayPost(uid, tz, now) {
         // desliza fuera de su serie. (Si hoy fuera su día, el paso
         // 1.5 ya lo trató.)
         let diaSerieDraft = null;
-        try { diaSerieDraft = serieFeed.diaDerivadoDe(db, draft, tz); } catch (e) {}
+        try { diaSerieDraft = serieFeed.diaDerivadoDe(db, draft, tz); } catch (e) { /* sin mapa de serie legible: el borrador es del dueño y se promueve igual (promover no genera) */ }
         if (!diaSerieDraft || diaSerieDraft === hoy) {
           const prog = programarHoy(uid, draft.id, tz, hoy);
           if (prog) return { ok: true, post: prog, fuente: 'borrador' };
         }
+      }
+      // (LOTE CORTE-ASEGURADOR) LA MARCA MANDA SOBRE LA GENERACIÓN: si
+      // el usuario es un invitado con semana de prueba marcada LÍNEA A
+      // MANO, el asegurador NO genera — su posteo del día ES la prueba
+      // en armado, que produce bamboo a mano. La guarda de abajo lee la
+      // tabla posts y la semana cáscara de la puerta sin gasto no tiene
+      // filas al entrar el invitado: quedaba ciega y el asegurador
+      // generó para los invitados 122/123 al abrir la casa (posteos
+      // 704/705/707, descartados a mano; gasto concept-shot fuera del
+      // tope demo). La marca se resuelve desde el uid sin inventar
+      // esquema: primero por el user_id que el barrido ata a la marca
+      // y, si todavía no ató (la marca nace con user_id=0), por la
+      // identidad del invitado (users.guest_ig/guest_domain → la
+      // claveCache de linea-mano → marcaActiva) — la misma identidad
+      // que findGuestByIdentity cruza al revés. Solo frena a invitados
+      // (is_guest): cuando el invitado se convierte, el ciclo de vida
+      // de la marca la levanta y la garantía del cliente real queda
+      // intacta. Ante CUALQUIER error leyendo la marca: no se genera
+      // (fail-closed) — bajo la orden de gasto cero, la duda frena.
+      {
+        let marcaLM = false;
+        let marcaDudaLM = false;
+        try {
+          const uLM = db.prepare('SELECT is_guest, guest_ig, guest_domain FROM users WHERE id = ?').get(uid);
+          if (uLM && Number(uLM.is_guest || 0)) {
+            lineaMano.ensureSchema(db);
+            const atadaLM = db.prepare(`SELECT cache_key FROM trial_linea_mano WHERE user_id = ? AND estado = 'activa' LIMIT 1`).get(uid);
+            if (atadaLM) marcaLM = true;
+            else {
+              const igLM = trialLock ? trialLock.normalizeIg(uLM.guest_ig || '') : String(uLM.guest_ig || '').trim().replace(/^@/, '').toLowerCase();
+              const domLM = trialLock ? trialLock.normalizeDomain(uLM.guest_domain || '') : '';
+              const ckLM = lineaMano.claveCache(igLM, domLM);
+              if (ckLM && lineaMano.marcaActiva(db, ckLM)) marcaLM = true;
+            }
+          }
+        } catch (e) { marcaDudaLM = true; }
+        if (marcaLM || marcaDudaLM) return { ok: false, reason: 'prueba_linea_mano' };
       }
       // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) La
       // prueba NO se desplaza: si la secuencia de la prueba (días 1–3,
@@ -21436,18 +21473,18 @@ async function ensureTodayPost(uid, tz, now) {
           const fd = morningPostPush.dayKeyInTz(new Date(String(tFirst.scheduled_at).replace(' ', 'T')), tz);
           if (fd && fd > hoy && fd <= shiftDays(hoy, 3)) return { ok: false, reason: 'prueba_por_empezar' };
         }
-      } catch (e) { /* sin lectura de prueba: el pipeline decide */ }
+      } catch (e) { /* (CORTE-ASEGURADOR) lectura de prueba ilegible: fail-closed — no se genera */ return { ok: false, reason: 'prueba_ilegible' }; }
       // 3) Nada hoy: generar UNO. Cupo semanal de feed: sin cupo no se
       // genera (límite honesto del plan, igual que /api/ritual/elegir).
       // (LOTE SERIE-FEED-PROPIO) Guarda de generación: si hoy quedó
       // RESERVADO por la serie (el paso 1.5 ya trató a la dueña; esto
       // cubre el mapa que cambió entre pasos), NO se genera un posteo
       // extranjero para hoy.
-      try { if (serieFeed.piezaDuenaDelDia(db, uid, hoy, tz)) return { ok: false, reason: 'dia_de_serie' }; } catch (e) {}
+      try { if (serieFeed.piezaDuenaDelDia(db, uid, hoy, tz)) return { ok: false, reason: 'dia_de_serie' }; } catch (e) { /* sin mapa de serie legible: la generación de clientes sigue; la de un invitado marcado ya frenó en la marca (CORTE-ASEGURADOR) */ }
       try {
         const q = quotaFor(uid, 'image');
         if (q && q.left <= 0) return { ok: false, reason: 'plan_limit' };
-      } catch (e) { /* sin cupo legible: el pipeline decide */ }
+      } catch (e) { /* sin cupo legible: sigue el pipeline — es el cupo de plan de los clientes reales; la población de prueba ya frenó arriba en la marca (CORTE-ASEGURADOR) */ }
       const idea = ideaDiariaSintetica(uid, hoy);
       if (!idea) return { ok: false, reason: 'no_idea' };
       let gen = null;
@@ -45952,7 +45989,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1149';
+const BUILD_ID = '20261105-v1150';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
