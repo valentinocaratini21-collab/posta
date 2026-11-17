@@ -1317,12 +1317,13 @@ function resolveTrialRubro({ fields, webData, feed, formText, catalogItems, lang
   // pasada pueden no votar nada (bio ilegible, captions sin
   // vocabulario) y sin ese puente la lectura del @ se perdía entera.
   let reconciliacion = null;
+  let webCls = null;
   try {
     const igCls = rubroId.classifyBusiness({
       bio: signals.bio, fullName: signals.fullName, handle: signals.handle,
       captions: signals.captions, igCategory: signals.igCategory,
     });
-    const webCls = rubroId.classifyBusiness({
+    webCls = rubroId.classifyBusiness({
       jsonldType: signals.jsonldType, catalogText: signals.catalogText, webText: signals.webText,
     });
     const igPrefillRubro = (src !== 'pregunta' && src !== 'form' && catSel && catSel !== 'otro' && rubroId.RUBROS.includes(catSel)) ? catSel : '';
@@ -1348,6 +1349,31 @@ function resolveTrialRubro({ fields, webData, feed, formText, catalogItems, lang
   }
   const res = rubroId.resolveRubro({ cls, lang });
   res.reconciliacion = reconciliacion;
+  // (LOTE SALTEO-RESUELVE · corrida ×10 #5, invitado 118) EL SALTEO
+  // DEL CONFLICTO DE IDENTIDAD RESUELVE CON EL LADO WEBSITE: la duda
+  // de contradicción IG↔web ofrece «seguir sin responder» con la
+  // promesa «lo armo con lo que ya sé», pero el salteo viaja como
+  // pregunta_rubro='skip' y su único consumidor era la puerta (para
+  // no repreguntar): la contradicción quedaba en pie sin resolver y
+  // el guarda de importación (DESTRABE A4) frenaba la semana para
+  // siempre — el invitado salteaba y su semana jamás importaba.
+  // Acá, en el punto donde la reconciliación nace, el salteo de ESTA
+  // duda resuelve la identidad con la clasificación del lado WEBSITE
+  // (webCls: su rubro — lo que sí se sabe), descarta el rubro minado
+  // del lado IG y estampa la resolución con marca propia
+  // (resuelta_por 'salteo-web': auditable y distinta de la palabra
+  // del dueño, 'confirmacion'). El guarda NO se toca: una
+  // contradicción sin ninguna resolución sigue frenando igual, y el
+  // salteo de las demás dudas no cambia — sin contradicción en pie,
+  // esta rama no existe.
+  const salteoRubro = src === 'skip' || String(f.pregunta_rubro || '') === 'skip';
+  if (salteoRubro && reconciliacion && reconciliacion.contradiccion && webCls) {
+    const resWeb = rubroId.resolveRubro({ cls: webCls, lang });
+    resWeb.rubroId.fuente = 'skip';
+    resWeb.rubroCheck.needed = false;
+    resWeb.reconciliacion = { ...reconciliacion, resuelta_por: 'salteo-web' };
+    return resWeb;
+  }
   if (src === 'skip' && !cls.segura) {
     // Saltó la pregunta: se genera con el padre seguro y queda el
     // registro (la pregunta sigue viva en question_candidates).
@@ -45699,7 +45725,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1146';
+const BUILD_ID = '20261105-v1147';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
