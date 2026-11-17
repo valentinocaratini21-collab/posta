@@ -50,7 +50,11 @@
 'use strict';
 
 // ── Objetivo del negocio (pregunta 2 del onboarding) ──────────────
-const OBJETIVOS = ['reservar', 'escribirte', 'local', 'comprar'];
+// (LOTE ADS-PÚBLICO) 'seguir' se suma como objetivo elegible en la
+// tarjeta: su mapeo honesto es el camino de engagement (mapeoMeta),
+// sin prometer una optimización de seguidores que Meta no ofrece
+// por esta vía.
+const OBJETIVOS = ['reservar', 'escribirte', 'local', 'comprar', 'seguir'];
 
 // Valores crudos del fundamento → objetivo canónico. Las claves son
 // las de OC_CTA (onboarding un clic) y las de dueno.meta (onboarding
@@ -60,7 +64,9 @@ const OBJETIVO_DESDE_CTA = {
   escribirte: 'escribirte', escribir: 'escribirte', llamar: 'escribirte',
   local: 'local', venir: 'local',
   comprar: 'comprar', tienda: 'comprar', domicilio: 'comprar',
-  // seguirme: sin mapeo honesto a pauta de respuesta directa → null.
+  // (LOTE ADS-PÚBLICO) seguir/seguirme/seguirnos → 'seguir': mapea al
+  // camino de engagement (ver mapeoMeta), declarado y sin disfraz.
+  seguir: 'seguir', seguirme: 'seguir', seguirnos: 'seguir',
 };
 
 const ETIQUETA_OBJETIVO = {
@@ -68,6 +74,7 @@ const ETIQUETA_OBJETIVO = {
   escribirte: { es: 'Que te escriban por Instagram', en: 'Get Instagram messages' },
   local: { es: 'Que vengan a tu local', en: 'Get store visits' },
   comprar: { es: 'Que te compren', en: 'Get purchases' },
+  seguir: { es: 'Que me sigan', en: 'Get followers' },
 };
 
 // Objetivo canónico desde cualquier señal del fundamento.
@@ -100,7 +107,9 @@ function mapeoMeta(objetivo) {
       medicion: 'conversaciones',
     };
   }
-  // local y sin_dato: el camino histórico de engagement.
+  // local, seguir y sin_dato: el camino histórico de engagement.
+  // 'seguir' cae acá con honestidad: por esta vía Meta optimiza
+  // engagement sobre el posteo, no «conseguir seguidores».
   return {
     campaignObjective: 'OUTCOME_ENGAGEMENT',
     optimizationGoal: 'POST_ENGAGEMENT',
@@ -115,6 +124,34 @@ const RADIOS_KM = [2, 5, 10];
 const EDADES = [[18, 24], [25, 34], [25, 44], [35, 44], [35, 54], [45, 54], [55, 65], [18, 65]];
 const GENEROS = ['todos', 'mujeres', 'hombres'];
 const GENERO_META = { todos: [], mujeres: [2], hombres: [1] };
+
+// ── Alcance geográfico (LOTE ADS-PÚBLICO) ──────────────────────────
+// La pregunta «¿Dónde están?» reemplaza a la distancia fija al local
+// (las preguntas viejas suponían un local: un negocio online no tiene
+// ninguno — caso Valentino 17/11, su ciudad figuraba «Online» y el
+// impulso fallaba porque eso no es un lugar apuntable). Alcances:
+// cerca (recién ahí hay radio 2/5/10 km) · ciudad · pais · todos.
+// REGLA DURA: una ciudad que no es un lugar («Online», «remoto»,
+// «—», vacío y variantes) NUNCA es una ciudad: no se muestra como
+// tal, no se geocodifica y no entra al targeting como lugar.
+const ALCANCES = ['cerca', 'ciudad', 'pais', 'todos'];
+const CIUDAD_NO_LUGAR = new Set([
+  '', 'online', 'en linea', 'remoto', 'remote', 'virtual', 'internet', 'web',
+  'sin ciudad', 'sin direccion', 'no aplica', 'na', 'n a', 'ninguna', 'ninguno',
+  'todo el pais', 'todo el mundo', 'worldwide', 'global',
+]);
+function esCiudadReal(ciudad) {
+  const c = String(ciudad || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+  if (!c) return false;
+  if (CIUDAD_NO_LUGAR.has(c)) return false;
+  if (/^[-\u2014\u2013\u00b7./\s]+$/.test(c)) return false;
+  return true;
+}
+// Default desde el fundamento: con ciudad real el anuncio nace
+// cerca del negocio; sin ciudad real (online, remoto), nace al país.
+function alcanceDesdeFundamento(ciudad) {
+  return esCiudadReal(ciudad) ? 'cerca' : 'pais';
+}
 
 // Edad estimada por rubro (profiles.category / TRIAL_CAT_MAP). Es una
 // estimación editorial declarada, no un dato del negocio: el cliente
@@ -169,6 +206,17 @@ function edadDesdeTexto(texto, categoria) {
   return (EDAD_POR_RUBRO[categoria] || EDAD_POR_RUBRO.otro).slice();
 }
 
+// Respaldo de la frase del comprador cuando el fundamento no trae
+// ni cliente ideal ni audiencia declarada: se arma con los intereses
+// del rubro (los mismos de la propuesta), nunca con un local ni una
+// ciudad que el negocio no tenga.
+function respaldoComprador(categoria, lang) {
+  const nombres = INTERESES_POR_RUBRO[categoria] || [];
+  if (!nombres.length) return lang === 'en' ? 'Your customers and people like them' : 'Tus clientes y personas parecidas a ellos';
+  const lista = nombres.slice(0, 2).map((n) => (lang === 'en' ? n : (ETIQUETAS_INTERES[n] || n))).join(lang === 'en' ? ' and ' : ' y ');
+  return lang === 'en' ? `People into ${lista}` : `Personas a las que les gusta ${lista}`;
+}
+
 // ── La propuesta ───────────────────────────────────────────────────
 // Entrada: el fundamento aplanado que arma el servidor:
 // { cta, meta, goalTexto, categoria, audienciaTexto, clienteIdeal,
@@ -184,25 +232,41 @@ function propuestaDesdeFundamento(f) {
   const genero = generoDesdeTexto(textoAudiencia);
   const edad = edadDesdeTexto(textoAudiencia, categoria);
   const intereses = (INTERESES_POR_RUBRO[categoria] || []).map((nombre) => ({ nombre, activo: true }));
-  const ciudad = String(fund.ciudad || fund.donde || '').trim().slice(0, 80);
+  // (LOTE ADS-PÚBLICO) La ciudad del fundamento pasa el filtro de
+  // lugar real UNA vez, acá: si no es un lugar («Online», «remoto»),
+  // geo.ciudad queda vacía y ningún consumidor posterior (tarjeta,
+  // texto humano, geocodificación, targeting) la ve como ciudad.
+  const ciudadCruda = String(fund.ciudad || fund.donde || '').trim().slice(0, 80);
+  const ciudad = esCiudadReal(ciudadCruda) ? ciudadCruda : '';
   const pais = String(fund.pais || 'AR').trim().toUpperCase() || 'AR';
   const audiencia = {
     radio_km: 5,
+    alcance: alcanceDesdeFundamento(ciudad),
     edad_min: edad[0],
     edad_max: edad[1],
     genero,
     intereses,
     parecidos: true,
   };
+  // (LOTE ADS-PÚBLICO) Pregunta 1 «¿Quién te compra?»: la frase del
+  // comprador en palabras, del fundamento (cliente ideal o audiencia
+  // declarada); sin frase, el respaldo por rubro desde sus intereses.
+  // Es de LECTURA en la tarjeta: no abre ningún camino de texto libre
+  // al targeting (el ajuste son los chips de intereses de siempre).
+  const fraseFund = String(fund.clienteIdeal || '').trim() || String(fund.audienciaTexto || '').trim();
+  const comprador_texto = (fraseFund || respaldoComprador(categoria, lang)).slice(0, 140);
   const propuesta = {
     objetivo,
     objetivo_fuente: fuente,
     objetivo_label: objetivo ? ETIQUETA_OBJETIVO[objetivo][lang] : (lang === 'en' ? 'Get more people engaging with your post' : 'Que más gente interactúe con tu posteo'),
+    comprador_texto,
     audiencia,
     opciones: {
       radios: RADIOS_KM.slice(),
       edades: EDADES.map((e) => e.slice()),
       generos: GENEROS.slice(),
+      alcances: ALCANCES.slice(),
+      objetivos: OBJETIVOS.map((v) => ({ valor: v, etiqueta: ETIQUETA_OBJETIVO[v][lang] })),
     },
     geo: { ciudad, pais },
     lang,
@@ -223,8 +287,17 @@ function textoHumano(propuesta, lang) {
   const gen = a.genero === 'mujeres' ? (en ? 'Women' : 'Mujeres')
     : a.genero === 'hombres' ? (en ? 'Men' : 'Hombres') : (en ? 'Everyone' : 'Todos');
   partes.push(`${gen} ${a.edad_min}–${a.edad_max}`);
-  if (geo.ciudad) partes.push(en ? `within ${a.radio_km} km of your spot in ${geo.ciudad}` : `a ${a.radio_km} km de tu local en ${geo.ciudad}`);
-  else partes.push(en ? `all over the country` : `en todo el país`);
+  // (LOTE ADS-PÚBLICO) El segmento geo sigue al ALCANCE elegido, no a
+  // la sola existencia de una ciudad: cerca → radio (solo con ciudad
+  // real; sin ella la línea honesta es el país, como resuelve el
+  // targeting) · ciudad → la ciudad · pais → todo el país · todos →
+  // todos lados. geo.ciudad ya viene saneada de la propuesta (una
+  // «ciudad» que no es lugar acá ya es cadena vacía).
+  const alcanceTxt = String(a.alcance || (geo.ciudad ? 'cerca' : 'pais'));
+  if (alcanceTxt === 'cerca' && geo.ciudad) partes.push(en ? `within ${a.radio_km} km of your spot in ${geo.ciudad}` : `a ${a.radio_km} km de tu local en ${geo.ciudad}`);
+  else if (alcanceTxt === 'ciudad' && geo.ciudad) partes.push(en ? `in ${geo.ciudad}` : `en ${geo.ciudad}`);
+  else if (alcanceTxt === 'todos') partes.push(en ? 'everywhere' : 'en todos lados');
+  else partes.push(en ? 'all over the country' : 'en todo el país');
   const activos = (a.intereses || []).filter((i) => i && i.activo).map((i) => i.nombre);
   if (activos.length) {
     const lista = activos.slice(0, 3).join(', ') + (activos.length > 3 ? '…' : '');
@@ -243,8 +316,34 @@ function validarAudiencia(input, propuesta) {
   const no = (detalle) => ({ ok: false, motivo: 'audiencia_invalida', detalle });
   if (!input || typeof input !== 'object' || Array.isArray(input)) return no('no_es_objeto');
   if (!propuesta || !propuesta.audiencia) return no('sin_propuesta');
-  const radio = Number(input.radio_km);
-  if (!RADIOS_KM.includes(radio)) return no('radio_fuera_de_opciones');
+  // (LOTE ADS-PÚBLICO) Alcance: viaja con la audiencia y valida contra
+  // las opciones de la propuesta; sin alcance en el payload manda el
+  // de la propuesta (compatibilidad con payloads viejos).
+  const opcionesAlc = (propuesta.opciones && Array.isArray(propuesta.opciones.alcances) && propuesta.opciones.alcances.length)
+    ? propuesta.opciones.alcances : ALCANCES;
+  const alcance = (input.alcance == null || input.alcance === '')
+    ? String(propuesta.audiencia.alcance || 'pais') : String(input.alcance);
+  if (!opcionesAlc.includes(alcance)) return no('alcance_fuera_de_opciones');
+  // (LOTE ADS-PÚBLICO) Objetivo elegido en la tarjeta: si viaja con
+  // la audiencia, valida contra OBJETIVOS y MANDA en el mapeo; si no
+  // viaja, manda el objetivo de la propuesta (el de siempre).
+  let objetivo = propuesta.objetivo || null;
+  if (input.objetivo != null && input.objetivo !== '') {
+    const ob = String(input.objetivo);
+    if (!OBJETIVOS.includes(ob)) return no('objetivo_fuera_de_opciones');
+    objetivo = ob;
+  }
+  // El radio solo es obligatorio-válido con alcance 'cerca': con
+  // cualquier otro alcance un radio fuera de lista NO invalida (se
+  // normaliza al de la propuesta) — el radio no participa del geo.
+  const radioIn = Number(input.radio_km);
+  let radio;
+  if (alcance === 'cerca') {
+    if (!RADIOS_KM.includes(radioIn)) return no('radio_fuera_de_opciones');
+    radio = radioIn;
+  } else {
+    radio = RADIOS_KM.includes(radioIn) ? radioIn : (Number(propuesta.audiencia.radio_km) || 5);
+  }
   const emin = Number(input.edad_min), emax = Number(input.edad_max);
   if (!EDADES.some((e) => e[0] === emin && e[1] === emax)) return no('edad_fuera_de_opciones');
   const genero = String(input.genero || '');
@@ -269,7 +368,8 @@ function validarAudiencia(input, propuesta) {
   }
   return {
     ok: true,
-    audiencia: { radio_km: radio, edad_min: emin, edad_max: emax, genero, intereses, parecidos: input.parecidos },
+    audiencia: { radio_km: radio, alcance, edad_min: emin, edad_max: emax, genero, intereses, parecidos: input.parecidos },
+    objetivo,
   };
 }
 
@@ -302,30 +402,73 @@ async function resolverTargeting(audiencia, propuesta, meta) {
   }
   if (specs.length) targeting.flexible_spec = [{ interests: specs }];
 
-  // Geo: ciudad resuelta → radio alrededor del centro de la ciudad
-  // (la coordenada viene de la propia búsqueda de Meta, no de un
-  // mapa nuestro); sin coordenadas, la ciudad como target; sin
-  // ciudad, el país.
-  let geoLoc = null;
-  if (geo.ciudad && meta && typeof meta.searchGeo === 'function') {
-    try { geoLoc = await meta.searchGeo(geo.ciudad, geo.pais); } catch (e) { geoLoc = null; }
-  }
-  if (geoLoc && Number.isFinite(Number(geoLoc.latitude)) && Number.isFinite(Number(geoLoc.longitude))) {
-    targeting.geo_locations = {
-      custom_locations: [{
-        latitude: Number(geoLoc.latitude), longitude: Number(geoLoc.longitude),
-        radius: Number(a.radio_km) || 5, distance_unit: 'kilometer',
-      }],
-    };
-    resuelto.geo_modo = 'radio';
-    resuelto.geo_centro = { nombre: String(geoLoc.name || geo.ciudad), fuente: 'ciudad' };
-  } else if (geoLoc && geoLoc.key) {
-    targeting.geo_locations = { cities: [{ key: String(geoLoc.key), radius: Number(a.radio_km) || 5, distance_unit: 'kilometer' }] };
-    resuelto.geo_modo = 'ciudad';
-    resuelto.geo_centro = { nombre: String(geoLoc.name || geo.ciudad), fuente: 'ciudad' };
-  } else {
-    targeting.geo_locations = { countries: [String(geo.pais || 'AR')] };
+  // Geo por ALCANCE (LOTE ADS-PÚBLICO): el alcance de la audiencia
+  // manda; resuelto.geo_modo refleja lo que REALMENTE se aplicó y
+  // toda degradación queda declarada en resuelto.geo_fallback.
+  // - cerca: como siempre — ciudad resuelta → radio alrededor de su
+  //   centro (la coordenada viene de la propia búsqueda de Meta, no
+  //   de un mapa nuestro); sin coordenadas, la ciudad como target
+  //   con radio; sin ciudad real o sin resolución, el país.
+  // - ciudad: la ciudad como target, SIN radio custom.
+  // - pais: el país del fundamento.
+  // - todos: se intenta resolver «Worldwide» con la búsqueda de
+  //   Meta; si resuelve, va como región; si no, el país — declarado.
+  // La ciudad pasa el filtro de lugar real también acá (defensa en
+  // profundidad: una propuesta armada a mano con ciudad «Online»
+  // jamás se geocodifica ni entra como lugar).
+  const alcanceGeo = String(a.alcance || (propuesta && propuesta.audiencia && propuesta.audiencia.alcance) || (geo.ciudad ? 'cerca' : 'pais'));
+  const ciudadGeo = esCiudadReal(geo.ciudad) ? String(geo.ciudad) : '';
+  const paisGeo = String(geo.pais || 'AR');
+  const buscarGeo = async (q) => {
+    if (!meta || typeof meta.searchGeo !== 'function') return null;
+    try { return await meta.searchGeo(q, paisGeo); } catch (e) { return null; }
+  };
+  if (alcanceGeo === 'todos') {
+    const hit = await buscarGeo('Worldwide');
+    if (hit && hit.key) {
+      targeting.geo_locations = { regions: [{ key: String(hit.key) }] };
+      resuelto.geo_modo = 'todos';
+      resuelto.geo_centro = { nombre: String(hit.name || 'Worldwide'), fuente: 'worldwide' };
+    } else {
+      targeting.geo_locations = { countries: [paisGeo] };
+      resuelto.geo_modo = 'pais';
+      resuelto.geo_fallback = 'todos_sin_resolver';
+    }
+  } else if (alcanceGeo === 'pais') {
+    targeting.geo_locations = { countries: [paisGeo] };
     resuelto.geo_modo = 'pais';
+  } else if (alcanceGeo === 'ciudad') {
+    const geoLocC = ciudadGeo ? await buscarGeo(ciudadGeo) : null;
+    if (geoLocC && geoLocC.key) {
+      targeting.geo_locations = { cities: [{ key: String(geoLocC.key) }] };
+      resuelto.geo_modo = 'ciudad';
+      resuelto.geo_centro = { nombre: String(geoLocC.name || ciudadGeo), fuente: 'ciudad' };
+    } else {
+      targeting.geo_locations = { countries: [paisGeo] };
+      resuelto.geo_modo = 'pais';
+      resuelto.geo_fallback = 'ciudad_sin_resolver';
+    }
+  } else {
+    // cerca (y cualquier audiencia legada sin alcance con ciudad).
+    const geoLoc = ciudadGeo ? await buscarGeo(ciudadGeo) : null;
+    if (geoLoc && Number.isFinite(Number(geoLoc.latitude)) && Number.isFinite(Number(geoLoc.longitude))) {
+      targeting.geo_locations = {
+        custom_locations: [{
+          latitude: Number(geoLoc.latitude), longitude: Number(geoLoc.longitude),
+          radius: Number(a.radio_km) || 5, distance_unit: 'kilometer',
+        }],
+      };
+      resuelto.geo_modo = 'radio';
+      resuelto.geo_centro = { nombre: String(geoLoc.name || ciudadGeo), fuente: 'ciudad' };
+    } else if (geoLoc && geoLoc.key) {
+      targeting.geo_locations = { cities: [{ key: String(geoLoc.key), radius: Number(a.radio_km) || 5, distance_unit: 'kilometer' }] };
+      resuelto.geo_modo = 'ciudad';
+      resuelto.geo_centro = { nombre: String(geoLoc.name || ciudadGeo), fuente: 'ciudad' };
+    } else {
+      targeting.geo_locations = { countries: [paisGeo] };
+      resuelto.geo_modo = 'pais';
+      if (alcanceGeo === 'cerca') resuelto.geo_fallback = 'cerca_sin_ciudad_resuelta';
+    }
   }
 
   // Parecidos: solo si en la cuenta YA existe una audiencia lookalike
@@ -468,6 +611,8 @@ module.exports = {
   RADIOS_KM,
   EDADES,
   GENEROS,
+  ALCANCES,
+  esCiudadReal,
   INTERESES_POR_RUBRO,
   EDAD_POR_RUBRO,
   objetivoDesdeFundamento,

@@ -14758,18 +14758,26 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     // cambia).
     const propuestaAds = adsAudiencia.propuestaDesdeFundamento(fundamentoAdsDe(uid));
     let audienciaElegida = null;
+    let objetivoElegido = null;
     if (req.body && req.body.audiencia != null) {
       const val = adsAudiencia.validarAudiencia(req.body.audiencia, propuestaAds);
       if (!val.ok) return res.status(400).json({ ok: false, motivo: 'audiencia_invalida' });
       audienciaElegida = val.audiencia;
+      objetivoElegido = val.objetivo;
     }
     const audienciaFinal = audienciaElegida || propuestaAds.audiencia;
-    const mapeoAds = adsAudiencia.mapeoMeta(propuestaAds.objetivo);
+    // (LOTE ADS-PÚBLICO) El objetivo que MANDA es el elegido en la
+    // tarjeta (validarAudiencia lo cierra contra la lista) o, sin
+    // elección, el de la propuesta. Antes el mapeo salía siempre de
+    // la propuesta: la elección del cliente no llegaba ni a Meta ni
+    // al registro del impulso.
+    const objetivoFinal = objetivoElegido || propuestaAds.objetivo;
+    const mapeoAds = adsAudiencia.mapeoMeta(objetivoFinal);
     let resueltoAds = null;
     const audienciaJsonDe = () => {
       try {
         return JSON.stringify({
-          objetivo: propuestaAds.objetivo, objetivo_fuente: propuestaAds.objetivo_fuente,
+          objetivo: objetivoFinal, objetivo_fuente: objetivoElegido ? 'tarjeta' : propuestaAds.objetivo_fuente,
           editada: !!audienciaElegida, audiencia: audienciaFinal,
           resuelto: resueltoAds,
           mapeo: { objective: mapeoAds.campaignObjective, optimization_goal: mapeoAds.optimizationGoal, destination_type: mapeoAds.destinationType },
@@ -14859,6 +14867,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         targetingAds = rt.targeting; resueltoAds = rt.resuelto;
       } catch (e) { targetingAds = null; resueltoAds = null; }
       let cr = null;
+      let crError = null;
       try {
         cr = await metaAds.createBoost({
           name: `Posty · Impulso u${uid} · p${posteoId}`,
@@ -14868,24 +14877,26 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           destinationType: mapeoAds.destinationType, targeting: targetingAds,
           ctx: { token: gate.suat, adAccountId: gate.adAccountId },
         });
-      } catch (e) { cr = null; }
+      } catch (e) { cr = null; crError = e; }
       if (!cr || !cr.campaignId) {
         // Meta no creó la campaña: no se cobra fee ni se debita nada.
         // Queda el registro 'error' para el equipo (ese estado no
         // bloquea el reintento: el gate de arriba solo mira
-        // active/pending).
+        // active/pending). (LOTE ADS-PÚBLICO) La fila guarda el
+        // error REAL de Meta, no solo la línea genérica: sin eso el
+        // equipo no puede diagnosticar el fallo.
         try {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error, objetivo, audiencia_json)
             VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?,?,?)`)
-            .run(uid, posteoId, cand.ig_media_id, pautaCents, 'creación fallida en la cuenta del cliente (riel cliente)', propuestaAds.objetivo || '', audienciaJsonDe());
+            .run(uid, posteoId, cand.ig_media_id, pautaCents, `creación fallida en la cuenta del cliente (riel cliente): ${String((crError && crError.message) || crError || 'Meta no devolvió campaña').slice(0, 300)}`, objetivoFinal || '', audienciaJsonDe());
         } catch (e) {}
         return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
         VALUES (?,?,?,?,0,?,'USD','active',?,?,?,'engagement',7,?,?)`)
-        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '', propuestaAds.objetivo || '', audienciaJsonDe());
+        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '', objetivoFinal || '', audienciaJsonDe());
       try { track(uid, 'ad_boost_usd', String(pautaCents)); } catch (e) {}
       try { track(uid, 'ad_boost_riel_cliente', String(pautaCents)); } catch (e) {}
       // La costura del fee: 10% del presupuesto ÍNTEGRO de la campaña
@@ -14984,7 +14995,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
             VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', propuestaAds.objetivo || '', audienciaJsonDe());
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', objetivoFinal || '', audienciaJsonDe());
           try { track(uid, esARS ? 'ad_boost_ars' : 'ad_boost_usd', String(budgetRec)); } catch (e) {}
           // (LOTE FEE-IMPULSAR) La costura del fee de gestión, en el
           // punto exacto: la campaña ya quedó registrada activa con
@@ -15004,14 +15015,25 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
             VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `activación fallida en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, propuestaAds.objetivo || '', audienciaJsonDe());
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `activación fallida en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
         } else if (rec.tipo === 'debito_fallido') {
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
             VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`, propuestaAds.objetivo || '', audienciaJsonDe());
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`, objetivoFinal || '', audienciaJsonDe());
+        } else if (rec.tipo === 'error') {
+          // (LOTE ADS-PÚBLICO) El anuncio falló ANTES de existir
+          // (Meta rechazó la creación): hasta hoy este registro se
+          // PERDÍA — el registrar no tenía rama para tipo 'error' y
+          // ni la fila ni el error real de Meta llegaban al equipo.
+          // Queda la fila 'error' con el texto real, como en los
+          // demás rieles (sin débito: el módulo no debitó).
+          db.prepare(`INSERT INTO ad_boosts
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, Number(rec.spendCents) || 0, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `anuncio fallido en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
         }
       },
     });
@@ -45989,7 +46011,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1153';
+const BUILD_ID = '20261105-v1154';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -19211,7 +19211,14 @@ function pzAdsAudienciaTexto(sel) {
   const gen = a.genero === 'mujeres' ? (en ? 'Women' : 'Mujeres')
     : a.genero === 'hombres' ? (en ? 'Men' : 'Hombres') : (en ? 'Everyone' : 'Todos');
   const partes = [`${gen} ${a.edad_min}–${a.edad_max}`];
-  if (geo.ciudad) partes.push(en ? `within ${a.radio_km} km of your spot in ${geo.ciudad}` : `a ${a.radio_km} km de tu local en ${geo.ciudad}`);
+  // (LOTE ADS-PÚBLICO) Espejo de textoHumano del servidor: el
+  // segmento geo sigue al ALCANCE elegido (cerca solo con ciudad
+  // real; ciudad; país; todos lados) — la misma regla en los dos
+  // lados, nunca «tu local» para un negocio sin local.
+  const alcance = String(a.alcance || (geo.ciudad ? 'cerca' : 'pais'));
+  if (alcance === 'cerca' && geo.ciudad) partes.push(en ? `within ${a.radio_km} km of your spot in ${geo.ciudad}` : `a ${a.radio_km} km de tu local en ${geo.ciudad}`);
+  else if (alcance === 'ciudad' && geo.ciudad) partes.push(en ? `in ${geo.ciudad}` : `en ${geo.ciudad}`);
+  else if (alcance === 'todos') partes.push(en ? 'everywhere' : 'en todos lados');
   else partes.push(en ? 'all over the country' : 'en todo el país');
   const activos = (a.intereses || []).filter((i) => i && i.activo).map((i) => i.nombre);
   if (activos.length) partes.push((en ? 'into ' : 'les gusta ') + activos.slice(0, 3).join(', ') + (activos.length > 3 ? '…' : ''));
@@ -19224,9 +19231,23 @@ function pzAdsAudienciaHTML() {
   const s = pzBoostState || {};
   const prop = s.audienciaProp || {};
   const sel = s.audienciaSel || prop.audiencia || {};
-  const op = prop.opciones || { radios: [2, 5, 10], edades: [[18, 65]], generos: ['todos', 'mujeres', 'hombres'] };
+  const op = prop.opciones || { radios: [2, 5, 10], edades: [[18, 65]], generos: ['todos', 'mujeres', 'hombres'], alcances: ['cerca', 'ciudad', 'pais', 'todos'], objetivos: [] };
   const chip = (on, onclick, label) => `<button type="button" style="${on ? PZ_AUD_CHIP_SEL : PZ_AUD_CHIP}" onclick="${onclick}">${esc(label)}</button>`;
   const grupo = (titulo, chips) => `<div style="margin:10px 0 2px"><div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:#47617A;margin-bottom:6px">${esc(titulo)}</div><div>${chips}</div></div>`;
+  // (LOTE ADS-PÚBLICO) La tarjeta pasa a 4 preguntas generales, para
+  // todo tipo de negocio (las viejas suponían un local: distancia
+  // fija y objetivo fijo). 1) ¿Quién te compra? — la frase del
+  // estudio (lectura) + los chips de intereses y el «+ Otra gente»
+  // como su ajuste. 2) ¿Dónde están? — alcance; el radio SOLO con
+  // alcance 'cerca'. 3) ¿Qué querés que hagan? — el objetivo como
+  // chips elegibles (las opciones las manda el servidor en la
+  // propuesta; sin lista, queda la línea de lectura de siempre).
+  // 4) Ajustes finos: edades, quiénes y parecidos, como siempre.
+  const alcanceSel = String(sel.alcance || ((prop.geo && prop.geo.ciudad) ? 'cerca' : 'pais'));
+  const alcLbl = { cerca: en ? 'Near my business' : 'Cerca de mi negocio', ciudad: en ? 'In my city' : 'En mi ciudad', pais: en ? 'All over the country' : 'En todo el país', todos: en ? 'Everywhere' : 'En todos lados' };
+  const alcances = (op.alcances || []).map((v) => chip(alcanceSel === v, `pzAdsAudienciaAlcance('${v}')`, alcLbl[v] || v)).join('');
+  const objetivoSel = (s.audienciaObjetivo !== undefined) ? s.audienciaObjetivo : (prop.objetivo || null);
+  const objetivos = (op.objetivos || []).map((o) => chip(objetivoSel === o.valor, `pzAdsAudienciaObjetivo('${o.valor}')`, o.etiqueta || o.valor)).join('');
   const radios = (op.radios || []).map((r) => chip(Number(sel.radio_km) === Number(r), `pzAdsAudienciaRadio(${Number(r)})`, (en ? 'Within ' : 'A ') + r + ' km')).join('');
   const edades = (op.edades || []).map((e, i) => chip(Number(sel.edad_min) === Number(e[0]) && Number(sel.edad_max) === Number(e[1]), `pzAdsAudienciaEdad(${i})`, `${e[0]}–${e[1]}`)).join('');
   const genLbl = { todos: en ? 'Everyone' : 'Todos', mujeres: en ? 'Women' : 'Mujeres', hombres: en ? 'Men' : 'Hombres' };
@@ -19245,17 +19266,21 @@ function pzAdsAudienciaHTML() {
     : '')
     + `<button type="button" style="${PZ_AUD_CHIP}" onclick="pzAdsAudienciaOtraGente()">+ ${esc(en ? 'Other people' : 'Otra gente')}</button>`;
   const sinCiudad = !(prop.geo && prop.geo.ciudad);
+  const seccionComprador = `<div style="margin:10px 0 2px"><div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:#47617A;margin-bottom:6px">${esc(en ? 'WHO BUYS FROM YOU?' : '¿QUIÉN TE COMPRA?')}</div>`
+    + (prop.comprador_texto ? `<p style="margin:0 0 8px;font-size:14.5px;line-height:1.45">${esc(prop.comprador_texto)}</p>` : '')
+    + (intereses ? `<div>${intereses}</div>` : '')
+    + `<div style="margin-top:6px">${extraHTML}</div></div>`;
   return `<div style="border:1.5px solid #BFE0F2;background:#F2F9FD;border-radius:16px;padding:14px;margin:12px 0">
     <div style="font-weight:800;font-size:15.5px">${esc(en ? 'Who will see your ad?' : '¿A quién le llega tu anuncio?')}</div>
     <p style="margin:6px 0 2px;font-size:14.5px;line-height:1.45"><b>${esc(pzAdsAudienciaTexto(sel))}</b></p>
-    <p style="margin:2px 0 0;font-size:13px;color:#47617A">${esc((en ? 'Goal: ' : 'Objetivo: ') + (prop.objetivo_label || ''))}</p>
-    ${grupo(en ? 'DISTANCE FROM YOUR SPOT' : 'DISTANCIA A TU LOCAL', radios)}
-    ${sinCiudad ? `<p style="margin:2px 0 0;font-size:12.5px;color:#8A6D00">${esc(en ? 'We don’t have your city yet, so the distance applies around your city center once Posty knows it; until then the ad runs nationwide.' : 'Todavía no tenemos tu ciudad: la distancia se aplica cuando Posty la sepa; mientras tanto el anuncio sale en todo el país.')}</p>` : ''}
+    ${seccionComprador}
+    ${grupo(en ? 'WHERE ARE THEY?' : '¿DÓNDE ESTÁN?', alcances)}
+    ${alcanceSel === 'cerca' ? grupo(en ? 'DISTANCE FROM YOUR SPOT' : 'DISTANCIA A TU LOCAL', radios) : ''}
+    ${(alcanceSel === 'cerca' && sinCiudad) ? `<p style="margin:2px 0 0;font-size:12.5px;color:#8A6D00">${esc(en ? 'We don’t have your city yet: until Posty knows it, the ad runs nationwide.' : 'Todavía no tenemos tu ciudad: mientras tanto el anuncio sale en todo el país.')}</p>` : ''}
+    ${objetivos ? grupo(en ? 'WHAT SHOULD THEY DO?' : '¿QUÉ QUERÉS QUE HAGAN?', objetivos) : `<p style="margin:2px 0 0;font-size:13px;color:#47617A">${esc((en ? 'Goal: ' : 'Objetivo: ') + (prop.objetivo_label || ''))}</p>`}
     ${grupo(en ? 'AGES' : 'EDADES', edades)}
     ${grupo(en ? 'WHO' : 'QUIÉNES', generos)}
-    ${intereses ? grupo(en ? 'THEY LIKE' : 'LES GUSTA', intereses) : ''}
     ${grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
-    ${grupo(en ? 'SOMEONE ELSE?' : '¿OTRA GENTE?', extraHTML)}
     <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Go with this 🚀' : 'Sale así 🚀')}</button>
     <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Go with this”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».')}</p>
   </div>`;
@@ -19279,6 +19304,7 @@ async function pzAdsAudienciaMostrar() {
       const j = await api.get('/api/ads/billetera/audiencia');
       if (!j || !j.ok || !j.propuesta || !j.propuesta.audiencia) return false;
       s.audienciaProp = j.propuesta;
+      if (s.audienciaObjetivo === undefined) s.audienciaObjetivo = j.propuesta.objetivo || null;
       if (!s.audienciaSel) s.audienciaSel = JSON.parse(JSON.stringify(j.propuesta.audiencia));
       // Chip «otra gente» que el servidor ya tenía guardado (el
       // cliente volvió a la tarjeta sin pasar por el hook del chat).
@@ -19316,6 +19342,15 @@ function pzAdsAudienciaEdad(i) {
 function pzAdsAudienciaGenero(g) { pzAdsAudienciaMutar((a) => { a.genero = String(g); }); }
 function pzAdsAudienciaInteres(i) { pzAdsAudienciaMutar((a) => { const it = (a.intereses || [])[Number(i)]; if (it) it.activo = !it.activo; }); }
 function pzAdsAudienciaParecidos(b) { pzAdsAudienciaMutar((a) => { a.parecidos = !!b; }); }
+function pzAdsAudienciaAlcance(v) { pzAdsAudienciaMutar((a) => { a.alcance = String(v); }); }
+// El objetivo NO vive en la audiencia: es estado propio de la
+// tarjeta (nace del de la propuesta) y viaja con el POST del impulso,
+// donde el servidor lo valida contra sus opciones y manda en el mapeo.
+function pzAdsAudienciaObjetivo(v) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  s.audienciaObjetivo = String(v);
+  pzAdsAudienciaPintar();
+}
 
 // «Sale así»: la audiencia queda confirmada para este posteo + monto
 // y el gasto corre por el camino de siempre (pzBoostConfirmar).
@@ -19449,7 +19484,14 @@ async function pzBoostConfirmar(btn, enTarjeta) {
   // (LOTE ADS-ESTRATÉGICOS) La audiencia que el cliente vio (y editó)
   // viaja en el POST: el servidor la valida contra las opciones de la
   // propuesta antes de gastar.
-  if (s.audienciaSel) body.audiencia = s.audienciaSel;
+  // (LOTE ADS-PÚBLICO) El objetivo elegido en la tarjeta viaja con la
+  // audiencia: el servidor lo valida y manda en el mapeo a Meta; sin
+  // elección propia viaja el de la propuesta.
+  if (s.audienciaSel) {
+    body.audiencia = s.audienciaSel;
+    const objAud = (s.audienciaObjetivo !== undefined) ? s.audienciaObjetivo : ((s.audienciaProp || {}).objetivo || null);
+    if (objAud) body.audiencia = { ...s.audienciaSel, objetivo: objAud };
+  }
   try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
   if (j && j.ok) {
