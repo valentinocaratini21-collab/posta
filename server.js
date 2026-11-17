@@ -12625,6 +12625,79 @@ app.post('/api/admin/posts/:id/set-image', requireAdminToken, (req, res) => {
   res.json({ ok: true, id: dest.id, user_id: dest.user_id, status: dest.status, scheduled_at: dest.scheduled_at, from_post_id: src.id, ...media, cambiado });
 });
 
+// POST /api/admin/posts/:id/set-media?token=ADMIN_TOKEN  body {media, cover?}
+// (LOTE SET-MEDIA-ADMIN · emergencia video 695, 17/11) Reemplaza el medio
+// de UN posteo por un ARCHIVO NUEVO (data URI en el body): escribe el
+// archivo en MEDIA_DIR con nombre generado y actualiza image_path,
+// media_type, carousel_paths y cover_path de la fila. set-image (arriba)
+// solo COPIA medios desde otro posteo del mismo usuario, y pieza-mano
+// (/api/admin/trial/pieza-mano) solo escribe dentro de semanas de prueba
+// de invitados: para la cuenta del dueño no existía vía de subir el video
+// corregido sobre el posteo ya programado (el 695 sale hoy 19:00 y su
+// video hay que reemplazarlo en el lugar). La escritura espeja la de
+// pieza-mano (mismo regex de data URI, buffer con tope de 15 MB, nombre
+// con timestamp+random) y las guardas espejan las de set-image:
+// inexistente → 404 · published/publishing/cancelled/dismissed → 400
+// (ya_publicado/publicando/cancelado). No toca caption, hashtags, status
+// ni scheduled_at, ni ningún otro posteo.
+// PORTADA: si el body trae `cover` (data URI de imagen), se guarda como
+// archivo nuevo y es la portada. Si NO trae, cover_path se LIMPIA (con
+// cover_origin='' y cover_pos=50, el mismo UPDATE de quitar-portada de
+// la casa): dejar la portada del medio viejo haría que las superficies
+// muestren el póster viejo y que el publicador lo mande a Instagram como
+// cover_url del reel nuevo (scheduler.js pasa coverUrl =
+// post.cover_path si existe; instagram.js publishVideoReal solo agrega
+// cover_url si coverUrl). Sin portada el publicador publica igual
+// (comportamiento histórico: IG elige su frame) y las superficies
+// extraen el frame del video NUEVO (asegurarCoverDeVideo, nombre
+// determinístico <stem>-cover.jpg).
+// Idempotencia: repetir la llamada con el mismo archivo deja el mismo
+// contenido visible; cada llamada escribe un archivo con nombre nuevo.
+app.post('/api/admin/posts/:id/set-media', requireAdminToken, express.json({ limit: '16mb' }), (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'falta id' });
+  const body = req.body || {};
+  const media = String(body.media || '');
+  const mm = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(media);
+  if (!mm) return res.status(400).json({ ok: false, error: 'media inválida (data URL de imagen o video mp4)' });
+  const esVideo = mm[1] === 'video/mp4';
+  const buf = Buffer.from(mm[3], 'base64');
+  if (!buf.length || buf.length > 15 * 1024 * 1024) return res.status(400).json({ ok: false, error: 'media vacía o demasiado grande (máx 15 MB)' });
+  let coverBuf = null;
+  let coverExt = '';
+  if (body.cover != null && String(body.cover) !== '') {
+    const cm = /^data:image\/(png|jpeg|webp);base64,([\s\S]+)$/.exec(String(body.cover));
+    if (!cm) return res.status(400).json({ ok: false, error: 'portada inválida (data URL de imagen)' });
+    coverBuf = Buffer.from(cm[2], 'base64');
+    if (!coverBuf.length || coverBuf.length > 15 * 1024 * 1024) return res.status(400).json({ ok: false, error: 'portada vacía o demasiado grande (máx 15 MB)' });
+    coverExt = cm[1] === 'jpeg' ? 'jpg' : cm[1];
+  }
+  const dest = db.prepare(`SELECT id, user_id, status, scheduled_at, image_path, media_type, carousel_paths, cover_path FROM posts WHERE id = ?`).get(id);
+  if (!dest) return res.status(404).json({ ok: false, error: 'no_existe' });
+  if (dest.status === 'published' || dest.status === 'publishing' || dest.status === 'cancelled' || dest.status === 'dismissed') {
+    const motivo = dest.status === 'published' ? 'ya_publicado' : dest.status === 'publishing' ? 'publicando' : 'cancelado';
+    return res.status(400).json({ ok: false, motivo, error: 'el posteo no admite reemplazar el medio (status: ' + dest.status + ')' });
+  }
+  const ext = esVideo ? 'mp4' : (mm[2] === 'jpeg' ? 'jpg' : mm[2]);
+  const name = `admin-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  try { fs.writeFileSync(path.join(MEDIA_DIR, name), buf); }
+  catch (e) { return res.status(500).json({ ok: false, error: 'no se pudo guardar el medio' }); }
+  let coverPath = '';
+  if (coverBuf) {
+    const coverName = `admin-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${coverExt}`;
+    try { fs.writeFileSync(path.join(MEDIA_DIR, coverName), coverBuf); coverPath = `/media/${coverName}`; }
+    catch (e) { return res.status(500).json({ ok: false, error: 'no se pudo guardar la portada' }); }
+  }
+  const mediaType = esVideo ? 'video' : 'image';
+  const imagePath = `/media/${name}`;
+  const cambiado = dest.image_path !== imagePath || (dest.media_type || 'image') !== mediaType
+    || (dest.carousel_paths || '') !== '' || (dest.cover_path || '') !== coverPath;
+  db.prepare(`UPDATE posts SET image_path = ?, media_type = ?, carousel_paths = ?, cover_path = ?, cover_origin = ?, cover_pos = ? WHERE id = ?`)
+    .run(imagePath, mediaType, '', coverPath, coverBuf ? 'admin' : '', 50, dest.id);
+  if (cambiado) console.log(`[admin] set-media: post ${dest.id} (usuario ${dest.user_id}) medio ← archivo nuevo (${mediaType}: ${imagePath})`);
+  res.json({ ok: true, id: dest.id, user_id: dest.user_id, status: dest.status, scheduled_at: dest.scheduled_at, image_path: imagePath, media_type: mediaType, carousel_paths: '', cover_path: coverPath, cambiado });
+});
+
 // POST /api/admin/posts/:id/descartar?token=ADMIN_TOKEN  body {motivo?, actor?}
 // (LOTE DESCARTE-ADMIN) Descarte TERMINAL de un posteo por la vía admin:
 // status='cancelled', el estado de descarte de la casa. Hasta este lote,
@@ -46065,7 +46138,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1167';
+const BUILD_ID = '20261105-v1168';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
