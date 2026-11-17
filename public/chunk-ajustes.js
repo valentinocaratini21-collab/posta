@@ -72,7 +72,7 @@ function ajustesView() {
   // el bloque completo: checklist, modo Demo/Real y guía profesional.
   const igHealthy = !!(p.ig_connected && p.ig_username && !s.ig_token_warning);
   const igCuentaRow = `
-    <div class="set-row"><div><div class="t">Cuenta conectada</div>
+    <div class="set-row"><div><div class="t">${p.ig_connected ? 'Cuenta conectada' : 'Cuenta sin conectar'}</div>
       <div class="d">${p.ig_connected ? `${pzIc('checkCircle', 15)} @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
       <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>' + pzIc('key', 15) + ' Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
       ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">${pzIc('search', 15)} Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
@@ -1779,7 +1779,23 @@ function bindSettings() {
     const u = (PROFILE && PROFILE.ig_username) ? '@' + PROFILE.ig_username : 'tu cuenta';
     if (!confirm(`¿Desconectar ${u} de Posty?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
     track('ig_disconnect'); trackBeacon();
-    await api.post('/api/ig/disconnect'); render();
+    try {
+      await api.post('/api/ig/disconnect');
+    } catch (e) {
+      // (LOTE DESCONECTAR-REFRESCA) Si la desconexión falla, la vista sigue
+      // mostrando el estado conectado y el fallo se VE: nada de silencio.
+      const vm = $('#igVerifyMsg');
+      if (vm) vm.innerHTML = `<div class="err">${pzIc('reject', 13)} No se pudo desconectar: ${esc(e.message || 'probá de nuevo')}</div>`;
+      return;
+    }
+    // (LOTE DESCONECTAR-REFRESCA) El servidor ya desconectó, pero PROFILE en
+    // memoria sigue con ig_connected=1 y render() repintaba «Conectada» para
+    // siempre (video de Valentino 17/11: «No desconecta» con el servidor ya
+    // desconectado). Se re-lee la sesión con force — refreshSession sin
+    // force no viaja si la sesión se cargó hace menos de 45 s — y recién
+    // ahí se repinta: la fila pasa al estado real (Conectar Instagram).
+    try { await refreshSession(true); } catch (e) {}
+    render();
   };
   const stampVerified = () => {
     const d = new Date();
