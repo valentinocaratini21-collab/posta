@@ -12119,12 +12119,8 @@ async function chatExchange({ text, display, extra, pushed }) {
       chatAppendMsg(boxNow, chatMsgHtml('assistant', noReply, nts), nts);
       chatScroll(true);
     }
-    // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Si el cliente venía del
-    // chip «+ otra gente» de la tarjeta de audiencia, este turno era
-    // su descripción: el servidor la tradujo y pudo haber dejado el
-    // chip guardado — se trae y queda esperando su toque en la
-    // tarjeta (la decisión se cierra ahí, no en el chat).
-    try { if (typeof PZ_ADS_OG_ESPERA !== 'undefined' && PZ_ADS_OG_ESPERA) pzAdsAudienciaRefrescarPendiente(); } catch (e) {}
+    // (LOTE TARJETA-SIMPLE) El hook del chip «+ otra gente» salió
+    // con la sección §1 de la tarjeta: ya no hay espera que refrescar.
     // (LOTE v847) El servidor creó un trabajo (imagen pedida sin bloque): el
     // estado nace en el hilo en el acto y el poller lo sigue hasta que cae la
     // imagen en su lugar. Sin doble burbuja si ya se pintó por otro camino.
@@ -18616,7 +18612,7 @@ let pzBoostState = null; // { elegibles, billetera, adsReady, motivoGate, boostH
 let pzBoostImpulsados = new Set(); // claves pzBoostKey impulsadas en esta sesión (además de ya_impulsado del servidor)
 
 function pzBoostNewState() {
-  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
+  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', rielAds: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
 }
 
 function pzBoostSaldoUSD() {
@@ -18876,6 +18872,11 @@ async function pzBoostLoad() {
   // servidor la ofrece (login unificado configurado y falta la
   // conexión del cliente): es lo que abre el botón de la tarjeta.
   s.connectUrl = (elig && elig.ok && !elig.ads_ready) ? String(elig.connect_url || '') : '';
+  // (LOTE TARJETA-SIMPLE) El riel que correría un impulso hoy, según
+  // el gate que el servidor ya calculó para esta misma respuesta:
+  // la tarjeta de audiencia lo usa para explicar de dónde sale cada
+  // dólar antes de confirmar.
+  s.rielAds = (elig && elig.ok && elig.riel) ? String(elig.riel) : '';
   s.boostHabilitado = (bil && bil.ok && bil.boostHabilitado !== undefined) ? bil.boostHabilitado : undefined;
   s.adsPermiso = (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : undefined;
   s.conversionPendiente = (bil && bil.ok) ? !!bil.conversion_pendiente : undefined;
@@ -19325,10 +19326,39 @@ function pzAdsAudienciaTexto(sel) {
   else if (alcance === 'ciudad' && geo.ciudad) partes.push(en ? `in ${geo.ciudad}` : `en ${geo.ciudad}`);
   else if (alcance === 'todos') partes.push(en ? 'everywhere' : 'en todos lados');
   else partes.push(en ? 'all over the country' : 'en todo el país');
-  const activos = (a.intereses || []).filter((i) => i && i.activo).map((i) => i.nombre);
-  if (activos.length) partes.push((en ? 'into ' : 'les gusta ') + activos.slice(0, 3).join(', ') + (activos.length > 3 ? '…' : ''));
+  // (LOTE TARJETA-SIMPLE) El resumen ya no nombra intereses: la
+  // tarjeta no los muestra — los aplica la propuesta, por debajo.
   if (a.parecidos) partes.push(en ? 'similar to your followers' : 'parecido a tus seguidores');
   return partes.join(' · ');
+}
+
+// (LOTE TARJETA-SIMPLE) De dónde sale cada dólar, según el riel
+// que va a correr ESTE impulso — en palabras llanas y ANTES de
+// confirmar (la billetera de US$20 junto a un botón de US$22
+// confundía: nadie decía qué se pagaba de dónde). El riel lo dice
+// el servidor en /elegibles (su gate) y pzBoostLoad lo guarda como
+// s.rielAds: 'cliente' = hay conexión publicitaria capturada — la
+// pauta la cobra Meta directo en la cuenta del cliente y Posty
+// cobra SOLO su gestión (10%, el mismo redondeo de la tarjeta del
+// tab) a la tarjeta guardada, únicamente si la campaña corre; la
+// billetera de Posty no se toca · 'billetera' = sin conexión
+// capturada, la pauta se debita de la billetera de Posty. Sin riel
+// conocido no se afirma nada (la línea no se pinta).
+function pzAdsAudienciaDineroHTML() {
+  const s = pzBoostState || {};
+  if (s.rielAds !== 'cliente' && s.rielAds !== 'billetera') return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  let txt;
+  if (s.rielAds === 'cliente') {
+    const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
+    const fee = (pzBoostEsMP() ? '$' : 'US$') + pzBoostFmtMonto(Math.round(monto * 0.10));
+    txt = en
+      ? `Meta charges the ad spend to your own ad account. Posty charges ${fee} (10%) to your saved card, only if the campaign runs.`
+      : `La pauta la paga Meta desde tu cuenta publicitaria. Posty te cobra ${fee} (10%) en tu tarjeta guardada, solo si la campaña sale.`;
+  } else {
+    txt = en ? 'The ad spend comes out of your Posty wallet.' : 'La pauta sale de tu billetera de Posty.';
+  }
+  return `<p style="margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#47617A">${esc(txt)}</p>`;
 }
 
 function pzAdsAudienciaHTML() {
@@ -19339,15 +19369,21 @@ function pzAdsAudienciaHTML() {
   const op = prop.opciones || { radios: [2, 5, 10], edades: [[18, 65]], generos: ['todos', 'mujeres', 'hombres'], alcances: ['cerca', 'ciudad', 'pais', 'todos'], objetivos: [] };
   const chip = (on, onclick, label) => `<button type="button" style="${on ? PZ_AUD_CHIP_SEL : PZ_AUD_CHIP}" onclick="${onclick}">${esc(label)}</button>`;
   const grupo = (titulo, chips) => `<div style="margin:10px 0 2px"><div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:#47617A;margin-bottom:6px">${esc(titulo)}</div><div>${chips}</div></div>`;
-  // (LOTE ADS-PÚBLICO) La tarjeta pasa a 4 preguntas generales, para
+  // (LOTE ADS-PÚBLICO) La tarjeta pasa a preguntas generales, para
   // todo tipo de negocio (las viejas suponían un local: distancia
-  // fija y objetivo fijo). 1) ¿Quién te compra? — la frase del
-  // estudio (lectura) + los chips de intereses y el «+ Otra gente»
-  // como su ajuste. 2) ¿Dónde están? — alcance; el radio SOLO con
-  // alcance 'cerca'. 3) ¿Qué querés que hagan? — el objetivo como
-  // chips elegibles (las opciones las manda el servidor en la
-  // propuesta; sin lista, queda la línea de lectura de siempre).
-  // 4) Ajustes finos: edades, quiénes y parecidos, como siempre.
+  // fija y objetivo fijo). 1) ¿Dónde están? — alcance; el radio
+  // SOLO con alcance 'cerca'. 2) ¿Qué querés que hagan? — el
+  // objetivo como chips elegibles (las opciones las manda el
+  // servidor en la propuesta; sin lista, queda la línea de lectura
+  // de siempre). 3) Ajustes finos: edades, quiénes y parecidos.
+  // (LOTE TARJETA-SIMPLE) La vieja §1 «¿Quién te compra?» SALE
+  // entera (orden del dueño, 17/11: «paso innecesario»): la frase
+  // del comprador, los chips de intereses y el «+ Otra gente» — cuyo
+  // toque eyectaba al cliente de la tarjeta al chat — ya no se
+  // muestran ni se editan acá. El público estudiado sigue aplicando
+  // por debajo: los intereses los aporta la propuesta del servidor
+  // al validar (la tarjeta ya ni los manda en el POST), y la línea
+  // de dinero sobre el «Sale así» explica el riel que va a correr.
   const alcanceSel = String(sel.alcance || ((prop.geo && prop.geo.ciudad) ? 'cerca' : 'pais'));
   const alcLbl = { cerca: en ? 'Near my business' : 'Cerca de mi negocio', ciudad: en ? 'In my city' : 'En mi ciudad', pais: en ? 'All over the country' : 'En todo el país', todos: en ? 'Everywhere' : 'En todos lados' };
   const alcances = (op.alcances || []).map((v) => chip(alcanceSel === v, `pzAdsAudienciaAlcance('${v}')`, alcLbl[v] || v)).join('');
@@ -19357,28 +19393,12 @@ function pzAdsAudienciaHTML() {
   const edades = (op.edades || []).map((e, i) => chip(Number(sel.edad_min) === Number(e[0]) && Number(sel.edad_max) === Number(e[1]), `pzAdsAudienciaEdad(${i})`, `${e[0]}–${e[1]}`)).join('');
   const genLbl = { todos: en ? 'Everyone' : 'Todos', mujeres: en ? 'Women' : 'Mujeres', hombres: en ? 'Men' : 'Hombres' };
   const generos = (op.generos || []).map((g) => chip(sel.genero === g, `pzAdsAudienciaGenero('${g}')`, genLbl[g] || g)).join('');
-  const intereses = (sel.intereses || []).map((it, i) => chip(!!it.activo, `pzAdsAudienciaInteres(${i})`, it.nombre)).join('');
   const parecidos = chip(!!sel.parecidos, 'pzAdsAudienciaParecidos(true)', en ? 'Yes · similar to my followers' : 'Sí · parecido a mis seguidores')
     + chip(!sel.parecidos, 'pzAdsAudienciaParecidos(false)', en ? 'No' : 'No');
-  // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Al final de los chips, la
-  // puerta para lo que no está en la lista: abre el chat con el tema
-  // puesto. Si del chat ya volvió un chip traducido, se muestra acá
-  // esperando su toque (★) con su descarte (✕): la decisión se cierra
-  // en la tarjeta, nunca en el chat.
-  const extraPend = s.chipExtra || (prop.pendiente && prop.pendiente.chip) || null;
-  const extraHTML = (extraPend
-    ? `<button type="button" style="${PZ_AUD_CHIP_SEL}border-style:dashed" onclick="pzAdsAudienciaAceptarExtra()">★ ${esc(extraPend.etiqueta || '')}</button><button type="button" style="${PZ_AUD_CHIP}" onclick="pzAdsAudienciaDescartarExtra()" aria-label="${esc(en ? 'Discard' : 'Descartar')}">✕</button><div style="font-size:12px;color:#47617A;margin:2px 0 6px">${esc(en ? 'From what you told Posty in the chat — tap the ★ chip to add it to your audience.' : 'Salió de lo que le contaste a Posty en el chat: tocá el chip ★ para sumarlo a tu audiencia.')}</div>`
-    : '')
-    + `<button type="button" style="${PZ_AUD_CHIP}" onclick="pzAdsAudienciaOtraGente()">+ ${esc(en ? 'Other people' : 'Otra gente')}</button>`;
   const sinCiudad = !(prop.geo && prop.geo.ciudad);
-  const seccionComprador = `<div style="margin:10px 0 2px"><div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:#47617A;margin-bottom:6px">${esc(en ? 'WHO BUYS FROM YOU?' : '¿QUIÉN TE COMPRA?')}</div>`
-    + (prop.comprador_texto ? `<p style="margin:0 0 8px;font-size:14.5px;line-height:1.45">${esc(prop.comprador_texto)}</p>` : '')
-    + (intereses ? `<div>${intereses}</div>` : '')
-    + `<div style="margin-top:6px">${extraHTML}</div></div>`;
   return `<div style="border:1.5px solid #BFE0F2;background:#F2F9FD;border-radius:16px;padding:14px;margin:12px 0">
     <div style="font-weight:800;font-size:15.5px">${esc(en ? 'Who will see your ad?' : '¿A quién le llega tu anuncio?')}</div>
     <p style="margin:6px 0 2px;font-size:14.5px;line-height:1.45"><b>${esc(pzAdsAudienciaTexto(sel))}</b></p>
-    ${seccionComprador}
     ${grupo(en ? 'WHERE ARE THEY?' : '¿DÓNDE ESTÁN?', alcances)}
     ${alcanceSel === 'cerca' ? grupo(en ? 'DISTANCE FROM YOUR SPOT' : 'DISTANCIA A TU LOCAL', radios) : ''}
     ${(alcanceSel === 'cerca' && sinCiudad) ? `<p style="margin:2px 0 0;font-size:12.5px;color:#8A6D00">${esc(en ? 'We don’t have your city yet: until Posty knows it, the ad runs nationwide.' : 'Todavía no tenemos tu ciudad: mientras tanto el anuncio sale en todo el país.')}</p>` : ''}
@@ -19386,6 +19406,7 @@ function pzAdsAudienciaHTML() {
     ${grupo(en ? 'AGES' : 'EDADES', edades)}
     ${grupo(en ? 'WHO' : 'QUIÉNES', generos)}
     ${grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
+    ${pzAdsAudienciaDineroHTML()}
     <div id="pzAdsAudienciaError">${(s.boostError ? pzBoostErrorHTML(s.boostError.motivo, s.boostError.monto, s.boostError.cobroId) : '')}</div>
     <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Go with this 🚀' : 'Sale así 🚀')}</button>
     <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Go with this”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».')}</p>
@@ -19412,9 +19433,6 @@ async function pzAdsAudienciaMostrar() {
       s.audienciaProp = j.propuesta;
       if (s.audienciaObjetivo === undefined) s.audienciaObjetivo = j.propuesta.objetivo || null;
       if (!s.audienciaSel) s.audienciaSel = JSON.parse(JSON.stringify(j.propuesta.audiencia));
-      // Chip «otra gente» que el servidor ya tenía guardado (el
-      // cliente volvió a la tarjeta sin pasar por el hook del chat).
-      if (!s.chipExtra && j.propuesta.pendiente && j.propuesta.pendiente.chip) s.chipExtra = j.propuesta.pendiente.chip;
     }
     s.audienciaVisible = true;
     s.boostError = null; // (LOTE ADS-CREACIÓN-2) tarjeta fresca: no hereda el error de un intento anterior
@@ -19453,7 +19471,6 @@ function pzAdsAudienciaEdad(i) {
   pzAdsAudienciaMutar((a) => { a.edad_min = Number(e[0]); a.edad_max = Number(e[1]); });
 }
 function pzAdsAudienciaGenero(g) { pzAdsAudienciaMutar((a) => { a.genero = String(g); }); }
-function pzAdsAudienciaInteres(i) { pzAdsAudienciaMutar((a) => { const it = (a.intereses || [])[Number(i)]; if (it) it.activo = !it.activo; }); }
 function pzAdsAudienciaParecidos(b) { pzAdsAudienciaMutar((a) => { a.parecidos = !!b; }); }
 function pzAdsAudienciaAlcance(v) { pzAdsAudienciaMutar((a) => { a.alcance = String(v); }); }
 // El objetivo NO vive en la audiencia: es estado propio de la
@@ -19486,91 +19503,6 @@ async function pzAdsAudienciaSale(btn) {
   return j;
 }
 
-// (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) El cliente espera que un
-// turno del chat le traiga el chip traducido: lo marca
-// pzAdsAudienciaOtraGente y lo consume el hook de chatExchange.
-let PZ_ADS_OG_ESPERA = false;
-
-// Chip «+ Otra gente»: lo que no está en la lista se pide en el chat,
-// pero el chat abre CON EL TEMA PUESTO — nunca genérico. El servidor
-// deja la tarea abierta (endpoint tema) y devuelve el mensaje con el
-// que Posty habla primero; el anuncio queda resumido y visible como
-// burbuja de Posty (chatSay persiste por el log del chat). El cliente
-// responde por audio o texto; el servidor traduce contra el
-// vocabulario cerrado y el chip vuelve a ESTA tarjeta.
-async function pzAdsAudienciaOtraGente() {
-  const s = pzBoostState || (pzBoostState = pzBoostNewState());
-  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const prop = s.audienciaProp || {};
-  const sel = s.audienciaSel || prop.audiencia || {};
-  const p = s.selPost || {};
-  const tituloPost = String(p.text || p.caption || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-  const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
-  const resumen = (en ? 'For this ad' : 'Para este anuncio')
-    + (tituloPost ? `: «${tituloPost}»` : '')
-    + ' · $' + monto
-    + ' · ' + pzAdsAudienciaTexto(sel);
-  let mensaje = '';
-  try { const j = await api.post('/api/ads/billetera/audiencia/tema', { resumen }); if (j && j.mensaje) mensaje = j.mensaje; } catch (e) {}
-  PZ_ADS_OG_ESPERA = true;
-  try { location.hash = '#/app/chat'; } catch (e) {}
-  try { chatSay('📣 ' + resumen); } catch (e) {}
-  if (mensaje) { try { chatSay(mensaje); } catch (e) {} }
-}
-
-// Trae la propuesta fresca tras un turno del chat con la tarea
-// abierta: si el servidor guardó el chip traducido, queda en la
-// tarjeta (y la confirmación anterior se invalida: la audiencia
-// ofrecida cambió).
-async function pzAdsAudienciaRefrescarPendiente() {
-  try {
-    const j = await api.get('/api/ads/billetera/audiencia');
-    if (!j || !j.ok || !j.propuesta) return;
-    const s = pzBoostState || (pzBoostState = pzBoostNewState());
-    const chipN = (j.propuesta.pendiente && j.propuesta.pendiente.chip) || null;
-    if (s.audienciaProp) s.audienciaProp = j.propuesta;
-    if (chipN && (!s.chipExtra || s.chipExtra.etiqueta !== chipN.etiqueta)) {
-      s.chipExtra = chipN;
-      s.audienciaKey = '';
-      PZ_ADS_OG_ESPERA = false;
-      try { pzAdsAudienciaRepintar(); } catch (e) {}
-    }
-  } catch (e) {}
-}
-
-// Aceptar el chip extra: aplica SOLO el filtro que el servidor
-// tradujo (un interés de la lista, un rango prefijado, un género o un
-// radio — el POST del impulso lo vuelve a validar contra las
-// opciones) y cierra la tarea en el servidor. La decisión se cierra
-// acá, en la tarjeta; el «Sale así» se pide de nuevo porque la
-// audiencia cambió.
-function pzAdsAudienciaAceptarExtra() {
-  const s = pzBoostState || {};
-  const chip = s.chipExtra || ((s.audienciaProp || {}).pendiente || {}).chip || null;
-  if (!chip || !chip.filtro) return;
-  if (!s.audienciaSel && s.audienciaProp) s.audienciaSel = JSON.parse(JSON.stringify(s.audienciaProp.audiencia));
-  const a = s.audienciaSel;
-  if (!a) return;
-  const f = chip.filtro;
-  if (f.tipo === 'interes') (a.intereses || []).forEach((it) => { if (it.nombre === f.nombre) it.activo = true; });
-  else if (f.tipo === 'genero') a.genero = String(f.valor);
-  else if (f.tipo === 'edad') { a.edad_min = Number(f.edad_min); a.edad_max = Number(f.edad_max); }
-  else if (f.tipo === 'radio') a.radio_km = Number(f.radio_km);
-  else return;
-  s.chipExtra = null;
-  if (s.audienciaProp) s.audienciaProp.pendiente = null;
-  s.audienciaKey = '';
-  try { api.post('/api/ads/billetera/audiencia/pendiente', { accion: 'aceptar' }).catch(() => {}); } catch (e) {}
-  pzAdsAudienciaPintar();
-}
-
-function pzAdsAudienciaDescartarExtra() {
-  const s = pzBoostState || {};
-  s.chipExtra = null;
-  if (s.audienciaProp) s.audienciaProp.pendiente = null;
-  try { api.post('/api/ads/billetera/audiencia/pendiente', { accion: 'descartar' }).catch(() => {}); } catch (e) {}
-  pzAdsAudienciaPintar();
-}
 // (LOTE ADS-CREACIÓN-2) El bloque de error del impulso: VISIBLE y
 // persistente, en palabras de cliente — qué pasó y la garantía de
 // que no se cobró nada. Sin jerga de Meta: el detalle técnico vive
@@ -19637,9 +19569,15 @@ async function pzBoostConfirmar(btn, enTarjeta) {
   // audiencia: el servidor lo valida y manda en el mapeo a Meta; sin
   // elección propia viaja el de la propuesta.
   if (s.audienciaSel) {
-    body.audiencia = s.audienciaSel;
+    // (LOTE TARJETA-SIMPLE) Los intereses ya NO viajan: no son del
+    // cliente para editar — validarAudiencia los completa desde la
+    // propuesta (lo que el cliente no menciona queda como estaba),
+    // así el targeting final conserva el público estudiado entero.
+    const audSinIntereses = { ...s.audienciaSel };
+    delete audSinIntereses.intereses;
+    body.audiencia = audSinIntereses;
     const objAud = (s.audienciaObjetivo !== undefined) ? s.audienciaObjetivo : ((s.audienciaProp || {}).objetivo || null);
-    if (objAud) body.audiencia = { ...s.audienciaSel, objetivo: objAud };
+    if (objAud) body.audiencia = { ...audSinIntereses, objetivo: objAud };
   }
   try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
