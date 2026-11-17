@@ -1672,6 +1672,18 @@ const BANNED_PHRASES_EN = [
   // captionPassesEn entero (ok=true) sin nombrar un solo producto. La
   // firma es la frase exacta: "share this post" (CTA concreto) NO se toca.
   'share the love',
+  // (Juli, 2026-11-17 — ids reales 704/705/707, Scorpion Studios y Big Top
+  // Candy Shop, generaciones del asegurador frenadas por CORTE v1150):
+  // los tres quedaron CANCELADOS, pero la puerta EN dejaba pasar al 704 y
+  // al 707 enteros (ok=true reproducido en HEAD v1152): "let's make some
+  // magic happen!", "we bring your visions to life", "join our community
+  // of happy customers", "Looking for a sweet escape?" — el folleto
+  // genérico EN en estado puro, sin un dato del negocio. Las firmas son
+  // las frases exactas del relleno: "happy customers" a secas (un
+  // testimonio real: "our happy customers keep coming back for the
+  // fudge") NO se toca, y "share this" tampoco.
+  'magic happen', 'bring your visions to life', 'bring it to life',
+  'community of happy customers', 'sweet escape',
 ];
 const CTA_SIGNALS_EN = ['dm us', 'dm me', 'message us', 'comment', 'save this', 'save it', 'save these', 'book', 'stop by', 'come by', 'link in bio', 'tap the link', 'order', 'call us', 'text us', 'tag ', 'share this', 'grab yours', 'get yours', 'reserve', 'schedule', 'sign up', 'join us', 'try it', 'visit us', 'shop now', 'tell us'];
 const GENERIC_OPENINGS_EN = [
