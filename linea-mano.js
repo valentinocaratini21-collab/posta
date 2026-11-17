@@ -111,6 +111,12 @@ function registrarReseteo(db, igKey, domainKey, now) {
 // el punto exacto donde iba a arrancar la fase de medios. Devuelve
 // { marcada, motivo } y nunca tira: si algo falla, la generación sigue
 // como hoy (sin marca) — el vigilante jamás frena una prueba.
+// (LOTE PUERTA-SIN-GASTO) opts.forzar: el nacimiento de la puerta sin
+// gasto marca SIEMPRE, desde la entrada misma — la exclusión del
+// reseteo no se consulta ni se consume (queda disponible para un
+// nacimiento del gate, si alguna vez vuelve) y la semana cáscara nace
+// marcada aunque el operador haya reseteado la prueba minutos antes
+// (la R1 de la tanda mixta rebotó 409 sin_marca exactamente por esto).
 function nace(db, o) {
   try {
     const opts = o || {};
@@ -124,13 +130,17 @@ function nace(db, o) {
     const prev = db.prepare('SELECT cache_key, estado FROM trial_linea_mano WHERE cache_key = ?').get(key);
     if (prev && prev.estado === 'activa') return { marcada: true, motivo: 'ya-marcada' };
     // La exclusión del reseteo: la primera generación tras un reseteo
-    // del operador consume UNA fila sin consumir y no se marca.
-    const ex = db.prepare(`SELECT id FROM trial_reset_log WHERE consumida = 0 AND
-      ((kind = 'ig' AND ? <> '' AND value = ?) OR (kind = 'domain' AND ? <> '' AND value = ?))
-      ORDER BY at ASC, id ASC LIMIT 1`).get(ig, ig, dom, dom);
-    if (ex) {
-      db.prepare('UPDATE trial_reset_log SET consumida = 1 WHERE id = ?').run(ex.id);
-      return { marcada: false, motivo: 'reseteo-operador' };
+    // del operador consume UNA fila sin consumir y no se marca. Con
+    // forzar (la puerta sin gasto) no corre: la marca nace igual y la
+    // exclusión queda intacta, sin consumir.
+    if (!opts.forzar) {
+      const ex = db.prepare(`SELECT id FROM trial_reset_log WHERE consumida = 0 AND
+        ((kind = 'ig' AND ? <> '' AND value = ?) OR (kind = 'domain' AND ? <> '' AND value = ?))
+        ORDER BY at ASC, id ASC LIMIT 1`).get(ig, ig, dom, dom);
+      if (ex) {
+        db.prepare('UPDATE trial_reset_log SET consumida = 1 WHERE id = ?').run(ex.id);
+        return { marcada: false, motivo: 'reseteo-operador' };
+      }
     }
     const t = Number(opts.now) || Date.now();
     db.prepare(`INSERT INTO trial_linea_mano (cache_key, ig, domain, user_id, estado, creada_at)

@@ -30951,6 +30951,12 @@ async function rearmarSemanaPruebaPorCacheKey(cacheKey) {
     const pendIdx = [];
     payload.posts.forEach((p, i) => { if (p && p.armando === true) pendIdx.push(i); });
     if (!pendIdx.length) return { pendientes: 0, pendIdx: [], rearmada: false };
+    // (LOTE PUERTA-SIN-GASTO) Defensa en profundidad: sobre una semana
+    // marcada línea a mano el re-enganche corta ACÁ — no refresca el
+    // logo ni reabre la cadena (que además frena en su propia cabeza,
+    // scheduleWeekRescue). La semana la completan las cargas a mano;
+    // el rescate legítimo de semanas sin marca sigue intacto.
+    try { if (lineaMano.marcaActiva(db, cacheKey)) return { pendientes: pendIdx.length, pendIdx, rearmada: false, linea_mano: true }; } catch (e) {}
     if (semanaCadenasVivas.has(cacheKey)) return { pendientes: pendIdx.length, pendIdx, rearmada: false, viva: true };
     const logoPath = (await refrescarLogoPrueba(cacheKey).catch(() => null)) || trialLogoAbsPath(payload.digest);
     // (LOTE SOULCYCLE-CIERRE-7) LA ESCALACIÓN SE LEVANTA SOLO CON
@@ -31073,6 +31079,9 @@ async function rescateSemanaSweep() {
       const pend = [];
       payload.posts.forEach((p, i) => { if (p && p.armando === true) pend.push(i); });
       if (!pend.length) continue;
+      // (LOTE PUERTA-SIN-GASTO) Semana marcada línea a mano: el barrido
+      // ni la revisa ni la re-engancha — la completan las cargas a mano.
+      try { if (lineaMano.marcaActiva(db, ig)) continue; } catch (e) {}
       revisadas++;
       // Guarda anti-quema: si TODAS las pendientes están detenidas
       // por falta de logo, solo se re-abre si el refresco encuentra
@@ -38993,9 +39002,32 @@ app.post('/api/guest/start', async (req, res) => {
       const pendGS = (Array.isArray(payload.posts) ? payload.posts : [])
         .map((p, i) => (p && p.armando === true) ? i : -1).filter((x) => x >= 0);
       if (pendGS.length) {
+        // (LOTE PUERTA-SIN-GASTO) La casa del invitado muestra SU
+        // negocio y SU feed desde esta entrada, aunque la semana siga
+        // en armado y no haya posteos importados: el perfil se escribe
+        // desde el payload (la misma escritura de la salida con
+        // importación, con su misma guarda de invitado) y el snapshot
+        // del feed se siembra con los posteos reales de la prueba. La
+        // escritura corre SOLO sin contradicción viva del fundamento:
+        // una identidad sin resolver no se escribe en el perfil (la
+        // vara del guarda de importación, intacta).
+        if (!trialFundamentoContradice(payload)) {
+          try {
+            // La fila de perfil del invitado nace perezosa: se asegura
+            // con el helper de siempre antes de escribir la identidad.
+            getProfile(g.userId);
+            db.prepare(`UPDATE profiles SET ig_username = ?, business_name = ?, category = ? WHERE user_id = ? AND EXISTS (SELECT 1 FROM users WHERE id = ? AND is_guest = 1)`)
+              .run(igK || '', String(payload.business || '').trim(), String(payload.category || '').trim(), g.userId, g.userId);
+          } catch (e) {}
+          try { const seedP = seedTrialFeedSnapshot(g.userId, igK, payload); if (seedP && typeof seedP.catch === 'function') seedP.catch(() => {}); } catch (e) {}
+        }
         try { await rearmarSemanaPruebaPorCacheKey(cacheKey); } catch (e) {}
         try { evTrack(g.userId, 'trial_entrada_en_armado', { ig: cacheKey, pendientes: pendGS }); } catch (e) {}
-        return responder202Invitado({ ok: false, week_pending: true, pending: pendGS.length, error: lang === 'en' ? 'Your week is still being built — Posty is working on it right now. Come back in a few minutes and it will open right here.' : 'Tu semana todavía se está armando — Posty está trabajando en ella ahora. Volvé en unos minutos y se abre acá mismo.' });
+        // (LOTE PUERTA-SIN-GASTO · regla de copy de la puerta) El texto
+        // dice solo hechos: la semana se arma a mano y cada pieza
+        // aparece en su lugar cuando se carga. Nada de promesas de
+        // tiempo («volvé en unos minutos» era la redacción vieja).
+        return responder202Invitado({ ok: false, week_pending: true, pending: pendGS.length, error: lang === 'en' ? 'Your week is being put together by hand — each piece will appear in your home, in its day slot, as it is loaded.' : 'Tu semana se está armando a mano — cada pieza va a aparecer en tu Inicio, en el lugar de su día, a medida que se cargue.' });
       }
       // Sin piezas en armado y sin nada importable (la semana quedó
       // sin medio y esta entrada no tiene cadena que re-enganchar):
@@ -39373,6 +39405,45 @@ function buildTrialWeek(n, lang) {
       day: days[d.getDay()],
       date: en ? `${months[d.getMonth()]} ${d.getDate()}` : `${d.getDate()} ${months[d.getMonth()]}`,
       hour: hours[i % hours.length],
+      post: i,
+    };
+  });
+}
+
+// (LOTE PUERTA-SIN-GASTO) Los 3 lugares de la semana cáscara llevan su
+// día/hora REAL de publicación según la regla de la prueba: la primera
+// pieza sale en el próximo horario bueno — hoy 19:00 si todavía no
+// pasó, mañana 19:00 si ya pasó — y las otras dos en los días corridos,
+// siempre 19:00 (el mismo criterio con el que la agenda programa cada
+// pieza cuando se carga a mano). Así la casa puede decir «sale mañana
+// a las 19:00» sobre el lugar del día 1 sin prometer nada que la agenda
+// no vaya a cumplir. La zona se estima por el idioma del embudo (los
+// dos mercados de lanzamiento); el horario exacto lo fija la agenda
+// con la zona real del invitado al cargarse cada pieza.
+function buildTrialWeekCasara(lang) {
+  const en = lang === 'en';
+  const tz = en ? 'America/New_York' : 'America/Argentina/Buenos_Aires';
+  const days = en
+    ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    : ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const months = en
+    ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    : ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  let y = 0, m = 0, d = 0, hh = 0;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(new Date());
+    const got = {};
+    for (const p of parts) got[p.type] = p.value;
+    y = Number(got.year); m = Number(got.month); d = Number(got.day); hh = Number(got.hour) % 24;
+  } catch (e) { /* sin zona legible: la semana genérica de siempre */ }
+  if (!y || !m || !d) return buildTrialWeek(3, lang);
+  const startOffset = hh >= 19 ? 1 : 0; // 19:00 de hoy ya pasó → mañana
+  return Array.from({ length: 3 }, (_, i) => {
+    const dt = new Date(Date.UTC(y, m - 1, d + startOffset + i, 12, 0, 0));
+    return {
+      day: days[dt.getUTCDay()],
+      date: en ? `${months[dt.getUTCMonth()]} ${dt.getUTCDate()}` : `${dt.getUTCDate()} ${months[dt.getUTCMonth()]}`,
+      hour: en ? '7:00 PM' : '19:00',
       post: i,
     };
   });
@@ -39889,6 +39960,117 @@ function trialCacheWriteWeb(domainRaw, out, testMode) {
   } catch (e) {}
 }
 
+// (LOTE PUERTA-SIN-GASTO · orden de Valentino 16/11 22:40: «quiero que
+// nunca mas me llegue gasto de IA» — la prueba gratis la hace bamboo a
+// mano y la puerta no genera NADA) LA SEMANA CÁSCARA DE LA PUERTA: la
+// entrada crea la semana marcada LÍNEA A MANO desde el nacimiento, con
+// sus 3 piezas en armado honesto y su día/hora real de publicación
+// (buildTrialWeekCasara), usando SOLO lecturas públicas sin costo — el
+// perfil de Instagram y la web que las rutas ya bajaron — para que la
+// casa del invitado muestre su negocio y su feed (SUPERFICIE intacta).
+// CERO llamadas de IA paga en este camino: sin digest generado, sin
+// ideas LLM, sin clasificación por visión, sin renders ni QA — el
+// rubro y la estrella los aporta el fundamento de bamboo (la estrella
+// declarada por el dueño en el formulario sí viaja, es su palabra).
+// Devuelve el payload listo para responder y cachear, o null si la
+// marca no pudo nacer (la ruta falla honesta y el intento se reembolsa:
+// una semana sin marca NO se entrega, porque la cadena de rescate
+// podría generar sobre ella).
+async function puertaSinGastoSemana(o) {
+  try {
+    const fields = (o && o.fields) || {};
+    const ig = String((o && o.ig) || '').trim();
+    const igKey = String((o && o.igKey) || '').trim();
+    const lang = (o && o.lang) === 'en' ? 'en' : 'es';
+    const webData = (o && o.webData) || null;
+    if (!igKey) return null;
+    const dom = trialLock ? trialLock.normalizeDomain(fields.web || '') : '';
+    const marca = lineaMano.nace(db, { ig: igKey, domain: dom, testMode: false, allowlisted: false, forzar: true });
+    if (!marca || !marca.marcada) { console.error('[puerta-sin-gasto] la marca no nació:', marca && marca.motivo); return null; }
+    // Lecturas públicas ya en vuelo (el embed del feed): sin fetches
+    // nuevos más allá de la carrera acotada de siempre.
+    let embedPosts = [];
+    let followers = null;
+    let bio = '';
+    try {
+      const html = o.embedPromise ? await raceMs(o.embedPromise, 5000) : null;
+      if (html) {
+        try { embedPosts = feedAudit.parseEmbedPosts(html) || []; } catch (e) { embedPosts = []; }
+        try { followers = feedAudit.followersFromEmbedHtml(html); } catch (e) { followers = null; }
+        try { bio = demo.extractIgBiography(html) || ''; } catch (e) { bio = ''; }
+      }
+    } catch (e) { /* sin embed: la cáscara nace igual, con lo que haya */ }
+    const igName = String((o && o.igName) || '');
+    const bizName = String((o && o.business) || '').trim() || (webData && webData.name) || igName || ig;
+    const category = demo.CATEGORIES.includes(String(fields.category || '')) ? String(fields.category) : 'otro';
+    const star = String(fields.producto_estrella || '').trim().slice(0, 120);
+    const digest = {
+      hash: crypto.createHash('sha1').update(igKey + '|' + dom).digest('hex').slice(0, 16),
+      producto_estrella: star,
+      servicios: [],
+      productos: [],
+      web: { name: (webData && webData.name) || '', description: (webData && webData.description) || '', url: (webData && webData.url) || '' },
+      feed: { bio: bio || '' },
+    };
+    const posts = [0, 1, 2].map(() => ({ type: 'image', armando: true, caption: '', hashtags: '', headline: '', text_mode: 'text', style: null, style_name: null }));
+    let espejo = null;
+    try { espejo = fundamentoLiteral.espejoFromFields(fields); } catch (e) { espejo = null; }
+    const out = {
+      ok: true,
+      engine: demo.DEMO_ENGINE_V,
+      lang,
+      content_lang: lang,
+      business: bizName,
+      ig,
+      category,
+      subcat: String(fields.subcat || '').slice(0, 60),
+      rubro_check: null,
+      accent: null,
+      btn: null,
+      color_source: null,
+      feed_register: null,
+      feedMap: null,
+      feed_recents: trialFeedRecentsFromEmbed(embedPosts),
+      web_info: webData ? trialWebInfo(webData, 0) : null,
+      digest,
+      foto_gate: null,
+      primer_posteo: null,
+      juicio_final: null,
+      continuidad_serie: null,
+      rescate_semana: [],
+      onboarding: (o && o.ocAns) || {},
+      espejo,
+      ig_pic: (o && o.igPic) || null,
+      ig_name: igName,
+      profile: { name: igName || bizName, pic: (o && o.igPic) || null, posts_count: embedPosts.length || null, followers: followers || null },
+      analysis: null,
+      competition_line: null,
+      ideas: [],
+      posts,
+      formato_diag: null,
+      design: null,
+      week: buildTrialWeekCasara(lang),
+      screenshot: null,
+      spots_left: spotsLeft(),
+      video_ok: false,
+      render_fallback: false,
+      linea_mano: true,
+      puerta_sin_gasto: true,
+    };
+    try {
+      const payloadS = JSON.stringify(out);
+      if (payloadS.length < 12 * 1024 * 1024) {
+        db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+          ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`).run(igKey, payloadS, Date.now());
+      }
+    } catch (e) { console.error('[puerta-sin-gasto] no se pudo cachear la cáscara:', e.message); }
+    try { trialCacheWriteWeb(fields.web, out, false); } catch (e) {}
+    try { trialLockRecordFor(fields, webData, bizName, lang, out); } catch (e) {}
+    try { track(null, 'prueba_done', igKey); } catch (e) {}
+    return out;
+  } catch (e) { console.error('[puerta-sin-gasto] semana cáscara:', e.message); return null; }
+}
+
 // Pieza 13 · ESCUDO INVISIBLE ANTI-BOTS (cero fricción visible, nada de
 // captchas — regla cero trabas): (a) honeypot silencioso: el form trae un
 // campo trampa que ningún humano ve ni completa; si viene lleno, es un bot
@@ -40322,6 +40504,13 @@ app.post('/api/trial/pregenerate', express.json({ limit: '16kb' }), async (req, 
   const rubroOk = rubroDet && rubroDet.toLowerCase() !== 'otro';
   const evidenced = (mix === 'libre' && !!star) || det.length > 0 || (mix === 'todo' && rubroOk);
   if (!evidenced) return res.status(400).json({ ok: false, error: 'falta producto', falta_producto: true });
+  // (LOTE PUERTA-SIN-GASTO) La generación temprana al salir del campo
+  // ya no existe para la puerta real: la semana cáscara nace en el
+  // envío mismo, en segundos, así que pre-generar no ahorra nada — y
+  // dispararla crearía marcas y semanas para negocios que quizá nunca
+  // envían el formulario. El modo de prueba del gate conserva el
+  // comportamiento de siempre.
+  if (!trialTestMode(req)) return res.json({ ok: true, skipped: 'puerta-sin-gasto' });
   // Idempotencia: ya genera otro flujo, o la semana ya está guardada.
   if (trialGenIsInflight(igKey)) return res.json({ ok: true, generating: true });
   try {
@@ -40728,6 +40917,20 @@ async function trialGenerateHandler(req, res) {
   let photoPath = null;
   let ok = false;
   try {
+    // (LOTE PUERTA-SIN-GASTO) LA PUERTA NUEVA: fuera del modo de prueba
+    // del gate y de la allowlist interna, la entrada NO corre la
+    // tubería de generación: crea la semana cáscara marcada línea a
+    // mano desde el nacimiento, con solo las lecturas públicas ya
+    // hechas (perfil IG + web) — cero gasto de IA y aterrizaje en
+    // segundos. Las exclusiones de siempre quedan intactas: testMode
+    // (las corridas del gate) y la allowlist siguen por el camino de
+    // generación de hoy.
+    if (!trialTestMode(req) && !(trialLock && trialLock.isAllowlisted(db, igKey, trialLock.normalizeDomain(fields.web || '')))) {
+      const outPSG = await puertaSinGastoSemana({ fields, business, ig, igKey, webData, embedPromise, lang, ocAns, igPic, igName });
+      if (!outPSG) throw new Error('puerta-sin-gasto: la semana cáscara no nació');
+      ok = true;
+      return res.json(outPSG);
+    }
     if (file) {
       const kind = demo.validImageKind(file);
       if (!kind) return res.status(400).json({ error: 'La imagen tiene que ser JPG, PNG o WebP' });
@@ -41459,7 +41662,14 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   // (v274 · MODO EN) El prefill del funnel EN pide lang='en': las opciones
   // de la pregunta de rubro salen con rótulos en inglés.
   const prefillLang = String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
-  const cls = await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean), prefillLang, embedPosts.map((p) => p.shortcode).filter(Boolean));
+  // (LOTE PUERTA-SIN-GASTO) La puerta no paga visión: fuera del modo de
+  // prueba del gate, el rubro sale del voto determinístico de texto —
+  // el mismo resultado que hoy devuelve este camino cuando el tope del
+  // demo está caído — y el fundamento de bamboo lo confirma o lo
+  // corrige. La pregunta de rubro al dueño sigue intacta.
+  const cls = trialTestMode(req)
+    ? await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean), prefillLang, embedPosts.map((p) => p.shortcode).filter(Boolean))
+    : rubroId.classifyBusiness(signals);
   const resolved = rubroId.resolveRubro({ cls, lang: prefillLang });
   const legacyCat = demo.categoryFromText((bio ? bio + ' ' : '') + name);
   const hasVotes = (cls.candidatas || []).length > 0;
@@ -41500,7 +41710,7 @@ try { styleIg = await feedAudit.trialStyleProfile(embedPosts, { bio: bio || '', 
   // procedencia. La visión corre en UNA llamada, best-effort; sin ella,
   // la firma lleva solo lo determinista (nunca se inventa un estilo).
   try {
-    const firmaIg = await feedAudit.trialStyleSignature(embedPosts, { vision: (it) => classifyFeedPostStyles(it, prefillLang), source: 'tu feed' });
+    const firmaIg = await feedAudit.trialStyleSignature(embedPosts, { vision: trialTestMode(req) ? ((it) => classifyFeedPostStyles(it, prefillLang)) : null, source: 'tu feed' });
     if (firmaIg) { if (styleIg) styleIg.firma = firmaIg; else styleIg = { firma: firmaIg }; }
   } catch (e) { /* sin firma: el estudio sigue con lo demás */ }
   // (LOTE VOZ-PROPIA-EN-LA-PRUEBA) Sus frases que se repiten, del mismo
@@ -41785,7 +41995,9 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     webText: [data.name || '', data.description || ''].join(' '),
   };
   const webPrefillLang = String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
-  const wcls = await classifyWithVision(webSignals, (data.photos || []).map((p) => p.url), webPrefillLang);
+  // (LOTE PUERTA-SIN-GASTO) Igual que el prefill de Instagram: sin
+  // visión paga fuera del modo de prueba — voto determinístico.
+  const wcls = trialTestMode(req) ? await classifyWithVision(webSignals, (data.photos || []).map((p) => p.url), webPrefillLang) : rubroId.classifyBusiness(webSignals);
   const wresolved = rubroId.resolveRubro({ cls: wcls, lang: webPrefillLang });
   const wLegacy = demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' '));
   const wHasVotes = (wcls.candidatas || []).length > 0;
@@ -41795,7 +42007,7 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
   let firmaWeb = null;
   try {
     const webItems = (data.photos || []).slice(0, 12).map((p) => ({ type: 'GraphImage', thumb: p.url || null, caption: p.alt || '' }));
-    firmaWeb = await feedAudit.trialStyleSignature(webItems, { vision: (it) => classifyFeedPostStyles(it, webPrefillLang), source: 'tu web' });
+    firmaWeb = await feedAudit.trialStyleSignature(webItems, { vision: trialTestMode(req) ? ((it) => classifyFeedPostStyles(it, webPrefillLang)) : null, source: 'tu web' });
   } catch (e) { firmaWeb = null; }
   const webStyle = feedAudit.paletteProfileFromHexes(data.palette || []) || {};
   if (firmaWeb) webStyle.firma = firmaWeb;
@@ -42184,6 +42396,21 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   let doneSent = false;
   let keepalive = null;
   try {
+    // (LOTE PUERTA-SIN-GASTO) LA PUERTA NUEVA, igual que en la ruta
+    // clásica: la semana cáscara marcada nace acá, sin tubería de
+    // generación — el stream cuenta los hechos a medida que ocurren
+    // (la semana quedó creada, sus 3 lugares en armado con su día y
+    // hora) y cierra con 'done': la puerta pasa a la casa del invitado.
+    if (!trialTestMode(req) && !(trialLock && trialLock.isAllowlisted(db, igKey, trialLock.normalizeDomain(fields.web || '')))) {
+      const outPSG = await puertaSinGastoSemana({ fields, business, ig, igKey, webData, embedPromise: ig ? demo.fetchIgEmbedHtml(ig).catch(() => null) : Promise.resolve(null), lang, ocAns, igPic, igName });
+      if (!outPSG) { fail(lang === 'en' ? 'Something went wrong building your trial. Try again.' : 'Algo salió mal armando tu prueba. Probá de nuevo.'); return; }
+      send('status', { step: 'puerta-sin-gasto', text: lang === 'en' ? 'Your week is created — Posty is putting it together by hand.' : 'Tu semana ya está creada — Posty la está armando a mano.' });
+      send('meta', { total: outPSG.posts.length });
+      outPSG.posts.forEach((p, i) => { send('post', { index: i, day: outPSG.week[i].day, date: outPSG.week[i].date, hour: outPSG.week[i].hour, post: p }); });
+      if (!closed) { send('done', { out: outPSG }); doneSent = true; }
+      finish();
+      return;
+    }
     if (file) {
       const kind = demo.validImageKind(file);
       if (!kind) return fail('La imagen tiene que ser JPG, PNG o WebP');
@@ -45725,7 +45952,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1148';
+const BUILD_ID = '20261105-v1149';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

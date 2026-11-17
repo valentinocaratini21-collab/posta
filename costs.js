@@ -293,7 +293,13 @@ function costBreakdown(days) {
 // feature 'demo-ai-*' para medirlo contra conversión desde el panel admin.
 // FAIL-CLOSED como daySpendUsd: si la DB no responde, se asume tope superado
 // y el demo cae a plantillas (fallback silencioso, nunca error visible).
-const DEMO_AI_DAILY_CAP_USD = Math.max(0, parseFloat(process.env.DEMO_AI_DAILY_CAP_USD || '10') || 10);
+// (LOTE PUERTA-SIN-GASTO) El freno «0» tiene que frenar de verdad: el
+// parseo viejo hacía parseFloat('0') || 10 = 10 — un tope puesto en 0
+// (el freno de emergencia cargado en Railway) dejaba el gasto corriendo
+// hasta USD 10/día. Ahora el 0 explícito vale 0 (demoAiCapOk() queda
+// false siempre: fail-closed, también con la DB caída, que devuelve el
+// propio tope) y solo un valor ausente o ilegible cae al default de 10.
+const DEMO_AI_DAILY_CAP_USD = (() => { const v = parseFloat(process.env.DEMO_AI_DAILY_CAP_USD || '10'); return Number.isFinite(v) ? Math.max(0, v) : 10; })();
 
 function demoAiSpendTodayUsd() {
   if (!DB) return DEMO_AI_DAILY_CAP_USD;
