@@ -4424,6 +4424,30 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-strip .hf-chip-ico{flex:0 1 auto;min-width:0;overflow:hidden;display:inline-flex;line-height:0}
 .hf-strip .hf-chip-day{flex:0 0 auto;overflow:visible;text-overflow:clip;white-space:nowrap}
 .hf-strip .hf-chip-hm{flex:0 0 auto;white-space:nowrap}
+/* (LOTE RENDER-CASA · 16/11 · orden de Valentino) Casa del invitado:
+   el espejo de su perfil va «en oscurito» — atenuado y desaturado,
+   de fondo, pero legible: sigue probando que es SU negocio — y la
+   pieza de la prueba va a pleno brillo, protagonista, con su cartel
+   de agenda azul Posty. Las tres clases nacen SOLO de la rama del
+   invitado en app.js (pzIsGuest): la casa del cliente conectado no
+   recibe ninguna y no cambia. El chip de conexión y la fila de info
+   de la cabecera NO se atenúan: conectar es la acción de la casa. */
+.hf-head-invitado .hf-prow,.hf-head-invitado .hf-stats,.hf-head-invitado .hf-cat,.hf-head-invitado .hf-bio,.hf-head-invitado .hf-link,.hf-head-invitado .hf-links,.hf-head-invitado .hf-hls{opacity:.62;filter:saturate(.6)}
+.hf-tile-espejo{opacity:.6;filter:saturate(.5) brightness(.95)}
+.hf-tile-pieza{box-shadow:0 0 0 2px #2793C8,0 8px 20px rgba(10,30,51,.20);z-index:1}
+.hf-chip-sale{background:#2793C8;color:#fff}
+.hf-tile-cap .hf-chip-sale{display:inline-flex;align-items:center;gap:3px;background:#2793C8;color:#fff;padding:3px 7px;border-radius:6px;margin-top:4px;font-size:11px;font-weight:600}
+/* (LOTE RENDER-CASA · corrección 23:54 + pin 23:57) El candado amable:
+   tarjeta centrada azul Posty sobre la pieza del invitado sin
+   conectar — la foto se reconoce, pero verla limpia exige conectar.
+   La capa cubre la tile entera (inset:0) y traga el toque: es el
+   destino del toque, y su sola presencia en la tile es la llave que
+   cierra todas las rutas de apertura (detalle, peek, hoja, pop) en
+   app.js. Al conectar, el HTML ya no la trae y la pieza queda limpia. */
+.hf-pieza-lock{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;padding:8px}
+.hf-pieza-lock-card{display:flex;flex-direction:column;align-items:center;gap:7px;background:#2793C8;color:#fff;border-radius:14px;padding:12px 11px;box-shadow:0 10px 26px rgba(10,30,51,.35);text-align:center;max-width:100%}
+.hf-pieza-lock-t{font-size:12px;font-weight:700;line-height:1.3}
+.hf-pieza-lock-btn{background:#fff;color:#0A1E33;border:0;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer;line-height:1.25}
 .hf-tile-under{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:10px;font-size:12px;font-weight:700;color:#0A1E33;text-align:center;line-height:1.35;background:linear-gradient(140deg,#eaf6fd,#fdf3d7);box-sizing:border-box}
 .hf-tile-under>span{display:block}
 /* (SACAR-CORAZÓN 6/11 · SUPERSEDE LOTE CORAZÓN-ABAJO 1/11: el corazón sale del feed; el tik de aprobado ocupa su slot, bottom:38px right:6px — ver .hf-tik. La clase hf-has-glyph queda solo como marca en el HTML y en los tests.) */

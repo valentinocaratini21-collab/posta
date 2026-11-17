@@ -13669,6 +13669,11 @@ function scfClosePop(zoomBack) {
 }
 function scfOpenPop(wrap, pinned) {
   if (!wrap) return;
+  // (LOTE RENDER-CASA · pin 23:57) Una tile con candado (.hf-pieza-lock:
+  // pieza del invitado sin conectar) NO se abre — ni por hover ni por
+  // click ni por el avance del invitado. El candado solo existe en ese
+  // estado: para cualquier otra tile esta guarda no existe.
+  if (wrap.querySelector && wrap.querySelector('.hf-pieza-lock')) return;
   if (SCF_POP && SCF_POP.wrap === wrap) return;
   scfClosePop();
   const vault = document.getElementById('scfVault');
@@ -22153,6 +22158,69 @@ function hfWhenChip(post, now) {
     return `${wd} ${dt} · ${hh}`;
   } catch (e) { return ''; }
 }
+// (LOTE RENDER-CASA · 16/11 · orden de Valentino «dale, armalo así»)
+// Cartel de agenda de la pieza de la prueba en la casa del invitado:
+// «sale hoy · 19:00» / «sale mañana · 19:00» / «sale Sáb · 19:00»
+// (EN: «goes out today/tomorrow/Tue · 7:00 PM»). Se computa SIEMPRE
+// del scheduled_at real de la fila en la zona de la cuenta — nunca un
+// texto fijo y nunca una fecha inventada: sin scheduled_at válido no
+// hay cartel (''). Es el hecho de agenda de la pieza (su horario de
+// salida programado), no una promesa sobre la espera. Solo lo consume
+// la rama del invitado de homeTileHTML; la chapita del dueño
+// (hfWhenChip) no cambia.
+function hfSaleChipTxt(post) {
+  try {
+    if (!post || !post.scheduled_at) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(post.scheduled_at);
+    if (!d) {
+      const s = String(post.scheduled_at).replace(' ', 'T');
+      d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z');
+    }
+    if (!d || isNaN(d)) return '';
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const zo = tz ? { timeZone: tz } : {};
+    const keyOf = (x) => x.toLocaleDateString('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
+    const nowD = new Date();
+    const tKey = keyOf(d), todayKey = keyOf(nowD);
+    const tomKey = (typeof pcDayKeyShift === 'function') ? pcDayKeyShift(nowD, tz, 1) : '';
+    let hh = en
+      ? d.toLocaleTimeString('en-US', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: true }, zo))
+      : d.toLocaleTimeString('es-AR', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: false }, zo));
+    if (!en) hh = hh.replace(/^0(\d:)/, '$1');
+    if (!hh) return '';
+    let dia = '';
+    if (tKey === todayKey) dia = en ? 'today' : 'hoy';
+    else if (tomKey && tKey === tomKey) dia = en ? 'tomorrow' : 'mañana';
+    else {
+      let wd = d.toLocaleDateString(en ? 'en-US' : 'es-AR', Object.assign({ weekday: 'short' }, zo)).replace(/\./g, '');
+      if (!wd) return '';
+      dia = wd.charAt(0).toUpperCase() + wd.slice(1);
+    }
+    return (en ? 'goes out ' : 'sale ') + dia + ' · ' + hh;
+  } catch (e) { return ''; }
+}
+// (LOTE RENDER-CASA · corrección de Valentino 23:54) El candado amable
+// de la pieza: tarjeta centrada azul Posty sobre la imagen de la pieza
+// en su lugar de la grilla — «¿Lo querés en tu Instagram?» + el botón
+// de conectar con el @ del negocio (de pzHomeProfGet, la lectura
+// guardada de su perfil; sin @ leído, el botón va genérico). La foto
+// se reconoce — es su producto — pero verla limpia exige conectar: la
+// tarjeta cubre el centro y la capa entera traga el toque (sin
+// stopPropagation el detalle de la tile la mostraría en grande). El
+// botón abre igConnect, la puerta de conexión de siempre. Sin
+// data-ig-connect a propósito: el binder global de ese atributo
+// pisaría este onclick y con él el stopPropagation.
+function hfPiezaLockHTML(en) {
+  let at = '';
+  try {
+    const u = String(((typeof pzHomeProfGet === 'function') ? (pzHomeProfGet() || {}) : {}).username || '').replace(/^@/, '');
+    if (u) at = '@' + u;
+  } catch (e) {}
+  const btn = en ? ('Connect ' + (at || 'your Instagram')) : ('Conectar ' + (at || 'tu Instagram'));
+  return `<span class="hf-pieza-lock" onclick="event.stopPropagation()"><span class="hf-pieza-lock-card">${pzIc('camera', 22)}<span class="hf-pieza-lock-t">${en ? 'Want it on your Instagram?' : '¿Lo querés en tu Instagram?'}</span><button type="button" class="hf-pieza-lock-btn" onclick="event.stopPropagation();event.preventDefault();igConnect()">${esc(btn)}</button></span></span>`;
+}
 // (LOTE 10 · ítem 2) Chapita del PLAN para borradores sin
 // scheduled_at: el día real del plan (t.day, ymd de schedPlacements)
 // a la hora real del plan (slotHour, la misma política que el
@@ -22750,11 +22818,26 @@ function hfBorradorCapTxt(p, t, en) {
 }
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
+  // (LOTE RENDER-CASA · 16/11) Rama del invitado: su espejo (tiles
+  // 'ig') va atenuado (.hf-tile-espejo) y su pieza de la prueba
+  // (source 'trial', el marcador confiable de la semana importada)
+  // va a pleno brillo como protagonista (.hf-tile-pieza) con su
+  // cartel de agenda. Para el cliente conectado NADA cambia: sin
+  // pzIsGuest no se agrega ni una clase.
+  const guestTile = (typeof pzIsGuest === 'function' && pzIsGuest());
   if (t.kind === 'ig') {
     const glyph = t.pinned ? HOME_PIN_SVG : t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
-    return `<button type="button" class="hf-tile pub" data-hf-filtro="publicados" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags=""${t.shortcode ? ` data-shortcode="${esc(String(t.shortcode))}"` : ''} aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
+    return `<button type="button" class="hf-tile pub${guestTile ? ' hf-tile-espejo' : ''}" data-hf-filtro="publicados" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags=""${t.shortcode ? ` data-shortcode="${esc(String(t.shortcode))}"` : ''} aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
   }
   const p = t.post;
+  const esPieza = guestTile && !!p && String(p.source || '') === 'trial';
+  // (LOTE RENDER-CASA · corrección 23:54) El candado va SOLO en la
+  // pieza del invitado que todavía NO conectó: al conectar
+  // (PROFILE.ig_connected) la superposición no se rinde y la pieza
+  // queda limpia en su lugar. La pieza sigue siendo la protagonista
+  // de la grilla (.hf-tile-pieza) — el candado es su centro.
+  const igConectado = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected) ? true : false;
+  const piezaLock = (esPieza && !igConectado) ? hfPiezaLockHTML((typeof ME !== 'undefined' && ME && ME.lang === 'en')) : '';
   const isV = String(p.media_type || '') === 'video';
   const isCar = String(p.media_type || '') === 'carousel' || !!(p.carousel_paths && String(p.carousel_paths).length > 2);
   // (Tanda feed 6C · ítem 6) Con portada, la tile del reel es la
@@ -22828,16 +22911,24 @@ function homeTileHTML(t, i) {
   const archChip = t.archivedExt ? `<span class="hf-arch-chip">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Archived' : 'Archivado'}</span>` : '';
   const despCls = t.pzDespegue ? ' hf-tile-despegue' : '';
   const nextCls = t.pzNext ? ' hf-tile-next' : '';
-  const chipTxt = (p.status === 'draft' || p.status === 'scheduled')
+  // (LOTE RENDER-CASA) La pieza de la prueba del invitado lleva SU
+  // cartel de agenda («sale hoy/mañana/día · hora», hfSaleChipTxt,
+  // computado de su scheduled_at real) en el lugar de la chapita: no
+  // pasa por hfTileChipParts (recortaría el «sale» a una palabra) y
+  // lleva su clase propia (.hf-chip-sale). Solo programadas: un
+  // borrador no afirma salida. Sin cartel computable, la chapita de
+  // siempre — nunca una fecha inventada.
+  const saleTxt = (esPieza && p.status === 'scheduled') ? hfSaleChipTxt(p) : '';
+  const chipTxt = saleTxt || ((p.status === 'draft' || p.status === 'scheduled')
       ? (hfWhenChip(p) || (p.status === 'draft' ? hfPlanChip(t.day) : ''))
-      : '';
+      : '');
   // (LOTE 16 · la hora nunca se corta + el día tampoco)
   // La chapita ya no recorta nada: el día va entero (flex-none, sin
   // ellipsis) y la hora va en su tramo fijo.
-  const chipParts = hfTileChipParts(chipTxt, phEn);
+  const chipParts = saleTxt ? null : hfTileChipParts(chipTxt, phEn);
   const chip = chipTxt ? (chipParts
     ? `<span class="hf-chip"><span class="hf-chip-ico">${pzIc('clock', 12)}</span><span class="hf-chip-day">${esc(chipParts.day)}</span><span class="hf-chip-hm"> · ${esc(chipParts.hm)}</span></span>`
-    : `<span class="hf-chip">${pzIc('clock', 12)} ${esc(chipTxt)}</span>`) : '';
+    : `<span class="hf-chip${saleTxt ? ' hf-chip-sale' : ''}">${pzIc('clock', 12)} ${esc(chipTxt)}</span>`) : '';
   // (Corrección grilla 2026-10-25, Valentino — «sacar el icono del
   // chat»): la grilla NO lleva botón de chat.
   // (LOTE HABLAR-DE-ESTE-POSTEO 2/11: decisión nueva de Valentino — el botón 💬 vuelve a la tile, ver talkBtn abajo.) El chat vive DENTRO del
@@ -22950,10 +23041,14 @@ function homeTileHTML(t, i) {
     const pillR1 = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, (typeof pcTz === 'function') ? pcTz() : undefined, phEn) : '';
     const cuentaR1 = (typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, phEn) : '';
     const cuentaHtmlR1 = cuentaR1 ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at || ''))}">${esc(cuentaR1)}</span>` : '';
-    const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
-    return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${hoyBadge}${nuevoBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
+    // (LOTE RENDER-CASA) Si la carta es la pieza del invitado, su
+    // cartel de agenda acompaña a la píldora en la banda (sin píldora,
+    // ocChip ya ES el cartel: viene de la misma chip computada arriba).
+    const saleCap = saleTxt ? `<span class="hf-chip hf-chip-sale">${pzIc('clock', 12)} ${esc(saleTxt)}</span>` : '';
+    const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${saleCap}${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
+    return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia${esPieza ? ' hf-tile-pieza' : ''}" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${piezaLock}${hoyBadge}${nuevoBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
-  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${hoyBadge}${nuevoBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span>${capSubir}</span>`;
+  return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile${esPieza ? ' hf-tile-pieza' : ''}${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${piezaLock}${hoyBadge}${nuevoBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span>${capSubir}</span>`;
 }
 // (v468 · orden Instagram) Tira de destacadas, extraída de homeHeadHTML:
 // en Inicio se renderiza como slot propio (bio -> acciones -> destacadas
@@ -23113,7 +23208,14 @@ function homeHeadHTML(prof, bizName, opts) {
   const titleTxt = name || user;
   const handleTxt = (user && name && name.toLowerCase() !== user.toLowerCase()) ? '@' + user : '';
   const nameLineTxt = user ? handleTxt : name;
-  return `<div class="hf-head">
+  // (LOTE RENDER-CASA · 16/11) En la casa del invitado la cabecera —
+  // el espejo de su perfil — va atenuada (.hf-head-invitado: el CSS
+  // atenúa foto/nombre/stats/bio/link/destacadas, el fondo que prueba
+  // que es SU negocio); el cromo de Posty de la cabecera (la fila de
+  // info y el chip de conexión) NO se atenúa: conectar es la acción.
+  // Para el cliente conectado la clase nunca se agrega.
+  const guestHead = (typeof pzIsGuest === 'function' && pzIsGuest());
+  return `<div class="hf-head${guestHead ? ' hf-head-invitado' : ''}">
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
       <div class="hf-who">${user ? `<div class="hf-user">${esc(titleTxt)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
@@ -25004,30 +25106,17 @@ function pzWowConnectHTML(o) {
     let skipped = null;
     try { skipped = localStorage.getItem(pzWowSkipKey()); } catch (e) {}
     if (skipped) return pzWowQuietHTML(en);
-    const word = pzWowDayWord(Date.now(), tz);
-    const dw = en ? (word === 'hoy' ? 'today' : 'tomorrow') : word;
-    const hora = en ? '7:00 PM' : '19:00';
-    const ig = (typeof pzGuestIg === 'function') ? pzGuestIg() : '';
-    const at = ig ? '@' + String(ig).replace(/^@/, '') : '';
-    const img = String(post.image_path || '');
-    const head = String(post.headline || '').trim();
-    const cap = String(post.caption || '').trim();
-    const capPrev = cap ? esc(cap.split('\n')[0].slice(0, 90)) : '';
-    const line = en
-      ? `Want it on your Instagram? Connect it and this post goes out <b>${dw} at ${hora} — on its own.</b>`
-      : `¿Lo querés en tu Instagram? Conectalo y este posteo sale <b>${dw} a las ${hora}, solo.</b>`;
-    const btn = en
-      ? `Post it on ${esc(at || 'your Instagram')} ${dw}`
-      : `Publicalo en ${esc(at || 'tu Instagram')} ${dw}`;
-    return `<div class="card pz-wow" id="pzWowConnect">`
-      + (img ? `<img class="pz-wow-img" src="${esc(img)}" alt="">` : '')
-      + `<div class="pz-wow-body">`
-      + (head ? `<p class="pz-wow-head">${esc(head)}</p>` : '')
-      + (capPrev ? `<p class="pz-wow-cap">${capPrev}${cap.length > 90 ? '…' : ''}</p>` : '')
-      + `<p class="pz-wow-ask">${line}</p>`
-      + `<button type="button" class="btn btn-primary btn-block pz-wow-btn" data-pz-wow-go>${btn}</button>`
-      + `<button type="button" class="pz-wow-skip" data-pz-wow-skip>${en ? 'Not now' : 'Ahora no'}</button>`
-      + `</div></div>`;
+    // (LOTE RENDER-CASA · 16/11 · orden de Valentino 23:54) La tarjeta
+    // wow previa a la conexión SALIÓ de la superficie de prueba:
+    // mostraba la primera pieza LIMPIA — foto entera, titular y
+    // caption — arriba de la casa, fuera de su lugar en la grilla:
+    // capturable, la pieza gratis sin conectar. Desde este lote la
+    // ÚNICA aparición de la pieza es su lugar en la grilla, con el
+    // candado de conectar en el centro (homeTileHTML ·
+    // .hf-pieza-lock). Esta función conserva la confirmación
+    // post-conexión (solo texto, arriba) y la puerta quieta de texto
+    // para quien ya dijo «ahora no» (pzWowQuietHTML, sin imagen).
+    return '';
   } catch (e) { return ''; }
 }
 // El toque del wow: deja la marca de sesión (la confirmación se
@@ -25060,6 +25149,8 @@ function pzWowConnectBind(root) {
 }
 function pzHoyHoyHTML(p, o) {
   try {
+    // (RENDER-CASA · enmienda del liberador · orden de Valentino 23:54: «en la prueba, sacaría la muestra de arriba — arriba le pueden hacer screenshot») El héroe de hoy NO se rinde en la casa del invitado: es una muestra limpia de la pieza arriba de Inicio, capturable y con la imagen entera. La pieza del invitado vive solo en su lugar de la grilla, con su candado. La casa del cliente conectado no cambia.
+    if (typeof pzIsGuest === 'function' && pzIsGuest()) return '';
     const en = !!(o && o.en);
     const tz = (o && o.tz) || undefined;
     const hh = pzHoyHoraCorta(p.scheduled_at, tz, en);
@@ -30108,6 +30199,9 @@ async function hfCommentsLoad(post, ov) {
 // lámina: si el soltar cae sobre una acción, la acción se ejecuta.
 function hfPeekOpen(tile) {
   if (!tile || !tile.dataset) return;
+  // (LOTE RENDER-CASA · pin 23:57) El peek es una vista grande: una
+  // tile con candado (pieza del invitado sin conectar) no lo abre.
+  if (tile.querySelector && tile.querySelector('.hf-pieza-lock')) return;
   const id = tile.dataset.postId;
   const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)) : null;
   if (!t || !t.post) return;
@@ -30696,6 +30790,11 @@ function hfLiveApply(job) {
 // de hojas que pcOpenImageSheet: .pcsheet-backdrop + .pcsheet, se cierra
 // con pcCloseSheet o tocando el fondo). El cliente NO sale del feed.
 function hfOpenActionsSheet(tile) {
+  // (LOTE RENDER-CASA · pin 23:57) La hoja de acciones de una tile con
+  // candado (pieza del invitado sin conectar) no se abre: su «Editar»
+  // es una ruta a la imagen limpia del posteo, y el gesto entero cae
+  // en el candado. Sin candado, la hoja es la de siempre.
+  if (tile && tile.querySelector && tile.querySelector('.hf-pieza-lock')) return;
   const id = tile && tile.dataset ? tile.dataset.postId : '';
   if (!id) return;
   try { scfClosePop(); } catch (e) {}
@@ -31194,6 +31293,12 @@ function hfDetailBind(root) {
     // (hfChatBtnBind). Sin este guard, el capture se comería el click
     // antes de llegar al botón (igual que pasaba con el corazón).
     if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return;
+    // (LOTE RENDER-CASA · pin 23:57) Pieza del invitado sin conectar
+    // (su tile lleva el candado .hf-pieza-lock): el toque cae en el
+    // candado — este captura no navega al posteo ni abre el detalle.
+    // Sin candado (cliente conectado, o invitado ya conectado), el
+    // camino es el de siempre.
+    if (tile.querySelector && tile.querySelector('.hf-pieza-lock')) return;
     // Solo táctil: en escritorio manda el flujo vigente (hover que
     // agranda + click que fija la tarjeta del cofre). La supresión
     // del click tras un press-and-hold corre antes (captura previa).
