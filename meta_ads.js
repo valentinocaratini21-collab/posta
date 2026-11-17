@@ -107,6 +107,12 @@ function detalleErrorMeta(e) {
   } else {
     partes.push(String(e.message || e));
   }
+  // (LOTE ADS-CREACIÓN-4) Los frenos de la resolución del id de IG
+  // adjuntan el detalle CRUDO de sus lecturas (e.detalleLecturas):
+  // el registro del impulso lo guarda entero y el próximo
+  // diagnóstico es de una sola lectura, sin adivinar qué devolvió
+  // Meta en cada lectura.
+  if (e.detalleLecturas) partes.push(`lecturas: ${e.detalleLecturas}`);
   return partes.join(' · ').slice(0, 1200);
 }
 
@@ -196,36 +202,108 @@ async function resolvePageId(igUserId) {
 // 'creativo') — jamás se manda un id a ciegas. Las lecturas fallan
 // suave por separado (null = no legible) y la decisión es entera
 // de esta función.
-async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null }) {
+// (LOTE ADS-CREACIÓN-4) El intento 8 (17/11, ya con v1163) frenó
+// IGUAL: las DOS lecturas fallaron con el SUAT del cliente y el
+// impulso murió en ig_no_resuelto — con la cuenta correcta YA
+// guardada en la fila de la conexión (ig_account_ids, capturados
+// por fetchClientAssets desde las Páginas compartidas al conectar).
+// Hipótesis (declarada, sin probar contra Meta — el token vive en
+// la base de producción): el SUAT del diálogo FLB trae
+// ads_management, ads_read, instagram_manage_comments y
+// business_management, pero leer el owner de un medio IG y el
+// instagram_business_account de una Página pide instagram_basic /
+// pages_read_engagement, que la configuración no concede; con el
+// MISMO token las lecturas y escrituras de pauta (enumeración,
+// moneda, campaña y conjunto) sí funcionaron en los intentos 4–8.
+// Desde este lote la resolución manda en este orden: (1) las
+// guardadas de la propia conexión (ctx.igAccountIds ← la fila
+// ig_ads_connections vía adsReadiness) — una sola viaja sin leer
+// nada; varias arbitran con las lecturas y, sin lecturas, con la
+// cuenta que publica los posteos del usuario (publicadaId); (2)
+// las lecturas en vivo de v1163 como respaldo cuando no hay
+// guardadas útiles. Los frenos no cambian (fail-closed siempre) y
+// desde ahora registran el error CRUDO de cada lectura
+// (err.detalleLecturas → detalleErrorMeta lo suma al registro).
+async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaId = '' }) {
+  // Las lecturas capturan su error CRUDO (con metaError): hasta el
+  // intento 8 el catch lo reducía a null y el freno registraba solo
+  // el resumen — se frenó bien pero sin dejar saber QUÉ devolvió
+  // Meta en cada lectura.
   const leerDueno = async () => {
     try {
       const d = await g(`/${igMediaId}`, { params: { fields: 'owner{id,username}' }, ctx });
       const o = d && d.owner;
-      return (o && o.id) ? { id: String(o.id), username: String(o.username || '') } : null;
-    } catch (e) { return null; }
+      return { dato: (o && o.id) ? { id: String(o.id), username: String(o.username || '') } : null, error: null };
+    } catch (e) { return { dato: null, error: e }; }
   };
   const leerPagina = async () => {
-    if (!pageId) return null;
+    if (!pageId) return { dato: null, error: null };
     try {
       const d = await g(`/${pageId}`, { params: { fields: 'instagram_business_account{id,username}' }, ctx });
       const iba = d && d.instagram_business_account;
-      return (iba && iba.id) ? { id: String(iba.id), username: String(iba.username || '') } : null;
-    } catch (e) { return null; }
+      return { dato: (iba && iba.id) ? { id: String(iba.id), username: String(iba.username || '') } : null, error: null };
+    } catch (e) { return { dato: null, error: e }; }
   };
-  const [dueno, pagina] = await Promise.all([leerDueno(), leerPagina()]);
   const nom = (x) => x.username ? `@${x.username} (${x.id})` : x.id;
-  if (dueno && pagina && dueno.id !== pagina.id) {
-    const err = new Error(`La cuenta de Instagram dueña del posteo (${nom(dueno)}) no es la vinculada a la Página del anuncio (${nom(pagina)}): el impulso se frenó antes de crear el aviso. Revisá que el posteo sea de la cuenta conectada.`);
-    err.code = 'ig_conflicto';
+  const detalleDe = (r) => r.error ? detalleErrorMeta(r.error) : (r.dato ? `leída: ${nom(r.dato)}` : 'sin id en la respuesta');
+  const freno = (code, mensaje, ld, lp) => {
+    const err = new Error(mensaje);
+    err.code = code;
     err.paso = 'creativo';
-    throw err;
+    err.detalleLecturas = `dueño del medio — ${detalleDe(ld)} · IG de la Página — ${detalleDe(lp)}`;
+    return err;
+  };
+  // Las cuentas de IG que la PROPIA conexión del cliente guardó al
+  // conectar: las enumeró el diálogo de Meta desde las Páginas
+  // compartidas (instagram_business_account, el espacio de nombres
+  // que el creativo valida) — verificadas por origen, sin depender
+  // de ninguna lectura en vivo.
+  const guardadas = [...new Set((ctx && Array.isArray(ctx.igAccountIds) ? ctx.igAccountIds : []).map((x) => String(x || '')).filter(Boolean))];
+  if (guardadas.length === 1) {
+    return { id: guardadas[0], fuente: 'conexion_guardada' };
   }
+  const [ld, lp] = await Promise.all([leerDueno(), leerPagina()]);
+  const dueno = ld.dato, pagina = lp.dato;
+  // La contradicción demostrada frena en cualquier camino (v1163).
+  if (dueno && pagina && dueno.id !== pagina.id) {
+    throw freno('ig_conflicto', `La cuenta de Instagram dueña del posteo (${nom(dueno)}) no es la vinculada a la Página del anuncio (${nom(pagina)}): el impulso se frenó antes de crear el aviso. Revisá que el posteo sea de la cuenta conectada.`, ld, lp);
+  }
+  if (guardadas.length > 1) {
+    const enGuardadas = (x) => !!x && guardadas.includes(x.id);
+    // La dueña leída manda: si está entre las guardadas viaja; si la
+    // lectura la ubica FUERA de las compartidas, el posteo no es de
+    // una cuenta de la conexión y se frena (ninguna guardada está
+    // verificada para este medio).
+    if (dueno) {
+      if (!enGuardadas(dueno)) {
+        throw freno('ig_no_resuelto', `La cuenta de Instagram dueña del posteo (${nom(dueno)}) no está entre las cuentas compartidas en la conexión publicitaria (${guardadas.join(', ')}): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
+      }
+      return { id: dueno.id, fuente: 'guardada_dueno' };
+    }
+    if (pagina) {
+      if (!enGuardadas(pagina)) {
+        throw freno('ig_no_resuelto', `La Instagram vinculada a la Página del anuncio (${nom(pagina)}) no está entre las cuentas compartidas en la conexión publicitaria (${guardadas.join(', ')}): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
+      }
+      return { id: pagina.id, fuente: 'guardada_pagina' };
+    }
+    // Ninguna lectura respondió: desempata la cuenta que PUBLICA
+    // los posteos de este usuario (settings.ig_user_id — la fila
+    // del posteo no guarda cuenta; es la única identidad de
+    // publicación que el servidor conoce y el llamador la pasa
+    // como publicadaId). Si tampoco está entre las compartidas,
+    // no hay desempate concluyente: freno.
+    const pub = String(publicadaId || '');
+    if (pub && guardadas.includes(pub)) {
+      return { id: pub, fuente: 'guardada_publicada' };
+    }
+    throw freno('ig_no_resuelto', `No se pudo verificar cuál de las cuentas de Instagram compartidas (${guardadas.join(', ')}) es la dueña del posteo ${igMediaId} (ni el dueño del medio ni la Instagram de la Página pudieron leerse, y la cuenta de publicación no está entre las compartidas): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
+  }
+  // Sin cuentas guardadas útiles (riel de Posty o filas viejas): la
+  // resolución de v1163 tal cual — la dueña manda, la IG de la
+  // Página respalda y el vacío frena, ahora con el detalle crudo.
   if (dueno) return { id: dueno.id, fuente: 'dueno_medio' };
   if (pagina) return { id: pagina.id, fuente: 'pagina' };
-  const err = new Error(`No se pudo verificar la cuenta de Instagram dueña del posteo ${igMediaId} en la cuenta publicitaria (ni el dueño del medio ni la Instagram de la Página pudieron leerse): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`);
-  err.code = 'ig_no_resuelto';
-  err.paso = 'creativo';
-  throw err;
+  throw freno('ig_no_resuelto', `No se pudo verificar la cuenta de Instagram dueña del posteo ${igMediaId} en la cuenta publicitaria (ni el dueño del medio ni la Instagram de la Página pudieron leerse): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
 }
 
 // Lee el estado real de campaña y conjunto en Meta (fuente de verdad
@@ -358,8 +436,12 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   // (resolverIgUserIdBoost) y viaja el id resuelto. Si la resolución
   // frena, el error sale con paso 'creativo' y el registro lo guarda
   // entero, como un rechazo de Meta en el mismo paso.
+  // (LOTE ADS-CREACIÓN-4) El parámetro igUserId viaja SOLO como
+  // publicadaId: la cuenta que publica los posteos del usuario,
+  // desempate de última instancia entre las guardadas de la
+  // conexión — jamás como instagram_user_id directo.
   const creative = await pasoBoost('creativo', async () => {
-    const igResuelto = await resolverIgUserIdBoost({ pageId, igMediaId, ctx: gctx });
+    const igResuelto = await resolverIgUserIdBoost({ pageId, igMediaId, ctx: gctx, publicadaId: igUserId });
     const creativeParams = {
       name: `${name} · creativo`,
       instagram_user_id: igResuelto.id,
