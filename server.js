@@ -26366,6 +26366,53 @@ app.post('/api/archive/restore-post', requireAuth, express.json(), (req, res) =>
     res.json({ ok: true, post_id: post.id, status: 'draft' });
   } catch (e) { console.error('[archive-restore-post]', e.message); res.status(500).json({ ok: false, error: 'No se pudo restaurar el borrador' }); }
 });
+// ---------- (LOTE CONEXIÓN-SIN-SESIÓN) States OAuth en la base ----------
+// El state de los diálogos de conexión (Instagram y login unificado
+// de Ads) vive TAMBIÉN en la base, atado al usuario que lo compuso,
+// con vencimiento (30 min) y un solo uso: takeOAuthState lo consume
+// en el PRIMER golpe del callback, salga bien o mal (replay =
+// rechazado aunque la sesión acompañe). Motivo: en iOS el diálogo
+// que se abre desde la app instalada (PWA) vuelve en una vista de
+// Safari que NO comparte la cookie de sesión, y la conexión moría
+// en «La conexión venció» aunque Meta hubiera autorizado todo
+// (caso Valentino 16/11, dos veces la misma noche). Con la fila, el
+// callback identifica al dueño del state sin depender de la cookie:
+// si la vuelta cae sin sesión, la fila aporta usuario, redirect_uri
+// y destino, y la conexión se guarda igual.
+function ensureOAuthStates() {
+  db.prepare(`CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    flow TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    redirect_uri TEXT NOT NULL DEFAULT '',
+    dest TEXT NOT NULL DEFAULT '',
+    wow INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER
+  )`).run();
+}
+function saveOAuthState(state, flow, userId, redirectUri, dest, wow) {
+  try {
+    ensureOAuthStates();
+    const now = Date.now();
+    db.prepare(`INSERT OR REPLACE INTO oauth_states (state, flow, user_id, redirect_uri, dest, wow, created_at, expires_at, used_at)
+      VALUES (?,?,?,?,?,?,?,?,NULL)`).run(state, flow, userId, redirectUri || '', dest || '', wow ? 1 : 0, now, now + 30 * 60 * 1000);
+    db.prepare(`DELETE FROM oauth_states WHERE expires_at < ?`).run(now); // limpieza oportunista
+  } catch (e) { console.error('[oauth-state] save:', e.message); }
+}
+function takeOAuthState(state, flow) {
+  try {
+    ensureOAuthStates();
+    const row = db.prepare(`SELECT * FROM oauth_states WHERE state = ? AND flow = ?`).get(state, flow);
+    if (!row) return null;
+    if (row.used_at || row.expires_at < Date.now()) return { dead: true };
+    const upd = db.prepare(`UPDATE oauth_states SET used_at = ? WHERE state = ? AND used_at IS NULL`).run(Date.now(), state);
+    if (!upd.changes) return { dead: true };
+    return row;
+  } catch (e) { console.error('[oauth-state] take:', e.message); return null; }
+}
+
 // Prepara el OAuth de Instagram: valida la Embed URL, guarda state en sesión
 // y devuelve la URL de autorización de Meta.
 // IMPORTANTE iOS: el frontend NO navega directo a instagram.com (iOS lo sacaría
@@ -26414,6 +26461,11 @@ function buildIgAuth(req) {
   // a otro.
   if (String(req.query.wow || '') === '1') req.session.igWow = 1;
   else delete req.session.igWow;
+  // (LOTE CONEXIÓN-SIN-SESIÓN) El mismo state queda en la base, atado
+  // al usuario y con el destino y la marca wow ya resueltos: si la
+  // vuelta cae en un contexto sin esta sesión, el callback adopta
+  // los datos de la fila y la conexión se guarda igual.
+  saveOAuthState(state, 'ig', req.session.userId, redirectUri, req.session.igNext || '', req.session.igWow ? 1 : 0);
   return { url: getAuthUrl(authUrl, state) };
 }
 app.get('/api/ig/start', requireAuth, (req, res) => {
@@ -26440,6 +26492,21 @@ app.get('/api/ig/go', requireAuth, (req, res) => {
 
 app.get('/api/ig/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
+  // (LOTE CONEXIÓN-SIN-SESIÓN) El state se consume en la base en el
+  // PRIMER golpe, salga bien o mal. Si la vuelta cayó sin la sesión
+  // (salto PWA→Safari), la fila aporta usuario, redirect y destino
+  // — solo cuando la sesión no trae identidad propia en conflicto:
+  // sin sesión, o la sesión del mismo dueño del state.
+  const _oauthIg = state ? takeOAuthState(state, 'ig') : null;
+  const _oauthIgDead = !!(_oauthIg && _oauthIg.dead);
+  if (_oauthIg && !_oauthIgDead && req.session.igState === undefined
+    && (!req.session.userId || req.session.userId === _oauthIg.user_id)) {
+    req.session.userId = _oauthIg.user_id;
+    req.session.igState = state;
+    if (_oauthIg.redirect_uri) req.session.igRedirect = _oauthIg.redirect_uri;
+    if (_oauthIg.dest) req.session.igNext = _oauthIg.dest;
+    if (_oauthIg.wow) req.session.igWow = 1;
+  }
   // Destino post-OAuth: si el flujo empezó en una pantalla con ?next=, volvemos ahí
   const igDest = () => {
     const n = req.session.igNext;
@@ -26457,7 +26524,7 @@ app.get('/api/ig/callback', async (req, res) => {
     if (req.session.userId) req.session.igInterruptedAt = Date.now();
     return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(msg)));
   }
-  if (!req.session.userId || state !== req.session.igState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
+  if (_oauthIgDead || !req.session.userId || state !== req.session.igState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
   try {
     const s = getSettings(req.session.userId);
     const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
@@ -26665,6 +26732,12 @@ function buildUnifiedAuth(req) {
     const nx = String(req.query.next || '');
     req.session.igAdsDest = (/^\/#\/[^\s"'\\<>]*$/.test(nx)) ? nx : '/#/app/ajustes';
   }
+  // (LOTE CONEXIÓN-SIN-SESIÓN) El mismo state queda en la base, atado
+  // al usuario y con el destino ya resuelto (en el flujo encadenado,
+  // el que dejó el callback de Instagram en la sesión): si la vuelta
+  // cae en un contexto sin esta sesión, el callback adopta los datos
+  // de la fila y la conexión se guarda igual.
+  saveOAuthState(state, 'ig_ads', req.session.userId, redirectUri, req.session.igAdsDest || '', 0);
   const q = new URLSearchParams({
     client_id: c.appId, config_id: c.configId,
     redirect_uri: redirectUri, state, response_type: 'code',
@@ -26686,13 +26759,27 @@ app.get('/api/ig/unified/callback', async (req, res) => {
     return (typeof d === 'string' && /^\/#\/[^\s"'\\<>]*$/.test(d)) ? d : '/#/app/ajustes';
   };
   const { code, state, error, error_description } = req.query;
+  // (LOTE CONEXIÓN-SIN-SESIÓN) El state se consume en la base en el
+  // PRIMER golpe, salga bien o mal. Si la vuelta cayó sin la sesión
+  // (salto PWA→Safari), la fila aporta usuario, redirect y destino
+  // — solo cuando la sesión no trae identidad propia en conflicto:
+  // sin sesión, o la sesión del mismo dueño del state.
+  const _oauthAds = state ? takeOAuthState(state, 'ig_ads') : null;
+  const _oauthAdsDead = !!(_oauthAds && _oauthAds.dead);
+  if (_oauthAds && !_oauthAdsDead && req.session.igAdsState === undefined
+    && (!req.session.userId || req.session.userId === _oauthAds.user_id)) {
+    req.session.userId = _oauthAds.user_id;
+    req.session.igAdsState = state;
+    if (_oauthAds.redirect_uri) req.session.igAdsRedirect = _oauthAds.redirect_uri;
+    if (_oauthAds.dest) req.session.igAdsDest = _oauthAds.dest;
+  }
   if (error) {
     const msg = /access_denied|user_denied/i.test(error)
       ? 'Denegaste el acceso. Probá de nuevo y tocá "Permitir".'
       : (error_description || error);
     return res.redirect(adsWithQs(dest(), 'igads=error&msg=' + encodeURIComponent(msg)));
   }
-  if (!req.session.userId || state !== req.session.igAdsState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
+  if (_oauthAdsDead || !req.session.userId || state !== req.session.igAdsState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
   try {
     const uid = req.session.userId;
     const c = unifiedCfgFor(uid);
@@ -45592,7 +45679,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1142';
+const BUILD_ID = '20261105-v1143';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
