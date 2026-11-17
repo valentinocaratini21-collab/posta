@@ -27660,45 +27660,20 @@ async function pzVozEnviar(strip, text) {
     return;
   }
   if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzVozEnviar(strip, text)); return; }
-  pzVozEstado(strip, en ? 'Posty is on it…' : 'Posty está en eso…');
-  const pid = key === 'semana' ? 0 : Number(key) || 0;
-  if (pid) {
-    const lane = pzVozLane(text);
-    if (lane) {
-      const hecho = await pzVozAplicarDirecto(strip, pid, lane);
-      if (hecho !== null && hecho !== undefined) { await pzVozCerrar(strip, key, text, hecho); return; }
-    }
-  }
-  // Carril del cerebro: el mismo POST /api/ideas/chat que atiende el
-  // chat, con el posteo anclado (desde la semana, sin ancla: Posty lo
-  // ordena y lo aplica donde corresponde; si no puede ubicarlo, lo
-  // dice en su respuesta, que queda bajo la semana).
-  try {
-    const prev = Array.isArray(strip._pzVozMsgs) ? strip._pzVozMsgs.slice(-8) : [];
-    const messages = prev.map(m => ({ role: m.role, text: m.text }));
-    messages.push({ role: 'user', text });
-    const body = { messages, photos: [], library: [], libraryPaths: [], drafts: [], photoPaths: [] };
-    if (pid) body.anchor_post_id = pid;
-    const r = await api.post('/api/ideas/chat', body);
-    // (REHACER-ANCLADO · pieza 3) Si el cerebro rehízo la imagen de
-    // este posteo, la tira repinta la foto nueva y ofrece «Volver a
-    // la imagen anterior» — el carril directo ya lo hacía; este
-    // carril (el del incidente del 649) no pintaba ninguno de los dos.
-    if (pid && r && r.edit && Number(r.edit.imageRegen) > 0) {
-      try {
-        const hj = await api.get('/api/chat/hilo?post_id=' + encodeURIComponent(pid));
-        if (hj && hj.ok && hj.image_path) {
-          const cur = document.querySelector('[data-pzvozfoto="' + pid + '"] img');
-          pzVozPintarFoto(pid, cur);
-          pzVozVolverPintar(strip, pid);
-        }
-      } catch (e) {}
-    }
-    const reply = String((r && (r.reply || r.text)) || '').trim() || (en ? 'Done ✓' : 'Listo ✓');
-    await pzVozCerrar(strip, key, text, reply);
-  } catch (e) {
-    pzVozEstado(strip, en ? "It couldn't be sent — try again" : 'No se pudo enviar — probá de nuevo');
-  }
+  // (LOTE VOZ · ALCANCE TOTAL — orden de Valentino 17/11: «TODOS los
+  // audios que se envían, te encargás vos de punta a punta. Posty no
+  // escucha ni responde») La tira ya no ejecuta ni contesta: mueren el
+  // carril directo (pzVozLane, que aplicaba el cambio de foto en el
+  // acto) y el carril del cerebro (el POST al chat con el posteo
+  // anclado). El pedido queda guardado en su hilo y nada más:
+  // pzVozCerrar sin texto de asistente pinta solo el mensaje del
+  // cliente y lo loguea (POST /api/chat/hilo/log, user_text solo), de
+  // donde lo levanta el vigilante de bamboo por la cola de
+  // pedidos-voz. Bamboo lo resuelve a mano y la respuesta llega con el
+  // trabajo hecho. pzVozLane/pzVozAplicarDirecto quedan sin llamador
+  // desde la voz; los endpoints de foto siguen vivos para los botones
+  // y el chat de texto, que no cambian.
+  await pzVozCerrar(strip, key, text, '');
 }
 async function pzVozVolver(btn) {
   const pid = Number(btn.getAttribute('data-pz-voz-volver')) || 0;
@@ -31943,11 +31918,14 @@ function hfAskChangeBtnHTML(p) {
       status: p.status || '', media_type: p.media_type || '',
     };
   } catch (e) {}
-  const enA = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  return `<div class="hf-ask-mini" data-hf-ask-mini="${esc(String(p.id))}">
-    <div class="hf-ask-posty"><img src="ai-avatar.png" alt="Posty" class="hf-ask-ava"><span>${enA ? 'what do we change on this post?' : 'qué le cambiamos a este posteo?'}</span></div>
-    <button type="button" class="hf-ask-voice" data-hf-ask-voice="${esc(String(p.id))}">🎙️ ${enA ? 'Tell me with your voice' : 'Decímelo con tu voz'}</button>
-  </div>`;
+  // (LOTE VOZ · orden de Valentino 17/11: en el detalle queda UNA sola
+  // opción para mandar audio) La tarjeta mini-chat («qué le cambiamos a
+  // este posteo?» + «🎙️ Decímelo con tu voz») ya no se rinde en ninguno
+  // de sus dos call sites: el único micrófono del detalle es la tira de
+  // voz inferior (pzVozStripHTML, el amarillo de mantener-para-hablar).
+  // El registro HF_ASK_POSTS de arriba se conserva (lo leen otros
+  // handlers) y el handler delegado [data-hf-ask-voice] queda intacto.
+  return '';
 }
 // (v846 · CHAT SOLO POR AUDIO) hfDeliverAskText murió con el input
 // del mini-chat: el cambio se dicta por voz (pzCambioVozPrompt).

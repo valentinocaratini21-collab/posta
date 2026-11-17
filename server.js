@@ -9213,10 +9213,25 @@ app.post('/api/ideas/chat', async (req, res) => {
     const lastUser = [...clean].reverse().find(m => m.role === 'user');
     if (lastUser) lastUser.text = heard.slice(0, 3000);
     else clean.push({ role: 'user', text: heard.slice(0, 3000) });
-    chatNote = 'El cliente mandó una NOTA DE VOZ. El texto siguiente es EXACTAMENTE lo que dijo (transcripción literal, no un resumen). Ejecutalo como si lo hubiera escrito: si pide aprobar, publicar, cambiar foto/texto/día/hora, rechazar, crear, rehacer o cualquier otra acción sobre sus posteos, hacela de verdad con los mecanismos disponibles (bloques edit, publish, create, redo, rule) y confirmá qué hiciste con el resultado real. Solo si no es accionable, respondé. Nunca finjas haber hecho algo que no hiciste.';
-    // (voz-dueno) Si el audio es un reporte del dia, armar el borrador voz->posteo.
-    // Nunca rompe el flujo normal: cualquier error deja vozPost en null.
-    try { vozPost = await armarBorradorVozChat(uidChat, heard, audio, Array.isArray(photoPaths) ? photoPaths : []); } catch (e) { console.error('[voz-dueno] chat:', e.message); vozPost = null; }
+    // (LOTE VOZ · ALCANCE TOTAL — orden de Valentino 17/11: «TODOS los
+    // audios que se envían, te encargás vos de punta a punta. Posty no
+    // escucha ni responde») El turno de voz TERMINA acá: la
+    // transcripción (el tubo mudo de speech-to-text) queda guardada
+    // como el mensaje del usuario, con el mismo insert que usa el
+    // camino del cerebro, y el programa no hace NADA más con ella: no
+    // la contesta, no arma el borrador del día (armarBorradorVozChat),
+    // no llama al cerebro, no corre ninguna red (pzChatCambioSiFalta /
+    // pzChatImagenSiFalta) ni crea ninguna orden de trabajo. La nota
+    // chatNote que le ordenaba al cerebro «ejecutalo como si lo hubiera
+    // escrito» muere con este desvío: el cerebro ya no ve audios. El
+    // pedido lo levanta bamboo (el vigilante lee la cola de
+    // pedidos-voz y el hilo) y la respuesta que recibe el cliente es
+    // la de bamboo, con el trabajo hecho, escrita por la consola de
+    // supervisión. Los turnos de TEXTO no pasan por este bloque y
+    // quedan byte a byte como siempre.
+    try { chatInsertUser(db, uidChat, String(heard).slice(0, 3000), chatReply, JSON.stringify(userPhotos)); }
+    catch (e) { console.error('[voz] guardar el mensaje:', e.message); }
+    return res.json({ reply: '', idea: null, voz: true });
   }
   if (!clean.length) return res.status(400).json({ error: FT('Contanos tu idea', 'Tell me your idea') });
   // (SACAR-ACUSE-FIJO · v916 · 11/11 · veto Valentino: respuesta inmediata)
@@ -46011,7 +46026,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1154';
+const BUILD_ID = '20261105-v1155';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
