@@ -171,6 +171,63 @@ async function resolvePageId(igUserId) {
   return hit.id;
 }
 
+// (LOTE ADS-CREACIÓN-3) Resolución del instagram_user_id del creativo
+// CONTRA LA PROPIA CUENTA, en el momento de crear. El parámetro
+// igUserId que el llamador pasa a createBoost sale de
+// settings.ig_user_id: el id que guardó el callback de conexión de
+// Instagram (Instagram Login, graph.instagram.com) para PUBLICAR.
+// Ese id NO es válido en el espacio de nombres de la Marketing API
+// (graph.facebook.com): el intento 7 del dueño (17/11, tras v1160 —
+// la campaña y el conjunto ya pasaban) murió en el paso creativo con
+// «(#100) Param instagram_user_id must be a valid Instagram account
+// id». El id que Meta valida acá es el de la cuenta de Instagram
+// profesional EN SU grafo: el que la Página expone como
+// instagram_business_account.id (el mismo campo que resolvePageId y
+// fetchClientAssets ya leen) y el que el medio expone como owner.id.
+// La fila ig_ads_connections incluso capturó esos ids al conectar
+// (ig_account_ids) — pero ningún llamador los usaba para el creativo.
+// Regla: se resuelve SIEMPRE contra la cuenta del riel (su token,
+// su Página, su medio) y viaja el id resuelto; el id guardado de
+// settings no viaja nunca más, ni como respaldo. Si hay varias
+// candidatas manda la DUEÑA DEL MEDIO; si la dueña leída contradice
+// a la IG de la Página, el par (object_id + medio) es inválido de
+// forma demostrable y se frena; si ninguna candidata puede leerse,
+// se frena ANTES del paso creativo con el motivo registrado (paso
+// 'creativo') — jamás se manda un id a ciegas. Las lecturas fallan
+// suave por separado (null = no legible) y la decisión es entera
+// de esta función.
+async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null }) {
+  const leerDueno = async () => {
+    try {
+      const d = await g(`/${igMediaId}`, { params: { fields: 'owner{id,username}' }, ctx });
+      const o = d && d.owner;
+      return (o && o.id) ? { id: String(o.id), username: String(o.username || '') } : null;
+    } catch (e) { return null; }
+  };
+  const leerPagina = async () => {
+    if (!pageId) return null;
+    try {
+      const d = await g(`/${pageId}`, { params: { fields: 'instagram_business_account{id,username}' }, ctx });
+      const iba = d && d.instagram_business_account;
+      return (iba && iba.id) ? { id: String(iba.id), username: String(iba.username || '') } : null;
+    } catch (e) { return null; }
+  };
+  const [dueno, pagina] = await Promise.all([leerDueno(), leerPagina()]);
+  const nom = (x) => x.username ? `@${x.username} (${x.id})` : x.id;
+  if (dueno && pagina && dueno.id !== pagina.id) {
+    const err = new Error(`La cuenta de Instagram dueña del posteo (${nom(dueno)}) no es la vinculada a la Página del anuncio (${nom(pagina)}): el impulso se frenó antes de crear el aviso. Revisá que el posteo sea de la cuenta conectada.`);
+    err.code = 'ig_conflicto';
+    err.paso = 'creativo';
+    throw err;
+  }
+  if (dueno) return { id: dueno.id, fuente: 'dueno_medio' };
+  if (pagina) return { id: pagina.id, fuente: 'pagina' };
+  const err = new Error(`No se pudo verificar la cuenta de Instagram dueña del posteo ${igMediaId} en la cuenta publicitaria (ni el dueño del medio ni la Instagram de la Página pudieron leerse): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`);
+  err.code = 'ig_no_resuelto';
+  err.paso = 'creativo';
+  throw err;
+}
+
 // Lee el estado real de campaña y conjunto en Meta (fuente de verdad
 // tras el encendido), con el token del riel que corre (el del entorno o
 // el SUAT del cliente vía ctx). Si una lectura falla, ese estado queda
@@ -294,13 +351,23 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   const adset = await pasoBoost('conjunto', () => g(`${A}/adsets`, { method: 'POST', ctx: gctx, params: adsetParams }));
 
   // 3. Creativo desde el posteo existente (doc: "Use Posts as Instagram Ads")
-  const creativeParams = {
-    name: `${name} · creativo`,
-    instagram_user_id: String(igUserId),
-    source_instagram_media_id: String(igMediaId),
-  };
-  if (pageId) creativeParams.object_id = pageId;
-  const creative = await pasoBoost('creativo', () => g(`${A}/adcreatives`, { method: 'POST', ctx: gctx, params: creativeParams }));
+  // (LOTE ADS-CREACIÓN-3) El instagram_user_id NO es el parámetro
+  // igUserId del llamador (settings.ig_user_id, el id de Instagram
+  // Login para publicar — inválido en este grafo, error del intento
+  // 7): se resuelve contra la cuenta del riel en este momento
+  // (resolverIgUserIdBoost) y viaja el id resuelto. Si la resolución
+  // frena, el error sale con paso 'creativo' y el registro lo guarda
+  // entero, como un rechazo de Meta en el mismo paso.
+  const creative = await pasoBoost('creativo', async () => {
+    const igResuelto = await resolverIgUserIdBoost({ pageId, igMediaId, ctx: gctx });
+    const creativeParams = {
+      name: `${name} · creativo`,
+      instagram_user_id: igResuelto.id,
+      source_instagram_media_id: String(igMediaId),
+    };
+    if (pageId) creativeParams.object_id = pageId;
+    return g(`${A}/adcreatives`, { method: 'POST', ctx: gctx, params: creativeParams });
+  });
 
   // 4. Anuncio activo
   const ad = await pasoBoost('anuncio', () => g(`${A}/ads`, { method: 'POST', ctx: gctx, params: {
@@ -663,4 +730,4 @@ async function findLookalikeAudienceId(ctx) {
   } catch (e) { return null; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, detalleErrorMeta };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, detalleErrorMeta };
