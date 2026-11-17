@@ -12779,6 +12779,30 @@ function voiceDiscard() {
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
 }
+// (LOTE VOZ-CHAT — orden de Valentino 17/11 13:34: «todo va
+// directamente a vos y te encargas vos de armar todo y enviarlo al
+// cliente · posty no se ocupa de ningun audio») El turno que nace
+// del micrófono en el chat general (la barra del chat o el micrófono
+// de Inicio) ya NO entra al pipeline del texto (chatExchange): la
+// transcripción se guarda en su hilo por el mismo canal que usa la
+// tira del posteo/semana (POST /api/chat/hilo/log) y el programa no
+// contesta ni ejecuta nada con ella. Con ancla viva (HF_CHAT_ANCHOR)
+// el pedido es sobre ese posteo y va a su hilo; sin ancla va al hilo
+// general (hilo='general'), de donde la cola de pedidos-voz lo
+// levanta para bamboo igual que los de la tira. El poll de
+// supervisión queda corriendo para que la respuesta de bamboo —
+// dictada como Posty, con el trabajo hecho — llegue en vivo, como
+// en el camino «pending». Los envíos de texto que la app genera
+// (chips/prefills) siguen por chatExchange, byte a byte como hoy.
+async function pzVozChatGuardar(text) {
+  const anchor = (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? Number(HF_CHAT_ANCHOR.id) : 0;
+  try {
+    await api.post('/api/chat/hilo/log', anchor
+      ? { post_id: anchor, user_text: text }
+      : { general: 1, user_text: text });
+  } catch (e) {}
+  try { pzSupervisionPoll(); } catch (e) {}
+}
 async function voiceSend() {
   if (VOICE_STATE !== 'preview' || !VOICE_BLOB) return;
   const blob = VOICE_BLOB;
@@ -12832,8 +12856,11 @@ async function voiceSend() {
   VOICE_URL = ''; VOICE_BLOB = null; VOICE_STATE = 'idle';
   voiceRenderBar();
   try { chatUpdateSendBtn(); } catch (e) {}
-  // Mismo pipeline que el texto escrito (edits, publish, rule): sin audio.
-  return chatExchange({ text: transcript, pushed: true });
+  // (LOTE VOZ-CHAT) La nota del chat general ya no va al pipeline
+  // del texto: se guarda en su hilo y la atiende bamboo (ver
+  // pzVozChatGuardar). El cerebro ya no ve audios en ninguna
+  // superficie — ni en la tira (v1155), ni acá.
+  return pzVozChatGuardar(transcript);
 }
 
 // Barra estilo Muse: a la derecha va 🎙 si no hay nada para enviar, ➤ si hay texto o fotos.
@@ -28676,7 +28703,9 @@ function pzChatKbBind() {
 }
 // (LOTE MIC-INICIO) Nota enviada desde Inicio: al abrir el chat, la
 // burbuja del usuario (con audio) tiene que estar en el cuadro NUEVO y
-// el intercambio correr con ese cuadro — no con el de la hoja oculta.
+// el pedido guardarse con ese cuadro — no con el de la hoja oculta.
+// (LOTE VOZ-CHAT) El «intercambio» con el cerebro ya no corre para la
+// nota: se guarda en su hilo (pzVozChatGuardar) y la atiende bamboo.
 // Se espera al historial en vuelo: si lo barrió, se repone la burbuja;
 // si ya está pintada desde CHAT, solo se le agrega el audio.
 function pzVoicePendingDeliver() {
@@ -28698,7 +28727,9 @@ function pzVoicePendingDeliver() {
       }
       // (LOTE CHAT-SCROLL) La nota pendiente es un envío: abajo.
       try { chatScroll(true); } catch (e) {}
-      chatExchange({ text: p.text, pushed: true });
+      // (LOTE VOZ-CHAT) Nada de intercambio con el cerebro: el pedido
+      // de Inicio se guarda en su hilo y lo levanta bamboo.
+      pzVozChatGuardar(p.text);
     } catch (e) {}
   });
 }

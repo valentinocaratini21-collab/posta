@@ -12846,9 +12846,10 @@ app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 // (LOTE CONSERJE-PEDIDOS-VOZ) Lo que los clientes pidieron por nota de
-// voz (tira bajo el posteo / bajo la semana), con la respuesta de Posty
+// voz (tira bajo el posteo / bajo la semana / micrófono del chat
+// general — LOTE VOZ-CHAT), con la respuesta de Posty
 // y el posteo que quedó — lectura del equipo para controlar que lo
-// enviado sea lo correcto. Solo lee chat_messages (hilo post/semana) y
+// enviado sea lo correcto. Solo lee chat_messages (hilo post/semana/general) y
 // posts: no escribe nada.
 app.get('/api/admin/support/conserje/pedidos-voz', requireAdminToken, (req, res) => {
   try { res.json(supportCases.voiceRequests(db, { limit: req.query.limit || 60, userId: req.query.user_id || 0, absImageUrl, posterUrlFor: posterUrlDePosteo })); }
@@ -18450,6 +18451,12 @@ app.post('/api/chat/hilo/log', requireAuth, (req, res) => {
     const b = req.body || {};
     const pid = parseInt(b.post_id, 10) || 0;
     const semana = b.semana === true || b.semana === 1 || b.semana === '1';
+    // (LOTE VOZ-CHAT) Destino «general»: el hilo del chat principal.
+    // Lo usa el turno que nace del micrófono en el chat general
+    // (pzVozChatGuardar): el pedido queda guardado con hilo='general'
+    // y la cola de pedidos-voz lo levanta para bamboo como los de la
+    // tira (post/semana), sin posteo ancla.
+    const general = b.general === true || b.general === 1 || b.general === '1';
     const userText = String(b.user_text || '').slice(0, 4000);
     const asstText = String(b.assistant_text || '').slice(0, 4000);
     if (!userText && !asstText) return res.status(400).json({ ok: false, error: 'Nada para guardar' });
@@ -18459,6 +18466,7 @@ app.post('/api/chat/hilo/log', requireAuth, (req, res) => {
       if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
       hilo = 'post';
     } else if (semana) { hilo = 'semana'; }
+    else if (general) { hilo = 'general'; }
     else return res.status(400).json({ ok: false, error: 'Falta el destino' });
     if (userText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', userText, pid, hilo);
     if (asstText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', asstText, pid, hilo);
@@ -46054,7 +46062,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1160';
+const BUILD_ID = '20261105-v1161';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

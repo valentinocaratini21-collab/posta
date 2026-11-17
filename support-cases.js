@@ -1531,17 +1531,29 @@ function voiceRequests(db, opts) {
   const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : (uid, p) => String(p || '');
   const rows = safe(() => db.prepare(
     `SELECT id, user_id, text, created_at, hilo, post_id FROM chat_messages
-      WHERE role = 'user' AND hilo IN ('post', 'semana')${uidFilter ? ' AND user_id = ?' : ''}
+      WHERE role = 'user' AND hilo IN ('post', 'semana', 'general')${uidFilter ? ' AND user_id = ?' : ''}
       ORDER BY id DESC LIMIT ?`).all(...(uidFilter ? [uidFilter, limit] : [limit])), []);
   const pedidos = rows.map((r) => {
     const uid = Number(r.user_id);
-    const hilo = r.hilo === 'semana' ? 'semana' : 'post';
+    // (LOTE VOZ-CHAT) El hilo 'general' es el chat principal (pedido
+    // nacido del micrófono, sin posteo ancla): conserva su hilo para
+    // la búsqueda de respuesta y sale con ambito 'chat'.
+    const hilo = r.hilo === 'semana' ? 'semana' : (r.hilo === 'general' ? 'general' : 'post');
     const pid = Number(r.post_id) || 0;
     const prof = safe(() => db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(uid), null) || {};
-    const reply = safe(() => db.prepare(
-      `SELECT id, text, created_at FROM chat_messages
-        WHERE user_id = ? AND role = 'assistant' AND hilo = ? AND COALESCE(post_id, 0) = ? AND id > ?
-        ORDER BY id ASC LIMIT 1`).get(uid, hilo, pid, Number(r.id)), null);
+    // En el hilo general las respuestas del asistente viven sin hilo
+    // (replyAsPosty y el guardado del chat no lo estampan): la
+    // respuesta de un pedido 'general' es la primera del asistente en
+    // ese hilo (sin hilo o 'general', sin posteo) posterior al pedido.
+    const reply = hilo === 'general'
+      ? safe(() => db.prepare(
+          `SELECT id, text, created_at FROM chat_messages
+            WHERE user_id = ? AND role = 'assistant' AND COALESCE(post_id, 0) = 0 AND COALESCE(hilo, '') IN ('', 'general') AND id > ?
+            ORDER BY id ASC LIMIT 1`).get(uid, Number(r.id)), null)
+      : safe(() => db.prepare(
+          `SELECT id, text, created_at FROM chat_messages
+            WHERE user_id = ? AND role = 'assistant' AND hilo = ? AND COALESCE(post_id, 0) = ? AND id > ?
+            ORDER BY id ASC LIMIT 1`).get(uid, hilo, pid, Number(r.id)), null);
     // Estado de revisión del pedido (tabla support_voz_pedidos; sin
     // fila = pendiente). Lo que Posty entendió, hoy, es su respuesta
     // registrada en el hilo — el campo `entendido` es la costura donde
@@ -1590,7 +1602,7 @@ function voiceRequests(db, opts) {
       id: Number(r.id), user_id: uid,
       business_name: prof.business_name || '', ig_username: prof.ig_username || '',
       cuando, cuando_utc: String(r.created_at || ''),
-      ambito: hilo === 'semana' ? 'semana' : 'posteo',
+      ambito: hilo === 'semana' ? 'semana' : (hilo === 'general' ? 'chat' : 'posteo'),
       pedido: String(r.text || ''),
       respuesta: reply ? String(reply.text || '') : null,
       entendido: reply ? String(reply.text || '') : null,
@@ -1614,7 +1626,7 @@ function voiceRequests(db, opts) {
 // carga (viajan con el payload de la revisión de la noche). Cada
 // número sale de la MISMA fuente que lista su sección:
 // · voz — la misma base y el mismo tope que voiceRequests (las 60
-//   notas más recientes de hilo post/semana); pendiente = sin fila en
+//   notas más recientes de hilo post/semana/general); pendiente = sin fila en
 //   support_voz_pedidos o con estado 'pendiente' (idéntico criterio
 //   al de la lista: sin fila, la revisión nace pendiente).
 // · subir — las filas de subir_pedidos_voz en 'pendiente_revision',
@@ -1622,7 +1634,7 @@ function voiceRequests(db, opts) {
 function conteosPedidos(db) {
   ensureSchema(db);
   const rows = safe(() => db.prepare(
-    `SELECT id FROM chat_messages WHERE role = 'user' AND hilo IN ('post', 'semana')
+    `SELECT id FROM chat_messages WHERE role = 'user' AND hilo IN ('post', 'semana', 'general')
       ORDER BY id DESC LIMIT 60`).all(), []);
   let voz = 0;
   for (const r of rows) {
@@ -1651,7 +1663,7 @@ function decideVoiceRequest(db, opts) {
   if (!mid) return { ok: false, error: 'sin_pedido' };
   if (!['aprobado', 'descartado', 'pendiente'].includes(decision)) return { ok: false, error: 'decision_invalida' };
   const m = safe(() => db.prepare(
-    "SELECT id, user_id, hilo, post_id FROM chat_messages WHERE id = ? AND role = 'user' AND hilo IN ('post', 'semana')").get(mid), null);
+    "SELECT id, user_id, hilo, post_id FROM chat_messages WHERE id = ? AND role = 'user' AND hilo IN ('post', 'semana', 'general')").get(mid), null);
   if (!m) return { ok: false, error: 'pedido_inexistente' };
   if (decision === 'aprobado') {
     const reply = safe(() => db.prepare(
