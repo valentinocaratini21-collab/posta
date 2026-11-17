@@ -17953,15 +17953,27 @@ async function pzAdsAutorizarPagina(btn) {
     return;
   }
   const urlAds = (pzBoostState && pzBoostState.connectUrl) || '';
+  // (LOTE CONECTAR-AVISO) El salto al login unificado de Meta pasa
+  // por el aviso previo (una vez por sesión) con el destino de
+  // siempre. Si el cliente cancela el aviso, el botón se restaura;
+  // si el salto no ocurre, el cierre es el de siempre (botón +
+  // re-pintar + motivo honesto), reunido en sinSaltoAds.
+  const sinSaltoAds = () => {
+    if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; }
+    pzAdsPintar();
+    if (pzAdsPaginaSinAutorizar()) {
+      const el = document.getElementById('pzAdsRecMsg');
+      if (el && !el.textContent) el.textContent = pzBoostMotivo(pzBoostGate().motivo, 0);
+    }
+  };
   if (urlAds) {
-    try { window.location.href = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent('/#/app/ads'); return; } catch (e) {}
+    const destAds = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent('/#/app/ads');
+    pzConectarConAviso(
+      () => { try { window.location.href = destAds; } catch (e) { sinSaltoAds(); } },
+      () => { if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; } });
+    return;
   }
-  if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; }
-  pzAdsPintar();
-  if (pzAdsPaginaSinAutorizar()) {
-    const el = document.getElementById('pzAdsRecMsg');
-    if (el && !el.textContent) el.textContent = pzBoostMotivo(pzBoostGate().motivo, 0);
-  }
+  sinSaltoAds();
 }
 
 // (LOTE CAMINO-CLIENTE-ADS) El botón «Conectar mi cuenta
@@ -17979,17 +17991,29 @@ async function pzBoostConectarCuenta(btn) {
   const g = pzBoostGate();
   if (!g.cerrado) { pzBoostPintarBoost(); return; }
   const urlAds = (pzBoostState && pzBoostState.connectUrl) || '';
+  // (LOTE CONECTAR-AVISO) Mismo aviso previo que la tarjeta del tab:
+  // el salto al login unificado pasa por pzConectarConAviso (una vez
+  // por sesión) con el destino de siempre; cancelar restaura el
+  // botón y un salto fallido cae al cierre honesto de siempre,
+  // reunido en sinSaltoBoost.
+  const sinSaltoBoost = () => {
+    if (btn) btn.disabled = false;
+    const msgEl = document.getElementById('pzBoostMsg');
+    if (msgEl) msgEl.textContent = pzBoostMotivo(g.motivo, Number((pzBoostState || {}).selMonto) || 50);
+  };
   if (urlAds) {
     let nextAds = '/#/app/ads';
     try {
       const hAds = '/' + String(location.hash || '');
       if (/^\/#\/[^\s"'\\<>]*$/.test(hAds)) nextAds = hAds;
     } catch (e) {}
-    try { window.location.href = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent(nextAds); return; } catch (e) {}
+    const destAds = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent(nextAds);
+    pzConectarConAviso(
+      () => { try { window.location.href = destAds; } catch (e) { sinSaltoBoost(); } },
+      () => { if (btn) btn.disabled = false; });
+    return;
   }
-  if (btn) btn.disabled = false;
-  const msgEl = document.getElementById('pzBoostMsg');
-  if (msgEl) msgEl.textContent = pzBoostMotivo(g.motivo, Number((pzBoostState || {}).selMonto) || 50);
+  sinSaltoBoost();
 }
 
 // (LOTE TARJETA-IMPULSAR) Las recomendaciones chicas: otros posteos
@@ -25302,9 +25326,15 @@ function pzWowConnectHTML(o) {
 // El toque del wow: deja la marca de sesión (la confirmación se
 // pinta al volver) y abre el OAuth por la puerta de siempre con la
 // marca del wow — el callback agenda y vuelve a esta pantalla.
+// (LOTE CONECTAR-AVISO) El salto pasa por el aviso previo a Meta y
+// la marca del wow se deja en el salto real (al confirmar el aviso):
+// si el cliente cancela el aviso, no queda ninguna marca colgada.
 function pzWowGo() {
-  try { sessionStorage.setItem('pz_wow_pending', '1'); } catch (e) {}
-  location.href = '/api/ig/go?next=' + encodeURIComponent('/#/app/inicio') + '&wow=1';
+  pzConectarConAviso(() => {
+    try { sessionStorage.setItem('pz_wow_pending', '1'); } catch (e) {}
+    pzIgIntentoMarcar();
+    location.href = '/api/ig/go?next=' + encodeURIComponent('/#/app/inicio') + '&wow=1';
+  });
 }
 function pzWowConnectBind(root) {
   if (!root) return;
@@ -33218,13 +33248,78 @@ function bindApp(tab) {
 }
 
 
+/* ---------- (LOTE CONECTAR-AVISO) aviso previo al salto a Meta ---------- */
+// (Orden de Valentino 17/11 14:19: «dale, arma esas mejoras», sobre
+// su video de reconexión de las 14:15: el login de Meta dentro del
+// navegador le mostró DOS veces el «Something went wrong» de la
+// passkey — la confirmación con cara/huella falló dentro del
+// navegador — hasta que eligió «Try another way» → código por SMS y
+// entró. Ese paso es de Meta y no se arregla desde Posty: lo nuestro
+// es preparar al cliente ANTES del salto y rescatarlo si vuelve sin
+// conectar.)
+// TODOS los saltos a Meta pasan por pzConectarConAviso: el OAuth de
+// Instagram (igConnect, que usan el candado de la casa, el popup de
+// primer ingreso, el checklist, el gate de la semana, el banner de
+// reanudar y los botones de Ajustes vía chunk-ajustes), el wow
+// (pzWowGo) y el login unificado de Ads (pzAdsAutorizarPagina y
+// pzBoostConectarCuenta, vía connectUrl). El aviso se muestra UNA
+// vez por sesión (sessionStorage): quien ya lo vio salta directo —
+// un solo toque extra como máximo, nunca dos veces por sesión.
+const PZ_IG_AVISO_KEY = 'pz_ig_aviso_v1';
+const PZ_IG_INTENTO_KEY = 'pz_ig_intento_ts';
+function pzIgAvisoYaVisto() { try { return sessionStorage.getItem(PZ_IG_AVISO_KEY) === '1'; } catch (e) { return false; } }
+function pzIgAvisoMarcarVisto() { try { sessionStorage.setItem(PZ_IG_AVISO_KEY, '1'); } catch (e) {} }
+// La marca de intento de ESTA sesión la deja el salto real (nunca la
+// vista del aviso) y la lee el rescate discreto de renderIgResume
+// para el retorno que NO pasó por el callback (el cliente cerró el
+// login de Meta y volvió por su cuenta: el servidor no tiene marca
+// de ese retorno). Vive 2 h en la sesión y se apaga al conectar.
+function pzIgIntentoMarcar() { try { sessionStorage.setItem(PZ_IG_INTENTO_KEY, String(Date.now())); } catch (e) {} }
+function pzIgIntentoReciente() { try { const ts = Number(sessionStorage.getItem(PZ_IG_INTENTO_KEY) || 0); return ts > 0 && (Date.now() - ts) < 2 * 60 * 60 * 1000; } catch (e) { return false; } }
+function pzIgIntentoLimpiar() { try { sessionStorage.removeItem(PZ_IG_INTENTO_KEY); } catch (e) {} }
+
+function pzConectarConAviso(go, onCancel) {
+  const saltar = (typeof go === 'function') ? go : function () {};
+  if (pzIgAvisoYaVisto()) { saltar(); return; }
+  if (document.getElementById('pzConectarAvisoOv')) return; // ya abierto: no apilar
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const ov = document.createElement('div');
+  ov.className = 'modal-ov'; ov.id = 'pzConectarAvisoOv'; ov.style.zIndex = '10006'; // sobre la hoja de Impulsar (10003) y el prompt del invitado (10004)
+  const paso = (n, txt) => `<div style="display:flex;gap:10px;align-items:flex-start;margin:0 0 10px"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#EAF5FB;color:#0A1E33;font-size:12.5px;font-weight:800;display:flex;align-items:center;justify-content:center">${n}</span><p style="margin:0;font-size:13.5px;line-height:1.5">${txt}</p></div>`;
+  ov.innerHTML = `<div class="modal-card" style="max-width:420px">
+    <div style="font-size:30px;line-height:1;margin-bottom:6px">${pzIc('camera', 30)}</div>
+    <h2 style="margin:0 0 10px">${en ? 'Before you connect' : 'Antes de conectar'}</h2>
+    ${paso(1, en ? 'Meta will ask you to log in to your Instagram account.' : 'Meta te va a pedir entrar a tu cuenta de Instagram.')}
+    ${paso(2, en ? 'If face or fingerprint confirmation fails — it can happen inside the browser — tap "Try another way" and choose the text-message code.' : 'Si la confirmación con cara o huella falla — puede pasar dentro del navegador — tocá «Try another way» y elegí el código por mensaje de texto.')}
+    ${paso(3, en ? 'If it shows you more than one business, pick yours: the one with your Instagram and your Page.' : 'Si te muestra varios negocios, elegí el tuyo: el que tiene tu Instagram y tu Página.')}
+    <button class="btn btn-primary btn-block" id="pzAvisoGo" style="margin-top:6px">${en ? 'Got it, connect' : 'Entendido, conectar'}</button>
+    <button class="btn btn-ghost btn-block" id="pzAvisoNo" style="margin-top:8px">${en ? 'Not now' : 'Ahora no'}</button>
+    <div class="hint" style="margin-top:10px">${pzIc('lock', 13)} ${en ? 'We never see or store your password.' : 'Nunca vemos ni guardamos tu contraseña.'}</div>
+  </div>`;
+  document.body.appendChild(ov);
+  pzIgAvisoMarcarVisto(); // mostrado = visto: no se repite en la sesión, aunque cancele
+  const cerrar = () => { try { ov.remove(); } catch (e) {} };
+  const cancelar = () => { cerrar(); if (typeof onCancel === 'function') onCancel(); };
+  const bGo = ov.querySelector('#pzAvisoGo');
+  if (bGo) bGo.onclick = () => { cerrar(); saltar(); };
+  const bNo = ov.querySelector('#pzAvisoNo');
+  if (bNo) bNo.onclick = cancelar;
+  ov.addEventListener('click', (e) => { if (e.target === ov) cancelar(); });
+}
+
 function igConnect(next) {
   const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
   // Misma pestaña: /api/ig/go redirige vía 302 a Instagram (iOS no abre la app)
   // y el callback vuelve solo a Posta. Si el flujo vuelve sin completarse
   // (el callback lo marca), aparece el banner "terminar de conectar" y lo
   // reintentás con un toque.
-  location.href = '/api/ig/go' + (nx ? '?next=' + encodeURIComponent(nx) : '');
+  // (LOTE CONECTAR-AVISO) Antes del salto va el aviso previo (una vez
+  // por sesión); el salto en sí es byte a byte el de siempre y deja
+  // la marca de intento de la sesión para el rescate discreto.
+  pzConectarConAviso(() => {
+    pzIgIntentoMarcar();
+    location.href = '/api/ig/go' + (nx ? '?next=' + encodeURIComponent(nx) : '');
+  });
 }
 /* ---------- banner "terminar de conectar Instagram" ---------- */
 // (CORRECTIVO-6 · BANNER HONESTO) El banner solo aparece si el flujo de
@@ -33232,24 +33327,54 @@ function igConnect(next) {
 // que deja el callback (igInterruptedAt), ya no el mero intento de abrir
 // el OAuth. Dura 15 min y un toque reintenta. La copia no afirma ninguna
 // sesión iniciada: no hay evidencia de eso.
+// (LOTE CONECTAR-AVISO) El rescate queda en dos capas, un componente:
+//  · ig_pending (la marca del callback): la copia ahora dice por qué
+//    suele pasar (Instagram pide un código) y el reintento pasa por
+//    el aviso previo, porque el botón llama a igConnect.
+//  · intento de ESTA sesión sin marca del callback (pzIgIntentoReciente,
+//    la marca que deja el salto real): el cliente cerró el login de
+//    Meta y volvió por su cuenta — el servidor no tiene señal de ese
+//    retorno. Línea discreta, con descarte propio que apaga la marca.
+// Nada aparece para quien nunca intentó ni para quien ya conectó.
 function renderIgResume() {
-  const show = !!(PROFILE && PROFILE.ig_pending && !PROFILE.ig_connected);
-  let b = document.getElementById('igResumeBanner');
-  if (!show) { if (b) b.remove(); return; }
-  if (b) return;
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  b = document.createElement('div');
-  b.id = 'igResumeBanner';
-  b.innerHTML = `
+  const conectado = !!(PROFILE && PROFILE.ig_connected);
+  const pendiente = !!(PROFILE && PROFILE.ig_pending && !conectado);
+  const intentoSesion = !!(!conectado && !pendiente && pzIgIntentoReciente());
+  if (conectado) pzIgIntentoLimpiar();
+  let b = document.getElementById('igResumeBanner');
+  if (!pendiente) { if (b) b.remove(); }
+  else if (!b) {
+    b = document.createElement('div');
+    b.id = 'igResumeBanner';
+    b.innerHTML = `
   <div style="position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;justify-content:center;padding:10px 12px;pointer-events:none">
     <div style="pointer-events:auto;background:#0A1E33;color:#fff;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:560px;width:100%">
       <div style="font-size:26.5px;line-height:1">${pzIc('camera', 26)}</div>
-      <div style="flex:1;font-size:12.5px;line-height:1.45"><b>${en ? 'Almost there!' : '¡Casi terminás!'}</b><br>${en ? "Your Instagram connection didn't finish. One more tap and you can complete it." : 'La conexión con Instagram no se completó. Con un toque más la terminás.'}</div>
+      <div style="flex:1;font-size:12.5px;line-height:1.45"><b>${en ? 'Almost there!' : '¡Casi terminás!'}</b><br>${en ? "Your Instagram connection didn't finish. It usually happens when Instagram asks for a code: when you retry, choose the text-message code." : 'La conexión con Instagram no se completó. Suele pasar cuando Instagram pide un código: al reintentar, elegí el código por mensaje de texto.'}</div>
       <button class="btn btn-primary" id="igResumeGo" style="white-space:nowrap;padding:12px 16px">${en ? 'Finish connecting' : 'Terminar de conectar'}</button>
     </div>
   </div>`;
-  document.body.appendChild(b);
-  b.querySelector('#igResumeGo').onclick = () => igConnect();
+    document.body.appendChild(b);
+    b.querySelector('#igResumeGo').onclick = () => igConnect();
+  }
+  let b2 = document.getElementById('igRescueSesion');
+  if (!intentoSesion) { if (b2) b2.remove(); }
+  else if (!b2) {
+    b2 = document.createElement('div');
+    b2.id = 'igRescueSesion';
+    b2.innerHTML = `
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;justify-content:center;padding:10px 12px;pointer-events:none">
+    <div style="pointer-events:auto;background:#fff;color:#0A1E33;border:1.5px solid #e3ebf1;border-radius:16px;padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 10px 28px rgba(10,30,51,.18);max-width:560px;width:100%">
+      <div style="flex:1;font-size:12.5px;line-height:1.45">${en ? "Connection didn't finish? It usually happens when Instagram asks for a code: retry and choose the text message." : '¿No se completó la conexión? Suele pasar cuando Instagram pide un código: reintentá y elegí el mensaje de texto.'}</div>
+      <button class="btn btn-primary" id="igRescueGo" style="white-space:nowrap;padding:10px 14px">${en ? 'Retry' : 'Reintentar'}</button>
+      <button id="igRescueX" aria-label="${en ? 'Dismiss' : 'Descartar'}" style="background:none;border:0;cursor:pointer;padding:4px;color:#7d93a7">${pzIc('x', 15)}</button>
+    </div>
+  </div>`;
+    document.body.appendChild(b2);
+    b2.querySelector('#igRescueGo').onclick = () => igConnect();
+    b2.querySelector('#igRescueX').onclick = () => { pzIgIntentoLimpiar(); const el = document.getElementById('igRescueSesion'); if (el) el.remove(); };
+  }
 }
 
 
