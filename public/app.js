@@ -18022,6 +18022,20 @@ function pzAdsElegirMonto(m) {
   pzAdsPintar();
 }
 
+// (LOTE ADS-PANTALLA-2) El botón «Elegir otro posteo» del tab: la
+// tarjeta muestra el recomendado, pero la opción de elegir CUALQUIER
+// posteo del feed tiene que estar a la vista acá. Antes el tab no
+// rendía ninguna entrada a la hoja de elegir (pzAdsPickOpen existía
+// sin llamador en esta pantalla; solo quedaban las ≤3 tarjetas con
+// métricas de pzAdsOtrosHTML, que sin métricas ni se muestran).
+function pzAdsElegirBtnHTML() {
+  const s = pzBoostState || {};
+  const list = Array.isArray(s.elegibles) ? s.elegibles : [];
+  if (!list.length) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<button type="button" onclick="pzAdsPickOpen()" style="width:100%;box-sizing:border-box;padding:12px;border-radius:14px;border:2px solid #DCEFFF;background:#fff;font-weight:800;font-size:14.5px;color:var(--txt);cursor:pointer;margin:2px 0 14px">${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
+}
+
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
@@ -18146,7 +18160,7 @@ function pzAdsHTML() {
     recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   }
   const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
-  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${recHTML}${histHTML}`;
+  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${recHTML}${pzAdsElegirBtnHTML()}${histHTML}`;
 }
 function pzAdsPintar() {
   const box = document.getElementById('pzAdsRoot');
@@ -18868,9 +18882,53 @@ function pzBoostMostrar(cual) {
   const boostOv = document.getElementById('pzBoostOv');
   if (pickOv) pickOv.style.display = (cual === 'pick') ? 'flex' : 'none';
   if (boostOv) boostOv.style.display = (cual === 'boost') ? 'flex' : 'none';
+  // (LOTE ADS-PANTALLA-2) La hoja abre desde su tope: la .pubsheet es
+  // el contenedor con scroll (max-height:88vh; overflow-y:auto) y el
+  // overlay se crea una vez y se reusa — sin reset, la hoja reabría en
+  // el scroll donde quedó la vez anterior y arrancaba cortada arriba.
+  const ov = cual === 'pick' ? pickOv : (cual === 'boost' ? boostOv : null);
+  try { const sh = ov && ov.querySelector('.pubsheet'); if (sh) sh.scrollTop = 0; } catch (e) {}
 }
 
 function pzBoostCerrar() { pzBoostMostrar(null); }
+
+// (LOTE ADS-PANTALLA-2) Buscador de la hoja de elegir: el texto vive
+// fuera del DOM para que repintar la lista (al tocar una fila) no lo
+// pierda, y cada tecla repinta SOLO la lista — el input nunca pierde
+// el foco. Filtra sobre la MISMA fuente que la lista (s.elegibles, el
+// feed entero de publicados vivos), por palabra del caption.
+let pzBoostPickQTxt = '';
+
+function pzBoostPickFiltrados() {
+  const s = pzBoostState || {};
+  const list = Array.isArray(s.elegibles) ? s.elegibles : [];
+  const q = String(pzBoostPickQTxt || '').trim().toLowerCase();
+  if (!q) return list;
+  return list.filter((p) => String((p && p.caption) || '').toLowerCase().includes(q));
+}
+
+function pzBoostPickRowsHTML(list) {
+  const s = pzBoostState || {};
+  return list.map((p) => {
+    const key = pzBoostKey(p);
+    const sel = !!key && key === s.selId;
+    const ya = !!p.ya_impulsado || pzBoostImpulsados.has(key);
+    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const badge = p.recomendado ? `<span class="pz-boost-badge">RECOMENDADO</span>` : '';
+    const check = `<span class="pz-boost-check">${(sel && !ya) || ya ? '✓' : ''}</span>`;
+    return `<button type="button" role="radio" aria-checked="${sel && !ya ? 'true' : 'false'}" class="pz-boost-opt${sel && !ya ? ' on' : ''}" ${ya ? 'disabled' : ''} onclick="pzBoostElegirPick('${key}', this)">
+      ${img}<span class="pz-boost-t"><b>${esc(pzBoostTitulo(p))}${badge}</b><small>${esc(pzBoostNumeros(p))}</small></span>${check}</button>`;
+  }).join('');
+}
+
+function pzBoostPickBuscar(v) {
+  pzBoostPickQTxt = String(v || '');
+  const box = document.getElementById('pzBoostPickList');
+  if (!box) return;
+  const list = pzBoostPickFiltrados();
+  box.innerHTML = list.length ? pzBoostPickRowsHTML(list)
+    : `<p class="pz-boost-note" style="margin:14px 0">${esc(gzT('No encontré posteos con esa palabra.', 'No posts match that word.'))}</p>`;
+}
 
 function pzBoostPintarPick() {
   const body = document.getElementById('pzBoostPickBody');
@@ -18883,16 +18941,12 @@ function pzBoostPintarPick() {
     if (go) go.disabled = true;
     return;
   }
-  body.innerHTML = `<div class="pz-boost-list" role="radiogroup" aria-label="${esc(gzT('Posteos para impulsar', 'Posts to boost'))}">` + list.map((p) => {
-    const key = pzBoostKey(p);
-    const sel = !!key && key === s.selId;
-    const ya = !!p.ya_impulsado || pzBoostImpulsados.has(key);
-    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
-    const badge = p.recomendado ? `<span class="pz-boost-badge">RECOMENDADO</span>` : '';
-    const check = `<span class="pz-boost-check">${(sel && !ya) || ya ? '✓' : ''}</span>`;
-    return `<button type="button" role="radio" aria-checked="${sel && !ya ? 'true' : 'false'}" class="pz-boost-opt${sel && !ya ? ' on' : ''}" ${ya ? 'disabled' : ''} onclick="pzBoostElegirPick('${key}', this)">
-      ${img}<span class="pz-boost-t"><b>${esc(pzBoostTitulo(p))}${badge}</b><small>${esc(pzBoostNumeros(p))}</small></span>${check}</button>`;
-  }).join('') + `</div>`;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const filtrados = pzBoostPickFiltrados();
+  body.innerHTML = `<input type="search" id="pzBoostPickQ" value="${esc(pzBoostPickQTxt)}" placeholder="${esc(en ? 'Search by a word from the post…' : 'Buscá por una palabra del posteo…')}" oninput="pzBoostPickBuscar(this.value)" autocomplete="off" style="width:100%;box-sizing:border-box;padding:11px 13px;border:2px solid #DCEFFF;border-radius:12px;font-size:14.5px;margin:2px 0 10px">`
+    + `<div class="pz-boost-list" id="pzBoostPickList" role="radiogroup" aria-label="${esc(gzT('Posteos para impulsar', 'Posts to boost'))}">`
+    + (filtrados.length ? pzBoostPickRowsHTML(filtrados) : `<p class="pz-boost-note" style="margin:14px 0">${esc(gzT('No encontré posteos con esa palabra.', 'No posts match that word.'))}</p>`)
+    + `</div>`;
   if (go) go.disabled = !s.selId;
 }
 
@@ -19311,7 +19365,13 @@ async function pzAdsAudienciaMostrar() {
       if (!s.chipExtra && j.propuesta.pendiente && j.propuesta.pendiente.chip) s.chipExtra = j.propuesta.pendiente.chip;
     }
     s.audienciaVisible = true;
-    return pzAdsAudienciaPintar();
+    const pinte = pzAdsAudienciaPintar();
+    // (LOTE ADS-PANTALLA-2) Si el paso de audiencia vive en la hoja de
+    // impulso, la hoja arranca desde su tope con la tarjeta entera a
+    // la vista (antes heredaba el scroll del paso anterior y la
+    // tarjeta empezaba cortada arriba).
+    if (pinte) { try { const ov = document.getElementById('pzBoostOv'); const sh = (ov && ov.style.display !== 'none') ? ov.querySelector('.pubsheet') : null; if (sh) sh.scrollTop = 0; } catch (e) {} }
+    return pinte;
   } catch (e) { return false; }
 }
 
@@ -20619,7 +20679,11 @@ function pzPrefetchKick() {
   // (LOTE BILLETERA-APPLE-PAY) El botón de Apple Pay se monta tras pintar
   // el tab Ads (y tras cada re-pintado de la billetera en pzAdsPintar):
   // si el dispositivo no lo soporta, la sección queda oculta.
-  if (tab === 'ads') { try { pzAdsApplePayMontar(); } catch (e) {} }
+  // (LOTE ADS-PANTALLA-2) La pantalla de Ads abre desde arriba: el
+  // router no resetea el scroll al cambiar de pestaña (el único
+  // scrollTo(0,0) vivía en el pull-to-refresh) y la vista heredaba el
+  // scroll de la pantalla anterior — entraba corrida hacia abajo.
+  if (tab === 'ads') { try { window.scrollTo(0, 0); } catch (e) {} try { pzAdsApplePayMontar(); } catch (e) {} }
   // LOTE VELOCIDAD: los fills que render() lanzaba a 60-90 ms (antes de la
   // pintura final) se re-disparan tras pintar: con esqueleto, la primera
   // pasada no encontraba los slots. Son idempotentes (dataset.done).

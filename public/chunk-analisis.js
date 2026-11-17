@@ -1304,20 +1304,23 @@ function anaBilleteraHTML() {
       <p class="ana-boostrec-monto-t">${anaT('Cargar plata:', 'Top up:')}</p>
       ${anaMontosCarga().map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="anaBilleteraCargar(${x}, this)">$${anaFmtMonto(x)}</button>`).join(' ')}
     </div>`;
-  // Picker: recomendado primero, 5 más recientes como máximo. Sin
-  // elegibles, la nota honesta (el cliente igual puede cargar plata).
-  // (Los elegibles traen `post_id`, no `id`: así los devuelve el módulo.)
+  // Picker: recomendado primero, el feed entero de publicados vivos
+  // (LOTE ADS-PANTALLA-2: sin tope de 5 — cualquier posteo del feed se
+  // puede elegir; el buscador de abajo es el atajo para los viejos).
+  // Sin elegibles, la nota honesta (el cliente igual puede cargar
+  // plata). (Los elegibles traen `post_id`, no `id`: así los devuelve
+  // el módulo.)
   // (LOTE ADS-PANTALLA) El posteo elegido por el buscador, si no está
-  // entre los 5, se agrega como fila extra seleccionada: la elección
+  // en la lista, se agrega como fila extra seleccionada: la elección
   // nunca se pierde de vista. Sin mejor, la primera fila lleva el chip
   // «el más reciente».
   const mejorId = mejor ? mejor.post_id : 0;
-  const lista = eleg.slice().sort((a, b) => ((b.post_id === mejorId) ? 1 : 0) - ((a.post_id === mejorId) ? 1 : 0)).slice(0, 5);
+  const lista = eleg.slice().sort((a, b) => ((b.post_id === mejorId) ? 1 : 0) - ((a.post_id === mejorId) ? 1 : 0));
   const selPost = (d.selPost && Number(d.selPost.post_id) === Number(selId)) ? d.selPost : null;
   const listaIds = new Set(lista.map((e) => e.post_id));
   const extra = (selPost && !listaIds.has(selPost.post_id)) ? [selPost] : [];
   const pickerHTML = eleg.length
-    ? `<p class="ana-boostrec-monto-t" style="margin:12px 0 4px">${anaT('¿A cuál le metemos ads?', 'Which post gets the ads?')}</p>` + lista.map((e, i) => anaBilleteraPickerRow(e, e.post_id === selId, !!(mejor && e.post_id === mejor.post_id), !mejor && i === 0)).join('') + extra.map((e) => anaBilleteraPickerRow(e, true, false, false)).join('') + (eleg.length > 5 ? `<p class="ana-boostrec-nota">${anaT('Mostramos los 5 más recientes.', 'Showing the 5 most recent.')}</p>` : '')
+    ? `<p class="ana-boostrec-monto-t" style="margin:12px 0 4px">${anaT('¿A cuál le metemos ads?', 'Which post gets the ads?')}</p>` + lista.map((e, i) => anaBilleteraPickerRow(e, e.post_id === selId, !!(mejor && e.post_id === mejor.post_id), !mejor && i === 0)).join('') + extra.map((e) => anaBilleteraPickerRow(e, true, false, false)).join('')
     : `<p class="ana-boostrec-nota" style="margin-top:10px">${anaT('Todavía no tenés posteos publicados para impulsar.', "You don't have published posts to boost yet.")}</p>`;
   // (LOTE ADS-PANTALLA) Buscador: encontrar CUALQUIER posteo del feed
   // por una palabra de su caption, sin límite de edad. La búsqueda solo

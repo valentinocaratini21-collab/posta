@@ -13858,6 +13858,7 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
         AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
         AND p.ig_media_id NOT LIKE 'demo_%'
         AND p.media_type != 'story'
+        AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext')
         AND p.week_key = ?`).all(uid, wk);
     // (v867) La lectura del feed vivo arranca ya para correr en paralelo
     // con el chequeo de permiso de abajo (cada una con su carrera de 3 s).
@@ -14229,7 +14230,7 @@ app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
     const uid = req.session.userId;
     let rows = [];
     try {
-      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.ig_media_id NOT LIKE 'demo_%' AND p.media_type != 'story' ORDER BY p.published_at DESC`).all(uid);
+      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.ig_media_id NOT LIKE 'demo_%' AND p.media_type != 'story' AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext') ORDER BY p.published_at DESC`).all(uid);
     } catch (e) { rows = []; }
     // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
     rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
@@ -14468,6 +14469,13 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
     const gate = await adsReadiness(uid).catch(() => ({ ready: false, code: 'page_not_authorized' }));
+    // (LOTE ADS-PANTALLA-2) La lista del selector es el FEED ENTERO:
+    // sin LIMIT (antes 20: un posteo viejo publicado y vivo quedaba
+    // fuera del selector aunque estuviera en el feed) y sin archivados
+    // ni borrados en IG: la marca durable ig_state='archived_ext' se
+    // excluye ACÁ, en la consulta — el filtro del feed vivo (v867,
+    // fail-open con carrera de 3 s) queda como segunda red, no como
+    // única. Un posteo published con esa marca NO cuenta como vivo.
     let rows = [];
     try {
       rows = db.prepare(`
@@ -14479,7 +14487,8 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
           AND p.ig_media_id NOT LIKE 'demo_%'
           AND p.media_type != 'story'
-        ORDER BY p.published_at DESC LIMIT 20`).all(uid);
+          AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext')
+        ORDER BY p.published_at DESC`).all(uid);
     } catch (e) { rows = []; }
     // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed): el
     // recomendado de abajo sale de estas filas ya filtradas.
@@ -14538,6 +14547,7 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
           AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
           AND p.media_type != 'story'
           AND p.ig_media_id NOT LIKE 'demo_%'
+          AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext')
           AND p.caption LIKE '%' || ? || '%' ESCAPE '\\'
         ORDER BY p.published_at DESC LIMIT 20`).all(uid, escLike);
     } catch (e) { rows = []; }
@@ -15268,6 +15278,7 @@ app.get('/api/ads/recommendations', requireAuth, async (req, res) => {
       FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
       WHERE p.user_id = ? AND p.status = 'published'
         AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+        AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext')
         AND datetime(p.published_at) >= datetime('now', '-30 days')`).all(req.session.userId);
   } catch (e) {}
   // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
@@ -46043,7 +46054,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1156';
+const BUILD_ID = '20261105-v1157';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
