@@ -26497,9 +26497,19 @@ app.get('/api/ig/callback', async (req, res) => {
   // (salto PWA→Safari), la fila aporta usuario, redirect y destino
   // — solo cuando la sesión no trae identidad propia en conflicto:
   // sin sesión, o la sesión del mismo dueño del state.
+  // (LOTE CONEXIÓN-SIN-SESIÓN-2) La fila viva MANDA sobre el state
+  // que la sesión traiga: el navegador que recibe la vuelta puede
+  // arrastrar el state de un intento anterior abandonado (la sesión
+  // de Safari de Valentino guardaba el de sus intentos previos y
+  // cada vuelta nueva moría contra ese resto — video 16/11 20:02:
+  // Meta confirma «connected» y la vuelta cae en vencido). La fila
+  // es la prueba fuerte: la compuso el dueño autenticado, Meta
+  // volvió de ESE diálogo y está sin usar y sin vencer. El state
+  // de sesión, en cambio, puede ser un resto. La identidad no se
+  // negocia: sesión de OTRO usuario nunca adopta.
   const _oauthIg = state ? takeOAuthState(state, 'ig') : null;
   const _oauthIgDead = !!(_oauthIg && _oauthIg.dead);
-  if (_oauthIg && !_oauthIgDead && req.session.igState === undefined
+  if (_oauthIg && !_oauthIgDead
     && (!req.session.userId || req.session.userId === _oauthIg.user_id)) {
     req.session.userId = _oauthIg.user_id;
     req.session.igState = state;
@@ -26764,9 +26774,19 @@ app.get('/api/ig/unified/callback', async (req, res) => {
   // (salto PWA→Safari), la fila aporta usuario, redirect y destino
   // — solo cuando la sesión no trae identidad propia en conflicto:
   // sin sesión, o la sesión del mismo dueño del state.
+  // (LOTE CONEXIÓN-SIN-SESIÓN-2) La fila viva MANDA sobre el state
+  // que la sesión traiga: el navegador que recibe la vuelta puede
+  // arrastrar el state de un intento anterior abandonado (la sesión
+  // de Safari de Valentino guardaba el de sus intentos previos y
+  // cada vuelta nueva moría contra ese resto — video 16/11 20:02:
+  // Meta confirma «connected» y la vuelta cae en vencido). La fila
+  // es la prueba fuerte: la compuso el dueño autenticado, Meta
+  // volvió de ESE diálogo y está sin usar y sin vencer. El state
+  // de sesión, en cambio, puede ser un resto. La identidad no se
+  // negocia: sesión de OTRO usuario nunca adopta.
   const _oauthAds = state ? takeOAuthState(state, 'ig_ads') : null;
   const _oauthAdsDead = !!(_oauthAds && _oauthAds.dead);
-  if (_oauthAds && !_oauthAdsDead && req.session.igAdsState === undefined
+  if (_oauthAds && !_oauthAdsDead
     && (!req.session.userId || req.session.userId === _oauthAds.user_id)) {
     req.session.userId = _oauthAds.user_id;
     req.session.igAdsState = state;
@@ -45679,7 +45699,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1144';
+const BUILD_ID = '20261105-v1145';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
