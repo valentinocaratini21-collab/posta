@@ -99,7 +99,7 @@ button{font-family:inherit}
 .logo-posty{display:inline-flex;align-items:center;text-decoration:none}
 .logo-posty .pdot{color:#2793C8}
 
-.hero-posty{width:220px;height:220px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 20px;border:5px solid #fff;box-shadow:0 14px 36px rgba(39,147,200,.35)}
+.hero-posty{width:320px;height:320px;border-radius:24px;object-fit:cover;display:block;margin:0 auto 20px;border:5px solid #fff;box-shadow:0 14px 36px rgba(39,147,200,.35)}
 /* (v334) Video de presentación de Posty en el hero: ocupa el lugar visual del avatar (cuadrado, vivo). */
 .hero-video{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;margin:0 auto 22px;border-radius:30px;border:5px solid #fff;box-shadow:0 18px 44px rgba(39,147,200,.35);background:#EAF4FA}
 .hero-co{margin-top:10px;font-size:12px;color:var(--dim)}
@@ -653,7 +653,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
   .hero-cta{flex-direction:column;align-items:stretch}
   .hero-cta .btn{width:100%;max-width:340px;margin:0 auto}
   .hero-note{font-size:11.5px;padding:0 8px}
-  .hero-posty{width:168px;height:168px;margin-bottom:16px;border-width:4px}
+  .hero-posty{width:240px;height:240px;margin-bottom:16px;border-width:4px}
   .hero-co{font-size:11px;padding:0 8px}
   
   .mock-row{margin-top:48px;gap:22px}
