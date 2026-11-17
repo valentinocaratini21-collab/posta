@@ -61,9 +61,53 @@ async function g(path, { method = 'GET', params = {}, ctx = null } = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.error) {
     const m = (data.error && (data.error.message || data.error.error_user_msg)) || `Meta ${res.status}`;
-    throw new Error(`Meta Ads: ${m}`.slice(0, 300));
+    const err = new Error(`Meta Ads: ${m}`.slice(0, 300));
+    // (LOTE ADS-CREACIÓN) El error NUNCA se aplana: el detalle entero
+    // de Meta viaja adjunto (código, subcódigo, mensajes de usuario,
+    // error_data y fbtrace_id) para que el registro del impulso lo
+    // guarde completo. Hasta este lote solo sobrevivía e.message
+    // («Invalid parameter») y un rechazo real era indiagnosticable:
+    // el paso y el subcódigo se perdían acá.
+    if (data.error) {
+      err.metaError = {
+        code: data.error.code != null ? data.error.code : null,
+        type: data.error.type || null,
+        subcode: data.error.error_subcode != null ? data.error.error_subcode : null,
+        message: String(m),
+        user_title: data.error.error_user_title || null,
+        user_msg: data.error.error_user_msg || null,
+        error_data: data.error.error_data || null,
+        fbtrace_id: data.error.fbtrace_id || null,
+        http_status: res.status,
+      };
+    }
+    throw err;
   }
   return data;
+}
+
+// (LOTE ADS-CREACIÓN) El detalle de un error de Meta como UNA línea
+// para el registro del impulso (la fila 'error' de ad_boosts): paso
+// donde falló la creación + código + subcódigo + mensaje completo +
+// fbtrace_id. Es texto para el EQUIPO, nunca para el cliente (la
+// respuesta al cliente sigue genérica). Sin metaError adjunto cae al
+// mensaje del error, como antes.
+function detalleErrorMeta(e) {
+  if (!e) return 'Meta no devolvió detalle del error';
+  const m = e.metaError || null;
+  const partes = [];
+  const paso = e.paso || (m && m.paso) || '';
+  if (paso) partes.push(`paso ${paso}`);
+  if (m) {
+    if (m.code != null) partes.push(`code ${m.code}`);
+    if (m.subcode != null) partes.push(`subcode ${m.subcode}`);
+    partes.push(String(m.message || e.message || ''));
+    if (m.user_msg && m.user_msg !== m.message) partes.push(`usuario: ${m.user_msg}`);
+    if (m.fbtrace_id) partes.push(`fbtrace ${m.fbtrace_id}`);
+  } else {
+    partes.push(String(e.message || e));
+  }
+  return partes.join(' · ').slice(0, 1200);
 }
 
 function act(ctx) {
@@ -171,10 +215,20 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   const elig = await checkEligibility(igMediaId, gctx);
   if (!elig.ok) throw new Error(elig.reason);
 
+  // (LOTE ADS-CREACIÓN) Cada paso etiqueta su error: el registro del
+  // impulso guarda en qué paso rechazó Meta (con el subcódigo que
+  // viaja en e.metaError), no un «Invalid parameter» huérfano.
+  const pasoBoost = async (paso, fn) => {
+    try { return await fn(); } catch (e) {
+      if (e && typeof e === 'object' && !e.paso) e.paso = paso;
+      throw e;
+    }
+  };
+
   // 1. Campaña (pausada hasta tener todo listo)
-  const camp = await g(`${A}/campaigns`, { method: 'POST', ctx: gctx, params: {
+  const camp = await pasoBoost('campaña', () => g(`${A}/campaigns`, { method: 'POST', ctx: gctx, params: {
     name, objective: objective || 'OUTCOME_ENGAGEMENT', status: 'PAUSED', special_ad_categories: [],
-  }});
+  }}));
 
   // 2. Conjunto de anuncios: presupuesto total en `days` días. Sin
   // targeting explícito: país del negocio, 18-65+ (como siempre).
@@ -192,7 +246,18 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
     start_time: start, end_time: end, status: 'PAUSED',
   };
   if (destinationType) adsetParams.destination_type = destinationType;
-  const adset = await g(`${A}/adsets`, { method: 'POST', ctx: gctx, params: adsetParams });
+  // (LOTE ADS-CREACIÓN) Con destino de mensajes (INSTAGRAM_DIRECT +
+  // CONVERSATIONS), la doc oficial de la Marketing API exige el
+  // promoted_object del conjunto: { page_id } de la Página vinculada
+  // a la cuenta de Instagram. Sin él Meta rechaza la creación del
+  // conjunto con code 100 «Invalid parameter» — era el fallo real del
+  // riel del cliente (objetivo «comprar» de la tarjeta, 17/11): el
+  // conjunto salía sin promoted_object. Sin Página no se fabrica:
+  // queda el rechazo de Meta, ahora registrado entero.
+  if (destinationType === 'INSTAGRAM_DIRECT' && pageId) {
+    adsetParams.promoted_object = { page_id: String(pageId) };
+  }
+  const adset = await pasoBoost('conjunto', () => g(`${A}/adsets`, { method: 'POST', ctx: gctx, params: adsetParams }));
 
   // 3. Creativo desde el posteo existente (doc: "Use Posts as Instagram Ads")
   const creativeParams = {
@@ -201,12 +266,12 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
     source_instagram_media_id: String(igMediaId),
   };
   if (pageId) creativeParams.object_id = pageId;
-  const creative = await g(`${A}/adcreatives`, { method: 'POST', ctx: gctx, params: creativeParams });
+  const creative = await pasoBoost('creativo', () => g(`${A}/adcreatives`, { method: 'POST', ctx: gctx, params: creativeParams }));
 
   // 4. Anuncio activo
-  const ad = await g(`${A}/ads`, { method: 'POST', ctx: gctx, params: {
+  const ad = await pasoBoost('anuncio', () => g(`${A}/ads`, { method: 'POST', ctx: gctx, params: {
     name, adset_id: adset.id, creative: { creative_id: creative.id }, status: 'ACTIVE',
-  }});
+  }}));
 
   // 5. Encender campaña y conjunto — y VERIFICAR que quedaron ACTIVE.
   // (LOTE ADS-HARDENING-ACTIVACION) Antes el encendido se tragaba el
@@ -231,6 +296,7 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
       `La activación del anuncio falló en Meta (campaña ${camp.id}: ${estados.campaign || 'sin dato'}, conjunto ${adset.id}: ${estados.adset || 'sin dato'}${activacionErr ? ' — ' + activacionErr : ''}). El anuncio quedó creado pero pausado; no se cobró nada.`
     );
     err.code = 'activacion_fallida';
+    err.paso = 'activación';
     err.campaignId = camp.id; err.adsetId = adset.id; err.adId = ad.id; err.creativeId = creative.id;
     err.campaignStatus = estados.campaign || null; err.adsetStatus = estados.adset || null;
     throw err;
@@ -494,15 +560,20 @@ async function checkAdsPermission() {
 
 // Nombre de interés → { id, name } real de Meta. Caché en memoria por
 // nombre (el catálogo de rubros es chico y los nombres se repiten).
+// (LOTE ADS-CREACIÓN) ctx opcional: en el riel del cliente la búsqueda
+// corre con SU SUAT (los ids de intereses son taxonomía global de
+// Meta, pero la llamada ya no depende de la configuración de Posty);
+// sin ctx, el comportamiento histórico con el token del entorno.
 const _interestCache = new Map();
-async function searchInterestId(name) {
+async function searchInterestId(name, ctx) {
   const q = String(name || '').trim();
-  if (!q || !adsConfigured()) return null;
+  if (!q) return null;
+  if (ctx ? !(ctx.token && ctx.adAccountId) : !adsConfigured()) return null;
   const key = q.toLowerCase();
   if (_interestCache.has(key)) return _interestCache.get(key);
   let out = null;
   try {
-    const d = await g('/search', { params: { type: 'adinterest', q, limit: '25' } });
+    const d = await g('/search', { params: { type: 'adinterest', q, limit: '25' }, ctx: ctx || null });
     const rows = Array.isArray(d && d.data) ? d.data : [];
     const exact = rows.find((r) => r && r.id && String(r.name || '').trim().toLowerCase() === key);
     const hit = exact || rows.find((r) => r && r.id);
@@ -515,14 +586,16 @@ async function searchInterestId(name) {
 // Texto de ciudad → { key, name, latitude, longitude } de Meta
 // (adgeolocation, solo ciudades). latitude/longitude vienen en la
 // respuesta cuando Meta los tiene; si no, el llamador usa la key.
-async function searchGeo(query, country) {
+// (LOTE ADS-CREACIÓN) ctx opcional, como en searchInterestId.
+async function searchGeo(query, country, ctx) {
   const q = String(query || '').trim();
-  if (!q || !adsConfigured()) return null;
+  if (!q) return null;
+  if (ctx ? !(ctx.token && ctx.adAccountId) : !adsConfigured()) return null;
   try {
     const d = await g('/search', { params: {
       type: 'adgeolocation', q, location_types: JSON.stringify(['city']),
       ...(country ? { country_code: String(country).toUpperCase() } : {}), limit: '5',
-    }});
+    }, ctx: ctx || null });
     const rows = Array.isArray(d && d.data) ? d.data : [];
     const hit = rows.find((r) => r && r.key) || null;
     if (!hit) return null;
@@ -540,14 +613,20 @@ async function searchGeo(query, country) {
 // Crear una lookalike exige una audiencia origen poblada: no se crea
 // en el momento del impulso — si no hay ninguna, devuelve null y el
 // impulso corre sin parecidos, declarado en su registro.
-async function findLookalikeAudienceId() {
-  if (!adsConfigured()) return null;
+// (LOTE ADS-CREACIÓN) ctx opcional: las audiencias son DE UNA CUENTA
+// — en el riel del cliente la búsqueda corre en la cuenta DEL CLIENTE
+// con su SUAT. Sin ctx buscaba en la cuenta de Posty y ese id ajeno
+// entraba al conjunto del cliente: Meta lo rechaza (la cuenta del
+// conjunto no tiene acceso a esa audiencia). Un id de otra cuenta
+// JAMÁS entra a un conjunto.
+async function findLookalikeAudienceId(ctx) {
+  if (ctx ? !(ctx.token && ctx.adAccountId) : !adsConfigured()) return null;
   try {
-    const d = await g(`${act()}/customaudiences`, { params: { fields: 'id,name,subtype', limit: '100' } });
+    const d = await g(`${act(ctx || null)}/customaudiences`, { params: { fields: 'id,name,subtype', limit: '100' }, ctx: ctx || null });
     const rows = Array.isArray(d && d.data) ? d.data : [];
     const hit = rows.find((r) => r && r.id && String(r.subtype || '').toUpperCase() === 'LOOKALIKE');
     return hit ? String(hit.id) : null;
   } catch (e) { return null; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, detalleErrorMeta };

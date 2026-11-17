@@ -214,7 +214,10 @@ async function cargarBilleteraARS(input) {
 // y hacia afuera el motivo sigue siendo 'anuncio_fallido' (SIN débito).
 // `debitar({ clienteId, montoUSD | montoARS, ref, campaignId })` devuelve
 // { ok, saldoNuevo }. `registrar` recibe { tipo: 'exito' |
-// 'debito_fallido' | 'activacion_fallida', ..., feeCents }.
+// 'debito_fallido' | 'activacion_fallida' | 'error', ..., feeCents }.
+// ('error' — LOTE ADS-CREACIÓN: la creación fue rechazada por Meta;
+// el ad nunca existió, no se debita nada y el detalle entero del
+// rechazo queda asentado para el equipo.)
 // (LOTE v888 · decisión Valentino 10/11 14:17) `cobrarDirecto` (solo USD):
 // cuando la billetera es ARS con saldo > 0, el saldo en pesos NO bloquea
 // el cobro en dólares — queda como crédito en pesos y el impulso se cobra
@@ -301,7 +304,11 @@ async function impulsarConSaldo(input) {
       zona: zona.trim(), objetivo: 'visitas_perfil_y_mensajes',
     });
   } catch (e) {
-    anuncio = { ok: false, error: String((e && e.message) || e).slice(0, 300) };
+    // (LOTE ADS-CREACIÓN) El texto del error alimenta SOLO el
+    // registro (registrar tipo 'error'): el detalle de Meta va
+    // entero (hasta 1200), nunca truncado a 300. Hacia el cliente
+    // sale únicamente el motivo genérico 'anuncio_fallido'.
+    anuncio = { ok: false, error: String((e && e.message) || e).slice(0, 1200) };
   }
   // El ad NO se creó (o se creó pero NO quedó activo): NO se debita nada.
   // (LOTE ADS-HARDENING-ACTIVACION) Si la activación falló, el ad SÍ
@@ -316,6 +323,19 @@ async function impulsarConSaldo(input) {
           anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
           adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
           error: anuncio.error || 'activación fallida',
+        });
+      } catch (e) { /* el registro nunca tapa el motivo real */ }
+    } else if (typeof registrar === 'function') {
+      // (LOTE ADS-CREACIÓN) Un rechazo de creación de Meta también
+      // queda asentado (tipo 'error', con el detalle entero): hasta
+      // este lote el impulso fallido del riel billetera no dejaba
+      // NINGUNA fila y el error real se perdía — la rama 'error' del
+      // registrar del servidor existía sin que nadie la alimentara.
+      try {
+        await registrar({
+          tipo: 'error', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+          anuncioId: null, campaignId: null, adsetId: null, adId: null, spendCents,
+          error: (anuncio && anuncio.error) || 'Meta rechazó la creación del anuncio',
         });
       } catch (e) { /* el registro nunca tapa el motivo real */ }
     }

@@ -378,9 +378,17 @@ function validarAudiencia(input, propuesta) {
 // (searchInterestId, searchGeo, findLookalikeAudienceId). Lo que no
 // resuelve se OMITE y queda registrado en `resuelto` — jamás se
 // inventa un id ni una coordenada.
+// (LOTE ADS-CREACIÓN) ctx opcional { token, adAccountId }: la
+// resolución corre EN LA CUENTA DE QUIEN PAUTA. En el riel del
+// cliente, el llamador pasa el SUAT y la cuenta del cliente: la
+// audiencia parecida (un activo DE una cuenta) se busca en SU cuenta
+// y lo que no existe ahí degrada declarado ('sin_audiencia_
+// disponible') — jamás entra el id de la audiencia de otra cuenta.
+// Sin ctx (riel billetera), la resolución corre en la cuenta de
+// Posty, como siempre.
 // Sin ciudad en el fundamento, el geo cae al país (el comportamiento
 // histórico) y queda declarado en resuelto.geo_modo = 'pais'.
-async function resolverTargeting(audiencia, propuesta, meta) {
+async function resolverTargeting(audiencia, propuesta, meta, ctx) {
   const a = audiencia || {};
   const geo = (propuesta && propuesta.geo) || {};
   const resuelto = { intereses: [], intereses_omitidos: [], geo_modo: 'pais', parecidos_estado: a.parecidos ? 'sin_audiencia_disponible' : 'apagado' };
@@ -396,7 +404,7 @@ async function resolverTargeting(audiencia, propuesta, meta) {
   for (const it of (a.intereses || [])) {
     if (!it || !it.activo) continue;
     let hit = null;
-    try { hit = meta && typeof meta.searchInterestId === 'function' ? await meta.searchInterestId(it.nombre) : null; } catch (e) { hit = null; }
+    try { hit = meta && typeof meta.searchInterestId === 'function' ? await meta.searchInterestId(it.nombre, ctx) : null; } catch (e) { hit = null; }
     if (hit && hit.id) { specs.push({ id: String(hit.id), name: String(hit.name || it.nombre) }); resuelto.intereses.push({ nombre: it.nombre, id: String(hit.id) }); }
     else resuelto.intereses_omitidos.push(it.nombre);
   }
@@ -421,7 +429,7 @@ async function resolverTargeting(audiencia, propuesta, meta) {
   const paisGeo = String(geo.pais || 'AR');
   const buscarGeo = async (q) => {
     if (!meta || typeof meta.searchGeo !== 'function') return null;
-    try { return await meta.searchGeo(q, paisGeo); } catch (e) { return null; }
+    try { return await meta.searchGeo(q, paisGeo, ctx); } catch (e) { return null; }
   };
   if (alcanceGeo === 'todos') {
     const hit = await buscarGeo('Worldwide');
@@ -477,7 +485,7 @@ async function resolverTargeting(audiencia, propuesta, meta) {
   // impulso lo declara (persistido en audiencia_json).
   if (a.parecidos && meta && typeof meta.findLookalikeAudienceId === 'function') {
     let lid = null;
-    try { lid = await meta.findLookalikeAudienceId(); } catch (e) { lid = null; }
+    try { lid = await meta.findLookalikeAudienceId(ctx); } catch (e) { lid = null; }
     if (lid) { targeting.custom_audiences = [{ id: String(lid) }]; resuelto.parecidos_estado = 'aplicado'; }
   }
   return { targeting, resuelto };

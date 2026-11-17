@@ -14878,7 +14878,12 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       // punto de fallo del gasto).
       let targetingAds = null;
       try {
-        const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds);
+        // (LOTE ADS-CREACIÓN) La resolución corre EN LA CUENTA DEL
+        // CLIENTE (su SUAT, su cuenta): la audiencia parecida es un
+        // activo de una cuenta y buscarla en la de Posty inyectaba un
+        // id ajeno en su conjunto — Meta lo rechaza. Lo que no
+        // resuelve en SU cuenta degrada declarado en el registro.
+        const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds, { token: gate.suat, adAccountId: gate.adAccountId });
         targetingAds = rt.targeting; resueltoAds = rt.resuelto;
       } catch (e) { targetingAds = null; resueltoAds = null; }
       let cr = null;
@@ -14899,12 +14904,16 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // bloquea el reintento: el gate de arriba solo mira
         // active/pending). (LOTE ADS-PÚBLICO) La fila guarda el
         // error REAL de Meta, no solo la línea genérica: sin eso el
-        // equipo no puede diagnosticar el fallo.
+        // equipo no puede diagnosticar el fallo. (LOTE ADS-CREACIÓN)
+        // El detalle va ENTERO (paso + code + subcode + mensaje +
+        // fbtrace, vía detalleErrorMeta): el slice de 300 dejaba
+        // solo «Invalid parameter» y el fallo real del 17/11 fue
+        // indiagnosticable. La respuesta al cliente no cambia.
         try {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error, objetivo, audiencia_json)
             VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?,?,?)`)
-            .run(uid, posteoId, cand.ig_media_id, pautaCents, `creación fallida en la cuenta del cliente (riel cliente): ${String((crError && crError.message) || crError || 'Meta no devolvió campaña').slice(0, 300)}`, objetivoFinal || '', audienciaJsonDe());
+            .run(uid, posteoId, cand.ig_media_id, pautaCents, `creación fallida en la cuenta del cliente (riel cliente): ${metaAds.detalleErrorMeta(crError)}`, objetivoFinal || '', audienciaJsonDe());
         } catch (e) {}
         return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
       }
@@ -14977,7 +14986,15 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           if (e && e.code === 'activacion_fallida') {
             return { ok: false, motivo: 'activacion_fallida', error: String((e && e.message) || e).slice(0, 300), anuncioId: e.campaignId || null, campaignId: e.campaignId || null, adsetId: e.adsetId || null, adId: e.adId || null };
           }
-          throw e;
+          // (LOTE ADS-CREACIÓN) Un rechazo de creación viaja con el
+          // detalle ENTERO de Meta (paso + subcódigo + mensaje +
+          // fbtrace): impulsarConSaldo lo asienta en la fila 'error'
+          // vía registrar. Hacia el cliente el motivo sigue siendo
+          // el genérico 'anuncio_fallido', sin gasto.
+          const det = new Error(metaAds.detalleErrorMeta(e));
+          det.metaError = (e && e.metaError) || null;
+          det.paso = (e && e.paso) || null;
+          throw det;
         }
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
       },
@@ -46026,7 +46043,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1155';
+const BUILD_ID = '20261105-v1156';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
