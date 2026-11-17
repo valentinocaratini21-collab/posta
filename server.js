@@ -38400,7 +38400,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   // simultáneos no pueden pasar de 5) y se REEMBOLSA si la generación falla.
   const rl = demo.consumeTrialAttempt(ip);
   if (!rl.ok) {
-    return res.status(429).json({ error: 'Llegaste al límite de 5 demos por día. Volvé mañana 🚀' });
+    return res.status(429).json({ error: `Llegaste al límite de ${demo.demoLimitPerDay()} demos por día. Volvé mañana 🚀` });
   }
 
   let photoPath = null;
@@ -38534,7 +38534,7 @@ app.post('/api/audit', express.json({ limit: '16kb' }), async (req, res) => {
     return res.json({ ok: true, audit: cached.audit, cached: true });
   }
   const rl = feedAudit.consumeAuditAttempt(ip);
-  if (!rl.ok) return res.status(429).json({ ok: false, error: en ? "You've hit the limit of 5 audits per day. Come back tomorrow 🔍" : 'Llegaste al límite de 5 auditorías por día. Volvé mañana 🔍' });
+  if (!rl.ok) return res.status(429).json({ ok: false, error: en ? `You've hit the limit of ${demo.demoLimitPerDay()} audits per day. Come back tomorrow 🔍` : `Llegaste al límite de ${demo.demoLimitPerDay()} auditorías por día. Volvé mañana 🔍` });
   let ok = false;
   try {
     const r = await feedAudit.auditFeed(db, ig, { lang });
@@ -40717,7 +40717,7 @@ async function trialGenerateHandler(req, res) {
     }
     const rl = demo.consumeTrialAttempt(ip);
     if (!rl.ok) {
-      return res.status(429).json({ error: 'Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀' });
+      return res.status(429).json({ error: `Llegaste al límite de ${demo.demoLimitPerDay()} pruebas por día. Volvé mañana 🚀` });
     }
     charged = true;
   }
@@ -42171,7 +42171,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     }
     const rl = demo.consumeTrialAttempt(ip);
     if (!rl.ok) {
-      return fail('Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀');
+      return fail(`Llegaste al límite de ${demo.demoLimitPerDay()} pruebas por día. Volvé mañana 🚀`);
     }
     charged = true;
   }
@@ -45725,7 +45725,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1147';
+const BUILD_ID = '20261105-v1148';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
