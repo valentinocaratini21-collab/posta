@@ -46,15 +46,17 @@ const STOCK_DIR = path.join(__dirname, 'public', 'demo-stock');
 const DEMO_LIMIT_PER_DAY = 5;
 // (LOTE TOPE-ABIERTO · orden de Valentino 16/11/2026, autorización del
 // tablero) Ventana pre-lanzamiento: el tope diario de generaciones gratis
-// por IP sube a 50 hasta el 2026-11-30 inclusive y vuelve SOLO a 5 desde
-// el 2026-12-01, el día del lanzamiento — por chequeo de fecha en el
-// código, sin un segundo aterrizaje. El borde se mide con el mismo
-// todayStr() que cuenta los intentos (día del servidor): la vuelta a 5
-// cae con el día UTC del 1/12. El resto de la mecánica no cambia: el
+// por IP sube a 50 hasta el 2027-01-31 inclusive y vuelve SOLO a 5 desde
+// el 2027-02-01 — por chequeo de fecha en el código, sin un segundo
+// aterrizaje. (LOTE TOPE-EXTENDE · 18/11/2026: la ventana original cerraba
+// el 30/11/2026; al moverse el lanzamiento al 2027-01-01, el dueño ordenó
+// mantener el tope en 50 hasta fin de enero.) El borde se mide con el
+// mismo todayStr() que cuenta los intentos (día del servidor): la vuelta
+// a 5 cae con el día UTC del 1/2. El resto de la mecánica no cambia: el
 // intento se reserva atómico, el build fallido se reembolsa y el freno
 // dispara antes de reservar.
 const DEMO_LIMIT_PRELAUNCH_PER_DAY = 50;
-const DEMO_LIMIT_PRELAUNCH_UNTIL = '2026-11-30';
+const DEMO_LIMIT_PRELAUNCH_UNTIL = '2027-01-31';
 function demoLimitPerDay(day) {
   const d = day || todayStr();
   return d <= DEMO_LIMIT_PRELAUNCH_UNTIL ? DEMO_LIMIT_PRELAUNCH_PER_DAY : DEMO_LIMIT_PER_DAY;

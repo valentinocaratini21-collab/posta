@@ -1,7 +1,9 @@
-// Suite LOTE TOPE-ABIERTO — el tope diario de generaciones gratis por IP
-// sube a 50 hasta el 2026-11-30 inclusive (día del servidor, el mismo
-// todayStr que cuenta los intentos) y vuelve solo a 5 desde el
-// 2026-12-01, día del lanzamiento, por chequeo de fecha en el código.
+// Suite LOTE TOPE-ABIERTO + TOPE-EXTENDE — el tope diario de generaciones
+// gratis por IP sube a 50 hasta el 2027-01-31 inclusive (día del servidor,
+// el mismo todayStr que cuenta los intentos) y vuelve solo a 5 desde el
+// 2027-02-01, por chequeo de fecha en el código. (La ventana original de
+// TOPE-ABIERTO cerraba el 30/11/2026; TOPE-EXTENDE la extendió al moverse
+// el lanzamiento al 2027-01-01.)
 // Uso: node test-lote-tope-abierto.js [raíz-del-árbol]
 // Sin argumento usa el directorio de este archivo. El control sobre el
 // árbol base (v1147) tiene que fallar exactamente en los puntos [FIX].
@@ -24,7 +26,7 @@ console.log('A · censo de fuente');
 check('A1 DEMO_LIMIT_PER_DAY sigue en 5', /const DEMO_LIMIT_PER_DAY = 5;/.test(demo));
 // [FIX] la ventana pre-lanzamiento existe.
 check('A2 [FIX] constante de ventana = 50', /const DEMO_LIMIT_PRELAUNCH_PER_DAY = 50;/.test(demo));
-check('A3 [FIX] borde de ventana = 2026-11-30', /const DEMO_LIMIT_PRELAUNCH_UNTIL = '2026-11-30';/.test(demo));
+check('A3 [FIX] borde de ventana = 2027-01-31', /const DEMO_LIMIT_PRELAUNCH_UNTIL = '2027-01-31';/.test(demo));
 check('A4 [FIX] demoLimitPerDay definida', /function demoLimitPerDay\(day\) \{/.test(demo));
 check('A5 [FIX] demoLimitPerDay exportada', /demoLimitPerDay,/.test(demo));
 // [FIX] los dos consumidores usan el tope efectivo del día.
@@ -54,14 +56,14 @@ if (mConst) {
   vm.runInContext(mConst[0] + '\nthis.__f = demoLimitPerDay;', caja);
   const f = caja.__f;
   check('B2 [FIX] 2026-11-16 (hoy, pre-lanzamiento) → 50', f('2026-11-16') === 50);
-  check('B3 [FIX] 2026-11-30 (último día de la ventana) → 50', f('2026-11-30') === 50);
-  check('B4 [FIX] 2026-12-01 (lanzamiento) → 5', f('2026-12-01') === 5);
-  check('B5 [FIX] 2026-12-25 → 5', f('2026-12-25') === 5);
+  check('B3 [FIX] 2027-01-31 (último día de la ventana) → 50', f('2027-01-31') === 50);
+  check('B4 [FIX] 2027-02-01 (vuelve el tope) → 5', f('2027-02-01') === 5);
+  check('B5 [FIX] 2026-12-01 (el borde viejo ya no corta) → 50', f('2026-12-01') === 50);
   check('B6 [FIX] 2027-06-01 → 5 (nunca vuelve a abrir)', f('2027-06-01') === 5);
   caja.__hoy = '2026-11-20';
   check('B7 [FIX] sin argumento usa todayStr (2026-11-20) → 50', f() === 50);
-  caja.__hoy = '2026-12-01';
-  check('B8 [FIX] sin argumento usa todayStr (2026-12-01) → 5', f() === 5);
+  caja.__hoy = '2027-02-01';
+  check('B8 [FIX] sin argumento usa todayStr (2027-02-01) → 5', f() === 5);
 }
 
 console.log('\nResultado: ' + ok + ' ok · ' + mal + ' mal');
