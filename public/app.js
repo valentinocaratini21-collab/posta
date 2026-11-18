@@ -3914,6 +3914,69 @@ function lpCarrInit() {
   var b = document.getElementById('mkVidPro');
   if (a && b) { var sync = function () { if (Math.abs(a.currentTime - b.currentTime) > 0.25) { b.currentTime = a.currentTime; } }; a.addEventListener('timeupdate', sync); b.addEventListener('play', function () { sync(); }); }
 }
+function lpDisenoInit() {
+  var de = document.documentElement;
+  de.classList.add('wd-on');
+  var RM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function q(s, c) { return (c || document).querySelector(s); }
+  function qa(s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); }
+  function fmt(tpl, n) { return tpl ? tpl.replace('{n}', n) : String(n); }
+  function weekUpdate() {
+    var sec = q('.wd-scrolly'); if (!sec) return;
+    var cells = qa('.wd-cell', sec); if (!cells.length) return;
+    var n;
+    if (RM) { n = cells.length; }
+    else {
+      var total = sec.offsetHeight - window.innerHeight;
+      var r = sec.getBoundingClientRect();
+      var p = total > 0 ? Math.min(1, Math.max(0, -r.top / total)) : 1;
+      n = Math.min(cells.length, Math.floor(p * 7.6));
+    }
+    cells.forEach(function (c, i) { c.classList.toggle('on', i < n); });
+    var fill = q('.wd-bar i', sec); if (fill) fill.style.width = (n / cells.length * 100) + '%';
+    var cnt = q('.wd-count', sec);
+    if (cnt) cnt.innerHTML = fmt(sec.getAttribute('data-count'), n) + (n === cells.length ? (sec.getAttribute('data-done') || '') : '');
+    var hint = q('.wd-hint', sec); if (hint) hint.style.opacity = (n > 0 || RM) ? '0' : '1';
+  }
+  function calUpdate() {
+    var cal = q('.wd-cal'); if (!cal) return;
+    var days = qa('.wd-cal-d', cal); if (!days.length) return;
+    var n;
+    if (RM) { n = days.length; }
+    else {
+      var r = cal.getBoundingClientRect();
+      var vh = window.innerHeight || 800;
+      var p = Math.min(1, Math.max(0, (vh * 0.92 - r.top) / (vh * 0.85)));
+      n = Math.min(days.length, Math.floor(p * (days.length + 0.99)));
+    }
+    days.forEach(function (d, i) { d.classList.toggle('on', i < n); });
+    var cnt = q('.wd-cal-count', cal);
+    if (cnt) cnt.innerHTML = fmt(cal.getAttribute('data-count'), n) + (n === days.length ? (cal.getAttribute('data-done') || '') : '');
+  }
+  function upd() { weekUpdate(); calUpdate(); }
+  if (!window.__wdScroll) {
+    window.__wdScroll = 1;
+    var tick = false;
+    window.addEventListener('scroll', function () { if (!tick) { tick = true; requestAnimationFrame(function () { tick = false; if (window.__wdUpd) window.__wdUpd(); }); } }, { passive: true });
+    window.addEventListener('resize', function () { if (window.__wdUpd) window.__wdUpd(); });
+  }
+  window.__wdUpd = upd;
+  var targets = qa('#atiende .wd-chat, #crecimiento, #voz, #ads, #subir, .lp-final, #progreso, #equipo, #faq');
+  function arm(el) { el.classList.add('wd-live'); }
+  if (RM || !('IntersectionObserver' in window)) { targets.forEach(arm); }
+  else {
+    if (window.__wdIO) window.__wdIO.disconnect();
+    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { arm(en.target); io.unobserve(en.target); } }); }, { threshold: 0.22, rootMargin: '0px 0px -6% 0px' });
+    window.__wdIO = io;
+    targets.forEach(function (t) { io.observe(t); });
+  }
+  var priceN = q('#wdPriceN'), prow = q('#plansRow');
+  function syncPrice() { if (!priceN || !prow) return; var p = prow.querySelector('.price'); if (p && p.innerHTML) priceN.innerHTML = p.innerHTML; }
+  syncPrice();
+  if (prow && window.MutationObserver && !prow.getAttribute('data-wd-obs')) { prow.setAttribute('data-wd-obs', '1'); new MutationObserver(syncPrice).observe(prow, { childList: true, subtree: true }); }
+  upd();
+}
+
 function lpInitHero() {
   lpCarrInit();
   pzPlansSocialMount();
@@ -3984,6 +4047,7 @@ function lpInitHero() {
     ['pointerup', 'pointercancel'].forEach((ev) => drag.addEventListener(ev, () => { on = false; }));
     if (range) range.addEventListener('input', () => { drag.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
   }
+  try { lpDisenoInit(); } catch (e) {}
 }
 
 /* ---------- v176: carrusel de perfiles soñados (29 rubros desde v316: + boliche) ---------- */
@@ -4867,6 +4931,7 @@ function lpAdsHTML() {
           <div class="cap-aud">🎯 <b>Tu público:</b> mujeres de 25 a 44 años en Williamsburg y barrios cercanos (8 km), que compran postres para regalar y siguen la pastelería japonesa.<span class="cap-aud-sub">Lo estudiamos de tu negocio: tu producto, tu zona y quién te compra. Nada de públicos genéricos.</span></div>
           <div class="cap-amts"><span class="cap-amt on">$20</span><span class="cap-amt">$50</span><span class="cap-amt">$100</span><span class="cap-amts-note">· 7 días</span></div>
           <div class="cap-fee">$20 de pauta + $2 de gestión (10%) — la gestión se cobra solo si el anuncio sale.</div>
+          <div class="wd-total"><span>Total<small>US$20 de pauta + US$2 de gestión</small></span><b>US$22</b></div>
           <div class="cap-sendrow"><span class="cap-send">Impulsar ✓</span><span class="cap-alt">Ahora no</span></div>
         </div></div>
         <p class="cap-note">La pauta va por tu cuenta de Meta, aparte de la suscripción, y la gestión se cobra al impulsar con tu tarjeta guardada: + 10% de gestión de Posty, solo sobre lo que el anuncio gasta. Nada se gasta sin tu OK.</p>
@@ -4890,16 +4955,8 @@ function lpIdeasHTML() {
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
     <div class="cap-side">
-      <div class="cap-sample cap-idea-wrap">
-        <div class="idea-card">
-          <div class="idea-top"><span class="idea-fmt">📸 Posteo</span></div>
-          <div class="idea-title">El paso a paso de tu producto estrella</div>
-          <div class="idea-why">Tu competencia lo publicó el martes y le rindió el doble que su promedio. Tu versión sale con tu producto, tus fotos y tus colores.</div>
-          <div class="idea-actions">
-            <span class="btn btn-primary btn-sm">💪 Hacelo</span>
-            <span class="btn btn-ghost btn-sm">Ahora no</span>
-          </div>
-        </div>
+      <div class="cap-sample">
+        <div class="wd-cal" data-count="{n} de 30 días con posteo" data-done=" — <b>el mes completo, sin faltar un día</b>"><div class="wd-cal-head"><b>Un mes con Posty</b><span>1 posteo por día</span></div><div class="wd-cal-dow"><i>L</i><i>M</i><i>M</i><i>J</i><i>V</i><i>S</i><i>D</i></div><div class="wd-cal-grid"><span class="wd-cal-d"><b>1</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>2</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>3</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>4</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>5</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>6</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>7</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>8</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>9</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>10</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>11</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>12</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>13</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>14</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>15</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>16</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>17</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>18</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>19</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>20</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>21</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>22</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>23</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>24</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>25</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>26</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>27</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>28</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>29</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>30</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></div><div class="wd-cal-count">0 de 30 días con posteo</div></div>
       </div>
       <p class="cap-note">Así te llegan las ideas cada semana, listas para aprobar.</p>
     </div>
@@ -4925,6 +4982,7 @@ function lpCrecimientoHTML() {
           <div class="strat-row"><span class="strat-ic">🍜</span><div><b>Tipos de posteos</b><p>La estrella terminada · el proceso en cocina (dumplings en aceite de chile) · el momento de mesa (pato ahumado en té, para compartir).</p></div></div>
           <div class="strat-row"><span class="strat-ic">📅</span><div><b>Ritmo</b><p>1 posteo por día · 2 carruseles por semana con el proceso, paso a paso.</p></div></div>
           <div class="strat-row"><span class="strat-ic">🎯</span><div><b>Su público de Ads</b><p>A 6 km de Grand St: gente que sale a comer en Williamsburg y Greenpoint y busca cocina sichuanesa, de 25 a 44 años.</p></div></div>
+          <div class="strat-row"><span class="strat-ic">🎨</span><div><b>Su paleta</b><p><span class="wd-pal"><i style="background:#C8372D"></i><i style="background:#D9A441"></i><i style="background:#3E7A4E"></i><i style="background:#F3E9D2"></i><i style="background:#2B2118"></i></span> Los colores de su cocina y su local, en cada pieza.</p></div></div>
         </div>
       </div>
       <p class="cap-note">Cada negocio tiene la suya: sale de su estudio, no de una plantilla.</p>
@@ -4937,6 +4995,7 @@ function lpAtiendeHTML() {
     <h2>Atiende tu Instagram.</h2>
     <p class="lede">Posty no solo publica: también atiende.</p>
     <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">Responde los comentarios de tus posteos y los mensajes que te llegan, con tu voz y tu estilo. Y lo que necesita tu criterio te lo avisa, para que lo veas vos: tu cuenta nunca queda sola.</p>
+    <div class="wd-chat"><div class="wd-msg in"><span class="wd-who">Comentario en tu posteo</span>¿La Berry Mille Crepe viene en tamaño grande? Es para un cumpleaños 🎂</div><div class="wd-msg out"><span class="wd-who">Posty responde</span>¡Hola! Sí — viene en tamaño grande, para 12 personas. ¿Querés que te reservemos una para el sábado?</div><div class="wd-msg in"><span class="wd-who">Mensaje directo</span>¿Mañana abren? ¿Desde qué hora?</div><div class="wd-msg out"><span class="wd-who">Posty responde</span>¡Hola! Mañana abrimos de 9 a 19 h. ¡Te esperamos!</div><div class="wd-flag"><span>Lo que necesita tu criterio te lo avisamos a vos →</span></div></div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>`;
 }
@@ -4946,6 +5005,7 @@ function lpProgresoHTML() {
     <h2>Ves el progreso.</h2>
     <p class="lede">Tu Instagram avanza — y se ve.</p>
     <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">En la app ves el posteo de hoy, tu semana completa y tu jardín, que crece día a día con tu constancia. El progreso no se promete: se muestra.</p>
+    <div class="wd-garden"><svg viewBox="0 0 150 168" aria-hidden="true"><path class="wd-g-stem" d="M75,126 C75,100 70,84 75,46"/><path class="wd-g-leaf l" d="M62,100 C44,100 34,88 34,74 C50,76 62,84 62,100 Z"/><path class="wd-g-leaf r" d="M88,82 C106,82 116,70 116,56 C100,58 88,66 88,82 Z"/><g class="wd-g-flower"><circle cx="75" cy="24" r="9" fill="#FEC14D"/><circle cx="86" cy="32" r="9" fill="#FEC14D"/><circle cx="82" cy="45" r="9" fill="#FEC14D"/><circle cx="68" cy="45" r="9" fill="#FEC14D"/><circle cx="64" cy="32" r="9" fill="#FEC14D"/><circle cx="75" cy="35" r="6.5" fill="#DFA856"/></g><path d="M45,132 L105,132 L98,164 L52,164 Z" fill="#C96F4A"/><rect x="40" y="123" width="70" height="11" rx="4" fill="#B85F3C"/></svg><div class="wd-g-dots"><i></i><i></i><i></i><i></i></div><div class="wd-g-cap">Tu jardín crece con tu constancia</div></div>
   </div></div>`;
 }
 function lpSubirHTML() {
@@ -5026,6 +5086,193 @@ function landingView(cfg) {
   LP_CALC_CFG = lpCur === 'UYU' ? { sym: '$U ', min: 100, max: 2500, step: 50 } : lpCur === 'ARS' ? { sym: '$', min: 1000, max: 30000, step: 250 } : { sym: lpSym, min: 5, max: 200, step: 5 };
   return `
   ${pzRefBandHTML()}
+  <style>
+/* ===== WEB-DISEÑO: cada sección muestra cómo funciona ===== */
+.wd-scrolly{height:300vh;position:relative}
+.wd-sticky{position:sticky;top:0;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:26px 0}
+.wd-wk-label{text-align:center;font-weight:800;letter-spacing:2.5px;font-size:13px;color:#2793C8;text-transform:uppercase}
+.wd-wk-title{text-align:center;font-size:clamp(22px,3.4vw,34px);font-weight:900;margin:8px 0 26px;color:#0A1E33}
+.wd-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+.wd-cell{text-align:center;min-width:0}
+.wd-dname{font-weight:800;font-size:13px;letter-spacing:1px;color:#9AA7B4;transition:color .3s}
+.wd-ph{position:relative;margin:8px 0 6px}
+.wd-ph img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:14px;display:block;filter:grayscale(1);opacity:.38;transition:filter .45s,opacity .45s,transform .45s;box-shadow:0 6px 18px rgba(10,30,51,.10)}
+.wd-hora{font-size:12px;color:#9AA7B4;font-weight:600;transition:color .3s}
+.wd-chk{position:absolute;top:-9px;right:-7px;width:30px;height:30px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;transform:scale(0);box-shadow:0 4px 10px rgba(31,168,85,.45);border:2.5px solid #fff;z-index:2}
+.wd-chk svg{width:16px;height:16px}
+.wd-cell.on .wd-ph img{filter:none;opacity:1;transform:translateY(-3px)}
+.wd-cell.on .wd-dname{color:#0A1E33}
+.wd-cell.on .wd-hora{color:#1FA855;font-weight:800}
+.wd-cell.on .wd-chk{animation:wd-pop .38s cubic-bezier(.2,2.2,.4,1) forwards}
+@keyframes wd-pop{to{transform:scale(1)}}
+.wd-bar{height:10px;background:#E9E2D2;border-radius:99px;margin:28px auto 10px;max-width:640px;overflow:hidden}
+.wd-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2793C8,#1FA855);border-radius:99px;transition:width .3s}
+.wd-count{text-align:center;font-weight:800;font-size:16px;color:#0A1E33}
+.wd-count b{color:#1FA855}
+.wd-hint{text-align:center;color:#9AA7B4;font-size:13px;margin-top:8px;animation:wd-bob 1.6s ease-in-out infinite;transition:opacity .3s}
+@keyframes wd-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
+.wd-morning{position:relative;overflow:hidden;border-radius:26px;margin-top:42px;padding:34px 26px 30px;background:linear-gradient(180deg,#FFFDF6,#FBF7EF);text-align:left}
+.wd-blob{position:absolute;width:480px;height:480px;border-radius:50%;background:#FEC14D;opacity:.30;right:-150px;top:-90px;z-index:0}
+.wd-morning-in{position:relative;z-index:1}
+.wd-scene-title{font-size:clamp(24px,3.6vw,36px);font-weight:900;letter-spacing:-.6px;line-height:1.15;color:#0A1E33;max-width:620px}
+.wd-scene-sub{margin-top:10px;font-size:16.5px;color:#33475B;max-width:540px;line-height:1.5}
+.wd-stage{display:flex;gap:30px;align-items:center;margin-top:32px;flex-wrap:wrap}
+.wd-phone{width:290px;flex:0 0 auto;background:#fff;border-radius:36px;border:3px solid #0A1E33;box-shadow:0 26px 54px rgba(10,30,51,.20);padding:15px 13px 18px;transform:rotate(-3.5deg)}
+.wd-notch{width:84px;height:6px;border-radius:99px;background:#D8DEE6;margin:0 auto 11px}
+.wd-hi{font-size:12.5px;color:#7C8DA0;font-weight:600}
+.wd-hoy{font-weight:900;font-size:18px;margin:2px 0 9px;color:#0A1E33}
+.wd-card{border:1.5px solid #E7EDF3;border-radius:17px;overflow:hidden}
+.wd-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
+.wd-cap{padding:9px 11px;font-size:12.5px;color:#33475B;line-height:1.45}
+.wd-cap b{color:#0A1E33}
+.wd-sale{display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:12.5px;font-weight:700;color:#0A1E33}
+.wd-tag{background:#EAF7EF;color:#1FA855;padding:4px 9px;border-radius:99px;font-size:11.5px}
+.wd-row{display:flex;gap:8px;margin-top:11px}
+.wd-btn{flex:1;text-align:center;padding:10px 0;border-radius:11px;font-weight:800;font-size:13.5px}
+.wd-btn.go{background:#2793C8;color:#fff}
+.wd-btn.stop{background:#EEF3F7;color:#0A1E33}
+.wd-floats{flex:1;min-width:250px;position:relative;min-height:290px}
+.wd-notif{position:absolute;left:0;top:4px;background:#fff;border-radius:16px;box-shadow:0 16px 34px rgba(10,30,51,.16);padding:12px 15px;display:flex;gap:11px;align-items:flex-start;max-width:340px;animation:wd-floaty 4.5s ease-in-out infinite}
+.wd-av{width:37px;height:37px;border-radius:11px;background:#2793C8;color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto}
+.wd-notif .wd-t{font-size:13px;line-height:1.4;color:#33475B}
+.wd-notif .wd-t b{display:block;font-size:12.5px;color:#0A1E33}
+.wd-badge{position:absolute;left:34px;top:122px;background:#1FA855;color:#fff;font-weight:800;font-size:13.5px;padding:9px 17px;border-radius:99px;box-shadow:0 12px 26px rgba(31,168,85,.40);display:flex;gap:8px;align-items:center;animation:wd-floaty 5.2s .6s ease-in-out infinite}
+.wd-badge svg{width:15px;height:15px}
+.wd-voice{position:absolute;left:4px;top:204px;background:#fff;border-radius:99px;box-shadow:0 14px 30px rgba(10,30,51,.14);padding:9px 17px 9px 11px;display:flex;gap:9px;align-items:center;font-size:13px;font-weight:700;color:#0A1E33;animation:wd-floaty 4.8s 1.1s ease-in-out infinite}
+.wd-mic{width:29px;height:29px;border-radius:50%;background:#FEC14D;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.wd-mic svg{width:14px;height:14px}
+@keyframes wd-floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+#como-funciona .steps .step{transition:transform .35s ease}
+#como-funciona .steps .step:nth-child(1){transform:rotate(-1.3deg)}
+#como-funciona .steps .step:nth-child(2){transform:rotate(.9deg)}
+#como-funciona .steps .step:nth-child(3){transform:rotate(-.7deg)}
+#como-funciona .steps .step:hover{transform:rotate(0deg) translateY(-3px)}
+.wd-on .wd-reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease}
+.wd-on .wd-reveal.wd-live{opacity:1;transform:none}
+.wd-cal{padding:18px 18px 14px;text-align:left}
+.wd-cal-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.wd-cal-head b{font-size:16px;color:#0A1E33}
+.wd-cal-head span{font-size:12px;font-weight:700;color:#7C8DA0}
+.wd-cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.wd-cal-dow i{font-style:normal;text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.6px;color:#9AA7B4}
+.wd-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.wd-cal-d{aspect-ratio:1;border-radius:9px;background:#F3F0E6;display:flex;padding:4px 5px;position:relative;transition:background .3s}
+.wd-cal-d b{font-size:11px;color:#A6AFBA;transition:color .3s}
+.wd-cal-chk{position:absolute;right:3px;bottom:3px;width:14px;height:14px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;transform:scale(0)}
+.wd-cal-chk svg{width:9px;height:9px}
+.wd-cal-d.on{background:#EAF7EF}
+.wd-cal-d.on b{color:#0A1E33}
+.wd-cal-d.on .wd-cal-chk{animation:wd-pop .3s cubic-bezier(.2,2.2,.4,1) forwards}
+.wd-cal-count{margin-top:12px;font-weight:800;font-size:13.5px;color:#0A1E33;text-align:center}
+.wd-cal-count b{color:#1FA855}
+.wd-chat{background:#fff;border-radius:22px;box-shadow:0 16px 38px rgba(10,30,51,.12);padding:20px;max-width:560px;margin:30px auto 0;text-align:left}
+.wd-msg{max-width:84%;padding:10px 14px;border-radius:16px;margin:0 0 10px;font-size:14.5px;line-height:1.45;color:#0A1E33;width:fit-content}
+.wd-who{display:block;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#7C8DA0;margin-bottom:3px}
+.wd-msg.in{background:#F1EFE7;border-bottom-left-radius:6px;margin-right:auto}
+.wd-msg.out{background:#E8F3FA;border-bottom-right-radius:6px;margin-left:auto}
+.wd-msg.out .wd-who{color:#2793C8}
+.wd-flag{display:flex;justify-content:center;margin-top:4px}
+.wd-flag span{background:#FEC14D;color:#0A1E33;font-weight:800;font-size:12.5px;padding:7px 14px;border-radius:99px;text-align:center}
+.wd-on .wd-chat .wd-msg,.wd-on .wd-chat .wd-flag{opacity:0;transform:translateY(10px);transition:opacity .45s ease,transform .45s ease}
+.wd-on .wd-chat.wd-live .wd-msg,.wd-on .wd-chat.wd-live .wd-flag{opacity:1;transform:none}
+.wd-on .wd-chat.wd-live .wd-msg:nth-child(2){transition-delay:.45s}
+.wd-on .wd-chat.wd-live .wd-msg:nth-child(3){transition-delay:.9s}
+.wd-on .wd-chat.wd-live .wd-msg:nth-child(4){transition-delay:1.35s}
+.wd-on .wd-chat.wd-live .wd-flag{transition-delay:1.8s}
+.wd-pal{display:inline-flex;gap:6px;vertical-align:middle;margin-right:8px}
+.wd-pal i{width:19px;height:19px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 1px 4px rgba(10,30,51,.25)}
+.wd-on #crecimiento .strat-row{opacity:0;transform:translateX(18px);transition:opacity .5s ease,transform .5s ease}
+.wd-on #crecimiento.wd-live .strat-row{opacity:1;transform:none}
+.wd-on #crecimiento.wd-live .strat-row:nth-of-type(2){transition-delay:.10s}
+.wd-on #crecimiento.wd-live .strat-row:nth-of-type(3){transition-delay:.28s}
+.wd-on #crecimiento.wd-live .strat-row:nth-of-type(4){transition-delay:.46s}
+.wd-on #crecimiento.wd-live .strat-row:nth-of-type(5){transition-delay:.64s}
+.wd-on #crecimiento.wd-live .strat-row:nth-of-type(6){transition-delay:.82s}
+#voz .mk-wave i{transform-origin:center}
+.wd-on #voz .mk-ba figure:nth-of-type(2) img{filter:saturate(.35);opacity:.55;transition:filter .7s ease .55s,opacity .7s ease .55s}
+.wd-on #voz.wd-live .mk-ba figure:nth-of-type(2) img{filter:none;opacity:1}
+.wd-on #voz .mk-ok-chip{opacity:0;transform:translateY(6px);transition:opacity .5s ease 1s,transform .5s ease 1s}
+.wd-on #voz.wd-live .mk-ok-chip{opacity:1;transform:none}
+#voz.wd-live .mk-wave i{animation:wd-wave .9s ease-in-out infinite alternate}
+#voz.wd-live .mk-wave i:nth-child(3n){animation-delay:.18s}
+#voz.wd-live .mk-wave i:nth-child(4n){animation-delay:.36s}
+#voz.wd-live .mk-wave i:nth-child(5n){animation-delay:.54s}
+@keyframes wd-wave{from{transform:scaleY(.5)}to{transform:scaleY(1.18)}}
+.wd-on #ads .cap-grow>*{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
+.wd-on #ads.wd-live .cap-grow>*{opacity:1;transform:none}
+.wd-on #ads.wd-live .cap-grow>*:nth-child(2){transition-delay:.12s}
+.wd-on #ads.wd-live .cap-grow>*:nth-child(3){transition-delay:.24s}
+.wd-on #ads.wd-live .cap-grow>*:nth-child(4){transition-delay:.36s}
+.wd-on #ads.wd-live .cap-grow>*:nth-child(5){transition-delay:.48s}
+.wd-on #ads.wd-live .cap-grow>*:nth-child(6){transition-delay:.60s}
+.wd-on #ads.wd-live .cap-grow>*:nth-child(7){transition-delay:.72s}
+.wd-total{display:flex;justify-content:space-between;align-items:center;background:#0A1E33;color:#fff;border-radius:12px;padding:11px 15px;font-weight:800;font-size:14.5px;text-align:left}
+.wd-total b{color:#FEC14D;font-size:16px}
+.wd-total small{display:block;font-weight:600;color:#BFD2E2;font-size:11.5px}
+#ads .cap-send{display:inline-block}
+#ads.wd-live .cap-send{animation:wd-pulse 1.1s ease 1s 2}
+@keyframes wd-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+.wd-on #subir .mk-duo-pan:nth-child(2){clip-path:inset(0 100% 0 0);transition:clip-path 1.1s ease .25s}
+.wd-on #subir.wd-live .mk-duo-pan:nth-child(2){clip-path:inset(0 0 0 0)}
+.wd-on #subir .mk-checks li{opacity:0;transform:translateX(-8px);transition:opacity .45s ease,transform .45s ease}
+.wd-on #subir.wd-live .mk-checks li{opacity:1;transform:none}
+.wd-on #subir.wd-live .mk-checks li:nth-child(1){transition-delay:.35s}
+.wd-on #subir.wd-live .mk-checks li:nth-child(2){transition-delay:.6s}
+.wd-on #subir.wd-live .mk-checks li:nth-child(3){transition-delay:.85s}
+.wd-on #subir .mk-pub{opacity:0;transform:translateY(14px);transition:opacity .55s ease 1s,transform .55s ease 1s}
+.wd-on #subir.wd-live .mk-pub{opacity:1;transform:none}
+.wd-price{text-align:center;margin:4px 0 12px}
+.wd-price-n{font-size:clamp(56px,9vw,92px);font-weight:900;letter-spacing:-2px;color:#0A1E33;line-height:1}
+.wd-price-n small{font-size:.34em;font-weight:800;color:#7C8DA0;letter-spacing:0;margin-left:4px}
+.wd-price p{font-weight:700;color:#47617A;margin-top:8px;font-size:15px}
+.wd-trial{display:flex;gap:12px;justify-content:center;margin:28px auto 4px;max-width:540px;text-align:left}
+.wd-tday{flex:1;background:#fff;border-radius:16px;padding:10px;box-shadow:0 10px 24px rgba(10,30,51,.12);min-width:0}
+.wd-tday img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
+.wd-td-n{font-weight:900;font-size:13px;margin-top:9px;display:flex;justify-content:space-between;align-items:center;color:#0A1E33}
+.wd-td-c{font-size:12px;color:#47617A;margin-top:2px;line-height:1.4}
+.wd-tchk{width:20px;height:20px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.wd-on .wd-tchk{transform:scale(0)}
+.wd-tchk svg{width:11px;height:11px}
+.wd-on .wd-tday{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+.wd-on .lp-final.wd-live .wd-tday{opacity:1;transform:none}
+.wd-on .lp-final.wd-live .wd-tday:nth-child(2){transition-delay:.3s}
+.wd-on .lp-final.wd-live .wd-tday:nth-child(3){transition-delay:.6s}
+.wd-on .lp-final.wd-live .wd-tday:nth-child(1) .wd-tchk{animation:wd-pop .35s cubic-bezier(.2,2.2,.4,1) .4s forwards}
+.wd-on .lp-final.wd-live .wd-tday:nth-child(2) .wd-tchk{animation:wd-pop .35s cubic-bezier(.2,2.2,.4,1) .7s forwards}
+.wd-on .lp-final.wd-live .wd-tday:nth-child(3) .wd-tchk{animation:wd-pop .35s cubic-bezier(.2,2.2,.4,1) 1s forwards}
+.wd-garden{display:flex;flex-direction:column;align-items:center;margin:12px auto 0}
+.wd-garden svg{width:150px;height:168px;overflow:visible}
+.wd-g-stem{stroke:#1FA855;stroke-width:5;fill:none;stroke-linecap:round;stroke-dasharray:130;transition:stroke-dashoffset 1s ease .25s}
+.wd-on .wd-g-stem{stroke-dashoffset:130}
+.wd-on #progreso.wd-live .wd-g-stem{stroke-dashoffset:0}
+.wd-g-leaf{fill:#1FA855;transition:transform .5s cubic-bezier(.2,2,.4,1)}
+.wd-g-leaf.l{transform-origin:62px 100px;transition-delay:.8s}
+.wd-g-leaf.r{transform-origin:88px 82px;transition-delay:1.05s}
+.wd-on .wd-g-leaf{transform:scale(0)}
+.wd-on #progreso.wd-live .wd-g-leaf{transform:scale(1)}
+.wd-g-flower{transition:transform .55s cubic-bezier(.2,2.2,.4,1) 1.3s;transform-origin:75px 35px}
+.wd-on .wd-g-flower{transform:scale(0)}
+.wd-on #progreso.wd-live .wd-g-flower{transform:scale(1)}
+.wd-g-dots{display:flex;gap:8px;margin-top:12px}
+.wd-g-dots i{width:9px;height:9px;border-radius:50%;background:#1FA855;transition:background .4s}
+.wd-on .wd-g-dots i{background:#E3DCC8}
+.wd-on #progreso.wd-live .wd-g-dots i{background:#1FA855}
+.wd-on #progreso.wd-live .wd-g-dots i:nth-child(1){transition-delay:.3s}
+.wd-on #progreso.wd-live .wd-g-dots i:nth-child(2){transition-delay:.85s}
+.wd-on #progreso.wd-live .wd-g-dots i:nth-child(3){transition-delay:1.1s}
+.wd-on #progreso.wd-live .wd-g-dots i:nth-child(4){transition-delay:1.4s}
+.wd-g-cap{font-size:12.5px;font-weight:700;color:#7C8DA0;margin-top:8px}
+@media(max-width:760px){
+.wd-strip{gap:6px}
+.wd-dname{font-size:10px}
+.wd-chk{width:24px;height:24px;top:-7px;right:-5px}
+.wd-stage{justify-content:center}
+.wd-morning{padding:26px 16px 24px}
+.wd-chat{padding:16px}
+.wd-trial{flex-direction:column;max-width:320px}
+.wd-tday img{aspect-ratio:16/10}
+}
+</style>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="wb-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h16"/><path d="M14 5l7 7-7 7"/><path d="M9 9.5v5"/></symbol><symbol id="wb-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H6"/><path d="M10 5l-7 7 7 7"/><path d="M15 9.5v5"/></symbol><symbol id="wb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v16"/><path d="M5 14l7 7 7-7"/><path d="M9.5 9h5"/></symbol><symbol id="wb-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-7 8 7 8"/><circle cx="8" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l7 8-7 8"/><circle cx="16" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8 7 8-7"/><circle cx="12" cy="16" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="wb-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3" fill="#DFA856" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-2.6 2.7-2.6 15.3 0 18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18"/></symbol><symbol id="wb-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h2.5L9 6h6l2.5 2.5H20a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.8" cy="9.8" r="1.1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="5.5" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.4 10.6l7.2-3.7M8.4 13.4l7.2 3.7"/></symbol><symbol id="wb-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v9H9l-5 4v-4H4Z"/><circle cx="12" cy="10.5" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-clapper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v10H4Z"/><path d="M4 10l1.8-4h16L20 10"/><path d="M9 6l2 4M14 6l2 4"/></symbol><symbol id="wb-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-3.6 10.8c.9.8 1.6 1.5 1.6 2.7h4c0-1.2.7-1.9 1.6-2.7A6 6 0 0 0 12 3Z"/><path d="M10 18.5h4M10.5 21h3"/><circle cx="12" cy="10" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.2L16.5 4.5a2.1 2.1 0 0 1 3 3L8.7 18.3Z"/><path d="M14.5 6.5l3 3"/></symbol><symbol id="wb-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3.5 8l8.5 6 8.5-6"/></symbol><symbol id="wb-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z" fill="#DFA856" stroke="none"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6.5 6.5 0 0 1-6.5-6.5c0-3.2 2.2-5.2 3.4-7.2.6 1.4 1.6 2 2.4 2-.4-2.8.8-5 2.7-6.8.5 2.6 3 4.3 3 7.5A6.5 6.5 0 0 1 12 21Z"/><path d="M12 21a3 3 0 0 1-3-3c0-1.6 1.2-2.6 1.8-3.6.3.8.8 1.1 1.2 1.1.4-1.4 1-2.3 1.8-3-.2 2.2 1.2 3.2 1.2 5.5a3 3 0 0 1-3 3Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-laugh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 10.5c.7-1 1.8-1 2.5 0M13.5 10.5c.7-1 1.8-1 2.5 0"/><path d="M8 14.5c1.2 1.8 2.6 2.5 4 2.5s2.8-.7 4-2.5"/><circle cx="4.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/><circle cx="19.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h9.5L21 11.5a1.8 1.8 0 0 1 0 2.6l-6.9 6.9a1.8 1.8 0 0 1-2.6 0L4 13.5Z"/><circle cx="9.5" cy="9.5" r="1.6" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="11" rx="2"/><path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8"/><path d="M3 13.5h18"/><circle cx="12" cy="13.5" r="1.3" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8.2L20 19M8.2 15.8L20 5"/></symbol><symbol id="wb-mega" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5v2.5l12 5V6.5Z"/><path d="M20 9.5a4.5 4.5 0 0 1 0 5"/><path d="M8 19.5V21"/></symbol><symbol id="wb-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20S4.5 15.5 4.5 10a4.6 4.6 0 0 1 7.5-3.2A4.6 4.6 0 0 1 19.5 10C19.5 15.5 12 20 12 20Z"/></symbol><symbol id="wb-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.6 0 2.2-.9 2.2-2 0-1.6-1.7-1.5-1.7-3.1 0-1.5 1.3-2.4 2.9-2.4h1.4a4.7 4.7 0 0 0 4.7-4.7C21.5 5.4 17.5 3 12 3Z"/><circle cx="8" cy="10" r="1.4" fill="#2793C8" stroke="none"/><circle cx="12.5" cy="8" r="1.4" fill="#DFA856" stroke="none"/><circle cx="16.5" cy="11" r="1.4" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol><symbol id="wb-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol><symbol id="wb-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 1.5 5.5 5 5 9l-2 2-3-3-3 3-2-2c-1-4 1-7.5 5-9Z"/><circle cx="12" cy="9" r="1.8" fill="#DFA856" stroke="none"/><path d="M8.5 13.5L5 19M15.5 13.5L19 19"/></symbol><symbol id="wb-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h2l2.5 11h10L21 8H7"/><circle cx="10" cy="20" r="1.6"/><circle cx="17.5" cy="20" r="1.6"/></symbol><symbol id="wb-glasses" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="7" height="5" rx="2"/><rect x="14" y="9" width="7" height="5" rx="2"/><path d="M10 11h4M3 10L1.5 8M21 10l1.5-2"/></symbol><symbol id="wb-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></symbol><symbol id="wb-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h12v4.5A4.5 4.5 0 0 1 12.5 19h-3A4.5 4.5 0 0 1 5 14.5Z"/><path d="M17 11h1a2.5 2.5 0 0 1 0 5h-1"/><path d="M8 7c0-1.2 1-1.2 1-2.4M12 7c0-1.2 1-1.2 1-2.4"/></symbol><symbol id="wb-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 16.5 5 12a2 2 0 0 1 2-1.5h10a2 2 0 0 1 2 1.5l1.5 4.5"/><path d="M3.5 16.5H21"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M12 3.5l.6 1.6 1.6.6-1.6.6L12 8l-.6-1.7-1.6-.6 1.6-.6Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/><path d="M10.5 20v-5.5h3V20"/></symbol><symbol id="wb-tooth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3.5C9 3.5 10 4.5 12 4.5s3-1 4.5-1c1.8 0 2.6 1.6 2.2 4-.4 3-1.2 9-3.2 12.5-.7 1.2-2.3 1.2-3 0-.8-1.4-.5-4.5-1.5-4.5s-.7 3.1-1.5 4.5c-.7 1.2-2.3 1.2-3 0C4.5 16.5 3.7 10.5 3.3 7.5 2.9 5.1 5.7 3.5 7.5 3.5Z"/></symbol><symbol id="wb-pole" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="3" width="7" height="18" rx="3.5"/><path d="M8.5 8.5 15.5 6M8.5 13.5 15.5 11M8.5 18.5 15.5 16"/><path d="M8.5 3h7M8.5 21h7" stroke="#DFA856"/></symbol><symbol id="wb-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4 4 6.5 6 10l2-1v11h8V9l2 1 2-3.5L15.5 4a3.5 3.5 0 0 1-7 0Z"/></symbol><symbol id="wb-beauty" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.2" fill="#DFA856" stroke="none"/><path d="M12 3.5v3.5M12 17v3.5M3.5 12H7M17 12h3.5M6 6l2.4 2.4M15.6 15.6 18 18M18 6l-2.4 2.4M8.4 15.6 6 18"/></symbol><symbol id="wb-paw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="3.6" ry="3" fill="#DFA856" stroke="none"/><circle cx="6.8" cy="11.5" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="9" r="1.9" fill="currentColor" stroke="none"/><circle cx="17.2" cy="11.5" r="1.9" fill="currentColor" stroke="none"/></symbol><symbol id="wb-steth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3v6.5a5.5 5.5 0 0 0 11 0V3"/><path d="M17.5 14.5c0 3 1.5 4 3.5 4"/><circle cx="21" cy="18.5" r="1.5"/></symbol><symbol id="wb-dumbbell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5v5M7 7v10M17 7v10M20.5 9.5v5M7 12h10"/></symbol><symbol id="wb-disco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M9.5 6.5V4h5v2.5"/><path d="M5.5 13.5h13M7.5 10c1.8 1.2 3.6-1.2 4.5 0 .9 1.2 2.7-1.2 4.5 0M7.5 17c1.8-1.2 3.6 1.2 4.5 0 .9-1.2 2.7 1.2 4.5 0"/><circle cx="12" cy="4" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M12 10.7V21"/><path d="M12 15c-3.2 0-4.5-1.8-4.5-4M12 17.5c3.2 0 4.5-1.8 4.5-4"/><circle cx="12" cy="7.5" r="1.2" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-lipstick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 21h4M10.5 21v-8h3v8"/><path d="M11 13V8l4-2.5V13" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-sushi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="9" rx="4.5"/><circle cx="12" cy="14.5" r="2.2" fill="#DFA856" stroke="none"/><path d="M4 6.5 20 4"/></symbol><symbol id="wb-croissant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5c2.5 4.5 5.5 6 8.5 4.5 3 1.5 6 0 8.5-4.5-.8 4.5-4 7-8.5 7s-7.7-2.5-8.5-7Z"/><path d="M8 13.5c.8 2 2 3 4 3s3.2-1 4-3"/></symbol><symbol id="wb-bean" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="8.5" transform="rotate(18 12 12)"/><path d="M9 5.5c2.5 3 2.5 10 0 13"/></symbol></defs></svg>
   <div class="nav nav-landing"><div class="wrap">
     <a class="logo logo-posty" href="#/"><img class="logo-img" src="/posty-logo.png" width="226" height="62" alt="Posty"></a>
@@ -5071,6 +5318,7 @@ function landingView(cfg) {
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
   </div></div>
+  <div class="wd-scrolly" data-count="{n} de 7 días posteados" data-done=" — <b>tu Instagram nunca más abandonado</b>"><div class="wd-sticky"><div class="wrap"><div class="wd-wk-label">Tu semana con Posty</div><div class="wd-wk-title">Lunes a domingo, publicado.</div><div class="wd-strip"><div class="wd-cell"><div class="wd-dname">LUN</div><div class="wd-ph"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo del lunes"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MAR</div><div class="wd-ph"><img loading="lazy" src="ig-moda.jpg" alt="Posteo del martes"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MIÉ</div><div class="wd-ph"><img loading="lazy" src="ig-barber.jpg" alt="Posteo del miércoles"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">JUE</div><div class="wd-ph"><img loading="lazy" src="ig-belleza.jpg" alt="Posteo del jueves"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">VIE</div><div class="wd-ph"><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo del viernes"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">SÁB</div><div class="wd-ph"><img loading="lazy" src="lp-tomoko-berry.jpg" alt="Posteo del sábado"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">DOM</div><div class="wd-ph"><img loading="lazy" src="lp-tomoko-yuzu.jpg" alt="Posteo del domingo"><span class="wd-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-hora">19:00</div></div></div><div class="wd-bar"><i></i></div><div class="wd-count">0 de 7 días posteados</div><div class="wd-hint">Seguí bajando ↓</div></div></div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Tu producto real, como protagonista.</h2>
     <p class="lede">Vos seguí atendiendo tu negocio. Del resto nos ocupamos nosotros.</p>
@@ -5079,6 +5327,7 @@ function landingView(cfg) {
       <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Pensamos las ideas, diseñamos con tus fotos y tu marca, y escribimos los captions y hashtags que venden.</p></div>
       <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te avisamos; si no decís nada, sale. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
     </div>
+    <div class="wd-morning"><div class="wd-blob"></div><div class="wd-morning-in"><div class="wd-scene-title">Así aparece tu posteo del día, todas las mañanas.</div><p class="wd-scene-sub">Abrís el teléfono y ya está: el posteo de hoy, listo. Si no decís nada, sale solo.</p><div class="wd-stage"><div class="wd-phone"><div class="wd-notch"></div><div class="wd-hi">9:00 · Buen día, Patisserie Tomoko</div><div class="wd-hoy">Tu posteo de hoy</div><div class="wd-card"><img loading="lazy" src="lp-tomoko-berry.jpg" alt="Berry Mille Crepe de Patisserie Tomoko, el posteo de hoy"><div class="wd-cap"><b>Berry Mille Crepe.</b> El posteo de hoy, listo para salir.</div></div><div class="wd-sale"><span>Sale hoy</span><span class="wd-tag">19:00 · en tu Instagram</span></div><div class="wd-row"><div class="wd-btn go">Sale así</div><div class="wd-btn stop">Lo freno</div></div></div><div class="wd-floats"><div class="wd-notif"><div class="wd-av">P</div><div class="wd-t"><b>Posty · ahora</b>En 30 minutos sale tu posteo de hoy. Si no decís nada, sale solo.</div></div><div class="wd-badge"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Publicado · 19:00</div><div class="wd-voice"><span class="wd-mic"><svg viewBox="0 0 24 24"><path d="M12 15a3.5 3.5 0 003.5-3.5v-5a3.5 3.5 0 10-7 0v5A3.5 3.5 0 0012 15z" fill="#0A1E33"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3" stroke="#0A1E33" stroke-width="2" fill="none" stroke-linecap="round"/></svg></span> “Cambialo por el de mañana” — y se hace</div></div></div></div></div>
     <h2>Cada posteo está pensado para vender.</h2>
     <p class="lede">Son nuestra forma de trabajar, con cada negocio.</p>
     <div class="steps">
@@ -5242,7 +5491,7 @@ function landingView(cfg) {
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
-  <div class="section" id="equipo"><div class="wrap" style="max-width:760px">
+  <div class="section wd-reveal" id="equipo"><div class="wrap" style="max-width:760px">
     <h2><span class="hl">Somos un equipo, Posty y yo</span></h2>
     <div class="founder-card" id="homeFounderCard" aria-label="El equipo de Posty">
       <img src="valentino-posty-fundador.jpg?v=2" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
@@ -5255,6 +5504,7 @@ function landingView(cfg) {
     <h2>Precio único y claro.</h2>
     <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
     <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
+    <div class="wd-price"><div class="wd-price-n" id="wdPriceN">${lpPlanLabel}<small>/mes</small></div><p>Un solo plan · todo incluido · sin letra chica</p></div>
     <div class="country-toggle">
       ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
     </div>
@@ -5271,11 +5521,12 @@ function landingView(cfg) {
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
     <h2>Probás 3 días gratis antes de pagar.</h2>
     <p>Contanos de tu negocio en el chat y mirá tu semana. Gratis, sin tarjeta.</p>
+    <div class="wd-trial"><div class="wd-tday"><img loading="lazy" src="lp-tomoko-berry.jpg" alt="Día 1 de la prueba: tu posteo estrella"><div class="wd-td-n">Día 1 <span class="wd-tchk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-td-c">Tu posteo estrella, con tu producto real.</div></div><div class="wd-tday"><img loading="lazy" src="lp-patagonia-carrusel-1.jpg" alt="Día 2 de la prueba: tu carrusel"><div class="wd-td-n">Día 2 <span class="wd-tchk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-td-c">Tu carrusel, placa por placa.</div></div><div class="wd-tday"><img loading="lazy" src="lp-tomoko-yuzu.jpg" alt="Día 3 de la prueba: tu semana sigue"><div class="wd-td-n">Día 3 <span class="wd-tchk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-td-c">Y tu semana sigue, día a día.</div></div></div>
     <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   ${lpProgresoHTML()}
-  <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
+  <div class="section wd-reveal" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
     <div class="faq">
