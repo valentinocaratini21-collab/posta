@@ -22,6 +22,7 @@
 'use strict';
 
 const gobernador = require('./venty-gobernador');
+const canalDominante = require('./venty-canal'); // F3 CANAL DOMINANTE (C13): canal por defecto de la oleada cuando el lead no trae canal, con fallback al criterio actual.
 
 const TIPOS_FITSWAPP = ['T1', 'T2', 'T3', 'T4']; // T5/T6 no aplican todavía
 const CANALES_OLEADA = ['email', 'instagram'];
@@ -168,8 +169,24 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
   const r = db.prepare(`INSERT INTO venty_s4_oleadas (user_id, zona_id, fecha, estado, piloto, created_at) VALUES (?,?,?,?,?,?)`)
     .run(userId, zonaId === null || zonaId === undefined ? null : Number(zonaId), fecha, 'espejo', piloto, ahoraIso());
   const oleadaId = Number(r.lastInsertRowid);
+  // F3: el canal dominante manda como canal por defecto de la oleada SOLO
+  // para leads sin canal_preferido, y solo si aplica a oleadas (email /
+  // instagram) y está conectado; en cualquier otro caso, criterio actual
+  // (el lead sin canal confirmado queda fuera, como hasta hoy).
+  let dominanteOleada = null;
+  try {
+    const ef = canalDominante.canalEfectivo(db, userId, { canales_permitidos: CANALES_OLEADA, canal_actual: null });
+    if (ef.fuente === 'canal_dominante') dominanteOleada = ef.canal;
+  } catch (e) { dominanteOleada = null; }
+  const canalDeLead = new Map();
   const leads = venty.listarLeads(db, userId, zonaId ? { zona_id: Number(zonaId) } : {})
-    .filter((l) => l.estado === 'pendiente' && CANALES_OLEADA.includes(String(l.canal_preferido || '')) && String(l.contacto_ref || '').trim() !== '');
+    .filter((l) => {
+      if (l.estado !== 'pendiente' || String(l.contacto_ref || '').trim() === '') return false;
+      const pref = String(l.canal_preferido || '');
+      if (CANALES_OLEADA.includes(pref)) { canalDeLead.set(l.id, pref); return true; }
+      if (!pref && dominanteOleada) { canalDeLead.set(l.id, dominanteOleada); return true; }
+      return false;
+    });
   const detalleDe = o.detalleDeLead || null;
   const restantes = {};
   for (const canal of CANALES_OLEADA) {
@@ -185,7 +202,7 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
     if (tier !== 'A' && tier !== 'B') continue;
     const clave = det && det.clave_negocio ? det.clave_negocio : norm(lead.nombre);
     if (vistosNegocio.has(clave)) continue; // mismo negocio dos veces en la fuente: se contacta una sola vez
-    const canal = String(lead.canal_preferido);
+    const canal = canalDeLead.get(lead.id) || String(lead.canal_preferido);
     if (restantes[canal] <= 0) continue; // el gobernador manda: fuera de cupo no entra ni al espejo del día
     restantes[canal]--;
     vistosNegocio.add(clave);
@@ -196,7 +213,8 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
     const jug = db.prepare(`INSERT INTO venty_jugadas (user_id, partida_id, tipo, propuesta_json, porque, estado) VALUES (?,?,?,?,?,'pendiente')`)
       .run(userId, null, 'oleada_contacto', JSON.stringify({
         oleada_id: oleadaId, item_id: itemId, lead_id: lead.id, lead_nombre: lead.nombre,
-        canal, tipo_email: 'T1', asunto: pieza.asunto || '', texto: pieza.texto || '',
+        canal, canal_fuente: (!lead.canal_preferido && canal === dominanteOleada) ? 'canal_dominante' : 'canal_preferido',
+        tipo_email: 'T1', asunto: pieza.asunto || '', texto: pieza.texto || '',
         destino: lead.contacto_ref, espejo: true,
       }), 'oleada en espejo de tu zona: nada sale en real sin tu aceptación en la bandeja');
     const jugadaId = Number(jug.lastInsertRowid);

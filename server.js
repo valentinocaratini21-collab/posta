@@ -92,6 +92,7 @@ const ventyInstagram = require('./venty-instagram'); // VENTY-CONECTAR-4: webhoo
 const ventyEmail = require('./venty-email'); // VENTY-CONECTAR-4: dirección de reenvío + plantilla con paleta del negocio + supresión.
 const ventyWeb = require('./venty-web'); // VENTY-CONECTAR-4: el sitio del negocio como fuente conectada del fundamento.
 const ventyFitswapp = require('./venty-fitswapp'); // SLICE 2 FITSWAPP: piloto / cliente cero de Venty (fuente web fitswapp.com, email con paleta Fitswapp, IG @fit.swapp; WhatsApp fuera del piloto).
+const ventyCanal = require('./venty-canal'); // VENTY F3 CANAL DOMINANTE (C13): lectura automática del canal dominante desde la realidad conectada del negocio; se declara en el fundamento/estado, manda en cierre y oleadas con fallback.
 const informeMensual = require('./informe-mensual'); // INFORME MENSUAL REAL (ítem 5, 2026-10-26): números reales del mes, sin ROI inventado.
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 try { venty.init(db); } catch (e) { console.error('[venty] init:', e.message); }
@@ -101,6 +102,7 @@ try { ventyWhatsapp.ensureSchema(db); } catch (e) { console.error('[venty-whatsa
 try { ventyInstagram.ensureSchema(db); } catch (e) { console.error('[venty-instagram] init:', e.message); }
 try { ventyEmail.ensureSchema(db); } catch (e) { console.error('[venty-email] init:', e.message); }
 try { ventyFitswapp.ensureSchema(db); } catch (e) { console.error('[venty-fitswapp] init:', e.message); }
+try { ventyCanal.ensureSchema(db); } catch (e) { console.error('[venty-canal] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
@@ -5762,8 +5764,12 @@ app.get('/api/venty/estado', requireAuthOrWebToken, (req, res) => {
     // CONECTAR-4: estados REALES desde venty-conexiones (nunca hardcodeados).
     let reales = [];
     try { reales = ventyConexiones.resumenEstado(db, uid); } catch (e) { reales = []; }
+    // F3 CANAL DOMINANTE: lectura fresca con su evidencia (conteos por canal).
+    let canalDom = null;
+    try { canalDom = ventyCanal.paraFundamento(db, uid); } catch (e) { canalDom = null; }
     res.json({ ok: true, modo: 'prueba', freno: { pausado: venty.estaPausado(db, uid), alcance: 'mensajes y contactos nuevos; los turnos agendados siguen' },
       canales: [{ canal: 'simulacion', estado: 'activo' }, ...reales],
+      canal_dominante: canalDom,
       ultima_lectura: { fuente: 'lista cargada', ts: (f && f.updated_at) || '' },
       venty: { precio_usd: venty.PRECIO_MENSUAL_USD, plan: 'unico', estreno: venty.ESTRENO } });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -5861,9 +5867,13 @@ app.post('/api/venty/freno', requireAuthOrWebToken, (req, res) => {
 });
 app.get('/api/venty/fundamento', requireAuthOrWebToken, (req, res) => {
   try {
-    const f = venty.leerFundamento(db, ventyUid(req));
+    const uidF = ventyUid(req);
+    const f = venty.leerFundamento(db, uidF);
     if (!f) return res.status(404).json({ ok: false, error: 'sin_fundamento' });
-    res.json({ ok: true, modo: 'prueba', fundamento: f });
+    // F3 CANAL DOMINANTE: se declara DENTRO del fundamento, con su porqué con datos.
+    let canalDom = null;
+    try { canalDom = ventyCanal.paraFundamento(db, uidF); } catch (e) { canalDom = null; }
+    res.json({ ok: true, modo: 'prueba', fundamento: { ...f, canal_dominante: canalDom } });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 app.get('/api/venty/chat', requireAuthOrWebToken, (req, res) => {
@@ -46206,7 +46216,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1173';
+const BUILD_ID = '20261105-v1174';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

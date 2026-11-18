@@ -23,6 +23,7 @@
 
 const venty = require('./venty');
 const agenda = require('./venty-agenda');
+const canalMod = require('./venty-canal'); // F3 CANAL DOMINANTE (C13): canal por defecto del cierre cuando la partida no trae canal real, con fallback al criterio actual.
 let _conexiones = null;
 function conexiones() { if (!_conexiones) _conexiones = require('./venty-conexiones'); return _conexiones; }
 
@@ -271,6 +272,10 @@ function iniciarCierre(db, userId, partidaId, opts) {
     VALUES (?,?,?,?,?,?,?, ?,?, 'esperando', ?, ?)`)
     .run(userId, partidaId, tipo, cfg.proveedor, cfg.link_pago, cfg.credencial_ref, MODO_PAGO, esperado, titularEsperado, ahora, ahora);
   const pago = db.prepare('SELECT * FROM venty_cierre_pagos WHERE id = ?').get(Number(r.lastInsertRowid));
+  // F3: canal por defecto del cierre — el de la partida si es real; si la
+  // partida no trae canal real, el dominante conectado; si no, el actual.
+  let canalCierre = { canal: partida.canal || 'simulacion', fuente: 'canal_de_la_partida', motivo: '' };
+  try { canalCierre = canalMod.canalDeCierre(db, userId, partida); } catch (e) {}
   db.prepare(`UPDATE venty_partidas SET estado = 'esperando_pago', forma_cierre = ?, updated_at = ? WHERE id = ?`)
     .run(tipo === 'sena' ? 'seña con link de pago' : 'pago con link', ahora, partidaId);
   const mensajes = agenda.insertarMensajesVenty(db, partida, [
@@ -281,8 +286,8 @@ function iniciarCierre(db, userId, partidaId, opts) {
     'cuando pagues, avisame por acá con el comprobante y lo dejo registrado',
   ], ahora);
   venty.registrarEvento(db, userId, 'cierre_link_enviado', partidaId,
-    { pago_id: pago.id, tipo, monto_esperado: esperado, proveedor: cfg.proveedor, modo: MODO_PAGO });
-  return { ok: true, pago, link_pago: cfg.link_pago, mensajes, estado: 'esperando_pago' };
+    { pago_id: pago.id, tipo, monto_esperado: esperado, proveedor: cfg.proveedor, modo: MODO_PAGO, canal_cierre: canalCierre.canal, canal_fuente: canalCierre.fuente });
+  return { ok: true, pago, link_pago: cfg.link_pago, mensajes, estado: 'esperando_pago', canal_cierre: canalCierre };
 }
 
 function listarPagos(db, userId, opts) {
@@ -377,6 +382,10 @@ function pedirResena(db, userId, partidaId, opts) {
   const partida = obtenerPartida(db, userId, partidaId);
   if (!partida) return { ok: false, kind: 'partida_no_encontrada' };
   if (partida.estado !== 'cerrada_ganada') return { ok: false, kind: 'partida_no_ganada', estado: partida.estado };
+  // F3: la reseña se registra por el canal de cierre — el real de la
+  // partida, o el dominante conectado si la partida no trae canal real.
+  let canalResena = partida.canal || '';
+  try { canalResena = canalMod.canalDeCierre(db, userId, partida).canal || canalResena; } catch (e) {}
   const ya = db.prepare('SELECT * FROM venty_cierre_resenas WHERE user_id = ? AND partida_id = ?').get(userId, partidaId);
   if (ya) return { ok: false, kind: 'resena_ya_pedida', resena: ya };
   const evPrevio = db.prepare(`SELECT id FROM venty_eventos WHERE user_id = ? AND partida_id = ? AND tipo = 'resena_pedida' LIMIT 1`).get(userId, partidaId);
@@ -385,7 +394,7 @@ function pedirResena(db, userId, partidaId, opts) {
     // acá y no se vuelve a pedir.
     const ahora0 = o.ahora || ahoraIso();
     db.prepare(`INSERT OR IGNORE INTO venty_cierre_resenas (user_id, partida_id, canal, url, pedida_at) VALUES (?,?,?,?,?)`)
-      .run(userId, partidaId, partida.canal || '', configCierre(db, userId).resena_google_url, ahora0);
+      .run(userId, partidaId, canalResena, configCierre(db, userId).resena_google_url, ahora0);
     return { ok: false, kind: 'resena_ya_pedida' };
   }
   const ahora = o.ahora || ahoraIso();
@@ -394,7 +403,7 @@ function pedirResena(db, userId, partidaId, opts) {
   if (cfg.resena_google_url) textos.push(cfg.resena_google_url);
   const mensajes = agenda.insertarMensajesVenty(db, partida, textos, ahora);
   const r = db.prepare(`INSERT INTO venty_cierre_resenas (user_id, partida_id, canal, url, pedida_at) VALUES (?,?,?,?,?)`)
-    .run(userId, partidaId, partida.canal || '', cfg.resena_google_url, ahora);
+    .run(userId, partidaId, canalResena, cfg.resena_google_url, ahora);
   venty.registrarEvento(db, userId, 'resena_pedida', partidaId, { via: 'conversacion_de_cierre', resena_id: Number(r.lastInsertRowid) });
   return { ok: true, resena_id: Number(r.lastInsertRowid), mensajes };
 }
