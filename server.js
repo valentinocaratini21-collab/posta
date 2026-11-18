@@ -6494,6 +6494,50 @@ app.post('/api/venty/fundamento-auto/marcar-aceptado', requireAuthOrWebToken, (r
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- VENTY-F4-ESTRATEGIA: estrategia viva versionada ----------
+// UN solo bloque aditivo (require + rutas) entre el bloque SLICE 3 y los
+// webhooks de Venty, para que el preparador re-base por hunks sin tocar
+// los bloques de los otros lotes. La estrategia de ventas es un documento
+// vivo versionado (venty-estrategia.js): la vigente es la versión más
+// alta; sin filas rigen los defaults derivados del fundamento y nada
+// cambia. La propuesta pendiente NO se aplica hasta confirmar: sin
+// confirmación no nace versión. Todo bajo requireAuthOrWebToken como el
+// resto de /api/venty/*, todo en modo prueba, nada sale en real.
+const ventyEstrategiaSrv = require('./venty-estrategia'); // VENTY-F4-ESTRATEGIA: versiones + pendiente de confirmación.
+try { ventyEstrategiaSrv.ensureSchema(db); } catch (e) { console.error('[venty-estrategia] init:', e.message); }
+app.get('/api/venty/estrategia', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    res.json({ ok: true, modo: 'prueba', vigente: ventyEstrategiaSrv.obtenerVigente(db, uid), pendiente: ventyEstrategiaSrv.leerPendiente(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/estrategia/historial', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', historial: ventyEstrategiaSrv.listarHistorial(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/estrategia/propuesta', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const b = req.body || {};
+    const cambio = (b.cambio && typeof b.cambio === 'object') ? b.cambio : b;
+    const r = ventyEstrategiaSrv.proponer(db, uid, cambio, { origen: String(b.origen || 'chat'), texto_original: String(b.texto_original || '') });
+    res.json({ ok: true, modo: 'prueba', vigente: r.vigente, propuesta: r.propuesta, pendiente: r.pendiente });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/estrategia/confirmar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyEstrategiaSrv.confirmarPendiente(db, ventyUid(req), { origen: String(((req.body || {}).origen) || '') || undefined });
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/estrategia/descartar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyEstrategiaSrv.descartarPendiente(db, ventyUid(req));
+    if (!r.ok) return res.status(400).json({ ok: false, modo: 'prueba', ...r });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // ---------- Webhooks de Venty (Meta → Posta; públicos, verificados) ----------
 // Instagram: GET verifica con INSTAGRAM_VERIFY_TOKEN; POST verifica la
 // firma X-Hub-Signature-256 con INSTAGRAM_APP_SECRET. Sin secretos: 403.
@@ -46359,7 +46403,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1176';
+const BUILD_ID = '20261105-v1177';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

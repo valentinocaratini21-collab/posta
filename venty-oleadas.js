@@ -24,6 +24,7 @@
 const gobernador = require('./venty-gobernador');
 const canalDominante = require('./venty-canal'); // F3 CANAL DOMINANTE (C13): canal por defecto de la oleada cuando el lead no trae canal, con fallback al criterio actual.
 const seriesF5 = require('./venty-series'); // VENTY F5: series con nombre por negocio (la oleada elige la serie según el toque; sin series, comportamiento actual)
+const ventyEstrategia = require('./venty-estrategia'); // F4-ESTRATEGIA: la oleada lee la estrategia VIGENTE (zonas pausadas + canales habilitados).
 
 const TIPOS_FITSWAPP = ['T1', 'T2', 'T3', 'T4']; // T5/T6 no aplican todavía
 const CANALES_OLEADA = ['email', 'instagram'];
@@ -172,9 +173,24 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
     const items = db.prepare('SELECT * FROM venty_s4_oleada_items WHERE oleada_id = ? ORDER BY id ASC').all(existente.id);
     return { ok: true, ya_existia: true, oleada: existente, items };
   }
+  // F4-ESTRATEGIA: si la estrategia vigente pausa esta zona, la oleada de
+  // la zona no se prepara (ni siquiera en espejo). Sin estrategia cargada,
+  // la vigente derivada no pausa nada: comportamiento histórico.
+  let estrategiaVigente = null;
+  try { estrategiaVigente = ventyEstrategia.obtenerVigente(db, userId); } catch (e) { estrategiaVigente = null; }
+  if (estrategiaVigente && zonaId !== null && zonaId !== undefined) {
+    const zonaRow = db.prepare('SELECT nombre FROM venty_zonas WHERE id = ? AND user_id = ?').get(Number(zonaId), userId);
+    if (zonaRow && ventyEstrategia.zonaPausada(db, userId, zonaRow.nombre)) {
+      return { ok: true, ya_existia: false, zona_pausada: true, zona_nombre: zonaRow.nombre, oleada: null, items: [] };
+    }
+  }
   const r = db.prepare(`INSERT INTO venty_s4_oleadas (user_id, zona_id, fecha, estado, piloto, created_at) VALUES (?,?,?,?,?,?)`)
     .run(userId, zonaId === null || zonaId === undefined ? null : Number(zonaId), fecha, 'espejo', piloto, ahoraIso());
   const oleadaId = Number(r.lastInsertRowid);
+  // F4-ESTRATEGIA: solo entran leads cuyo canal siga habilitado en la
+  // estrategia vigente (default derivado: todos habilitados). El canal que
+  // cuenta es el efectivo del lead (su preferido o el dominante de F3).
+  const canalesHab = estrategiaVigente ? new Set(estrategiaVigente.datos.canales_habilitados.map((c) => norm(c))) : null;
   // F3: el canal dominante manda como canal por defecto de la oleada SOLO
   // para leads sin canal_preferido, y solo si aplica a oleadas (email /
   // instagram) y está conectado; en cualquier otro caso, criterio actual
@@ -192,7 +208,8 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
       if (CANALES_OLEADA.includes(pref)) { canalDeLead.set(l.id, pref); return true; }
       if (!pref && dominanteOleada) { canalDeLead.set(l.id, dominanteOleada); return true; }
       return false;
-    });
+    })
+    .filter((l) => !canalesHab || canalesHab.has(norm(canalDeLead.get(l.id) || '')));
   const detalleDe = o.detalleDeLead || null;
   const restantes = {};
   for (const canal of CANALES_OLEADA) {
@@ -272,7 +289,7 @@ function prepararOleadaDiaria(db, userId, opts) {
       const leadRow = db.prepare('SELECT nombre FROM venty_leads WHERE id = ?').get(it.lead_id);
       if (leadRow) claves.add(norm(leadRow.nombre));
     }
-    porZona.push({ zona_id: z.id, zona_nombre: z.nombre, oleada_id: r.oleada ? r.oleada.id : null, items: (r.items || []).length, ya_existia: !!r.ya_existia });
+    porZona.push({ zona_id: z.id, zona_nombre: z.nombre, oleada_id: r.oleada ? r.oleada.id : null, items: (r.items || []).length, ya_existia: !!r.ya_existia, zona_pausada: !!r.zona_pausada });
   }
   return { ok: true, fecha: String(o.fecha || hoyYmd()), por_zona: porZona, total_items: porZona.reduce((a, z) => a + z.items, 0) };
 }

@@ -48,7 +48,7 @@ async function req(method, p, opts = {}) {
   try {
     ok(await waitBoot(), 'boot: server levanta');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    eq(ver.build, '20261105-v1176', `/api/version sigue en v1111 (${ver.build})`);
+    eq(ver.build, '20261105-v1177', `/api/version sigue en v1111 (${ver.build})`);
 
     const db = new DatabaseSync(path.join(TMP, 'posta.db'));
     const vwt = require('./venty-web-tokens');

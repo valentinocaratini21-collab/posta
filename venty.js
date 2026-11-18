@@ -15,6 +15,20 @@ const GRUPO_ESCALA = 15;
 const SEGUIMIENTO_MAX = 3;
 const TZ_CUENTA = 'America/Argentina/Buenos_Aires';
 
+// F4-ESTRATEGIA (hunk 1/5): la estrategia viva versionada vive en
+// venty-estrategia.js; este módulo la LEE (cotizar / jugarMensaje /
+// chat del dueño). Sin filas de estrategia, la vigente se deriva del
+// fundamento y el comportamiento es exactamente el histórico.
+const ventyEstrategia = require('./venty-estrategia');
+function descuentoMaxVigente(db, userId, fundamento) {
+  try { return ventyEstrategia.descuentoMax(db, userId); }
+  catch (e) { return (fundamento && fundamento.limites && fundamento.limites.descuento_max_pct) ?? DESCUENTO_MAX; }
+}
+function seguimientoVigente(db, userId) {
+  try { return ventyEstrategia.obtenerVigente(db, userId).datos.seguimiento; }
+  catch (e) { return { toques_max: SEGUIMIENTO_MAX, espera_dias: 2 }; }
+}
+
 // ---- Café Aroma: fundamento comercial (una sola fuente; manda sobre el flujo) ----
 const CAFE_AROMA = {
   rubro: 'gastronomía',
@@ -112,6 +126,9 @@ function validarVoz(texto) {
 
 // ---- tablas ----
 function init(db) {
+  // F4-ESTRATEGIA (hunk 2/5): tablas de la estrategia viva (versiones +
+  // pendiente de confirmación); el DDL vive en venty-estrategia.js.
+  try { ventyEstrategia.ensureSchema(db); } catch (e) { /* la estrategia nunca rompe el init */ }
   db.exec(`CREATE TABLE IF NOT EXISTS venty_fundamento (
     user_id INTEGER PRIMARY KEY,
     rubro TEXT DEFAULT '',
@@ -600,8 +617,11 @@ function cotizar(db, userId, item, cantidad, descuentoPedido) {
   const cant = Math.max(1, Number(cantidad) || 1);
   const total = p.precio * cant;
   const desc = Number(descuentoPedido) || 0;
-  if (desc > (f.limites.descuento_max_pct ?? DESCUENTO_MAX)) {
-    return { ok: false, kind: 'a_bandeja', item: p.item, precio_unitario: p.precio, total, pedido_pct: desc, autorizado_pct: f.limites.descuento_max_pct ?? DESCUENTO_MAX };
+  // F4-ESTRATEGIA (hunk 3/5): el tope sale de la estrategia VIGENTE; sin
+  // estrategia cargada, la vigente se deriva del fundamento (mismo tope).
+  const maxVigente = descuentoMaxVigente(db, userId, f);
+  if (desc > maxVigente) {
+    return { ok: false, kind: 'a_bandeja', item: p.item, precio_unitario: p.precio, total, pedido_pct: desc, autorizado_pct: maxVigente };
   }
   return { ok: true, item: p.item, precio_unitario: p.precio, cantidad: cant, total, descuento_pct: desc, total_con_descuento: Math.round(total * (1 - desc / 100)), fuente: 'lista cargada' };
 }
@@ -660,8 +680,11 @@ function jugarMensaje(db, userId, partidaId, textoCliente) {
   const mGrupo = norm.match(/somos\s+(\d+)|(\d+)\s*personas/);
   const pctPedido = mPct ? Number(mPct[1]) : 0;
   const grupoN = mGrupo ? Number(mGrupo[1] || mGrupo[2]) : 0;
-  if ((pctPedido > (f?.limites?.descuento_max_pct ?? DESCUENTO_MAX)) || grupoN >= (f?.limites?.grupo_escala_desde ?? GRUPO_ESCALA)) {
-    const propuesta = { que: texto, pedido_pct: pctPedido || null, grupo: grupoN || null, autorizado_pct: f?.limites?.descuento_max_pct ?? DESCUENTO_MAX };
+  // F4-ESTRATEGIA (hunk 4a/5): el motor lee la estrategia VIGENTE para el
+  // tope de descuento; sin estrategia, el tope derivado = el del fundamento.
+  const maxVigenteMsg = descuentoMaxVigente(db, userId, f);
+  if ((pctPedido > maxVigenteMsg) || grupoN >= (f?.limites?.grupo_escala_desde ?? GRUPO_ESCALA)) {
+    const propuesta = { que: texto, pedido_pct: pctPedido || null, grupo: grupoN || null, autorizado_pct: maxVigenteMsg };
     const ya = db.prepare(`SELECT id FROM venty_jugadas WHERE user_id = ? AND partida_id = ? AND tipo = 'descuento' AND estado = 'pendiente'`).get(userId, partidaId);
     if (!ya) {
       db.prepare(`INSERT INTO venty_jugadas (user_id, partida_id, tipo, propuesta_json, porque, estado) VALUES (?,?,?,?,?,'pendiente')`)
@@ -698,9 +721,12 @@ function jugarMensaje(db, userId, partidaId, textoCliente) {
   }
   // Lo consulto: seguimiento con dato concreto.
   if (/lo consulto|lo pienso|te aviso|lo veo/.test(norm)) {
-    const toque = Math.min((Number(partida.seguimiento_toque) || 0) + 1, SEGUIMIENTO_MAX);
+    // F4-ESTRATEGIA (hunk 4b/5): toques y espera salen de la vigente
+    // (default derivado: 3 toques cada 2 días = comportamiento histórico).
+    const segVig = seguimientoVigente(db, userId);
+    const toque = Math.min((Number(partida.seguimiento_toque) || 0) + 1, segVig.toques_max);
     db.prepare(`UPDATE venty_partidas SET seguimiento_toque = ?, proximo_toque_at = ?, updated_at = ? WHERE id = ?`)
-      .run(toque, shiftDays(hoyYmd(), 2) + ' 10:00:00', ahora, partidaId);
+      .run(toque, shiftDays(hoyYmd(), segVig.espera_dias) + ' 10:00:00', ahora, partidaId);
     registrarEvento(db, userId, 'seguimiento', partidaId, { toque });
     const r = registrarRespuesta(db, userId, partidaId, ['dale, te guardo la disponibilidad del brunch del fin de semana y te escribo'], canal);
     return { ok: true, respuestas: r, estado: 'viva', seguimiento_toque: toque };
@@ -732,11 +758,202 @@ function jugarMensaje(db, userId, partidaId, textoCliente) {
   return { ok: true, respuestas: r, estado: 'viva' };
 }
 
+// ---- F4-ESTRATEGIA (hunk 5/5): chat de toques de la estrategia viva ----
+// Distinguo D16: preferencia (sin partida) → propuesta sobre la estrategia
+// que se muestra («así queda tu estrategia») y SOLO nace la versión al
+// confirmar. Pedido puntual (partida identificada, solo descuento) →
+// jugada en Bandeja para esa partida sola, estrategia intacta. Referencia
+// a una partida sin identificar («esta partida», «este cliente») →
+// desambiguación con dos toques, nunca se adivina. Todo reply pasa por
+// baja() del llamador vía texto ya en minúsculas (voz: sin ¿/¡).
+function estrNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+function estrBuscarZona(db, userId, normTexto) {
+  let zonas = [];
+  try { zonas = listarZonas(db, userId); } catch (e) { zonas = []; }
+  for (const z of zonas) {
+    if (z.nombre && normTexto.includes(estrNorm(z.nombre))) return z.nombre;
+  }
+  // Sin zonas cargadas: captura tras «zona» o tras «en» al final del pedido.
+  const m = normTexto.match(/zona\s+([a-z]+(?:\s[a-z]+)?)\s*$/) || normTexto.match(/(?:en|de)\s+([a-z]+(?:\s[a-z]+)?)\s*$/);
+  if (m) {
+    const limpio = m[1].replace(/\s+(por|favor|gracias)$/, '').trim();
+    if (limpio && !/^(whatsapp|instagram|email|correo)$/.test(limpio)) return limpio.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return null;
+}
+
+// Parsea un ajuste de estrategia desde el texto del dueño (norm, sin
+// acentos). Devuelve el cambio parcial, { pedir_dato } o null.
+function estrParseCambio(db, userId, normTexto) {
+  const cambio = {};
+  let toca = false;
+  if (/descuento/.test(normTexto)) {
+    const mNum = normTexto.match(/(\d{1,2})\s*%/) || normTexto.match(/descuento[^0-9]{0,24}(\d{1,2})/) || normTexto.match(/a\s+(\d{1,2})\b/);
+    if (mNum) { cambio.descuento_max_pct = Number(mNum[1]); toca = true; }
+    else return { pedir_dato: 'descuento_max_pct' };
+  }
+  const zona = estrBuscarZona(db, userId, normTexto);
+  if (zona && /(reactiv|volve|volvamos|habilit|activ)/.test(normTexto) && !/descuento/.test(normTexto)) {
+    cambio.zona_reactivar = zona; toca = true;
+  } else if (zona && /(paus|no busques|no buscar|no busquemos|fren|deten|no trabajes|no trabajemos)/.test(normTexto)) {
+    cambio.zona_pausar = zona; toca = true;
+  }
+  const canalesTxt = ['whatsapp', 'instagram', 'email', 'correo'];
+  const canalMencionado = canalesTxt.find((c) => normTexto.includes(c));
+  if (canalMencionado && !zona) {
+    const canal = canalMencionado === 'correo' ? 'email' : canalMencionado;
+    if (/(solo|solamente|unicamente)/.test(normTexto)) { cambio.canales_habilitados = [canal]; toca = true; }
+    else if (/(sin|no uses|no usar|desactiv|quita|saca|apaga)/.test(normTexto)) { cambio.canal_quitar = canal; toca = true; }
+    else if (/(habilit|activ|suma|agrega|volve)/.test(normTexto)) { cambio.canal_agregar = canal; toca = true; }
+  }
+  const mToques = normTexto.match(/(\d{1,2})\s*toques/);
+  if (mToques) { cambio.seguimiento = { ...(cambio.seguimiento || {}), toques_max: Number(mToques[1]) }; toca = true; }
+  const mEspera = normTexto.match(/(?:espera|cada)\s*(?:de\s*)?(\d{1,2})\s*dias/) || normTexto.match(/(\d{1,2})\s*dias\s*(?:de\s*)?espera/);
+  if (mEspera) { cambio.seguimiento = { ...(cambio.seguimiento || {}), espera_dias: Number(mEspera[1]) }; toca = true; }
+  return toca ? cambio : null;
+}
+
+function estrBuscarPartida(db, userId, normTexto) {
+  let rows = [];
+  try { rows = listarPartidas(db, userId); } catch (e) { rows = []; }
+  const halladas = [];
+  for (const p of rows) {
+    const nombreNorm = estrNorm(p.cliente_nombre);
+    if (!nombreNorm) continue;
+    if (normTexto.includes(nombreNorm)) { halladas.push(p); continue; }
+    const primero = nombreNorm.split(' ')[0];
+    if (primero.length >= 3 && new RegExp(`(^|\\s)${primero}(\\s|$)`).test(normTexto)) halladas.push(p);
+  }
+  const unicas = [...new Map(halladas.map((p) => [p.id, p])).values()];
+  if (unicas.length === 1) return { partida: unicas[0] };
+  if (unicas.length > 1) return { multi: unicas };
+  return null;
+}
+
+function estrCrearJugadaPuntual(db, userId, partida, cambio, textoOriginal) {
+  const propuesta = {
+    que: textoOriginal,
+    pedido_pct: cambio.descuento_max_pct,
+    alcance: 'solo_esta_partida',
+    partida_id: partida.id,
+    cliente: partida.cliente_nombre,
+  };
+  const r = db.prepare(`INSERT INTO venty_jugadas (user_id, partida_id, tipo, propuesta_json, porque, estado) VALUES (?,?,?,?,?,'pendiente')`)
+    .run(userId, partida.id, 'descuento', JSON.stringify(propuesta), 'pedido puntual del dueño: cambia solo esta partida, la estrategia no se toca');
+  registrarEvento(db, userId, 'jugada_creada', partida.id, { tipo: 'descuento', propuesta, alcance: 'solo_esta_partida' });
+  return Number(r.lastInsertRowid);
+}
+
+function manejarChatEstrategia(db, userId, textoOriginal, norm) {
+  const bajaE = (s) => String(s || '').toLowerCase();
+  const pend = ventyEstrategia.leerPendiente(db, userId);
+
+  // Desambiguación en curso, paso 2: «solo esta partida» ya elegido y el
+  // dueño ahora nombra la partida → jugada puntual con el cambio guardado.
+  if (pend && pend.tipo === 'esperando_partida') {
+    if (/^(cancelar|descartar|dejalo)$/.test(norm)) {
+      ventyEstrategia.borrarPendiente(db, userId);
+      return { reply: bajaE('dale, queda todo como estaba, no toco nada.'), options: [] };
+    }
+    const b = estrBuscarPartida(db, userId, norm);
+    if (b && b.partida && pend.datos && pend.datos.descuento_max_pct !== undefined) {
+      estrCrearJugadaPuntual(db, userId, b.partida, pend.datos, pend.texto_original || textoOriginal);
+      ventyEstrategia.borrarPendiente(db, userId);
+      return { reply: bajaE(`listo, te dejé la jugada solo para ${b.partida.cliente_nombre}: descuento de ${pend.datos.descuento_max_pct}% en su partida. tu estrategia no se tocó.`), options: ['ver la bandeja'] };
+    }
+    if (b && b.multi) {
+      return { reply: bajaE(`encontré ${b.multi.length} partidas con ese nombre, decime cuál de estas es.`), options: b.multi.slice(0, 3).map((p) => bajaE(p.cliente_nombre)) };
+    }
+  }
+
+  // Desambiguación en curso, paso 1: los dos toques deciden el alcance.
+  if (pend && pend.tipo === 'ambiguo') {
+    if (norm === 'mi estrategia') {
+      const prop = ventyEstrategia.proponer(db, userId, pend.datos || {}, { origen: pend.origen || 'chat', texto_original: pend.texto_original || '' });
+      return { reply: bajaE(`así queda tu estrategia: ${ventyEstrategia.describirDatos(prop.propuesta)}. si te sirve, tocá confirmar y queda fija; si no, cancelar.`), options: ['confirmar', 'cancelar'] };
+    }
+    if (norm === 'solo esta partida') {
+      ventyEstrategia.guardarPendiente(db, userId, pend.datos || {}, { origen: pend.origen || 'chat', tipo: 'esperando_partida', texto_original: pend.texto_original || '' });
+      return { reply: bajaE('dale, solo para esa partida. decime de cuál partida es y te dejo la jugada solo para ella, tu estrategia no se toca.'), options: [] };
+    }
+    if (/^(cancelar|descartar|dejalo)$/.test(norm)) {
+      ventyEstrategia.borrarPendiente(db, userId);
+      return { reply: bajaE('dale, queda todo como estaba, no toco nada.'), options: [] };
+    }
+  }
+
+  // Propuesta esperando confirmación: sin confirmar no nace versión.
+  if (pend && pend.tipo === 'propuesta') {
+    if (/^(confirmar|confirmo|confirmar estrategia|confirmar mi estrategia)$/.test(norm)) {
+      const r = ventyEstrategia.confirmarPendiente(db, userId, {});
+      if (r.ok) {
+        return { reply: bajaE(`listo, tu estrategia quedó actualizada (versión ${r.version}): ${ventyEstrategia.describirDatos(r.datos)}.`), options: [] };
+      }
+    }
+    if (/^(cancelar|descartar|dejalo)$/.test(norm)) {
+      ventyEstrategia.descartarPendiente(db, userId);
+      return { reply: bajaE('dale, no toco tu estrategia, queda como estaba.'), options: [] };
+    }
+  }
+
+  const cambio = estrParseCambio(db, userId, norm);
+  if (cambio && cambio.pedir_dato === 'descuento_max_pct') {
+    return { reply: bajaE('dale, a cuánto querés dejar el descuento máximo de tu estrategia.'), options: [] };
+  }
+
+  // «mi estrategia» sin ajuste: muestra la vigente en simple.
+  if (!cambio && /(estrategia)/.test(norm)) {
+    const vig = ventyEstrategia.obtenerVigente(db, userId);
+    const hist = ventyEstrategia.listarHistorial(db, userId);
+    const nota = vig.es_default
+      ? 'todavía no fijaste ninguna versión: rige la que sale de tu fundamento.'
+      : `es tu versión ${vig.version}, fijada el ${String(vig.created_at || '').slice(0, 10)} por ${vig.origen}. tenés ${hist.length} ${hist.length === 1 ? 'versión guardada' : 'versiones guardadas'}.`;
+    return { reply: bajaE(`tu estrategia hoy: ${ventyEstrategia.describirDatos(vig.datos)}. ${nota}`), options: [] };
+  }
+  if (!cambio) return null;
+
+  // Ambiguo: habla de una partida pero no dice cuál → desambiguación.
+  if (/(esta partida|este cliente|esta venta|este caso|esa partida|ese cliente|esa venta)/.test(norm)) {
+    ventyEstrategia.guardarPendiente(db, userId, cambio, { origen: 'chat', tipo: 'ambiguo', texto_original: textoOriginal });
+    return { reply: bajaE('antes de tocar nada: eso cambia tu estrategia en general o es solo para esta partida.'), options: ['mi estrategia', 'solo esta partida'] };
+  }
+
+  // Puntual: partida identificada y el cambio es solo de descuento →
+  // jugada para esa partida sola; la estrategia queda intacta.
+  const soloDescuento = cambio.descuento_max_pct !== undefined
+    && !cambio.zona_pausar && !cambio.zona_reactivar && !cambio.canal_quitar && !cambio.canal_agregar
+    && !cambio.canales_habilitados && !cambio.seguimiento;
+  if (soloDescuento) {
+    const b = estrBuscarPartida(db, userId, norm);
+    if (b && b.partida) {
+      estrCrearJugadaPuntual(db, userId, b.partida, cambio, textoOriginal);
+      return { reply: bajaE(`listo, te dejé la jugada solo para ${b.partida.cliente_nombre}: descuento de ${cambio.descuento_max_pct}% en su partida. tu estrategia no se tocó.`), options: ['ver la bandeja'] };
+    }
+    if (b && b.multi) {
+      return { reply: bajaE(`encontré ${b.multi.length} partidas con ese nombre, decime cuál es y te dejo la jugada solo para ella.`), options: b.multi.slice(0, 3).map((p) => bajaE(p.cliente_nombre)) };
+    }
+  }
+
+  // Preferencia: nace la propuesta; la versión nace recién al confirmar.
+  const prop = ventyEstrategia.proponer(db, userId, cambio, { origen: 'chat', texto_original: textoOriginal });
+  registrarEvento(db, userId, 'estrategia_propuesta', null, { cambio });
+  return { reply: bajaE(`así queda tu estrategia: ${ventyEstrategia.describirDatos(prop.propuesta)}. si te sirve, tocá confirmar y queda fija; si no, cancelar.`), options: ['confirmar', 'cancelar'] };
+}
+
 // ---- chat dueño↔Venty (el dueño le habla a Venty; nunca le escribe al cliente) ----
 function responderChatDueno(db, userId, texto) {
   const t = sliceTxt(String(texto || '').trim(), 2000);
   const norm = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const baja = (s) => String(s || '').toLowerCase();
+  // F4-ESTRATEGIA (hunk 5/5, gancho): la estrategia se atiende ANTES que
+  // el freno y el resto, para que «pausá la zona centro» no frene a todo
+  // venty y «mi estrategia» no caiga en el anotado genérico. Si no es un
+  // tema de estrategia, devuelve null y el chat sigue como siempre.
+  try {
+    const rEstr = manejarChatEstrategia(db, userId, t, norm);
+    if (rEstr) return rEstr;
+  } catch (e) { /* la estrategia nunca rompe el chat del dueño */ }
   if (/paus|fren|parala|para todo/.test(norm)) {
     setFreno(db, userId, true);
     registrarEvento(db, userId, 'freno', null, { pausado: true });
@@ -884,5 +1101,6 @@ module.exports = {
   listarBandeja, resolverJugada,
   computarFrase, computarLineaNorte, computarParte, mensajesHoy,
   cotizar, buscarPrecio, validarVoz, jugarMensaje, responderChatDueno,
+  ventyEstrategia, descuentoMaxVigente, seguimientoVigente,
   registrarEvento, fmtPesos, hoyYmd, mondayKeyOf, shiftDays,
 };
