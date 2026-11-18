@@ -4852,7 +4852,7 @@ function lpAdsHTML() {
     <div class="cap-grid">
       <div class="cap-copy">
         <div class="cap-kick">Ads</div>
-        <h2><span class="hl">Con Posty impulsamos tus mejores posteos</span></h2>
+        <h2><span class="hl">Impulsar con público estudiado</span></h2>
         <p class="cap-exp">Cuando un posteo anda muy bien, te lo marcamos y te proponemos potenciarlo. La pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y nosotros elegimos el posteo, el público y lo gestionamos.</p>
         <ul class="cap-list">
           <li><b>Tu mejor posteo, detectado solo.</b> Marcamos el posteo que más rindió y te contamos por qué funciona.</li>
@@ -4875,12 +4875,12 @@ function lpAdsHTML() {
   </div></div>`;
 }
 
-function lpIdeasGrowthHTML() {
+function lpIdeasHTML() {
   return `
   <div class="section cap-sec" id="ideas"><div class="wrap"><div class="cap-grid cap-flip">
     <div class="cap-copy">
       <div class="cap-kick">Ideas semanales</div>
-      <h2>Nunca te quedás <span class="hl">sin qué publicar</span></h2>
+      <h2>Constancia de <span class="hl">verdad</span>.</h2>
       <p class="cap-exp">Cada semana Posty mira el posteo que mejor te anduvo y las fechas que se vienen — y te propone ideas concretas para tu negocio. La que te gusta se convierte en posteo con un toque.</p>
       <ul class="cap-list">
         <li>Desde tus ganadores y el calendario</li>
@@ -4904,10 +4904,12 @@ function lpIdeasGrowthHTML() {
       <p class="cap-note">Así te llegan las ideas cada semana, listas para aprobar.</p>
     </div>
   </div></div></div>
-  <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
+`;}
+function lpCrecimientoHTML() {
+  return `  <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
       <div class="cap-kick">Estrategia</div>
-      <h2>Estudiamos tu negocio. <span class="hl">Tu estrategia sale de ahí.</span></h2>
+      <h2>Una estrategia <span class="hl">hecha para tu negocio</span>.</h2>
       <p class="cap-exp">Antes de postear, estudiamos tu negocio de punta a punta: tu producto, tu feed, tu zona y quién te compra. De ese estudio sale tu estrategia — y la ajustamos cuando nos pedís un cambio por nota de voz.</p>
       <ul class="cap-list">
         <li>Qué posteos le convienen a <b>tu</b> negocio — nunca una plantilla para todos</li>
@@ -4929,10 +4931,27 @@ function lpIdeasGrowthHTML() {
     </div>
   </div></div></div>
 `;}
+function lpAtiendeHTML() {
+  return `
+  <div class="section" id="atiende"><div class="wrap" style="max-width:760px">
+    <h2>Atiende tu Instagram.</h2>
+    <p class="lede">Posty no solo publica: también atiende.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">Responde los comentarios de tus posteos y los mensajes que te llegan, con tu voz y tu estilo. Y lo que necesita tu criterio te lo avisa, para que lo veas vos: tu cuenta nunca queda sola.</p>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+  </div></div>`;
+}
+function lpProgresoHTML() {
+  return `
+  <div class="section" id="progreso"><div class="wrap" style="max-width:760px">
+    <h2>Ves el progreso.</h2>
+    <p class="lede">Tu Instagram avanza — y se ve.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">En la app ves el posteo de hoy, tu semana completa y tu jardín, que crece día a día con tu constancia. El progreso no se promete: se muestra.</p>
+  </div></div>`;
+}
 function lpSubirHTML() {
   return `
   <div class="section" id="subir"><div class="wrap">
-    <h2>Tu material también se convierte en posteos</h2>
+    <h2>Tu material también sale.</h2>
     <p class="lede">¿Ya tenés fotos, un video o una idea dando vueltas? Mandáselos a Posty desde la app y los sumamos a tu semana.</p>
     <div class="pz-mg pz-mg--big" style="display:block;max-width:880px;margin:4px auto 34px"><img src="posty-recibiendo.jpg" alt="Posty en el mostrador de una cafetería, mostrando en el celular la foto de un plato, rodeado de fotos de platos de un negocio" loading="lazy" style="width:100%;border-radius:26px"></div>
     <div class="steps">
@@ -4941,17 +4960,7 @@ function lpSubirHTML() {
       <div class="step"><div class="num">💡</div><h3>Tus ideas</h3><p>Contale tu idea a Posty con una nota de voz. La cruzamos con tu negocio, la revisamos y sale al día siguiente como posteo.</p></div>
     </div>
     <div>
-<div class="mk-block">
-  <div class="mk-block-head"><b>¿Querés un cambio? Pedilo hablando</b><span>Una nota de voz desde la app, y Posty rehace la pieza.</span></div>
-  <div class="mk-voice-bubble"><span class="mk-play">▶</span><span class="mk-wave"><i style="height:8px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:12px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:28px"></i><i style="height:18px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:24px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:27px"></i><i style="height:15px"></i><i style="height:11px"></i><i style="height:21px"></i><i style="height:17px"></i><i style="height:8px"></i><i style="height:19px"></i><i style="height:13px"></i><i style="height:23px"></i><i style="height:10px"></i><i style="height:16px"></i><i style="height:12px"></i></span><span class="mk-dur">0:07</span></div>
-  <p class="mk-transcript">«cambiame el fondo, más cálido»</p>
-  <div class="mk-ba">
-    <figure><img src="lp-patagonia-syncilla.jpg" alt="El posteo de tu negocio, antes"><figcaption>ANTES</figcaption></figure>
-    <span class="mk-ba-arrow">→</span>
-    <figure><img src="lp-patagonia-syncilla-calida.jpg" alt="El posteo de tu negocio, con el fondo nuevo"><figcaption>DESPUÉS</figcaption></figure>
-  </div>
-  <span class="mk-ok-chip">✓ Fondo nuevo — listo</span>
-</div>
+
 <div class="mk-block">
   <div class="mk-block-head"><b>Así se ve en la práctica</b><span>El video que nos mandó Filthy Rich Barbershop: así sale publicado.</span></div>
   <div class="mk-duo"><div class="mk-duo-pan"><video id="mkVidRaw" autoplay muted loop playsinline preload="auto" poster="lp-subir-poster-crudo.jpg"><source src="lp-subir-crudo.mp4" type="video/mp4"/></video><span class="mk-raw-tag">ASÍ COMO LLEGÓ</span></div><div class="mk-duo-pan"><video id="mkVidPro" autoplay muted loop playsinline preload="auto" poster="lp-subir-poster-disenado.jpg"><source src="lp-subir-disenado.mp4" type="video/mp4"/></video><span class="mk-raw-tag ok">ASÍ LO PUBLICAMOS</span></div></div>
@@ -4973,6 +4982,25 @@ function lpSubirHTML() {
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>`;
 }
+function lpVozHTML() {
+  return `
+  <div class="section" id="voz"><div class="wrap">
+    <h2>Pedís por nota de voz y se hace.</h2>
+    <div>
+<div class="mk-block">
+  <div class="mk-block-head"><b>¿Querés un cambio? Pedilo hablando</b><span>Una nota de voz desde la app, y Posty rehace la pieza.</span></div>
+  <div class="mk-voice-bubble"><span class="mk-play">▶</span><span class="mk-wave"><i style="height:8px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:12px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:28px"></i><i style="height:18px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:24px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:27px"></i><i style="height:15px"></i><i style="height:11px"></i><i style="height:21px"></i><i style="height:17px"></i><i style="height:8px"></i><i style="height:19px"></i><i style="height:13px"></i><i style="height:23px"></i><i style="height:10px"></i><i style="height:16px"></i><i style="height:12px"></i></span><span class="mk-dur">0:07</span></div>
+  <p class="mk-transcript">«cambiame el fondo, más cálido»</p>
+  <div class="mk-ba">
+    <figure><img src="lp-patagonia-syncilla.jpg" alt="El posteo de tu negocio, antes"><figcaption>ANTES</figcaption></figure>
+    <span class="mk-ba-arrow">→</span>
+    <figure><img src="lp-patagonia-syncilla-calida.jpg" alt="El posteo de tu negocio, con el fondo nuevo"><figcaption>DESPUÉS</figcaption></figure>
+  </div>
+  <span class="mk-ok-chip">✓ Fondo nuevo — listo</span>
+</div>
+</div>
+  </div></div>`;}
+
 
 function landingView(cfg) {
   const plansRaw = (cfg && cfg.plans) || [];
@@ -5041,6 +5069,36 @@ function landingView(cfg) {
     <p class="lp-sec"><a class="lp-sec-link" role="button" tabindex="0" onclick="lpHeroWebToggle(this);return false">Prefiero usar mi web</a><span class="lp-sec-dot">·</span><a class="lp-sec-link" href="#ejemplos">Ver una semana de ejemplo</a></p>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
+    <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
+  </div></div>
+  <div class="section" id="como-funciona"><div class="wrap">
+    <h2>Tu producto real, como protagonista.</h2>
+    <p class="lede">Vos seguí atendiendo tu negocio. Del resto nos ocupamos nosotros.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Nos contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pedimos más nada.</p></div>
+      <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Pensamos las ideas, diseñamos con tus fotos y tu marca, y escribimos los captions y hashtags que venden.</p></div>
+      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te avisamos; si no decís nada, sale. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
+    </div>
+    <h2>Cada posteo está pensado para vender.</h2>
+    <p class="lede">Son nuestra forma de trabajar, con cada negocio.</p>
+    <div class="steps">
+      <div class="step"><div class="num">🔍</div><h3>Entendemos tu rubro</h3><p>Leemos tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
+      <div class="step"><div class="num">🔌</div><h3>Nos conectamos a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
+      <div class="step"><div class="num">💬</div><h3>Preguntamos solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estamos seguros de tu rubro, te preguntamos antes de generar — nunca adivinamos. Y tu respuesta queda guardada: no te la volvemos a hacer.</p></div>
+    </div>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Trabajamos completo.</b> Todo lo que tu Instagram necesita lo hacemos nosotros — no necesitás contratar a nadie más ni sumar ningún otro servicio. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">👤 <b>Detrás del equipo está Valentino</b>, el fundador de Posty: revisa cada pieza, toma las decisiones y se asegura de que todo salga correctamente.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 19:00 sale solo.</p>
+    <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
+    <div class="mk-connect mk-wow"><img alt="El primer posteo de tu negocio" class="mk-wow-img" src="lp-wow-generica.jpg""/><div class="mk-wow-body"><div class="mk-wow-head"><b>@tu_negocio</b><span class="mk-ok">✓ Programado</span></div><p>¿Lo querés en tu Instagram? Conectalo y este posteo sale hoy a las 19:00, solo.</p><span class="btn btn-primary mk-wow-btn">Publicalo en @tu_negocio hoy</span><span class="mk-wow-no">Ahora no</span></div></div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+  </div></div>
+  ${lpIdeasHTML()}
+  ${lpAtiendeHTML()}
+  ${lpCrecimientoHTML()}
+  ${lpVozHTML()}
+  ${lpAdsHTML()}
+  ${lpSubirHTML()}
     <div class="lp-show" id="ejemplos">
       <p class="lp-show-eyebrow">✨ Así queda tu Instagram con Posty</p>
       <div class="lp-wall" id="lpWall">
@@ -5102,8 +5160,6 @@ function landingView(cfg) {
       </div>
       <p class="pz-drag-hint">👆 Arrastrá la línea: así cambia un perfil cuando Posty se pone a trabajar</p>
     </div>
-    <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
-  </div></div>
   <div class="section lp-week-sec" id="prueba"><div class="wrap">
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
       <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
@@ -5186,29 +5242,6 @@ function landingView(cfg) {
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
-  <div class="section" id="como-funciona"><div class="wrap">
-    <h2>Así trabajamos nosotros 👇</h2>
-    <p class="lede">Vos seguí atendiendo tu negocio. Del resto nos ocupamos nosotros.</p>
-    <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Nos contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pedimos más nada.</p></div>
-      <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Pensamos las ideas, diseñamos con tus fotos y tu marca, y escribimos los captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te avisamos; si no decís nada, sale. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
-    </div>
-    <h2>Y trabajamos con tres reglas simples</h2>
-    <p class="lede">Son nuestra forma de trabajar, con cada negocio.</p>
-    <div class="steps">
-      <div class="step"><div class="num">🔍</div><h3>Entendemos tu rubro</h3><p>Leemos tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
-      <div class="step"><div class="num">🔌</div><h3>Nos conectamos a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
-      <div class="step"><div class="num">💬</div><h3>Preguntamos solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estamos seguros de tu rubro, te preguntamos antes de generar — nunca adivinamos. Y tu respuesta queda guardada: no te la volvemos a hacer.</p></div>
-    </div>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Trabajamos completo.</b> Todo lo que tu Instagram necesita lo hacemos nosotros — no necesitás contratar a nadie más ni sumar ningún otro servicio. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan.</p>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">👤 <b>Detrás del equipo está Valentino</b>, el fundador de Posty: revisa cada pieza, toma las decisiones y se asegura de que todo salga correctamente.</p>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 19:00 sale solo.</p>
-    <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
-    <div class="mk-connect mk-wow"><img alt="El primer posteo de tu negocio" class="mk-wow-img" src="lp-wow-generica.jpg""/><div class="mk-wow-body"><div class="mk-wow-head"><b>@tu_negocio</b><span class="mk-ok">✓ Programado</span></div><p>¿Lo querés en tu Instagram? Conectalo y este posteo sale hoy a las 19:00, solo.</p><span class="btn btn-primary mk-wow-btn">Publicalo en @tu_negocio hoy</span><span class="mk-wow-no">Ahora no</span></div></div>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
-  </div></div>
-  ${lpSubirHTML()}
   <div class="section" id="equipo"><div class="wrap" style="max-width:760px">
     <h2><span class="hl">Somos un equipo, Posty y yo</span></h2>
     <div class="founder-card" id="homeFounderCard" aria-label="El equipo de Posty">
@@ -5218,9 +5251,8 @@ function landingView(cfg) {
       <p class="fc-body">Creé Posty porque identifiqué un problema en cada negocio que conozco: gente talentosa ocupándose de Instagram en vez de ocuparse de su negocio. Y pensé: esto no lo tiene que hacer el dueño. Lo tiene que hacer alguien por él. Ese alguien es Posty. Somos un equipo, Posty y yo: él arma tu semana y yo reviso que cada posteo salga perfecto. Vos solo mirás, y si algo no te gusta, lo ajustamos juntos.</p>
     </div>
   </div></div>
-  ${lpAdsHTML()}
   <div class="section" id="planes"><div class="wrap">
-    <h2>Un solo plan. Todo incluido.</h2>
+    <h2>Precio único y claro.</h2>
     <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
     <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
     <div class="country-toggle">
@@ -5235,7 +5267,14 @@ function landingView(cfg) {
     <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque el precio suba.</p>
 
   </div></div>
-  ${lpIdeasGrowthHTML()}
+  <div class="lp-final"><div class="wrap">
+    <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
+    <h2>Probás 3 días gratis antes de pagar.</h2>
+    <p>Contanos de tu negocio en el chat y mirá tu semana. Gratis, sin tarjeta.</p>
+    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
+    <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
+  </div></div>
+  ${lpProgresoHTML()}
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
@@ -5256,13 +5295,6 @@ function landingView(cfg) {
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary lp-cta-big" href="/prueba">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a>
     </div>
-  </div></div>
-  <div class="lp-final"><div class="wrap">
-    <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
-    <h2>Tu primera semana ya puede estar armada</h2>
-    <p>Contanos de tu negocio en el chat y mirá tu semana. Gratis, sin tarjeta.</p>
-    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
-    <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img class="logo-img-foot" src="/posty-logo.png" width="226" height="62" alt="Posty"></span>
