@@ -93,6 +93,7 @@ const ventyEmail = require('./venty-email'); // VENTY-CONECTAR-4: dirección de 
 const ventyWeb = require('./venty-web'); // VENTY-CONECTAR-4: el sitio del negocio como fuente conectada del fundamento.
 const ventyFitswapp = require('./venty-fitswapp'); // SLICE 2 FITSWAPP: piloto / cliente cero de Venty (fuente web fitswapp.com, email con paleta Fitswapp, IG @fit.swapp; WhatsApp fuera del piloto).
 const ventyCanal = require('./venty-canal'); // VENTY F3 CANAL DOMINANTE (C13): lectura automática del canal dominante desde la realidad conectada del negocio; se declara en el fundamento/estado, manda en cierre y oleadas con fallback.
+const ventySeries = require('./venty-series'); // VENTY F5: series con nombre por negocio (C14): 4 series derivadas del fundamento, una idea por paso, disparo al aceptarse el fundamento.
 const informeMensual = require('./informe-mensual'); // INFORME MENSUAL REAL (ítem 5, 2026-10-26): números reales del mes, sin ROI inventado.
 try { oficina.init(db); } catch (e) { console.error('[oficina] init:', e.message); }
 try { venty.init(db); } catch (e) { console.error('[venty] init:', e.message); }
@@ -103,6 +104,7 @@ try { ventyInstagram.ensureSchema(db); } catch (e) { console.error('[venty-insta
 try { ventyEmail.ensureSchema(db); } catch (e) { console.error('[venty-email] init:', e.message); }
 try { ventyFitswapp.ensureSchema(db); } catch (e) { console.error('[venty-fitswapp] init:', e.message); }
 try { ventyCanal.ensureSchema(db); } catch (e) { console.error('[venty-canal] init:', e.message); }
+try { ventySeries.ensureSchema(db); } catch (e) { console.error('[venty-series] init:', e.message); }
 const postyOficina = require('./posty-oficina'); // POSTY en la oficina: su semana real entra al río y a la Bandeja.
 try { postyOficina.init(db); } catch (e) { console.error('[posty-oficina] init:', e.message); }
 try { gesty.initGesty(db); } catch (e) { console.error('[gesty] init:', e.message); }
@@ -5756,7 +5758,16 @@ app.post('/api/auth/venty-revoke', requireWebToken, (req, res) => {
 // Las 5 pantallas del mock aprobado viviendo en la app real, con partidas
 // simuladas de Café Aroma y registro durable. Todo responde con modo:
 // 'prueba'. La caza es ejemplo rotulado hasta el slice 4.
-const ventyUid = (req) => { const uid = (req.session && req.session.userId) || req.webUserId; try { venty.asegurarSemilla(db, uid); } catch (e) { console.error('[venty] semilla:', e.message); } return uid; };
+const ventyUid = (req) => { const uid = (req.session && req.session.userId) || req.webUserId; try { venty.asegurarSemilla(db, uid); } catch (e) { console.error('[venty] semilla:', e.message); } try { ventySeries.asegurarSeries(db, uid); } catch (e) { console.error('[venty-series] disparo:', e.message); } return uid; };
+// F5 — DISPARO DE LAS SERIES (punto mínimo viable, declarado): en v1111
+// no hay endpoint separado de aceptación de fundamento; el fundamento
+// vigente en venty_fundamento es el aceptado (la semilla lo crea y el
+// dueño lo ajusta por los caminos existentes). Por eso asegurarSeries
+// se engancha acá, tras asegurarSemilla: es idempotente por huella del
+// fundamento sustancial — genera las 4 series la primera vez que hay
+// fundamento y regenera solo ante un cambio sustancial (rubro, estrella,
+// lista de precios, oferta o rituales). Nunca bloquea la ruta: va en
+// try/catch y las series son opcionales para el resto del sistema.
 app.get('/api/venty/estado', requireAuthOrWebToken, (req, res) => {
   try {
     const uid = ventyUid(req);
@@ -6250,6 +6261,36 @@ app.post('/api/venty/medicion/jobs/parte', requireAuthOrWebToken, (req, res) => 
     const semana = String(((req.body || {}).semana) || req.query.semana || '');
     if (semana && !/^\d{4}-\d{2}-\d{2}$/.test(semana)) return res.status(400).json({ ok: false, error: 'semana_invalida' });
     res.json({ ok: true, ...ventyMedicion.jobParteSemanal(db, { userId: ventyUid(req), semana: semana || undefined }) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// ---------- VENTY F5: SERIES CON NOMBRE (zona nueva, un solo bloque) ----------
+// Módulo nuevo venty-series.js: cada negocio tiene sus jugadas en serie
+// con nombre propio (primer contacto · seguimiento · reactivación ·
+// reseña/referido), derivadas de su fundamento, una idea por mensaje.
+// Las oleadas (venty-oleadas.js) eligen la serie por nombre según el
+// toque; sin series, el comportamiento anterior queda intacto. Nada se
+// envía desde estas rutas: son lectura y (re)generación de estructura.
+// Rutas bajo requireAuthOrWebToken, como el resto de /api/venty/*.
+app.get('/api/venty/series', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    res.json({ ok: true, modo: 'prueba', series: ventySeries.listarSeries(db, uid) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/venty/series/:tipo', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const s = ventySeries.obtenerSerie(db, uid, String(req.params.tipo || ''));
+    if (!s) return res.status(404).json({ ok: false, error: 'serie_no_encontrada' });
+    res.json({ ok: true, modo: 'prueba', serie: s });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/series/generar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const r = ventySeries.generarSeries(db, uid, { forzar: !!((req.body || {}).forzar) });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, errores: r.errores || undefined });
+    res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // ---------- VENTY SLICE 3: cierre real (pago/seña + agenda anti no-show) ----------
@@ -46216,7 +46257,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1174';
+const BUILD_ID = '20261105-v1175';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

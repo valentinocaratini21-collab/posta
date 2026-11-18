@@ -23,6 +23,7 @@
 
 const gobernador = require('./venty-gobernador');
 const canalDominante = require('./venty-canal'); // F3 CANAL DOMINANTE (C13): canal por defecto de la oleada cuando el lead no trae canal, con fallback al criterio actual.
+const seriesF5 = require('./venty-series'); // VENTY F5: series con nombre por negocio (la oleada elige la serie según el toque; sin series, comportamiento actual)
 
 const TIPOS_FITSWAPP = ['T1', 'T2', 'T3', 'T4']; // T5/T6 no aplican todavía
 const CANALES_OLEADA = ['email', 'instagram'];
@@ -57,6 +58,11 @@ function ensureSchema(db) {
     UNIQUE(oleada_id, lead_id, canal)
   )`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_venty_s4_items_oleada ON venty_s4_oleada_items(oleada_id, estado)');
+  // F5 (aditivo, guardado): la serie con nombre que usó cada ítem.
+  for (const col of ['serie_nombre TEXT', 'serie_tipo TEXT']) {
+    try { db.exec(`ALTER TABLE venty_s4_oleada_items ADD COLUMN ${col}`); } catch (e) { /* ya existe */ }
+  }
+  try { seriesF5.ensureSchema(db); } catch (e) { /* las series son opcionales: sin su tabla, la oleada sigue como antes */ }
 }
 
 // ---- scoring -------------------------------------------------------------
@@ -196,6 +202,15 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
   }
   const items = [];
   const vistosNegocio = new Set(o.clavesVistas || []);
+  // F5: el tipo de toque de esta oleada (default T1, primer contacto,
+  // como siempre) elige la SERIE CON NOMBRE del negocio: primer contacto
+  // → su serie de primer contacto; seguimiento (T2–T4) → su serie de
+  // seguimiento; T5/T6 → reactivación / reseña. Si el negocio todavía
+  // no tiene series, eleccionSerie es null y todo sigue exactamente
+  // como antes de F5 (fallback intacto).
+  const tipoToque = String(o.tipo || o.tipo_email || 'T1').toUpperCase();
+  let eleccionSerie = null;
+  try { eleccionSerie = seriesF5.serieParaToque(db, userId, tipoToque); } catch (e) { eleccionSerie = null; }
   for (const lead of leads) {
     const det = detalleDe ? detalleDe(lead) : null;
     const tier = (det && det.tier) || (lead.puntaje >= 85 ? 'A' : (lead.puntaje >= 70 ? 'B' : 'C'));
@@ -206,20 +221,34 @@ function prepararOleadaZona(db, userId, zonaId, opts) {
     if (restantes[canal] <= 0) continue; // el gobernador manda: fuera de cupo no entra ni al espejo del día
     restantes[canal]--;
     vistosNegocio.add(clave);
-    const pieza = textoPara(lead, 'T1', { negocio: o.negocio || 'fitswapp' });
-    const ins = db.prepare(`INSERT INTO venty_s4_oleada_items (oleada_id, user_id, lead_id, canal, tipo, asunto, texto, estado, created_at) VALUES (?,?,?,?,?,?,?,'espejo',?)`)
-      .run(oleadaId, userId, lead.id, canal, 'T1', pieza.asunto || '', pieza.texto || '', ahoraIso());
+    let pieza = textoPara(lead, tipoToque, { negocio: o.negocio || 'fitswapp' });
+    // F5: para los toques que el texto fijo del piloto no cubre (T5/T6),
+    // la pieza sale del paso de la serie con nombre del negocio.
+    if (!pieza.ok && eleccionSerie && eleccionSerie.paso) {
+      pieza = { ok: true, tipo: tipoToque, asunto: eleccionSerie.paso.asunto || '', texto: eleccionSerie.paso.texto || '', firma: eleccionSerie.paso.firma || '' };
+    }
+    if (!pieza.ok) continue; // toque que no aplica y sin serie que lo cubra: no entra al espejo
+    const datosSerie = eleccionSerie ? {
+      serie_nombre: eleccionSerie.serie_nombre, serie_tipo: eleccionSerie.serie_tipo,
+      serie_id: eleccionSerie.serie.id, paso_orden: eleccionSerie.paso ? eleccionSerie.paso.orden : null,
+      idea: eleccionSerie.paso ? eleccionSerie.paso.idea : '', cta: eleccionSerie.paso ? eleccionSerie.paso.cta : '',
+    } : {};
+    const ins = db.prepare(`INSERT INTO venty_s4_oleada_items (oleada_id, user_id, lead_id, canal, tipo, asunto, texto, estado, serie_nombre, serie_tipo, created_at) VALUES (?,?,?,?,?,?,?,'espejo',?,?,?)`)
+      .run(oleadaId, userId, lead.id, canal, tipoToque, pieza.asunto || '', pieza.texto || '', datosSerie.serie_nombre || '', datosSerie.serie_tipo || '', ahoraIso());
     const itemId = Number(ins.lastInsertRowid);
     const jug = db.prepare(`INSERT INTO venty_jugadas (user_id, partida_id, tipo, propuesta_json, porque, estado) VALUES (?,?,?,?,?,'pendiente')`)
       .run(userId, null, 'oleada_contacto', JSON.stringify({
         oleada_id: oleadaId, item_id: itemId, lead_id: lead.id, lead_nombre: lead.nombre,
         canal, canal_fuente: (!lead.canal_preferido && canal === dominanteOleada) ? 'canal_dominante' : 'canal_preferido',
-        tipo_email: 'T1', asunto: pieza.asunto || '', texto: pieza.texto || '',
+        tipo_email: tipoToque, asunto: pieza.asunto || '', texto: pieza.texto || '',
         destino: lead.contacto_ref, espejo: true,
-      }), 'oleada en espejo de tu zona: nada sale en real sin tu aceptación en la bandeja');
+        ...datosSerie,
+      }), eleccionSerie
+        ? `oleada en espejo de tu zona, serie ${eleccionSerie.serie_nombre}: nada sale en real sin tu aceptación en la bandeja`
+        : 'oleada en espejo de tu zona: nada sale en real sin tu aceptación en la bandeja');
     const jugadaId = Number(jug.lastInsertRowid);
     db.prepare('UPDATE venty_s4_oleada_items SET jugada_id = ? WHERE id = ?').run(jugadaId, itemId);
-    items.push({ id: itemId, lead_id: lead.id, canal, jugada_id: jugadaId, estado: 'espejo' });
+    items.push({ id: itemId, lead_id: lead.id, canal, jugada_id: jugadaId, estado: 'espejo', ...(eleccionSerie ? { serie_nombre: eleccionSerie.serie_nombre, serie_tipo: eleccionSerie.serie_tipo } : {}) });
   }
   try { venty.registrarEvento(db, userId, 'oleada_espejo_preparada', null, { oleada_id: oleadaId, zona_id: zonaId, fecha, items: items.length }); } catch (e) {}
   const oleada = db.prepare('SELECT * FROM venty_s4_oleadas WHERE id = ?').get(oleadaId);
@@ -286,4 +315,5 @@ module.exports = {
   TIPOS_FITSWAPP, CANALES_OLEADA,
   ensureSchema, puntuar, tierDe, textoPara,
   prepararOleadaZona, prepararOleadaDiaria, verificarSalida, hoyYmd,
+  series: seriesF5, // F5: acceso a las series con nombre (serieParaToque y demás)
 };
