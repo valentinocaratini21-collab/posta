@@ -5004,6 +5004,14 @@ function lpAdsHTML() {
   </div></div>`;
 }
 
+function vdAns(btn) {
+  if (!btn) return;
+  var wrap = btn.parentNode;
+  var btns = wrap.querySelectorAll('.vd-ans');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('vd-sel', btns[i] === btn);
+  var win = btn.closest ? btn.closest('.vd-win') : null;
+  if (win) { var s = win.querySelector('.vd-saved'); if (s) s.classList.add('vd-on'); }
+}
 function lpIdeasHTML() {
   return `
   <div class="section cap-sec" id="ideas"><div class="wrap"><div class="cap-grid cap-flip">
@@ -5820,14 +5828,56 @@ function landingView(cfg) {
       <div class="pv-arrow pv-a2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M13 5l7 7-7 7"/></svg></div>
     </div>
     <div class="mv-scene"><div class="mv-title">Así aparece tu posteo del día, todas las mañanas.</div><p class="mv-sub">Abrís el teléfono y ya está: el posteo de hoy, listo. Si no decís nada, sale solo.</p><div class="mv-arc" aria-hidden="true"><svg class="mv-arc-svg" viewBox="0 0 1000 150" fill="none"><path d="M46,126 C330,16 670,16 954,126" stroke="#2793C8" stroke-width="3" stroke-dasharray="1 14" stroke-linecap="round" opacity=".75"/><g><animateMotion dur="8s" repeatCount="indefinite" path="M46,126 C330,16 670,16 954,126"/><circle r="12" fill="#2793C8" opacity=".30"/><circle r="6.5" fill="#fff" stroke="rgba(39,147,200,.35)" stroke-width="3"/></g></svg><div class="mv-sun"></div><div class="mv-check"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5 L10 18 L19.5 6.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><div class="mv-phones"><div class="mv-slot"><div class="mv-push-pos"><div class="mv-push mv-push-l"><img class="mv-tile" src="ai-avatar.png" alt="Posty"><div><div class="mv-p-head"><span class="mv-p-app">Posty</span><span class="mv-p-hour">· 9:00</span></div><div class="mv-p-title">Tu posteo de hoy está listo</div><div class="mv-p-sub">Si no decís nada, sale solo a las 19:00.</div></div></div></div><div class="mv-phone mv-phone-l"><div class="mv-status"><span class="mv-clock">9:00</span><span class="mv-sicons" aria-hidden="true"><svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#0A1E33"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="#0A1E33"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="#0A1E33"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="#0A1E33"/></svg><svg width="16" height="11" viewBox="0 0 16 12" fill="none"><path d="M1.5 4.2 A10 10 0 0 1 14.5 4.2" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6.9 A6.4 6.4 0 0 1 12 6.9" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="10" r="1.5" fill="#0A1E33"/></svg><svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.7" y="0.7" width="20" height="10.6" rx="3" fill="none" stroke="#0A1E33" stroke-opacity=".45" stroke-width="1.2"/><rect x="2.4" y="2.4" width="13.4" height="7.2" rx="1.6" fill="#0A1E33"/><path d="M22.8 4 v4 a2.2 2.2 0 0 0 0-4z" fill="#0A1E33" fill-opacity=".45"/></svg></span></div><div class="mv-notch"></div><p class="mv-greet">Buen día, Patisserie Tomoko</p><p class="mv-ptitle">Tu posteo de hoy</p><div class="mv-postcard"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy"><div class="mv-cap"><b>Hojicha Mille Crepe.</b> El posteo de hoy, listo para salir.</div></div><div class="mv-chip"><span class="mv-dot"></span>Sale hoy · 19:00 · en tu Instagram</div><div class="mv-btnrow"><div class="mv-btn-p">Sale así</div><div class="mv-btn-g">Lo freno</div></div></div></div><div class="mv-slot"><div class="mv-loop-pos" aria-hidden="true"><div class="mv-loop-card"><div class="mv-l-head"><img src="ai-avatar.png" alt=""><span>Posty <span class="mv-grey">· Mañana · 9:00</span></span></div><div class="mv-l-line">Tu próximo posteo ya está en camino</div></div></div><div class="mv-push-pos"><div class="mv-push mv-push-r"><img class="mv-tile" src="ai-avatar.png" alt="Posty"><div><div class="mv-p-head"><span class="mv-p-app">Posty</span><span class="mv-p-hour">· 19:00</span></div><div class="mv-p-title">Tu posteo ya salió</div><div class="mv-p-sub">Hojicha Mille Crepe — ya está en tu Instagram.</div></div></div></div><div class="mv-phone mv-phone-r"><div class="mv-status"><span class="mv-clock">19:00</span><span class="mv-sicons" aria-hidden="true"><svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#0A1E33"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="#0A1E33"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="#0A1E33"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="#0A1E33"/></svg><svg width="16" height="11" viewBox="0 0 16 12" fill="none"><path d="M1.5 4.2 A10 10 0 0 1 14.5 4.2" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6.9 A6.4 6.4 0 0 1 12 6.9" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="10" r="1.5" fill="#0A1E33"/></svg><svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.7" y="0.7" width="20" height="10.6" rx="3" fill="none" stroke="#0A1E33" stroke-opacity=".45" stroke-width="1.2"/><rect x="2.4" y="2.4" width="13.4" height="7.2" rx="1.6" fill="#0A1E33"/><path d="M22.8 4 v4 a2.2 2.2 0 0 0 0-4z" fill="#0A1E33" fill-opacity=".45"/></svg></span></div><div class="mv-notch"></div><div class="mv-ig-head"><img src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko"><div><div class="mv-ig-name">patisserietomoko</div><div class="mv-ig-sub">Tu feed</div></div></div><div class="mv-ig-photo"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy en tu feed"><span class="mv-posted-chip"><span class="mv-pcheck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5 L10 18 L19.5 6.5" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Publicado · 19:00</span></div><div class="mv-ig-acts" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 20.7C6.4 16.9 3 13.6 3 9.9 3 7.2 5.1 5 7.7 5c1.7 0 3.3.9 4.3 2.3C13 5.9 14.6 5 16.3 5 18.9 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.8z" fill="#ED4956"/></svg><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 11.5c0 4.4-4 8-9 8-1.1 0-2.2-.16-3.2-.47L3 20l.6-3.4C2.6 15.2 3 13.4 3 11.5c0-4.4 4-8 9-8s9 3.6 9 8z" stroke="#0A1E33" stroke-width="1.9" stroke-linejoin="round" transform="translate(0 .5)"/></svg><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21.2 3.4 10.6 13.9M21.2 3.4 14.4 21l-3.8-7.1L3.4 10z" stroke="#0A1E33" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="mv-time">19:00 · hoy</span></div><p class="mv-likes"><b>236</b> Me gusta</p><p class="mv-ig-cap"><b>patisserietomoko</b> Hojicha Mille Crepe — capas finitas y crema de té tostado.</p><div class="mv-comment in"><span class="mv-avatar-s">S</span><span><b>sofia.m</b> ¡Se ve increíble!</span></div></div></div></div><div class="mv-payoff"><div class="mv-tl-row"><span class="mv-tl-label">9:00 — lo ves listo</span><span class="mv-tl-line"><span class="mv-tl-dot mv-d-l"></span><span class="mv-tl-dot mv-d-r"></span></span><span class="mv-tl-label">19:00 — <span class="mv-green">ya salió</span></span></div><p class="mv-punch">En el medio, no hacés nada.</p></div></div>
+    <div class="vd-kick">ASÍ VENDE CADA POSTEO</div>
     <h2>Cada posteo está pensado para vender.</h2>
     <p class="lede">Así es cada pieza que sale de tu negocio.</p>
-    <div class="steps">
-      <div class="step"><div class="num">🔍</div><h3>Una pieza, un producto</h3><p>Cada pieza vende una sola cosa: tu producto real, con su nombre y su precio, en el centro. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
-      <div class="step"><div class="num">🔌</div><h3>Nos conectamos a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
-      <div class="step"><div class="num">💬</div><h3>Preguntamos solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estamos seguros de tu rubro, te preguntamos antes de generar — nunca adivinamos. Y tu respuesta queda guardada: no te la volvemos a hacer.</p></div>
+    <div class="vd-cols">
+      <div class="vd-col"><div class="vd-panel">
+        <div class="vd-phead"><span class="vd-badge"><svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg></span><div class="vd-ptitle">Una pieza, un producto</div></div>
+        <div class="vd-scene vd-s1">
+          <div class="vd-messy" aria-hidden="true">
+            <div class="vd-mgrid"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt=""><img loading="lazy" src="g2-moda-1.jpg" alt=""><img loading="lazy" src="g2-barber-5.jpg" alt=""><img loading="lazy" src="gt-miogelato-5.jpg" alt=""></div>
+            <span class="vd-stk vd-stkr">¡OFERTA!</span><span class="vd-stk vd-stkp">2x1 HOY</span><span class="vd-who">todo junto, sin nombre</span>
+          </div>
+          <div class="vd-hero"><img loading="lazy" src="lp-vender-berry.jpg" alt="Posteo diseñado de la Berry Mille Crepe, con su nombre en la pieza"><span class="vd-tag"><span class="vd-tn">Berry Mille Crepe</span><span class="vd-tp">$18</span></span></div>
+        </div>
+        <p class="vd-cap">Una sola cosa, con nombre y precio. Nada genérico.</p>
+      </div></div>
+      <div class="vd-col"><div class="vd-panel">
+        <div class="vd-phead"><span class="vd-badge"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span><div class="vd-ptitle">Nos conectamos a lo que ya usás</div></div>
+        <div class="vd-scene">
+          <div class="vd-plugs">
+            <span class="vd-pchip"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="vdIgG" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#vdIgG)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg>Instagram</span>
+            <svg class="vd-wire" viewBox="0 0 60 14" preserveAspectRatio="none" aria-hidden="true"><path d="M1,7 C18,2 42,12 59,7"/></svg>
+            <span class="vd-pchip vd-posty"><img src="ai-avatar.png" alt="Posty">Posty</span>
+            <svg class="vd-wire" viewBox="0 0 60 14" preserveAspectRatio="none" aria-hidden="true"><path d="M1,7 C18,12 42,2 59,7"/></svg>
+            <span class="vd-pchip"><svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path fill="#2C3357" d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>Tiendanube</span>
+          </div>
+          <div class="vd-win">
+            <div class="vd-winbar"><i></i><i></i><i></i><span>Tu tienda</span></div>
+            <div class="vd-srow vd-hot"><img class="vd-th" loading="lazy" src="lp-tomoko-berry.jpg" alt=""><div><div class="vd-nm">Berry Mille Crepe</div><div class="vd-st">quedan 6</div></div><div class="vd-side"><span class="vd-chipsky">el que más vendés, manda</span></div></div>
+            <div class="vd-srow vd-dim"><img class="vd-th" loading="lazy" src="lp-tomoko-yuzu.jpg" alt=""><div><div class="vd-nm">Tarta de yuzu</div><div class="vd-st">sin stock</div></div><div class="vd-side"><span class="vd-chipglass">sin stock · no sale</span></div></div>
+            <div class="vd-srow"><img class="vd-th" loading="lazy" src="lp-tomoko-hojicha.jpg" alt=""><div><div class="vd-nm">Hojicha Mille Crepe</div><div class="vd-st">quedan 12</div></div></div>
+          </div>
+        </div>
+        <p class="vd-cap">Con el login oficial de Meta, sin contraseñas.</p>
+      </div></div>
+      <div class="vd-col"><div class="vd-panel">
+        <div class="vd-phead"><span class="vd-badge"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></span><div class="vd-ptitle">Preguntamos solo lo que falta</div></div>
+        <div class="vd-scene">
+          <div class="vd-win">
+            <div class="vd-chathead"><img src="ai-avatar.png" alt="Posty"><b>Posty</b><span>· ahora</span></div>
+            <div class="vd-chatbody">
+              <div class="vd-bubble">¿La Berry sale también sin gluten?</div>
+              <div class="vd-answers"><button type="button" class="vd-ans" onclick="vdAns(this)">Sí</button><button type="button" class="vd-ans" onclick="vdAns(this)">No</button></div>
+              <div class="vd-saved"><span class="vd-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Guardado · no te lo volvemos a preguntar</div>
+            </div>
+          </div>
+        </div>
+        <p class="vd-cap">Una pregunta por semana, como máximo.</p>
+      </div></div>
     </div>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+    <div class="vd-ctarow"><a class="vd-btnglass" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
   ${lpIdeasHTML()}
   ${lpAtiendeHTML()}
