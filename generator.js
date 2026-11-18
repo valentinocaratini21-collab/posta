@@ -887,6 +887,43 @@ function captionWeekClash(caption, prevCaptions, business) {
   return { ok: true, note: r.reason };
 }
 
+// (HASHTAGS-RUBRO · Juli, 2026-11-18) El campo hashtags vive SEPARADO
+// del cuerpo y ninguna puerta lo miraba: captionPasses solo ve los
+// hashtags pegados en el texto. Así publicaron el id 700 (Bill Lawrence
+// Salon, peluquería de Washington DC: "precision cuts and color") con el
+// set de SKINCARE #beautyroutine #selfcare #skincare #glowingskin, y el
+// id 701 (All Life is Yoga, estudio de yoga de Atlanta) con el set de
+// GYM #gymlife #personaltrainer #fitness — ambos el 2026-11-18, tras
+// cuatro días de evidencia registrada (672 con set de café, The Ordinary
+// con tags de peluquería). hashtagsPass(hashtags, input) es la puerta
+// de ese campo: firmas angostas por familia (hacen falta >=2 tags de la
+// familia) y contexto que la habilita — si el negocio, el rubro o el
+// propio caption hablan de ese mundo, el set es legítimo y pasa (una
+// estética con "tratamiento facial para tu piel" usa #skincare bien;
+// un gimnasio con "gym" en el nombre usa #gymlife bien). La consultan
+// captionPasses/captionPassesEn cuando el llamador pasa input.hashtags
+// y el lint al programar (server.js scheduleLintForPost), que es la
+// transición por la que pasa TODO posteo antes de publicarse.
+const HASHTAG_FAMILY_SKIN = ['skincare', 'glowingskin', 'beautyroutine', 'skincareroutine', 'cuidadodelapiel', 'pielradiante'];
+const HASHTAG_FAMILY_GYM = ['gymlife', 'personaltrainer', 'gymmotivation', 'bodybuilding', 'gymrat'];
+function hashtagsPass(hashtags, input) {
+  const tags = (String(hashtags || '').match(/#[\p{L}\p{N}_]+/gu) || [])
+    .map((t) => t.slice(1).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  if (!tags.length) return { ok: true };
+  const inp = input || {};
+  const ctx = [inp.business || '', inp.category || '', inp.rubro || '', inp.caption || '']
+    .join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const skinHits = tags.filter((t) => HASHTAG_FAMILY_SKIN.includes(t));
+  if (skinHits.length >= 2 && !/skincare|piel|facial|estetic|spa\b|cosmet|dermat/.test(ctx)) {
+    return { ok: false, reason: `hashtags de otro rubro (HASHTAGS-RUBRO): #${skinHits.join(' #')} son de skincare y ni el negocio, ni el rubro, ni el caption hablan del cuidado de la piel — los hashtags son del rubro DE ESTE negocio y de ESTE posteo (id 700 real: una peluquería publicó con el set de skincare)` };
+  }
+  const gymHits = tags.filter((t) => HASHTAG_FAMILY_GYM.includes(t));
+  if (gymHits.length >= 2 && /yoga|pilates/.test(ctx) && !/gym|gimnasio|crossfit|pesas|muscul/.test(ctx)) {
+    return { ok: false, reason: `hashtags de otro rubro (HASHTAGS-RUBRO): #${gymHits.join(' #')} son de gimnasio y el negocio/posteo es de yoga o pilates — los hashtags son del rubro DE ESTE negocio y de ESTE posteo (id 701 real: un estudio de yoga publicó con el set de gym)` };
+  }
+  return { ok: true };
+}
+
 // Puerta de calidad automática: el cliente nunca ve un caption mediocre.
 // Devuelve { ok, reason }.
 // `input` (opcional) aporta { dna, business } para el chequeo de grounding:
@@ -998,6 +1035,12 @@ function captionPasses(caption, input) {
   const tagNorm = (t) => t.slice(1).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const badTag = (c.match(/#[\p{L}\p{N}_]+/gu) || []).map(tagNorm).find(t => IRRELEVANT_TAGS.includes(t));
   if (badTag) return { ok: false, reason: `hashtag irrelevante: #${badTag} no le vende nada al negocio` };
+  // HASHTAGS-RUBRO (Juli, 2026-11-18): el campo hashtags separado del
+  // cuerpo, cuando el llamador lo pasa, pasa por su propia puerta.
+  if (input && input.hashtags) {
+    const hp = hashtagsPass(input.hashtags, { ...input, caption: c });
+    if (!hp.ok) return hp;
+  }
   // PREGUNTA CORTADA Y CERRADA (regla de Valentino 2026-10-19): si la
   // primera línea — la que se quema como titular en la imagen — es una
   // pregunta TRUNCADA respecto de la pregunta completa del brief o del
@@ -1876,6 +1919,12 @@ function captionPassesEn(caption, input) {
   if (tags.length > 10) return { ok: false, reason: `${tags.length} hashtags (max 10)` };
   const badTag = tags.map((t) => t.slice(1).toLowerCase()).find((t) => ['follow4follow', 'f4f', 'like4like', 'l4l', 'instagood', 'photooftheday', 'spam', 'crypto', 'forex'].includes(t));
   if (badTag) return { ok: false, reason: `irrelevant hashtag: #${badTag}` };
+  // HASHTAGS-RUBRO (Juli, 2026-11-18): the separate hashtags field,
+  // when the caller passes it, goes through its own gate (ids 700/701).
+  if (input && input.hashtags) {
+    const hp = hashtagsPass(input.hashtags, { ...input, caption: c });
+    if (!hp.ok) return hp;
+  }
   // Pregunta cortada y cerrada (regla de Valentino, vale en los dos idiomas).
   const firstLine = (c.split('\n').map((s) => s.trim()).filter(Boolean)[0]) || '';
   if (firstLine.endsWith('?') && truncatedClosedQuestion(firstLine, c)) {
@@ -6163,4 +6212,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, hashtagsPass, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };

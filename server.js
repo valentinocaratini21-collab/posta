@@ -49,7 +49,7 @@ try {
   const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
-const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionPassesEn, captionBodyKey, captionWeekClash } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, chatReceiptLines, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionPassesEn, hashtagsPass, captionBodyKey, captionWeekClash } = require('./generator');
 const { isCasaHandle, casaIdeasBlock, casaCaptionBlock } = require('./posty-casa-linea'); // LOTE POSTY APRENDE: línea editorial solo para la casa
 const { propiaLineaForClient } = require('./posty-cliente-linea'); // LOTE POSTY APRENDE CLIENTES: referencia propia por cliente, sin cruces
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
@@ -20673,7 +20673,7 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
 function scheduleLintForPost(uid, postId) {
   try {
     if (!uid || !postId || typeof captionPasses !== 'function') return null;
-    const post = db.prepare('SELECT id, caption, week_key, source FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    const post = db.prepare('SELECT id, caption, hashtags, week_key, source FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post) return null;
     const caption = String(post.caption || '');
     if (!caption.trim()) return { ok: true }; // sin caption no hay copy que lintear
@@ -20704,6 +20704,22 @@ function scheduleLintForPost(uid, postId) {
     const gateFn = brandLang === 'en' ? captionPassesEn : captionPasses;
     const chk = gateFn(caption, { business: prof.business_name || '', dna, ig_username: prof.ig_username || '', prevCaptions, lang: brandLang });
     if (chk && !chk.ok) { failReason = String(chk.reason || 'caption no pasa el gate'); langFail = !!chk.langFail; }
+    // (HASHTAGS-RUBRO · Juli, 2026-11-18) El lint miraba solo el cuerpo:
+    // el campo hashtags — separado, y el que Instagram indexa — salía
+    // sin ninguna puerta (id 700, peluquería, publicó con el set de
+    // skincare; id 701, yoga, con el set de gym; ambos 2026-11-18).
+    // hashtagsPass corre acá, en la transición a programado por la que
+    // pasa todo posteo, con el contexto del negocio (nombre, rubro y el
+    // propio caption): un set de otro rubro marca el posteo igual que
+    // un caption que no pasa (registro + retención según la política de
+    // siempre de este lint; la prueba registra sin retener, salvo
+    // idioma). Sin hashtags no hay nada que lintear en este campo.
+    if (!failReason && typeof hashtagsPass === 'function' && String(post.hashtags || '').trim()) {
+      try {
+        const hp = hashtagsPass(post.hashtags, { business: prof.business_name || '', category: prof.category || '', caption });
+        if (hp && !hp.ok) failReason = String(hp.reason || 'hashtags no pasan el gate');
+      } catch (e) {}
+    }
     if (!failReason) {
       try {
         const lt = analysisEngine.lintTone(caption);
@@ -46403,7 +46419,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1177';
+const BUILD_ID = '20261105-v1178';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
