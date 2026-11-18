@@ -15578,9 +15578,22 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
 });
 
 // Historial de pautas (refresca métricas de las activas, best effort)
+// (LOTE IMPULSOS-SOLO-REALES · orden de Valentino 17/11 21:18) El
+// historial que ve el cliente («Tus impulsos» del tab Ads y «Últimos
+// impulsos» de la billetera, ambos alimentados por este endpoint)
+// muestra SOLO impulsos reales: los que llegaron a existir en Meta.
+// El intento de creación que Meta rechazó queda asentado en
+// ad_boosts como status 'error' SIN meta_campaign_id (así lo escriben
+// todos los rieles: cliente directo, Destacado y billetera) — ese
+// registro es del equipo (diagnóstico en /api/admin/client/:id, que
+// sigue leyendo la tabla entera) y NO es un impulso: queda fuera de
+// esta lectura. El 'error' CON campaña creada sí se muestra: el
+// anuncio existió en Meta y no quedó activo (activación fallida) o
+// se creó sin débito — son estados creados, no intentos. El filtro
+// va en el SQL para que el LIMIT 20 cuente solo impulsos reales.
 app.get('/api/ads/boosts', requireAuth, async (req, res) => {
   let boosts = [];
-  try { boosts = db.prepare(`SELECT * FROM ad_boosts WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(req.session.userId); } catch (e) {}
+  try { boosts = db.prepare(`SELECT * FROM ad_boosts WHERE user_id = ? AND NOT (status = 'error' AND COALESCE(meta_campaign_id, '') = '') ORDER BY id DESC LIMIT 20`).all(req.session.userId); } catch (e) {}
   if (metaAds.adsConfigured()) {
     for (const b of boosts) {
       if (b.status !== 'active' || !b.meta_campaign_id) continue;
@@ -46138,7 +46151,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1169';
+const BUILD_ID = '20261105-v1170';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
