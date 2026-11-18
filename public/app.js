@@ -5041,20 +5041,13 @@ function lpSubirHTML() {
 function lpVozHTML() {
   return `
   <div class="section" id="voz"><div class="wrap">
-    <h2>Pedís por nota de voz y se hace.</h2>
-    <div>
-<div class="mk-block">
-  <div class="mk-block-head"><b>¿Querés un cambio? Pedilo hablando</b><span>Una nota de voz desde la app, y rehacemos la pieza.</span></div>
-  <div class="mk-voice-bubble"><span class="mk-play">▶</span><span class="mk-wave"><i style="height:8px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:12px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:28px"></i><i style="height:18px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:24px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:27px"></i><i style="height:15px"></i><i style="height:11px"></i><i style="height:21px"></i><i style="height:17px"></i><i style="height:8px"></i><i style="height:19px"></i><i style="height:13px"></i><i style="height:23px"></i><i style="height:10px"></i><i style="height:16px"></i><i style="height:12px"></i></span><span class="mk-dur">0:07</span></div>
-  <p class="mk-transcript">«cambiame el fondo, más cálido»</p>
-  <div class="mk-ba">
-    <figure><img src="lp-patagonia-syncilla.jpg" alt="El posteo de tu negocio, antes"><figcaption>ANTES</figcaption></figure>
-    <span class="mk-ba-arrow">→</span>
-    <figure><img src="lp-patagonia-syncilla-calida.jpg" alt="El posteo de tu negocio, con el fondo nuevo"><figcaption>DESPUÉS</figcaption></figure>
-  </div>
-  <span class="mk-ok-chip">✓ Fondo nuevo — listo</span>
-</div>
-</div>
+    <div class="wd-vk">Pedís por nota de voz y se hace</div>
+    <h2 class="wd-vh2">Hablás, y queda hecho.</h2>
+    <p class="wd-vsub">Sin formularios ni vueltas: una nota de voz desde la app.</p>
+    <div class="wd-vozrow">
+      <div class="wd-vnote"><span class="wd-vplay">▶</span><span class="wd-vwave"><i style="animation-delay:0.00s"></i><i style="animation-delay:0.09s"></i><i style="animation-delay:0.18s"></i><i style="animation-delay:0.27s"></i><i style="animation-delay:0.36s"></i><i style="animation-delay:0.45s"></i><i style="animation-delay:0.54s"></i><i style="animation-delay:0.63s"></i><i style="animation-delay:0.72s"></i><i style="animation-delay:0.81s"></i><i style="animation-delay:0.90s"></i><i style="animation-delay:0.99s"></i><i style="animation-delay:1.08s"></i><i style="animation-delay:1.17s"></i><i style="animation-delay:1.26s"></i><i style="animation-delay:1.35s"></i><i style="animation-delay:1.44s"></i><i style="animation-delay:1.53s"></i></span><span class="wd-vquote">“El posteo de hoy, cambialo por el de mañana”</span></div>
+      <div class="wd-vdone"><span class="wd-vck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#0A1E33" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Listo.</b> El posteo de mañana sale hoy, como pediste.</span></div>
+    </div>
   </div></div>`;}
 
 
@@ -5185,15 +5178,24 @@ function landingView(cfg) {
 .wd-on #crecimiento.wd-live .strat-row:nth-of-type(4){transition-delay:.46s}
 .wd-on #crecimiento.wd-live .strat-row:nth-of-type(5){transition-delay:.64s}
 .wd-on #crecimiento.wd-live .strat-row:nth-of-type(6){transition-delay:.82s}
-#voz .mk-wave i{transform-origin:center}
-.wd-on #voz .mk-ba figure:nth-of-type(2) img{filter:saturate(.35);opacity:.55;transition:filter .7s ease .55s,opacity .7s ease .55s}
-.wd-on #voz.wd-live .mk-ba figure:nth-of-type(2) img{filter:none;opacity:1}
-.wd-on #voz .mk-ok-chip{opacity:0;transform:translateY(6px);transition:opacity .5s ease 1s,transform .5s ease 1s}
-.wd-on #voz.wd-live .mk-ok-chip{opacity:1;transform:none}
-#voz.wd-live .mk-wave i{animation:wd-wave .9s ease-in-out infinite alternate}
-#voz.wd-live .mk-wave i:nth-child(3n){animation-delay:.18s}
-#voz.wd-live .mk-wave i:nth-child(4n){animation-delay:.36s}
-#voz.wd-live .mk-wave i:nth-child(5n){animation-delay:.54s}
+/* ===== WEB-MOCK-1: la seccion de voz con la composicion del mock de linea unificada ===== */
+#voz .wd-vk{font-weight:800;letter-spacing:2.5px;font-size:13px;color:#2793C8;text-transform:uppercase;text-align:center}
+#voz .wd-vh2{font-size:clamp(30px,4vw,44px);font-weight:800;letter-spacing:-.6px;line-height:1.13;text-align:center;margin:10px auto 8px;max-width:720px;color:#0A1E33}
+#voz .wd-vsub{text-align:center;color:#33475B;font-size:17px;max-width:560px;margin:0 auto}
+#voz .wd-vozrow{display:flex;gap:26px;align-items:center;justify-content:center;margin-top:38px;flex-wrap:wrap;background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:24px;box-shadow:0 18px 40px rgba(10,30,51,.10);padding:30px 26px;transform:rotate(1.2deg)}
+#voz .wd-vnote{background:#fff;border-radius:99px;box-shadow:0 14px 32px rgba(10,30,51,.13);padding:14px 22px 14px 14px;display:flex;gap:13px;align-items:center}
+#voz .wd-vplay{width:42px;height:42px;border-radius:50%;background:#2793C8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto}
+#voz .wd-vwave{display:flex;gap:3px;align-items:center;height:30px}
+#voz .wd-vwave i{width:4px;border-radius:99px;background:#C6D3DF;height:8px;display:block;flex:0 0 auto}
+#voz.wd-live .wd-vwave i{animation:wd-wv 1s ease-in-out infinite alternate}
+@keyframes wd-wv{from{height:6px}to{height:26px}}
+#voz .wd-vquote{font-weight:700;font-size:14px;color:#0A1E33}
+#voz .wd-vdone{background:#fff;border-radius:18px;box-shadow:0 14px 32px rgba(10,30,51,.12);padding:16px 18px;font-size:14.5px;display:flex;gap:11px;align-items:center;max-width:340px;color:#0A1E33}
+#voz .wd-vck{width:30px;height:30px;border-radius:50%;background:#FEC14D;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+#voz .wd-vck svg{width:15px;height:15px}
+.wd-on #voz .wd-vdone{opacity:0;transform:translateY(6px);transition:opacity .5s ease 1s,transform .5s ease 1s}
+.wd-on #voz.wd-live .wd-vdone{opacity:1;transform:none}
+@media(max-width:760px){#voz .wd-vozrow{transform:none}}
 @keyframes wd-wave{from{transform:scaleY(.5)}to{transform:scaleY(1.18)}}
 .wd-on #ads .cap-grow>*{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
 .wd-on #ads.wd-live .cap-grow>*{opacity:1;transform:none}
@@ -5320,7 +5322,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pz-mg pz-mg--heroI"><img class="hero-posty" src="valentino-posty-fundador.jpg?v=2" alt="Valentino y Posty, tus community managers"></div>
     <div class="pill">Tus community managers</div>
-    <h1>«No tengo tiempo de postear en Instagram todos los días», <span class="hl">nosotros posteamos por tu negocio todos los días, con tu producto real.</span></h1>
+    <h1>«No tengo tiempo de postear en Instagram todos los días», <span class="hl">nosotros posteamos por tu negocio <b>todos los días</b>, con tu producto real.</span></h1>
     
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
