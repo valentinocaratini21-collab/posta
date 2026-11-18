@@ -5774,13 +5774,24 @@ function landingView(cfg) {
       ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
     </div>
     <p class="lp-pais-nota" id="plansCountryNote">${(PZ_PAIS_META[country] && PZ_PAIS_META[country].nota) || ''}</p>
-    <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
     <div id="lpSocial"></div>
-    <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
+    <div class="cmp-scene" aria-label="Comparación de opciones">
+      <div class="cmp-card cmp-alt cmp-cm">
+        <h3>Un community manager</h3>
+        <div class="cmp-price">US$800–1.500<small>/mes</small></div>
+        <ul><li>+ entrevistas y búsqueda</li><li>+ sueldo, vacaciones y bajas</li><li>+ sigue siendo tu problema si falta</li></ul>
+      </div>
+      <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
+      <div class="cmp-card cmp-alt cmp-diy">
+        <h3>Hacerlo vos</h3>
+        <div class="cmp-price cmp-price-txt">tu tiempo, todos los días</div>
+        <ul><li>pensar qué postear</li><li>diseñar cada pieza</li><li>responder todo</li></ul>
+      </div>
+    </div>
     <div class="plan-dots" id="planDots"><span class="on"></span></div>
-    <p style="font-size:15px;color:#0A1E33;line-height:1.6;text-align:center;max-width:660px;margin:18px auto 0">⭐ <b>Precio fundador:</b> los que entren ahora lo conservan para siempre.</p>
+    <p style="font-size:15px;color:#0A1E33;line-height:1.6;text-align:center;max-width:660px;margin:18px auto 0">⭐ <b>Precio fundador:</b> solo para los primeros 50 clientes — los que entren ahora lo conservan para siempre.</p>
     <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
-    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque el precio suba.</p>
+    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los US$199 para siempre.</p>
 
   </div></div>
   <div class="lp-final"><div class="wrap">

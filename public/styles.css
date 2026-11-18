@@ -513,6 +513,26 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* Planes landing */
 .plans-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px;align-items:stretch}
 .plans-row .price-card{margin:0;max-width:none}
+/* ANCLA-PRECIO: la comparación que resuelve en el plan — las dos alternativas
+   apagadas e inclinadas hacia un lado; la tarjeta de Posty, héroe a todo
+   color en el centro, inclinada al revés. El precio del plan vive SOLO en
+   su tarjeta: las alternativas llevan sus propios costos, nunca el 199. */
+.cmp-scene{display:grid;grid-template-columns:1fr 1.12fr 1fr;gap:22px;align-items:center;max-width:1140px;margin:30px auto 6px}
+.cmp-scene .plans-row{display:block;transform:rotate(1.1deg)}
+.cmp-card{background:var(--card);border:1.5px dashed var(--line);border-radius:24px;padding:30px 26px;text-align:center;box-shadow:var(--shadow)}
+.cmp-alt{opacity:.72;filter:saturate(.55);transform:rotate(-1.8deg)}
+.cmp-card h3{font-size:19px;color:var(--txt);margin:0 0 10px}
+.cmp-price{display:inline-block;background:rgba(10,30,51,.06);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:21px;font-weight:800;color:var(--txt);white-space:nowrap}
+.cmp-price small{font-size:12.5px;color:var(--mut);font-weight:400}
+.cmp-price-txt{font-size:16.5px;white-space:normal}
+.cmp-card ul{list-style:none;margin:20px auto 4px;padding:0;color:var(--mut);font-size:13.5px;line-height:2;text-align:left;width:fit-content}
+@media(max-width:820px){
+  .cmp-scene{display:flex;flex-direction:column;gap:18px;margin:24px auto 4px}
+  .cmp-cm{order:1}
+  .cmp-diy{order:2}
+  .cmp-scene .plans-row{order:3;width:100%;transform:none}
+  .cmp-alt{transform:rotate(-1.2deg);width:100%}
+}
 .price-card.hot{border-color:var(--cel);box-shadow:0 20px 60px rgba(39,147,200,.18)}
 .price-card.hot .tag{background:var(--yl);color:#0A1E33}
 
