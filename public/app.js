@@ -3760,46 +3760,6 @@ function wireShowcaseCard(slot) {
 // se inyecta SOLO si /api/showcase devuelve casos activos. Sin casos (o
 // ante cualquier falla) no se inserta NADA: la sección no existe en el
 // HTML servido ni queda una caja vacía — la home de hoy queda idéntica.
-function lpShowcaseCardHTML(c) {
-  const who = `${esc(c.business_name)}${c.rubro ? ' · ' + esc(c.rubro) : ''}${c.city ? ' · ' + esc(c.city) : ''}`;
-  const img = c.image ? `<div class="sc-phone"><div class="sc-phone-head"><b>${esc(c.business_name)}</b><span>•••</span></div><img loading="lazy" src="${esc(c.image)}" alt="Posteo real de ${esc(c.business_name)}, hecho con nosotros"></div>` : '';
-  const inner = `<figure class="sc-card-lp">${img}<blockquote>«${esc(c.quote)}»</blockquote><figcaption><b>${who}</b><span class="sc-chip">📊 ${esc(c.metric_label || '')}</span></figcaption></figure>`;
-  return c.permalink ? `<a class="sc-link" href="${esc(c.permalink)}" target="_blank" rel="noopener">${inner}</a>` : inner;
-}
-function lpShowcaseInit() {
-  try {
-    fetch('/api/showcase').then((r) => r.json()).then((d) => {
-      const cases = (d && Array.isArray(d.cases)) ? d.cases : [];
-      if (!cases.length) return;
-      const anchor = document.querySelector('.lp-week-sec');
-      if (!anchor || document.getElementById('historias-reales')) return;
-      anchor.insertAdjacentHTML('afterend',
-        `<div class="section sc-sec" id="historias-reales"><div class="wrap">` +
-        `<h2>Historias reales 💛</h2>` +
-        `<p class="lede">Negocios que ya no tocan su Instagram: nosotros se lo trabajamos — y ellos lo cuentan.</p>` +
-        `<div class="sc-row">${cases.map(lpShowcaseCardHTML).join('')}</div>` +
-        `</div></div>`);
-    }).catch(() => {});
-  } catch (e) {}
-}
-// 🌈 FRANJA VIVA «El feed se arma solo» (v381, #feed) — patrón de familia
-// (el patrón de la franja): escena mandada por el scroll. Las tarjetas vuelan
-// desordenadas y se acomodan en la grilla perfecta; capítulos del método
-// (Pienso · Diseño · Publico) por umbrales de progreso. ESTADO POR DEFECTO =
-// ESCENA COMPLETA: sin JS o con prefers-reduced-motion no se escribe ningún
-// transform y la grilla se ve final. Solo transform/opacity, y todo es
-// función pura de la posición → reversible al retroceder.
-const LP_FEED_SCATTER = [
-  { x: -58, y: -36, r: -14 }, { x: 10, y: -60, r: 9 }, { x: 62, y: -28, r: 16 },
-  { x: -74, y: 4, r: 11 }, { x: 0, y: -16, r: -7 }, { x: 72, y: 8, r: -12 },
-  { x: -54, y: 42, r: 8 }, { x: 14, y: 60, r: -10 }, { x: 56, y: 38, r: 13 }
-];
-const LP_FEED_LINES = [
-  'Primero pienso las ideas de tu semana.',
-  'Después las diseño con tus fotos y tus colores.',
-  'Y tu feed queda perfecto, publicándose solo.'
-];
-let LP_FEED = null, LP_FEED_WIRED = false, LP_FEED_TICK = false;
 function lpFeedInit() {
   const scene = document.getElementById('lpFeedScene');
   if (!scene) { LP_FEED = null; return; }
@@ -3893,7 +3853,7 @@ function lpHeroWebToggle(link) {
   if (web) { form.scrollIntoView({ behavior: 'smooth', block: 'center' }); web.focus({ preventScroll: true }); }
 }
 
-let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
+
 /* Pura (sin DOM): la cubren las suites del lote con las 48 combinaciones. */
 
 
@@ -3979,7 +3939,6 @@ function lpInitHero() {
   pzPaisPruebaLinks();
   lpInitCarousel();
   lpInitWall();
-  lpShowcaseInit(); // 📣 v370: «Historias reales» — solo si hay casos activos
   lpFeedInit(); // 🌈 v381: franja viva «El feed se arma solo» (#feed)
   /* v377: la semana de muestra navegable — solo rubros con semana completa y
      captions auditados; la grilla inicial (mixto) se re-renderiza con visor */
@@ -3994,31 +3953,6 @@ function lpInitHero() {
       const fio = new IntersectionObserver((es) => { es.forEach((en) => { if (en.isIntersecting) { trackOnce('home_founder', 'home_founder_view'); fio.disconnect(); } }); }, { threshold: 0.3 });
       fio.observe(fc);
     } else trackOnce('home_founder', 'home_founder_view');
-  }
-  // — Actividad en vivo "Posty trabajando": rota líneas ilustrativas del negocio de ejemplo.
-  const line = document.getElementById('lpLiveLine');
-  if (line) {
-    const items = [
-      '🐾 Publicamos el posteo del martes <span>· hace 2 h</span>',
-      '💡 Propusimos 3 ideas para la semana <span>· hace 5 h</span>',
-      '📈 Marcamos el posteo que más rindió <span>· ayer</span>',
-      '📸 Dejamos lista la promo de hoy <span>· hoy 9:00</span>',
-      '📊 Tu reporte de la semana está listo <span>· el lunes</span>'
-    ];
-    let i = 0;
-    line.innerHTML = items[0];
-    if (LP_LIVE_TIMER) { clearInterval(LP_LIVE_TIMER); LP_LIVE_TIMER = null; }
-    if (LP_LIVE_IO) { LP_LIVE_IO.disconnect(); LP_LIVE_IO = null; }
-    const tick = () => {
-      line.classList.add('swap');
-      setTimeout(() => { i = (i + 1) % items.length; line.innerHTML = items[i]; line.classList.remove('swap'); }, 320);
-    };
-    const start = () => { if (!LP_LIVE_TIMER) LP_LIVE_TIMER = setInterval(tick, 3500); };
-    const stop = () => { if (LP_LIVE_TIMER) { clearInterval(LP_LIVE_TIMER); LP_LIVE_TIMER = null; } };
-    if ('IntersectionObserver' in window) {
-      LP_LIVE_IO = new IntersectionObserver((es) => { es.forEach((en) => { if (en.isIntersecting) start(); else stop(); }); }, { threshold: 0.15 });
-      LP_LIVE_IO.observe(line);
-    } else start();
   }
   // — Contraste arrastrable HOY / CON POSTY (pointer events + range accesible).
   const drag = document.getElementById('pzDrag');
@@ -4922,13 +4856,23 @@ function lpAdsHTML() {
         <a class="cap-cta" href="/prueba">Probalo 3 días gratis →</a>
       </div>
       <div class="cap-side">
-        <div class="cap-sample"><div class="cap-grow">
-          <div class="cap-grow-best"><img loading="lazy" src="lp-tomoko-yuzu.jpg" alt="Yuzu Mousse de Patisserie Tomoko, el posteo con más llegada"><div><h4>Yuzu Mousse — tu posteo con más llegada</h4><div class="cap-grow-metric">★ Recomendado · 2× tu promedio</div><div class="cap-grow-sub">Patisserie Tomoko · tu cuenta de Meta · $20</div></div></div>
-          <div class="cap-aud">🎯 <b>Tu público:</b> mujeres de 25 a 44 años en Williamsburg y barrios cercanos (8 km), que compran postres para regalar y siguen la pastelería japonesa.<span class="cap-aud-sub">Lo estudiamos de tu negocio: tu producto, tu zona y quién te compra. Nada de públicos genéricos.</span></div>
-          <div class="cap-amts"><span class="cap-amt on">$20</span><span class="cap-amt">$50</span><span class="cap-amt">$100</span><span class="cap-amts-note">· 7 días</span></div>
-          <div class="cap-fee">$20 de pauta + $2 de gestión (10%) — la gestión se cobra solo si el anuncio sale.</div>
-          <div class="wd-total"><span>Total<small>US$20 de pauta + US$2 de gestión</small></span><b>US$22</b></div>
-          <div class="cap-sendrow"><span class="cap-send">Impulsar ✓</span><span class="cap-alt">Ahora no</span></div>
+                <div class="cap-sample"><div class="wd-boost">
+          <div class="wd-reco wd-beat">
+            <div class="wd-reco-head"><span class="wd-reco-av">P</span><b>Posty</b><span class="wd-reco-tag">Recomendación</span></div>
+            <p class="wd-reco-msg">Este fue tu posteo con más llegada esta semana 📈 Con US$20 llega a las mujeres de tu zona que compran postres para regalar y siguen la pastelería japonesa. ¿Sale?</p>
+            <div class="wd-reco-post"><img loading="lazy" src="lp-tomoko-yuzu.jpg" alt="Yuzu Mousse de Patisserie Tomoko, el posteo con más llegada"><div><b>Yuzu Mousse</b><span>Tu posteo con más llegada · ★ 2× tu promedio</span></div></div>
+          </div>
+          <div class="wd-bcard wd-beat">
+            <div class="wd-bcard-t">🎯 El público que estudiamos para vos</div>
+            <div class="wd-bchips"><span class="wd-bchip">📍 Williamsburg y barrios cercanos (8 km)</span><span class="wd-bchip">👩 Mujeres de 25 a 44 años</span><span class="wd-bchip">🎁 Compran postres para regalar</span><span class="wd-bchip">🍰 Siguen la pastelería japonesa</span></div>
+            <p class="wd-bsub">Lo estudiamos de tu negocio: tu producto, tu zona y quién te compra. Nada de públicos genéricos.</p>
+            <div class="wd-total"><span>Total<small>US$20 de pauta + US$2 de gestión</small></span><b>US$22</b></div>
+          </div>
+          <div class="wd-tap wd-beat">
+            <span class="wd-salebtn">Sale así</span>
+            <div class="wd-tapok"><span class="wd-okck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Tu anuncio está activo</div>
+            <p class="wd-tapcap">Un toque y sale. Sin configurar nada, sin entrar a ningún administrador de anuncios.</p>
+          </div>
         </div></div>
         <p class="cap-note">La pauta va por tu cuenta de Meta, aparte de la suscripción, y la gestión se cobra al impulsar con tu tarjeta guardada: + 10% de gestión nuestra, solo sobre lo que el anuncio gasta. Nada se gasta sin tu OK.</p>
       </div>
@@ -4940,13 +4884,13 @@ function lpIdeasHTML() {
   return `
   <div class="section cap-sec" id="ideas"><div class="wrap"><div class="cap-grid cap-flip">
     <div class="cap-copy">
-      <div class="cap-kick">Ideas semanales</div>
+      <div class="cap-kick">Constancia</div>
       <h2>Constancia de <span class="hl">verdad</span>.</h2>
-      <p class="cap-exp">Cada semana miramos el posteo que mejor te anduvo y las fechas que se vienen — y te proponemos ideas concretas para tu negocio. La que te gusta se convierte en posteo con un toque.</p>
+      <p class="cap-exp">Publicamos un posteo por día, todos los días — también en tus semanas más ocupadas. El mes se llena completo y tu Instagram nunca queda abandonado.</p>
       <ul class="cap-list">
-        <li>Desde tus ganadores y el calendario</li>
-        <li>Un toque en "Hacelo" y la idea se vuelve posteo</li>
-        <li>Sin relleno: si no hay nada concreto, no te molesta</li>
+        <li>Un posteo por día, sin faltar</li>
+        <li>El mes completo, semana tras semana</li>
+        <li>Sin que tengas que acordarte de nada</li>
       </ul>
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
@@ -4954,7 +4898,7 @@ function lpIdeasHTML() {
       <div class="cap-sample">
         <div class="wd-cal" data-count="{n} de 30 días con posteo" data-done=" — <b>el mes completo, sin faltar un día</b>"><div class="wd-cal-head"><b>Un mes con nosotros</b><span>1 posteo por día</span></div><div class="wd-cal-dow"><i>L</i><i>M</i><i>M</i><i>J</i><i>V</i><i>S</i><i>D</i></div><div class="wd-cal-grid"><span class="wd-cal-d"><b>1</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>2</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>3</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>4</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>5</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>6</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>7</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>8</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>9</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>10</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>11</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>12</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>13</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>14</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>15</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>16</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>17</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>18</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>19</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>20</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>21</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>22</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>23</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>24</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>25</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>26</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>27</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>28</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>29</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><span class="wd-cal-d"><b>30</b><span class="wd-cal-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span></div><div class="wd-cal-count">0 de 30 días con posteo</div></div>
       </div>
-      <p class="cap-note">Así te llegan las ideas cada semana, listas para aprobar.</p>
+      <p class="cap-note">Así se ve tu mes: completo, sin faltar un día.</p>
     </div>
   </div></div></div>
 `;}
@@ -4966,6 +4910,7 @@ function lpCrecimientoHTML() {
       <p class="cap-exp">Antes de postear, estudiamos tu negocio de punta a punta: tu producto, tu feed, tu zona y quién te compra. De ese estudio sale tu estrategia — y la ajustamos cuando nos pedís un cambio por nota de voz.</p>
       <ul class="cap-list">
         <li>Qué posteos le convienen a <b>tu</b> negocio — nunca una plantilla para todos</li>
+        <li>Cada semana te proponemos ideas concretas, desde tu posteo que mejor anduvo y las fechas que se vienen — la que te gusta se vuelve posteo con un toque</li>
         <li>Su ritmo, sus carruseles y su público de Ads, definidos negocio por negocio</li>
       </ul>
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
@@ -5035,6 +4980,7 @@ function lpSubirHTML() {
 </div>
 </div>
     <p style="text-align:center;font-size:15.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">Lo que nos mandás <b>ocupa su día</b> en tu semana, como un posteo más: un día, un posteo.</p>
+    <p style="text-align:center;font-size:15.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🎬 Además, cada semana te creamos un video cinematográfico de tu producto, listo para postear — incluido en todos los planes.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>`;
 }
@@ -5289,6 +5235,45 @@ function landingView(cfg) {
 .wd-strip{margin-top:auto}
 .wd-bar{margin-top:auto}
 }
+/* (WEB-SIMPLE) Escena de impulso en 3 tiempos: recomendación → público → un toque. */
+.wd-boost{display:flex;flex-direction:column;gap:12px;text-align:left}
+.wd-reco{background:#fff;border:1.5px solid #E3EDF4;border-radius:18px;padding:14px;box-shadow:0 8px 22px rgba(10,30,51,.07)}
+.wd-reco-head{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#0A1E33}
+.wd-reco-av{width:26px;height:26px;border-radius:50%;background:#2793C8;color:#fff;display:grid;place-items:center;font-weight:900;font-size:14px;flex:none}
+.wd-reco-tag{margin-left:auto;background:#FDEBC8;color:#0A1E33;font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px}
+.wd-reco-msg{font-size:14.5px;line-height:1.5;color:#33506B;margin:10px 0 12px}
+.wd-reco-post{display:flex;gap:10px;align-items:center;background:#F4F9FC;border-radius:12px;padding:8px}
+.wd-reco-post img{width:46px;height:46px;object-fit:cover;border-radius:9px;flex:none}
+.wd-reco-post b{display:block;font-size:14px;color:#0A1E33}
+.wd-reco-post span{font-size:12.5px;color:#5B7A94}
+.wd-bcard{background:#fff;border:1.5px solid #E3EDF4;border-radius:18px;padding:14px;box-shadow:0 8px 22px rgba(10,30,51,.07)}
+.wd-bcard-t{font-weight:800;font-size:14px;color:#0A1E33;margin-bottom:10px}
+.wd-bchips{display:flex;flex-wrap:wrap;gap:7px}
+.wd-bchip{background:#EAF6FC;color:#0A1E33;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:99px}
+.wd-bsub{font-size:12.5px;line-height:1.5;color:#5B7A94;margin:10px 0 0}
+.wd-bcard .wd-total{margin-top:12px}
+.wd-tap{text-align:center;padding:2px 0 0}
+.wd-salebtn{display:inline-block;background:#2793C8;color:#fff;font-weight:900;font-size:16.5px;padding:13px 34px;border-radius:99px;box-shadow:0 10px 24px rgba(39,147,200,.35)}
+.wd-tapok{display:none;align-items:center;justify-content:center;gap:8px;font-weight:900;font-size:16.5px;color:#0A1E33}
+.wd-okck{width:26px;height:26px;border-radius:50%;background:#22C55E;display:grid;place-items:center;flex:none}
+.wd-okck svg{width:15px;height:15px}
+.wd-tapcap{font-size:13.5px;color:#5B7A94;margin-top:10px;line-height:1.5}
+.wd-on #ads .wd-beat{opacity:0;transform:translateY(14px)}
+.wd-on #ads.wd-live .wd-beat{animation:wdBeatIn .55s ease forwards}
+.wd-on #ads.wd-live .wd-beat:nth-child(2){animation-delay:.5s}
+.wd-on #ads.wd-live .wd-beat:nth-child(3){animation-delay:1s}
+@keyframes wdBeatIn{to{opacity:1;transform:none}}
+.wd-on #ads.wd-live .wd-salebtn{animation:wdPress .45s ease 2s forwards}
+@keyframes wdPress{40%{transform:scale(.93)}100%{transform:scale(1);opacity:0;visibility:hidden}}
+.wd-on #ads.wd-live .wd-tapok{display:inline-flex;opacity:0;animation:wdBeatIn .4s ease 2.35s forwards}
+.wd-on #ads.wd-live .wd-tapcap{opacity:0;animation:wdBeatIn .5s ease 2.6s forwards}
+@media (prefers-reduced-motion: reduce){
+.wd-on #ads .wd-beat{opacity:1;transform:none;animation:none}
+.wd-on #ads .wd-salebtn{animation:none}
+.wd-on #ads .wd-tapok{display:none}
+.wd-on #ads .wd-tapcap{opacity:1;animation:none}
+}
+
 </style>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="wb-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h16"/><path d="M14 5l7 7-7 7"/><path d="M9 9.5v5"/></symbol><symbol id="wb-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H6"/><path d="M10 5l-7 7 7 7"/><path d="M15 9.5v5"/></symbol><symbol id="wb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v16"/><path d="M5 14l7 7 7-7"/><path d="M9.5 9h5"/></symbol><symbol id="wb-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-7 8 7 8"/><circle cx="8" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l7 8-7 8"/><circle cx="16" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8 7 8-7"/><circle cx="12" cy="16" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="wb-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3" fill="#DFA856" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-2.6 2.7-2.6 15.3 0 18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18"/></symbol><symbol id="wb-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h2.5L9 6h6l2.5 2.5H20a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.8" cy="9.8" r="1.1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="5.5" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.4 10.6l7.2-3.7M8.4 13.4l7.2 3.7"/></symbol><symbol id="wb-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v9H9l-5 4v-4H4Z"/><circle cx="12" cy="10.5" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-clapper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v10H4Z"/><path d="M4 10l1.8-4h16L20 10"/><path d="M9 6l2 4M14 6l2 4"/></symbol><symbol id="wb-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-3.6 10.8c.9.8 1.6 1.5 1.6 2.7h4c0-1.2.7-1.9 1.6-2.7A6 6 0 0 0 12 3Z"/><path d="M10 18.5h4M10.5 21h3"/><circle cx="12" cy="10" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.2L16.5 4.5a2.1 2.1 0 0 1 3 3L8.7 18.3Z"/><path d="M14.5 6.5l3 3"/></symbol><symbol id="wb-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3.5 8l8.5 6 8.5-6"/></symbol><symbol id="wb-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z" fill="#DFA856" stroke="none"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6.5 6.5 0 0 1-6.5-6.5c0-3.2 2.2-5.2 3.4-7.2.6 1.4 1.6 2 2.4 2-.4-2.8.8-5 2.7-6.8.5 2.6 3 4.3 3 7.5A6.5 6.5 0 0 1 12 21Z"/><path d="M12 21a3 3 0 0 1-3-3c0-1.6 1.2-2.6 1.8-3.6.3.8.8 1.1 1.2 1.1.4-1.4 1-2.3 1.8-3-.2 2.2 1.2 3.2 1.2 5.5a3 3 0 0 1-3 3Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-laugh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 10.5c.7-1 1.8-1 2.5 0M13.5 10.5c.7-1 1.8-1 2.5 0"/><path d="M8 14.5c1.2 1.8 2.6 2.5 4 2.5s2.8-.7 4-2.5"/><circle cx="4.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/><circle cx="19.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h9.5L21 11.5a1.8 1.8 0 0 1 0 2.6l-6.9 6.9a1.8 1.8 0 0 1-2.6 0L4 13.5Z"/><circle cx="9.5" cy="9.5" r="1.6" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="11" rx="2"/><path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8"/><path d="M3 13.5h18"/><circle cx="12" cy="13.5" r="1.3" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8.2L20 19M8.2 15.8L20 5"/></symbol><symbol id="wb-mega" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5v2.5l12 5V6.5Z"/><path d="M20 9.5a4.5 4.5 0 0 1 0 5"/><path d="M8 19.5V21"/></symbol><symbol id="wb-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20S4.5 15.5 4.5 10a4.6 4.6 0 0 1 7.5-3.2A4.6 4.6 0 0 1 19.5 10C19.5 15.5 12 20 12 20Z"/></symbol><symbol id="wb-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.6 0 2.2-.9 2.2-2 0-1.6-1.7-1.5-1.7-3.1 0-1.5 1.3-2.4 2.9-2.4h1.4a4.7 4.7 0 0 0 4.7-4.7C21.5 5.4 17.5 3 12 3Z"/><circle cx="8" cy="10" r="1.4" fill="#2793C8" stroke="none"/><circle cx="12.5" cy="8" r="1.4" fill="#DFA856" stroke="none"/><circle cx="16.5" cy="11" r="1.4" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol><symbol id="wb-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol><symbol id="wb-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 1.5 5.5 5 5 9l-2 2-3-3-3 3-2-2c-1-4 1-7.5 5-9Z"/><circle cx="12" cy="9" r="1.8" fill="#DFA856" stroke="none"/><path d="M8.5 13.5L5 19M15.5 13.5L19 19"/></symbol><symbol id="wb-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h2l2.5 11h10L21 8H7"/><circle cx="10" cy="20" r="1.6"/><circle cx="17.5" cy="20" r="1.6"/></symbol><symbol id="wb-glasses" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="7" height="5" rx="2"/><rect x="14" y="9" width="7" height="5" rx="2"/><path d="M10 11h4M3 10L1.5 8M21 10l1.5-2"/></symbol><symbol id="wb-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></symbol><symbol id="wb-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h12v4.5A4.5 4.5 0 0 1 12.5 19h-3A4.5 4.5 0 0 1 5 14.5Z"/><path d="M17 11h1a2.5 2.5 0 0 1 0 5h-1"/><path d="M8 7c0-1.2 1-1.2 1-2.4M12 7c0-1.2 1-1.2 1-2.4"/></symbol><symbol id="wb-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 16.5 5 12a2 2 0 0 1 2-1.5h10a2 2 0 0 1 2 1.5l1.5 4.5"/><path d="M3.5 16.5H21"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M12 3.5l.6 1.6 1.6.6-1.6.6L12 8l-.6-1.7-1.6-.6 1.6-.6Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/><path d="M10.5 20v-5.5h3V20"/></symbol><symbol id="wb-tooth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3.5C9 3.5 10 4.5 12 4.5s3-1 4.5-1c1.8 0 2.6 1.6 2.2 4-.4 3-1.2 9-3.2 12.5-.7 1.2-2.3 1.2-3 0-.8-1.4-.5-4.5-1.5-4.5s-.7 3.1-1.5 4.5c-.7 1.2-2.3 1.2-3 0C4.5 16.5 3.7 10.5 3.3 7.5 2.9 5.1 5.7 3.5 7.5 3.5Z"/></symbol><symbol id="wb-pole" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="3" width="7" height="18" rx="3.5"/><path d="M8.5 8.5 15.5 6M8.5 13.5 15.5 11M8.5 18.5 15.5 16"/><path d="M8.5 3h7M8.5 21h7" stroke="#DFA856"/></symbol><symbol id="wb-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4 4 6.5 6 10l2-1v11h8V9l2 1 2-3.5L15.5 4a3.5 3.5 0 0 1-7 0Z"/></symbol><symbol id="wb-beauty" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.2" fill="#DFA856" stroke="none"/><path d="M12 3.5v3.5M12 17v3.5M3.5 12H7M17 12h3.5M6 6l2.4 2.4M15.6 15.6 18 18M18 6l-2.4 2.4M8.4 15.6 6 18"/></symbol><symbol id="wb-paw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="3.6" ry="3" fill="#DFA856" stroke="none"/><circle cx="6.8" cy="11.5" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="9" r="1.9" fill="currentColor" stroke="none"/><circle cx="17.2" cy="11.5" r="1.9" fill="currentColor" stroke="none"/></symbol><symbol id="wb-steth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3v6.5a5.5 5.5 0 0 0 11 0V3"/><path d="M17.5 14.5c0 3 1.5 4 3.5 4"/><circle cx="21" cy="18.5" r="1.5"/></symbol><symbol id="wb-dumbbell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5v5M7 7v10M17 7v10M20.5 9.5v5M7 12h10"/></symbol><symbol id="wb-disco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M9.5 6.5V4h5v2.5"/><path d="M5.5 13.5h13M7.5 10c1.8 1.2 3.6-1.2 4.5 0 .9 1.2 2.7-1.2 4.5 0M7.5 17c1.8-1.2 3.6 1.2 4.5 0 .9-1.2 2.7 1.2 4.5 0"/><circle cx="12" cy="4" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M12 10.7V21"/><path d="M12 15c-3.2 0-4.5-1.8-4.5-4M12 17.5c3.2 0 4.5-1.8 4.5-4"/><circle cx="12" cy="7.5" r="1.2" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-lipstick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 21h4M10.5 21v-8h3v8"/><path d="M11 13V8l4-2.5V13" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-sushi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="9" rx="4.5"/><circle cx="12" cy="14.5" r="2.2" fill="#DFA856" stroke="none"/><path d="M4 6.5 20 4"/></symbol><symbol id="wb-croissant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5c2.5 4.5 5.5 6 8.5 4.5 3 1.5 6 0 8.5-4.5-.8 4.5-4 7-8.5 7s-7.7-2.5-8.5-7Z"/><path d="M8 13.5c.8 2 2 3 4 3s3.2-1 4-3"/></symbol><symbol id="wb-bean" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="8.5" transform="rotate(18 12 12)"/><path d="M9 5.5c2.5 3 2.5 10 0 13"/></symbol></defs></svg>
   <div class="nav nav-landing"><div class="wrap">
@@ -5344,15 +5329,15 @@ function landingView(cfg) {
       <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Pensamos las ideas, diseñamos con tus fotos y tu marca, y escribimos los captions y hashtags que venden.</p></div>
       <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te avisamos; si no decís nada, sale. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
     </div>
-    <div class="wd-morning"><div class="wd-blob"></div><div class="wd-morning-in"><div class="wd-scene-title">Así aparece tu posteo del día, todas las mañanas.</div><p class="wd-scene-sub">Abrís el teléfono y ya está: el posteo de hoy, listo. Si no decís nada, sale solo.</p><div class="wd-stage"><div class="wd-phone"><div class="wd-notch"></div><div class="wd-hi">9:00 · Buen día, Patisserie Tomoko</div><div class="wd-hoy">Tu posteo de hoy</div><div class="wd-card"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy"><div class="wd-cap"><b>Hojicha Mille Crepe.</b> El posteo de hoy, listo para salir.</div></div><div class="wd-sale"><span>Sale hoy</span><span class="wd-tag">19:00 · en tu Instagram</span></div><div class="wd-row"><div class="wd-btn go">Sale así</div><div class="wd-btn stop">Lo freno</div></div></div><div class="wd-floats"><div class="wd-notif"><div class="wd-av">P</div><div class="wd-t"><b>Posty · ahora</b>En 30 minutos sale tu posteo de hoy. Si no decís nada, sale solo.</div></div><div class="wd-badge"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Publicado · 19:00</div><div class="wd-voice"><span class="wd-mic"><svg viewBox="0 0 24 24"><path d="M12 15a3.5 3.5 0 003.5-3.5v-5a3.5 3.5 0 10-7 0v5A3.5 3.5 0 0012 15z" fill="#0A1E33"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3" stroke="#0A1E33" stroke-width="2" fill="none" stroke-linecap="round"/></svg></span> “Cambialo por el de mañana” — y se hace</div></div></div></div></div>
+    <div class="wd-morning"><div class="wd-blob"></div><div class="wd-morning-in"><div class="wd-scene-title">Así aparece tu posteo del día, todas las mañanas.</div><p class="wd-scene-sub">Abrís el teléfono y ya está: el posteo de hoy, listo. Si no decís nada, sale solo.</p><div class="wd-stage"><div class="wd-phone"><div class="wd-notch"></div><div class="wd-hi">9:00 · Buen día, Patisserie Tomoko</div><div class="wd-hoy">Tu posteo de hoy</div><div class="wd-card"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy"><div class="wd-cap"><b>Hojicha Mille Crepe.</b> El posteo de hoy, listo para salir.</div></div><div class="wd-sale"><span>Sale hoy</span><span class="wd-tag">19:00 · en tu Instagram</span></div><div class="wd-row"><div class="wd-btn go">Sale así</div><div class="wd-btn stop">Lo freno</div></div></div><div class="wd-floats"><div class="wd-notif"><div class="wd-av">P</div><div class="wd-t"><b>Posty · ahora</b>En 30 minutos sale tu posteo de hoy. Si no decís nada, sale solo.</div></div><div class="wd-badge"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Publicado · 19:00</div></div></div></div></div>
     <h2>Cada posteo está pensado para vender.</h2>
-    <p class="lede">Son nuestra forma de trabajar, con cada negocio.</p>
+    <p class="lede">Así es cada pieza que sale de tu negocio.</p>
     <div class="steps">
-      <div class="step"><div class="num">🔍</div><h3>Entendemos tu rubro</h3><p>Leemos tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
+      <div class="step"><div class="num">🔍</div><h3>Una pieza, un producto</h3><p>Cada pieza vende una sola cosa: tu producto real, con su nombre y su precio, en el centro. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
       <div class="step"><div class="num">🔌</div><h3>Nos conectamos a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
       <div class="step"><div class="num">💬</div><h3>Preguntamos solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estamos seguros de tu rubro, te preguntamos antes de generar — nunca adivinamos. Y tu respuesta queda guardada: no te la volvemos a hacer.</p></div>
     </div>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Trabajamos completo.</b> Todo lo que tu Instagram necesita lo hacemos nosotros — no necesitás contratar a nadie más ni sumar ningún otro servicio. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan.</p>
+    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0"><b>Trabajamos completo.</b> Cada pieza sale terminada: la idea, el diseño, el texto y la publicación — no necesitás contratar a nadie más ni sumar otro servicio.</p>
     <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">👤 <b>Detrás del equipo está Valentino</b>, el fundador de Posty: revisa cada pieza, toma las decisiones y se asegura de que todo salga correctamente.</p>
     <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🕘 <b>Tu ritmo de cada día:</b> a la mañana ves el posteo, lo aprobás con un toque y a las 19:00 sale solo.</p>
     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
@@ -5384,10 +5369,7 @@ function landingView(cfg) {
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
       </div>
-      <div class="lp-live" id="lpLive">
-        <div class="lp-live-head"><span class="lp-live-dot"></span><b>Estamos trabajando</b><span>así trabajamos por este negocio, todos los días</span></div>
-        <div class="lp-live-line" id="lpLiveLine"></div>
-      </div><div class="mk-arrive">
+<div class="mk-arrive">
   <div class="mk-notif">
     <img src="ai-avatar.png" alt="Posty">
     <div>
@@ -5427,29 +5409,6 @@ function landingView(cfg) {
       <p class="pz-drag-hint">👆 Arrastrá la línea: así cambia un perfil cuando nos ponemos a trabajar</p>
     </div>
   <div class="section lp-week-sec" id="prueba"><div class="wrap">
-    <div class="lp-week" aria-label="Ejemplo de una semana armada por nosotros">
-      <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
-      <div class="lp-wchips" role="group" aria-label="Ver la semana de un rubro">
-        <button type="button" class="lp-wchip on" onclick="lpWeekSet('mixto', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-spark"/></svg> Ejemplo mixto</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('cafeteria', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-cup"/></svg> Cafetería</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('detailing', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-car"/></svg> Detailing</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('inmobiliaria', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-house"/></svg> Inmobiliaria</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('odontologia', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-tooth"/></svg> Odontología</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('barberia', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-pole"/></svg> Barbería</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('moda', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-shirt"/></svg> Moda</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('belleza', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-beauty"/></svg> Belleza</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('mascotas', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-paw"/></svg> Mascotas</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('veterinaria', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-steth"/></svg> Veterinaria</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('fitness', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-dumbbell"/></svg> Fitness</button>
-        <button type="button" class="lp-wchip" onclick="lpWeekSet('boliche', this)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-disco"/></svg> Boliche</button>
-      </div>
-      <div class="lp-week-grid" id="lpWeekGrid">
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FDEBD2">C</i></span><b>cafe.aurora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por nosotros"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · lun 10:32</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E4F0FA">T</i></span><b>tiendacora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa hecho por nosotros"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · mar 11:06</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E9E4DC">E</i></span><b>elcorte.barberia</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería hecho por nosotros"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mié</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · mié 18:30</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FBE4EC">A</i></span><b>estetica.alma</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-belleza.jpg" alt="Posteo de Instagram de una estética hecho por nosotros"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · jue 11:00</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por nosotros"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · vie 12:15</div></div>
-      </div>
       <div class="mk-carr">
   <div class="mk-carr-head"><b>El día 2 es un carrusel</b><span>Patagonia · deslizá →</span></div>
   <p class="mk-carr-sub">Es el día 2 de la prueba gratis: te armamos un carrusel con las fotos reales de tu negocio.</p>
@@ -5467,30 +5426,6 @@ function landingView(cfg) {
   <div class="mk-carr-dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
   <p class="mk-cap"><b>patagonia</b> four repairs in. still going. every patch is a place this jacket has been. #wornwear</p>
 </div>
-      <div class="lp-vp">
-      <style>/* (v866 - videos 2.5 en la home) Fila de videos verticales, misma que /prueba */
-.vp-row{display:flex;gap:12px;overflow-x:auto;padding:14px 2px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
-.vp-card{flex:0 0 auto;width:148px;margin:0;scroll-snap-align:start}
-.vp-card video{display:block;width:148px;height:263px;object-fit:cover;border-radius:16px;border:1.5px solid #E3EDF4;box-shadow:0 10px 26px rgba(10,30,51,.10);background:#EAF6FC}
-.vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:13px;margin-top:8px}
-.vp-row.vp-top{display:grid;grid-template-columns:repeat(5,1fr);overflow:visible;padding:14px 0 6px;margin:0 20px;scroll-snap-type:none}
-.vp-row.vp-top .vp-card{width:auto}
-.vp-row.vp-top .vp-card video{width:100%;height:auto;aspect-ratio:9/16}
-@media(max-width:760px){
-.vp-row.vp-top{display:flex;overflow-x:auto;padding:14px 0 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
-.vp-row.vp-top .vp-card{flex:0 0 148px;width:148px}
-.vp-row.vp-top .vp-card video{width:148px;height:263px;aspect-ratio:auto}
-}</style>
-      <h3>Un video premium cada semana 🎬</h3>
-      <p class="lede">Creamos un video cinematográfico de tu producto, listo para publicar — incluido en todos los planes.</p>
-      <div class="vp-row vp-top" aria-label="Videos premium hechos por nosotros">
-        <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una cafetería, hecho por nosotros"></video><figcaption class="vp-tag"><svg class="wb-ic" aria-hidden="true"><use href="#wb-cup"/></svg> Cafetería</figcaption></figure>
-        <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una perfumería, hecho por nosotros"></video><figcaption class="vp-tag">🧴 Perfumería</figcaption></figure>
-        <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una marca de zapatillas, hecho por nosotros"></video><figcaption class="vp-tag">👟 Zapatillas</figcaption></figure>
-        <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una pastelería, hecho por nosotros"></video><figcaption class="vp-tag">🧁 Pastelería</figcaption></figure>
-        <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de un estudio de uñas, hecho por nosotros"></video><figcaption class="vp-tag">💅 Uñas</figcaption></figure>
-      </div>
-      </div>
       <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);var w=this.querySelector('input[data-lp-web]');var q=[];if(v)q.push('ig='+encodeURIComponent(v));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
@@ -5549,17 +5484,17 @@ function landingView(cfg) {
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
     <div class="faq">
-      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
-      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. Y en la prueba gratis ya ves tu semana armada antes de registrarte.</p></details>
-      <details><summary>¿Usás mis fotos y mi marca?</summary><p>No hace falta subir nada: Estudiamos tu Instagram o tu web y armamos tu identidad desde ahí — tus fotos reales, tus colores. Nada genérico.</p></details>
+      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez y listo — y si querés, podés revisar todo antes de que salga.</p></details>
+      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta.</p></details>
+      <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí: trabajamos con tus fotos reales y tus colores, desde tu Instagram o tu web. No hace falta que subas nada.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta algo? Pedí otra foto, otro texto u otra idea, en el chat. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos tu contraseña: ni la pedimos ni la guardamos.</p></details>
-      <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: cada mañana a las 9:00 ves el posteo del día, y 30 minutos antes de que salga te aviso; si no decís nada, sale. Si algo no te cierra, lo frenás con un toque.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: hablás conmigo en el chat, estudio tu negocio y te pregunto solo lo que falta — 2 o 3 toques — y ves tu semana armada. Si no te sirve, no pagás nada.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis hablás conmigo en el chat — 2 o 3 toques — y ves tu semana armada. Al crear tu cuenta, cada mañana a las 9:00 ves el posteo del día y 30 minutos antes de que salga te aviso; si no decís nada, sale.</p></details>
-      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar — con tu aprobación en un toque cuando hace falta criterio humano. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
-      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Te lo marcamos y te proponemos potenciarlo: la pauta se paga desde tu propia cuenta de Meta, aparte de la suscripción, y elegimos el posteo, el público y lo gestionamos, siempre con tu OK en un toque.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo. Posty es un producto completo por sí mismo: pienso las ideas, diseño y publico — todo dentro de tu plan, sin que contrates a nadie más ni sumes otros servicios. Si querés promocionar un posteo, lo impulsás desde tu cuenta de Meta, aparte del plan. Con nosotros alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
+      <details><summary>¿Los posteos se publican solos?</summary><p>Sí: cada mañana ves el posteo del día y sale solo si no decís nada; si algo no te cierra, lo frenás con un toque.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: ves tu semana armada antes de pagar, y si no te sirve, no pagás nada.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis ves tu semana armada en unos toques, antes de registrarte.</p></details>
+      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar — con tu aprobación en un toque cuando hace falta criterio humano. La producción presencial de fotos o video y las campañas a medida siguen siendo trabajo de un equipo humano.</p></details>
+      <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí: cuando un posteo anda muy bien te lo marcamos y te proponemos potenciarlo, siempre con tu OK en un toque; la pauta va por tu cuenta de Meta, aparte de la suscripción.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo: las ideas, el diseño y la publicación están dentro de tu plan, sin contratar a nadie más. Con nosotros alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con nosotros <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
     <div style="text-align:center;margin-top:44px">
