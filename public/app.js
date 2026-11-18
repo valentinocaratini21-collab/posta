@@ -19416,13 +19416,113 @@ function pzAdsAudienciaDineroHTML() {
   if (s.rielAds === 'cliente') {
     const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
     const fee = (pzBoostEsMP() ? '$' : 'US$') + pzBoostFmtMonto(Math.round(monto * 0.10));
+    // (LOTE ADS-DIFERENCIA) El TOTAL como un solo número, antes de
+    // confirmar (regla de Valentino 17/11): pauta + gestión, sin
+    // extras silenciosos — el cliente aprueba el total entero o no
+    // sale. Es el mismo desglose del servidor (ads-fee: 10% sobre la
+    // pauta, cobrado solo si la campaña corre).
+    const sim = pzBoostEsMP() ? '$' : 'US$';
+    const total = sim + pzBoostFmtMonto(monto + Math.round(monto * 0.10));
+    const pautaFmt = sim + pzBoostFmtMonto(monto);
     txt = en
-      ? `Meta charges the ad spend to your own ad account. Posty charges ${fee} (10%) to your saved card, only if the campaign runs.`
-      : `La pauta la paga Meta desde tu cuenta publicitaria. Posty te cobra ${fee} (10%) en tu tarjeta guardada, solo si la campaña sale.`;
+      ? `Meta charges the ad spend to your own ad account. Posty charges ${fee} (10%) to your saved card, only if the campaign runs. Total: ${total} (${pautaFmt} in ad spend + ${fee} Posty fee).`
+      : `La pauta la paga Meta desde tu cuenta publicitaria. Posty te cobra ${fee} (10%) en tu tarjeta guardada, solo si la campaña sale. Total: ${total} (${pautaFmt} de pauta + ${fee} de gestión).`;
   } else {
     txt = en ? 'The ad spend comes out of your Posty wallet.' : 'La pauta sale de tu billetera de Posty.';
   }
   return `<p style="margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#47617A">${esc(txt)}</p>`;
+}
+
+// (LOTE ADS-DIFERENCIA) La diferencia del riel billetera, con los
+// totales REALES del flujo (censo del lote): en este riel el total a
+// cubrir es el monto elegido, entero — el flujo USD de la billetera
+// no lleva fee (regla del módulo) y en ARS el fee del 10% ya va
+// DENTRO del monto elegido (splitARS), nunca encima. La billetera
+// solo paga si su moneda ES la del riel (espejo del servidor:
+// saldoCentsUSD/ARS según la moneda guardada); con la moneda cruzada
+// corre otro camino (el cobro directo de v888) y acá no se afirma
+// ninguna diferencia. Devuelve null si no falta nada: con el saldo
+// cubriendo el total, la tarjeta queda como estaba.
+function pzAdsDiferencia() {
+  const s = pzBoostState || {};
+  if (s.rielAds !== 'billetera' || !s.billetera) return null;
+  const esMP = pzBoostEsMP();
+  const monedaWallet = String(s.billetera.currency || 'USD');
+  if (esMP ? monedaWallet !== 'ARS' : monedaWallet !== 'USD') return null;
+  const total = Number(s.selMonto) || (esMP ? 10000 : 50);
+  const saldo = Math.floor(Number(s.billetera.balance_cents || 0) / 100);
+  const falta = total - saldo;
+  if (!(falta > 0)) return null;
+  return { falta, total, saldo, esMP };
+}
+
+// El bloque de la diferencia EN la tarjeta, antes del «Sale así»:
+// cuánto hay, cuánto sale, cuánto falta — y el botón que carga
+// EXACTAMENTE eso. Sin cargar, el impulso no sale (el «Sale así»
+// frena en pzAdsAudienciaSale) y no se cobra nada.
+function pzAdsAudienciaDiferenciaHTML() {
+  const d = pzAdsDiferencia();
+  if (!d) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const sim = d.esMP ? '$' : 'US$';
+  const f = (n) => sim + pzBoostFmtMonto(n);
+  const txt = en
+    ? `You have ${f(d.saldo)} of ${f(d.total)}. You're ${f(d.falta)} short.`
+    : `Tenés ${f(d.saldo)} de ${f(d.total)}. Te faltan ${f(d.falta)}.`;
+  const nota = en
+    ? 'Top up and the boost is ready to go, right here. Without topping up, it doesn’t run and nothing is charged.'
+    : 'Cargás y el impulso queda listo para salir, acá mismo. Sin cargar, no sale y no se cobra nada.';
+  const btn = en ? `Top up the missing ${f(d.falta)}` : `Cargar los ${f(d.falta)} que faltan`;
+  return `<div id="pzAdsDiferencia" style="border:1.5px solid #F2C94C;background:#FFF9E6;border-radius:12px;padding:10px 12px;margin:12px 0 0">
+    <div style="font-size:14px;line-height:1.5;color:#6B5200"><b>${esc(txt)}</b><br>${esc(nota)}</div>
+    <button type="button" class="btn btn-primary btn-block" style="margin-top:10px" onclick="pzAdsAudienciaCargarDiferencia(this)">${esc(btn)}</button>
+    <p id="pzAdsDiferenciaMsg" style="margin:8px 0 0;font-size:13px;line-height:1.45;color:#6B5200"></p>
+  </div>`;
+}
+
+// Carga la diferencia exacta por la vía de siempre (/cargar), con la
+// marca `diferencia`: el servidor recomputa lo que falta con la
+// billetera real y solo autoriza ese monto (nunca un monto libre).
+// En USD el cobro es off-session con la tarjeta guardada y el saldo
+// nuevo vuelve en la respuesta: la tarjeta se repinta sin el bloque
+// y el cliente confirma con «Sale así», en el mismo flujo. En ARS la
+// carga se aprueba en el checkout de Mercado Pago (init_point), como
+// toda carga del riel. Si no se carga, no se tocó nada.
+async function pzAdsAudienciaCargarDiferencia(btn) {
+  const d = pzAdsDiferencia();
+  if (!d) { pzAdsAudienciaPintar(); return; }
+  const decir = (t) => { const el = document.getElementById('pzAdsDiferenciaMsg'); if (el) el.textContent = t; };
+  if (btn) btn.disabled = true;
+  let j = null;
+  try {
+    j = await api.post('/api/ads/billetera/cargar', d.esMP
+      ? { montoARS: d.falta, diferencia: { montoImpulsoARS: d.total } }
+      : { montoUSD: d.falta, diferencia: { montoImpulsoUSD: d.total } });
+  } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok && j.init_point) {
+    decir(gzT('Te llevamos a Mercado Pago para completar la carga.', 'Taking you to Mercado Pago to complete the top-up.'));
+    try { window.location.href = j.init_point; } catch (e) {}
+    return;
+  }
+  if (j && j.ok) {
+    if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
+    pzAdsAudienciaPintar();
+    const sim = d.esMP ? '$' : 'US$';
+    try { toast(gzT('Listo: ya tenés ' + sim + pzBoostFmtMonto(d.total) + '. Tocá «Sale así» y sale.', 'Done: you now have ' + sim + pzBoostFmtMonto(d.total) + '. Tap “Go with this” and it runs.')); } catch (e) {}
+    return;
+  }
+  const motivo = (j && j.motivo) || '';
+  decir(motivo === 'diferencia_invalida'
+    ? gzT('Tu saldo cambió mientras tanto: revisá la tarjeta de nuevo. No se cobró nada.', 'Your balance changed in the meantime: check the card again. Nothing was charged.')
+    : pzBoostCargarMotivo(motivo, d.falta, j && j.cobroId));
+  // Sin tarjeta guardada, el camino de agregarla queda pegado al
+  // mensaje (mismo patrón que la carga común de la hoja, v877).
+  if (motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada') {
+    const msgEl = document.getElementById('pzAdsDiferenciaMsg');
+    try { await loadChunk('analisis'); } catch (e) {}
+    try { if (msgEl && typeof anaAgregarTarjetaBtn === 'function') anaAgregarTarjetaBtn(msgEl); } catch (e) {}
+  }
 }
 
 function pzAdsAudienciaHTML() {
@@ -19471,6 +19571,7 @@ function pzAdsAudienciaHTML() {
     ${grupo(en ? 'WHO' : 'QUIÉNES', generos)}
     ${grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
     ${pzAdsAudienciaDineroHTML()}
+    ${pzAdsAudienciaDiferenciaHTML()}
     <div id="pzAdsAudienciaError">${(s.boostError ? pzBoostErrorHTML(s.boostError.motivo, s.boostError.monto, s.boostError.cobroId) : '')}</div>
     <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Go with this 🚀' : 'Sale así 🚀')}</button>
     <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Go with this”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».')}</p>
@@ -19552,6 +19653,18 @@ async function pzAdsAudienciaSale(btn) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   const p = s.selPost || null;
   const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
+  // (LOTE ADS-DIFERENCIA) Riel billetera con saldo corto: el «Sale
+  // así» NO corre — primero la diferencia, en esta misma tarjeta.
+  // No se postea nada a /impulsar y no se cobra nada hasta que el
+  // saldo cubra el total; el bloque de la diferencia ya está pintado
+  // sobre este botón y se trae a la vista. (El servidor además sigue
+  // frenando con saldo_insuficiente: este es el aviso y el camino,
+  // no el único freno.)
+  if (pzAdsDiferencia()) {
+    pzAdsAudienciaPintar();
+    try { const el = document.getElementById('pzAdsDiferencia'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+    return { ok: false, motivo: 'diferencia_pendiente' };
+  }
   s.audienciaKey = pzAdsAudienciaKey(p, monto);
   s.audienciaVisible = false;
   const j = await pzBoostConfirmar(btn);

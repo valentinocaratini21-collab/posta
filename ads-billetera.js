@@ -85,6 +85,25 @@ function validarPresupuestoARS(monto) {
   return typeof monto === 'number' && Number.isInteger(monto) && MONTOS_IMPULSO_ARS.includes(monto);
 }
 
+// (LOTE ADS-DIFERENCIA) La carga de la DIFERENCIA de un impulso: el
+// cliente eligió un monto fijo, su saldo no alcanza y carga SOLO lo
+// que falta (regla de Valentino 17/11: «si yo quiero hacer un posteo
+// de veinte y sale veintidós debería primero pedirme los dos dólares
+// que faltan»). Estos validadores NO habilitan montos libres: solo
+// acotan (entero, mayor que 0 y menor que el monto máximo del riel).
+// La igualdad EXACTA con la diferencia real (monto elegido − saldo,
+// recomputada con la billetera verdadera) la exige el endpoint antes
+// de llamar acá con esDiferencia — sin esa doble llave, una carga
+// común sigue aceptando únicamente los montos fijos de siempre. La
+// cota superior es el monto fijo mayor del riel: con saldo 0 la
+// diferencia puede ser el monto elegido entero.
+function validarMontoDiferenciaUSD(monto) {
+  return typeof monto === 'number' && Number.isInteger(monto) && monto >= 1 && monto <= Math.max(...MONTOS_CARGA_USD);
+}
+function validarMontoDiferenciaARS(monto) {
+  return typeof monto === 'number' && Number.isInteger(monto) && monto >= 1 && monto <= Math.max(...MONTOS_IMPULSO_ARS);
+}
+
 // Ref estable del débito de un impulso: mismo cliente + posteo + monto +
 // mismo día = mismo impulso (reintento seguro). La fecha viene en
 // 'YYYY-MM-DD'; si no se pasa, se usa el día actual (UTC).
@@ -117,10 +136,12 @@ function refDebitoBoostARS({ clienteId, posteoId, montoARS, fecha }) {
 // el mismo ref no cobra dos veces. `acreditar({ montoUSD, cobroId })`
 // devuelve { ok, saldoNuevo }.
 async function cargarBilletera(input) {
-  const { clienteId, montoUSD, monedaActual, saldoActual, ref, buscarCarga, cobrar, acreditar, demo } = input || {};
+  const { clienteId, montoUSD, monedaActual, saldoActual, ref, buscarCarga, cobrar, acreditar, demo, esDiferencia } = input || {};
   const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
   if (demo) return no('demo');
-  if (!validarMontoUSD(montoUSD)) return no('monto_invalido');
+  // (LOTE ADS-DIFERENCIA) esDiferencia solo lo pasa el endpoint tras
+  // recomputar que montoUSD ES la diferencia exacta del impulso.
+  if (!(esDiferencia ? validarMontoDiferenciaUSD(montoUSD) : validarMontoUSD(montoUSD))) return no('monto_invalido');
   if (!clienteId) return no('sin_cliente');
   if (monedaActual === 'ARS' && Number(saldoActual || 0) > 0) return no('saldo_ars_pendiente');
   if (typeof buscarCarga === 'function') {
@@ -161,10 +182,12 @@ async function cargarBilletera(input) {
 // `buscarCarga(ref)` devuelve la preferencia ya creada (o null): el
 // reintento con el mismo ref no crea una segunda preferencia.
 async function cargarBilleteraARS(input) {
-  const { clienteId, montoARS, monedaActual, saldoActual, ref, buscarCarga, crearPreferencia, demo } = input || {};
+  const { clienteId, montoARS, monedaActual, saldoActual, ref, buscarCarga, crearPreferencia, demo, esDiferencia } = input || {};
   const no = (motivo, extra) => ({ ok: false, motivo, ...(extra || {}) });
   if (demo) return no('demo');
-  if (!validarMontoARS(montoARS)) return no('monto_invalido');
+  // (LOTE ADS-DIFERENCIA) Ídem USD: esDiferencia solo con la
+  // diferencia exacta ya recomputada por el endpoint.
+  if (!(esDiferencia ? validarMontoDiferenciaARS(montoARS) : validarMontoARS(montoARS))) return no('monto_invalido');
   if (!clienteId) return no('sin_cliente');
   if (monedaActual === 'USD' && Number(saldoActual || 0) > 0) return no('saldo_usd_pendiente');
   if (typeof buscarCarga === 'function') {
@@ -570,6 +593,8 @@ module.exports = {
   validarMontoUSD,
   validarMontoARS,
   validarPresupuestoARS,
+  validarMontoDiferenciaUSD,
+  validarMontoDiferenciaARS,
   cortarCaption,
   refDebitoBoost,
   refDebitoBoostARS,

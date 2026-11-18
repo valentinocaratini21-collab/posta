@@ -14086,13 +14086,32 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
 app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
+    // (LOTE ADS-DIFERENCIA) La marca de carga-diferencia del impulso:
+    // el cliente la manda SOLO desde el botón «Cargar lo que falta» de
+    // la tarjeta de audiencia, con el monto fijo que eligió impulsar.
+    // El servidor recomputa la diferencia con la billetera real en
+    // cada rama y solo autoriza ESE monto exacto; sin la marca, las
+    // cargas siguen aceptando únicamente los montos fijos.
+    const difReq = (req.body && typeof req.body.diferencia === 'object' && req.body.diferencia) ? req.body.diferencia : null;
     // (LOTE RIEL-SUSCRIPCION v878) La rama MP solo corre con riel MP y
     // monto ARS: un cliente Stripe (o sin riel) que mande montoARS cae
     // en la rama USD de siempre (400 monto_invalido / sin_cliente_stripe).
     const montoARSReq = Number(req.body.montoARS);
     if (railCobro(uid) === 'mp' && Number.isFinite(montoARSReq)) {
       const montoARS = montoARSReq;
-      if (!adsBilletera.validarMontoARS(montoARS)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+      // (LOTE ADS-DIFERENCIA) Diferencia ARS: la billetera tiene que
+      // ser ARS, el monto del impulso uno de los presupuestos fijos y
+      // el monto pedido EXACTAMENTE lo que falta (en pesos enteros).
+      let esDiferenciaARS = false;
+      if (difReq && difReq.montoImpulsoARS != null) {
+        const wDif = getAdWallet(uid);
+        const faltaCents = Math.round(Number(difReq.montoImpulsoARS) * 100) - (wDif.currency === 'ARS' ? Number(wDif.balance_cents || 0) : 0);
+        esDiferenciaARS = wDif.currency === 'ARS'
+          && adsBilletera.validarPresupuestoARS(Number(difReq.montoImpulsoARS))
+          && faltaCents > 0 && faltaCents % 100 === 0 && montoARS === faltaCents / 100;
+        if (!esDiferenciaARS) return res.status(409).json({ ok: false, motivo: 'diferencia_invalida' });
+      }
+      if (!(esDiferenciaARS ? adsBilletera.validarMontoDiferenciaARS(montoARS) : adsBilletera.validarMontoARS(montoARS))) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
       if (!mp.mpConfigured()) return res.status(503).json({ ok: false, motivo: 'mp_no_configurado' });
       // El ref de la preferencia TIENE que ser adtopup_<uid>_...: el
       // webhook solo acredita los pagos cuyo external_reference casa con
@@ -14102,6 +14121,7 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
       const w0 = getAdWallet(uid);
       const r = await adsBilletera.cargarBilleteraARS({
         clienteId: uid, montoARS, monedaActual: w0.currency, saldoActual: w0.balance_cents, ref,
+        esDiferencia: esDiferenciaARS,
         demo: !!((getSettings(uid) || {}).demo_mode),
         buscarCarga: () => null, // la preferencia no se persiste: la
         // idempotencia real es por payment id en el webhook.
@@ -14132,10 +14152,23 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
       // La plata entra por el webhook cuando el cliente aprueba en MP:
       // acá no hay saldo nuevo que devolver, solo el init_point.
       const w = getAdWallet(uid);
-      return res.json({ ok: true, init_point: r.init_point, currency: 'ARS', montoARS: r.montoARS, balance_cents: w.balance_cents, ref: r.ref });
+      return res.json({ ok: true, init_point: r.init_point, currency: 'ARS', montoARS: r.montoARS, balance_cents: w.balance_cents, ref: r.ref, ...(esDiferenciaARS ? { diferencia: true } : {}) });
     }
     const montoUSD = Number(req.body.montoUSD);
-    if (!adsBilletera.validarMontoUSD(montoUSD)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    // (LOTE ADS-DIFERENCIA) Diferencia USD: la billetera tiene que
+    // ser USD, el monto del impulso uno de los fijos y el monto
+    // pedido EXACTAMENTE lo que falta (en dólares enteros). Cualquier
+    // desvío frena con diferencia_invalida, sin cobrar nada.
+    let esDiferenciaUSD = false;
+    if (difReq && difReq.montoImpulsoUSD != null) {
+      const wDif = getAdWallet(uid);
+      const faltaCents = Math.round(Number(difReq.montoImpulsoUSD) * 100) - (wDif.currency === 'USD' ? Number(wDif.balance_cents || 0) : 0);
+      esDiferenciaUSD = wDif.currency === 'USD'
+        && adsBilletera.validarMontoUSD(Number(difReq.montoImpulsoUSD))
+        && faltaCents > 0 && faltaCents % 100 === 0 && montoUSD === faltaCents / 100;
+      if (!esDiferenciaUSD) return res.status(409).json({ ok: false, motivo: 'diferencia_invalida' });
+    }
+    if (!(esDiferenciaUSD ? adsBilletera.validarMontoDiferenciaUSD(montoUSD) : adsBilletera.validarMontoUSD(montoUSD))) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
     const ref = String(req.body.ref || '').slice(0, 80) || `carga_${uid}_${Date.now().toString(36)}`;
     const stripeCustomer = (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return (u && u.stripe_customer_id) || ''; } catch (e) { return ''; } })();
     const client = stripeBilling.stripeConfigured() ? stripeBilling.stripeClient() : null;
@@ -14158,9 +14191,10 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
     }
     const r = await adsBilletera.cargarBilletera({
       clienteId: uid, montoUSD, monedaActual: w0.currency, saldoActual: w0.balance_cents, ref,
+      esDiferencia: esDiferenciaUSD,
       demo: !!((getSettings(uid) || {}).demo_mode),
       buscarCarga: (rf) => { try { return db.prepare(`SELECT ref FROM ad_transactions WHERE user_id = ? AND kind = 'topup_usd' AND ref = ?`).get(uid, rf) || null; } catch (e) { return null; } },
-      cobrar: () => destacadoCobro.cobrarCargaBilletera({ client, customerId: stripeCustomer, montoUSD, ref }),
+      cobrar: () => destacadoCobro.cobrarCargaBilletera({ client, customerId: stripeCustomer, montoUSD, ref, permitirDiferencia: esDiferenciaUSD }),
       acreditar: async ({ montoUSD: m, cobroId }) => {
         try {
           // Migración de moneda ARS→USD solo con saldo 0 (nunca se mezcla
@@ -14180,7 +14214,7 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
       return res.status(status).json({ ok: false, motivo: r.motivo, ...(r.cobroId ? { cobroId: r.cobroId } : {}) });
     }
     const w = getAdWallet(uid);
-    res.json({ ok: true, cobroId: r.cobroId, montoUSD: r.montoUSD, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w.balance_cents, currency: w.currency, ...(r.ya_cargado ? { ya_cargado: true } : {}) });
+    res.json({ ok: true, cobroId: r.cobroId, montoUSD: r.montoUSD, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w.balance_cents, currency: w.currency, ...(r.ya_cargado ? { ya_cargado: true } : {}), ...(esDiferenciaUSD ? { diferencia: true } : {}) });
   } catch (e) { res.status(500).json({ ok: false, motivo: 'cobro_fallido', error: 'No se pudo cargar la billetera' }); }
 });
 
@@ -46151,7 +46185,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1170';
+const BUILD_ID = '20261105-v1171';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

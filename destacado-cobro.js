@@ -24,6 +24,17 @@ function validarMontoUSD(monto) {
   return typeof monto === 'number' && Number.isInteger(monto) && MONTOS_USD.includes(monto);
 }
 
+// (LOTE ADS-DIFERENCIA) La carga de la diferencia de un impulso cobra
+// un monto que NO es uno de los fijos (p. ej. US$2): solo se acepta
+// cuando el llamador pasa permitirDiferencia, y el endpoint ya
+// recomputó que el monto ES la diferencia exacta (monto elegido −
+// saldo real). Sin el flag, esta costura sigue cobrando únicamente
+// los 3 montos fijos aprobados. La cota es la del validador espejo de
+// ads-billetera: entero, mayor que 0 y hasta el monto fijo mayor.
+function validarMontoDiferenciaUSD(monto) {
+  return typeof monto === 'number' && Number.isInteger(monto) && monto >= 1 && monto <= Math.max(...MONTOS_USD);
+}
+
 // Resuelve la tarjeta guardada: primero la default del cliente, si no
 // la primera tarjeta listada. Sin tarjeta → null (fail-closed).
 async function resolverTarjetaGuardada(client, customerId) {
@@ -92,7 +103,7 @@ async function cobrarImpulso(input) {
   return { ok: false, motivo: 'cobro_no_confirmado', piStatus: pi.status || null };
 }
 
-module.exports = { MONTOS_USD, validarMontoUSD, resolverTarjetaGuardada, tarjetaGuardadaInfo, cobrarImpulso, cobrarCargaBilletera };
+module.exports = { MONTOS_USD, validarMontoUSD, validarMontoDiferenciaUSD, resolverTarjetaGuardada, tarjetaGuardadaInfo, cobrarImpulso, cobrarCargaBilletera };
 
 // cobrarCargaBilletera({ client, customerId, montoUSD, ref })
 //   → { ok: true, cobroId } ó { ok: false, motivo [, detalle] }.
@@ -104,10 +115,10 @@ module.exports = { MONTOS_USD, validarMontoUSD, resolverTarjetaGuardada, tarjeta
 // no duplica el cargo. Sin ref, se usa cliente+monto+día (un solo cargo de
 // ese monto por día y cliente como red de seguridad).
 async function cobrarCargaBilletera(input) {
-  const { client, customerId, montoUSD, ref } = input || {};
+  const { client, customerId, montoUSD, ref, permitirDiferencia } = input || {};
   if (!client) return { ok: false, motivo: 'stripe_no_configurado' };
   if (!customerId) return { ok: false, motivo: 'sin_cliente_stripe' };
-  if (!validarMontoUSD(montoUSD)) return { ok: false, motivo: 'monto_invalido' };
+  if (!(permitirDiferencia ? validarMontoDiferenciaUSD(montoUSD) : validarMontoUSD(montoUSD))) return { ok: false, motivo: 'monto_invalido' };
   const pmId = await resolverTarjetaGuardada(client, customerId);
   if (!pmId) return { ok: false, motivo: 'sin_tarjeta_guardada' };
   const idem = ref
