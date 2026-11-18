@@ -224,6 +224,20 @@ async function resolvePageId(igUserId) {
 // guardadas útiles. Los frenos no cambian (fail-closed siempre) y
 // desde ahora registran el error CRUDO de cada lectura
 // (err.detalleLecturas → detalleErrorMeta lo suma al registro).
+// (LOTE ADS-CREACIÓN-5) La causa raíz de los intentos del dueño,
+// probada la noche del 17/11: sus posteos (582 y 696) son de su
+// Instagram en español (@posty.communitymanager) y la conexión
+// guardó solo la del inglés (@postycommunitymanager, la IG de la
+// Página «Posty.») — Meta valida que el instagram_user_id sea la
+// cuenta DUEÑA del medio fuente, vinculada a la Página del
+// object_id y asignada a la cuenta publicitaria; una id de otra
+// cuenta muere en el creativo con code 100 siempre. Desde este
+// lote la conexión guarda el detalle por cuenta (id + username +
+// Página + asignación, ver fetchClientAssets) y, con varias
+// detalladas, el arbitraje es por el username de la cuenta que
+// publica — sin lecturas en vivo — con frenos honestos antes de
+// crear nada (createBoost resuelve ahora ANTES del paso 1). Las
+// filas viejas sin detalle siguen por los caminos de v1167/v1163.
 async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaId = '' }) {
   // Las lecturas capturan su error CRUDO (con metaError): hasta el
   // intento 8 el catch lo reducía a null y el freno registraba solo
@@ -258,9 +272,88 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
   // compartidas (instagram_business_account, el espacio de nombres
   // que el creativo valida) — verificadas por origen, sin depender
   // de ninguna lectura en vivo.
-  const guardadas = [...new Set((ctx && Array.isArray(ctx.igAccountIds) ? ctx.igAccountIds : []).map((x) => String(x || '')).filter(Boolean))];
+  // (LOTE ADS-CREACIÓN-5) Con el detalle guardado (ctx.igAccounts:
+  // id + username + Página de cada una, capturado al conectar) el
+  // arbitraje entre varias NO lee nada en vivo: la dueña del medio
+  // es, por construcción de la app, la cuenta que publica los
+  // posteos del usuario (la fila del posteo no guarda cuenta y el
+  // camino de publicación usa una sola), así que el username de
+  // publicación identifica a la dueña entre las guardadas. El
+  // triple que el creativo valida se chequea entero contra lo
+  // guardado: dueña (username) · vinculada a la Página del anuncio
+  // (page_id guardado contra el pageId del riel) · asignada a la
+  // cuenta publicitaria (usable_en_cuenta, si la lectura al
+  // conectar respondió). Lo que no cierra frena ANTES de crear
+  // nada, con el motivo honesto — jamás viaja un id de otra cuenta.
+  const normU = (u) => String(u || '').replace(/^@+/, '').trim().toLowerCase();
+  const detalladas = [...new Map((ctx && Array.isArray(ctx.igAccounts) ? ctx.igAccounts : [])
+    .map((a) => ({ id: String((a && a.id) || ''), username: String((a && a.username) || ''), page_id: String((a && a.page_id) || ''), usable: (a && a.usable_en_cuenta !== undefined) ? a.usable_en_cuenta : null }))
+    .filter((a) => a.id).map((a) => [a.id, a])).values()];
+  const guardadas = detalladas.length
+    ? detalladas.map((a) => a.id)
+    : [...new Set((ctx && Array.isArray(ctx.igAccountIds) ? ctx.igAccountIds : []).map((x) => String(x || '')).filter(Boolean))];
   if (guardadas.length === 1) {
+    // Una sola guardada SIN detalle (fila vieja) o con el username
+    // de publicación coincidente: viaja como hoy (v1167, el caso
+    // del intento 8). Pero una sola DETALLADA cuyo username
+    // difiere del de publicación es un desacuerdo DEMOSTRADO — el
+    // posteo es de otra cuenta — y mandar esa id sería repetir el
+    // code 100 de todos los intentos del dueño (su conexión guarda
+    // solo la EN y sus posteos son de la ES): freno honesto antes
+    // de crear nada, el mismo motivo que con varias guardadas.
+    if (detalladas.length === 1) {
+      const pubU1 = normU(ctx && ctx.publicadaUsername);
+      const unica = detalladas[0];
+      if (pubU1 && normU(unica.username) && normU(unica.username) !== pubU1) {
+        const err = new Error(`Este posteo es de la cuenta de Instagram @${pubU1}, que no está en la conexión publicitaria (la conexión tiene ${unica.username ? `@${unica.username}` : unica.id}): el impulso se frenó antes de crear nada en Meta. Para impulsarlo, esa cuenta tiene que estar vinculada a una Página compartida en la conexión.`);
+        err.code = 'ig_fuera_de_conexion';
+        err.paso = 'creativo';
+        err.detalleLecturas = 'arbitraje por lo guardado (sin lecturas en vivo): la única cuenta guardada con username no es la que publica el posteo';
+        throw err;
+      }
+    }
     return { id: guardadas[0], fuente: 'conexion_guardada' };
+  }
+  if (detalladas.length > 1) {
+    const pubU = normU(ctx && ctx.publicadaUsername);
+    if (pubU) {
+      const match = detalladas.filter((a) => normU(a.username) && normU(a.username) === pubU);
+      const lista = detalladas.map((a) => (a.username ? `@${a.username}` : a.id)).join(', ');
+      const frenoGuardado = (code, mensaje, detalle) => {
+        const err = new Error(mensaje);
+        err.code = code;
+        err.paso = 'creativo';
+        err.detalleLecturas = detalle;
+        return err;
+      };
+      if (match.length === 0) {
+        throw frenoGuardado('ig_fuera_de_conexion',
+          `Este posteo es de la cuenta de Instagram @${pubU}, que no está en la conexión publicitaria (la conexión tiene ${lista}): el impulso se frenó antes de crear nada en Meta. Para impulsarlo, esa cuenta tiene que estar vinculada a una Página compartida en la conexión.`,
+          'arbitraje por lo guardado (sin lecturas en vivo): la cuenta que publica no está entre las cuentas guardadas con username');
+      }
+      if (match.length === 1) {
+        const m = match[0];
+        // La dueña está, pero el creativo también exige que esté
+        // vinculada a la Página que el anuncio pasa como object_id:
+        // vinculada a OTRA Página, Meta lo rechaza igual — freno
+        // honesto antes de crear, con su propio motivo.
+        if (pageId && m.page_id && String(m.page_id) !== String(pageId)) {
+          throw frenoGuardado('ig_otra_pagina',
+            `Este posteo es de la cuenta de Instagram @${pubU}, que en la conexión publicitaria está vinculada a otra Página de Facebook, no a la Página de este anuncio: el impulso se frenó antes de crear nada en Meta.`,
+            'arbitraje por lo guardado (sin lecturas en vivo): la dueña está guardada pero su Página guardada no es la del riel');
+        }
+        if (m.usable === false) {
+          throw frenoGuardado('ig_fuera_de_conexion',
+            `Este posteo es de la cuenta de Instagram @${pubU}, que no está asignada a la cuenta publicitaria de la conexión (la conexión tiene ${lista}): el impulso se frenó antes de crear nada en Meta. Asignala a la cuenta publicitaria en Meta y volvé a conectar.`,
+            'arbitraje por lo guardado (sin lecturas en vivo): la dueña está guardada pero usable_en_cuenta quedó false al conectar');
+        }
+        return { id: m.id, fuente: 'guardada_username' };
+      }
+      // match.length > 1 (el mismo username dos veces): imposible
+      // en una captura sana; cae al arbitraje de siempre.
+    }
+    // Sin username de publicación con qué arbitrar: sigue el
+    // arbitraje de v1167 sobre las guardadas (lecturas + publicadaId).
   }
   const [ld, lp] = await Promise.all([leerDueno(), leerPagina()]);
   const dueno = ld.dato, pagina = lp.dato;
@@ -350,6 +443,14 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   const elig = await checkEligibility(igMediaId, gctx);
   if (!elig.ok) throw new Error(elig.reason);
 
+  // (LOTE ADS-CREACIÓN-5) La resolución del instagram_user_id corre
+  // ACÁ, antes de crear NADA (antes vivía en el paso 3 y un freno
+  // dejaba campaña y conjunto huérfanos en Meta): si la cuenta del
+  // posteo no se puede emparejar con lo guardado en la conexión,
+  // el impulso frena sin una sola escritura. El id resuelto es el
+  // que viaja en el creativo del paso 3.
+  const igResuelto = await resolverIgUserIdBoost({ pageId, igMediaId, ctx: gctx, publicadaId: igUserId });
+
   // (LOTE ADS-CREACIÓN) Cada paso etiqueta su error: el registro del
   // impulso guarda en qué paso rechazó Meta (con el subcódigo que
   // viaja en e.metaError), no un «Invalid parameter» huérfano.
@@ -432,16 +533,17 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   // (LOTE ADS-CREACIÓN-3) El instagram_user_id NO es el parámetro
   // igUserId del llamador (settings.ig_user_id, el id de Instagram
   // Login para publicar — inválido en este grafo, error del intento
-  // 7): se resuelve contra la cuenta del riel en este momento
-  // (resolverIgUserIdBoost) y viaja el id resuelto. Si la resolución
-  // frena, el error sale con paso 'creativo' y el registro lo guarda
-  // entero, como un rechazo de Meta en el mismo paso.
+  // 7): viaja el id RESUELTO contra la cuenta del riel. Si la
+  // resolución frena, el error sale con paso 'creativo' y el
+  // registro lo guarda entero, como un rechazo de Meta en el
+  // mismo paso.
   // (LOTE ADS-CREACIÓN-4) El parámetro igUserId viaja SOLO como
   // publicadaId: la cuenta que publica los posteos del usuario,
   // desempate de última instancia entre las guardadas de la
   // conexión — jamás como instagram_user_id directo.
+  // (LOTE ADS-CREACIÓN-5) La resolución se movió ANTES del paso 1
+  // (ver arriba): acá solo se usa el id ya resuelto.
   const creative = await pasoBoost('creativo', async () => {
-    const igResuelto = await resolverIgUserIdBoost({ pageId, igMediaId, ctx: gctx, publicadaId: igUserId });
     const creativeParams = {
       name: `${name} · creativo`,
       instagram_user_id: igResuelto.id,
@@ -627,7 +729,7 @@ async function fetchClientAssets(suat) {
   if (!suat) throw new Error('Falta el token de la conexión publicitaria');
   const [enumRes, pages, me] = await Promise.all([
     enumerateAdAccounts(suat),
-    gToken('/me/accounts', suat, { fields: 'id,name,instagram_business_account', limit: '100' }).catch(() => ({ data: [] })),
+    gToken('/me/accounts', suat, { fields: 'id,name,instagram_business_account{id,username}', limit: '100' }).catch(() => ({ data: [] })),
     gToken('/me', suat, { fields: 'id,name' }).catch(() => ({})),
   ]);
   const adAccounts = enumRes.accounts;
@@ -635,14 +737,43 @@ async function fetchClientAssets(suat) {
     id: String(p.id || ''),
     name: String(p.name || ''),
     ig_user_id: (p.instagram_business_account && p.instagram_business_account.id) ? String(p.instagram_business_account.id) : '',
+    ig_username: (p.instagram_business_account && p.instagram_business_account.username) ? String(p.instagram_business_account.username) : '',
   })).filter(p => p.id);
   const igSet = new Set(pageList.map(p => p.ig_user_id).filter(Boolean));
   const biz = adAccounts.find(a => a.business_id);
+  // (LOTE ADS-CREACIÓN-5) Las cuentas de IG con su identidad
+  // completa: id + username + la Página a la que cada una está
+  // vinculada (la enumeración la trae nativa: el
+  // instagram_business_account DE esa Página) — el creativo valida
+  // dueña + vínculo con la Página del anuncio, y el arbitraje al
+  // impulsar (sin lecturas en vivo) necesita este mapa guardado.
+  // Tercera pata del triple: el conjunto que la cuenta
+  // publicitaria principal puede usar (/{act}/instagram_accounts,
+  // la fuente que la propia doc de Meta manda para
+  // instagram_user_id). Lectura secundaria fail-soft, SOLO al
+  // conectar: si no responde, usable_en_cuenta queda null (sin
+  // dato) — jamás frena la captura ni se inventa un false.
+  const principal = adAccounts.find(a => Number(a.account_status) === 1) || adAccounts[0] || null;
+  let usables = null;
+  if (principal && principal.account_id) {
+    try {
+      const d = await gToken(`/act_${principal.account_id}/instagram_accounts`, suat, { fields: 'id,username', limit: '100' });
+      usables = new Set((d.data || []).map(x => String((x && x.id) || '')).filter(Boolean));
+    } catch (e) { usables = null; }
+  }
+  const igAccounts = pageList.filter(p => p.ig_user_id).map(p => ({
+    id: p.ig_user_id,
+    username: p.ig_username || '',
+    page_id: p.id,
+    page_name: p.name || '',
+    usable_en_cuenta: usables ? usables.has(p.ig_user_id) : null,
+  }));
   return {
     businessId: biz ? biz.business_id : (enumRes.businessIds[0] || ''),
     adAccounts,
     pages: pageList,
     igAccountIds: [...igSet],
+    igAccounts,
     suatUserId: (me && me.id) ? String(me.id) : '',
     adAccountsError: (adAccounts.length === 0 && enumRes.errors.length) ? enumRes.errors[0] : null,
   };

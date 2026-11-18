@@ -13786,24 +13786,30 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
         return res.status(409).json({ ok: false, motivo: 'conversion_pendiente' });
       }
       let crD = null;
+      let crDError = null;
       try {
         crD = await metaAds.createBoost({
           name: `Posty · Destacado u${uid} · p${targetId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
           spendCents: spendDest, days: 7, country: adCountry(uid),
-          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [] },
+          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' },
         });
-      } catch (e) { crD = null; }
+      } catch (e) { crD = null; crDError = e; }
       if (!crD || !crD.campaignId) {
         // Sin campaña no hay cobro de ningún tipo; queda el registro
         // 'error' para el equipo, como en el riel histórico.
+        // (LOTE ADS-CREACIÓN-5) El registro guarda el detalle real
+        // (antes una línea fija que lo tapaba) y los frenos de
+        // identidad de la resolución salen con su motivo honesto,
+        // igual que en el impulso.
         try {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
             VALUES (?,?,?,0,0,0,?,'error','engagement',7,?)`)
-            .run(uid, targetId, post.ig_media_id, monedaCuenta, 'creación fallida en la cuenta del cliente (destacado, riel cliente)');
+            .run(uid, targetId, post.ig_media_id, monedaCuenta, `creación fallida en la cuenta del cliente (destacado, riel cliente): ${metaAds.detalleErrorMeta(crDError)}`);
         } catch (e) {}
-        return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
+        const motivoFrenoD = (crDError && (crDError.code === 'ig_fuera_de_conexion' || crDError.code === 'ig_otra_pagina')) ? crDError.code : 'anuncio_fallido';
+        return res.status(409).json({ ok: false, motivo: motivoFrenoD });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
@@ -13833,7 +13839,7 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
           name: `Posty · Destacado u${uid} · p${a.posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
           spendCents: a.spendCents, days: 7, country: adCountry(uid),
-          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [] } : null,
+          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' } : null,
         });
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
       },
@@ -15013,7 +15019,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           spendCents: pautaCents, days: 7, country: adCountry(uid),
           objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
           destinationType: mapeoAds.destinationType, targeting: targetingAds,
-          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [] },
+          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' },
         });
       } catch (e) { cr = null; crError = e; }
       if (!cr || !cr.campaignId) {
@@ -15033,7 +15039,14 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
             VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?,?,?)`)
             .run(uid, posteoId, cand.ig_media_id, pautaCents, `creación fallida en la cuenta del cliente (riel cliente): ${metaAds.detalleErrorMeta(crError)}`, objetivoFinal || '', audienciaJsonDe());
         } catch (e) {}
-        return res.status(409).json({ ok: false, motivo: 'anuncio_fallido' });
+        // (LOTE ADS-CREACIÓN-5) Los frenos de identidad de la
+        // resolución NO son un rechazo de Meta (Meta ni vio el
+        // aviso): el cliente recibe SU motivo honesto — el posteo
+        // es de un Instagram que no está en la conexión, o está
+        // vinculado a otra Página — nunca el genérico
+        // «anuncio_fallido», que diría que Meta no aceptó algo.
+        const motivoFreno = (crError && (crError.code === 'ig_fuera_de_conexion' || crError.code === 'ig_otra_pagina')) ? crError.code : 'anuncio_fallido';
+        return res.status(409).json({ ok: false, motivo: motivoFreno });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
@@ -15094,7 +15107,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
             spendCents: a.spendCents, days: 7, country: adCountry(uid),
             objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
             destinationType: mapeoAds.destinationType, targeting: targetingAds,
-            ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [] } : null,
+            ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' } : null,
           });
         } catch (e) {
           // (LOTE ADS-HARDENING-ACTIVACION) Si la activación falló, el
@@ -15304,7 +15317,7 @@ function getAdsConnection(userId) {
     const row = db.prepare('SELECT * FROM ig_ads_connections WHERE user_id = ?').get(userId);
     if (!row) return null;
     const parse = (t) => { try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
-    return { ...row, ig_account_ids: parse(row.ig_account_ids), ad_accounts: parse(row.ad_accounts) };
+    return { ...row, ig_account_ids: parse(row.ig_account_ids), ig_accounts: parse(row.ig_accounts), ad_accounts: parse(row.ad_accounts) };
   } catch (e) { return null; }
 }
 function adsConnectionReady(userId) {
@@ -15355,6 +15368,13 @@ async function adsReadiness(userId) {
       // (LOTE ADS-CREACIÓN-4) Las IG guardadas de la conexión: la
       // resolución del creativo las usa como fuente primaria.
       igAccountIds: conn.ig_account_ids || [],
+      // (LOTE ADS-CREACIÓN-5) El detalle por cuenta (id + username
+      // + Página + asignación) y el username de la cuenta que
+      // publica los posteos del usuario (profiles.ig_username):
+      // el arbitraje entre varias guardadas es por ese username,
+      // sin lecturas en vivo.
+      igAccounts: conn.ig_accounts || [],
+      publicadaUsername: (() => { try { const p = getProfile(userId); return (p && p.ig_username) || ''; } catch (e) { return ''; } })(),
     };
   }
   // (2) Riel histórico de la cuenta propia: la Página resuelve con el
@@ -15507,7 +15527,7 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
         name: `Posty · Boost u${req.session.userId} · p${postId}`,
         pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
         spendCents: budgetCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
-        ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [] },
+        ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' },
       });
     } catch (e) {
       return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
@@ -15553,7 +15573,7 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
         spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
         // (LOTE CONEXIÓN-PÁGINA) Riel del cliente: la campaña se crea
         // en SU cuenta publicitaria, con su SUAT.
-        ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [] } : null,
+        ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' } : null,
       });
     } catch (e) {
       return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
@@ -27099,14 +27119,15 @@ app.get('/api/ig/unified/callback', async (req, res) => {
     // toque para terminarla. Nunca queda «conectado a medias» mudo.
     const status = primary ? 'ok' : 'sin_cuenta';
     db.prepare(`INSERT INTO ig_ads_connections
-      (user_id, suat, client_business_id, config_id, ig_account_ids, fb_page_id, fb_page_name, ad_accounts, primary_ad_account_id, ad_currency, status, connected_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+      (user_id, suat, client_business_id, config_id, ig_account_ids, ig_accounts, fb_page_id, fb_page_name, ad_accounts, primary_ad_account_id, ad_currency, status, connected_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
       ON CONFLICT(user_id) DO UPDATE SET suat=excluded.suat, client_business_id=excluded.client_business_id,
-        config_id=excluded.config_id, ig_account_ids=excluded.ig_account_ids, fb_page_id=excluded.fb_page_id,
+        config_id=excluded.config_id, ig_account_ids=excluded.ig_account_ids, ig_accounts=excluded.ig_accounts, fb_page_id=excluded.fb_page_id,
         fb_page_name=excluded.fb_page_name, ad_accounts=excluded.ad_accounts,
         primary_ad_account_id=excluded.primary_ad_account_id, ad_currency=excluded.ad_currency,
         status=excluded.status, connected_at=excluded.connected_at, updated_at=datetime('now')`)
       .run(uid, suat, assets.businessId || '', c.configId, JSON.stringify([...igIds]),
+        JSON.stringify(assets.igAccounts || []),
         page ? page.id : '', page ? page.name : '', JSON.stringify(assets.adAccounts),
         primary ? primary.account_id : '', primary ? (primary.currency || '') : '', status);
     if (page) {
@@ -46185,7 +46206,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1171';
+const BUILD_ID = '20261105-v1172';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

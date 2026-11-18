@@ -18732,6 +18732,13 @@ function pzBoostMotivo(motivo, monto, cobroId) {
       return gzT('La pauta todavía no está configurada para tu cuenta. Te avisamos en cuanto esté lista. No se gastó nada.', 'Ads aren’t set up for your account yet. We’ll let you know as soon as it’s ready. Nothing was spent.');
     case 'ig_not_connected':
       return gzT('Conectá tu Instagram para poder potenciar tus posteos.', 'Connect your Instagram to boost your posts.');
+    case 'ig_fuera_de_conexion':
+      // (LOTE ADS-CREACIÓN-5) El posteo es de un Instagram que la
+      // conexión publicitaria no tiene (o no puede usar): no es un
+      // rechazo de Meta — el aviso ni se creó — y se dice tal cual.
+      return gzT('Este posteo es de un Instagram que no está en tu conexión publicitaria, así que no se puede impulsar con esta conexión. No se gastó nada.', 'This post is from an Instagram that isn’t in your Ads connection, so it can’t be boosted with this connection. Nothing was spent.');
+    case 'ig_otra_pagina':
+      return gzT('Este posteo es de un Instagram que está vinculado a otra Página de Facebook, no a la de este anuncio, así que no se puede impulsar con esta conexión. No se gastó nada.', 'This post is from an Instagram linked to a different Facebook Page than this ad’s, so it can’t be boosted with this connection. Nothing was spent.');
     case 'sin_cuenta_publicitaria':
       // (LOTE CONEXIÓN-PÁGINA) El camino es del cliente y es un toque:
       // nada de «todavía no autorizó» sin salida.

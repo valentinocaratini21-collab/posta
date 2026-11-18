@@ -133,6 +133,18 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS ig_ads_connections (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`); } catch (e) { /* tabla conexión-página: ya existe o sin DB */ }
 // === LOTE CONEXIÓN-PÁGINA tabla (fin) ===
+// (LOTE ADS-CREACIÓN-5) Las cuentas de IG de la conexión CON su
+// username, su Página y su asignación a la cuenta publicitaria:
+// ig_account_ids guarda solo ids pelados y el creativo de Meta
+// valida un triple (la cuenta es la dueña del medio · está
+// vinculada a la Página del anuncio · la cuenta publicitaria la
+// puede usar). El arbitraje entre varias cuentas — sin lecturas
+// en vivo, que el SUAT no puede hacer — necesita saber cuál es
+// cuál y de qué Página cuelga cada una. JSON:
+// [{id, username, page_id, page_name, usable_en_cuenta}]
+// (usable_en_cuenta: true/false si la lectura de la cuenta
+// publicitaria respondió al conectar; null si no se pudo leer).
+try { db.exec(`ALTER TABLE ig_ads_connections ADD COLUMN ig_accounts TEXT DEFAULT '[]'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN competitors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN monthly_goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
