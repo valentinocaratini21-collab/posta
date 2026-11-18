@@ -788,6 +788,12 @@ function safeJson(s, dflt) { try { return JSON.parse(s || ''); } catch (e) { ret
 function resolverJugada(db, userId, jugadaId, accion, nota) {
   const j = db.prepare('SELECT * FROM venty_jugadas WHERE id = ? AND user_id = ?').get(jugadaId, userId);
   if (!j) return { ok: false, kind: 'jugada_no_encontrada' };
+  // F1 FUNDAMENTO-AUTO: las jugadas fundamento_* las resuelve su módulo
+  // (aceptar aplica el borrador; el resto de tipos sigue el flujo de acá).
+  if (j.tipo && j.tipo.indexOf('fundamento_') === 0) {
+    try { return require('./venty-fundamento-auto').resolverJugadaFundamento(db, userId, jugadaId, accion, nota); }
+    catch (e) { return { ok: false, kind: 'fundamento_auto_no_disponible' }; }
+  }
   if (j.estado !== 'pendiente') return { ok: false, kind: 'jugada_ya_resuelta', estado: j.estado };
   const ahora = ahoraIso();
   if (accion === 'aceptar') {

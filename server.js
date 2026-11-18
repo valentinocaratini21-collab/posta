@@ -6392,6 +6392,108 @@ app.post('/api/venty/agenda/turnos/:id/no-show', requireAuthOrWebToken, (req, re
     res.json({ ok: true, modo: 'prueba', ...r });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// ---------- VENTY F1: fundamento automático desde lo publicado ----------
+// ZONA F1 (única del lote; distinta de los bloques SLICE 3, SLICE 4 y
+// SLICE 5 de arriba; los lotes siguientes se apilan DESPUÉS de este
+// bloque, antes de los webhooks de Venty). Ancla: inmediatamente después
+// de la última ruta del bloque SLICE 3 (POST /api/venty/agenda/turnos/
+// :id/no-show) y antes del comentario «Webhooks de Venty (Meta → Posta».
+// Módulo nuevo venty-fundamento-auto.js: al conectar o actualizar el
+// website o el Instagram, Venty lee SOLO el fundamento de lo que el
+// negocio ya publica (rubro, oferta con nombre y precio si está
+// publicado, tono, zona; cero preguntas) y lo deja como BORRADOR en la
+// Bandeja. Nunca pisa un fundamento aceptado: con aceptado previo, la
+// lectura es jugada de actualización con diff. Lectura vacía o
+// contradictoria: jugada de duda con las candidatas reales del negocio.
+// Disparadores sin tocar las rutas viejas: se envuelven las funciones
+// que esas rutas ya llaman por propiedad (venty-web.refrescarDesdeWeb
+// para web — incluye el conectar web del piloto Fitswapp — y
+// venty-conexiones.marcarFetch/iniciarConexion para instagram), siempre
+// en try/catch y devolviendo el resultado original intacto. Más la ruta
+// autenticada para pedir la lectura a mano. Todo bajo
+// requireAuthOrWebToken, como el resto de /api/venty/*.
+const ventyFundamentoAuto = require('./venty-fundamento-auto'); // VENTY F1: fundamento automático desde lo publicado.
+try { ventyFundamentoAuto.ensureSchema(db); } catch (e) { console.error('[venty-f1] init:', e.message); }
+try {
+  const refrescarWebF1 = ventyWeb.refrescarDesdeWeb;
+  ventyWeb.refrescarDesdeWeb = async (dbF1, uidF1, urlF1, optsF1) => {
+    const r = await refrescarWebF1(dbF1, uidF1, urlF1, optsF1);
+    if (r && r.ok) {
+      try { r.fundamento_auto = await ventyFundamentoAuto.alConectarFuente(db, uidF1, 'web', { sitio: r.sitio || null, saltarRed: true }); }
+      catch (e) { console.error('[venty-f1] lectura web:', e.message); }
+    }
+    return r;
+  };
+} catch (e) { console.error('[venty-f1] wrap web:', e.message); }
+try {
+  const marcarFetchF1 = ventyConexiones.marcarFetch;
+  ventyConexiones.marcarFetch = (dbF1, uidF1, canalF1, optsF1) => {
+    const r = marcarFetchF1(dbF1, uidF1, canalF1, optsF1);
+    if (canalF1 === 'instagram') {
+      ventyFundamentoAuto.alConectarFuente(db, uidF1, 'instagram', { saltarRed: true })
+        .catch((e) => console.error('[venty-f1] lectura ig:', e.message));
+    }
+    return r;
+  };
+  const iniciarConexionF1 = ventyConexiones.iniciarConexion;
+  ventyConexiones.iniciarConexion = (dbF1, uidF1, canalF1, optsF1) => {
+    const r = iniciarConexionF1(dbF1, uidF1, canalF1, optsF1);
+    // Registrar la intención de instagram no trae datos nuevos: la
+    // lectura solo corre si ya hay fuentes guardadas que leer.
+    if (canalF1 === 'instagram') {
+      ventyFundamentoAuto.alConectarFuente(db, uidF1, 'instagram', { saltarRed: true, soloSiHayDatos: true })
+        .catch((e) => console.error('[venty-f1] lectura ig:', e.message));
+    }
+    return r;
+  };
+  const conectarIgFitswappF1 = ventyFitswapp.conectarInstagram;
+  ventyFitswapp.conectarInstagram = (dbF1, uidF1, optsF1) => {
+    const r = conectarIgFitswappF1(dbF1, uidF1, optsF1);
+    ventyFundamentoAuto.alConectarFuente(db, uidF1, 'instagram', { saltarRed: true, soloSiHayDatos: true })
+      .catch((e) => console.error('[venty-f1] lectura ig piloto:', e.message));
+    return r;
+  };
+} catch (e) { console.error('[venty-f1] wrap ig:', e.message); }
+app.get('/api/venty/fundamento-auto', requireAuthOrWebToken, (req, res) => {
+  try { res.json({ ok: true, modo: 'prueba', ...ventyFundamentoAuto.estadoFundamentoAuto(db, ventyUid(req)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/fundamento-auto/leer', requireAuthOrWebToken, async (req, res) => {
+  try {
+    const uid = ventyUid(req);
+    const b = req.body || {};
+    const fuentes = b.fuentes || {};
+    const r = await ventyFundamentoAuto.leerFundamentoAuto(db, uid, {
+      disparador: 'manual',
+      websiteUrl: String(b.website_url || ''),
+      sitio: fuentes.web || b.web || null,
+      perfilInstagram: fuentes.instagram || b.instagram || b.perfil_instagram || null,
+      saltarRed: !!(fuentes.web || b.web),
+    });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/fundamento-auto/lecturas/:id/aceptar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyFundamentoAuto.aceptarLectura(db, ventyUid(req), Number(req.params.id), { confirmarConDudas: !!((req.body || {}).confirmar_con_dudas) });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error, dudas: r.dudas || [] });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/fundamento-auto/lecturas/:id/rechazar', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyFundamentoAuto.rechazarLectura(db, ventyUid(req), Number(req.params.id), String(((req.body || {}).nota) || ''));
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/venty/fundamento-auto/marcar-aceptado', requireAuthOrWebToken, (req, res) => {
+  try {
+    const r = ventyFundamentoAuto.marcarActualComoAceptado(db, ventyUid(req));
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+    res.json({ ok: true, modo: 'prueba', ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // ---------- Webhooks de Venty (Meta → Posta; públicos, verificados) ----------
 // Instagram: GET verifica con INSTAGRAM_VERIFY_TOKEN; POST verifica la
 // firma X-Hub-Signature-256 con INSTAGRAM_APP_SECRET. Sin secretos: 403.
@@ -46257,7 +46359,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1175';
+const BUILD_ID = '20261105-v1176';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
