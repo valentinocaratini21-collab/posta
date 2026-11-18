@@ -3891,12 +3891,10 @@ function lpDisenoInit() {
       var r = sec.getBoundingClientRect();
       var p = total > 0 ? Math.min(1, Math.max(0, -r.top / total)) : 1;
       n = 0;
-      for (var k = 0; k < cells.length; k++) { if (p >= 0.03 + k * 0.11) n = k + 1; }
+      for (var k = 0; k < cells.length; k++) { if (p >= 0.02 + k * 0.13) n = k + 1; }
     }
     cells.forEach(function (c, i) { c.classList.toggle('on', i < n); });
     var fill = q('.wd-bar i', sec); if (fill) fill.style.width = (n / cells.length * 100) + '%';
-    var cnt = q('.wd-count', sec);
-    if (cnt) cnt.innerHTML = fmt(sec.getAttribute('data-count'), n) + (n === cells.length ? (sec.getAttribute('data-done') || '') : '');
     sec.classList.toggle('wd-done', n === cells.length);
     var hint = q('.wd-hint', sec); if (hint) hint.style.opacity = (n > 0 || RM) ? '0' : '1';
   }
@@ -5055,11 +5053,11 @@ function landingView(cfg) {
   ${pzRefBandHTML()}
   <style>
 /* ===== WEB-DISEÑO: cada sección muestra cómo funciona ===== */
-.wd-scrolly{height:190vh;position:relative}
+.wd-scrolly{height:122vh;position:relative}
 .wd-sticky{position:sticky;top:0;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:10px 0}
 .wd-wk-label{text-align:center;font-weight:800;letter-spacing:2.5px;font-size:13px;color:#2793C8;text-transform:uppercase}
-.wd-wk-title{text-align:center;font-size:clamp(26px,3.6vw,44px);font-weight:900;margin:8px 0 26px;color:#0A1E33}
-.wd-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:14px}
+.wd-wk-title{text-align:center;font-size:clamp(26px,3.6vw,44px);font-weight:900;margin:8px 0 18px;color:#0A1E33}
+.wd-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:14px;max-width:1060px;margin:0 auto}
 .wd-scrolly .wrap{max-width:1280px}
 .wd-cell{text-align:center;min-width:0}
 .wd-dname{font-weight:800;font-size:15px;letter-spacing:1px;color:#9AA7B4;transition:color .3s}
@@ -5352,10 +5350,8 @@ function landingView(cfg) {
 
 @media (prefers-reduced-motion: reduce){.wd-on .wd-cell:not(.on) .wd-ph{animation:none}.wd-on .wd-payoff{opacity:1;transform:none}}
 @keyframes wd-pop{to{transform:scale(1)}}
-.wd-bar{height:10px;background:#E9E2D2;border-radius:99px;margin:28px auto 10px;max-width:760px;overflow:hidden}
+.wd-bar{height:10px;background:#E9E2D2;border-radius:99px;margin:20px auto 10px;max-width:760px;overflow:hidden}
 .wd-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2793C8,#1FA855);border-radius:99px;transition:width .3s}
-.wd-count{text-align:center;font-weight:800;font-size:19px;color:#0A1E33}
-.wd-count b{color:#1FA855}
 .wd-hint{text-align:center;color:#9AA7B4;font-size:13px;margin-top:8px;animation:wd-bob 1.6s ease-in-out infinite;transition:opacity .3s}
 @keyframes wd-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
 .wd-morning{position:relative;overflow:hidden;border-radius:26px;margin-top:42px;padding:34px 26px 30px;background:linear-gradient(180deg,#FFFDF6,#FBF7EF);text-align:left}
@@ -5541,7 +5537,7 @@ function landingView(cfg) {
 /* ===== WEB-DISEÑO-ESPACIOS: la tira llega pegada al hero y llena la pantalla (solo desktop) ===== */
 @media(min-width:761px){
 .hero:has(+ .wd-scrolly){padding-bottom:26px}
-.wd-sticky{justify-content:flex-start;padding:30px 0 34px}
+.wd-sticky{justify-content:flex-start;padding:24px 0 26px}
 .wd-scrolly .wrap{flex:1;display:flex;flex-direction:column}
 /* (WEB-LOGO-HERO) Sin margin-top:auto: título, tira y cierre se leen como
    una sola escena compacta, con el ritmo normal del sitio. */
@@ -5639,7 +5635,7 @@ function landingView(cfg) {
       </div>
     </div>
   </div></div>
-  <div class="wd-scrolly" data-count="{n} de 7 días posteados"><div class="wd-sticky"><div class="wrap"><div class="wd-wk-label">Tu semana con nosotros</div><div class="wd-wk-title">Lunes a domingo, publicado.</div><div class="wd-strip"><div class="wd-cell"><div class="wd-dname">LUN</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt="Posteo del lunes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MAR</div><div class="wd-ph"><img loading="lazy" src="g2-moda-1.jpg" alt="Posteo del martes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MIÉ</div><div class="wd-ph"><img loading="lazy" src="g2-barber-5.jpg" alt="Posteo del miércoles"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">JUE</div><div class="wd-ph"><img loading="lazy" src="g2-belleza-1.jpg" alt="Posteo del jueves"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">VIE</div><div class="wd-ph"><img loading="lazy" src="g4-mascotas-1.jpg" alt="Posteo del viernes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">SÁB</div><div class="wd-ph"><img loading="lazy" src="g4-fitness-1.jpg" alt="Posteo del sábado"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">DOM</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-3.jpg" alt="Posteo del domingo"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div></div><div class="wd-payoff"><span class="wd-payoff-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>7 de 7 días posteados — <b>tu Instagram nunca más abandonado.</b></span></div><div class="wd-bar"><i></i></div><div class="wd-count">0 de 7 días posteados</div><div class="wd-hint">Seguí bajando ↓</div></div></div></div>
+  <div class="wd-scrolly"><div class="wd-sticky"><div class="wrap"><div class="wd-wk-label">Tu semana con nosotros</div><div class="wd-wk-title">Lunes a domingo, publicado.</div><div class="wd-strip"><div class="wd-cell"><div class="wd-dname">LUN</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt="Posteo del lunes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MAR</div><div class="wd-ph"><img loading="lazy" src="g2-moda-1.jpg" alt="Posteo del martes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MIÉ</div><div class="wd-ph"><img loading="lazy" src="g2-barber-5.jpg" alt="Posteo del miércoles"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">JUE</div><div class="wd-ph"><img loading="lazy" src="g2-belleza-1.jpg" alt="Posteo del jueves"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">VIE</div><div class="wd-ph"><img loading="lazy" src="g4-mascotas-1.jpg" alt="Posteo del viernes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">SÁB</div><div class="wd-ph"><img loading="lazy" src="g4-fitness-1.jpg" alt="Posteo del sábado"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">DOM</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-3.jpg" alt="Posteo del domingo"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div></div><div class="wd-payoff"><span class="wd-payoff-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>7 de 7 días posteados — <b>tu Instagram nunca más abandonado.</b></span></div><div class="wd-bar"><i></i></div><div class="wd-hint">Seguí bajando ↓</div></div></div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Tu producto real, como protagonista.</h2>
     <p class="lede">Vos seguí atendiendo tu negocio. Del resto nos ocupamos nosotros.</p>
