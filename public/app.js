@@ -3935,7 +3935,7 @@ function lpDisenoInit() {
     window.addEventListener('resize', function () { if (window.__wdUpd) window.__wdUpd(); });
   }
   window.__wdUpd = upd;
-  var targets = qa('#atiende .wd-chat, #crecimiento, #voz, #ads, #subir, .lp-final, #progreso, #equipo, #faq, #como-funciona .pv-story, #como-funciona .wd-eve');
+  var targets = qa('#atiende .wd-chat, #crecimiento, #voz, #ads, #subir, .lp-final, #progreso, #equipo, #faq, #como-funciona .pv-story');
   function arm(el) { el.classList.add('wd-live'); }
   if (RM || !('IntersectionObserver' in window)) { targets.forEach(arm); }
   else {
@@ -4016,6 +4016,42 @@ function lpDisenoInit() {
     else {
       var pvIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { pvCycle(); pvIO.disconnect(); } }); }, { threshold: 0.25 });
       pvIO.observe(pvStory);
+    }
+  }
+  /* MANANA-VIVA · la mañana en dos actos: la chispa del arco y el ciclo de
+     likes corren solo con la escena en pantalla; sin movimiento (RM) la
+     escena queda en su estado final (236 + comentario), como sin JS. */
+  var mvScene = q('.mv-scene');
+  if (mvScene) {
+    var mvSvg = q('.mv-arc-svg', mvScene);
+    if (mvSvg && mvSvg.pauseAnimations) { mvSvg.pauseAnimations(); try { mvSvg.setCurrentTime(2.4); } catch (e) {} }
+    if (!RM) {
+      mvScene.classList.add('mv-armed');
+      var mvLikes = q('.mv-likes b', mvScene), mvComment = q('.mv-comment', mvScene), mvTimers = [];
+      if (mvComment) mvComment.classList.remove('in');
+      function mvClear() { mvTimers.forEach(clearTimeout); mvTimers = []; }
+      function mvHearts() {
+        var line = mvLikes ? mvLikes.parentNode : null; if (!line) return;
+        for (var i = 0; i < 3; i++) { (function (k) { var h = document.createElement('span'); h.className = 'mv-heart'; h.textContent = '♥'; h.style.left = (2 + k * 13 + Math.random() * 5) + 'px'; h.style.animationDelay = (k * 0.16) + 's'; line.appendChild(h); setTimeout(function () { h.remove(); }, 2100); })(i); }
+      }
+      function mvSet(n, fx) { if (!mvLikes) return; mvLikes.textContent = n; if (fx) { mvLikes.classList.remove('mv-pop'); void mvLikes.offsetWidth; mvLikes.classList.add('mv-pop'); mvHearts(); } }
+      function mvCycle() {
+        mvClear();
+        if (mvComment) mvComment.classList.remove('in');
+        mvSet(12, false);
+        mvTimers.push(setTimeout(function () { mvSet(47, true); }, 2400));
+        mvTimers.push(setTimeout(function () { mvSet(128, true); }, 5000));
+        mvTimers.push(setTimeout(function () { mvSet(236, true); }, 7600));
+        mvTimers.push(setTimeout(function () { if (mvComment) mvComment.classList.add('in'); }, 8800));
+        mvTimers.push(setTimeout(mvCycle, 11500));
+      }
+      mvSet(12, false);
+      if ('IntersectionObserver' in window) {
+        if (window.__mvIO) window.__mvIO.disconnect();
+        var mvIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { mvScene.classList.add('mv-live'); if (mvSvg && mvSvg.unpauseAnimations) mvSvg.unpauseAnimations(); mvCycle(); } else { mvScene.classList.remove('mv-live'); if (mvSvg && mvSvg.pauseAnimations) mvSvg.pauseAnimations(); mvClear(); } }); }, { threshold: 0.22 });
+        window.__mvIO = mvIO;
+        mvIO.observe(mvScene);
+      } else { mvScene.classList.add('mv-live'); if (mvSvg && mvSvg.unpauseAnimations) mvSvg.unpauseAnimations(); mvCycle(); }
     }
   }
   upd();
@@ -5223,35 +5259,10 @@ function landingView(cfg) {
 .pv-audio{font-size:13px;padding:10px 16px}
 .pv-caption{font-size:13px}
 }
-/* --- chip Posteado compartido (noche / escena 3 / viaje) --- */
-.wd-eve-cell .wd-posted,.ms-feed .wd-posted,.wd-jfeed .wd-posted{position:absolute;left:8px;bottom:8px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.92);color:#0A1E33;font-size:11px;font-weight:800;padding:4px 10px 4px 5px;border-radius:99px;box-shadow:0 6px 16px rgba(10,30,51,.18);z-index:2}
-.wd-eve-cell .wd-posted-ck,.ms-feed .wd-posted-ck,.wd-jfeed .wd-posted-ck{width:17px;height:17px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;flex:none}
-.wd-eve-cell .wd-posted-ck svg,.ms-feed .wd-posted-ck svg,.wd-jfeed .wd-posted-ck svg{width:10px;height:10px}
-/* --- 13 · escena de la noche --- */
-.wd-eve{flex:0 1 302px;min-width:262px}
-.wd-eve-title{font-size:19.5px;font-weight:900;color:#0A1E33;letter-spacing:-.3px;margin-bottom:13px;line-height:1.2}
-.wd-eve-phone{position:relative;background:#fff;border:3px solid #0A1E33;border-radius:28px;box-shadow:0 26px 54px rgba(10,30,51,.18);padding:13px 13px 15px;transform:rotate(2.2deg)}
-.wd-eve-head{display:flex;gap:9px;align-items:center;margin-bottom:10px}
-.wd-eve-head img{width:32px;height:32px;border-radius:50%;object-fit:cover;flex:none}
-.wd-eve-head b{display:block;font-size:13.5px;color:#0A1E33;line-height:1.15}
-.wd-eve-head span{font-size:11.5px;color:#7C8DA0;font-weight:700}
-.wd-eve-cell{position:relative;border-radius:15px;overflow:hidden}
-.wd-eve-cell img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
-.wd-on .wd-eve.wd-live .wd-eve-cell{animation:wd-eve-glow 1.6s ease .1s forwards}
-@keyframes wd-eve-glow{0%{box-shadow:0 0 0 0 rgba(254,193,77,0)}55%{box-shadow:0 0 0 3px #FEC14D,0 0 40px 8px rgba(254,193,77,.60)}100%{box-shadow:0 0 0 2px rgba(254,193,77,.85),0 0 20px 3px rgba(254,193,77,.35)}}
-.wd-eve-acts{display:flex;gap:10px;align-items:center;margin-top:10px}
-.wd-eve-acts svg{width:19px;height:19px}
-.wd-eve-acts span{margin-left:auto;font-size:11.5px;font-weight:800;color:#7C8DA0}
-.wd-eve-cell .wd-posted{transition:opacity .4s cubic-bezier(.2,2.2,.4,1) 1.15s,transform .4s cubic-bezier(.2,2.2,.4,1) 1.15s}
-.wd-on .wd-eve:not(.wd-live) .wd-posted{opacity:0;transform:scale(.5)}
-.wd-eve-push{position:absolute;top:-18px;right:-8px;width:248px;max-width:88%;background:#fff;border-radius:16px;box-shadow:0 18px 38px rgba(10,30,51,.22);padding:10px 12px;display:flex;gap:9px;align-items:flex-start;transition:opacity .5s ease .55s,transform .5s cubic-bezier(.2,1.6,.4,1) .55s;z-index:3}
-.wd-eve-push img{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none}
-.wd-eve-push-top{display:flex;gap:6px;align-items:baseline}
-.wd-eve-push-top b{font-size:12.5px;color:#0A1E33}
-.wd-eve-push-top span{font-size:11px;color:#8CA3B8;font-weight:700}
-.wd-eve-push-t{display:block;font-size:13.5px;color:#0A1E33;margin-top:1px}
-.wd-eve-push p{font-size:12px;line-height:1.4;color:#5B7A94;margin:1px 0 0}
-.wd-on .wd-eve:not(.wd-live) .wd-eve-push{opacity:0;transform:translateY(-16px)}
+/* --- chip Posteado compartido (escena 3 / viaje) --- */
+.ms-feed .wd-posted,.wd-jfeed .wd-posted{position:absolute;left:8px;bottom:8px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.92);color:#0A1E33;font-size:11px;font-weight:800;padding:4px 10px 4px 5px;border-radius:99px;box-shadow:0 6px 16px rgba(10,30,51,.18);z-index:2}
+.ms-feed .wd-posted-ck,.wd-jfeed .wd-posted-ck{width:17px;height:17px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;flex:none}
+.ms-feed .wd-posted-ck svg,.wd-jfeed .wd-posted-ck svg{width:10px;height:10px}
 /* --- 20 · el mes vivo --- */
 .wd-cal{position:relative}
 .wd-cal-d{overflow:hidden;padding:0}
@@ -5369,7 +5380,6 @@ function landingView(cfg) {
 .wd-door p{font-size:13.5px;line-height:1.5;color:#5B7A94}
 .wd-door p b{color:#0A1E33}
 @media(max-width:760px){
-.wd-eve{flex:1 1 100%;max-width:330px}
 .wd-jgrid{grid-template-columns:1fr;gap:22px}
 .wd-jgrid:before{content:"";position:absolute;left:15px;top:6px;bottom:6px;border-left:2.5px dashed rgba(39,147,200,.45)}
 .wd-jst{padding-left:25px}
@@ -5379,8 +5389,6 @@ function landingView(cfg) {
 .strat-chip{font-size:12px;padding:7px 11px}
 }
 @media (prefers-reduced-motion: reduce){
-.wd-on .wd-eve .wd-posted,.wd-on .wd-eve .wd-eve-push{opacity:1;transform:none;transition:none}
-.wd-on .wd-eve .wd-eve-cell{animation:none;box-shadow:0 0 0 2px rgba(254,193,77,.85),0 0 20px 3px rgba(254,193,77,.35)}
 .wd-on .wd-cal:not(.wd-full) .wd-cal-payoff{opacity:1;transform:none}
 .wd-on .wd-cal-mile{display:none}
 .wd-on .strat-body.deal .strat-head,.wd-on .strat-body.deal .strat-row{animation:none}
@@ -5397,37 +5405,111 @@ function landingView(cfg) {
 .wd-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2793C8,#1FA855);border-radius:99px;transition:width .3s}
 .wd-hint{text-align:center;color:#9AA7B4;font-size:13px;margin-top:8px;animation:wd-bob 1.6s ease-in-out infinite;transition:opacity .3s}
 @keyframes wd-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
-.wd-morning{position:relative;overflow:hidden;border-radius:26px;margin-top:42px;padding:34px 26px 30px;background:linear-gradient(180deg,#FFFDF6,#FBF7EF);text-align:left}
-.wd-blob{position:absolute;width:480px;height:480px;border-radius:50%;background:#FEC14D;opacity:.30;right:-150px;top:-90px;z-index:0}
-.wd-morning-in{position:relative;z-index:1}
-.wd-scene-title{font-size:clamp(24px,3.6vw,36px);font-weight:900;letter-spacing:-.6px;line-height:1.15;color:#0A1E33;max-width:620px}
-.wd-scene-sub{margin-top:10px;font-size:16.5px;color:#33475B;max-width:540px;line-height:1.5}
-.wd-stage{display:flex;gap:30px;align-items:center;margin-top:32px;flex-wrap:wrap}
-.wd-phone{width:290px;flex:0 0 auto;background:#fff;border-radius:36px;border:3px solid #0A1E33;box-shadow:0 26px 54px rgba(10,30,51,.20);padding:15px 13px 18px;transform:rotate(-3.5deg)}
-.wd-notch{width:84px;height:6px;border-radius:99px;background:#D8DEE6;margin:0 auto 11px}
-.wd-hi{font-size:12.5px;color:#7C8DA0;font-weight:600}
-.wd-hoy{font-weight:900;font-size:18px;margin:2px 0 9px;color:#0A1E33}
-.wd-card{border:1.5px solid #E7EDF3;border-radius:17px;overflow:hidden}
-.wd-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
-.wd-cap{padding:9px 11px;font-size:12.5px;color:#33475B;line-height:1.45}
-.wd-cap b{color:#0A1E33}
-.wd-sale{display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:12.5px;font-weight:700;color:#0A1E33}
-.wd-tag{background:#EAF7EF;color:#1FA855;padding:4px 9px;border-radius:99px;font-size:11.5px}
-.wd-row{display:flex;gap:8px;margin-top:11px}
-.wd-btn{flex:1;text-align:center;padding:10px 0;border-radius:11px;font-weight:800;font-size:13.5px}
-.wd-btn.go{background:#2793C8;color:#fff}
-.wd-btn.stop{background:#EEF3F7;color:#0A1E33}
-.wd-floats{flex:1;min-width:250px;position:relative;min-height:290px}
-.wd-notif{position:absolute;left:0;top:4px;background:#fff;border-radius:16px;box-shadow:0 16px 34px rgba(10,30,51,.16);padding:12px 15px;display:flex;gap:11px;align-items:flex-start;max-width:340px;animation:wd-floaty 4.5s ease-in-out infinite}
-.wd-av{width:37px;height:37px;border-radius:11px;background:#2793C8;color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto}
-.wd-notif .wd-t{font-size:13px;line-height:1.4;color:#33475B}
-.wd-notif .wd-t b{display:block;font-size:12.5px;color:#0A1E33}
-.wd-badge{position:absolute;left:34px;top:122px;background:#1FA855;color:#fff;font-weight:800;font-size:13.5px;padding:9px 17px;border-radius:99px;box-shadow:0 12px 26px rgba(31,168,85,.40);display:flex;gap:8px;align-items:center;animation:wd-floaty 5.2s .6s ease-in-out infinite}
-.wd-badge svg{width:15px;height:15px}
-.wd-voice{position:absolute;left:4px;top:204px;background:#fff;border-radius:99px;box-shadow:0 14px 30px rgba(10,30,51,.14);padding:9px 17px 9px 11px;display:flex;gap:9px;align-items:center;font-size:13px;font-weight:700;color:#0A1E33;animation:wd-floaty 4.8s 1.1s ease-in-out infinite}
-.wd-mic{width:29px;height:29px;border-radius:50%;background:#FEC14D;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
-.wd-mic svg{width:14px;height:14px}
-@keyframes wd-floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+/* --- 13 · la mañana en dos actos (MANANA-VIVA) --- */
+.mv-scene{position:relative;overflow:hidden;border-radius:26px;border:1px solid rgba(10,30,51,.08);box-shadow:0 18px 40px rgba(10,30,51,.10);margin-top:42px;padding:42px 46px 44px;text-align:left;background:radial-gradient(560px 380px at -4% -6%,rgba(254,193,77,.26),rgba(254,193,77,0) 62%),radial-gradient(680px 480px at 104% 108%,rgba(39,147,200,.13),rgba(39,147,200,0) 62%),linear-gradient(100deg,#FFFDF6 0%,#FBF6EA 30%,#F2F0EB 57%,#E8EEF7 100%)}
+.mv-title{font-size:clamp(24px,3.6vw,36px);font-weight:900;line-height:1.16;letter-spacing:-.01em;color:#0A1E33;max-width:640px}
+.mv-sub{margin:12px 0 0;max-width:620px;font-size:16.5px;font-weight:500;line-height:1.5;color:#33475B}
+.mv-arc{position:relative;width:1000px;max-width:100%;aspect-ratio:1000/150;margin:6px auto 0}
+.mv-arc svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.mv-sun{position:absolute;left:4.6%;top:84%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;z-index:2;background:radial-gradient(circle at 38% 34%,#FFE6A3,#FEC14D 78%);box-shadow:0 0 22px 6px rgba(254,193,77,.65),0 0 52px 18px rgba(254,193,77,.35)}
+.mv-sun::after{content:"";position:absolute;inset:-9px;border-radius:50%;border:2.5px dashed rgba(254,193,77,.85)}
+.mv-scene.mv-live .mv-sun::after{animation:mv-spin 26s linear infinite}
+@keyframes mv-spin{to{transform:rotate(360deg)}}
+.mv-check{position:absolute;left:95.4%;top:84%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;z-index:2;background:radial-gradient(circle at 38% 32%,#3ED97E,#22C55E 75%);box-shadow:0 0 22px 6px rgba(34,197,94,.5),0 0 48px 16px rgba(34,197,94,.28);display:flex;align-items:center;justify-content:center}
+.mv-phones{display:flex;justify-content:center;gap:196px;margin-top:124px}
+.mv-slot{position:relative;width:296px;flex:0 0 296px}
+.mv-phone{position:relative;z-index:2;width:296px;height:624px;background:#fff;border:3px solid #0A1E33;border-radius:36px;box-shadow:0 26px 54px rgba(10,30,51,.20);padding:13px 13px 16px;display:flex;flex-direction:column;overflow:hidden}
+.mv-phone-l{transform:rotate(-2.4deg)}
+.mv-phone-r{transform:rotate(2deg)}
+.mv-status{display:flex;align-items:center;justify-content:space-between;padding:0 5px}
+.mv-clock{font-size:12.5px;font-weight:800;color:#0A1E33;letter-spacing:.01em}
+.mv-sicons{display:flex;align-items:center;gap:5px}
+.mv-notch{width:84px;height:6px;border-radius:99px;background:#D8DEE6;margin:8px auto 12px}
+.mv-greet{font-size:12px;font-weight:600;color:#8496A8;margin:0 2px}
+.mv-ptitle{font-size:18px;font-weight:800;color:#0A1E33;margin:3px 2px 12px}
+.mv-postcard{border:1.5px solid #E7EDF3;border-radius:17px;overflow:hidden;background:#fff}
+.mv-postcard img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover}
+.mv-cap{padding:10px 12px 12px;font-size:12.5px;line-height:1.45;color:#33475B}
+.mv-cap b{color:#0A1E33;font-weight:800}
+.mv-chip{margin-top:12px;align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:99px;font-size:12px;font-weight:800;color:#0A1E33;background:rgba(255,255,255,.6);-webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%);border:1px solid rgba(255,255,255,.95);border-top:1.5px solid #fff;box-shadow:0 8px 20px rgba(10,30,51,.10),inset 0 1px 0 rgba(255,255,255,.9)}
+.mv-dot{width:8px;height:8px;border-radius:50%;background:#2793C8;box-shadow:0 0 8px 2px rgba(39,147,200,.55);flex:0 0 auto}
+.mv-btnrow{margin-top:auto;display:flex;gap:10px;padding-top:14px}
+.mv-btn-p,.mv-btn-g{flex:1;border-radius:12px;padding:12px 6px;font-size:13.5px;font-weight:800;text-align:center}
+.mv-btn-p{color:#fff;border:1px solid rgba(255,255,255,.85);border-top:1.5px solid #fff;background:linear-gradient(180deg,rgba(39,147,200,.80),rgba(39,147,200,.58));-webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%);box-shadow:0 10px 22px rgba(39,147,200,.38),inset 0 1px 0 rgba(255,255,255,.65),inset 0 -8px 14px rgba(255,255,255,.12);text-shadow:0 1px 3px rgba(10,30,51,.35)}
+.mv-btn-g{color:#0A1E33;border:1px solid rgba(255,255,255,.95);border-top:1.5px solid #fff;background:rgba(238,243,247,.72);-webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%);box-shadow:0 10px 22px rgba(10,30,51,.10),inset 0 1px 0 rgba(255,255,255,.9)}
+.mv-ig-head{display:flex;align-items:center;gap:9px;margin:0 2px 11px}
+.mv-ig-head img{width:32px;height:32px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+.mv-ig-name{font-size:13.5px;font-weight:800;color:#0A1E33;line-height:1.15}
+.mv-ig-sub{font-size:11.5px;font-weight:500;color:#8496A8;line-height:1.2}
+.mv-ig-photo{position:relative}
+.mv-ig-photo>img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:15px}
+.mv-posted-chip{position:absolute;left:10px;bottom:10px;display:inline-flex;align-items:center;gap:6px;padding:6px 11px 6px 7px;border-radius:99px;font-size:11px;font-weight:800;color:#0A1E33;background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);border:1px solid rgba(255,255,255,.95);border-top:1.5px solid #fff;box-shadow:0 10px 24px rgba(10,30,51,.18)}
+.mv-pcheck{width:17px;height:17px;border-radius:50%;background:#22C55E;display:flex;align-items:center;justify-content:center;flex:0 0 auto;box-shadow:0 0 8px 2px rgba(34,197,94,.45)}
+.mv-ig-acts{display:flex;align-items:center;gap:15px;margin:12px 2px 0}
+.mv-time{margin-left:auto;font-size:11.5px;font-weight:600;color:#8496A8}
+.mv-likes{position:relative;margin:9px 2px 0;font-size:13px;color:#33475B;font-weight:500}
+.mv-likes b{color:#0A1E33;font-weight:800;display:inline-block}
+.mv-likes b.mv-pop{animation:mv-like-pop .45s ease}
+@keyframes mv-like-pop{0%{transform:scale(1)}35%{transform:scale(1.45)}100%{transform:scale(1)}}
+.mv-heart{position:absolute;bottom:12px;font-size:11px;line-height:1;color:#ED4956;pointer-events:none;opacity:0;animation:mv-float-heart 1.5s ease-out forwards}
+@keyframes mv-float-heart{0%{opacity:0;transform:translateY(0) scale(.7)}18%{opacity:1}100%{opacity:0;transform:translateY(-34px) scale(1.1)}}
+.mv-ig-cap{margin:6px 2px 0;font-size:12.5px;line-height:1.5;color:#33475B;font-weight:500}
+.mv-ig-cap b{color:#0A1E33;font-weight:800}
+.mv-comment{margin:11px 2px 0;display:flex;gap:8px;align-items:flex-start;padding:9px 11px;border-radius:13px;background:rgba(39,147,200,.10);-webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%);border:1px solid rgba(255,255,255,.9);border-top:1.5px solid #fff;box-shadow:0 8px 18px rgba(10,30,51,.08);font-size:12px;line-height:1.4;color:#33475B;font-weight:500}
+.mv-armed .mv-comment{opacity:0;transform:translateY(10px);transition:opacity .6s ease,transform .6s ease}
+.mv-armed .mv-comment.in{opacity:1;transform:translateY(0)}
+.mv-avatar-s{width:22px;height:22px;border-radius:50%;flex:0 0 auto;background:#F08C2E;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.mv-comment b{color:#0A1E33;font-weight:800}
+.mv-push-pos{position:absolute;left:50%;top:-88px;transform:translateX(-50%);z-index:5;width:336px}
+.mv-push{display:flex;gap:11px;width:336px;padding:13px 15px;border-radius:20px;background:rgba(255,255,255,.68);-webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(255,255,255,.92);border-top:1.5px solid #fff;box-shadow:0 18px 40px rgba(10,30,51,.17),inset 0 1px 0 rgba(255,255,255,.95)}
+.mv-push-l{transform:rotate(-2.2deg)}
+.mv-push-r{transform:rotate(2deg)}
+.mv-scene.mv-live .mv-push-l{animation:mv-float-l 5.2s ease-in-out infinite}
+.mv-scene.mv-live .mv-push-r{animation:mv-float-r 5.8s ease-in-out infinite}
+@keyframes mv-float-l{0%,100%{transform:rotate(-2.2deg) translateY(0)}50%{transform:rotate(-2.2deg) translateY(-7px)}}
+@keyframes mv-float-r{0%,100%{transform:rotate(2deg) translateY(0)}50%{transform:rotate(2deg) translateY(-7px)}}
+.mv-tile{width:38px;height:38px;border-radius:11px;object-fit:cover;flex:0 0 auto}
+.mv-p-head{display:flex;align-items:baseline;gap:5px}
+.mv-p-app{font-size:12.5px;font-weight:800;color:#0A1E33}
+.mv-p-hour{font-size:12px;font-weight:600;color:#8496A8}
+.mv-p-title{font-size:15.5px;font-weight:800;color:#0A1E33;line-height:1.25;margin-top:2px}
+.mv-p-sub{font-size:12.5px;font-weight:500;color:#5C6E80;line-height:1.4;margin-top:2px}
+.mv-loop-pos{position:absolute;left:50%;top:-88px;width:336px;z-index:4;transform:translateX(-50%) translate(13px,-46px) rotate(4.5deg)}
+.mv-loop-card{width:336px;height:118px;padding:7px 15px;border-radius:20px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(255,255,255,.92);border-top:1.5px solid #fff;box-shadow:0 18px 40px rgba(10,30,51,.13)}
+.mv-l-head{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#0A1E33}
+.mv-l-head img{width:20px;height:20px;border-radius:6px;object-fit:cover}
+.mv-grey{color:#8496A8;font-weight:600}
+.mv-l-line{font-size:13.5px;font-weight:800;color:#0A1E33;margin-top:2px;line-height:1.25}
+.mv-payoff{margin-top:58px}
+.mv-tl-row{display:flex;align-items:center;gap:20px}
+.mv-tl-label{font-size:15px;font-weight:800;color:#0A1E33;white-space:nowrap}
+.mv-green{color:#1FA855}
+.mv-tl-line{position:relative;flex:1;height:3px;border-radius:99px;background:linear-gradient(90deg,#2793C8,#22C55E)}
+.mv-tl-dot{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;transform:translateY(-50%);border:2.5px solid #fff}
+.mv-d-l{left:0;background:#2793C8;box-shadow:0 0 0 2px rgba(39,147,200,.35),0 2px 8px rgba(39,147,200,.5)}
+.mv-d-r{right:0;background:#22C55E;box-shadow:0 0 0 2px rgba(34,197,94,.32),0 2px 8px rgba(34,197,94,.5)}
+.mv-punch{text-align:center;font-size:21px;font-weight:900;color:#0A1E33;margin:20px 0 2px;letter-spacing:-.01em}
+@media(max-width:1080px){
+.mv-phones{gap:110px}
+}
+@media(max-width:900px){
+.mv-scene{padding:34px 22px 30px}
+.mv-phones{flex-direction:column;align-items:center;gap:150px;margin-top:112px}
+.mv-payoff{margin-top:46px}
+}
+@media(max-width:560px){
+.mv-scene{padding:26px 14px 24px}
+.mv-push-pos,.mv-loop-pos,.mv-push,.mv-loop-card{width:306px}
+.mv-p-title{font-size:14.5px}
+.mv-tl-row{gap:12px}
+.mv-tl-label{font-size:13px}
+.mv-punch{font-size:18px}
+.mv-sun,.mv-check{width:38px;height:38px}
+}
+@media (prefers-reduced-motion: reduce){
+.mv-scene .mv-push-l,.mv-scene .mv-push-r,.mv-scene .mv-sun::after,.mv-likes b.mv-pop,.mv-heart{animation:none}
+.mv-armed .mv-comment{transition:none}
+}
 #como-funciona .steps .step{transition:transform .35s ease}
 #como-funciona .steps .step:nth-child(1){transform:rotate(-1.3deg)}
 #como-funciona .steps .step:nth-child(2){transform:rotate(.9deg)}
@@ -5561,8 +5643,6 @@ function landingView(cfg) {
 .wd-strip{gap:6px}
 .wd-dname{font-size:10px}
 .wd-posted{font-size:10px;padding:2px 7px 2px 3px;left:5px;bottom:5px}.wd-posted-ck{width:14px;height:14px}
-.wd-stage{justify-content:center}
-.wd-morning{padding:26px 16px 24px}
 .wd-chat{padding:16px}
 .wd-trial{flex-direction:column;max-width:320px}
 .wd-tday img{aspect-ratio:16/10}
@@ -5739,7 +5819,7 @@ function landingView(cfg) {
       <div class="pv-arrow pv-a1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M13 5l7 7-7 7"/></svg></div>
       <div class="pv-arrow pv-a2" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M13 5l7 7-7 7"/></svg></div>
     </div>
-    <div class="wd-morning"><div class="wd-blob"></div><div class="wd-morning-in"><div class="wd-scene-title">Así aparece tu posteo del día, todas las mañanas.</div><p class="wd-scene-sub">Abrís el teléfono y ya está: el posteo de hoy, listo. Si no decís nada, sale solo.</p><div class="wd-stage"><div class="wd-phone"><div class="wd-notch"></div><div class="wd-hi">9:00 · Buen día, Patisserie Tomoko</div><div class="wd-hoy">Tu posteo de hoy</div><div class="wd-card"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy"><div class="wd-cap"><b>Hojicha Mille Crepe.</b> El posteo de hoy, listo para salir.</div></div><div class="wd-sale"><span>Sale hoy</span><span class="wd-tag">19:00 · en tu Instagram</span></div><div class="wd-row"><div class="wd-btn go">Sale así</div><div class="wd-btn stop">Lo freno</div></div></div><div class="wd-floats"><div class="wd-notif"><div class="wd-av">P</div><div class="wd-t"><b>Posty · ahora</b>En 30 minutos sale tu posteo de hoy. Si no decís nada, sale solo.</div></div><div class="wd-badge"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Publicado · 19:00</div></div><div class="wd-eve"><h3 class="wd-eve-title">Así sale tu posteo, todos los días</h3><div class="wd-eve-phone"><div class="wd-eve-head"><img src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko"><div><b>patisserietomoko</b><span>Tu feed</span></div></div><div class="wd-eve-cell"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy en tu feed"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Publicado</span></div><div class="wd-eve-acts"><svg viewBox="0 0 24 24"><path d="M12 20S4.5 15.5 4.5 10a4.6 4.6 0 0 1 7.5-3.2A4.6 4.6 0 0 1 19.5 10C19.5 15.5 12 20 12 20Z" fill="none" stroke="#0A1E33" stroke-width="1.8"/></svg><svg viewBox="0 0 24 24"><path d="M4 6h16v9H9l-5 4v-4H4Z" fill="none" stroke="#0A1E33" stroke-width="1.8" stroke-linejoin="round"/></svg><span>19:00 · hoy</span></div><div class="wd-eve-push"><img src="ai-avatar.png" alt="Posty"><div class="wd-eve-push-in"><div class="wd-eve-push-top"><b>Posty</b><span>ahora</span></div><b class="wd-eve-push-t">Tu posteo salió</b><p>Hojicha Mille Crepe — ya está en tu Instagram.</p></div></div></div></div></div></div></div>
+    <div class="mv-scene"><div class="mv-title">Así aparece tu posteo del día, todas las mañanas.</div><p class="mv-sub">Abrís el teléfono y ya está: el posteo de hoy, listo. Si no decís nada, sale solo.</p><div class="mv-arc" aria-hidden="true"><svg class="mv-arc-svg" viewBox="0 0 1000 150" fill="none"><path d="M46,126 C330,16 670,16 954,126" stroke="#2793C8" stroke-width="3" stroke-dasharray="1 14" stroke-linecap="round" opacity=".75"/><g><animateMotion dur="8s" repeatCount="indefinite" path="M46,126 C330,16 670,16 954,126"/><circle r="12" fill="#2793C8" opacity=".30"/><circle r="6.5" fill="#fff" stroke="rgba(39,147,200,.35)" stroke-width="3"/></g></svg><div class="mv-sun"></div><div class="mv-check"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5 L10 18 L19.5 6.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><div class="mv-phones"><div class="mv-slot"><div class="mv-push-pos"><div class="mv-push mv-push-l"><img class="mv-tile" src="ai-avatar.png" alt="Posty"><div><div class="mv-p-head"><span class="mv-p-app">Posty</span><span class="mv-p-hour">· 9:00</span></div><div class="mv-p-title">Tu posteo de hoy está listo</div><div class="mv-p-sub">Si no decís nada, sale solo a las 19:00.</div></div></div></div><div class="mv-phone mv-phone-l"><div class="mv-status"><span class="mv-clock">9:00</span><span class="mv-sicons" aria-hidden="true"><svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#0A1E33"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="#0A1E33"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="#0A1E33"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="#0A1E33"/></svg><svg width="16" height="11" viewBox="0 0 16 12" fill="none"><path d="M1.5 4.2 A10 10 0 0 1 14.5 4.2" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6.9 A6.4 6.4 0 0 1 12 6.9" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="10" r="1.5" fill="#0A1E33"/></svg><svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.7" y="0.7" width="20" height="10.6" rx="3" fill="none" stroke="#0A1E33" stroke-opacity=".45" stroke-width="1.2"/><rect x="2.4" y="2.4" width="13.4" height="7.2" rx="1.6" fill="#0A1E33"/><path d="M22.8 4 v4 a2.2 2.2 0 0 0 0-4z" fill="#0A1E33" fill-opacity=".45"/></svg></span></div><div class="mv-notch"></div><p class="mv-greet">Buen día, Patisserie Tomoko</p><p class="mv-ptitle">Tu posteo de hoy</p><div class="mv-postcard"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy"><div class="mv-cap"><b>Hojicha Mille Crepe.</b> El posteo de hoy, listo para salir.</div></div><div class="mv-chip"><span class="mv-dot"></span>Sale hoy · 19:00 · en tu Instagram</div><div class="mv-btnrow"><div class="mv-btn-p">Sale así</div><div class="mv-btn-g">Lo freno</div></div></div></div><div class="mv-slot"><div class="mv-loop-pos" aria-hidden="true"><div class="mv-loop-card"><div class="mv-l-head"><img src="ai-avatar.png" alt=""><span>Posty <span class="mv-grey">· Mañana · 9:00</span></span></div><div class="mv-l-line">Tu próximo posteo ya está en camino</div></div></div><div class="mv-push-pos"><div class="mv-push mv-push-r"><img class="mv-tile" src="ai-avatar.png" alt="Posty"><div><div class="mv-p-head"><span class="mv-p-app">Posty</span><span class="mv-p-hour">· 19:00</span></div><div class="mv-p-title">Tu posteo ya salió</div><div class="mv-p-sub">Hojicha Mille Crepe — ya está en tu Instagram.</div></div></div></div><div class="mv-phone mv-phone-r"><div class="mv-status"><span class="mv-clock">19:00</span><span class="mv-sicons" aria-hidden="true"><svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#0A1E33"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="#0A1E33"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="#0A1E33"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="#0A1E33"/></svg><svg width="16" height="11" viewBox="0 0 16 12" fill="none"><path d="M1.5 4.2 A10 10 0 0 1 14.5 4.2" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6.9 A6.4 6.4 0 0 1 12 6.9" stroke="#0A1E33" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="10" r="1.5" fill="#0A1E33"/></svg><svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.7" y="0.7" width="20" height="10.6" rx="3" fill="none" stroke="#0A1E33" stroke-opacity=".45" stroke-width="1.2"/><rect x="2.4" y="2.4" width="13.4" height="7.2" rx="1.6" fill="#0A1E33"/><path d="M22.8 4 v4 a2.2 2.2 0 0 0 0-4z" fill="#0A1E33" fill-opacity=".45"/></svg></span></div><div class="mv-notch"></div><div class="mv-ig-head"><img src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko"><div><div class="mv-ig-name">patisserietomoko</div><div class="mv-ig-sub">Tu feed</div></div></div><div class="mv-ig-photo"><img loading="lazy" src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko, el posteo de hoy en tu feed"><span class="mv-posted-chip"><span class="mv-pcheck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5 L10 18 L19.5 6.5" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Publicado · 19:00</span></div><div class="mv-ig-acts" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 20.7C6.4 16.9 3 13.6 3 9.9 3 7.2 5.1 5 7.7 5c1.7 0 3.3.9 4.3 2.3C13 5.9 14.6 5 16.3 5 18.9 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.8z" fill="#ED4956"/></svg><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 11.5c0 4.4-4 8-9 8-1.1 0-2.2-.16-3.2-.47L3 20l.6-3.4C2.6 15.2 3 13.4 3 11.5c0-4.4 4-8 9-8s9 3.6 9 8z" stroke="#0A1E33" stroke-width="1.9" stroke-linejoin="round" transform="translate(0 .5)"/></svg><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21.2 3.4 10.6 13.9M21.2 3.4 14.4 21l-3.8-7.1L3.4 10z" stroke="#0A1E33" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="mv-time">19:00 · hoy</span></div><p class="mv-likes"><b>236</b> Me gusta</p><p class="mv-ig-cap"><b>patisserietomoko</b> Hojicha Mille Crepe — capas finitas y crema de té tostado.</p><div class="mv-comment in"><span class="mv-avatar-s">S</span><span><b>sofia.m</b> ¡Se ve increíble!</span></div></div></div></div><div class="mv-payoff"><div class="mv-tl-row"><span class="mv-tl-label">9:00 — lo ves listo</span><span class="mv-tl-line"><span class="mv-tl-dot mv-d-l"></span><span class="mv-tl-dot mv-d-r"></span></span><span class="mv-tl-label">19:00 — <span class="mv-green">ya salió</span></span></div><p class="mv-punch">En el medio, no hacés nada.</p></div></div>
     <h2>Cada posteo está pensado para vender.</h2>
     <p class="lede">Así es cada pieza que sale de tu negocio.</p>
     <div class="steps">
