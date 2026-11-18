@@ -2033,6 +2033,15 @@ function switchPlansCountry(c) {
 .lp-wall-card .igp-grid.igp-go>*{opacity:.55}
 .lp-wall-card .igp-grid.igp-go>*:first-child{opacity:1}
 .lp-wall-card .igp-grid::after{content:'TODAY · 7:00 PM';position:absolute;top:6px;left:6px;z-index:3;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:10.5px;letter-spacing:.4px;padding:4px 8px;border-radius:99px;box-shadow:0 4px 10px rgba(10,30,51,.30)}
+
+/* ===== WEB-DISEÑO-ESPACIOS: la tira llega pegada al hero y llena la pantalla (solo desktop) ===== */
+@media(min-width:761px){
+.hero:has(+ .wd-scrolly){padding-bottom:26px}
+.wd-sticky{justify-content:flex-start;padding:30px 0 34px}
+.wd-scrolly .wrap{flex:1;display:flex;flex-direction:column}
+.wd-strip{margin-top:auto}
+.wd-bar{margin-top:auto}
+}
 </style>
   <script>(function () {
   var de = document.documentElement;
