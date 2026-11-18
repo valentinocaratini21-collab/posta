@@ -23046,8 +23046,9 @@ function hfSaleChipTxt(post) {
 }
 // (LOTE RENDER-CASA · corrección de Valentino 23:54) El candado amable
 // de la pieza: tarjeta centrada azul Posty sobre la imagen de la pieza
-// en su lugar de la grilla — «¿Lo querés en tu Instagram?» + el botón
-// de conectar con el @ del negocio (de pzHomeProfGet, la lectura
+// en su lugar de la grilla — la copia de conexión con fecha del
+// MODELO-NUEVO («Conectá tu Instagram hoy para que mañana salga tu
+// primer posteo») + el botón de conectar con el @ del negocio (de pzHomeProfGet, la lectura
 // guardada de su perfil; sin @ leído, el botón va genérico). La foto
 // se reconoce — es su producto — pero verla limpia exige conectar: la
 // tarjeta cubre el centro y la capa entera traga el toque (sin
@@ -23062,7 +23063,11 @@ function hfPiezaLockHTML(en) {
     if (u) at = '@' + u;
   } catch (e) {}
   const btn = en ? ('Connect ' + (at || 'your Instagram')) : ('Conectar ' + (at || 'tu Instagram'));
-  return `<span class="hf-pieza-lock" onclick="event.stopPropagation()"><span class="hf-pieza-lock-card">${pzIc('camera', 22)}<span class="hf-pieza-lock-t">${en ? 'Want it on your Instagram?' : '¿Lo querés en tu Instagram?'}</span><button type="button" class="hf-pieza-lock-btn" onclick="event.stopPropagation();event.preventDefault();igConnect()">${esc(btn)}</button></span></span>`;
+  // (LOTE MODELO-NUEVO · 18/11) La copia del banner es la del modelo
+  // nuevo: conectar HOY tiene fecha y motivo — el primer posteo sale
+  // mañana. El botón sigue llevando el @ del negocio, un solo toque,
+  // y la tarjeta vive en la casa de la prueba hasta que conecta.
+  return `<span class="hf-pieza-lock" onclick="event.stopPropagation()"><span class="hf-pieza-lock-card">${pzIc('camera', 22)}<span class="hf-pieza-lock-t">${en ? 'Connect your Instagram today so your first post goes out tomorrow' : 'Conectá tu Instagram hoy para que mañana salga tu primer posteo'}</span><button type="button" class="hf-pieza-lock-btn" onclick="event.stopPropagation();event.preventDefault();igConnect()">${esc(btn)}</button></span></span>`;
 }
 // (LOTE 10 · ítem 2) Chapita del PLAN para borradores sin
 // scheduled_at: el día real del plan (t.day, ymd de schedPlacements)
@@ -25996,6 +26001,97 @@ function pzWowConnectBind(root) {
     } catch (e) { try { card.remove(); } catch (e2) {} }
   };
 }
+/* ---------- (LOTE MODELO-NUEVO · 18/11) EL PLAN EN LA CASA ----------
+   «Hoy te estudiamos, mañana sale»: la sección del plan vive arriba
+   de la grilla de Inicio cuando /api/trial/mi-plan trae la semana
+   de prueba proyectada. Los slots en plan son vidrio con nombre,
+   formato y fecha — NUNCA arte fingido; el slot listo muestra su
+   pieza y su estado, con la línea del audio para pedir un cambio
+   hasta las 17:00 (nada frena la salida de las 19:00). Debajo van
+   la tarjeta de la estrategia (aprobación en un toque, persistida
+   en el servidor), el banner de conexión con fecha (la misma copia
+   del candado de la pieza, botón con el @) y la tira del día 4. */
+function mnSlotWhen(s, en) {
+  const hora = String((s && s.hora) || '');
+  const dia = String((s && s.dia_semana) || '');
+  if (s && s.estado === 'listo') {
+    if (s.sale_hoy) return en ? ('Ready · goes out today' + (hora ? ' ' + hora : '')) : ('Listo · sale hoy' + (hora ? ' ' + hora : ''));
+    return (en ? 'Ready · goes out ' : 'Listo · sale ') + dia + (hora ? ' · ' + hora : '');
+  }
+  return (en ? 'goes out ' : 'sale ') + dia + (hora ? ' · ' + hora : '');
+}
+function mnPlanHTML(res, en) {
+  try {
+    const plan = res && res.plan;
+    if (!plan || !Array.isArray(plan.slots) || !plan.slots.length) return '';
+    const slots = plan.slots.map((s) => {
+      const nombre = String(s.nombre || '');
+      const formato = String(s.formato || '');
+      const titulo = nombre || formato;
+      return `<div class="mn-slot mn-slot-${esc(String(s.estado || 'plan'))}">`
+        + (s.media ? `<img class="mn-slot-img" src="${esc(String(s.media))}" alt="">` : `<div class="mn-slot-glass">${pzIc('sparkle', 20)}<span class="mn-slot-dia">${en ? 'Day' : 'Día'} ${Number(s.dia) || ''}</span></div>`)
+        + `<div class="mn-slot-body">`
+        + (titulo ? `<div class="mn-slot-name">${esc(titulo)}</div>` : '')
+        + ((formato && nombre) ? `<div class="mn-slot-fmt">${esc(formato)}</div>` : '')
+        + `<div class="mn-slot-when">${esc(mnSlotWhen(s, en))}</div>`
+        + `</div></div>`;
+    }).join('');
+    const hayListo = plan.slots.some((s) => s && s.estado === 'listo');
+    const audio = hayListo ? `<p class="mn-audio">${en ? 'Want a change? Send us a voice note by 5:00 PM' : '¿Querés un cambio? Mandanos un audio hasta las 17:00'}</p>` : '';
+    // La tarjeta de la estrategia: con la primera pieza lista y el
+    // sistema de formatos del negocio; su aprobación persiste en el
+    // servidor y la casa la muestra aprobada al volver.
+    let strat = '';
+    const formatos = Array.isArray(plan.formatos) ? plan.formatos.filter(Boolean) : [];
+    if (hayListo && formatos.length) {
+      const lista = ''
+        + (plan.estrella ? `<div class="mn-strat-row"><span class="mn-strat-k">${en ? 'Your star' : 'Tu estrella'}</span><b>${esc(String(plan.estrella))}</b></div>` : '')
+        + formatos.map((f) => `<div class="mn-strat-row"><span class="mn-strat-dot">•</span><span>${esc(String(f))}</span></div>`).join('');
+      strat = (res && res.estrategia_aprobada)
+        ? `<div class="mn-strat mn-strat-ok"><b>${pzIc('checkCircle', 15)} ${en ? 'Strategy approved' : 'Estrategia aprobada'}</b><div class="mn-strat-list">${lista}</div></div>`
+        : `<div class="mn-strat"><b class="mn-strat-t">${en ? 'This is how your Instagram will post' : 'Así va a postear tu Instagram'}</b><div class="mn-strat-list">${lista}</div><button type="button" class="btn btn-primary btn-sm" data-mn-aprobar>${en ? 'Approve' : 'Aprobar'}</button></div>`;
+    }
+    // El banner de conexión con fecha: la copia del modelo nuevo (la
+    // misma del candado de la pieza), botón con el @ del negocio, un
+    // toque por la puerta de siempre, hasta que conecte.
+    let banner = '';
+    if (res && !res.conectado) {
+      const at = String(res.ig || '').replace(/^@/, '');
+      banner = `<div class="mn-connect"><span class="mn-connect-t">${en ? 'Connect your Instagram today so your first post goes out tomorrow' : 'Conectá tu Instagram hoy para que mañana salga tu primer posteo'}</span><button type="button" class="btn btn-primary btn-sm" data-mn-connect>${en ? ('Connect ' + (at ? '@' + at : 'your Instagram')) : ('Conectar ' + (at ? '@' + at : 'tu Instagram'))}</button></div>`;
+    }
+    const dia4 = `<div class="mn-dia4">${en ? 'Day 4: your Instagram keeps going on its own' : 'Día 4: tu Instagram sigue solo'} · <b>US$199${en ? '/mo' : '/mes'}</b> · ${en ? 'founder price' : 'precio fundador'}</div>`;
+    return `<section class="mn-plan" id="mnPlan"><div class="mn-plan-head"><b>${en ? 'Your week, planned' : 'Tu semana, planeada'}</b>${plan.estrella ? `<span class="mn-plan-star">★ ${esc(String(plan.estrella))}</span>` : ''}</div><div class="mn-grid">${slots}</div>${audio}${strat}${banner}${dia4}</section>`;
+  } catch (e) { return ''; }
+}
+async function mnAprobarEstrategia(btn) {
+  if (!btn || btn.disabled) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  btn.disabled = true;
+  try {
+    const r = await api.post('/api/trial/estrategia/aprobar', {});
+    if (r && r.ok) {
+      const card = btn.closest('.mn-strat');
+      if (card) {
+        card.classList.add('mn-strat-ok');
+        const b = card.querySelector('.mn-strat-t');
+        if (b) b.textContent = en ? 'Strategy approved ✓' : 'Estrategia aprobada ✓';
+        btn.remove();
+      }
+      try { toast(en ? 'Strategy approved ✓' : 'Estrategia aprobada ✓'); } catch (e) {}
+      return;
+    }
+    btn.disabled = false;
+  } catch (e) { btn.disabled = false; }
+}
+function mnPlanBind(root) {
+  if (!root || !root.querySelector) return;
+  const sec = root.querySelector('#mnPlan');
+  if (!sec) return;
+  const ap = sec.querySelector('[data-mn-aprobar]');
+  if (ap) ap.onclick = () => { mnAprobarEstrategia(ap); };
+  const cn = sec.querySelector('[data-mn-connect]');
+  if (cn) cn.onclick = () => { try { igConnect(); } catch (e) { location.hash = '#/app/ajustes'; } };
+}
 function pzHoyHoyHTML(p, o) {
   try {
     // (RENDER-CASA · enmienda del liberador · orden de Valentino 23:54: «en la prueba, sacaría la muestra de arriba — arriba le pueden hacer screenshot») El héroe de hoy NO se rinde en la casa del invitado: es una muestra limpia de la pieza arriba de Inicio, capturable y con la imagen entera. La pieza del invitado vive solo en su lugar de la grilla, con su candado. La casa del cliente conectado no cambia.
@@ -26438,6 +26534,7 @@ function pzHoyBind(root) {
   try { pzPostWowEmailBind(root); } catch (e) {}
   try { pzTrialAvisoBind(root); } catch (e) {}
   try { pzWowConnectBind(root); } catch (e) {}
+  try { mnPlanBind(root); } catch (e) {}
 }
 
 // (LOTE REDISENO-R6) Entrada al conserje desde Hoy, solo en ventana
@@ -26528,13 +26625,17 @@ async function inicioView() {
   } catch (e) {}
   // LOTE VELOCIDAD: cuota, perfil y nivel son independientes: un solo
   // viaje en paralelo en vez de tres en serie.
-  const [quotaRes, hpRes, nvRes, mejorRes] = await Promise.all([
+  const [quotaRes, hpRes, nvRes, mejorRes, mnRes] = await Promise.all([
     api.get('/api/quota').catch(() => null),
     api.get('/api/home/profile').catch(() => null),
     (!HF_VISITOR ? api.get('/api/oficina/nivel?poder=posty').catch(() => null) : Promise.resolve(null)),
     // (v846) El recomendado de la sección Impulsar: el mismo mejor
     // posteo de la semana de la carta (sin fetch nuevo por render).
     (!HF_VISITOR ? api.get('/api/estrategia/mejor-posteo').catch(() => null) : Promise.resolve(null)),
+    // (LOTE MODELO-NUEVO) El plan de la semana de prueba (estrella,
+    // formatos, fechas, estados): sin plan, la respuesta es null y
+    // la sección no existe.
+    (!HF_VISITOR ? api.get('/api/trial/mi-plan').catch(() => null) : Promise.resolve(null)),
   ]);
   let quota = quotaRes;
   // (v846) Recomendado de la sección Impulsar (null = sin datos: la
@@ -26659,6 +26760,9 @@ async function inicioView() {
   const tabEmptyHTML = HF_TAB === 'tagged' ? hfTaggedEmptyHTML(enHome)
     : HF_TAB === 'reels' ? hfReelsEmptyHTML(enHome)
     : HF_VISITOR ? hfVisitorEmptyHTML(enHome) : '';
+  // (LOTE MODELO-NUEVO) La sección del plan, justo arriba de la
+  // grilla: los slots planeados viven en la casa desde el día 0.
+  const mnPlanStr = (!HF_VISITOR && mnRes && mnRes.ok && mnRes.plan) ? mnPlanHTML(mnRes, enHome) : '';
   const gridHTML = tiles.length
     ? (displayTiles.length
       ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
@@ -26871,6 +26975,7 @@ async function inicioView() {
   <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
   ${hfTabsHTML(HF_TAB, enHome)}
+  ${mnPlanStr}
   ${gridHTML}
   ${visitorPillHTML}
   <!-- (LOTE SACAR-CHATBAR-INICIO · decisión Valentino 5/11) La caja de chat sale de Inicio: sin campo, sin mic, sin +. La entrada de subida es el tab Agregar del dock (hoja «Subir foto / Subir video» → chat con la foto). La hoja del chat (mzSheet) queda: es la superficie del cambio del posteo (hfOpenChatForPost). -->

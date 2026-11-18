@@ -28,6 +28,7 @@ const morningPostPush = require('./morning-post-push');
 // acciones del equipo con registro. La consola NUNCA publica.
 const supportCases = require('./support-cases');
 const lineaMano = require('./linea-mano'); // (LOTE VIGILANTE-ENTRADAS) marca de línea a mano de las pruebas self-serve + su barrido
+const modeloNuevo = require('./modelo-nuevo'); // (LOTE MODELO-NUEVO) proyección del plan de la semana de prueba («hoy te estudiamos, mañana sale») + aprobación de la estrategia
 const wowConnect = require('./wow-connect'); // (LOTE CONEXIÓN POST-WOW) la agenda del wow: al conectar IG desde la revelación, la prueba queda agendada a las 19:00 de su zona
 const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
@@ -11785,6 +11786,20 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
     if (body.caption != null) pieza.caption = String(body.caption);
     if (body.hashtags != null) pieza.hashtags = String(body.hashtags);
     if (body.headline != null) pieza.headline = String(body.headline);
+    // (LOTE MODELO-NUEVO) El formato con nombre de la pieza (el sistema
+    // de formatos del negocio: la pieza del día pertenece a un formato
+    // o es la estrella): opcional — sin el campo, la carga es la de
+    // siempre, byte-idéntica. Es el dato que el plan de la casa
+    // muestra junto al nombre de la pieza.
+    if (body.formato != null) pieza.formato = String(body.formato).slice(0, 60);
+    // (LOTE MODELO-NUEVO) El sistema de formatos COMPLETO del negocio
+    // (estrella en rotación + formatos con nombre), fijado sobre la
+    // semana: alimenta la tarjeta «Así va a postear tu Instagram».
+    // Opcional y solo cuando viene como array; sin el campo, el
+    // payload queda como estaba.
+    if (Array.isArray(body.formatos_sistema)) {
+      out.formatos_sistema = body.formatos_sistema.map((x) => String(x || '').trim().slice(0, 60)).filter(Boolean).slice(0, 6);
+    }
     if (prev.mano && prev.mano.post_id) pieza.mano.post_id = prev.mano.post_id;
     out.posts[idx] = pieza;
     let uid = Number(marca.user_id) || 0;
@@ -11839,6 +11854,76 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
     db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(payload, cacheKey);
     return res.json({ ok: true, cache_key: cacheKey, dia, idx, post_id: postId || null, user_id: uid || null, ...(setMedias ? { placas: setMedias.length } : {}) });
   } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
+
+// ---------- (LOTE MODELO-NUEVO) EL PLAN DE LA SEMANA, EN LA CASA ----------
+// Decisión de Valentino (18/11/2026): «hoy te estudiamos, mañana
+// sale» — lo instantáneo de la puerta nueva es el PLAN, no la pieza.
+// GET /api/trial/mi-plan devuelve la proyección de la semana de
+// prueba del usuario en sesión (modelo-nuevo.planSemanaPrueba sobre
+// el payload de trial_cache, por su @ o por su dominio): estrella,
+// sistema de formatos y los 3 slots con nombre, formato, fecha y
+// estado (plan / listo). El slot listo resuelve su imagen desde la
+// fila del posteo (mano.post_id) — NUNCA se devuelve el data URI del
+// payload. Sin semana o sin plan: { plan: null } y la casa no
+// muestra nada (ni un placeholder vacío: sin plan no hay promesa).
+app.get('/api/trial/mi-plan', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    let user = null;
+    try { user = db.prepare('SELECT is_guest, guest_ig, guest_domain FROM users WHERE id = ?').get(uid); } catch (e) {}
+    let prof = null;
+    try { prof = getProfile(uid); } catch (e) {}
+    let cacheKey = String((prof && prof.ig_username) || '').trim().replace(/^@/, '').toLowerCase();
+    if (!cacheKey && user && user.guest_ig) cacheKey = String(user.guest_ig).trim().replace(/^@/, '').toLowerCase();
+    let row = null;
+    if (cacheKey) { try { row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(cacheKey); } catch (e) {} }
+    if (!row && user && user.guest_domain) {
+      const domKey = 'web:' + String(user.guest_domain).trim().toLowerCase();
+      try { row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(domKey); if (row) cacheKey = domKey; } catch (e) {}
+    }
+    if (!row || !row.payload) return res.json({ ok: true, plan: null });
+    let payload = null;
+    try { payload = JSON.parse(row.payload); } catch (e) { return res.json({ ok: true, plan: null }); }
+    const plan = modeloNuevo.planSemanaPrueba(payload);
+    if (!plan) return res.json({ ok: true, plan: null });
+    // La imagen del slot listo sale de la fila del posteo ya creado
+    // (la importación o el rescate tardío): ruta /media, jamás el
+    // data URI guardado en el payload.
+    for (const s of plan.slots) {
+      s.media = null;
+      if (s.estado === 'listo' && s.post_id) {
+        try {
+          const pr = db.prepare('SELECT image_path, media_type FROM posts WHERE id = ? AND user_id = ?').get(s.post_id, uid);
+          if (pr && pr.image_path && !String(pr.image_path).startsWith('data:')) { s.media = pr.image_path; s.media_tipo = pr.media_type || s.tipo; }
+        } catch (e) {}
+      }
+    }
+    let aprobadaAt = 0;
+    try { aprobadaAt = modeloNuevo.estrategiaAprobada(db, uid); } catch (e) {}
+    return res.json({
+      ok: true,
+      plan,
+      conectado: !!(prof && prof.ig_connected),
+      ig: String((prof && prof.ig_username) || (user && user.guest_ig) || '').trim().replace(/^@/, ''),
+      es_invitado: !!(user && user.is_guest),
+      estrategia_aprobada: aprobadaAt > 0,
+      estrategia_aprobada_at: aprobadaAt || null,
+    });
+  } catch (e) { return res.json({ ok: true, plan: null }); }
+});
+
+// (LOTE MODELO-NUEVO) La aprobación de la estrategia en un toque:
+// persiste la marca del usuario (tabla trial_estrategia_aprobada,
+// idempotente — la primera aprobación manda). No aprueba posteos ni
+// toca la agenda: es la conformidad del cliente con su sistema de
+// formatos, que la casa muestra como «Estrategia aprobada».
+app.post('/api/trial/estrategia/aprobar', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const at = modeloNuevo.marcarEstrategiaAprobada(db, uid);
+    return res.json({ ok: true, aprobada_at: at });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'No se pudo guardar la aprobación.' }); }
 });
 // Hold a nivel usuario (v864, M185-hold): congela la cuenta para el sweep
 // semanal y los avisos de semana lista, aunque el trial siga vigente.
@@ -46419,7 +46504,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1178';
+const BUILD_ID = '20261105-v1179';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
