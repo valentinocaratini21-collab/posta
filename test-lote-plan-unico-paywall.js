@@ -248,7 +248,7 @@ const cookieDe = (headers) => {
     }
     ok(up, 'H0 boot levanta');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261105-v1183', `H0 /api/version v1183 (vino ${ver.build})`);
+    ok(ver.build === '20261105-v1184', `H0 /api/version v1184 (vino ${ver.build})`);
 
     const pSin = await apiH('', 'GET', '/api/billing/plans?country=AR');
     ok(pSin.status === 200 && pSin.data.plans.length === 3, 'H1 sin unico: el catálogo de 3 tiers sigue (facturación interna)', pSin.data && pSin.data.plans.length);

@@ -175,7 +175,7 @@ globalThis.fetch = async (url, opts = {}) => {
     }
     t('B0 boot levanta', up, srvLog.slice(-400));
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    t('B0b /api/version = BUILD del árbol (v1183; bump del liberador aplicado)', ver.build === '20261105-v1183', ver.build);
+    t('B0b /api/version = BUILD del árbol (v1184; bump del liberador aplicado)', ver.build === '20261105-v1184', ver.build);
 
     const pAr = await apiH('', 'GET', '/api/billing/plans?country=AR&unico=1');
     const planAr = pAr.data && pAr.data.plans && pAr.data.plans[0];

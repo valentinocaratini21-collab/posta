@@ -32,6 +32,7 @@ const modeloNuevo = require('./modelo-nuevo'); // (LOTE MODELO-NUEVO) proyecció
 const wowConnect = require('./wow-connect'); // (LOTE CONEXIÓN POST-WOW) la agenda del wow: al conectar IG desde la revelación, la prueba queda agendada a las 19:00 de su zona
 const supervisionChat = require('./supervision-chat'); // (SUPERVISIÓN) bamboo detrás de Posty
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) revisión de la noche 19:00–00:00 + ficha del cliente
+const conserjeVista = require('./conserje-vista'); // (LOTE VISTA-CONSERJE) la consola del operador: roster, decisiones, cola y ficha en vivo
 const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + candados C1–C5
 const serieFeed = require('./serie-feed'); // (LOTE SERIE-FEED-PROPIO) el DÍA de cada pieza en la serie del feed registrado: mapa derivado + candado + alerta
 const dogfood = require('./dogfood');
@@ -13464,6 +13465,61 @@ app.post('/api/admin/support/conserje/nota', requireAdminToken, (req, res) => {
     const u = db.prepare('SELECT id FROM users WHERE id = ?').get(Number(b.user_id));
     if (!u) return res.status(404).json({ ok: false, error: 'sin_usuario' });
     res.json(conserjeRevision.guardarNota(db, Number(b.user_id), b.nota || ''));
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// ---------- (LOTE VISTA-CONSERJE) LA CONSOLA DEL OPERADOR ----------
+// La vista agregada de la consola (public/conserje.html): roster con
+// racha y pendientes, la tira de hoy, las decisiones que esperan (voz,
+// la pieza de mañana, impulsos en error, alertas de hecho, casos), el
+// registro de últimas decisiones y la cola de producción. TODO sale de
+// las fuentes vivas vía conserje-vista.js — esta zona solo rutea.
+// Las acciones escriben en la fuente de cada cosa: el tratamiento en
+// su tabla con guarda de colisión; el pedido de voz resuelto A MANO en
+// support_voz_pedidos (nunca por la puerta «aprobado», que dispara el
+// ejecutor del software); «producir ahora» abre el caso de la línea a
+// mano que los pendientes del conserje ya levantan; cerrar un caso usa
+// el cierre de support-cases con su confirmación.
+function vistaDiscoMB() { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; }
+app.get('/api/admin/conserje/vista', requireAdminToken, (req, res) => {
+  try { res.json(conserjeVista.vista(db, { absImageUrl, posterUrlFor: posterUrlDePosteo, diskFreeMB: vistaDiscoMB() })); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.get('/api/admin/conserje/vista/cliente', requireAdminToken, (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const r = conserjeVista.cliente(db, Number(req.query.user_id), { absImageUrl, posterUrlFor: posterUrlDePosteo });
+    if (!r.ok) return res.status(404).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/vista/tratamiento', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = conserjeVista.asignarTratamiento(db, Number(b.user_id) || 0, b.familia || '', 'equipo');
+    if (!r.ok) return res.status(r.error === 'colision' ? 409 : 400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const r = conserjeVista.marcarVozResuelto(db, Number((req.body || {}).message_id) || 0, 'equipo');
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/vista/producir', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = conserjeVista.abrirOrdenProduccion(db, Number(b.user_id) || 0, b.detalle || '', 'equipo');
+    if (!r.ok) return res.status(400).json(r);
+    res.json({ ok: true, caso: r.caso ? { id: r.caso.id, titulo: r.caso.titulo } : null, duplicado: !!r.duplicado });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/vista/caso-cerrar', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const r = conserjeVista.cerrarCaso(db, Number((req.body || {}).case_id) || 0);
+    if (!r.ok) return res.status(400).json(r);
+    res.json({ ok: true, caso: r.caso ? { id: r.caso.id, estado: r.caso.estado } : null });
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 app.get('/api/admin/support/:userId/manana', requireAdminToken, (req, res) => {
@@ -39084,6 +39140,17 @@ app.get('/panel', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'panel.html'));
 });
 
+// ---------- (LOTE VISTA-CONSERJE) La consola del operador ----------
+// La página de vidrio que el equipo abre para operar el día: roster de
+// cuentas atendidas, la ficha viva de cada una, lo que espera decisión
+// y la cola de producción. La página es pública como archivo, pero no
+// muestra NADA sin el token: todos sus datos salen de /api/admin/*
+// con requireAdminToken, la puerta de siempre.
+app.get('/conserje', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'conserje.html'));
+});
+
 // ---------- Feed Audit: auditoría IA del Instagram (lead magnet) ----------
 // Página pública /auditoria → POST /api/audit {ig} → reporte con score.
 // Cache 72h por @ (no consume intento), anti-spam 5/día por IP con reembolso.
@@ -46534,7 +46601,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1183';
+const BUILD_ID = '20261105-v1184';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
