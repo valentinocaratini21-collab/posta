@@ -22695,7 +22695,7 @@ async function pzAdsAudienciaCargarDiferencia(btn) {
     if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
     pzAdsAudienciaPintar();
     const sim = d.esMP ? '$' : 'US$';
-    try { toast(gzT('Listo: ya tenés ' + sim + pzBoostFmtMonto(d.total) + '. Tocá «Sale así» y sale.', 'Done: you now have ' + sim + pzBoostFmtMonto(d.total) + '. Tap “Go with this” and it runs.')); } catch (e) {}
+    try { toast(gzT('Listo: ya tenés ' + sim + pzBoostFmtMonto(d.total) + '. Tocá «Impulsar este posteo con Ads» y sale.', 'Done: you now have ' + sim + pzBoostFmtMonto(d.total) + '. Tap “Boost this post with Ads” and it runs.')); } catch (e) {}
     return;
   }
   const motivo = (j && j.motivo) || '';
@@ -22759,8 +22759,8 @@ function pzAdsAudienciaHTML() {
     ${pzAdsAudienciaDineroHTML()}
     ${pzAdsAudienciaDiferenciaHTML()}
     <div id="pzAdsAudienciaError">${(s.boostError ? pzBoostErrorHTML(s.boostError.motivo, s.boostError.monto, s.boostError.cobroId) : '')}</div>
-    <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Go with this 🚀' : 'Sale así 🚀')}</button>
-    <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Go with this”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».')}</p>
+    <button type="button" class="btn btn-primary btn-block" style="margin-top:12px" onclick="pzAdsAudienciaSale(this)">${esc(en ? 'Boost this post with Ads' : 'Impulsar este posteo con Ads')}</button>
+    <p style="margin:8px 0 0;font-size:12.5px;color:#47617A">${esc(en ? 'Posty put this together from your business. Tap anything you want to change — nothing runs until you say “Boost this post with Ads”.' : 'Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Impulsar este posteo con Ads».')}</p>
   </div>`;
 }
 
