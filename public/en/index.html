@@ -1167,7 +1167,7 @@
       <button type="button" data-country="PE" onclick="switchPlansCountry('PE')" title="Peru" aria-label="Peru" aria-pressed="false">🇵🇪</button>
       <button type="button" data-country="UY" onclick="switchPlansCountry('UY')" title="Uruguay" aria-label="Uruguay" aria-pressed="false">🇺🇾</button>
       <button type="button" data-country="GB" onclick="switchPlansCountry('GB')" title="United Kingdom" aria-label="United Kingdom" aria-pressed="false">🇬🇧</button>
-      <button type="button" data-country="EU" onclick="switchPlansCountry('EU')" title="Eurozone" aria-label="Eurozone" aria-pressed="false">🇪🇺</button>
+      <button type="button" data-country="ES" onclick="switchPlansCountry('ES')" title="Spain" aria-label="Spain" aria-pressed="false">🇪🇸</button>
     </div>
     <p class="lp-pais-nota" id="plansCountryNote">Prices in USD.</p>
     <div id="lpSocialEn"></div>
@@ -2167,7 +2167,11 @@ try { window.addEventListener('pagehide', () => { try { if (_TQ.length && naviga
    la familia (Venty/Atenty/Gesty). EC/VE no están: no se publican hasta
    confirmar contra fuente oficial de Mercado Pago. El país persiste en
    localStorage ('posta-pais') y viaja a /en/prueba como ?pais=. */
-var PZ_PAISES_EN = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+/* (LOTE PRECIO-ARS 2026-11-18) The selector is a list of COUNTRIES:
+   «Eurozone» becomes Spain. Argentina shows and charges the single plan
+   IN PESOS: a fixed $324.000/month via Mercado Pago (the figure lives
+   server-side, PRECIO_ARS_FIJO; this page only paints the API's reply). */
+var PZ_PAISES_EN = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES'];
 var PZ_META_EN = {
   US: { nota: 'Prices in USD.' },
   AR: { nota: 'Pay with Mercado Pago.' },
@@ -2178,7 +2182,7 @@ var PZ_META_EN = {
   PE: { nota: 'Pay by card in USD with Stripe.' },
   UY: { nota: 'Pay with Mercado Pago.' },
   GB: { nota: 'Pay by card.' },
-  EU: { nota: 'Pay by card.' }
+  ES: { nota: 'Pay by card.' }
 };
 var PZ_PAIS_EN = 'US';
 var LP_CALC_BASE = '$199';
@@ -2230,6 +2234,10 @@ function pzApplyEN(c, cfg) {
     LP_CALC_BASE = base;
     LP_CALC_PERDAY = pzDiaEN(esc);
     if (typeof lpCalcUpdate === 'function') lpCalcUpdate();
+    // (LOTE PRECIO-ARS) The founder line follows the country: pesos for
+    // AR (keep $324.000 forever), US$199 everywhere else.
+    var fe = document.querySelector('.pc-founder');
+    if (fe) fe.innerHTML = '⭐ <b style="color:#0A1E33">Founder price</b> for the first 50 clients: join now and keep ' + (esc.currency === 'ARS' ? pzFmtEN(esc) : 'US$199') + ' forever.';
   }
   var suf = c === 'US' ? '' : ('?pais=' + c);
   document.querySelectorAll('a[href="/en/prueba"], a[href^="/en/prueba?"]').forEach(function (a) {
@@ -2237,6 +2245,7 @@ function pzApplyEN(c, cfg) {
   });
 }
 function switchPlansCountry(c) {
+  if (c === 'EU') c = 'ES'; // (LOTE PRECIO-ARS) legacy code = Spain
   if (PZ_PAISES_EN.indexOf(c) < 0) c = 'US';
   PZ_PAIS_EN = c;
   try { localStorage.setItem('posta-pais', c); } catch (e) {}
@@ -2248,6 +2257,7 @@ function switchPlansCountry(c) {
   var init = 'US';
   try {
     var g = localStorage.getItem('posta-pais');
+    if (g === 'EU') g = 'ES';
     if (g && PZ_PAISES_EN.indexOf(g) >= 0) init = g;
   } catch (e) {}
   if (init !== 'US') switchPlansCountry(init);

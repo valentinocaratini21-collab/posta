@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1140';
+const PZ_BUILD = '20261105-v1183';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -3153,7 +3153,12 @@ const catCustom = v => (catKnown(v) || v === 'otro' || !v) ? '' : v;
 // contra fuente oficial de Mercado Pago. El país elegido persiste en
 // localStorage ('posta-pais') y viaja a /prueba como ?pais= para que el
 // paywall cobre con el mismo país y riel.
-const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+// (LOTE PRECIO-ARS 2026-11-18) El selector es una lista de PAÍSES: la
+// opción «Eurozona» pasa a ser España. Y Argentina muestra y cobra el
+// plan único EN PESOS: $324.000/mes fijos por Mercado Pago (la cifra
+// vive en el servidor, PRECIO_ARS_FIJO; acá solo se pinta lo que la
+// API devuelve para el país elegido).
+const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES'];
 const PZ_PAIS_META = {
   US: { flag: '\u{1F1FA}\u{1F1F8}', nombre: 'Estados Unidos', nota: 'Precios en USD.' },
   AR: { flag: '\u{1F1E6}\u{1F1F7}', nombre: 'Argentina', nota: 'Pagás con Mercado Pago.' },
@@ -3164,11 +3169,12 @@ const PZ_PAIS_META = {
   PE: { flag: '\u{1F1F5}\u{1F1EA}', nombre: 'Perú', nota: 'Pagás con tarjeta en USD por Stripe.' },
   UY: { flag: '\u{1F1FA}\u{1F1FE}', nombre: 'Uruguay', nota: 'Pagás con Mercado Pago.' },
   GB: { flag: '\u{1F1EC}\u{1F1E7}', nombre: 'Reino Unido', nota: 'Pagás con tarjeta.' },
-  EU: { flag: '\u{1F1EA}\u{1F1FA}', nombre: 'Eurozona', nota: 'Pagás con tarjeta.' },
+  ES: { flag: '\u{1F1EA}\u{1F1F8}', nombre: 'España', nota: 'Pagás con tarjeta.' },
 };
 function pzPaisGuardado() {
   try {
-    const g = localStorage.getItem('posta-pais');
+    let g = localStorage.getItem('posta-pais');
+    if (g === 'EU') g = 'ES'; // (LOTE PRECIO-ARS) «Eurozona» guardado = España
     if (g && PZ_PAISES.includes(g)) return g;
   } catch (e) {}
   return 'AR';
@@ -3249,6 +3255,7 @@ document.addEventListener('click', function (e) {
   if (href.length > 1 && href.charAt(1) !== '/') closeMobileMenu();
 });
 async function switchPlansCountry(c) {
+  if (c === 'EU') c = 'ES'; // (LOTE PRECIO-ARS) código viejo = España
   PLANS_COUNTRY = PZ_PAISES.includes(c) ? c : 'AR';
   pzPaisGuardar(PLANS_COUNTRY);
   document.querySelectorAll('.country-toggle button').forEach(b => b.classList.toggle('on', b.dataset.country === PLANS_COUNTRY));
@@ -3271,6 +3278,12 @@ async function switchPlansCountry(c) {
       unico.innerHTML = cfg.anchor
         ? anchorHTML(cfg.anchor)
         : ('Posty arranca en <b>' + ((planes[0] ? planes[0].price_label : '')) + '</b>.');
+    }
+    // (LOTE PRECIO-ARS) La línea fundador sigue al país: en pesos para
+    // AR (conservan los $324.000 para siempre), US$199 en el resto.
+    const founderEl = document.querySelector('#planes .pc-founder');
+    if (founderEl && planes[0]) {
+      founderEl.innerHTML = '⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los ' + (planes[0].currency === 'ARS' ? planes[0].price_label : 'US$199') + ' para siempre.';
     }
     /* v377: el comparador y la calculadora siguen al plan real del país elegido */
     if (planes.length) lpCalcSetPlan(planes.find(pp => pp.id === 'esencial') || planes[0]);
@@ -6278,6 +6291,9 @@ function landingView(cfg) {
   const lpDefCost = Math.round(6 * 4.33 * lpDefRate);
   const lpHorasMes = Math.round(6 * 4.33);
   const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || 'USD 199';
+  // (LOTE PRECIO-ARS) La línea fundador habla la moneda del país: el
+  // price_label del plan para AR ($324.000), US$199 en el resto.
+  const lpFounderAmt = (lpEsencial && lpEsencial.currency === 'ARS' && lpEsencial.price_label) ? lpEsencial.price_label : 'US$199';
   const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 7;
   const lpPerDaySym = lpEsencial ? pzSimbolo(lpEsencial) : 'USD ';
   LP_CALC_RATE = lpDefRate;
@@ -8425,7 +8441,7 @@ function landingView(cfg) {
     <div class="plan-dots" id="planDots"><span class="on"></span></div>
     <p style="font-size:15px;color:#0A1E33;line-height:1.6;text-align:center;max-width:660px;margin:18px auto 0">⭐ <b>Precio fundador:</b> solo para los primeros 50 clientes — los que entren ahora lo conservan para siempre.</p>
     <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
-    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los US$199 para siempre.</p>
+    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los ${lpFounderAmt} para siempre.</p>
 
   </div></div>
   <div class="lp-final"><div class="wrap">

@@ -124,7 +124,7 @@ const preguntasPosteos = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
-const { PLANS, PLAN_UNICO, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, completoPrice, teamPrice, contratoTier } = require('./config/plans');
+const { PLANS, PLAN_UNICO, getPlanUnico, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, completoPrice, teamPrice, contratoTier } = require('./config/plans');
 const LA = require('./launch-analytics'); // (v322) analytics de lanzamiento: época, tablero, termómetro, alertas, carta
 const metaDeauth = require('./meta-deauthorize'); // (Frente 4b) Deauthorize callback de Meta: baja lógica IG + evento durable
 const holaInbox = require('./hola-inbox'); // (Frente 4b) Lector SOLO LECTURA de respuestas a hola@ (Carta/toque), clasificador por reglas
@@ -28295,7 +28295,7 @@ app.get('/api/billing/plans', (req, res) => {
   // (Tablero 2026-10-25) 10 países del selector + CA solo-API (no se toca).
   // Default intacto: sin código válido, AR. EC/VE no existen acá: no se publican.
   const q = String(req.query.country || '').toUpperCase();
-  const country = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'CA'].includes(q) ? q : 'AR';
+  const country = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'ES', 'CA'].includes(q) ? q : 'AR';
   const plans = getPlans(country);
   const anchor = PLAN_ANCHOR[country];
   const meta = COUNTRY_META[country] || COUNTRY_META.AR;
@@ -28306,11 +28306,16 @@ app.get('/api/billing/plans', (req, res) => {
   // queda SOLO como facturación interna (usuarios existentes, founder) y
   // para los deep links con agente/nivel de los otros poderes.
   if (req.query.unico === '1') {
-    const p = { ...PLAN_UNICO, price_label: formatPrice(PLAN_UNICO) };
-    const anchorU = PLAN_ANCHOR[country] ? { cm: PLAN_ANCHOR[country].cm, desde: 'USD 199' } : null;
+    // (LOTE PRECIO-ARS 2026-11-18) El plan único sale del país:
+    // getPlanUnico(AR) = $324.000 ARS fijos (PRECIO_ARS_FIJO, única
+    // fuente: la misma cifra que cobra Mercado Pago); todos los demás
+    // países, USD 199 por Stripe, como siempre.
+    const unico = getPlanUnico(country);
+    const p = { ...unico, price_label: formatPrice(unico) };
+    const anchorU = PLAN_ANCHOR[country] ? { cm: PLAN_ANCHOR[country].cm, desde: country === 'AR' ? formatPrice(unico) : 'USD 199' } : null;
     return res.json({
       country,
-      currency: 'USD',
+      currency: unico.currency,
       rail: meta.rail,
       local_price_pending: false,
       countries: SELECTOR_COUNTRIES.map((c) => ({ code: c, ...COUNTRY_META[c] })),
@@ -28320,11 +28325,12 @@ app.get('/api/billing/plans', (req, res) => {
       mp_configured: mp.mpConfigured(),
       stripe_configured: stripeBilling.stripeConfigured(),
       poderes: PODERES,
-      // Completo fundador = 3x el poder (USD 597); equipo con teamPrice.
-      completo: { prices: { posty: 3 * PLAN_UNICO.price }, price_labels: { posty: formatPrice({ price: 3 * PLAN_UNICO.price, currency: 'USD' }) } },
+      // Completo fundador = 3x el poder (USD 597; en AR, 3x el fijo en
+      // pesos); equipo con teamPrice. Derivan del plan del país.
+      completo: { prices: { posty: 3 * unico.price }, price_labels: { posty: formatPrice({ price: 3 * unico.price, currency: unico.currency }) } },
       equipo: {
         descuentos: { 2: 10, 3: 15, 4: 20 },
-        precios: Object.fromEntries([2, 3, 4].map((n) => [n, { posty: teamPrice(n, PLAN_UNICO.price) }])),
+        precios: Object.fromEntries([2, 3, 4].map((n) => [n, { posty: teamPrice(n, unico.price) }])),
       },
     });
   }
@@ -28395,7 +28401,14 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   // Stripe en USD 199 para todos los países: no tiene precio en pesos (la
   // tasa USD→ARS no está decidida y no se inventa). Sin esta guarda,
   // contratoTier lo degradaba a 'esencial' y MP cobraba el tier en ARS.
-  if (String(planIdRaw || '').trim().toLowerCase() === PLAN_UNICO.id) {
+  // (LOTE PRECIO-ARS 2026-11-18) La tasa se decidió: ARGENTINA paga el
+  // único EN PESOS por este mismo riel — $324.000 fijos (PRECIO_ARS_FIJO
+  // vía getPlanUnico('AR'), la misma cifra que muestra la vidriera). El
+  // resto de los países sigue SOLO por Stripe en USD 199, con el mismo
+  // error de siempre.
+  const esUnico = String(planIdRaw || '').trim().toLowerCase() === PLAN_UNICO.id;
+  const agente = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String(agenteRaw || '').toLowerCase()) ? String(agenteRaw).toLowerCase() : 'posty';
+  if (esUnico && !(String(country || '').toUpperCase() === 'AR' && agente === 'posty')) {
     return res.status(400).json({ error: 'El plan Posty se paga con tarjeta en USD 199: volvé a Mi plan y tocá Suscribirse.' });
   }
   // (Pagos lado app, 2026-10-25) Riel MP: SOLO AR + UY. BR/MX/CL/CO/PE
@@ -28404,8 +28417,9 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   const mpCountry = String(country || '').toUpperCase();
   const plans = getPlans(['AR', 'UY'].includes(mpCountry) ? mpCountry : 'AR');
   const planId = contratoTier(planIdRaw);
-  const agente = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String(agenteRaw || '').toLowerCase()) ? String(agenteRaw).toLowerCase() : 'posty';
-  const plan = plans[planId];
+  // (LOTE PRECIO-ARS) Único AR: el plan sale de getPlanUnico('AR') —
+  // id 'posty', $324.000 ARS — y NO del catálogo de tiers.
+  const plan = esUnico ? getPlanUnico('AR') : plans[planId];
   if (!plan) return res.status(400).json({ error: 'Plan inválido' });
   if (!mp.mpConfigured()) {
     return res.status(400).json({ error: 'Pagos no configurados todavía.' });
@@ -28665,7 +28679,9 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
   // (Pagos lado app, 2026-10-25) Riel Stripe: US + GB + EU + BR/MX/CL/CO/PE
   // (estos últimos con planes USD). Sin país válido, US. CA no entra acá
   // (solo API): un country CA cae a US como antes.
-  const stripeCountry = ['US', 'GB', 'EU', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
+  // (LOTE PRECIO-ARS 2026-11-18) 'ES' entra al riel Stripe: es el código
+  // que el selector emite desde este lote (España = catálogo EUR).
+  const stripeCountry = ['US', 'GB', 'EU', 'ES', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(String((req.body && req.body.country) || '').toUpperCase()) ? String(req.body.country).toUpperCase() : 'US';
   // (LOTE PLAN-ÚNICO-PAYWALL) El plan único (id 'posty') es global: USD 199
   // para TODOS los países, incluida Argentina (que por este endpoint antes
   // caía a US solo para los tiers). No pasa por contratoTier ni por el
@@ -46518,7 +46534,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1182';
+const BUILD_ID = '20261105-v1183';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

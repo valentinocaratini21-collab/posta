@@ -248,12 +248,12 @@ const cookieDe = (headers) => {
     }
     ok(up, 'H0 boot levanta');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261105-v977', `H0 /api/version v977 (vino ${ver.build})`);
+    ok(ver.build === '20261105-v1183', `H0 /api/version v1183 (vino ${ver.build})`);
 
     const pSin = await apiH('', 'GET', '/api/billing/plans?country=AR');
     ok(pSin.status === 200 && pSin.data.plans.length === 3, 'H1 sin unico: el catálogo de 3 tiers sigue (facturación interna)', pSin.data && pSin.data.plans.length);
     const pAr = await apiH('', 'GET', '/api/billing/plans?country=AR&unico=1');
-    ok(pAr.status === 200 && pAr.data.plans.length === 1 && pAr.data.plans[0].id === 'posty' && pAr.data.plans[0].price === 199 && pAr.data.currency === 'USD', 'H2 AR ?unico=1: un solo plan, USD 199', pAr.data && pAr.data.plans);
+    ok(pAr.status === 200 && pAr.data.plans.length === 1 && pAr.data.plans[0].id === 'posty' && pAr.data.plans[0].price === 324000 && pAr.data.plans[0].currency === 'ARS' && pAr.data.plans[0].price_label === '$324.000' && pAr.data.currency === 'ARS' && pAr.data.rail === 'mercadopago', 'H2 AR ?unico=1: un solo plan, ARS 324.000 por MP (LOTE PRECIO-ARS)', pAr.data && pAr.data.plans);
     const pUs = await apiH('', 'GET', '/api/billing/plans?country=US&unico=1');
     ok(pUs.status === 200 && pUs.data.plans.length === 1 && pUs.data.plans[0].price === 199, 'H3 US ?unico=1: un solo plan, USD 199');
 
@@ -281,9 +281,10 @@ const cookieDe = (headers) => {
     ok(coAr.status === 400 && /not configured/i.test(String(coAr.data && coAr.data.error || '')), 'H6 checkout único AR: llega al gate de Stripe (riel correcto)', coAr.data);
     const coUs = await apiH(ckF, 'POST', '/api/billing/stripe/checkout', { plan: 'posty', country: 'US', agente: 'posty' });
     ok(coUs.status === 400 && /not configured/i.test(String(coUs.data && coUs.data.error || '')), 'H7 checkout único US: llega al gate de Stripe', coUs.data);
-    // Guarda MP: el plan único NO se cobra en pesos.
+    // Guarda MP (LOTE PRECIO-ARS): el plan único AR SÍ se cobra en pesos por MP;
+    // el rechazo «tarjeta en USD 199» queda solo para el único fuera de AR.
     const subU = await apiH(ckF, 'POST', '/api/billing/subscribe', { plan: 'posty', country: 'AR', payer_email: 'paywall@example.com', agente: 'posty' });
-    ok(subU.status === 400 && /tarjeta en USD 199/.test(String(subU.data && subU.data.error || '')), 'H8 subscribe con plan único: rechazado con el motivo del lote (no cae a Esencial ARS)', subU.data);
+    ok(subU.status === 400 && /no configurados/i.test(String(subU.data && subU.data.error || '')), 'H8 subscribe con plan único AR: ya no se rechaza (LOTE PRECIO-ARS) — llega al gate de config de MP como un tier', subU.data);
     const subT = await apiH(ckF, 'POST', '/api/billing/subscribe', { plan: 'esencial', country: 'AR', payer_email: 'paywall@example.com', agente: 'posty' });
     ok(subT.status === 400 && /no configurados/i.test(String(subT.data && subT.data.error || '')), 'H9 subscribe con tier: riel MP intacto (gate de config)', subT.data);
 

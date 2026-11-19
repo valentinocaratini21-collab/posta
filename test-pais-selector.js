@@ -33,7 +33,7 @@ ok(pl.getPlans('AR').esencial.price === 199999, 'AR intacto 199999');
 ok(pl.getPlans('UY').esencial.price === 4990, 'UY intacto 4990');
 ok(pl.getPlans('US').esencial.price === 199.99, 'USD intacto 199.99');
 ok(pl.getPlans('CA').esencial.price === 279, 'CA intacto (no se toca)');
-ok(JSON.stringify(pl.SELECTOR_COUNTRIES) === JSON.stringify(['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU']), 'selector = exactamente los 10 códigos, en orden');
+ok(JSON.stringify(pl.SELECTOR_COUNTRIES) === JSON.stringify(['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES']), 'selector = exactamente los 10 códigos, en orden (ES por EU — LOTE PRECIO-ARS)');
 ok(!pl.SELECTOR_COUNTRIES.includes('EC') && !pl.SELECTOR_COUNTRIES.includes('VE'), 'EC/VE fuera del selector');
 ok(pl.getRail('US') === 'stripe' && pl.getRail('GB') === 'stripe' && pl.getRail('EU') === 'stripe', 'riel Stripe US/GB/EU');
 ok(pl.getRail('AR') === 'mercadopago' && pl.getRail('UY') === 'mercadopago', 'riel MP AR/UY');
@@ -44,16 +44,16 @@ ok(!/Ecuador|Venezuela/.test(plansSrc), 'Ecuador/Venezuela ausentes de plans.js'
 
 // ---------- 2. server.js ----------
 const srv = read('server.js');
-ok(srv.includes("['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'CA'].includes(q)"), 'API planes: allowlist 11 códigos');
+ok(srv.includes("['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'ES', 'CA'].includes(q)"), 'API planes: allowlist 12 códigos (ES suma — LOTE PRECIO-ARS)');
 ok(srv.includes("['AR', 'UY', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(mpCountry)"), 'MP subscribe: 7 países MP');
-ok(srv.includes("['US', 'GB', 'EU'].includes(") && srv.includes('stripeCountry'), 'Stripe checkout: país US/GB/EU');
+ok(srv.includes("['US', 'GB', 'EU', 'ES', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(") && srv.includes('stripeCountry'), 'Stripe checkout: país US/GB/EU/ES + latam USD (ES suma — LOTE PRECIO-ARS)');
 ok(!srv.includes("user.lang !== 'en'"), 'puerta vieja lang=en muerta en Stripe checkout');
 ok(srv.includes('local_price_pending') && srv.includes('rail: meta.rail'), 'API planes: rail + pending en respuesta');
 ok(srv.includes('founder_currency') && srv.includes("String(plan.currency || '') === 'USD'"), 'fundador Stripe solo si moneda coincide');
 
 // ---------- 3. app.js (home ES) ----------
 const app = read('public/app.js');
-ok(app.includes("const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU']"), 'app.js: PZ_PAISES 10 códigos');
+ok(app.includes("const PZ_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES']"), 'app.js: PZ_PAISES 10 códigos (ES por EU — LOTE PRECIO-ARS)');
 ok(app.includes('PZ_PAISES.map(') && app.includes("onclick=\"switchPlansCountry('${c}')\""), 'app.js: toggle renderiza 10 banderas');
 ok(app.includes('id="plansCountryNote"'), 'app.js: línea de nota del país');
 ok(app.includes("PLANS_COUNTRY = PZ_PAISES.includes(c) ? c : 'AR'"), 'app.js: switch valida contra la lista');

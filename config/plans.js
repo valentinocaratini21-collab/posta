@@ -227,9 +227,9 @@ const PLANS_AR = {
 // viejos (Esencial/Pro/Total) quedan SOLO como catálogo interno de
 // facturación (usuarios existentes, founder_price congelado, límites de IA)
 // y NUNCA se muestran en la vidriera. La vidriera (landing ES/EN, JSON-LD)
-// sirve este plan vía /api/billing/plans?unico=1. Sin precio en ARS: la
-// tasa USD→ARS está sin decidir y no se inventa un número. El plan único
-// es el producto completo: lo que el tier Total incluía.
+// sirve este plan vía /api/billing/plans?unico=1. El precio en pesos para
+// Argentina se decidió el 2026-11-18 (ver PRECIO_ARS_FIJO más abajo). El
+// plan único es el producto completo: lo que el tier Total incluía.
 const PLAN_UNICO = {
   id: 'posty',
   name: 'Posty',
@@ -245,6 +245,22 @@ const PLAN_UNICO = {
   features: PLANS_AR.total.features,
   highlighted: true,
 };
+
+// (LOTE PRECIO-ARS, decisión de Valentino 2026-11-18) ARGENTINA paga el
+// plan único EN PESOS, por Mercado Pago: ARS $324.000/mes FIJOS (eligió
+// precio fijo sobre indexado al MEP; USD 199 × MEP 1.629 del 2026-11-18
+// ≈ 324.131, redondeado a 324.000). PRECIO_ARS_FIJO es la ÚNICA fuente del
+// número: la vidriera lo muestra desde getPlanUnico('AR') (vía
+// /api/billing/plans?unico=1) y el checkout de Mercado Pago cobra ese
+// mismo plan — display y cobro no pueden divergir. El fundador AR conserva
+// estos $324.000 para siempre (su founder_price se congela desde
+// mp_base_amount, como cualquier alta MP). Todos los demás países siguen
+// en USD 199 por Stripe, sin cambios.
+const PRECIO_ARS_FIJO = 324000;
+const PLAN_UNICO_AR = { ...PLAN_UNICO, price: PRECIO_ARS_FIJO, currency: 'ARS' };
+function getPlanUnico(country) {
+  return country === 'AR' ? { ...PLAN_UNICO_AR } : { ...PLAN_UNICO };
+}
 
 // ✅ UY (escalera de familia Bambooty, 2026-10-24) — misma arquitectura que AR: el Pro es el héroe (≈ $U 250/día).
 const PLANS_UY = {
@@ -434,6 +450,7 @@ function getPlans(country) {
   if (country === 'US') return PLANS_US;
   if (country === 'GB') return PLANS_GB;
   if (country === 'EU') return PLANS_EU;
+  if (country === 'ES') return PLANS_EU; // (LOTE PRECIO-ARS) España = catálogo EUR
   if (country === 'CA') return PLANS_CA;
   // Latam sin precio local publicado (tablero 2026-10-25; riel Stripe
   // desde la tanda de pagos 2026-10-25): la escalera que se MUESTRA es la
@@ -448,7 +465,11 @@ function getPlans(country) {
 // pending = sin precio local publicado: se muestra USD base + nota, jamás un
 // precio inventado. EC/VE NO están acá: no se publican hasta confirmar contra
 // fuente oficial de Mercado Pago.
-const SELECTOR_COUNTRIES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+// (LOTE PRECIO-ARS 2026-11-18) El selector es una lista de PAÍSES: la
+// opción «Eurozona» se reemplaza por España (su mercado europeo). El
+// código 'EU' sigue resolviendo el catálogo EUR para links y datos
+// guardados viejos, pero ya no se ofrece en el selector.
+const SELECTOR_COUNTRIES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES'];
 const COUNTRY_META = {
   US: { flag: '\u{1F1FA}\u{1F1F8}', name_es: 'Estados Unidos', name_en: 'United States', currency: 'USD', rail: 'stripe', pending: false,
         note_es: 'Precios en USD.', note_en: 'Prices in USD.' },
@@ -469,6 +490,8 @@ const COUNTRY_META = {
   GB: { flag: '\u{1F1EC}\u{1F1E7}', name_es: 'Reino Unido', name_en: 'United Kingdom', currency: 'GBP', rail: 'stripe', pending: false,
         note_es: 'Precios en libras. Pagás con Stripe.', note_en: 'Prices in pounds. Pay with Stripe.' },
   EU: { flag: '\u{1F1EA}\u{1F1FA}', name_es: 'Eurozona', name_en: 'Eurozone', currency: 'EUR', rail: 'stripe', pending: false,
+        note_es: 'Precios en euros. Pagás con Stripe.', note_en: 'Prices in euros. Pay with Stripe.' },
+  ES: { flag: '\u{1F1EA}\u{1F1F8}', name_es: 'España', name_en: 'Spain', currency: 'EUR', rail: 'stripe', pending: false,
         note_es: 'Precios en euros. Pagás con Stripe.', note_en: 'Prices in euros. Pay with Stripe.' },
   CA: { flag: '\u{1F1E8}\u{1F1E6}', name_es: 'Canadá', name_en: 'Canada', currency: 'CAD', rail: 'stripe', pending: false,
         note_es: 'Precios en dólares canadienses. Pagás con Stripe.', note_en: 'Prices in Canadian dollars. Pay with Stripe.' },
@@ -562,4 +585,4 @@ function formatPrice(plan) {
   return '$' + Number(plan.price).toLocaleString('es-AR');
 }
 
-module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_UNICO, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, COMPLETO_FUNDADOR, completoPrice, teamPrice, contratoTier };
+module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_EU, PLANS_CA, PLAN_UNICO, PRECIO_ARS_FIJO, PLAN_UNICO_AR, getPlanUnico, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice, SELECTOR_COUNTRIES, COUNTRY_META, getRail, PODERES, PODER_NOMBRE, COMPLETO_FUNDADOR, completoPrice, teamPrice, contratoTier };

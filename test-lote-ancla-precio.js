@@ -46,12 +46,12 @@ t('EN: filas DIY', secEN.includes('thinking of what to post') && secEN.includes(
 // mención del párrafo fundador alineado (decisión de Valentino 18/11)
 t('EN: 199 = 2 en #planes (precio en la tarjeta + mención en .pc-founder)', (secEN.match(/199/g) || []).length === 2);
 t('ES: anchorLine fuera de #planes', !secES.includes('anchorLine'));
-t('ES: 199 literal solo en .pc-founder (el precio no es literal en la plantilla)', (secES.match(/199/g) || []).length === 1 && secES.includes('conservan los US$199 para siempre'));
+t('ES: sin 199 literal en #planes (el fundador sale del plan del país — LOTE PRECIO-ARS)', (secES.match(/199/g) || []).length === 0 && secES.includes('conservan los ${lpFounderAmt} para siempre'));
 // 3 — borde fundador
 t('ES: «50 clientes»', secES.includes('Precio fundador:</b> solo para los primeros 50 clientes'));
 t('EN: «first 50»', secEN.includes('Founder price:</b> first 50 clients only'));
 // 3b — párrafo .pc-founder alineado a la regla nueva (primeros 50 · para siempre)
-t('ES: .pc-founder alineado', secES.includes('para los primeros 50 clientes: los que entren ahora conservan los US$199 para siempre'));
+t('ES: .pc-founder alineado', secES.includes('para los primeros 50 clientes: los que entren ahora conservan los ${lpFounderAmt} para siempre'));
 t('EN: .pc-founder alineado', secEN.includes('for the first 50 clients: join now and keep US$199 forever'));
 t('ES: sin «Primeros 200» ni «12 meses» en #planes', !secES.includes('Primeros 200') && !secES.includes('12 meses'));
 t('EN: sin «First 200» ni «12 months» en #planes', !secEN.includes('First 200') && !secEN.includes('12 months'));

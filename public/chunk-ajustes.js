@@ -1118,7 +1118,7 @@ function bindSettings() {
    * país, así que nunca se usa para el precio. Puro: sin DOM ni storage,
    * para poder testearlo aislado. */
   function pzParseCheckoutDeepLink(hash) {
-    const PZ_DL_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
+    const PZ_DL_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'ES'];
     const PZ_DL_AGENTES = ['posty', 'venty', 'gesty', 'atenty', 'completo'];
     const PZ_DL_NIVELES = { esencial: 'esencial', completa: 'pro', pro: 'pro', total: 'total' };
     let qs = null;
@@ -1152,8 +1152,8 @@ function bindSettings() {
     // (pais-selector) País del paywall: el elegido en la home/prueba
     // ('posta-pais'); si no hay, lang en→US, si no AR. El RIEL lo decide el
     // país, no el idioma: GB/EU pagan por Stripe aunque el usuario hable ES.
-    const PZ_PAY_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU'];
-    const PZ_PAY_STRIPE = ['US', 'GB', 'EU', 'BR', 'MX', 'CL', 'CO', 'PE'];
+    const PZ_PAY_PAISES = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'ES'];
+    const PZ_PAY_STRIPE = ['US', 'GB', 'EU', 'ES', 'BR', 'MX', 'CL', 'CO', 'PE'];
     // (Pagos lado app) Deep link: pais manda y también setea
     // localStorage 'posta-pais' (el servidor decide precio/riel por país;
     // moneda del link es solo hint y NO se usa para el precio).
@@ -1168,6 +1168,8 @@ function bindSettings() {
       pzPayCountry = pzDl.pais;
       try { localStorage.setItem('posta-pais', pzDl.pais); } catch (e) {}
     }
+    // (LOTE PRECIO-ARS 2026-11-18) «EU» guardado o linkeado = España.
+    if (pzPayCountry === 'EU') pzPayCountry = 'ES';
     // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
     // (LOTE PLAN-ÚNICO-PAYWALL) Modo plan único: sin deep link de agente,
     // Mi plan pide el plan único (?unico=1) como la vidriera. Con agente
@@ -1219,8 +1221,11 @@ function bindSettings() {
       // (LOTE PLAN-ÚNICO-PAYWALL) El plan único se cobra por Stripe en USD
       // para TODOS los países (incluidos AR/UY, cuyo riel por país es MP
       // para los tiers): no hay precio en moneda local del plan único.
+      // (LOTE PRECIO-ARS 2026-11-18) Ya lo hay para Argentina: el único
+      // AR va por Mercado Pago en pesos ($324.000 fijos, PRECIO_ARS_FIJO
+      // en el servidor); el resto del mundo sigue por Stripe en USD.
       const pzUnico = !pzDl.agente;
-      const isStripe = pzUnico ? true : PZ_PAY_STRIPE.includes(pzPayCountry);
+      const isStripe = pzUnico ? pzPayCountry !== 'AR' : PZ_PAY_STRIPE.includes(pzPayCountry);
       // (2026-10-25 · pulido ítem 5) Los 5 países que pagan en USD sin
       // precio local todavía (BR/MX/CL/CO/PE) llevan «USD » en AMBOS
       // idiomas: en EN, «$199» se podía leer como moneda local.
