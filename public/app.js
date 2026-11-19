@@ -3958,20 +3958,66 @@ function lpDisenoInit() {
     window.__wdIO = io;
     targets.forEach(function (t) { io.observe(t); });
   }
-  var swChips = qa('.strat-chip'), swBodies = qa('.strat-body');
-  if (swChips.length && swBodies.length) {
-    swChips.forEach(function (ch) {
+  /* (ESTRATEGIA-VIVA) la tarjeta viva de la estrategia: un solo cuerpo que se
+     re-pinta con la piel de cada negocio (mock aprobado 18/11). El estado
+     inicial ya viene renderizado en el HTML (Birds): sin JS la sección se ve
+     completa; el switcher solo re-pinta. */
+  var esCardEl = q('#crecimiento .es-card');
+  if (esCardEl) {
+    var ES_PLAY = '<svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M6 4.5v15l13-7.5z"/></svg>';
+    var ES_STACK = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5v-2a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6.5v7A2.5 2.5 0 0 0 6 16h2.5"/></svg>';
+    var ES_BIZ = [
+      { name: 'Estrategia de Sotto Sotto', sub: 'Restaurante italiano · Inman Park, Atlanta',
+        skin: { '--cbg': '#F6F0E4', '--cink': '#2B2118', '--csub': 'rgba(43,33,24,.60)', '--cacc': '#6B7248', '--cchip': 'rgba(43,33,24,.055)', '--cline': 'rgba(43,33,24,.13)' },
+        hero: 'lp-es-sotto-hero.jpg', starName: 'Tortelli di Michelangelo', starTag: 'Sotto Sotto · La estrella de la casa',
+        fund: 'El tortelli es el plato que la gente viene a buscar, y abre la semana. La pasta se hace a mano todos los días: eso se muestra, porque es su diferencial. Y la mesa, larga y con luz baja, vende la ocasión de venir.',
+        week: [['L', 'The Dish', 'lp-es-sotto-strozzapreti.jpg', 'star'], ['M', 'Handmade', 'lp-es-sotto-tagliatelle.jpg', ''], ['X', 'The Table', 'lp-es-sotto-sala.jpg', 'car'], ['J', 'The Dish', 'lp-es-sotto-costoletta.jpg', ''], ['V', 'The Dish', 'lp-es-sotto-caprese.jpg', 'reel'], ['S', 'The Table', 'lp-es-sotto-mesa.jpg', ''], ['D', 'The Sweet Finish', 'lp-es-sotto-zuppa.jpg', 'car']],
+        ritmo: '1 por día · 2 carruseles por semana', ads: 'Tu zona · cenas y sobremesas',
+        pal: ['#F6F0E4', '#6B7248', '#A8B09A', '#8A6B42', '#2B2118'] },
+      { name: 'Estrategia de A Cappella Books', sub: 'Librería independiente · Inman Park, Atlanta',
+        skin: { '--cbg': '#F3EAD8', '--cink': '#2B2118', '--csub': 'rgba(43,33,24,.60)', '--cacc': '#8A6B42', '--cchip': 'rgba(43,33,24,.055)', '--cline': 'rgba(43,33,24,.13)' },
+        hero: 'lp-es-cappella-hero.jpg', starName: 'Signed First Editions Club', starTag: 'A Cappella Books · La estrella de la casa',
+        fund: 'Su estrella es el club de primeras ediciones firmadas, elegidas por el staff: abre la semana desde su estantería. Los recién llegados renuevan la visita, y la vidriera recuerda que la librería está ahí desde 1989.',
+        week: [['L', 'Ediciones firmadas', 'lp-es-cappella-firmados.jpg', 'star'], ['M', 'El pasillo', 'lp-es-cappella-pasillo.jpg', ''], ['X', 'La vidriera', 'lp-es-cappella-vidriera.jpg', 'car'], ['J', 'Recién llegados', 'lp-es-cappella-llegados.jpg', ''], ['V', 'El rincón', 'lp-es-cappella-rincon.jpg', 'reel'], ['S', 'Desde 1989', 'lp-es-cappella-fachada.jpg', 'car'], ['D', 'Elegidos del staff', 'lp-es-cappella-elegidos.jpg', '']],
+        ritmo: '1 por día · 2 carruseles por semana', ads: 'Lectores de tu zona · novedades y eventos de autor',
+        pal: ['#F3EAD8', '#8A6B42', '#4A3520', '#B08D57', '#2B2118'] },
+      { name: 'Estrategia de All Life is Yoga', sub: 'Estudio de yoga · Inman Park, Atlanta',
+        skin: { '--cbg': '#EFE7D8', '--cink': '#3A3226', '--csub': 'rgba(58,50,38,.60)', '--cacc': '#A98A5F', '--cchip': 'rgba(58,50,38,.055)', '--cline': 'rgba(58,50,38,.13)' },
+        hero: 'lp-es-yoga-hero.jpg', starName: 'Great Wall Yoga', starTag: 'All Life is Yoga · La estrella de la casa',
+        fund: 'La pared es lo que nadie más tiene: abre la semana. La práctica diaria marca el ritmo y el descanso también se muestra, porque la gente no busca solo exigirse: busca un lugar donde bajar.',
+        week: [['L', 'En la pared', 'lp-es-yoga-pared.jpg', 'star'], ['M', 'La práctica', 'lp-es-yoga-clase.jpg', ''], ['X', 'El respiro', 'lp-es-yoga-respiro.jpg', 'car'], ['J', 'La práctica', 'lp-es-yoga-practica.jpg', ''], ['V', 'Con apoyos', 'lp-es-yoga-pared2.jpg', 'reel'], ['S', 'El descanso', 'lp-es-yoga-descanso.jpg', ''], ['D', 'La práctica', 'lp-es-yoga-cierre.jpg', 'car']],
+        ritmo: '1 por día · 2 carruseles por semana', ads: 'Tu zona · clases para todos los niveles',
+        pal: ['#EFE7D8', '#D9C7A7', '#A98A5F', '#7A6A4F', '#3A3226'] }
+    ];
+    var esRender = function (i, animate) {
+      var b = ES_BIZ[i]; if (!b) return;
+      for (var k in b.skin) esCardEl.style.setProperty(k, b.skin[k]);
+      document.getElementById('esName').textContent = b.name;
+      document.getElementById('esSub').textContent = b.sub;
+      document.getElementById('esHeroImg').src = b.hero;
+      document.getElementById('esStarName').textContent = b.starName;
+      document.getElementById('esStarTag').textContent = b.starTag;
+      document.getElementById('esFund').textContent = b.fund;
+      document.getElementById('esWeek').innerHTML = b.week.map(function (s) {
+        var mk = s[3] === 'reel' ? '<span class="es-mk">' + ES_PLAY + '</span>' : (s[3] === 'car' ? '<span class="es-mk">' + ES_STACK + '</span>' : '');
+        return '<div class="es-slot' + (s[3] === 'star' ? ' star' : '') + '"><img loading="lazy" src="' + s[2] + '" alt=""><span class="es-dow">' + s[0] + '</span>' + mk + '<span class="es-fmt">' + s[1] + '</span></div>';
+      }).join('');
+      document.getElementById('esRitmo').textContent = b.ritmo;
+      document.getElementById('esAds').textContent = b.ads;
+      document.getElementById('esPal').innerHTML = b.pal.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join('');
+      qa('#crecimiento .es-chip').forEach(function (ch, j) {
+        var on = j === i; ch.classList.toggle('on', on); ch.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      if (animate && !RM) { esCardEl.classList.remove('es-anim'); void esCardEl.offsetWidth; esCardEl.classList.add('es-anim'); }
+    };
+    qa('#crecimiento .es-chip').forEach(function (ch) {
       ch.addEventListener('click', function () {
-        swChips.forEach(function (c) { var on = c === ch; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-        swBodies.forEach(function (b) {
-          var on = b.getAttribute('data-body') === ch.getAttribute('data-strat');
-          b.hidden = !on; b.classList.toggle('on', on);
-          if (on && !RM) { b.classList.remove('deal'); void b.offsetWidth; b.classList.add('deal'); }
-        });
+        esRender(+ch.getAttribute('data-esbiz'), true);
         var sec = q('#crecimiento'); if (sec) sec.classList.add('wd-live');
       });
     });
   }
+
   /* ATIENDE-VIVO: el chat en tres actos se rearma en vivo mientras la
      sección está en pantalla y repite; fuera de pantalla se detiene y
      vuelve al estado final. El markup nace completo (sin JS = final)
@@ -5528,7 +5574,7 @@ function lpIdeasHTML() {
   </div></div></div>
 `; }
 function lpCrecimientoHTML() {
-  return `  <div class="section cap-sec navy" id="crecimiento"><div class="wrap"><div class="cap-grid">
+  return `  <div class="section cap-sec" id="crecimiento"><div class="wrap"><div class="cap-grid">
     <div class="cap-copy">
       <div class="cap-kick">Estrategia</div>
       <h2>Una estrategia <span class="hl">hecha para tu negocio</span>.</h2>
@@ -5536,19 +5582,34 @@ function lpCrecimientoHTML() {
       <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
     </div>
     <div class="cap-side">
-      <div class="strat-switch" role="group" aria-label="Estrategias por negocio">
-        <button type="button" class="strat-chip on" data-strat="0" aria-pressed="true">Birds of a Feather · restaurante</button>
-        <button type="button" class="strat-chip" data-strat="1" aria-pressed="false">Tomoko · pastelería</button>
-        <button type="button" class="strat-chip" data-strat="2" aria-pressed="false">Scorpion · tattoo</button>
+      <div class="es-invite"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.5a5.5 5.5 0 1 1 6 .5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Tocá un negocio y mirá la suya.</div>
+      <div class="es-switch" role="group" aria-label="Estrategias por negocio">
+        <button type="button" class="es-chip on" data-esbiz="0" aria-pressed="true">Sotto Sotto · restaurante</button>
+        <button type="button" class="es-chip" data-esbiz="1" aria-pressed="false">A Cappella · librería</button>
+        <button type="button" class="es-chip" data-esbiz="2" aria-pressed="false">All Life is Yoga · yoga</button>
       </div>
-      <div class="cap-sample cap-idea-wrap">
-        <div class="strat-card"><div class="strat-body on" data-body="0"><div class="strat-head"><b>Estrategia de Birds of a Feather</b><span>Restaurante sichuanés · Williamsburg, Brooklyn</span></div><div class="strat-row"><span class="strat-ic">⭐</span><div><b>Su estrella</b><p class="strat-star"><img loading="lazy" src="lp-birds-estrella.jpg" alt="El plato estrella de Birds of a Feather"><span><b>Dan Dan Noodles</b> — el héroe del feed: el primer posteo y el que más vuelve.</span></p></div></div><div class="strat-row"><span class="strat-ic">🍜</span><div><b>Tipos de posteos</b><p class="strat-chips"><span>La estrella terminada</span><span>El proceso en cocina</span><span>El momento de mesa</span></p></div></div><div class="strat-row"><span class="strat-ic">📅</span><div><b>Ritmo</b><p class="strat-week"><i class="on"></i><i class="on car"></i><i class="on"></i><i class="on"></i><i class="on car"></i><i class="on"></i><i class="on"></i><span class="strat-week-note">1 por día · 2 carruseles por semana</span></p></div></div><div class="strat-row"><span class="strat-ic">🎯</span><div><b>Su público de Ads</b><p><span class="strat-pill">A 6 km de Grand St · 25 a 44 años</span></p></div></div><div class="strat-row"><span class="strat-ic">🎨</span><div><b>Su paleta</b><p><span class="wd-pal"><i style="background:#C8372D"></i><i style="background:#D9A441"></i><i style="background:#3E7A4E"></i><i style="background:#F3E9D2"></i><i style="background:#2B2118"></i></span></p></div></div></div><div class="strat-body" data-body="1" hidden><div class="strat-head"><b>Estrategia de Tomoko</b><span>Pastelería japonesa</span></div><div class="strat-row"><span class="strat-ic">⭐</span><div><b>Su estrella</b><p class="strat-star"><img loading="lazy" src="lp-tomoko-hojicha-det.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko"><span><b>Hojicha Mille Crepe</b> — la estrella de la casa: la que abre cada semana.</span></p></div></div><div class="strat-row"><span class="strat-ic">🍜</span><div><b>Tipos de posteos</b><p class="strat-chips"><span>El postre estrella</span><span>Los clásicos de la casa</span><span>El especial de temporada</span></p></div></div><div class="strat-row"><span class="strat-ic">📅</span><div><b>Ritmo</b><p class="strat-week"><i class="on"></i><i class="on car"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><span class="strat-week-note">1 por día · 1 carrusel por semana</span></p></div></div><div class="strat-row"><span class="strat-ic">🎯</span><div><b>Su público de Ads</b><p><span class="strat-pill">Mujeres de tu zona · postres para regalar</span></p></div></div><div class="strat-row"><span class="strat-ic">🎨</span><div><b>Su paleta</b><p><span class="wd-pal"><i style="background:#F3E3D3"></i><i style="background:#C98A5E"></i><i style="background:#7A4E2D"></i><i style="background:#A63D50"></i><i style="background:#2E211A"></i></span></p></div></div></div><div class="strat-body" data-body="2" hidden><div class="strat-head"><b>Estrategia de Scorpion</b><span>Estudio de tattoo</span></div><div class="strat-row"><span class="strat-ic">⭐</span><div><b>Su estrella</b><p class="strat-star"><img loading="lazy" src="lp-scorpion-estrella.jpg" alt="Pieza de tattoo fine line de Scorpion"><span><b>Fine line botánico</b> — la pieza destacada del estudio: la que abre la semana.</span></p></div></div><div class="strat-row"><span class="strat-ic">🍜</span><div><b>Tipos de posteos</b><p class="strat-chips"><span>La pieza terminada</span><span>El proceso, paso a paso</span><span>Trabajos curados</span></p></div></div><div class="strat-row"><span class="strat-ic">📅</span><div><b>Ritmo</b><p class="strat-week"><i class="on"></i><i class="on"></i><i class="on car"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><span class="strat-week-note">1 por día · 1 carrusel por semana</span></p></div></div><div class="strat-row"><span class="strat-ic">🎯</span><div><b>Su público de Ads</b><p><span class="strat-pill">Tu zona · amantes del tattoo</span></p></div></div><div class="strat-row"><span class="strat-ic">🎨</span><div><b>Su paleta</b><p><span class="wd-pal"><i style="background:#111111"></i><i style="background:#C8372D"></i><i style="background:#8C8C8C"></i><i style="background:#F5F0E8"></i><i style="background:#3A3A3A"></i></span></p></div></div></div>
+      <div class="es-card" style="--cbg:#F6F0E4;--cink:#2B2118;--csub:rgba(43,33,24,.60);--cacc:#6B7248;--cchip:rgba(43,33,24,.055);--cline:rgba(43,33,24,.13)">
+        <div class="es-head"><b id="esName">Estrategia de Sotto Sotto</b><span id="esSub">Restaurante italiano · Inman Park, Atlanta</span></div>
+        <div class="es-hero">
+          <img id="esHeroImg" src="lp-es-sotto-hero.jpg" alt="">
+          <div class="es-shade"></div>
+          <span class="es-starchip"><svg width="11" height="11" viewBox="0 0 24 24" fill="#FEC14D"><path d="M12 2.6l2.8 5.9 6.5.8-4.8 4.5 1.3 6.4L12 17.1l-5.8 3.1 1.3-6.4L2.7 9.3l6.5-.8z"/></svg>SU ESTRELLA</span>
+          <div class="es-starname"><div class="nm" id="esStarName">Tortelli di Michelangelo</div><div class="tg" id="esStarTag">Sotto Sotto · La estrella de la casa</div></div>
+        </div>
+        <p class="es-fund" id="esFund">El tortelli es el plato que la gente viene a buscar, y abre la semana. La pasta se hace a mano todos los días: eso se muestra, porque es su diferencial. Y la mesa, larga y con luz baja, vende la ocasión de venir.</p>
+        <div class="es-weeklab"><span>Su semana</span><em>1 posteo por día · 19:00</em></div>
+        <div class="es-week" id="esWeek"><div class="es-slot star"><img loading="lazy" src="lp-es-sotto-strozzapreti.jpg" alt=""><span class="es-dow">L</span><span class="es-fmt">The Dish</span></div><div class="es-slot"><img loading="lazy" src="lp-es-sotto-tagliatelle.jpg" alt=""><span class="es-dow">M</span><span class="es-fmt">Handmade</span></div><div class="es-slot"><img loading="lazy" src="lp-es-sotto-sala.jpg" alt=""><span class="es-dow">X</span><span class="es-mk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5v-2a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6.5v7A2.5 2.5 0 0 0 6 16h2.5"/></svg></span><span class="es-fmt">The Table</span></div><div class="es-slot"><img loading="lazy" src="lp-es-sotto-costoletta.jpg" alt=""><span class="es-dow">J</span><span class="es-fmt">The Dish</span></div><div class="es-slot"><img loading="lazy" src="lp-es-sotto-caprese.jpg" alt=""><span class="es-dow">V</span><span class="es-mk"><svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M6 4.5v15l13-7.5z"/></svg></span><span class="es-fmt">The Dish</span></div><div class="es-slot"><img loading="lazy" src="lp-es-sotto-mesa.jpg" alt=""><span class="es-dow">S</span><span class="es-fmt">The Table</span></div><div class="es-slot"><img loading="lazy" src="lp-es-sotto-zuppa.jpg" alt=""><span class="es-dow">D</span><span class="es-mk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5v-2a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6.5v7A2.5 2.5 0 0 0 6 16h2.5"/></svg></span><span class="es-fmt">The Sweet Finish</span></div></div>
+        <div class="es-strip">
+          <span class="it"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span id="esRitmo">1 por día · 2 carruseles por semana</span></span>
+          <span class="it"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span id="esAds">Tu zona · cenas y sobremesas</span></span>
+          <span class="it"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-.9 2-1.9 0-1.2-1-1.7-1-2.9 0-1 .8-1.7 2-1.7h1.6a3.9 3.9 0 0 0 3.9-3.9c0-3.4-3.8-6.1-8.5-6.1z"/><circle cx="7.6" cy="10.4" r="1.15" fill="currentColor" stroke="none"/><circle cx="10.8" cy="7.2" r="1.15" fill="currentColor" stroke="none"/><circle cx="15.2" cy="8.2" r="1.15" fill="currentColor" stroke="none"/></svg>Su paleta<span class="es-pal" id="esPal"><i style="background:#F6F0E4"></i><i style="background:#6B7248"></i><i style="background:#A8B09A"></i><i style="background:#8A6B42"></i><i style="background:#2B2118"></i></span></span>
         </div>
       </div>
       <p class="cap-note">Cada negocio tiene la suya: sale de su estudio, no de una plantilla.</p>
     </div>
   </div></div></div>
 `;}
+
 function lpAtiendeHTML() {
   return `
   <div class="section" id="atiende"><div class="wrap" style="max-width:760px">
@@ -6541,6 +6602,51 @@ function landingView(cfg) {
 .strat-body.deal .strat-row:nth-of-type(5){animation-delay:.28s}
 .strat-body.deal .strat-row:nth-of-type(6){animation-delay:.35s}
 @keyframes wd-stamp{from{opacity:0;transform:scale(.92) translateY(8px)}to{opacity:1;transform:none}}
+/* --- 21b · ESTRATEGIA-VIVA (mock aprobado 18/11 + corrección de fondo de Valentino: la sección deja el navy y vive sobre el plaid claro de la línea, como las demás) — la tarjeta viva de la estrategia: una sola tarjeta que se re-pinta con la piel de cada negocio --- */
+#crecimiento .es-invite{display:flex;align-items:center;gap:8px;color:#2793C8;font-size:13.5px;font-weight:600;letter-spacing:.02em;margin:2px 0 12px 4px}
+#crecimiento .es-invite svg{flex:none}
+#crecimiento .es-switch{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:16px}
+#crecimiento .es-chip{appearance:none;border:1px solid rgba(10,30,51,.16);background:rgba(255,255,255,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:rgba(10,30,51,.78);font:inherit;font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:999px;cursor:pointer;transition:all .25s}
+#crecimiento .es-chip:hover{background:rgba(255,255,255,.88);color:#0A1E33}
+#crecimiento .es-chip.on{background:rgba(254,193,77,.25);border-color:rgba(254,193,77,.85);color:#0A1E33;box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 4px 14px rgba(10,30,51,.10)}
+#crecimiento .es-card{--cbg:#FBF2DF;--cink:#2B2118;--csub:rgba(43,33,24,.60);--cacc:#C8372D;--cchip:rgba(43,33,24,.055);--cline:rgba(43,33,24,.13);background:var(--cbg);color:var(--cink);border:1px solid rgba(10,30,51,.08);border-radius:24px;padding:24px 24px 20px;box-shadow:0 18px 40px rgba(10,30,51,.10);text-align:left;transition:background .55s ease,color .55s ease}
+#crecimiento .es-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#crecimiento .es-head b{font-size:19.5px;font-weight:800;letter-spacing:-.01em}
+#crecimiento .es-head span{font-size:13px;color:var(--csub);font-weight:600}
+#crecimiento .es-hero{position:relative;margin-top:16px;border-radius:18px;overflow:hidden;aspect-ratio:16/8.4;background:#000}
+#crecimiento .es-hero img{width:100%;height:100%;object-fit:cover;display:block}
+#crecimiento .es-shade{position:absolute;inset:0;background:linear-gradient(to top,rgba(5,10,16,.78) 0%,rgba(5,10,16,.18) 42%,transparent 65%)}
+#crecimiento .es-starchip{position:absolute;top:14px;left:14px;display:inline-flex;align-items:center;gap:7px;background:rgba(39,147,200,.28);border:1px solid rgba(255,255,255,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:11px;font-weight:800;letter-spacing:.22em;padding:7px 12px;border-radius:999px}
+#crecimiento .es-starname{position:absolute;left:20px;right:20px;bottom:16px;color:#fff}
+#crecimiento .es-starname .nm{font-size:31px;font-weight:800;letter-spacing:-.01em;line-height:1.05;text-shadow:0 2px 14px rgba(0,0,0,.35)}
+#crecimiento .es-starname .tg{margin-top:5px;font-size:11.5px;font-weight:700;letter-spacing:.26em;color:rgba(255,255,255,.85)}
+#crecimiento .es-fund{margin:18px 2px 0;padding:2px 0 2px 16px;border-left:3px solid #2793C8;font-style:italic;font-size:16.5px;line-height:1.5;color:var(--cink)}
+#crecimiento .es-weeklab{margin:22px 2px 10px;font-size:11.5px;font-weight:800;letter-spacing:.24em;color:var(--csub);display:flex;justify-content:space-between;align-items:baseline}
+#crecimiento .es-weeklab em{font-style:normal;letter-spacing:.02em;font-weight:600;font-size:12px}
+#crecimiento .es-week{display:grid;grid-template-columns:repeat(7,1fr);gap:9px}
+#crecimiento .es-slot{position:relative;border-radius:13px;overflow:hidden;aspect-ratio:4/4.7;background:rgba(0,0,0,.15)}
+#crecimiento .es-slot img{width:100%;height:100%;object-fit:cover;display:block}
+#crecimiento .es-dow{position:absolute;top:6px;left:6px;width:19px;height:19px;border-radius:6px;background:rgba(6,17,28,.72);backdrop-filter:blur(4px);color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+#crecimiento .es-mk{position:absolute;top:6px;right:6px;width:19px;height:19px;border-radius:50%;background:rgba(6,17,28,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center}
+#crecimiento .es-slot.star{box-shadow:0 0 0 2px var(--cacc),0 0 18px 2px var(--cacc)}
+#crecimiento .es-fmt{position:absolute;left:0;right:0;bottom:0;padding:12px 7px 6px;background:linear-gradient(to top,rgba(5,10,16,.82),transparent);color:#fff;font-size:9.8px;font-weight:700;line-height:1.2}
+@keyframes es-rise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+#crecimiento .es-card.es-anim .es-slot,#crecimiento .es-card.es-anim .es-hero,#crecimiento .es-card.es-anim .es-fund{animation:es-rise .55s cubic-bezier(.2,.8,.25,1) both}
+#crecimiento .es-card.es-anim .es-slot:nth-child(1){animation-delay:.03s}
+#crecimiento .es-card.es-anim .es-slot:nth-child(2){animation-delay:.09s}
+#crecimiento .es-card.es-anim .es-slot:nth-child(3){animation-delay:.15s}
+#crecimiento .es-card.es-anim .es-slot:nth-child(4){animation-delay:.21s}
+#crecimiento .es-card.es-anim .es-slot:nth-child(5){animation-delay:.27s}
+#crecimiento .es-card.es-anim .es-slot:nth-child(6){animation-delay:.33s}
+#crecimiento .es-card.es-anim .es-slot:nth-child(7){animation-delay:.39s}
+#crecimiento .es-strip{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--cline)}
+#crecimiento .es-strip .it{display:inline-flex;align-items:center;gap:8px;background:var(--cchip);border:1px solid var(--cline);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:600;color:var(--cink)}
+#crecimiento .es-strip .it svg{color:var(--cacc);flex:none}
+#crecimiento .es-pal{display:inline-flex;gap:5px;margin-left:2px}
+#crecimiento .es-pal i{width:15px;height:15px;border-radius:50%;border:1.5px solid rgba(128,128,128,.35);display:block}
+@media (max-width:900px){#crecimiento .es-week{grid-template-columns:repeat(4,1fr)}}
+@media (prefers-reduced-motion:reduce){#crecimiento .es-card.es-anim .es-slot,#crecimiento .es-card.es-anim .es-hero,#crecimiento .es-card.es-anim .es-fund{animation:none}}
+
 /* --- 23 · la hoja de impulso, como en la app --- */
 .wd-reco-avimg{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:none}
 .wd-acard{background:#F2F9FD;border:1.5px solid #BFE0F2;border-radius:16px;padding:14px;text-align:left}
