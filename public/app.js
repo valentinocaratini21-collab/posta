@@ -8595,26 +8595,26 @@ function landingView(cfg) {
   </div></div>
   <div class="lp-prueba"><div class="wrap">
 <div class=\"ej\">
-      <p class=\"ej-title\">La prueba real de Big Top Candy Shop</p>
+      <p class=\"ej-title\">Las pruebas gratis se ven así</p>
       <div class=\"ej-row\">
         <div class=\"ej-card\">
-          <img class=\"ph\" src=\"/puerta-ej-bigtop-dia1.jpg\" alt=\"Día 1 de la prueba: una imagen\" loading=\"lazy\">
-          <span class=\"daychip\">Día 1</span>
+          <img class=\"ph\" src=\"/lp-es-yoga-hero.jpg\" alt=\"Día 1 de la prueba: una imagen\" loading=\"lazy\">
+          <span class=\"daychip\">Día 1<small>Imagen</small></span>
         </div>
         <div class=\"ej-card\">
           <div class=\"ej-car\" id=\"ejCar\" onscroll=\"var n=this.parentNode.querySelector('.ej-count');if(n){var i=Math.round(this.scrollLeft/Math.max(1,this.clientWidth));if(i<0)i=0;if(i>4)i=4;n.textContent=(i+1)+' / 5'}\">
-            <img src=\"/puerta-ej-bigtop-dia2-1.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 1 de 5\" loading=\"lazy\">
-            <img src=\"/puerta-ej-bigtop-dia2-2.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 2 de 5\" loading=\"lazy\">
-            <img src=\"/puerta-ej-bigtop-dia2-3.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 3 de 5\" loading=\"lazy\">
-            <img src=\"/puerta-ej-bigtop-dia2-4.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 4 de 5\" loading=\"lazy\">
-            <img src=\"/puerta-ej-bigtop-dia2-5.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 5 de 5\" loading=\"lazy\">
+            <img src=\"/lp-es-yoga-clase.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 1 de 5\" loading=\"lazy\">
+            <img src=\"/lp-es-yoga-respiro.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 2 de 5\" loading=\"lazy\">
+            <img src=\"/lp-es-yoga-practica.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 3 de 5\" loading=\"lazy\">
+            <img src=\"/lp-es-yoga-descanso.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 4 de 5\" loading=\"lazy\">
+            <img src=\"/lp-es-yoga-cierre.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 5 de 5\" loading=\"lazy\">
           </div>
-          <span class=\"daychip\">Día 2</span>
+          <span class=\"daychip\">Día 2<small>Carrusel</small></span>
           <span class=\"ej-count\">1 / 5</span>
         </div>
         <div class=\"ej-card\">
-          <video src=\"/puerta-ej-bigtop-dia3.mp4\" poster=\"/puerta-ej-bigtop-dia3-poster.jpg\" autoplay muted loop playsinline preload=\"metadata\" oncanplay=\"try{var pr=this.play();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}\" aria-label=\"Día 3 de la prueba: un video\"></video>
-          <span class=\"daychip\">Día 3</span>
+          <video src=\"/puerta-ej-yoga-dia3.mp4\" poster=\"/puerta-ej-yoga-dia3-poster.jpg\" autoplay muted loop playsinline preload=\"metadata\" oncanplay=\"try{var pr=this.play();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}\" aria-label=\"Día 3 de la prueba: un video\"></video>
+          <span class=\"daychip\">Día 3<small>Video completo</small></span>
         </div>
       </div>
     </div>
@@ -8809,7 +8809,6 @@ function landingView(cfg) {
       </div>
     </div>
     <div class="plan-dots" id="planDots"><span class="on"></span></div>
-    <p style="font-size:15px;color:#0A1E33;line-height:1.6;text-align:center;max-width:660px;margin:18px auto 0">⭐ <b>Precio fundador:</b> solo para los primeros 50 clientes — los que entren ahora lo conservan para siempre.</p>
     <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
     <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los ${lpFounderAmt} para siempre.</p>
 
