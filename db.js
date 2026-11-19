@@ -498,6 +498,10 @@ try { db.exec(`ALTER TABLE users ADD COLUMN plan_status TEXT DEFAULT 'trial'`); 
 // Hoy lo consumen el calendario (efemérides US vs AR) y /api/auth/me; la
 // generación semanal de cuentas sigue en español (la app no es i18n).
 try { db.exec(`ALTER TABLE users ADD COLUMN lang TEXT DEFAULT 'es'`); } catch (e) { /* ya existe */ }
+// (LOTE PUERTA-NUEVA) El invitado declaró «No tengo web» en la puerta:
+// la ausencia de web es una decisión registrada, no un dato faltante —
+// nadie se la reclama ni se la pregunta como olvido.
+try { db.exec(`ALTER TABLE users ADD COLUMN guest_sin_web INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // 🧠 Niveles de conocimiento de Posty (posty-level.js): último nivel festejado
 // y marca de agua del resumen semanal de aprendizaje.

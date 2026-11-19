@@ -258,6 +258,67 @@
   <div class="hero"><div class="wrap">
     <div class="pill">Your community managers</div>
     <h1>“I don't have time to post on Instagram every day”, <span class="hl">we post for your business <b>every day</b>, with your real product.</span></h1>
+    <style>
+    /* (PUERTA-NUEVA LOT · AMENDMENT 21:49) The format trio + the real
+       example strip in the hero: the door SAYS what the 3 posts are
+       (a photo, a carousel and a video) and SHOWS it with Big Top
+       Candy Shop's real trial. Glass chips, yellow only as a detail. */
+    .trio{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:20px}
+    .trio span{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.66);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:700;color:#0A1E33;box-shadow:0 6px 18px rgba(10,30,51,.06)}
+    .trio span i{width:7px;height:7px;border-radius:50%;background:var(--yl);flex:none}
+    .ej{margin-top:26px}
+    .ej-title{font-size:14.5px;font-weight:800;color:#0A1E33;margin-bottom:12px}
+    .ej-row{display:flex;gap:10px;justify-content:center}
+    .ej-card{position:relative;flex:1 1 0;max-width:204px;background:#fff;border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(10,30,51,.10)}
+    .ej-card img.ph,.ej-card video{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--bg2)}
+    .ej-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .ej-car::-webkit-scrollbar{display:none}
+    .ej-car img{flex:0 0 100%;width:100%;aspect-ratio:4/5;object-fit:cover;scroll-snap-align:start;display:block;background:var(--bg2)}
+    .daychip{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:6px 11px;box-shadow:0 4px 14px rgba(10,30,51,.12)}
+    .ej-count{position:absolute;top:10px;right:10px;z-index:3;background:rgba(10,30,51,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 10px}
+    </style>
+    <div class="trio">
+      <span><i></i>Day 1: a photo</span>
+      <span><i></i>Day 2: a carousel</span>
+      <span><i></i>Day 3: a video</span>
+    </div>
+    <div class="ej">
+      <p class="ej-title">Big Top Candy Shop's real trial</p>
+      <div class="ej-row">
+        <div class="ej-card">
+          <img class="ph" src="/puerta-ej-bigtop-dia1.jpg" alt="Day 1 of the trial: a photo" loading="lazy">
+          <span class="daychip">Day 1</span>
+        </div>
+        <div class="ej-card">
+          <div class="ej-car" id="ejCar">
+            <img src="/puerta-ej-bigtop-dia2-1.jpg" alt="Day 2 of the trial: a carousel, photo 1 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-2.jpg" alt="Day 2 of the trial: a carousel, photo 2 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-3.jpg" alt="Day 2 of the trial: a carousel, photo 3 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-4.jpg" alt="Day 2 of the trial: a carousel, photo 4 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-5.jpg" alt="Day 2 of the trial: a carousel, photo 5 of 5" loading="lazy">
+          </div>
+          <span class="daychip">Day 2</span>
+          <span class="ej-count" id="ejCount">1 / 5</span>
+        </div>
+        <div class="ej-card">
+          <video src="/puerta-ej-bigtop-dia3.mp4" poster="/puerta-ej-bigtop-dia3-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Day 3 of the trial: a video"></video>
+          <span class="daychip">Day 3</span>
+        </div>
+      </div>
+    </div>
+    <script>
+    /* (PUERTA-NUEVA LOT · AMENDMENT 21:49) Counter for the example
+       carousel in the strip: follows the real swipe (1 / 5 … 5 / 5). */
+    (function () {
+      var car = document.getElementById('ejCar'), n = document.getElementById('ejCount');
+      if (!car || !n) return;
+      car.addEventListener('scroll', function () {
+        var i = Math.round(car.scrollLeft / Math.max(1, car.clientWidth));
+        if (i < 0) i = 0; if (i > 4) i = 4;
+        n.textContent = (i + 1) + ' / 5';
+      }, { passive: true });
+    })();
+    </script>
     
     
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">

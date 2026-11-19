@@ -88,9 +88,9 @@ async function waitFor(fn, timeoutMs, label) {
       count(es, 'if (!waitState.built) buildWait();') === 1 && count(en, 'if (!waitState.built) buildWait();') === 1);
     t('A5 ES/EN: resetWait definido ×1',
       count(es, 'function resetWait()') === 1 && count(en, 'function resetWait()') === 1);
-    t('A6 ES/EN: la salida need_star apaga la espera justo antes de su aviso ×1',
-      count(es, "if (waitEl) waitEl.hidden = true;\n      showStatus('Veo tu perfil pero no qué vendés") === 1
-      && count(en, "if (waitEl) waitEl.hidden = true;\n      showStatus('I can see your profile but not what you sell") === 1);
+    t('A6 ES/EN: (re-pin PUERTA-NUEVA) la salida need_star muestra la pregunta y avisa con la línea del modelo nuevo ×1',
+      count(es, "if (waitEl) waitEl.hidden = true;\n      showStatus('Vemos tu perfil pero no qué vendés — contanos arriba y armamos tu semana.')") === 1
+      && count(en, "if (waitEl) waitEl.hidden = true;\n      showStatus('We can see your profile but not what you sell — tell us above and we’ll build your week.')") === 1);
     t('A7 ES/EN: la etiqueta del lote aparece ×5 (showWait, buildFirstPost, hito ig, need_star, poleo)',
       count(es, 'ESPERA-EN-TODOS-LOS-CAMINOS') === 5 && count(en, 'ESPERA-EN-TODOS-LOS-CAMINOS') === 5,
       'es=' + count(es, 'ESPERA-EN-TODOS-LOS-CAMINOS') + ' en=' + count(en, 'ESPERA-EN-TODOS-LOS-CAMINOS'));
@@ -263,7 +263,7 @@ async function main() {
     if (!CONTROL) {
       t('S1.1 la espera está montada y visible DURANTE el prefill', page.waitEl.hidden === false && has(page.waitEl.innerHTML, 'wait-hero'));
       t('S1.2 la insignia dorada y la línea aprobada están en pantalla',
-        has(page.waitEl.innerHTML, '/ai-avatar.png') && has(page.waitEl.innerHTML, 'Lo estoy haciendo bien, no rápido.'));
+        has(page.waitEl.innerHTML, '/ai-avatar.png') && has(page.waitEl.innerHTML, 'Lo hacemos bien, no rápido.'));
       t('S1.3 hay 4 medallones y ninguno encendido todavía (sin inventar progreso)',
         page.steps().length === 4 && page.steps().every((s) => s.className !== 'wstep done'));
       t('S1.4 el primer medallón figura como el paso en curso', page.steps()[0].className === 'wstep now', page.steps()[0] && page.steps()[0].className);
@@ -318,7 +318,7 @@ async function main() {
     page.sse('event: post\ndata: {"index":0,"post":{"image":"data:image/jpeg;base64,AAAA","caption":"Un caption","headline":"Titular"}}\n\n');
     await sleep(250);
     t('S2.6 con el primer posteo listo, la espera se apaga y sale la tarjeta real',
-      page.waitEl.hidden === true && page.els.fPreview.hidden === false && has(page.els.fPreview.innerHTML, 'Tu primer posteo ya está listo'));
+      page.waitEl.hidden === true && page.els.fPreview.hidden === false && has(page.els.fPreview.innerHTML, 'Tu primer posteo — sale mañana a las 19:00'));
     page.sse('event: done\ndata: {}\n\n');
     page.closeStream();
     const entered = await waitFor(() => page.location.href === '/#/app/inicio', 8000, 'entrada al producto');
@@ -345,7 +345,7 @@ async function main() {
         page.calls.some((u) => u.startsWith('/api/trial/prefill')));
       t('S3.2 DURANTE el poleo la espera aprobada es la pantalla', page.waitEl.hidden === false && has(page.waitEl.innerHTML, 'wait-steps'));
       t('S3.3 el estado del poleo entra como «Ahora:»',
-        page.els.wNow && page.els.wNow.textContent === 'Ya estoy armando tu primer posteo — lo busco…',
+        page.els.wNow && page.els.wNow.textContent === 'Ya estamos armando tu semana — la buscamos…',
         page.els.wNow && page.els.wNow.textContent);
       t('S3.4 el poleo NO inventa hitos: escena y chequeo apagados, estrella apagada',
         page.steps().length === 4 && page.steps()[1].className !== 'wstep done'
@@ -373,7 +373,7 @@ async function main() {
     t('S4.1 sin productos ni rubro, la pregunta de estrella aparece', asked);
     t('S4.2 la espera se apagó: la pregunta vive en el formulario', page.waitEl.hidden === true);
     t('S4.3 el aviso vuelve a la línea de estado, visible',
-      page.els.fStatus.hidden === false && has(page.els.fStatus.textContent, 'Veo tu perfil pero no qué vendés'));
+      page.els.fStatus.hidden === false && has(page.els.fStatus.textContent, 'Vemos tu perfil pero no qué vendés'));
     page.teardown();
   }
 
@@ -386,7 +386,7 @@ async function main() {
     submitForm(page, '@espera5');
     await sleep(250);
     t('S5.1 EN: la espera visible durante el prefill, con su línea aprobada',
-      page.waitEl.hidden === false && has(page.waitEl.innerHTML, "I'm doing it well, not fast."));
+      page.waitEl.hidden === false && has(page.waitEl.innerHTML, "We do it well, not fast."));
     t('S5.2 EN: el «Now:» lleva el estado del prefill y #fStatus queda oculto',
       page.els.wNow && page.els.wNow.textContent === 'Looking up your Instagram…' && page.els.fStatus.hidden === true,
       page.els.wNow && page.els.wNow.textContent);

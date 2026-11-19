@@ -131,8 +131,8 @@ ok(APP.includes('${mnPlanStr}') && APP.includes('mnPlanBind(root)'), 'B17 · la 
 ok(APP.includes('function mnPlanHTML') && APP.includes('mn-slot-glass') && APP.includes('Tu semana, planeada'), 'B18 · el slot en plan es vidrio con nombre y fecha (sin arte)');
 
 ok(CSS.includes('.mn-plan') && CSS.includes('.mn-slot-listo') && CSS.includes('.mn-dia4') && CSS.includes('.mn-connect'), 'B19 · los estilos del plan existen');
-ok(IDX.includes('app.js?v=796') && IDX.includes('styles.css?v=20261299'), 'B20 · (re-pin PLAN-MAGIA) stamps del aterrizaje: app.js 796 + estilos 20261299 (ES)');
-ok(IDXEN.includes('styles.css?v=20261299') && !IDXEN.includes('app.js?v=796'), 'B21 · (re-pin PLAN-MAGIA) el índice EN bumpea solo estilos (no carga app.js)');
+ok(IDX.includes('app.js?v=797') && IDX.includes('styles.css?v=20261299'), 'B20 · (re-pin PUERTA-NUEVA) stamps del aterrizaje: app.js 797 + estilos 20261299 (ES)');
+ok(IDXEN.includes('styles.css?v=20261299') && !IDXEN.includes('app.js?v=797'), 'B21 · (re-pin PUERTA-NUEVA) el índice EN bumpea solo estilos (no carga app.js)');
 
 /* ---------------- C. Arranque real ---------------- */
 console.log('\n— C. Arranque real: puerta → plan → pieza → aprobación —');

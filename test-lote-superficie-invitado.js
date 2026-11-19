@@ -86,7 +86,7 @@ function seccionA() {
   ok(cuerpoP.includes('So Posty can get your week ready to publish.') && cuerpoP.includes('We never see or store your password.'), 'A6 el modal genérico tiene su versión en inglés completa');
   const iW = APPJS.indexOf('function homeWeekHTML');
   const cuerpoW = iW >= 0 ? APPJS.slice(iW, iW + 5200) : '';
-  ok(cuerpoW.includes('guestIgHw') && cuerpoW.includes('Posty is finishing your week'), 'A7 el invitado CON @ ve la tarjeta de armado (nunca «decime tu Instagram»), en su idioma');
+  ok(cuerpoW.includes('guestIgHw') && cuerpoW.includes('Posty is building your week'), 'A7 (re-pin PUERTA-NUEVA) el invitado CON @ ve la tarjeta de armado (nunca «decime tu Instagram»), en su idioma');
   ok(cuerpoW.includes('Tell me your Instagram so I can build your posts'), 'A8 la tarjeta de pedir el @ (invitado sin @) también sigue el idioma de la entrada');
   ok(APPJS.includes('pzWowConnectHTML({ post: wowPostR1'), 'A9 la tarjeta wow sigue anclada al posteo de hoy en el Inicio (CONEXIÓN-WOW intacta)');
   const mSrv = SERVER.match(/const BUILD_ID = '([^']+)'/);

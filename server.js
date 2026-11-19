@@ -39351,6 +39351,11 @@ app.post('/api/guest/start', async (req, res) => {
     // (LOTE C13) Zona del navegador que inicia la prueba (sin validar
     // acá: browserTzOf devuelve null si no es una zona IANA real).
     const tzK = browserTzOf(body);
+    // (LOTE PUERTA-NUEVA) «No tengo web»: la puerta manda sin_web=1
+    // cuando el invitado tocó el escape — la ausencia de web queda
+    // registrada como decisión (users.guest_sin_web), no como dato
+    // faltante: la entrada no se bloquea ni se le reclama la web.
+    const sinWebK = (body.sin_web === 1 || body.sin_web === true || body.sin_web === '1') ? 1 : 0;
     const igRaw = String(body.ig || '').trim().replace(/^@/, '').toLowerCase();
     const domRaw = String(body.domain || body.web || '').trim();
     const igK = trialLock.normalizeIg(igRaw);
@@ -39500,7 +39505,7 @@ app.post('/api/guest/start', async (req, res) => {
     // se crea como siempre.
     const g = reuseGuest || guestTrial.createGuest(db, {
       referralCode: typeof newReferralCode === 'function' ? newReferralCode() : '',
-      lang, ig: igK, domain: domK, device,
+      lang, ig: igK, domain: domK, device, sinWeb: !!sinWebK,
     });
     // (v928) Reuso con identidad nueva: la fila invitada adopta el @ y el
     // dominio de ESTA entrada (antes conservaba los viejos y el perfil
@@ -39509,6 +39514,9 @@ app.post('/api/guest/start', async (req, res) => {
     // una prueba.
     if (reuseGuest) {
       try { db.prepare('UPDATE users SET guest_ig = ?, guest_domain = ? WHERE id = ? AND is_guest = 1').run(igK || '', domK || '', g.userId); } catch (e) {}
+      // (LOTE PUERTA-NUEVA) La declaración «No tengo web» también se
+      // adopta en el reuso: esta entrada manda sobre la marca vieja.
+      if (sinWebK) { try { db.prepare('UPDATE users SET guest_sin_web = 1 WHERE id = ? AND is_guest = 1').run(g.userId); } catch (e) {} }
     }
     // (LOTE DESPERTAR-INMEDIATO) El alta del invitado puede ser la
     // última precondición del despertar de la línea a mano: la marca
@@ -46510,7 +46518,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1181';
+const BUILD_ID = '20261105-v1182';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

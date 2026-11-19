@@ -5970,6 +5970,55 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pill">Tus community managers</div>
     <h1>«No tengo tiempo de postear en Instagram todos los días», <span class="hl">nosotros posteamos por tu negocio <b>todos los días</b>, con tu producto real.</span></h1>
+    <style>
+    /* (LOTE PUERTA-NUEVA · ENMIENDA 21:49) El trío de formatos + la
+       tira de ejemplo real en el hero que renderiza la app: la puerta
+       DICE qué son los 3 posteos (una imagen, un carrusel y un video)
+       y lo MUESTRA con la prueba real de Big Top Candy Shop. Chips
+       de cristal, amarillo solo como detalle. */
+    .trio{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:20px}
+    .trio span{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.66);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:700;color:#0A1E33;box-shadow:0 6px 18px rgba(10,30,51,.06)}
+    .trio span i{width:7px;height:7px;border-radius:50%;background:var(--yl);flex:none}
+    .ej{margin-top:26px}
+    .ej-title{font-size:14.5px;font-weight:800;color:#0A1E33;margin-bottom:12px}
+    .ej-row{display:flex;gap:10px;justify-content:center}
+    .ej-card{position:relative;flex:1 1 0;max-width:204px;background:#fff;border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(10,30,51,.10)}
+    .ej-card img.ph,.ej-card video{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--bg2)}
+    .ej-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .ej-car::-webkit-scrollbar{display:none}
+    .ej-car img{flex:0 0 100%;width:100%;aspect-ratio:4/5;object-fit:cover;scroll-snap-align:start;display:block;background:var(--bg2)}
+    .daychip{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:6px 11px;box-shadow:0 4px 14px rgba(10,30,51,.12)}
+    .ej-count{position:absolute;top:10px;right:10px;z-index:3;background:rgba(10,30,51,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 10px}
+    </style>
+    <div class=\"trio\">
+      <span><i></i>Día 1: una imagen</span>
+      <span><i></i>Día 2: un carrusel</span>
+      <span><i></i>Día 3: un video</span>
+    </div>
+    <div class=\"ej\">
+      <p class=\"ej-title\">La prueba real de Big Top Candy Shop</p>
+      <div class=\"ej-row\">
+        <div class=\"ej-card\">
+          <img class=\"ph\" src=\"/puerta-ej-bigtop-dia1.jpg\" alt=\"Día 1 de la prueba: una imagen\" loading=\"lazy\">
+          <span class=\"daychip\">Día 1</span>
+        </div>
+        <div class=\"ej-card\">
+          <div class=\"ej-car\" id=\"ejCar\" onscroll=\"var n=this.parentNode.querySelector('.ej-count');if(n){var i=Math.round(this.scrollLeft/Math.max(1,this.clientWidth));if(i<0)i=0;if(i>4)i=4;n.textContent=(i+1)+' / 5'}\">
+            <img src=\"/puerta-ej-bigtop-dia2-1.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 1 de 5\" loading=\"lazy\">
+            <img src=\"/puerta-ej-bigtop-dia2-2.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 2 de 5\" loading=\"lazy\">
+            <img src=\"/puerta-ej-bigtop-dia2-3.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 3 de 5\" loading=\"lazy\">
+            <img src=\"/puerta-ej-bigtop-dia2-4.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 4 de 5\" loading=\"lazy\">
+            <img src=\"/puerta-ej-bigtop-dia2-5.jpg\" alt=\"Día 2 de la prueba: un carrusel, foto 5 de 5\" loading=\"lazy\">
+          </div>
+          <span class=\"daychip\">Día 2</span>
+          <span class=\"ej-count\">1 / 5</span>
+        </div>
+        <div class=\"ej-card\">
+          <video src=\"/puerta-ej-bigtop-dia3.mp4\" poster=\"/puerta-ej-bigtop-dia3-poster.jpg\" autoplay muted loop playsinline preload=\"metadata\" oncanplay=\"try{var pr=this.play();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}\" aria-label=\"Día 3 de la prueba: un video\"></video>
+          <span class=\"daychip\">Día 3</span>
+        </div>
+      </div>
+    </div>
     
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
@@ -14371,8 +14420,8 @@ function homeWeekHTML(posts, quota, generating, noDna, trialArming) {
     const guestIgHw = (noDna && pzIsGuest() && typeof pzGuestIg === 'function') ? String(pzGuestIg() || '') : '';
     if (noDna && guestIgHw) return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>${enHw ? 'Posty is finishing your week' : 'Posty está terminando de armar tu semana'} ${pzIc('sparkle', 16)}</b>
-    <p>${enHw ? 'Designs, captions and hashtags in your business style.<br>They appear right here in a few seconds' : 'Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá'} ${pzIc('arrowDown', 14)}</p>
+    <b>${enHw ? 'Posty is building your week' : 'Posty está armando tu semana'} ${pzIc('sparkle', 16)}</b>
+    <p>${enHw ? 'Designs, captions and hashtags in your business style.<br>Your first post goes out tomorrow at 7:00 PM — the pieces appear here as they are ready' : 'Diseños, textos y hashtags con la onda de tu negocio.<br>Tu primer posteo sale mañana a las 19:00 — las piezas aparecen acá a medida que están listas'} ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
   </div>`;
     // (ONBOARDING-SIMPLE · 11/11 · ACT.4) Invitado sin @: el camino es el
@@ -14395,8 +14444,8 @@ function homeWeekHTML(posts, quota, generating, noDna, trialArming) {
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
-    <b>${trialArming ? 'Posty está terminando de armar tu semana' : 'Posty está armando tu posteo de hoy'} ${pzIc('sparkle', 16)}</b>
-    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
+    <b>${trialArming ? 'Posty está armando tu semana' : 'Posty está armando tu posteo de hoy'} ${pzIc('sparkle', 16)}</b>
+    <p>${trialArming ? 'Diseños, textos y hashtags con la onda de tu negocio.<br>Tu primer posteo sale mañana a las 19:00 — las piezas aparecen acá a medida que están listas' : 'Diseños, textos y hashtags con la onda de tu negocio.<br>Las piezas aparecen acá a medida que están listas'} ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
     <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">${pzIc('search', 18)} ¿Por qué tarda tanto?</button>
     <div id="hsDiagOut" style="margin-top:10px;text-align:left"></div>
@@ -14412,7 +14461,7 @@ function homeWeekHTML(posts, quota, generating, noDna, trialArming) {
     return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><span class="pz-mg"><img src="ai-avatar.png" alt="Posty"></span></div>
     <b>Posty está armando tu posteo de hoy ${pzIc('sparkle', 16)}</b>
-    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá ${pzIc('arrowDown', 14)}</p>
+    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>Las piezas aparecen acá a medida que están listas ${pzIc('arrowDown', 14)}</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
   </div>`;
   }
@@ -14464,7 +14513,7 @@ function homeWeekHTML(posts, quota, generating, noDna, trialArming) {
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">${pzIc('checkCircle', 18)} ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Accept all' : 'Aceptar todo'} <span class="accept-count">${list.filter(p => p.status === 'draft').length}</span></button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
-    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} ${trialArming ? ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "I'm still building your week — the missing pieces appear here as soon as they're ready" : 'Estoy terminando de armar tu semana — las piezas que faltan aparecen acá apenas estén listas') : 'Estoy armando tu posteo de hoy…'}</div>` : ''}
+    ${generating ? `<div class="hs-completing">${pzIc('sparkle', 14)} ${trialArming ? ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? "I'm still building your week — your first post goes out tomorrow at 7:00 PM and the pieces appear here as they're ready" : 'Estoy armando tu semana — tu primer posteo sale mañana a las 19:00 y las piezas aparecen acá a medida que están listas') : 'Estoy armando tu posteo de hoy…'}</div>` : ''}
     ${staleHTML}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
@@ -18072,7 +18121,7 @@ function bindFastTrack() {
         : `Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio ${pzIc('mic', 13)}</b> — así los próximos posteos salen todavía mejor.`;
       streakModalShell(`
         <div class="big-emoji">${pzIc('gift', 64)}</div>
-        <h3 style="margin:12px 0 4px">${ftDemo ? '¡Tu primer posteo está listo!' : '¡Tu primer posteo está saliendo!'}</h3>
+        <h3 style="margin:12px 0 4px">${ftDemo ? '¡Tu primer posteo ya está en tu semana!' : '¡Tu primer posteo está saliendo!'}</h3>
         <p class="d" style="font-size:14px">${ftTxt}</p>
         <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:14px">${pzIc('mic', 18)} Contame de tu negocio</button>
         <button class="btn btn-ghost btn-block" id="ftCelebClose" style="margin-top:8px">Ahora no</button>`);
@@ -18104,7 +18153,7 @@ function firstPublishCardHTML(drafts) {
     ? (n === 1
         ? 'Ya tenés 1 borrador listo — publicalo y miralo vivo en tu Instagram.'
         : `Ya tenés ${n} borradores listos — publicá el primero y miralo vivo en tu Instagram.`)
-    : 'Todavía no hay borradores — tocá el botón, armo el primero al toque y lo publicamos';
+    : 'Todavía no hay borradores — estamos armando tu semana: tu primer posteo sale mañana a las 19:00';
   return `
   <div class="card" id="firstPublishCard" style="border:2px solid var(--yel);background:#FFF9EC">
     <h3 style="margin:0 0 4px">${pzIc('rocket', 13)} Tu primer posteo</h3>

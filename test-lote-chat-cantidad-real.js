@@ -51,27 +51,27 @@ function welcomeText(opts) {
 }
 {
   const a = welcomeText({ lang: 'es', business: 'Veja', nPosts: 3 });
-  t('A1 ES 3 → mensaje del veredicto', has(a.text, 'tu primer posteo está listo') && has(a.text, 'los otros dos llegan uno por día'), a.text);
-  t('A1 ES 3 → nunca «3 posteos» ni «ya están en tu feed»', !/3 posteos|primeros 3|ya están en tu feed|ya armé tus primeros/.test(a.text), a.text);
+  t('A1 ES 3 → (re-pin PUERTA-NUEVA) mensaje del modelo: plan + los 3 reales en la semana + el primero sale mañana 19:00', has(a.text, 'tu semana ya está planeada') && has(a.text, 'los 3 posteos de tu prueba en tu semana') && has(a.text, 'tu primer posteo sale mañana a las 19:00'), a.text);
+  t('A1 ES 3 → (re-pin PUERTA-NUEVA) nunca dados por publicados ni «ya están en tu feed» (el conteo real sí se dice: están en su semana, programados)', !/ya están en tu feed|ya salieron|ya están publicados|ya armé tus primeros/.test(a.text), a.text);
   const b = welcomeText({ lang: 'en', business: 'Veja', nPosts: 3 });
-  t('A2 EN 3 → verdict message', has(b.text, 'your first post is ready') && has(b.text, 'the other two arrive one per day'), b.text);
+  t('A2 EN 3 → (re-pin PUERTA-NUEVA) model message: plan + all 3 real posts in the week + first out tomorrow 7:00 PM', has(b.text, 'your week is already planned') && has(b.text, 'all 3 trial posts are in your week') && has(b.text, 'your first post goes out tomorrow at 7:00 PM'), b.text);
   t('A2 EN 3 → never «first 3 posts» / «already in your feed»', !/first 3 posts|already in your feed|i just made your first/.test(b.text), b.text);
   const c = welcomeText({ lang: 'es', business: 'Veja', nPosts: 1 });
-  t('A3 ES 1 → «tu primer posteo está listo»', has(c.text, 'tu primer posteo está listo'), c.text);
+  t('A3 ES 1 → (re-pin PUERTA-NUEVA) «ya está tu primer posteo en tu semana» y sale mañana', has(c.text, 'ya está tu primer posteo en tu semana') && has(c.text, 'sale mañana a las 19:00'), c.text);
   t('A3 ES 1 → no promete los otros dos', !has(c.text, 'los otros dos') && !has(c.text, 'llega mañana') && !/3 posteos/.test(c.text), c.text);
   const d = welcomeText({ lang: 'es', business: 'Veja', nPosts: 2 });
-  t('A4 ES 2 → «el otro llega mañana»', has(d.text, 'tu primer posteo está listo') && has(d.text, 'el otro llega mañana'), d.text);
+  t('A4 ES 2 → (re-pin PUERTA-NUEVA) los 2 reales en la semana + el primero sale mañana', has(d.text, 'ya están 2 posteos de tu prueba en tu semana') && has(d.text, 'tu primer posteo sale mañana a las 19:00'), d.text);
   t('A4 ES 2 → no dice «los otros dos»', !has(d.text, 'los otros dos'), d.text);
   const e = welcomeText({ lang: 'es', business: 'Veja', nPosts: 0 });
   t('A5 ES 0 → no afirma ningún posteo', !has(e.text, 'posteo está listo') && !/posteos/.test(e.text), e.text);
-  t('A5 ES 0 → avisa sin prometer', has(e.text, 'te aviso cuando tu primer posteo esté listo'), e.text);
+  t('A5 ES 0 → (re-pin PUERTA-NUEVA) avisa el modelo sin prometer el instante', has(e.text, 'estamos armando tu semana') && has(e.text, 'las piezas se cargan durante el día') && has(e.text, 'tu primer posteo sale mañana a las 19:00'), e.text);
   const f = welcomeText({ lang: 'en', business: 'Veja', nPosts: 0 });
   // La promesa futura («i'll let you know when…») NO es afirmar que ya
   // está listo: el 0 no debe llevar ninguna forma de entrega («from your
   // real product», «take a look», «arrive…»).
-  t('A6 EN 0 → no post claimed', !/from your real product|take a look|arrive one per day|arrives tomorrow/.test(f.text) && has(f.text, "i'll let you know when your first post is ready"), f.text);
+  t('A6 EN 0 → no post claimed', !/from your real product|take a look|arrive one per day|arrives tomorrow/.test(f.text) && has(f.text, "we're building your week") && has(f.text, 'the pieces load during the day') && has(f.text, 'your first post goes out tomorrow at 7:00 PM'), f.text);
   const g = welcomeText({ lang: 'es', business: '', nPosts: 3 });
-  t('A7 ES 3 sin marca → sin «undefined»', !has(g.text, 'undefined') && has(g.text, 'los otros dos llegan uno por día'), g.text);
+  t('A7 ES 3 sin marca → sin «undefined»', !has(g.text, 'undefined') && has(g.text, 'tu semana ya está planeada') && has(g.text, 'los 3 posteos de tu prueba en tu semana'), g.text);
   t('A8 inserta en chat (db stub)', a.ok === true, String(a.ok));
 }
 
@@ -148,7 +148,7 @@ async function main() {
       await new Promise((r) => setTimeout(r, 1000));
     }
     t('C1 boot /api/version 5/5', versionOk === 5, `ok=${versionOk} build=${build}`);
-    t('C2 build es v923', String(build).includes('v923'), build);
+    t('C2 build (re-pin PUERTA-NUEVA) es el del aterrizaje v1182', String(build).includes('v1182'), build);
     if (versionOk < 5) {
       console.log('LOG:', log.slice(-2000));
       console.log(results.join('\n'));
@@ -165,8 +165,8 @@ async function main() {
     const sched1 = d1.posts.filter((p) => p.status === 'scheduled').length;
     t('B1 respuesta posts:3 scheduled:3', r1.body.posts === 3 && r1.body.scheduled === 3, JSON.stringify(r1.body));
     t('B1 DB: 3 programados (verificado)', sched1 === 3, `scheduled=${sched1}`);
-    t('B1 mensaje = veredicto', has(msg1, 'tu primer posteo está listo') && has(msg1, 'los otros dos llegan uno por día'), msg1);
-    t('B1 mensaje nunca dice 3', !/3 posteos|primeros 3|ya están en tu feed/.test(msg1), msg1);
+    t('B1 mensaje = (re-pin PUERTA-NUEVA) el modelo: plan + los 3 reales + el primero sale mañana', has(msg1, 'tu semana ya está planeada') && has(msg1, 'los 3 posteos de tu prueba en tu semana') && has(msg1, 'tu primer posteo sale mañana a las 19:00'), msg1);
+    t('B1 mensaje (re-pin PUERTA-NUEVA) nunca los da por publicados ni en el feed', !/ya están en tu feed|ya salieron|ya están publicados|primeros 3/.test(msg1), msg1);
 
     // B2: parcial — 1 posteo → 1 programado → solo el primero, sin prometer los otros
     seed('suite1', payloadFor('suite1', 'SuiteUno', 1, 12));
@@ -174,7 +174,7 @@ async function main() {
     const d2 = chatOf('suite1');
     const msg2 = (d2.chat.find((m) => m.role === 'assistant') || {}).text || '';
     t('B2 respuesta posts:1 scheduled:1', r2.body.posts === 1 && r2.body.scheduled === 1, JSON.stringify(r2.body));
-    t('B2 mensaje dice solo el primero', has(msg2, 'tu primer posteo está listo') && !has(msg2, 'los otros dos') && !has(msg2, 'llega mañana'), msg2);
+    t('B2 mensaje dice solo el primero', has(msg2, 'ya está tu primer posteo en tu semana') && !has(msg2, 'los otros dos') && !has(msg2, 'llega mañana') && !/2 posteos|3 posteos/.test(msg2), msg2);
     t('B2 mensaje nunca dice 3', !/3 posteos|primeros 3/.test(msg2), msg2);
 
     // B3: gate retiene todo — 3 importados, 0 programados → el chat no anuncia posteos
@@ -185,7 +185,7 @@ async function main() {
     t('B3 respuesta posts:3 scheduled:0', r3.body.posts === 3 && r3.body.scheduled === 0, JSON.stringify(r3.body));
     t('B3 DB: 0 programados (verificado)', d3.posts.filter((p) => p.status === 'scheduled').length === 0, JSON.stringify(d3.posts.map((p) => p.status)));
     t('B3 mensaje no afirma ningún posteo', !has(msg3, 'posteo está listo') && !/posteos/.test(msg3), msg3);
-    t('B3 mensaje avisa sin prometer', has(msg3, 'te aviso cuando tu primer posteo esté listo'), msg3);
+    t('B3 mensaje (re-pin PUERTA-NUEVA) avisa el modelo sin prometer el instante', has(msg3, 'estamos armando tu semana') && has(msg3, 'las piezas se cargan durante el día') && has(msg3, 'tu primer posteo sale mañana a las 19:00'), msg3);
 
     // B4: orden — el mensaje se emite DESPUÉS de importar + programar, con el conteo programado
     const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');

@@ -114,7 +114,7 @@ function findGuestByIdentity(db, igKey, domainKey) {
 
 // Crea la fila invitada. NO verifica candados (el handler lo hace antes,
 // con allowlist y modo test): esta función solo persiste.
-function createGuest(db, { referralCode, lang, ig, domain, device }) {
+function createGuest(db, { referralCode, lang, ig, domain, device, sinWeb }) {
   const email = guestPlaceholderEmail();
   const trialEnds = Date.now() + TRIAL_DAYS_GUEST * 24 * 3600 * 1000;
   const r = db.prepare(
@@ -123,6 +123,11 @@ function createGuest(db, { referralCode, lang, ig, domain, device }) {
      VALUES (?, '', ?, ?, 1, 1, ?, 1, ?, ?, ?)`
   ).run(email, referralCode || '', trialEnds, lang === 'en' ? 'en' : 'es',
     String(ig || ''), String(domain || ''), String(device || ''));
+  // (LOTE PUERTA-NUEVA) La declaración «No tengo web» de la puerta se
+  // guarda con el alta (columna guest_sin_web, la crea db.js al boot);
+  // si un esquema local no la tiene (fixtures viejos), se omite en
+  // silencio — el alta nunca se cae por la marca.
+  if (sinWeb) { try { db.prepare('UPDATE users SET guest_sin_web = 1 WHERE id = ?').run(r.lastInsertRowid); } catch (e) {} }
   return { userId: r.lastInsertRowid, email, trialEnds };
 }
 
@@ -196,26 +201,32 @@ function welcomeGuestMessage(db, userId, { lang, business, nPosts, productoReal 
   const cola = en
     ? `\n\nif you want to change anything or approve it, tap anything and i'll ask you to create your account first (your feed stays exactly the same).`
     : `\n\nsi querés cambiar algo o aprobarlo, tocá lo que sea y te pido que crees tu cuenta primero (tu feed queda exactamente igual).`;
+  // (LOTE PUERTA-NUEVA · MODELO 18/11) La bienvenida ya no dice
+  // «está listo»: el modelo vigente es plan al instante + primer
+  // posteo mañana a las 19:00. Con posteos reales programados (n>=1)
+  // afirma el plan y la salida de mañana; con 0 no afirma ningún
+  // posteo: el plan se ve en su perfil, las piezas se cargan durante
+  // el día y el primero sale mañana a las 19:00.
   let text;
   if (n >= 3) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz}${claim} and the other two are too: all 3 are already in your week, one for each day of the trial 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz}${claim} y los otros dos también: ya están los 3 en tu semana, uno para cada día de la prueba 👇`;
+      ? `hi! i'm posty 💙 your week is already planned${paraBiz}${claim} all 3 trial posts are in your week, one for each day, and your first post goes out tomorrow at 7:00 PM 👇`
+      : `hola! soy posty 💙 tu semana ya está planeada${paraBiz}${claim} ya están los 3 posteos de tu prueba en tu semana, uno para cada día, y tu primer posteo sale mañana a las 19:00 👇`;
     text += cola;
   } else if (n === 2) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz}${claim} and the second one too: both are already in your week 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz}${claim} y el segundo también: ya están los 2 en tu semana 👇`;
+      ? `hi! i'm posty 💙 your week is already planned${paraBiz}${claim} 2 trial posts are already in your week, and your first post goes out tomorrow at 7:00 PM 👇`
+      : `hola! soy posty 💙 tu semana ya está planeada${paraBiz}${claim} ya están 2 posteos de tu prueba en tu semana, y tu primer posteo sale mañana a las 19:00 👇`;
     text += cola;
   } else if (n === 1) {
     text = en
-      ? `hi! i'm posty 💙 your first post is ready${paraBiz}${claim} take a look 👇`
-      : `hola! soy posty 💙 tu primer posteo está listo${paraBiz}${claim} miralo 👇`;
+      ? `hi! i'm posty 💙 your week is already planned${paraBiz}${claim} your first trial post is already in your week and goes out tomorrow at 7:00 PM 👇`
+      : `hola! soy posty 💙 tu semana ya está planeada${paraBiz}${claim} ya está tu primer posteo en tu semana y sale mañana a las 19:00 👇`;
     text += cola;
   } else {
     text = en
-      ? `hi! i'm posty 💙 i'm finishing your week${paraBiz} ✨ i'll let you know when your first post is ready`
-      : `hola! soy posty 💙 estoy terminando de armar tu semana${paraBiz} ✨ te aviso cuando tu primer posteo esté listo`;
+      ? `hi! i'm posty 💙 we're building your week${paraBiz} ✨ your planned days are already in your profile, the pieces load during the day and your first post goes out tomorrow at 7:00 PM`
+      : `hola! soy posty 💙 estamos armando tu semana${paraBiz} ✨ en tu perfil ya ves los días planeados, las piezas se cargan durante el día y tu primer posteo sale mañana a las 19:00`;
   }
   // (LOTE L10 · BIENVENIDA-IDEMPOTENTE · v955) Una sola bienvenida por
   // invitado: guest/start puede tener éxito varias veces para el mismo
@@ -228,8 +239,13 @@ function welcomeGuestMessage(db, userId, { lang, business, nPosts, productoReal 
   // primer posteo está listo' / 'your first post is ready' / 'ya armé
   // tus primeros 3 posteos' / 'first 3 posts' (el EN legacy solo consta
   // por el regex negativo de test-lote-chat-cantidad-real.js: el texto
-  // viejo EN no sobrevive en el código). PLACEHOLDER (n=0): 'estoy
-  // terminando de armar tu semana' / "i'm finishing your week". Regla:
+  // viejo EN no sobrevive en el código). PUERTA-NUEVA (18/11) suma el
+  // wording del modelo vigente a las dos familias — REAL: 'tu semana
+  // ya está planeada' / 'your week is already planned'; PLACEHOLDER
+  // (n=0): 'estoy terminando de armar tu semana' / "i'm finishing your
+  // week" + 'estamos armando tu semana' / "we're building your week".
+  // Los marcadores viejos quedan: las bienvenidas ya insertadas con el
+  // texto anterior siguen bloqueando duplicados. Regla:
   // una bienvenida REAL previa bloquea cualquier otra (real o
   // placeholder); un placeholder previo solo bloquea otro placeholder —
   // si la primera entrada no tenía nada programado y la segunda sí, el
@@ -239,8 +255,8 @@ function welcomeGuestMessage(db, userId, { lang, business, nPosts, productoReal 
   // Devuelve false también cuando ya existe (no es error: el llamador
   // ignora el valor).
   const isReal = n >= 1;
-  const REAL_MARKERS = ['tu primer posteo está listo', 'your first post is ready', 'ya armé tus primeros 3 posteos', 'first 3 posts'];
-  const HOLD_MARKERS = ['estoy terminando de armar tu semana', "i'm finishing your week"];
+  const REAL_MARKERS = ['tu primer posteo está listo', 'your first post is ready', 'ya armé tus primeros 3 posteos', 'first 3 posts', 'tu semana ya está planeada', 'your week is already planned'];
+  const HOLD_MARKERS = ['estoy terminando de armar tu semana', "i'm finishing your week", 'estamos armando tu semana', "we're building your week"];
   const hasMarker = (markers) => {
     const q = markers.map(() => 'text LIKE ?').join(' OR ');
     const row = db.prepare(

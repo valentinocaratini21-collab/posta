@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Posty — Your first post, built for free</title>
-<meta name="description" content="Drop your Instagram and your website: Posty builds your first post from your real product. Try it free for 3 days, no card, no questions, no password.">
+<title>Posty — Download the app and we'll make you 3 free posts</title>
+<meta name="description" content="Download the app and we'll make you 3 free posts: enter with your Instagram and your website or your link, see your planned week instantly, and tomorrow at 7:00 PM your first post goes out. No card, no password.">
 <link rel="canonical" href="https://postycommunitymanager.com/en/prueba">
 <link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/prueba">
 <link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/prueba">
 <link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/prueba">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://postycommunitymanager.com/en/prueba">
-<meta property="og:title" content="Posty builds your first post — free">
-<meta property="og:description" content="Drop your Instagram and your website and see your first post built from your real product. Try it free for 3 days, no card.">
+<meta property="og:title" content="Download the app and we'll make you 3 free posts">
+<meta property="og:description" content="Enter with your Instagram and your website or your link: you instantly see your planned week, and tomorrow at 7:00 PM your first post goes out, with your real product. No card.">
 <meta property="og:image" content="https://postycommunitymanager.com/og-prueba.jpg">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Posty builds your first post — free">
-<meta name="twitter:description" content="Drop your Instagram and your website and see your first post built from your real product. Try it free for 3 days, no card.">
+<meta name="twitter:title" content="Download the app and we'll make you 3 free posts">
+<meta name="twitter:description" content="Enter with your Instagram and your website or your link: you instantly see your planned week, and tomorrow at 7:00 PM your first post goes out, with your real product. No card.">
 <meta name="twitter:image" content="https://postycommunitymanager.com/og-prueba.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,6 +47,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .field input{width:100%;padding:14px 16px;border:1.5px solid var(--line);border-radius:12px;font:inherit;font-size:16px;color:var(--navy);background:#fff}
 .field input:focus{outline:none;border-color:var(--cel);box-shadow:0 0 0 3px rgba(39,147,200,.15)}
 .hint{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.5}
+.noweb-link{background:none;border:0;padding:0;margin-top:8px;font:inherit;font-size:13px;font-weight:700;color:var(--cel);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.noweb-note{font-size:13px;color:var(--navy);background:var(--bg2);border-radius:10px;padding:9px 12px;margin-top:8px;line-height:1.5}
+.field input:disabled{background:var(--bg2);color:var(--mut)}
 .btn{display:inline-block;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:16px;border-radius:999px;padding:15px 28px;text-decoration:none}
 .btn-primary{background:var(--cel);color:#fff;width:100%}
 .btn-ghost{background:#fff;border:1.5px solid var(--cel);color:var(--cel);flex:1}
@@ -98,6 +101,24 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tiny{text-align:center;font-size:13px;color:var(--mut);margin-top:14px;line-height:1.6}
 .tiny a{color:var(--cel);font-weight:700}
 .hero-note{text-align:center;font-size:14px;color:var(--mut);margin:20px 0 40px}
+/* (PUERTA-NUEVA LOT · AMENDMENT 21:49) The format trio + the real
+   example strip: the door SAYS what the 3 posts are (a photo, a
+   carousel and a video) and SHOWS it with Big Top Candy Shop's real
+   trial — its day 1, its day-2 carousel (swipeable) and its day-3
+   video (muted, looping). Glass chips, yellow only as a detail. */
+.trio{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:20px}
+.trio span{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.66);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:700;color:var(--navy);box-shadow:0 6px 18px rgba(10,30,51,.06)}
+.trio span i{width:7px;height:7px;border-radius:50%;background:var(--yl);flex:none}
+.ej{margin-top:26px}
+.ej-title{font-size:14.5px;font-weight:800;color:var(--navy);margin-bottom:12px}
+.ej-row{display:flex;gap:10px;justify-content:center}
+.ej-card{position:relative;flex:1 1 0;max-width:204px;background:#fff;border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(10,30,51,.10)}
+.ej-card img.ph,.ej-card video{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--bg2)}
+.ej-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ej-car::-webkit-scrollbar{display:none}
+.ej-car img{flex:0 0 100%;width:100%;aspect-ratio:4/5;object-fit:cover;scroll-snap-align:start;display:block;background:var(--bg2)}
+.daychip{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);color:var(--navy);font-size:12px;font-weight:800;border-radius:999px;padding:6px 11px;box-shadow:0 4px 14px rgba(10,30,51,.12)}
+.ej-count{position:absolute;top:10px;right:10px;z-index:3;background:rgba(10,30,51,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 10px}
 </style>
 </head>
 <body>
@@ -108,8 +129,37 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 <div class="wrap">
   <div class="hero">
     <img src="/ai-avatar.png" alt="Posty">
-    <h1>Your first post, built from <span class="hl">what you already post</span></h1>
-    <p class="sub">Drop your Instagram and your website — Posty builds your first post from your real product. No questions, no password. Free for 3 days.</p>
+    <h1>We make you 3 posts <span class="hl">for free</span></h1>
+    <p class="sub">Drop your Instagram and your website or your link — you instantly see your planned week in your profile, and tomorrow at 7:00 PM your first post goes out, with your real product. No card, no password.</p>
+    <div class="trio">
+      <span><i></i>Day 1: a photo</span>
+      <span><i></i>Day 2: a carousel</span>
+      <span><i></i>Day 3: a video</span>
+    </div>
+    <div class="ej">
+      <p class="ej-title">Big Top Candy Shop's real trial</p>
+      <div class="ej-row">
+        <div class="ej-card">
+          <img class="ph" src="/puerta-ej-bigtop-dia1.jpg" alt="Day 1 of the trial: a photo" loading="lazy">
+          <span class="daychip">Day 1</span>
+        </div>
+        <div class="ej-card">
+          <div class="ej-car" id="ejCar">
+            <img src="/puerta-ej-bigtop-dia2-1.jpg" alt="Day 2 of the trial: a carousel, photo 1 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-2.jpg" alt="Day 2 of the trial: a carousel, photo 2 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-3.jpg" alt="Day 2 of the trial: a carousel, photo 3 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-4.jpg" alt="Day 2 of the trial: a carousel, photo 4 of 5" loading="lazy">
+            <img src="/puerta-ej-bigtop-dia2-5.jpg" alt="Day 2 of the trial: a carousel, photo 5 of 5" loading="lazy">
+          </div>
+          <span class="daychip">Day 2</span>
+          <span class="ej-count" id="ejCount">1 / 5</span>
+        </div>
+        <div class="ej-card">
+          <video src="/puerta-ej-bigtop-dia3.mp4" poster="/puerta-ej-bigtop-dia3-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Day 3 of the trial: a video"></video>
+          <span class="daychip">Day 3</span>
+        </div>
+      </div>
+    </div>
   </div>
   <form id="fEntry" class="card" novalidate>
     <div class="field">
@@ -117,24 +167,26 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <input id="fIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
     </div>
     <div class="field">
-      <label for="fWeb">Your website <small>(if you have one)</small></label>
-      <input id="fWeb" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="www.yourbusiness.com" aria-label="Your website">
-      <p class="hint">Posty reads your website too: services, prices and photos all feed your first post.</p>
+      <label for="fWeb">Your website or your link</label>
+      <input id="fWeb" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="www.yourbusiness.com or your link" aria-label="Your website or your link">
+      <p class="hint">Your website, your Tiendanube, your Linktree, your menu or your Google profile all work: we read it to plan your week with your services, prices and photos.</p>
+      <button type="button" class="noweb-link" id="fNoWeb">I don't have a website</button>
+      <p class="noweb-note" id="fNoWebNote" hidden>No website: we build your week from your Instagram, and whatever is missing we'll ask you later, one question at a time.</p>
     </div>
     <div class="field" id="fStarWrap" hidden>
       <label for="fStar">What do you sell the most? *</label>
       <input id="fStar" type="text" autocomplete="off" placeholder="E.g.: specialty coffee" aria-label="What do you sell the most">
-      <p class="hint">I couldn't see it on your Instagram or your website — tell me in your own words and I'll build your first post around it.</p>
+      <p class="hint">We couldn't see it on your Instagram or your website — tell us in your own words what you sell the most and we'll build your week around it.</p>
     </div>
     <div class="field" id="fAskWrap" hidden>
       <label id="fAskQ"></label>
       <div class="langrow" id="fAskOpts" style="flex-wrap:wrap"></div>
-      <p class="hint">One quick question before I build your week — tap one and I'll keep going. Or skip it and I'll build with what I already know.</p>
+      <p class="hint">One quick question before we build your week — tap one and we'll keep going. Or skip it and we'll build with what we already know.</p>
       <button type="button" class="btn btn-ghost" id="fAskSkip">Skip this question</button>
     </div>
     <div class="field" id="fLangWrap" hidden>
       <label>What language do you post in? *</label>
-      <p class="hint">Your website is in another language and I can't tell what language you post in — pick one and I'll build your week in that language.</p>
+      <p class="hint">Your website is in another language and we can't tell what language you post in — pick one and we'll build your week in that language.</p>
       <div class="langrow">
         <button type="button" class="btn btn-ghost" id="fLangEn">English</button>
         <button type="button" class="btn btn-ghost" id="fLangEs">Español</button>
@@ -144,7 +196,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="fStatus" class="status" hidden></div>
     <div id="fWait" class="wait" hidden></div>
     <div id="fPreview" class="preview" hidden></div>
-    <button id="btnGo" class="btn btn-primary" type="submit">Build my first post</button>
+    <button id="btnGo" class="btn btn-primary" type="submit">See my planned week</button>
     <p class="tiny">Already have an account? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
   </form>
   <div class="card" id="returnDoor" style="margin-top:14px">
@@ -164,7 +216,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="rOk" class="status" hidden></div>
     <button id="btnReturn" class="btn btn-primary" type="button" style="width:100%">Send me my link →</button>
   </div>
-  <p class="hero-note">✓ No card · ✓ Free for 3 days · ✓ Cancel anytime</p>
+  <p class="hero-note">✓ No card · ✓ 3 free posts · ✓ Cancel anytime</p>
 </div>
 <script>
 /* (ONBOARDING-SIMPLE · 11/11 · ACT.4) Entry: @ + website -> prefill
@@ -181,6 +233,23 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   var TEST_KEY_QS = qs.get('test_key') ? ('?test_key=' + encodeURIComponent(qs.get('test_key'))) : '';
   var $ = function (id) { return document.getElementById(id); };
   var igEl = $('fIg'), webEl = $('fWeb'), starEl = $('fStar'), starWrap = $('fStarWrap');
+  // (LOTE PUERTA-NUEVA · DOOR RULE 11/18) Both fields always show and
+  // are always expected; the only way out is the «I don't have a
+  // website» escape: tap it and the website is waived (field off and
+  // cleared), the guest still enters, and the state travels as
+  // sin_web in the payloads (pregenerate, generate-stream and
+  // guest/start) so the backend records it and nobody asks for a
+  // website they declared they don't have — whatever is missing is
+  // asked later, one question at a time.
+  var noWeb = false;
+  var noWebBtn = $('fNoWeb'), noWebNote = $('fNoWebNote');
+  function applyNoWeb() {
+    if (noWeb) { webEl.value = ''; webEl.disabled = true; }
+    else { webEl.disabled = false; }
+    if (noWebNote) noWebNote.hidden = !noWeb;
+    if (noWebBtn) noWebBtn.textContent = noWeb ? (LANG === 'en' ? 'I do have a website' : 'Sí tengo web') : (LANG === 'en' ? "I don't have a website" : 'No tengo web');
+  }
+  if (noWebBtn) noWebBtn.addEventListener('click', function () { noWeb = !noWeb; applyNoWeb(); if (!noWeb) webEl.focus(); });
   var langWrap = $('fLangWrap');
   // (LOTE FUNDAMENTO-QUE-DUDA) THE TRIAL QUESTION: if the fundamento
   // is left with a real doubt (unconfirmed star or rubro), the server
@@ -247,7 +316,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   function savePending(ig, web, star) {
     try {
       localStorage.setItem(PENDING_KEY, JSON.stringify({
-        ig: ig, web: web, star: String(star || '').slice(0, 60),
+        ig: ig, web: web, sinWeb: !!noWeb, star: String(star || '').slice(0, 60),
         brandLang: brandLangChoice || '', ts: Date.now(),
         // (LOTE FUNDAMENTO-QUE-DUDA) The trial question's answers also
         // survive a reload: an answered question is never re-asked.
@@ -337,15 +406,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       '</div>' +
       '<div class="wait-body">' +
         '<img class="wait-badge" src="/ai-avatar.png" alt="Posty">' +
-        '<h2>I\'m building your first post</h2>' +
-        '<span class="wait-line">I\'m doing it well, not fast.</span>' +
+        '<h2>We\'re building your week</h2>' +
+        '<span class="wait-line">We do it well, not fast.</span>' +
         '<div class="wait-steps">' + steps + '</div>' +
         '<p class="wait-now"><b>Now:</b> <span id="wNow">reading your account…</span></p>' +
         '<div class="wait-mirror" id="wMirror" hidden>' +
           '<img id="wMirrorImg" alt="" onerror="this.closest(\'.wait-mirror\').hidden=true">' +
           '<div><div class="mk">MEANWHILE, SOMETHING OF YOURS</div><div class="mt">This was your most-liked post</div><div class="ms" id="wMirrorTxt"></div></div>' +
         '</div>' +
-        '<div class="wait-exit">Taking a while? <b>Go easy</b> — I\'ll let you know when it\'s ready.</div>' +
+        '<div class="wait-exit">Taking a while? <b>Go easy</b> — we\'ll let you know when your week is ready.</div>' +
       '</div>';
     paintWait();
   }
@@ -416,8 +485,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       function f(d) { return new Intl.DateTimeFormat(loc, { weekday: 'long' }).format(d) + ' ' + new Intl.DateTimeFormat(loc, { day: 'numeric' }).format(d); }
       var m = f(new Date(Date.now() + 86400000));
       var p = f(new Date(Date.now() + 2 * 86400000));
-      if (LANG === 'en') return 'This is day 1 of 3: tomorrow, ' + m + ', you’ll get another post, and on ' + p + ' the last one of the trial.';
-      return 'Esto es el día 1 de 3: mañana, ' + m + ', te llega otro posteo, y el ' + p + ' el último de la prueba.';
+      var t = f(new Date(Date.now() + 3 * 86400000));
+      if (LANG === 'en') return 'Your trial is 3 posts, one per day: the first goes out tomorrow, ' + m + ', at 7:00 PM; the second on ' + p + ' and the last one on ' + t + ', always at 7:00 PM.';
+      return 'Tu prueba son 3 posteos, uno por día: el primero sale mañana, ' + m + ', a las 19:00; el segundo el ' + p + ' y el último el ' + t + ', siempre a las 19:00.';
     } catch (e) { return ''; }
   }
   function showFirstPostPreview(post) {
@@ -426,17 +496,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // post card: it stays on the honest waiting screen.
     if (post.armando || !post.image) {
       showWait();
-      setWaitNow('Your first post is still being built — when it\'s ready, with your logo in the scene, it\'ll be waiting for you on Home.');
+      setWaitNow('Your first post is being built — when it\'s ready, with your logo in the scene, it\'ll be waiting for you on Home. It goes out tomorrow at 7:00 PM.');
       return;
     }
     var img = post.image || post.cover || '';
     var cap = String(post.caption || '').slice(0, 200);
     var head = String(post.headline || '');
-    previewEl.innerHTML = '<p class="pv-kicker">Your first post is ready</p>' +
+    previewEl.innerHTML = '<p class="pv-kicker">Your first post — goes out tomorrow at 7:00 PM</p>' +
       (img ? '<img class="pv-img" src="' + esc(img) + '" alt="">' : '') +
       (head ? '<p class="pv-head">' + esc(head) + '</p>' : '') +
       (cap ? '<p class="pv-cap">' + esc(cap) + '</p>' : '') +
-      '<p class="pv-note">Finishing your week — don’t close this window… ' + pvDiasTxt() + '</p>';
+      '<p class="pv-note">We’re finishing your week — don’t close this window… ' + pvDiasTxt() + '</p>';
     previewEl.hidden = false;
   }
   async function trialStatus(ig) {
@@ -458,7 +528,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       if (st.cached) return 'cached';
       if (!st.generating) return 'gone';
       if (Date.now() - t0 > L6_STATUS_MAX_MS) return 'timeout';
-      showStatus('I’m already building your first post — let me find it…');
+      showStatus('We’re already building your week — let us find it…');
       await new Promise(function (res) { setTimeout(res, L6_STATUS_POLL_MS); });
     }
   }
@@ -470,11 +540,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     try {
       res = await fetch('/api/trial/generate-stream' + TEST_KEY_QS, { method: 'POST', body: fd });
     } catch (e) {
-      showErr("We couldn't build your first post. Try again.");
+      showErr("We couldn't build your week. Try again.");
       return false;
     }
     if (!res || !res.ok || !res.body || typeof res.body.getReader !== 'function') {
-      showErr("We couldn't build your first post. Try again.");
+      showErr("We couldn't build your week. Try again.");
       return false;
     }
     var reader = res.body.getReader();
@@ -500,7 +570,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       var now = Date.now();
       if (!firstPostShown && !slowShown && now - lastEventAt > L6_SLOW_NOTE_MS) {
         slowShown = true;
-        showStatus('Taking longer than usual — I’m still working on your first post, don’t close this window…');
+        showStatus('Taking longer than usual — we’re still working on your week, don’t close this window…');
       }
       if (!firstPostShown && now - lastEventAt > L6_FIRST_POST_TIMEOUT_MS) {
         outcome = false;
@@ -508,7 +578,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         try { reader.cancel(); } catch (e) {}
       } else if (firstPostShown && now - lastEventAt > L6_IDLE_NOTE_MS) {
         lastEventAt = now;
-        showStatus('Still working on your week — your first post is already up there…');
+        showStatus('Still working on your week — your plan is already in your profile…');
       }
     }, 1000);
     try {
@@ -561,10 +631,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
                 showFirstPostPreview(d.post);
               } else {
                 completeWait(d.post);
-                showStatus('Your first post is ready — finishing your week…');
+                showStatus('Your first post is built — it goes out tomorrow at 7:00 PM. Finishing your week…');
               }
             } else if (d && d.post && entregableTF) {
-              showStatus('Post ' + postsSeen + ' of ' + postsTotal + ' ready — still working on your week…');
+              showStatus('Post ' + postsSeen + ' of ' + postsTotal + ' built — still working on your week…');
             }
           } else if (ev === 'done') {
             outcome = true;
@@ -595,11 +665,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       try { reader.releaseLock(); } catch (e) {}
     }
     if (outcome === true) return true;
-    if (outcome === 'need_question') { showAsk(); showStatus('One question before I build your week — tap an answer and I’ll keep going.'); return 'need_question'; }
-    if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('I still don’t know what you sell — tell me above and I’ll build your week around it.'); return 'need_star'; }
-    if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Your website is in another language and I can’t tell what language you post in — pick one below and I’ll build your week in that language.'); return 'need_lang'; }
+    if (outcome === 'need_question') { showAsk(); showStatus('One question before we build your week — tap an answer and we’ll keep going.'); return 'need_question'; }
+    if (outcome === 'need_star') { starWrap.hidden = false; starEl.focus(); showStatus('We still don’t know what you sell — tell us above and we’ll build your week around it.'); return 'need_star'; }
+    if (outcome === 'need_lang') { langWrap.hidden = false; showStatus('Your website is in another language and we can’t tell what language you post in — pick one below and we’ll build your week in that language.'); return 'need_lang'; }
     if (outcomeUsed) { clearPending(); showErrHtml(usedHtml(outcomeErr || 'This business already used its one free trial 💛')); return false; }
-    showErr(outcomeErr || "We couldn't build your first post. Try again.");
+    showErr(outcomeErr || "We couldn't build your week. Try again.");
     return false;
   }
   // (LOTE FUNDAMENTO-QUE-DUDA) Shows the question the stream brought
@@ -653,7 +723,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       bOtro.type = 'button'; bOtro.className = 'btn btn-ghost'; bOtro.textContent = 'Other';
       bOtro.addEventListener('click', function () {
         askWrap.hidden = true; starWrap.hidden = false; starEl.focus();
-        showStatus('Tell me what you sell the most and I’ll build your week around it.');
+        showStatus('Tell us what you sell the most and we’ll build your week around it.');
       });
       askOpts.appendChild(bOtro);
     }
@@ -703,10 +773,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       // form, not in the wait: the wait turns off and the note goes
       // back to the usual status line.
       if (waitEl) waitEl.hidden = true;
-      showStatus('I can see your profile but not what you sell — tell me above and I’ll build your first post.');
+      showStatus('We can see your profile but not what you sell — tell us above and we’ll build your week.');
       return 'need_star';
     }
-    showStatus('Building your first post…');
+    showStatus('Building your week…');
     var fd = new FormData();
     fd.append('business', String(pf.j.name || '') || ig);
     fd.append('ig', ig);
@@ -734,6 +804,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (mix === 'todo' && !det.length && rubroOk) fd.append('rubro_detectado', category);
     if (mix === 'libre') fd.append('producto_estrella', star);
     if (web) fd.append('web', web);
+    else if (noWeb) fd.append('sin_web', '1');
     // (LOTE ETIQUETA-Y-TEXTO · pieza C1) THE PREFILL STYLE IS
     // FORWARDED: the signature (with the feed text signal) was born
     // in the prefill and died here — the form never sent it and the
@@ -752,9 +823,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // the approved design requires.
     var st0 = await trialStatus(ig);
     if (st0 && st0.generating && !st0.cached) {
-      showStatus('I’m already building your first post — let me find it…');
+      showStatus('We’re already building your week — let us find it…');
       var rd = await waitTrialReady(ig);
-      if (rd === 'gone') { showErr("We couldn't build your first post. Try again."); return false; }
+      if (rd === 'gone') { showErr("We couldn't build your week. Try again."); return false; }
       // 'cached' or 'timeout'/'unknown': go to the stream, which returns
       // 'done' straight away if the week is already there, or regenerates
       // if it has to.
@@ -765,7 +836,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     ev.preventDefault();
     hideNotes();
     var ig = cleanIg(igEl.value);
-    var web = cleanWeb(webEl.value);
+    var web = noWeb ? '' : cleanWeb(webEl.value);
     if (!ig) { showErr('Tell us your Instagram @ 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
     if (!starWrap.hidden && !star && !askSkipStar) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
@@ -776,9 +847,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     btn.disabled = true; btn.textContent = 'Building…';
     try {
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
-      if (built === 'need_star' || built === 'need_lang' || built === 'need_question' || !built) { btn.disabled = false; btn.textContent = 'Build my first post'; return; }
+      if (built === 'need_star' || built === 'need_lang' || built === 'need_question' || !built) { btn.disabled = false; btn.textContent = 'See my planned week'; return; }
       showStatus('Entering your product…');
-      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, device: deviceId(), lang: LANG, tz: browserTz() });
+      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, sin_web: noWeb ? 1 : 0, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
         if (gs.status === 409 || (gs.j && (gs.j.trial_used || gs.j.device_used))) {
           clearPending();
@@ -788,14 +859,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         } else {
           showErr((gs.j && gs.j.error) || "We couldn't get you in yet. Try again.");
         }
-        btn.disabled = false; btn.textContent = 'Build my first post';
+        btn.disabled = false; btn.textContent = 'See my planned week';
         return;
       }
       clearPending();
       location.href = '/#/app/inicio';
     } catch (e) {
-      showErr("We couldn't build your first post. Try again.");
-      btn.disabled = false; btn.textContent = 'Build my first post';
+      showErr("We couldn't build your week. Try again.");
+      btn.disabled = false; btn.textContent = 'See my planned week';
     }
   });
   // (LOTE IMAGEN-PRUEBA-TEMPRANA) En cuanto el @ está puesto y validado,
@@ -808,13 +879,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   async function maybePregenerate(fromWeb) {
     try {
       const ig = cleanIg(igEl.value);
-      const web = cleanWeb(webEl.value);
+      const web = noWeb ? '' : cleanWeb(webEl.value);
       if (!ig) return;
       // En el blur del @, sin web todavía no se dispara: la web se escribe
       // después y la generación temprana con web vacía armaría la semana
       // sin la foto real del producto. En el blur de la web sí: dejarla
       // vacía es una decisión (sin web), no un campo sin llenar.
-      if (!web && !fromWeb) return;
+      if (!web && !fromWeb && !noWeb) return;
       if (pregeneratedFor === ig + '|' + web) return;
       const pf = await postJSON('/api/trial/prefill' + TEST_KEY_QS, { ig: ig, lang: LANG });
       if (!pf.ok || !pf.j || !pf.j.ok) return;
@@ -830,7 +901,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       // (el envío pediría la estrella con un toque).
       const starInput = String(starEl.value || '').trim();
       if (!starInput && !det.length && !rubroOk) return;
-      const body = { business: String(pf.j.name || '').trim() || ig, ig: ig, category: rubroDet || 'otro', lang: LANG, producto_mix: starInput ? 'libre' : 'todo', web: web };
+      const body = { business: String(pf.j.name || '').trim() || ig, ig: ig, category: rubroDet || 'otro', lang: LANG, producto_mix: starInput ? 'libre' : 'todo', web: web, sin_web: noWeb ? 1 : 0 };
       if (starInput) body.producto_estrella = starInput.slice(0, 60);
       if (!starInput && det.length) body.productos_detectados = det;
       if (!starInput && !det.length && rubroOk) body.rubro_detectado = rubroDet;
@@ -896,6 +967,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (pend) {
       igEl.value = '@' + pend.ig;
       if (pend.web) webEl.value = pend.web;
+      if (pend.sinWeb) { noWeb = true; applyNoWeb(); }
       if (pend.star) starEl.value = pend.star;
       if (pend.brandLang) brandLangChoice = pend.brandLang;
       if (pend.askRubro) askRubroAnswer = pend.askRubro;
@@ -908,6 +980,19 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       igEl.focus();
     }
   }
+})();
+</script>
+<script>
+/* (PUERTA-NUEVA LOT · AMENDMENT 21:49) Counter for the example
+   carousel in the strip: follows the real swipe (1 / 5 … 5 / 5). */
+(function () {
+  var car = document.getElementById('ejCar'), n = document.getElementById('ejCount');
+  if (!car || !n) return;
+  car.addEventListener('scroll', function () {
+    var i = Math.round(car.scrollLeft / Math.max(1, car.clientWidth));
+    if (i < 0) i = 0; if (i > 4) i = 4;
+    n.textContent = (i + 1) + ' / 5';
+  }, { passive: true });
 })();
 </script>
 </body>

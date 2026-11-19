@@ -180,7 +180,7 @@ try {
 
 /* ---------------- G. Sellos ---------------- */
 console.log('\n— G. Sellos —');
-ok(IDX.includes('app.js?v=796') && IDX.includes('styles.css?v=20261299'), 'G1 · índice ES: app.js 796 + estilos 20261299 (sellos del aterrizaje)');
+ok(IDX.includes('app.js?v=797') && IDX.includes('styles.css?v=20261299'), 'G1 · (re-pin PUERTA-NUEVA) índice ES: app.js 797 + estilos 20261299 (sellos del aterrizaje)');
 ok(IDXEN.includes('styles.css?v=20261299') && !IDXEN.includes('app.js?v='), 'G2 · índice EN: solo estilos 20261299 (no carga app.js; las menciones son comentarios)');
 
 /* ---------------- H. Arranque real: invitado fresco → mi-plan ---------------- */
