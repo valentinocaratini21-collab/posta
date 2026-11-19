@@ -924,6 +924,32 @@ function hashtagsPass(hashtags, input) {
   return { ok: true };
 }
 
+// (PRECIO-HUÉRFANO · Juli, 2026-11-19 — id 712 real, Big Top Candy
+// Shop, cuenta 123): el caption programado para el 2026-11-19 00:00Z
+// traía los precios MUTILADOS — "hand-jerked sodas .77 with nearly 50
+// syrup flavors, real blue bell shakes & malts .77, sundaes .77, the
+// banana split 0.77" — la transcripción de la línea a mano perdió el
+// signo "$" Y la parte entera de cada precio, y ningún gate conocía el
+// fragmento: la puerta EN lo rechazaba solo por CTA (formato póster),
+// nunca por el precio roto. El posteo se publicó reescrito A MANO sin
+// precios (los reales no estaban en la ficha), pero la clase queda: un
+// decimal sin signo ni entero (".77", ",77", "0.77"/"0,77" sin $) no
+// dice cuánto sale nada y no es prosa válida en ningún caption — es el
+// resto de un precio. La firma es angosta a propósito: con signo y
+// entero pasa siempre ("$0.99" del id 617 real, "$4.77", "$6.700" con
+// punto de miles), un entero real pasa ("4.77"), y fecha/hora/versión
+// no se tocan ("19.11", "7:30", "v1.77": el separador viene pegado a un
+// dígito). Barrido del corpus entero 2026-11-19 (283 captions): cero
+// colateral — el único decimal sospechoso era el "$0.99" legítimo.
+function orphanPriceToken(caption) {
+  const c = String(caption || '');
+  const bare = c.match(/(?:^|[\s(])(\.\d{2}|\,\d{2})(?!\d)/);
+  if (bare) return bare[1];
+  const zero = c.match(/(?<![$€£])\b0[.,]\d{2}(?!\d)/);
+  if (zero) return zero[0];
+  return null;
+}
+
 // Puerta de calidad automática: el cliente nunca ve un caption mediocre.
 // Devuelve { ok, reason }.
 // `input` (opcional) aporta { dna, business } para el chequeo de grounding:
@@ -947,6 +973,14 @@ function captionPasses(caption, input) {
   // los dos rótulos no llevan acentos y no aparecen en un caption humano.
   for (const m of ['producto literal', 'objetivo del posteo']) {
     if (low.includes(m)) return { ok: false, reason: `filtración del fundamento: el caption trae texto interno del brief ("${m}") — el fundamento se usa para escribir, nunca se publica` };
+  }
+  // PRECIO-HUÉRFANO (Juli, 2026-11-19 — id 712 real): un decimal sin
+  // signo ni parte entera es un precio mutilado, no un dato (ver
+  // orphanPriceToken). Va temprano, antes de largo/bloques, para que el
+  // motivo que corrige el reintento sea ESTE y no otro.
+  {
+    const op = orphanPriceToken(c);
+    if (op) return { ok: false, reason: `precio huérfano: "${op}" es un precio mutilado (sin signo ni parte entera: "${op}" no dice cuánto sale) — escribí el precio completo ($X.XXX) o sacalo; un precio a medias no se publica (PRECIO-HUÉRFANO, id 712 real)` };
   }
   // META-LÍNEA (Juli, 2026-11-12 — ids REALES 595/596/597/601/603/617/618/
   // 619/621/622/623/633/634/635, trials 11-12/11): el caption cierra con una
@@ -1824,6 +1858,14 @@ function captionPassesEn(caption, input) {
   {
     const meta = low.match(/(^|\n)\s*(in your words|as you asked)\s*:/);
     if (meta) return { ok: false, reason: `meta-line: "${meta[2]}:" is an internal engine note, not caption copy — the customer's voice goes in the body, never as a label at the end` };
+  }
+  // ORPHAN-PRICE (Juli, 2026-11-19 — real id 712, Big Top Candy Shop):
+  // a decimal with no currency sign and no integer part is a mutilated
+  // price, not a fact (see orphanPriceToken). Early, before length and
+  // blocks, so the retry feedback names THIS defect.
+  {
+    const op = orphanPriceToken(c);
+    if (op) return { ok: false, reason: `orphan price: "${op}" is a mutilated price (no currency sign, no integer part: "${op}" does not say what it costs) — write the full price ($X.XX) or drop it; a half price never ships (ORPHAN-PRICE, real id 712)` };
   }
   // PLANTILLA-CRUZADA-EN + ESTRELLA-GENÉRICA (Juli, 2026-11-14 — ids reales
   // 660/663/669/677 y 641/678, trials del 13-14/11): el esqueleto
@@ -6212,4 +6254,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, hashtagsPass, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, hashtagsPass, orphanPriceToken, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
