@@ -4583,6 +4583,7 @@ function lpDisenoInit() {
 
 function lpInitHero() {
   lpCarrInit();
+  lpSemanaInit();
   pzPlansSocialMount();
   pzPaisPruebaLinks();
   lpInitCarousel();
@@ -5504,6 +5505,127 @@ function lpCrecimientoHTML() {
   </div></div></div>
 `;}
 
+/* SEMANA-VIVA · datos y render de «Una semana, posteo por posteo.» */
+const LP_SEMANA = [
+  { day: 'Lunes', dshort: 'Lun', fmt: 'Imagen', kind: 'img', src: 'lp-semana-lun.jpg', short: 'The Pepperoni', title: 'The Pepperoni, la clásica de la casa', line: 'La pepperoni de la casa, bien de cerca: la foto real del producto, con su nombre diseñado en la pieza.' },
+  { day: 'Martes', dshort: 'Mar', fmt: 'Reel', kind: 'video', src: 'lp-semana-reel-mar.mp4', poster: 'lp-semana-reel-mar.jpg', short: 'La masa', title: 'La masa, al aire', line: 'Un reel cortito de la masa estirándose a mano, como se hace todos los días frente al mostrador.' },
+  { day: 'Miércoles', dshort: 'Mié', fmt: 'Carrusel', kind: 'car', src: ['lp-semana-mie-1.jpg', 'lp-semana-mie-2.jpg', 'lp-semana-mie-3.jpg', 'lp-semana-mie-4.jpg', 'lp-semana-mie-5.jpg'], short: 'La fila no miente', title: 'La fila no miente', line: 'Cinco fotos reales del local lleno: el salón, la fila en la puerta y el patio de noche.' },
+  { day: 'Jueves', dshort: 'Jue', fmt: 'Imagen', kind: 'img', src: 'lp-semana-jue.jpg', short: 'Las manos de la casa', title: 'Las manos de la casa', line: 'El equipo de la casa, con su cara y su nombre, haciendo la pizza de todos los días.' },
+  { day: 'Viernes', dshort: 'Vie', fmt: 'Reel', kind: 'video', src: 'lp-semana-reel-vie.mp4', poster: 'lp-semana-reel-vie.jpg', short: 'Hoy: una porción y listo', title: 'Hoy: una porción y listo', line: 'Un reel de viernes a la noche: el local prendido y la porción lista, para pasar hasta tarde.' },
+  { day: 'Sábado', dshort: 'Sáb', fmt: 'Video', kind: 'video', src: 'lp-semana-sab.mp4', poster: 'lp-semana-sab.jpg', short: 'The Slice', title: 'The Slice, la película', line: 'El video grande de la semana: 30 segundos con música propia.' },
+  { day: 'Domingo', dshort: 'Dom', fmt: 'Carrusel', kind: 'car', src: ['lp-semana-dom-1.jpg', 'lp-semana-dom-2.jpg', 'lp-semana-dom-3.jpg'], short: 'La Blanca', title: 'La Blanca, espinaca y ricotta', line: 'Tres fotos de la Blanca — espinaca, ricotta y ajo — para cerrar la semana.' }
+];
+function lpSemanaCard(d, i) {
+  let media = '';
+  if (d.kind === 'img') {
+    media = '<img loading="lazy" src="' + d.src + '" alt="' + d.title + '"><span class="sv-chip sv-chip-glass sv-fmt">' + d.fmt + '</span>';
+  } else if (d.kind === 'video') {
+    media = '<video class="sv-vid" src="' + d.src + '" poster="' + d.poster + '" muted loop playsinline autoplay preload="metadata"></video><span class="sv-chip sv-chip-glass sv-fmt">' + d.fmt + '</span><span class="sv-play">▶</span>';
+  } else {
+    media = '<div class="sv-car" data-sv-car onscroll="lpSemanaCar(this)">' + d.src.map(s => '<img loading="lazy" src="' + s + '" alt="' + d.title + '">').join('') + '</div>'
+      + '<span class="sv-chip sv-chip-glass sv-fmt">' + d.fmt + ' ×' + d.src.length + '</span><span class="sv-count" data-sv-count>1/' + d.src.length + '</span>'
+      + '<div class="sv-dots" data-sv-dots>' + d.src.map((_, j) => '<i class="' + (j === 0 ? 'on' : '') + '"></i>').join('') + '</div>';
+  }
+  return '<article class="sv-day" tabindex="0" onclick="lpSemanaOpen(' + i + ')" onkeydown="if(event.key===\'Enter\')lpSemanaOpen(' + i + ')">'
+    + '<div class="sv-dhead"><span class="sv-dname">' + d.dshort + '</span></div>'
+    + '<div class="sv-media">' + media + '</div>'
+    + '<div class="sv-dfoot"><span class="sv-s">' + d.short + '</span><span class="sv-f">' + d.fmt + '</span></div></article>';
+}
+function lpSemanaHTML() {
+  return `
+  <div class="section" id="semana"><div class="wrap">
+    <div class="sv-head">
+      <div class="sv-kick">Lo que armamos para tu negocio</div>
+      <h2 class="sv-title">Una semana, posteo por posteo.</h2>
+      <p class="sv-sub">Siete posteos y ninguno de relleno: cada día, un formato distinto, pensado para este negocio.</p>
+    </div>
+    <div class="sv-profile">
+      <img src="lp-semana-avatar.jpg" alt="Home Slice Pizza">
+      <div class="sv-who">
+        <div class="sv-name">Home Slice Pizza</div>
+        <div class="sv-handle">@homeslicepizza</div>
+      </div>
+      <div class="sv-meta">
+        <span class="sv-chip">Pizzería · Austin</span>
+        <span class="sv-chip">Semana tipo · 7 posteos</span>
+      </div>
+    </div>
+    <div class="sv-week">${LP_SEMANA.map(lpSemanaCard).join('')}</div>
+    <p class="sv-hint"><b>Tocá cualquier día:</b> cada posteo se ve de cerca.</p>
+  </div></div>
+  <div class="sv-lb" id="svLb" role="dialog" aria-modal="true" aria-label="Posteo de la semana" onclick="if(event.target===this)lpSemanaClose()">
+    <button type="button" class="sv-lb-x" onclick="lpSemanaClose()" aria-label="Cerrar">✕</button>
+    <div class="sv-lb-card">
+      <div class="sv-lb-media" id="svLbMedia"></div>
+      <div class="sv-lb-body">
+        <div class="sv-lb-row" id="svLbChips"></div>
+        <h3 id="svLbTitle"></h3>
+        <p class="sv-lb-line" id="svLbLine"></p>
+      </div>
+    </div>
+  </div>
+`;
+}
+function lpSemanaReduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+function lpSemanaCar(el) {
+  const wrap = el.closest('.sv-media') || el.closest('.sv-lb-media');
+  if (!wrap) return;
+  const idx = Math.round(el.scrollLeft / el.clientWidth);
+  const count = wrap.querySelector('[data-sv-count]');
+  if (count) count.textContent = (idx + 1) + '/' + el.children.length;
+  const dots = wrap.querySelectorAll('[data-sv-dots] i');
+  dots.forEach((dt, j) => dt.classList.toggle('on', j === idx));
+}
+function lpSemanaOpen(i) {
+  const d = LP_SEMANA[i]; if (!d) return;
+  const lb = document.getElementById('svLb'); if (!lb) return;
+  document.getElementById('svLbChips').innerHTML = '<span class="sv-chip sv-chip-navy">' + d.day + '</span><span class="sv-chip sv-chip-glass">' + d.fmt + (d.kind === 'car' ? ' ×' + d.src.length : '') + '</span>';
+  document.getElementById('svLbTitle').textContent = d.title;
+  document.getElementById('svLbLine').textContent = d.line;
+  const m = document.getElementById('svLbMedia');
+  if (d.kind === 'img') {
+    m.innerHTML = '<img src="' + d.src + '" alt="' + d.title + '">';
+  } else if (d.kind === 'video') {
+    m.innerHTML = '<video src="' + d.src + '" poster="' + d.poster + '" muted loop playsinline autoplay controls></video>';
+  } else {
+    m.innerHTML = '<div class="sv-lb-car" onscroll="lpSemanaCar(this)">' + d.src.map(s => '<img src="' + s + '" alt="' + d.title + '">').join('') + '</div>'
+      + '<div class="sv-lb-nav"><button type="button" aria-label="Anterior" onclick="lpSemanaLbNav(-1)">‹</button><button type="button" aria-label="Siguiente" onclick="lpSemanaLbNav(1)">›</button></div>';
+  }
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const v = m.querySelector('video');
+  if (v && !lpSemanaReduced()) { const p = v.play(); if (p && p.catch) p.catch(function () {}); }
+}
+function lpSemanaLbNav(dir) {
+  const car = document.querySelector('#svLbMedia .sv-lb-car');
+  if (car) car.scrollBy({ left: dir * car.clientWidth, behavior: 'smooth' });
+}
+function lpSemanaClose() {
+  const lb = document.getElementById('svLb'); if (!lb) return;
+  lb.classList.remove('open');
+  document.getElementById('svLbMedia').innerHTML = '';
+  document.body.style.overflow = '';
+}
+function lpSemanaInit() {
+  const sec = document.getElementById('semana'); if (!sec) return;
+  const vids = sec.querySelectorAll('.sv-vid');
+  if (lpSemanaReduced()) {
+    vids.forEach(v => { v.removeAttribute('autoplay'); v.pause(); });
+    return;
+  }
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      const v = e.target;
+      if (e.isIntersecting) { const p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      else v.pause();
+    }), { threshold: 0.25 });
+    vids.forEach(v => io.observe(v));
+  } else {
+    vids.forEach(v => { const p = v.play(); if (p && p.catch) p.catch(function () {}); });
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') lpSemanaClose(); });
+}
+/* /SEMANA-VIVA */
 function lpAtiendeHTML() {
   return `
   <div class="section" id="atiende"><div class="wrap" style="max-width:760px">
@@ -8084,6 +8206,73 @@ function landingView(cfg) {
 .lp-noweb{background:none;border:none;font:inherit;font-size:13.5px;font-weight:600;color:#47617A;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:2px 6px}
 .lp-noweb:hover{color:#0A1E33}
 .lp-igform.lp-noweb-on input[data-lp-web]{opacity:.45}
+/* SEMANA-VIVA · «Una semana, posteo por posteo.» */
+#semana .sv-head{text-align:center;max-width:760px;margin:0 auto 38px}
+#semana .sv-kick{color:#2793C8;font-size:13px;font-weight:800;letter-spacing:3.5px;text-transform:uppercase;margin-bottom:16px}
+#semana .sv-title{color:#0A1E33;font-size:clamp(32px,4.4vw,50px);font-weight:900;line-height:1.08;letter-spacing:-.5px;margin:0}
+#semana .sv-sub{color:#5B7186;font-size:18px;font-weight:500;line-height:1.55;margin-top:16px}
+.sv-profile{background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:24px;box-shadow:0 18px 40px rgba(10,30,51,.10);display:flex;align-items:center;gap:18px;padding:20px 26px;margin-bottom:26px;flex-wrap:wrap}
+.sv-profile img{width:66px;height:66px;border-radius:50%;object-fit:cover;box-shadow:0 6px 18px rgba(10,30,51,.18)}
+.sv-profile .sv-who{flex:1;min-width:200px}
+.sv-profile .sv-name{color:#0A1E33;font-size:21px;font-weight:800}
+.sv-profile .sv-handle{color:#5B7186;font-size:14.5px;font-weight:600;margin-top:2px}
+.sv-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:7px 13px;border-radius:999px;white-space:nowrap}
+.sv-chip-glass{background:rgba(255,255,255,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.75);color:#0A1E33;box-shadow:0 6px 16px rgba(10,30,51,.14)}
+.sv-chip-navy{background:#0A1E33;color:#fff}
+.sv-profile .sv-meta{display:flex;gap:8px;flex-wrap:wrap}
+.sv-profile .sv-meta .sv-chip{background:rgba(39,147,200,.10);color:#0A1E33;border:1px solid rgba(39,147,200,.16);box-shadow:none}
+.sv-week{display:flex;flex-wrap:wrap;gap:18px;justify-content:center}
+.sv-day{background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:24px;box-shadow:0 18px 40px rgba(10,30,51,.10);padding:12px 12px 14px;cursor:pointer;flex:0 1 calc(25% - 14px);min-width:0;transition:transform .25s ease,box-shadow .25s ease}
+.sv-day:nth-child(odd){transform:rotate(-.55deg)}
+.sv-day:nth-child(even){transform:rotate(.55deg)}
+.sv-day:hover{transform:rotate(0) translateY(-4px);box-shadow:0 26px 48px rgba(10,30,51,.16)}
+.sv-dhead{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 10px}
+.sv-dname{color:#0A1E33;font-size:16px;font-weight:800}
+.sv-media{position:relative;border-radius:16px;overflow:hidden;aspect-ratio:4/5;background:#101C29}
+.sv-media img,.sv-media video{width:100%;height:100%;object-fit:cover;display:block}
+.sv-fmt{position:absolute;top:10px;left:10px;z-index:3}
+.sv-play{position:absolute;right:10px;top:10px;z-index:3;width:26px;height:26px;border-radius:50%;background:rgba(10,30,51,.45);backdrop-filter:blur(6px);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px}
+.sv-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;height:100%;scrollbar-width:none}
+.sv-car::-webkit-scrollbar{display:none}
+.sv-car img{flex:0 0 100%;scroll-snap-align:start}
+.sv-count{position:absolute;top:10px;right:10px;z-index:3;background:rgba(10,30,51,.55);color:#fff;font-size:11px;font-weight:700;padding:5px 9px;border-radius:999px;backdrop-filter:blur(6px)}
+.sv-dots{position:absolute;bottom:10px;left:0;right:0;z-index:3;display:flex;gap:5px;justify-content:center}
+.sv-dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.45)}
+.sv-dots i.on{background:#fff}
+.sv-dfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 4px 0}
+.sv-dfoot .sv-s{color:#0A1E33;font-size:13.5px;font-weight:800}
+.sv-dfoot .sv-f{color:#5B7186;font-size:12px;font-weight:600;white-space:nowrap}
+.sv-hint{text-align:center;color:#5B7186;font-size:14.5px;font-weight:600;margin-top:28px}
+.sv-hint b{color:#0A1E33}
+.sv-lb{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(10,30,51,.66);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.sv-lb.open{display:flex}
+.sv-lb-card{background:#fff;border-radius:24px;box-shadow:0 34px 80px rgba(0,0,0,.35);max-width:880px;width:100%;max-height:92vh;overflow:auto;display:grid;grid-template-columns:minmax(0,420px) 1fr}
+.sv-lb-media{position:relative;background:#101C29;min-height:300px;display:flex;align-items:center;justify-content:center}
+.sv-lb-media>img{width:100%;height:100%;object-fit:cover;display:block;max-height:92vh}
+.sv-lb-media>video{height:100%;max-height:92vh;width:auto;max-width:100%;display:block}
+.sv-lb-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;height:100%;scrollbar-width:none;width:100%}
+.sv-lb-car::-webkit-scrollbar{display:none}
+.sv-lb-car img{flex:0 0 100%;scroll-snap-align:start}
+.sv-lb-nav{position:absolute;bottom:12px;right:12px;display:flex;gap:8px;z-index:4}
+.sv-lb-nav button{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:rgba(255,255,255,.55);backdrop-filter:blur(8px);color:#0A1E33;font-size:16px;cursor:pointer;font-family:inherit}
+.sv-lb-body{padding:30px 30px 26px;display:flex;flex-direction:column;gap:14px}
+.sv-lb-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sv-lb-body h3{color:#0A1E33;font-size:27px;font-weight:900;line-height:1.15;margin:0}
+.sv-lb-line{color:#22364C;font-size:17.5px;line-height:1.6;font-weight:500;margin:0}
+.sv-lb-x{position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:rgba(255,255,255,.6);backdrop-filter:blur(8px);color:#0A1E33;font-size:17px;cursor:pointer;z-index:210;font-family:inherit}
+@media(max-width:900px){
+.sv-day{flex-basis:calc(50% - 9px)}
+.sv-lb-card{grid-template-columns:1fr}
+.sv-lb-media{max-height:52vh}
+.sv-lb-media>video{max-height:52vh}
+}
+@media (prefers-reduced-motion: reduce){
+.sv-day{transition:none}
+.sv-day:nth-child(odd),.sv-day:nth-child(even){transform:none}
+.sv-day:hover{transform:none}
+}
+/* /SEMANA-VIVA */
+
 </style>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="wb-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h16"/><path d="M14 5l7 7-7 7"/><path d="M9 9.5v5"/></symbol><symbol id="wb-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H6"/><path d="M10 5l-7 7 7 7"/><path d="M15 9.5v5"/></symbol><symbol id="wb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v16"/><path d="M5 14l7 7 7-7"/><path d="M9.5 9h5"/></symbol><symbol id="wb-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-7 8 7 8"/><circle cx="8" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l7 8-7 8"/><circle cx="16" cy="12" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8 7 8-7"/><circle cx="12" cy="16" r="1.7" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="wb-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3" fill="#DFA856" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c-2.6 2.7-2.6 15.3 0 18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18"/></symbol><symbol id="wb-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h2.5L9 6h6l2.5 2.5H20a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/><circle cx="17.8" cy="9.8" r="1.1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="5.5" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.4 10.6l7.2-3.7M8.4 13.4l7.2 3.7"/></symbol><symbol id="wb-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v9H9l-5 4v-4H4Z"/><circle cx="12" cy="10.5" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-clapper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v10H4Z"/><path d="M4 10l1.8-4h16L20 10"/><path d="M9 6l2 4M14 6l2 4"/></symbol><symbol id="wb-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-3.6 10.8c.9.8 1.6 1.5 1.6 2.7h4c0-1.2.7-1.9 1.6-2.7A6 6 0 0 0 12 3Z"/><path d="M10 18.5h4M10.5 21h3"/><circle cx="12" cy="10" r="1.4" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.2L16.5 4.5a2.1 2.1 0 0 1 3 3L8.7 18.3Z"/><path d="M14.5 6.5l3 3"/></symbol><symbol id="wb-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3.5 8l8.5 6 8.5-6"/></symbol><symbol id="wb-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z" fill="#DFA856" stroke="none"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6.5 6.5 0 0 1-6.5-6.5c0-3.2 2.2-5.2 3.4-7.2.6 1.4 1.6 2 2.4 2-.4-2.8.8-5 2.7-6.8.5 2.6 3 4.3 3 7.5A6.5 6.5 0 0 1 12 21Z"/><path d="M12 21a3 3 0 0 1-3-3c0-1.6 1.2-2.6 1.8-3.6.3.8.8 1.1 1.2 1.1.4-1.4 1-2.3 1.8-3-.2 2.2 1.2 3.2 1.2 5.5a3 3 0 0 1-3 3Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-laugh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 10.5c.7-1 1.8-1 2.5 0M13.5 10.5c.7-1 1.8-1 2.5 0"/><path d="M8 14.5c1.2 1.8 2.6 2.5 4 2.5s2.8-.7 4-2.5"/><circle cx="4.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/><circle cx="19.5" cy="12.5" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h9.5L21 11.5a1.8 1.8 0 0 1 0 2.6l-6.9 6.9a1.8 1.8 0 0 1-2.6 0L4 13.5Z"/><circle cx="9.5" cy="9.5" r="1.6" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="11" rx="2"/><path d="M9 8V6.5A2.5 2.5 0 0 1 11.5 4h1A2.5 2.5 0 0 1 15 6.5V8"/><path d="M3 13.5h18"/><circle cx="12" cy="13.5" r="1.3" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8.2L20 19M8.2 15.8L20 5"/></symbol><symbol id="wb-mega" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5v2.5l12 5V6.5Z"/><path d="M20 9.5a4.5 4.5 0 0 1 0 5"/><path d="M8 19.5V21"/></symbol><symbol id="wb-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20S4.5 15.5 4.5 10a4.6 4.6 0 0 1 7.5-3.2A4.6 4.6 0 0 1 19.5 10C19.5 15.5 12 20 12 20Z"/></symbol><symbol id="wb-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.6 0 2.2-.9 2.2-2 0-1.6-1.7-1.5-1.7-3.1 0-1.5 1.3-2.4 2.9-2.4h1.4a4.7 4.7 0 0 0 4.7-4.7C21.5 5.4 17.5 3 12 3Z"/><circle cx="8" cy="10" r="1.4" fill="#2793C8" stroke="none"/><circle cx="12.5" cy="8" r="1.4" fill="#DFA856" stroke="none"/><circle cx="16.5" cy="11" r="1.4" fill="#0A1E33" stroke="none"/></symbol><symbol id="wb-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol><symbol id="wb-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol><symbol id="wb-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 1.5 5.5 5 5 9l-2 2-3-3-3 3-2-2c-1-4 1-7.5 5-9Z"/><circle cx="12" cy="9" r="1.8" fill="#DFA856" stroke="none"/><path d="M8.5 13.5L5 19M15.5 13.5L19 19"/></symbol><symbol id="wb-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h2l2.5 11h10L21 8H7"/><circle cx="10" cy="20" r="1.6"/><circle cx="17.5" cy="20" r="1.6"/></symbol><symbol id="wb-glasses" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="7" height="5" rx="2"/><rect x="14" y="9" width="7" height="5" rx="2"/><path d="M10 11h4M3 10L1.5 8M21 10l1.5-2"/></symbol><symbol id="wb-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></symbol><symbol id="wb-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h12v4.5A4.5 4.5 0 0 1 12.5 19h-3A4.5 4.5 0 0 1 5 14.5Z"/><path d="M17 11h1a2.5 2.5 0 0 1 0 5h-1"/><path d="M8 7c0-1.2 1-1.2 1-2.4M12 7c0-1.2 1-1.2 1-2.4"/></symbol><symbol id="wb-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 16.5 5 12a2 2 0 0 1 2-1.5h10a2 2 0 0 1 2 1.5l1.5 4.5"/><path d="M3.5 16.5H21"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M12 3.5l.6 1.6 1.6.6-1.6.6L12 8l-.6-1.7-1.6-.6 1.6-.6Z" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/><path d="M10.5 20v-5.5h3V20"/></symbol><symbol id="wb-tooth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3.5C9 3.5 10 4.5 12 4.5s3-1 4.5-1c1.8 0 2.6 1.6 2.2 4-.4 3-1.2 9-3.2 12.5-.7 1.2-2.3 1.2-3 0-.8-1.4-.5-4.5-1.5-4.5s-.7 3.1-1.5 4.5c-.7 1.2-2.3 1.2-3 0C4.5 16.5 3.7 10.5 3.3 7.5 2.9 5.1 5.7 3.5 7.5 3.5Z"/></symbol><symbol id="wb-pole" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="3" width="7" height="18" rx="3.5"/><path d="M8.5 8.5 15.5 6M8.5 13.5 15.5 11M8.5 18.5 15.5 16"/><path d="M8.5 3h7M8.5 21h7" stroke="#DFA856"/></symbol><symbol id="wb-shirt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 4 4 6.5 6 10l2-1v11h8V9l2 1 2-3.5L15.5 4a3.5 3.5 0 0 1-7 0Z"/></symbol><symbol id="wb-beauty" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.2" fill="#DFA856" stroke="none"/><path d="M12 3.5v3.5M12 17v3.5M3.5 12H7M17 12h3.5M6 6l2.4 2.4M15.6 15.6 18 18M18 6l-2.4 2.4M8.4 15.6 6 18"/></symbol><symbol id="wb-paw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="3.6" ry="3" fill="#DFA856" stroke="none"/><circle cx="6.8" cy="11.5" r="1.9" fill="currentColor" stroke="none"/><circle cx="12" cy="9" r="1.9" fill="currentColor" stroke="none"/><circle cx="17.2" cy="11.5" r="1.9" fill="currentColor" stroke="none"/></symbol><symbol id="wb-steth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3v6.5a5.5 5.5 0 0 0 11 0V3"/><path d="M17.5 14.5c0 3 1.5 4 3.5 4"/><circle cx="21" cy="18.5" r="1.5"/></symbol><symbol id="wb-dumbbell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5v5M7 7v10M17 7v10M20.5 9.5v5M7 12h10"/></symbol><symbol id="wb-disco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M9.5 6.5V4h5v2.5"/><path d="M5.5 13.5h13M7.5 10c1.8 1.2 3.6-1.2 4.5 0 .9 1.2 2.7-1.2 4.5 0M7.5 17c1.8-1.2 3.6 1.2 4.5 0 .9-1.2 2.7 1.2 4.5 0"/><circle cx="12" cy="4" r="1" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-flower" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M12 10.7V21"/><path d="M12 15c-3.2 0-4.5-1.8-4.5-4M12 17.5c3.2 0 4.5-1.8 4.5-4"/><circle cx="12" cy="7.5" r="1.2" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-lipstick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 21h4M10.5 21v-8h3v8"/><path d="M11 13V8l4-2.5V13" fill="#DFA856" stroke="none"/></symbol><symbol id="wb-sushi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="9" rx="4.5"/><circle cx="12" cy="14.5" r="2.2" fill="#DFA856" stroke="none"/><path d="M4 6.5 20 4"/></symbol><symbol id="wb-croissant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5c2.5 4.5 5.5 6 8.5 4.5 3 1.5 6 0 8.5-4.5-.8 4.5-4 7-8.5 7s-7.7-2.5-8.5-7Z"/><path d="M8 13.5c.8 2 2 3 4 3s3.2-1 4-3"/></symbol><symbol id="wb-bean" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="6" ry="8.5" transform="rotate(18 12 12)"/><path d="M9 5.5c2.5 3 2.5 10 0 13"/></symbol></defs></svg>
   <div class="nav nav-landing"><div class="wrap">
@@ -8331,6 +8520,7 @@ function landingView(cfg) {
   ${lpIdeasHTML()}
   ${lpAtiendeHTML()}
   ${lpCrecimientoHTML()}
+  ${lpSemanaHTML()}
   ${lpVozHTML()}
   ${lpAdsHTML()}
   ${lpSubirHTML()}
