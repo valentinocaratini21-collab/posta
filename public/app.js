@@ -3949,7 +3949,7 @@ function lpDisenoInit() {
     window.addEventListener('resize', function () { if (window.__wdUpd) window.__wdUpd(); });
   }
   window.__wdUpd = upd;
-  var targets = qa('#atiende .wd-chat, #crecimiento, #voz, #ads, #subir, .lp-final, #progreso, #equipo, #faq, #como-funciona .pv-story');
+  var targets = qa('#crecimiento, #voz, #ads, #subir, .lp-final, #progreso, #equipo, #faq, #como-funciona .pv-story');
   function arm(el) { el.classList.add('wd-live'); }
   if (RM || !('IntersectionObserver' in window)) { targets.forEach(arm); }
   else {
@@ -3971,6 +3971,43 @@ function lpDisenoInit() {
         var sec = q('#crecimiento'); if (sec) sec.classList.add('wd-live');
       });
     });
+  }
+  /* ATIENDE-VIVO: el chat en tres actos se rearma en vivo mientras la
+     sección está en pantalla y repite; fuera de pantalla se detiene y
+     vuelve al estado final. El markup nace completo (sin JS = final)
+     y con reduced-motion el ciclo nunca arranca. */
+  var atChat = q('#atiende .at-chat');
+  if (atChat && !RM && 'IntersectionObserver' in window) {
+    var atSteps = {}, atTyps = {}, atTimers = [], atPlaying = false;
+    qa('[data-at-step]', atChat).forEach(function (el) { atSteps[el.getAttribute('data-at-step')] = el; });
+    qa('[data-at-typing]', atChat).forEach(function (el) { atTyps[el.getAttribute('data-at-typing')] = el; });
+    function atAt(ms, fn) { atTimers.push(setTimeout(fn, ms)); }
+    function atShow(k) { if (atSteps[k]) atSteps[k].classList.add('on'); }
+    function atDots(k, on) { if (atTyps[k]) atTyps[k].classList.toggle('show', !!on); }
+    function atFinal() { for (var k in atSteps) atSteps[k].classList.add('on'); for (var t in atTyps) atTyps[t].classList.remove('show'); atChat.classList.remove('at-fading'); }
+    function atStop() { atTimers.forEach(clearTimeout); atTimers = []; atPlaying = false; atFinal(); }
+    function atPlay() {
+      atTimers.forEach(clearTimeout); atTimers = [];
+      for (var k in atSteps) atSteps[k].classList.remove('on');
+      for (var t in atTyps) atTyps[t].classList.remove('show');
+      atChat.classList.remove('at-fading');
+      atPlaying = true;
+      atAt(300, function () { atShow('m1'); });
+      atAt(1200, function () { atDots('t1', true); });
+      atAt(2400, function () { atDots('t1', false); atShow('a1'); });
+      atAt(3500, function () { atShow('m2'); });
+      atAt(4500, function () { atDots('t2', true); });
+      atAt(5700, function () { atDots('t2', false); atShow('a2'); });
+      atAt(6800, function () { atShow('m3'); });
+      atAt(7800, function () { atDots('t3', true); });
+      atAt(8700, function () { atDots('t3', false); }); /* se detiene: no responde solo */
+      atAt(9100, function () { atShow('esc'); });
+      atAt(10500, function () { atShow('warm'); });
+      atAt(14800, function () { atChat.classList.add('at-fading'); });
+      atAt(15800, function () { if (atPlaying) atPlay(); });
+    }
+    var atIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { if (!atPlaying) atPlay(); } else if (atPlaying) { atStop(); } }); }, { threshold: 0.25 });
+    atIO.observe(atChat);
   }
   /* PRODUCTO-VIVO: el panel 3 cobra vida cuando la historia entra en pantalla
      (likes que suben 12→47→128→236, el caption se tipea, los comentarios
@@ -5515,11 +5552,23 @@ function lpCrecimientoHTML() {
 function lpAtiendeHTML() {
   return `
   <div class="section" id="atiende"><div class="wrap" style="max-width:760px">
+    <div class="at-kick">Atención</div>
     <h2>Atiende tu Instagram.</h2>
-    <p class="lede">No solo publicamos: también atendemos.</p>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">Respondemos los comentarios de tus posteos y los mensajes que te llegan, con tu voz y tu estilo. Y lo que necesita tu criterio te lo avisamos, para que lo veas vos: tu cuenta nunca queda sola.</p>
-    <div class="wd-chat"><div class="wd-msg in"><span class="wd-who">Comentario en tu posteo</span>¿La Berry Mille Crepe viene en tamaño grande? Es para un cumpleaños 🎂</div><div class="wd-msg out"><span class="wd-who">Posty responde</span>¡Hola! Sí — viene en tamaño grande, para 12 personas. ¿Querés que te reservemos una para el sábado?</div><div class="wd-msg in"><span class="wd-who">Mensaje directo</span>¿Mañana abren? ¿Desde qué hora?</div><div class="wd-msg out"><span class="wd-who">Posty responde</span>¡Hola! Mañana abrimos de 9 a 19 h. ¡Te esperamos!</div><div class="wd-flag"><span>Lo que necesita tu criterio te lo avisamos a vos →</span></div></div>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+    <p class="lede">No solo publicamos: también atendemos — con tu voz y tu estilo.</p>
+    <div class="at-card"><div class="at-chat">
+      <div class="at-row-v at-anim at-from-left on" data-at-step="m1"><div class="at-bubble-v"><span class="at-sender">Comentario en tu posteo</span><p>¿La torta de chocolate viene en tamaño grande? Es para un cumpleaños</p></div></div>
+      <div class="at-typing-row" data-at-typing="t1" aria-hidden="true"><div class="at-typing"><span></span><span></span><span></span></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-row-p at-anim at-from-right on" data-at-step="a1"><div class="at-posty-wrap"><div class="at-bubble-p"><span class="at-sender">Posty responde</span><p>¡Hola! Sí — viene en tamaño grande, para 12 personas. ¿Querés que te reservemos una para el sábado?</p></div><div class="at-chip-anchor"><span class="at-glass-chip"><span class="at-dot" aria-hidden="true"></span>respondido en el momento</span></div></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-chip-spacer" aria-hidden="true"></div>
+      <div class="at-row-v at-anim at-from-left on" data-at-step="m2"><div class="at-bubble-v"><span class="at-sender">Mensaje directo</span><p>¿Mañana abren? ¿Desde qué hora?</p></div></div>
+      <div class="at-typing-row" data-at-typing="t2" aria-hidden="true"><div class="at-typing"><span></span><span></span><span></span></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-row-p at-anim at-from-right on" data-at-step="a2"><div class="at-posty-wrap"><div class="at-bubble-p"><span class="at-sender">Posty responde</span><p>¡Hola! Mañana abrimos de 9 a 19 h. ¡Te esperamos!</p></div></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-row-v at-anim at-from-left on" data-at-step="m3"><div class="at-bubble-v"><span class="at-sender">Mensaje directo</span><p>Quiero encargar 30 tortas para el cumpleaños de mi empresa, ¿me pasás precio?</p></div></div>
+      <div class="at-typing-row" data-at-typing="t3" aria-hidden="true"><div class="at-typing"><span></span><span></span><span></span></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-esc on" data-at-step="esc" role="group" aria-label="Esto necesita tu criterio"><div class="at-esc-top"><div class="at-bell-disc" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5a5.5 5.5 0 0 0-5.5 5.5c0 4-1.3 5.4-2.2 6.2-.3.3-.1.8.3.8h14.8c.4 0 .6-.5.3-.8-.9-.8-2.2-2.2-2.2-6.2A5.5 5.5 0 0 0 12 3.5Z" fill="#fff"/><path d="M9.8 19a2.3 2.3 0 0 0 4.4 0" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg><span class="at-bell-dot"></span></div><p class="at-esc-title">Esto necesita tu criterio</p><span class="at-tag-para">PARA VOS</span></div><div class="at-quote"><span class="at-sender">Mensaje directo · recién</span><p>Quiero encargar 30 tortas para el cumpleaños de mi empresa, ¿me pasás precio?</p></div><div class="at-esc-actions"><a class="at-glass-btn at-esc-btn" href="/prueba">Ver y responder</a><p class="at-esc-note">Posty no lo respondió solo: te lo pasó a vos.</p></div></div>
+      <div class="at-warm on" data-at-step="warm"><div class="at-bubble-v"><p>¡Genial, gracias!</p></div><svg class="at-heart" width="19" height="17" viewBox="0 0 24 22" aria-hidden="true"><path d="M12 20.5C6 16.4 2 13.1 2 8.9 2 5.9 4.3 3.6 7.2 3.6c1.9 0 3.7 1 4.8 2.7 1.1-1.7 2.9-2.7 4.8-2.7 2.9 0 5.2 2.3 5.2 5.3 0 4.2-4 7.5-10 11.6Z" fill="#2793C8"/></svg></div>
+    </div></div>
+    <div class="at-cta-wrap"><a class="at-glass-btn" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>`;
 }
 function lpProgresoHTML() {
@@ -7290,20 +7339,60 @@ function landingView(cfg) {
 .wd-cal-d.on .wd-cal-chk{animation:wd-pop .3s cubic-bezier(.2,2.2,.4,1) forwards}
 .wd-cal-count{margin-top:12px;font-weight:800;font-size:13.5px;color:#0A1E33;text-align:center}
 .wd-cal-count b{color:#1FA855}
-.wd-chat{background:#fff;border-radius:22px;box-shadow:0 16px 38px rgba(10,30,51,.12);padding:20px;max-width:560px;margin:30px auto 0;text-align:left}
-.wd-msg{max-width:84%;padding:10px 14px;border-radius:16px;margin:0 0 10px;font-size:14.5px;line-height:1.45;color:#0A1E33;width:fit-content}
-.wd-who{display:block;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#7C8DA0;margin-bottom:3px}
-.wd-msg.in{background:#F1EFE7;border-bottom-left-radius:6px;margin-right:auto}
-.wd-msg.out{background:#E8F3FA;border-bottom-right-radius:6px;margin-left:auto}
-.wd-msg.out .wd-who{color:#2793C8}
-.wd-flag{display:flex;justify-content:center;margin-top:4px}
-.wd-flag span{background:#FEC14D;color:#0A1E33;font-weight:800;font-size:12.5px;padding:7px 14px;border-radius:99px;text-align:center}
-.wd-on .wd-chat .wd-msg,.wd-on .wd-chat .wd-flag{opacity:0;transform:translateY(10px);transition:opacity .45s ease,transform .45s ease}
-.wd-on .wd-chat.wd-live .wd-msg,.wd-on .wd-chat.wd-live .wd-flag{opacity:1;transform:none}
-.wd-on .wd-chat.wd-live .wd-msg:nth-child(2){transition-delay:.45s}
-.wd-on .wd-chat.wd-live .wd-msg:nth-child(3){transition-delay:.9s}
-.wd-on .wd-chat.wd-live .wd-msg:nth-child(4){transition-delay:1.35s}
-.wd-on .wd-chat.wd-live .wd-flag{transition-delay:1.8s}
+/* ATIENDE-VIVO: el chat en tres actos — porte del mock aprobado 18/11 (la escena
+   nace completa: sin JS = estado final; el ciclo vive en lpDisenoInit) */
+.at-kick{text-align:center;color:#2793C8;font-size:12.5px;font-weight:800;letter-spacing:2.6px;text-transform:uppercase;margin:0 0 14px}
+.at-card{max-width:600px;margin:30px auto 0;background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:24px;box-shadow:0 18px 40px rgba(10,30,51,.10);transform:rotate(.45deg);padding:24px 22px 26px;text-align:left}
+.at-chat{display:flex;flex-direction:column;gap:16px;transition:opacity .7s ease}
+.at-chat.at-fading{opacity:0}
+.at-anim{opacity:0;transform:translateY(12px);transition:opacity .55s ease,transform .55s cubic-bezier(.22,.9,.32,1);pointer-events:none}
+.at-anim.at-from-left{transform:translate(-10px,8px)}
+.at-anim.at-from-right{transform:translate(10px,8px)}
+.at-anim.on{opacity:1;transform:translate(0,0);pointer-events:auto}
+.at-row-v{display:flex;justify-content:flex-start}
+.at-bubble-v{max-width:82%;background:#F4F1EA;border-radius:18px 18px 18px 6px;padding:10px 15px 12px}
+.at-sender{display:block;font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:rgba(10,30,51,.52);margin-bottom:4px}
+.at-bubble-v p,.at-bubble-p p{margin:0;font-size:14.5px;line-height:1.5;color:#0A1E33;font-weight:500}
+.at-row-p{display:flex;justify-content:flex-end;align-items:flex-end;gap:9px}
+.at-posty-wrap{position:relative;max-width:82%;display:flex;flex-direction:column;align-items:flex-end}
+.at-bubble-p{background:#E4F2FA;border-radius:18px 18px 6px 18px;padding:10px 15px 12px}
+.at-bubble-p .at-sender{color:#2793C8}
+.at-avatar{width:34px;height:34px;border-radius:50%;flex:none;object-fit:cover;border:2px solid #fff;box-shadow:0 4px 10px rgba(10,30,51,.16);background:#fff}
+.at-chip-anchor{position:relative;height:0;width:100%}
+.at-glass-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;font-size:11.5px;font-weight:700;color:#0A1E33;background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(196,231,247,.62));-webkit-backdrop-filter:blur(10px) saturate(1.25);backdrop-filter:blur(10px) saturate(1.25);border:1px solid rgba(255,255,255,.75);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 8px 18px rgba(10,30,51,.14);white-space:nowrap}
+.at-chip-anchor .at-glass-chip{position:absolute;right:10px;top:-9px;z-index:3}
+.at-glass-chip .at-dot{width:7px;height:7px;border-radius:50%;background:#2793C8;flex:none;box-shadow:0 0 0 3px rgba(39,147,200,.18)}
+.at-chip-spacer{height:14px}
+.at-typing-row{display:none;justify-content:flex-end;align-items:flex-end;gap:9px}
+.at-typing-row.show{display:flex}
+.at-typing{display:inline-flex;align-items:center;gap:5px;background:#E4F2FA;border-radius:18px 18px 6px 18px;padding:13px 16px}
+.at-typing span{width:7px;height:7px;border-radius:50%;background:#2793C8;opacity:.45;animation:at-bounce 1s infinite ease-in-out}
+.at-typing span:nth-child(2){animation-delay:.15s}
+.at-typing span:nth-child(3){animation-delay:.3s}
+@keyframes at-bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+.at-esc{opacity:0;transform:translateX(56px) rotate(2deg);transition:opacity .65s ease,transform .7s cubic-bezier(.22,.9,.3,1);pointer-events:none;width:100%;border-radius:20px;padding:18px 18px 16px;background:linear-gradient(135deg,rgba(255,255,255,.78) 0%,rgba(205,235,249,.58) 58%,rgba(255,255,255,.66) 100%);-webkit-backdrop-filter:blur(16px) saturate(1.35);backdrop-filter:blur(16px) saturate(1.35);border:1px solid rgba(255,255,255,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(39,147,200,.12),0 20px 38px rgba(10,30,51,.16),0 4px 12px rgba(39,147,200,.14)}
+.at-esc.on{opacity:1;transform:translateX(0) rotate(-1deg);pointer-events:auto}
+.at-esc-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.at-bell-disc{position:relative;flex:none;width:46px;height:46px;border-radius:50%;background:#0A1E33;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(10,30,51,.28),inset 0 1px 0 rgba(255,255,255,.25)}
+.at-bell-disc svg{width:22px;height:22px;display:block}
+.at-bell-dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;background:#FEC14D;border:2px solid #fff}
+.at-esc-title{margin:0;font-size:17.5px;font-weight:800;color:#0A1E33;letter-spacing:-.01em;line-height:1.25;flex:1 1 180px}
+.at-tag-para{display:inline-flex;align-items:center;padding:6px 11px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:1.4px;color:#1B7AAB;background:linear-gradient(135deg,rgba(255,255,255,.75),rgba(39,147,200,.20));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 6px 14px rgba(39,147,200,.18)}
+.at-quote{margin-top:14px;background:rgba(255,255,255,.88);border:1px solid rgba(10,30,51,.06);border-radius:14px 14px 14px 5px;padding:10px 14px 12px;box-shadow:0 4px 12px rgba(10,30,51,.05)}
+.at-quote p{margin:0;font-size:14px;line-height:1.5;color:#0A1E33;font-weight:500}
+.at-esc-actions{margin-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.at-glass-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:13px 26px;border-radius:999px;color:#fff;font-size:15.5px;font-weight:700;text-decoration:none;cursor:pointer;background:linear-gradient(135deg,rgba(39,147,200,.88) 0%,rgba(84,178,226,.62) 55%,rgba(39,147,200,.78) 100%);-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid rgba(255,255,255,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -1px 0 rgba(10,30,51,.08),0 12px 26px rgba(39,147,200,.32);transition:transform .2s ease,box-shadow .2s ease}
+.at-glass-btn:hover{transform:translateY(-1px)}
+.at-esc-btn{min-height:44px;padding:11px 22px;font-size:14.5px}
+.at-esc-note{margin:0;font-size:12.5px;line-height:1.45;color:#47617A;font-weight:500;flex:1 1 200px}
+.at-warm{display:flex;align-items:center;justify-content:center;gap:9px;opacity:0;transform:scale(.85) translateY(8px);transition:opacity .45s ease,transform .5s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
+.at-warm.on{opacity:1;transform:scale(1) translateY(0);pointer-events:auto}
+.at-warm .at-bubble-v{max-width:260px;border-radius:16px;padding:8px 14px 10px}
+.at-warm .at-bubble-v p{font-size:14px}
+.at-heart{flex:none;display:block}
+.at-cta-wrap{text-align:center;margin-top:34px}
+@media(prefers-reduced-motion:reduce){.at-typing span{animation:none}.at-anim,.at-esc,.at-warm,.at-chat{transition:none}}
+@media(max-width:560px){.at-card{padding:20px 15px 22px;border-radius:22px}.at-bubble-v,.at-posty-wrap{max-width:88%}.at-bubble-v p,.at-bubble-p p{font-size:14px}.at-esc{padding:16px 14px 14px}.at-esc-title{font-size:16.5px}.at-glass-chip{font-size:11px;padding:6px 10px}.at-chip-anchor .at-glass-chip{right:2px}}
 .wd-pal{display:inline-flex;gap:6px;vertical-align:middle;margin-right:8px}
 .wd-pal i{width:19px;height:19px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 1px 4px rgba(10,30,51,.25)}
 .wd-on #crecimiento .strat-row{opacity:0;transform:translateX(18px);transition:opacity .5s ease,transform .5s ease}
@@ -7391,7 +7480,6 @@ function landingView(cfg) {
 .wd-strip{gap:6px}
 .wd-dname{font-size:10px}
 .wd-posted{font-size:10px;padding:2px 7px 2px 3px;left:5px;bottom:5px}.wd-posted-ck{width:14px;height:14px}
-.wd-chat{padding:16px}
 .wd-trial{flex-direction:column;max-width:320px}
 .wd-tday img{aspect-ratio:16/10}
 }
