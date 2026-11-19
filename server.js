@@ -4181,7 +4181,14 @@ function creaMetaDeIdea(uid, idea, estrellaPost, promptTxt) {
   } catch (e) { return ''; }
 }
 
-async function makeIdeaDraft(uid, idea) {
+async function makeIdeaDraft(uid, idea, opts) {
+  // (LOTE FRENO-CUENTA-PROPIA) BACKSTOP de creación: aunque nazca un
+  // llamador nuevo, la cuenta propia no recibe borradores del
+  // pipeline. Único origen exento: el gesto manual expreso del dueño
+  // (su toque en «Hacelo» sobre una idea suya, que pasa
+  // manualExpreso). La carga por pieza-mano no pasa por acá: usa
+  // crearPosteoRescateTardio.
+  if (!(opts && opts.manualExpreso) && esCuentaPropia(uid)) return { ok: false, reason: 'cuenta_propia' };
   // (v236) FRESCURA: una idea vencida NO se hace, aunque la llamen
   // directo (el endpoint o el admin pasan por acá): su efeméride ya
   // pasó o su TTL expiró. Queda marcada expired y el llamador
@@ -4516,7 +4523,7 @@ app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res)
   const idea = db.prepare(`SELECT * FROM posty_ideas WHERE id = ? AND user_id = ? AND status = 'pending'`).get(req.params.id, uid);
   if (!idea) return res.status(404).json({ error: 'Esa idea ya no está 😅 Actualizá y probá de nuevo' });
   try {
-    const r = await makeIdeaDraft(uid, idea);
+    const r = await makeIdeaDraft(uid, idea, { manualExpreso: true });
     if (!r.ok) {
       // (v236) Vencida: mensaje honesto y definitivo, no un "probá en
       // un rato" que promete lo que nunca va a pasar.
@@ -22132,6 +22139,17 @@ async function ensureTodayPost(uid, tz, now) {
           if (fd && fd > hoy && fd <= shiftDays(hoy, 3)) return { ok: false, reason: 'prueba_por_empezar' };
         }
       } catch (e) { /* (CORTE-ASEGURADOR) lectura de prueba ilegible: fail-closed — no se genera */ return { ok: false, reason: 'prueba_ilegible' }; }
+      // (LOTE FRENO-CUENTA-PROPIA) La cuenta propia NO genera: el
+      // freno vive en el paso de generación (no en la entrada) a
+      // propósito — los pasos 1/1.5/2 no crean nada: reusan lo ya
+      // programado o promueven un borrador EXISTENTE (el gesto
+      // deliberado del dueño sobre su propio día sigue mandando,
+      // contrato DESCARTE-TERMINAL), y los frenos de arriba
+      // (day_stops, publishing_stopped, marca de invitado) ya
+      // devolvieron su reason propio. Acá, crear deja de ser opción:
+      // cubre home, ritual y push matutina, que comparten este
+      // asegurador.
+      if (esCuentaPropia(uid)) return { ok: false, reason: 'cuenta_propia' };
       // 3) Nada hoy: generar UNO. Cupo semanal de feed: sin cupo no se
       // genera (límite honesto del plan, igual que /api/ritual/elegir).
       // (LOTE SERIE-FEED-PROPIO) Guarda de generación: si hoy quedó
@@ -23421,7 +23439,41 @@ function pipelineAliveRecently(uid) {
   } catch (e) { return false; }
 }
 // Los 4 gates juntos. Devuelve { ok, reason }.
+// ---------- (LOTE FRENO-CUENTA-PROPIA) La cuenta de la casa no genera ----------
+// Regla: el software NUNCA crea posteos para la cuenta propia
+// (@posty.communitymanager / @postycommunitymanager): su feed es
+// línea a mano — piezas cargadas por pieza-mano o gesto manual
+// expreso del dueño — y la generación automática la paría igual cada
+// día (724→725→730, 19/11: el asegurador reponía lo que el dueño
+// borraba, porque el freno por día depende de marcas que no todos
+// los caminos escriben). La guarda vive en los caminos de creación,
+// no en los datos. Identidad por dos vías (SPEC §4): el id en la
+// lista de la casa (env HOUSE_USER_IDS, default '12') o el
+// ig_username normalizado de la casa (users o profiles; cubre ES y
+// EN). Fail-closed: si la identidad no se puede leer, el camino de
+// generación frena igual (mismo criterio que la marca de línea a
+// mano en el asegurador).
+const HOUSE_IGS = new Set(['posty.communitymanager', 'postycommunitymanager']);
+function igEsDeLaCasa(ig) {
+  return HOUSE_IGS.has(String(ig || '').trim().replace(/^@/, '').toLowerCase());
+}
+function esCuentaPropia(uid) {
+  let duda = false;
+  try {
+    const ids = String(process.env.HOUSE_USER_IDS || '12').split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0);
+    if (ids.includes(Number(uid))) return true;
+  } catch (e) { duda = true; }
+  let ig = null;
+  try { const u = db.prepare('SELECT ig_username FROM users WHERE id = ?').get(uid); if (u) ig = u.ig_username; } catch (e) { duda = true; }
+  if (!ig) { try { const p = db.prepare('SELECT ig_username FROM profiles WHERE user_id = ?').get(uid); if (p) ig = p.ig_username; } catch (e) { duda = true; } }
+  if (ig) return igEsDeLaCasa(ig);
+  return duda;
+}
 function nextWeekEligible(uid, weekKey) {
+  // (LOTE FRENO-CUENTA-PROPIA) La cuenta propia nunca es elegible
+  // para el motor semanal: frena en cadena backfillThisWeek,
+  // nextWeekSweep y retrySweepFailures, que consultan esta puerta.
+  if (esCuentaPropia(uid)) return { ok: false, reason: 'cuenta_propia' };
   // (v864, M185-hold) Cuenta en hold: se saltea antes que cualquier otro
   // gate, con razón propia para que el sweep la distinga de 'no_plan'.
   if (userOnHold(uid)) return { ok: false, reason: 'on_hold' };
@@ -23894,6 +23946,14 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   if (userOnHold(uid)) {
     console.log(`[pipeline:${tag}] usuario ${uid}: en hold — no se genera`);
     return { ok: false, reason: 'on_hold', created: 0 };
+  }
+  // (LOTE FRENO-CUENTA-PROPIA) Guarda propia a la entrada (defensa en
+  // profundidad: hay llamadores que no pasan por nextWeekEligible,
+  // p. ej. /api/admin/generate-week o el rebuild): la cuenta de la
+  // casa no genera semanas por ningún camino.
+  if (esCuentaPropia(uid)) {
+    console.log(`[pipeline:${tag}] usuario ${uid}: cuenta propia — no se genera`);
+    return { ok: false, reason: 'cuenta_propia', created: 0 };
   }
   try {
     let founderGate = false;
@@ -25061,6 +25121,9 @@ function bumpRebuildCount(uid, wk) {
 // borradores ya fueron marcados como rejected y eliminados. Aplica gates + tope
 // de 2 reconstrucciones/semana. Devuelve { rebuilding, reason?, count? }.
 function maybeStartRebuild(uid, wk) {
+  // (LOTE FRENO-CUENTA-PROPIA) Sin reconstrucción automática para
+  // la cuenta propia.
+  if (esCuentaPropia(uid)) return { rebuilding: false, reason: 'cuenta_propia' };
   const tz = userTz(uid);
   const week = wk || mondayKeyOf(tzToday(tz));
   if (!planOrTrialOk(uid)) return { rebuilding: false, reason: 'no_plan' };
@@ -25815,6 +25878,9 @@ function serieFeedSweep() {
     let emitidas = 0;
     for (const a of alertas) {
       try {
+        // (LOTE FRENO-CUENTA-PROPIA) La serie del feed propio es de
+        // la línea a mano: el barrido no la vigila ni la registra.
+        if (esCuentaPropia(a.user_id)) continue;
         const p = db.prepare('SELECT status FROM posts WHERE id = ?').get(a.post_id);
         if (!p || p.status !== 'draft') continue;
         supportCases.logTeamAction(db, { actor: 'sistema', action: a.action, userId: a.user_id, postId: a.post_id, detalle: a.detalle });
@@ -25832,6 +25898,10 @@ function serieFeedSweep() {
 async function autoArmWeek(uid, tag) {
   try {
     tag = tag || 'auto-arm';
+    // (LOTE FRENO-CUENTA-PROPIA) La cuenta propia no se auto-arma
+    // (ni en login): ni extras ni programación automática — su feed
+    // es línea a mano.
+    if (esCuentaPropia(uid)) { console.log(`[auto-arm:${tag}] usuario ${uid}: cuenta propia — no se arma`); return { ok: false, reason: 'cuenta_propia', scheduled: [] }; }
     // 1) Historias + reels del plan (si el plan los incluye).
     try {
       const { generateWeekExtras } = require('./story-reel');
@@ -25958,6 +26028,9 @@ app.post('/api/posts/generate-extras', requireAuth, (req, res) => {
   res.json({ ok: true, started: true });
   (async () => {
     try {
+      // (LOTE FRENO-CUENTA-PROPIA) Los extras automáticos (historias
+      // y reels del plan) tampoco corren para la cuenta propia.
+      if (esCuentaPropia(uid)) { console.log(`[extras:manual] usuario ${uid}: cuenta propia — no se generan extras`); return; }
       const { generateWeekExtras } = require('./story-reel');
       const tz = userTz(uid);
       const weekKey = mondayKeyOf(tzToday(tz));
@@ -31787,6 +31860,10 @@ async function rescateSemanaSweep() {
       if (reabiertas >= RESCATE_SWEEP_MAX_SEMANAS) break;
       const ig = row && row.ig;
       if (!ig || semanaCadenasVivas.has(ig)) continue;
+      // (LOTE FRENO-CUENTA-PROPIA) El rescate de semanas es de la
+      // puerta de invitados: una clave con la identidad de la casa
+      // jamás se re-engancha.
+      if (igEsDeLaCasa(ig)) continue;
       let payload = null;
       try { payload = row.payload ? JSON.parse(row.payload) : null; } catch (e) { payload = null; }
       if (!payload || !Array.isArray(payload.posts)) continue;
@@ -46689,7 +46766,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1187';
+const BUILD_ID = '20261105-v1188';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
