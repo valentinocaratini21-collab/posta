@@ -260,6 +260,27 @@
     .ej-car img{flex:0 0 100%;width:100%;aspect-ratio:4/5;object-fit:cover;scroll-snap-align:start;display:block;background:var(--bg2)}
     .daychip{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:6px 11px;box-shadow:0 4px 14px rgba(10,30,51,.12)}
     .ej-count{position:absolute;top:10px;right:10px;z-index:3;background:rgba(10,30,51,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 10px}
+    .ej2{max-width:900px;margin-left:auto;margin-right:auto}
+    .ej2-free{color:#2793C8}
+    .ej2-sub{text-align:center;font-size:16.5px;line-height:1.55;color:#47617A;max-width:620px;margin:-6px auto 26px}
+    .ej2-feed{background:#fff;border:1px solid var(--line);border-radius:28px;box-shadow:0 24px 60px rgba(10,30,51,.14);padding:18px;text-align:left}
+    .ej2-head{display:flex;align-items:center;gap:12px;padding:2px 6px 14px}
+    .ej2-head img{width:44px;height:44px;border-radius:50%;object-fit:cover;display:block}
+    .ej2-hid b{font-size:16px;display:block;color:#0A1E33;line-height:1.25}
+    .ej2-hid span{font-size:13px;color:#7A8FA3}
+    .ej2-tag{margin-left:auto;background:#FDF3D7;color:#8A6D1F;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:999px;white-space:nowrap}
+    .ej2-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:12px}
+    .ej2-col{display:grid;gap:12px;grid-template-rows:1fr 1fr;min-height:0}
+    .ej2 .ej-card{max-width:none;border:none;border-radius:20px;box-shadow:none;height:100%}
+    .ej2-big img.ph{width:100%;height:auto;aspect-ratio:4/5;object-fit:cover}
+    .ej2-col .ej-card video{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;object-fit:cover}
+    .ej2-col .ej-car{position:absolute;inset:0;height:auto}
+    .ej2-col .ej-car img{height:100%;aspect-ratio:auto;object-position:top}
+    .ej2 .daychip{top:auto;bottom:10px}
+    .ej2-foot{display:flex;align-items:center;gap:16px;padding:18px 6px 4px;flex-wrap:wrap}
+    .ej2-cta{background:linear-gradient(135deg,rgba(62,166,219,.92),rgba(27,111,160,.9));color:#fff;font-weight:800;font-size:16.5px;padding:15px 28px;border-radius:999px;text-decoration:none;box-shadow:0 10px 24px rgba(39,147,200,.38)}
+    .ej2-foot p{font-size:13.5px;color:#7A8FA3;margin:0}
+    @media (max-width:680px){.ej2-grid{grid-template-columns:1fr}.ej2-col{grid-template-columns:1fr 1fr;grid-template-rows:none}.ej2-col .ej-card{aspect-ratio:4/5;height:auto}.ej2-big img.ph{aspect-ratio:4/5;height:auto}.ej2-foot{justify-content:center;text-align:center}}
     </style>
     
     
@@ -294,27 +315,39 @@
 <p class="lp-manda" style="text-align:center;font-size:15px;font-weight:700;color:#0A1E33;margin:12px auto 0;max-width:560px">📸 ¿Tenés fotos y videos de tu producto? Mandámelos por el chat: yo los edito, les pongo caption y los posteo por vos.</p>
   </div></div>
   <div class="lp-prueba"><div class="wrap">
-<div class="ej">
-      <p class="ej-title">Las pruebas gratis se ven así</p>
-      <div class="ej-row">
-        <div class="ej-card">
-          <img class="ph" src="/lp-es-yoga-hero.jpg" alt="Día 1 de la prueba: una imagen" loading="lazy">
-          <span class="daychip">Día 1<small>Imagen</small></span>
+<div class="ej ej2">
+      <p class="ej-title">Esto le hicimos a Tomoko. <span class="ej2-free">Gratis.</span></p>
+      <p class="ej2-sub">Tres días de posteos con sus productos reales, diseñados uno por uno. Tu negocio se puede ver así esta misma semana.</p>
+      <div class="ej2-feed">
+        <div class="ej2-head">
+          <img src="/lp-tomoko-avatar.jpg" alt="Patisserie Tomoko">
+          <div class="ej2-hid"><b>patisserie.tomoko</b><span>Patisserie Tomoko · Brooklyn</span></div>
+          <span class="ej2-tag">Prueba gratis</span>
         </div>
-        <div class="ej-card">
-          <div class="ej-car" id="ejCar">
-            <img src="/lp-es-yoga-clase.jpg" alt="Día 2 de la prueba: un carrusel, foto 1 de 5" loading="lazy">
-            <img src="/lp-es-yoga-respiro.jpg" alt="Día 2 de la prueba: un carrusel, foto 2 de 5" loading="lazy">
-            <img src="/lp-es-yoga-practica.jpg" alt="Día 2 de la prueba: un carrusel, foto 3 de 5" loading="lazy">
-            <img src="/lp-es-yoga-descanso.jpg" alt="Día 2 de la prueba: un carrusel, foto 4 de 5" loading="lazy">
-            <img src="/lp-es-yoga-cierre.jpg" alt="Día 2 de la prueba: un carrusel, foto 5 de 5" loading="lazy">
+        <div class="ej2-grid">
+          <div class="ej-card ej2-big">
+            <img class="ph" src="/prueba-tomoko-dia1.jpg" alt="Día 1 de la prueba de Tomoko: la Mille Crêpe de frutos rojos, diseñada" loading="lazy">
+            <span class="daychip">Día 1<small>Imagen</small></span>
           </div>
-          <span class="daychip">Día 2<small>Carrusel</small></span>
-          <span class="ej-count" id="ejCount">1 / 5</span>
+          <div class="ej2-col">
+            <div class="ej-card">
+              <div class="ej-car" onscroll="var n=this.parentNode.querySelector('.ej-count');if(n){var i=Math.round(this.scrollLeft/Math.max(1,this.clientWidth));if(i<0)i=0;if(i>2)i=2;n.textContent=(i+1)+' / 3'}">
+                <img src="/prueba-tomoko-yuzu.jpg" alt="Día 2 de la prueba de Tomoko: carrusel de la tarta de yuzu, foto 1 de 3" loading="lazy">
+                <img src="/prueba-tomoko-yuzu-det.jpg" alt="Día 2 de la prueba de Tomoko: el domo de yuzu de cerca, foto 2 de 3" loading="lazy">
+                <img src="/prueba-tomoko-yuzu-caja.jpg" alt="Día 2 de la prueba de Tomoko: la caja de la casa, foto 3 de 3" loading="lazy">
+              </div>
+              <span class="daychip">Día 2<small>Carrusel</small></span>
+              <span class="ej-count">1 / 3</span>
+            </div>
+            <div class="ej-card">
+              <video src="/prueba-tomoko-dia3.mp4" poster="/prueba-tomoko-dia3-poster.jpg" autoplay muted loop playsinline preload="metadata" oncanplay="try{var pr=this.play();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}" aria-label="Día 3 de la prueba de Tomoko: el video del hojicha"></video>
+              <span class="daychip">Día 3<small>Video completo</small></span>
+            </div>
+          </div>
         </div>
-        <div class="ej-card">
-          <video src="/puerta-ej-yoga-dia3.mp4" poster="/puerta-ej-yoga-dia3-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Día 3 de la prueba: un video"></video>
-          <span class="daychip">Día 3<small>Video completo</small></span>
+        <div class="ej2-foot">
+          <a class="ej2-cta" href="/prueba">Quiero mi prueba así</a>
+          <p>3 días gratis · sin tarjeta · cancelás cuando querás</p>
         </div>
       </div>
     </div>
@@ -327,7 +360,7 @@
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=817"></script>
+<script src="/app.js?v=818"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
