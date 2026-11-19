@@ -8355,8 +8355,6 @@ function landingView(cfg) {
     <figure><img src="lp-tomoko-hojicha.jpg" alt="Hojicha Mille Crepe de Patisserie Tomoko"></figure>
     <figure><img src="lp-tomoko-yuzu.jpg" alt="Yuzu Mousse de Patisserie Tomoko"></figure>
   </div>
-  <p class="mk-feed-cap"><b>patisserietomoko</b> · El de hoy es la Berry Mille Crepe: salió a las 19:00 y ya está en tu feed, resaltado.</p>
-  <p class="mk-ctrl">¿No te cierra? Lo rehacés, lo editás, lo frenás o lo eliminás — todo desde la app, en un toque.</p>
 </div>
     </div>
     <div class="pz-beforeafter">

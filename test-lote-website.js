@@ -62,11 +62,11 @@ t(!app.includes('webMode') && !idx.includes('webMode') && !idxEn.includes('webMo
 /* ---------- 3. Llegada del posteo (mock v5) */
 t(app.includes('mk-arrive'), 'SPA bloque llegada');
 t(app.includes('Tu posteo del día ya está listo. Sale hoy 7pm al feed y a tu story.'), 'SPA notif copia exacta');
-t(app.includes('El de hoy es la Berry Mille Crepe: salió a las 19:00 y ya está en tu feed, resaltado.'), 'SPA feed cap');
+t(!app.includes('El de hoy es la Berry Mille Crepe: salió a las 19:00 y ya está en tu feed, resaltado.'), 'SPA feed cap fuera (FUERA-REPETIDO)');
 t(css.includes('.mk-feed figure:not(.mk-hoy) img{filter:brightness(.8)}'), 'CSS no-hoy oscurecidas');
 t(idxEn.includes('Your post of the day is ready. It goes out today at 7pm to your feed and your story.'), 'EN notif');
-t(app.includes('¿No te cierra? Lo rehacés, lo editás, lo frenás o lo eliminás — todo desde la app, en un toque.'), 'SPA línea control del posteo (agregado 14:49)');
-t(idxEn.includes('Not feeling it? Redo it, edit it, pause it or delete it — all from the app, in one tap.'), 'EN línea control del posteo (agregado 14:49)');
+t(!app.includes('¿No te cierra? Lo rehacés, lo editás, lo frenás o lo eliminás — todo desde la app, en un toque.'), 'SPA línea control del posteo fuera (FUERA-REPETIDO)');
+t(!idxEn.includes('Not feeling it? Redo it, edit it, pause it or delete it — all from the app, in one tap.'), 'EN línea control del posteo fuera (FUERA-REPETIDO)');
 t(css.includes('.mk-ctrl{'), 'CSS regla mk-ctrl');
 
 /* ---------- 4. Carrusel Patagonia (mock v6/v7) */
