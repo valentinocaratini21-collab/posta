@@ -5784,44 +5784,6 @@ function lpAtiendeHTML() {
     <div class="at-cta-wrap"><a class="at-glass-btn" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>`;
 }
-function lpProgresoHTML() {
-  return `
-  <div class="section" id="progreso"><div class="wrap">
-    <div class="pg-head">
-      <p class="pg-kick">El progreso</p>
-      <h2>Ves el progreso.</h2>
-      <p class="lede">Tu Instagram avanza — y se ve.</p>
-    </div>
-    <div class="pg-zone">
-      <div class="pg-phone">
-        <div class="pg-app-head">
-          <img class="pg-ava" src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko">
-          <div class="pg-id"><b>patisserietomoko</b><span>Tu mes · noviembre</span></div>
-          <span class="pg-hora" id="pgHora"><span class="pg-dot"></span>19:00</span>
-        </div>
-        <div class="pg-chips">
-          <span class="pg-chip pg-chip-dia" id="pgChipDia">Día <b id="pgDiaN">0</b> de 30</span>
-          <span class="pg-chip pg-chip-racha" id="pgChipRacha"><span class="pg-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#FEC14D" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b id="pgRachaN">0</b> <span id="pgRachaTxt">días seguidos</span></span></span>
-        </div>
-        <div class="pg-grid-wrap">
-          <div class="pg-dow" aria-hidden="true"><i>L</i><i>M</i><i>M</i><i>J</i><i>V</i><i>S</i><i>D</i></div>
-          <div class="pg-grid" id="pgGrid" role="img" aria-label="Calendario de noviembre de Patisserie Tomoko que se va llenando de posteos día a día"></div>
-          <div class="pg-banner" id="pgBanner"><span class="pg-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>30 de 30 · Mes completo</div>
-        </div>
-        <div class="pg-react" aria-live="polite">
-          <img class="pg-rthumb" id="pgThumb" src="lp-mes-01.jpg" alt="La pieza más reciente de Patisserie Tomoko">
-          <div class="pg-rmain">
-            <p class="pg-rtitle" id="pgTitle">Tu mes está por empezar.</p>
-            <p class="pg-likes"><svg class="pg-heart" id="pgHeart" viewBox="0 0 24 24" fill="#E0245E" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span id="pgLikeN">0</span> <small>me gusta en la pieza de hoy</small></p>
-            <div class="pg-comment" id="pgComment"><b id="pgCUser"></b> <span class="pg-q" id="pgCText"></span><span class="pg-estado pg-nuevo" id="pgCEstado"></span></div>
-          </div>
-        </div>
-      </div>
-      <p class="pg-payoff">Esto es lo que ves en la app: <b>tu feed llenándose, día a día.</b> El progreso no se promete: se muestra.</p>
-      <button class="pg-replay" id="pgReplay" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3"/><path d="M3 4v5h5"/></svg>Ver el mes de nuevo</button>
-    </div>
-  </div></div>`;
-}
 function lpSubirHTML() {
   return `
   <div class="section" id="subir"><div class="wrap">
@@ -8848,7 +8810,6 @@ function landingView(cfg) {
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
-  ${lpProgresoHTML()}
   <div class="section wd-reveal" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
