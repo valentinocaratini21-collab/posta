@@ -15,8 +15,10 @@
 //
 // EL PLAN, DESDE LOS DATOS QUE LA SEMANA YA TRAE:
 //   - fechas: payload.week[i] {day, date, hour} — en la puerta sin
-//     gasto las arma buildTrialWeekCasara con la regla nueva (primer
-//     slot en el próximo 19:00, hoy si no pasó, mañana si pasó).
+//     gasto las arma buildTrialWeekCasara. (LOTE PLAN-MAGIA · 18/11)
+//     La regla vigente es la del modelo: el día 1 sale MAÑANA 19:00
+//     siempre; la cáscara ya nace así y esta proyección reasigna las
+//     cáscaras viejas que todavía arrancan hoy (ver planSemanaPrueba).
 //   - estrella: payload.digest.producto_estrella (o la estrella que
 //     el spec registró para el slot 0 en design.posts[0].creatividad).
 //   - nombre de la pieza: posts[i].headline o design.posts[i].headline
@@ -169,6 +171,26 @@ function planSemanaPrueba(payload, nowMs) {
       };
     });
     if (!slots.length) return null;
+    // (LOTE PLAN-MAGIA · 18/11) EL MODELO MANDA: el día 1 de una
+    // prueba FRESCA sale MAÑANA 19:00, nunca hoy. Una cáscara armada
+    // con la regla vieja (primer slot hoy, si el 19:00 no había
+    // pasado) se reasigna acá, en la proyección: si el slot 1 sigue
+    // en plan y su etiqueta es HOY, los tres slots corren un día —
+    // mañana / +2 / +3, con las etiquetas recalculadas con las
+    // mismas tablas y zonas de etiquetaHoy — y ninguno queda
+    // «sale hoy». Un slot 1 ya LISTO no se toca: su fecha es la
+    // real de su pieza cargada, y la proyección no la reescribe.
+    if (slots[0].estado === 'plan' && slots[0].sale_hoy) {
+      const base = Number(nowMs) || Date.now();
+      for (let i = 0; i < slots.length; i++) {
+        const et = etiquetaHoy(lang, base + (i + 1) * 86400000);
+        if (et.day && et.date) {
+          slots[i].dia_semana = et.day;
+          slots[i].fecha = et.date;
+          slots[i].sale_hoy = false;
+        }
+      }
+    }
     let formatos = formatosSistema(payload);
     if (!formatos.length) {
       for (const s of slots) if (s.formato && !formatos.includes(s.formato)) formatos.push(s.formato);

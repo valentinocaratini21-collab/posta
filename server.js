@@ -39968,15 +39968,16 @@ function buildTrialWeek(n, lang) {
 }
 
 // (LOTE PUERTA-SIN-GASTO) Los 3 lugares de la semana cáscara llevan su
-// día/hora REAL de publicación según la regla de la prueba: la primera
-// pieza sale en el próximo horario bueno — hoy 19:00 si todavía no
-// pasó, mañana 19:00 si ya pasó — y las otras dos en los días corridos,
-// siempre 19:00 (el mismo criterio con el que la agenda programa cada
-// pieza cuando se carga a mano). Así la casa puede decir «sale mañana
-// a las 19:00» sobre el lugar del día 1 sin prometer nada que la agenda
-// no vaya a cumplir. La zona se estima por el idioma del embudo (los
-// dos mercados de lanzamiento); el horario exacto lo fija la agenda
-// con la zona real del invitado al cargarse cada pieza.
+// día/hora REAL de publicación según la regla de la prueba.
+// (LOTE PLAN-MAGIA · 18/11 · modelo aprobado «hoy te estudiamos,
+// mañana sale») La primera pieza sale MAÑANA a las 19:00, SIEMPRE —
+// nunca hoy, entre a la hora que entre — y las otras dos en los días
+// corridos, siempre 19:00. La regla vieja (hoy 19:00 si todavía no
+// pasaba) dejaba el slot 1 fechado hoy y la casa se contradecía con
+// su propio banner («mañana salga tu primer posteo»): la recorrida en
+// vivo del 18/11 lo cazó. La zona se estima por el idioma del embudo
+// (los dos mercados de lanzamiento); el horario exacto lo fija la
+// agenda con la zona real del invitado al cargarse cada pieza.
 function buildTrialWeekCasara(lang) {
   const en = lang === 'en';
   const tz = en ? 'America/New_York' : 'America/Argentina/Buenos_Aires';
@@ -39994,7 +39995,7 @@ function buildTrialWeekCasara(lang) {
     y = Number(got.year); m = Number(got.month); d = Number(got.day); hh = Number(got.hour) % 24;
   } catch (e) { /* sin zona legible: la semana genérica de siempre */ }
   if (!y || !m || !d) return buildTrialWeek(3, lang);
-  const startOffset = hh >= 19 ? 1 : 0; // 19:00 de hoy ya pasó → mañana
+  const startOffset = 1; // (PLAN-MAGIA) día 1 = mañana 19:00, sin excepción
   return Array.from({ length: 3 }, (_, i) => {
     const dt = new Date(Date.UTC(y, m - 1, d + startOffset + i, 12, 0, 0));
     return {
@@ -46509,7 +46510,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1180';
+const BUILD_ID = '20261105-v1181';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -17950,7 +17950,7 @@ function fastTrackCardHTML(candidates) {
   return `
   <div class="card ft-card" id="fastTrackCard">
     <div class="ft-head">
-      <div class="ft-title">' + pzIc('rocket', 13) + ' Tu primer posteo</div>
+      <div class="ft-title">${pzIc('rocket', 13)} Tu primer posteo</div>
       <div class="ft-sub">Elegí uno, publicalo, y listo — sale en tu Instagram.</div>
     </div>
     <div class="ft-step"><div class="ft-stepn">1</div><div class="ft-stepbody">
@@ -18107,7 +18107,7 @@ function firstPublishCardHTML(drafts) {
     : 'Todavía no hay borradores — tocá el botón, armo el primero al toque y lo publicamos';
   return `
   <div class="card" id="firstPublishCard" style="border:2px solid var(--yel);background:#FFF9EC">
-    <h3 style="margin:0 0 4px">' + pzIc('rocket', 13) + ' Tu primer posteo</h3>
+    <h3 style="margin:0 0 4px">${pzIc('rocket', 13)} Tu primer posteo</h3>
     <p class="hint" style="margin:0 0 10px">${sub}</p>
     <button type="button" class="btn btn-primary btn-block" id="btnFirstPublish" style="min-height:52px;font-size:16px;touch-action:manipulation">${pzIc('bolt', 18)} Publicar mi primero</button>
     <div id="fpPubMount" style="margin-top:10px"></div>
@@ -26458,8 +26458,16 @@ function pzWowConnectBind(root) {
    pieza y su estado, con la línea del audio para pedir un cambio
    hasta las 17:00 (nada frena la salida de las 19:00). Debajo van
    la tarjeta de la estrategia (aprobación en un toque, persistida
-   en el servidor), el banner de conexión con fecha (la misma copia
-   del candado de la pieza, botón con el @) y la tira del día 4. */
+   en el servidor) y la tira del día 4.
+   (LOTE PLAN-MAGIA · 18/11 · correcciones de Valentino sobre la
+   captura en vivo) El banner de conexión con fecha (la misma copia
+   del candado de la pieza, botón DE VIDRIO con el @) va ARRIBA de
+   los slots, y los slots se muestran en orden inverso — día 3 a la
+   izquierda, día 2 en el medio, día 1 a la derecha — solo orden de
+   pantalla: cada slot conserva su día, su fecha y su dato. El
+   vidrio del slot en plan es mágico (luz que lo atraviesa, hilo de
+   luz, chispas flotantes, brillo que lo recorre; CSS puro, con
+   prefers-reduced-motion quieto) también en el estado vacío. */
 function mnSlotWhen(s, en) {
   const hora = String((s && s.hora) || '');
   const dia = String((s && s.dia_semana) || '');
@@ -26473,12 +26481,13 @@ function mnPlanHTML(res, en) {
   try {
     const plan = res && res.plan;
     if (!plan || !Array.isArray(plan.slots) || !plan.slots.length) return '';
-    const slots = plan.slots.map((s) => {
+    // (PLAN-MAGIA) Orden de pantalla inverso: día 3 · día 2 · día 1.
+    const slots = plan.slots.slice().reverse().map((s) => {
       const nombre = String(s.nombre || '');
       const formato = String(s.formato || '');
       const titulo = nombre || formato;
-      return `<div class="mn-slot mn-slot-${esc(String(s.estado || 'plan'))}">`
-        + (s.media ? `<img class="mn-slot-img" src="${esc(String(s.media))}" alt="">` : `<div class="mn-slot-glass">${pzIc('sparkle', 20)}<span class="mn-slot-dia">${en ? 'Day' : 'Día'} ${Number(s.dia) || ''}</span></div>`)
+      return `<div class="mn-slot mn-slot-${esc(String(s.estado || 'plan'))}" data-mn-dia="${Number(s.dia) || ''}">`
+        + (s.media ? `<img class="mn-slot-img" src="${esc(String(s.media))}" alt="">` : `<div class="mn-slot-glass"><span class="mn-spark mn-spark-a"></span><span class="mn-spark mn-spark-b"></span><span class="mn-spark mn-spark-c"></span><span class="mn-slot-orb">${pzIc('sparkle', 20)}</span><span class="mn-slot-dia">${en ? 'Day' : 'Día'} ${Number(s.dia) || ''}</span></div>`)
         + `<div class="mn-slot-body">`
         + (titulo ? `<div class="mn-slot-name">${esc(titulo)}</div>` : '')
         + ((formato && nombre) ? `<div class="mn-slot-fmt">${esc(formato)}</div>` : '')
@@ -26506,10 +26515,10 @@ function mnPlanHTML(res, en) {
     let banner = '';
     if (res && !res.conectado) {
       const at = String(res.ig || '').replace(/^@/, '');
-      banner = `<div class="mn-connect"><span class="mn-connect-t">${en ? 'Connect your Instagram today so your first post goes out tomorrow' : 'Conectá tu Instagram hoy para que mañana salga tu primer posteo'}</span><button type="button" class="btn btn-primary btn-sm" data-mn-connect>${en ? ('Connect ' + (at ? '@' + at : 'your Instagram')) : ('Conectar ' + (at ? '@' + at : 'tu Instagram'))}</button></div>`;
+      banner = `<div class="mn-connect"><span class="mn-connect-t">${en ? 'Connect your Instagram today so your first post goes out tomorrow' : 'Conectá tu Instagram hoy para que mañana salga tu primer posteo'}</span><button type="button" class="mn-connect-btn" data-mn-connect>${en ? ('Connect ' + (at ? '@' + at : 'your Instagram')) : ('Conectar ' + (at ? '@' + at : 'tu Instagram'))}</button></div>`;
     }
     const dia4 = `<div class="mn-dia4">${en ? 'Day 4: your Instagram keeps going on its own' : 'Día 4: tu Instagram sigue solo'} · <b>US$199${en ? '/mo' : '/mes'}</b> · ${en ? 'founder price' : 'precio fundador'}</div>`;
-    return `<section class="mn-plan" id="mnPlan"><div class="mn-plan-head"><b>${en ? 'Your week, planned' : 'Tu semana, planeada'}</b>${plan.estrella ? `<span class="mn-plan-star">★ ${esc(String(plan.estrella))}</span>` : ''}</div><div class="mn-grid">${slots}</div>${audio}${strat}${banner}${dia4}</section>`;
+    return `<section class="mn-plan" id="mnPlan"><div class="mn-plan-head"><b>${en ? 'Your week, planned' : 'Tu semana, planeada'}</b>${plan.estrella ? `<span class="mn-plan-star">★ ${esc(String(plan.estrella))}</span>` : ''}</div>${banner}<div class="mn-grid">${slots}</div>${audio}${strat}${dia4}</section>`;
   } catch (e) { return ''; }
 }
 async function mnAprobarEstrategia(btn) {

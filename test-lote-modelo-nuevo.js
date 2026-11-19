@@ -105,7 +105,7 @@ if (MN) {
     { day: '—', date: '—', hour: '19:00', post: 2 },
   ];
   const planHoy = MN.planSemanaPrueba(conHoy);
-  ok(planHoy && planHoy.slots[0].sale_hoy === true && planHoy.slots[1].sale_hoy === false, 'A16 · sale_hoy se marca comparando la etiqueta del día');
+  ok(planHoy && planHoy.slots[0].sale_hoy === false && planHoy.slots[0].fecha === MN.etiquetaHoy('es', Date.now() + 86400000).date && planHoy.slots[1].sale_hoy === false, 'A16 · (re-pin PLAN-MAGIA) la cáscara que arranca hoy se reasigna: el día 1 sale mañana (sale_hoy en falso, fecha de mañana)');
 }
 
 /* ---------------- B. Pines estáticos ---------------- */
@@ -131,8 +131,8 @@ ok(APP.includes('${mnPlanStr}') && APP.includes('mnPlanBind(root)'), 'B17 · la 
 ok(APP.includes('function mnPlanHTML') && APP.includes('mn-slot-glass') && APP.includes('Tu semana, planeada'), 'B18 · el slot en plan es vidrio con nombre y fecha (sin arte)');
 
 ok(CSS.includes('.mn-plan') && CSS.includes('.mn-slot-listo') && CSS.includes('.mn-dia4') && CSS.includes('.mn-connect'), 'B19 · los estilos del plan existen');
-ok(IDX.includes('app.js?v=788') && IDX.includes('styles.css?v=20261296'), 'B20 · stamps del scratch: app.js 788 + estilos 20261296 (ES)');
-ok(IDXEN.includes('styles.css?v=20261296') && !IDXEN.includes('app.js?v=787'), 'B21 · el índice EN bumpea solo estilos (no carga app.js)');
+ok(IDX.includes('app.js?v=796') && IDX.includes('styles.css?v=20261299'), 'B20 · (re-pin PLAN-MAGIA) stamps del aterrizaje: app.js 796 + estilos 20261299 (ES)');
+ok(IDXEN.includes('styles.css?v=20261299') && !IDXEN.includes('app.js?v=796'), 'B21 · (re-pin PLAN-MAGIA) el índice EN bumpea solo estilos (no carga app.js)');
 
 /* ---------------- C. Arranque real ---------------- */
 console.log('\n— C. Arranque real: puerta → plan → pieza → aprobación —');
@@ -221,7 +221,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(p0.status === 200 && !!pl0, 'C4 · mi-plan devuelve el plan del invitado');
     ok(pl0 && pl0.estrella === 'Berry Mille Crepe' && pl0.slots[0].nombre === 'Berry Mille Crepe', 'C5 · el plan trae la estrella y el slot 0 la muestra');
     ok(pl0 && pl0.slots.every((s) => s.estado === 'plan'), 'C6 · día 0: los tres slots en plan, sin arte fingido');
-    ok(pl0 && pl0.slots[0].sale_hoy === true && pl0.slots[0].hora === '19:00', 'C7 · el slot 1 cae hoy según la cáscara (sale_hoy + 19:00)');
+    ok(pl0 && pl0.slots[0].sale_hoy === false && pl0.slots[0].hora === '19:00' && pl0.slots[0].fecha === man.date, 'C7 · (re-pin PLAN-MAGIA) el slot 1 NO cae hoy: la proyección reasigna la cáscara a mañana (sale_hoy en falso, fecha de mañana, 19:00)');
     ok(p0.json && p0.json.conectado === false && p0.json.estrategia_aprobada === false, 'C8 · sin conexión y sin estrategia aprobada al entrar');
 
     // La marca de línea a mano + la carga de la pieza del día 1 con
