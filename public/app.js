@@ -4573,7 +4573,6 @@ function lpInitHero() {
   pzPlansSocialMount();
   pzPaisPruebaLinks();
   lpInitCarousel();
-  lpInitWall();
   lpFeedInit(); // 🌈 v381: franja viva «El feed se arma solo» (#feed)
   /* v377: la semana de muestra navegable — solo rubros con semana completa y
      captions auditados; la grilla inicial (mixto) se re-renderiza con visor */
@@ -4740,109 +4739,6 @@ function lpCellsHTML(p, tiles) {
     if (k === 4 && !p.cells) return `<span class="igp-cell-reel">${img}<span class="igp-reel-badge">▶</span></span>`;
     return img;
   }).join('');
-}
-/* ---------- Tarjeta compacta de perfil por rubro: cabecera + stats +
-   bio corta + grilla 3×3. Nació como pared densa en v208; desde la tanda
-   de vidriera deslizable la landing la muestra en la galería de 20
-   destacados (ver LP_GAL_FEATURED). */
-function lpWallCardHTML(p) {
-  const tiles = lpTiles(p);
-  const ava = p.ava || tiles[0];
-  const avaAlt = p.avaAlt || ('Foto de perfil de ' + p.user);
-  return `<div class="lp-wall-card">
-    <div class="igp-top"><b>${p.user}</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"/></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
-    <div class="igp-head">
-      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="${ava}" alt="${avaAlt}"></span>
-      <div class="igp-stats"><div><b>${p.stats[0]}</b><span>publicaciones</span></div><div><b>${p.stats[1]}</b><span>seguidores</span></div><div><b>${p.stats[2]}</b><span>seguidos</span></div></div>
-    </div>
-    <div class="igp-bio"><b>${p.name}</b> <span class="igp-cat">${p.cat}</span><br><span class="igp-link">postycommunitymanager.com/p/${p.link}</span></div>
-    <div class="igp-grid">${lpCellsHTML(p, tiles)}</div>
-    <div class="lp-wall-foot">${p.rubro}</div>
-  </div>`;
-}
-/* ---------- VIDRIERA DESLIZABLE (tanda 2026-10-25, orden de Valentino):
-   «donde haya muestras, que se puedan DESLIZAR, y las demos muestran 20
-   NEGOCIOS DISTINTOS usando el producto». La pared paginada de v211 pasa a
-   ser UNA galería horizontal de 20 negocios destacados del registro de
-   ejemplos (LP_PROFILES): tira con scroll-snap en todos los tamaños —
-   táctil en el celular; en desktop, arrastre con el mouse, rueda que se
-   convierte mientras la tira puede correr y flechas ‹ › que avanzan de a
-   una tarjeta con .off en los extremos (la mecánica de la casa). Sin
-   librerías; las imágenes ya nacen lazy en lpCellsHTML. Los perfiles del
-   registro que no entran en los 20 quedan a un toque en «Ver más ejemplos»
-   (lpGalMoreHTML), cada uno con su link /p/<slug> — las páginas de la
-   vidriera viven en showcase-pages.js y resuelven siempre. ---------- */
-const LP_GAL_FEATURED = ['cafe-aurora', 'bustos', 'tiendacora', 'roca', 'nocta', 'elcorte', 'dental-prado', 'estetica-alma', 'academia-ritmo', 'laesquina', 'eltrigodorado', 'gymnorte', 'andrada', 'patitas', 'herrera', 'casalinda', 'elrosedal', 'donroque', 'cerveceria-ambar', 'vet-norte'];
-function lpGalFeatured() { return LP_GAL_FEATURED.map((slug) => LP_PROFILES.find((p) => p.link === slug)).filter(Boolean); }
-function lpGalRest() { return LP_PROFILES.filter((p) => LP_GAL_FEATURED.indexOf(p.link) === -1); }
-function lpGalHTML() { return lpGalFeatured().map(lpWallCardHTML).join(''); }
-function lpGalMoreHTML() {
-  return lpGalRest().map((p) => `<a class="lp-gal-chip" href="/p/${p.link}">${p.name} · ${p.rubro}</a>`).join('');
-}
-function lpGalToggle(btn) {
-  const box = document.getElementById('lpGalMore');
-  if (!box) return;
-  const open = box.classList.toggle('open');
-  if (btn) btn.textContent = open ? 'Ver menos ejemplos' : 'Ver más ejemplos';
-}
-function lpGalStepPx(track) {
-  const card = track.querySelector('.lp-wall-card');
-  if (!card) return track.clientWidth;
-  const second = card.nextElementSibling;
-  return second ? (second.offsetLeft - card.offsetLeft) : card.offsetWidth + 14;
-}
-function lpGalSync() {
-  const track = document.getElementById('lpWallTrack');
-  const prev = document.getElementById('lpWallPrev');
-  const next = document.getElementById('lpWallNext');
-  if (!track) return;
-  const max = track.scrollWidth - track.clientWidth;
-  if (prev) prev.classList.toggle('off', track.scrollLeft <= 2);
-  if (next) next.classList.toggle('off', track.scrollLeft >= max - 2);
-  const c = document.getElementById('lpWallCount');
-  if (c && track.children.length) {
-    const idx = Math.max(0, Math.min(track.children.length - 1, Math.round(track.scrollLeft / lpGalStepPx(track))));
-    c.textContent = (idx + 1) + ' / ' + track.children.length;
-  }
-}
-function lpWallStep(d) {
-  const track = document.getElementById('lpWallTrack');
-  if (!track) return;
-  track.scrollBy({ left: d * lpGalStepPx(track), behavior: 'smooth' });
-}
-function lpInitWall() {
-  const track = document.getElementById('lpWallTrack');
-  if (!track || track.dataset.bound) return;
-  track.dataset.bound = '1';
-  let raf = false;
-  track.addEventListener('scroll', () => {
-    if (raf) return;
-    raf = true;
-    requestAnimationFrame(() => { raf = false; lpGalSync(); });
-  }, { passive: true });
-  window.addEventListener('resize', lpGalSync);
-  track.addEventListener('dragstart', (e) => e.preventDefault());
-  // Arrastre con el mouse en desktop (el swipe táctil lo da el scroll nativo).
-  let drag = null;
-  track.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    drag = { x: e.clientX, sl: track.scrollLeft };
-    track.classList.add('dragging');
-    try { track.setPointerCapture(e.pointerId); } catch (err) {}
-  });
-  track.addEventListener('pointermove', (e) => { if (drag) track.scrollLeft = drag.sl - (e.clientX - drag.x); });
-  ['pointerup', 'pointercancel'].forEach((ev) => track.addEventListener(ev, () => { drag = null; track.classList.remove('dragging'); }));
-  // Rueda: mientras la tira puede correr en ese sentido, la rueda la mueve;
-  // en los extremos no frena el scroll de la página.
-  track.addEventListener('wheel', (e) => {
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    const max = track.scrollWidth - track.clientWidth;
-    const nl = Math.max(0, Math.min(max, track.scrollLeft + e.deltaY));
-    if (nl === track.scrollLeft) return;
-    e.preventDefault();
-    track.scrollLeft = nl;
-  }, { passive: false });
-  lpGalSync();
 }
 function lpProfileHTML(p) {
   const tiles = lpTiles(p);
@@ -8001,12 +7897,6 @@ function landingView(cfg) {
 
 /* ===== pared de ejemplos: contenida como el resto y feeds apagados salvo hoy ===== */
 #ejemplos{max-width:1140px;margin-left:auto;margin-right:auto;padding-left:24px;padding-right:24px}
-.lp-wall-card .igp-grid{position:relative}
-.lp-wall-card .igp-grid>*{filter:grayscale(1) brightness(.62)}
-.lp-wall-card .igp-grid>*:first-child{filter:none}
-.lp-wall-card .igp-grid.igp-go>*{opacity:.55}
-.lp-wall-card .igp-grid.igp-go>*:first-child{opacity:1}
-.lp-wall-card .igp-grid::after{content:'HOY · 19:00';position:absolute;top:6px;left:6px;z-index:3;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:10.5px;letter-spacing:.4px;padding:4px 8px;border-radius:99px;box-shadow:0 4px 10px rgba(10,30,51,.30)}
 
 /* ===== WEB-DISEÑO-ESPACIOS: la tira llega pegada al hero y llena la pantalla (solo desktop) ===== */
 @media(min-width:761px){
@@ -8459,16 +8349,6 @@ function landingView(cfg) {
   ${lpAdsHTML()}
   ${lpSubirHTML()}
     <div class="lp-show" id="ejemplos">
-      <p class="lp-show-eyebrow">✨ Así queda tu Instagram con nosotros</p>
-      <div class="lp-wall" id="lpWall">
-        <button type="button" class="lp-wall-nav prev off" id="lpWallPrev" aria-label="Perfiles anteriores" onclick="lpWallStep(-1)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-chev-l"/></svg></button>
-        <div class="lp-wall-viewport" id="lpWallViewport">
-          <div class="lp-wall-track" id="lpWallTrack">${lpGalHTML()}</div>
-        </div>
-        <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Perfiles siguientes" onclick="lpWallStep(1)"><svg class="wb-ic" aria-hidden="true"><use href="#wb-chev-r"/></svg></button>
-      </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">Perfiles armados por nosotros</span><span class="lp-wall-count" id="lpWallCount">1 / 20</span></div>
-      <div class="lp-gal-morewrap"><button type="button" class="lp-gal-btn" id="lpGalMoreBtn" onclick="lpGalToggle(this)">Ver más ejemplos</button><div class="lp-gal-more" id="lpGalMore">${lpGalMoreHTML()}</div></div>
       <div class="lp-show-cta">
         <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);var w=this.querySelector('input[data-lp-web]');var q=[];if(v)q.push('ig='+encodeURIComponent(v));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
           <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad2)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
