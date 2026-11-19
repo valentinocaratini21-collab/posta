@@ -317,6 +317,26 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
       if (row.media_type === 'video') have.video = row.n;
     }
   } catch (e) {}
+  // (LOTE DESCARTE-TERMINAL) El descarte DEL DUEÑO también cuenta como
+  // cupo cubierto: si el dueño descartó una historia/reel de esta
+  // semana (la pieza quedó 'cancelled' y su día frenado en day_stops
+  // con origen 'dueno_descarte'), ese extra NO se regenera —
+  // regenerarlo era la clase 703→714 (u105, 18/11: cancelada la copia
+  // anterior, esta ruta parió la siguiente porque el conteo de arriba
+  // excluye 'cancelled'). El descarte del equipo por la vía admin NO
+  // escribe esa marca (DESCARTE-ADMIN: descartar una pieza defectuosa
+  // deja el cupo abierto a propósito) y acá no cuenta: la distinción
+  // es el ORIGEN del descarte, no el estado de la pieza. Sin tabla
+  // day_stops (DBs mínimas de tests viejos) el conteo sigue como
+  // siempre: el catch deja `have` intacto.
+  try {
+    for (const row of db.prepare(`SELECT p.media_type AS mt, COUNT(*) AS n FROM day_stops ds JOIN posts p ON p.id = ds.post_id
+      WHERE ds.user_id = ? AND ds.origen = 'dueno_descarte' AND p.week_key = ? AND p.status = 'cancelled'
+      AND p.media_type IN ('story','video') GROUP BY p.media_type`).all(uid, weekKey)) {
+      if (row.mt === 'story') have.story += row.n;
+      if (row.mt === 'video') have.video += row.n;
+    }
+  } catch (e) {}
   if (have.story >= nStories && have.video >= nReels) {
     console.log(`[extras:${tag}] usuario ${uid} semana ${weekKey}: extras ya completos (${have.story} historias, ${have.video} reels)`);
     return { stories: 0, reels: 0, plan: plan.id, already: true, need: { stories: nStories, reels: nReels }, have: { stories: have.story, reels: have.video } };

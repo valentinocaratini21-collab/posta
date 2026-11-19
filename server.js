@@ -20996,6 +20996,22 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   let lintRes = null; // (v931) resultado del lint al programar: si falla, el posteo queda en revisión
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
+    // (LOTE DESCARTE-TERMINAL) Cancelar un posteo PROGRAMADO es vaciar
+    // su día a propósito: el día queda frenado en day_stops con origen
+    // 'dueno_descarte' — ningún relleno automático (ensure del día,
+    // embudo semanal, auto-arm) puede imponerle un reemplazo (caso
+    // 725, 19/11: el dueño eliminó el posteo de hoy y el ensure creó
+    // otro el mismo día). Es el espejo del 'unschedule' de abajo, que
+    // ya marcaba el día: el cancel dejaba el día libre porque el
+    // descarte se pensó «de la pieza, no del día» (DESCARTE-ADMIN,
+    // para la vía admin) — para el dueño, la pieza programada ES el
+    // día: su gesto «Saltar» ya promete que ese día no sale nada
+    // salvo que pida «Armar otro» (que limpia el stop, como todo
+    // gesto deliberado sobre el día). Sin fecha (borrador puro) no
+    // hay día que marcar; las historias tienen su propio carril.
+    if (post.scheduled_at && post.media_type !== 'story') {
+      try { dayStopSet(req.session.userId, ymdInTz(post.scheduled_at, userTz(req.session.userId)), post.id, 'dueno_descarte'); } catch (e) {}
+    }
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
     // 🧠 CEREBRO-CM: cancelar = veto durable de gusto.
     try { cmGusto.registrar(db, req.session.userId, post, 'rechazada'); } catch (e) {}
@@ -21302,6 +21318,18 @@ app.delete('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (post) recordSignal(req.session.userId, post, 'rejected'); // lo eliminó = no le gustó
   const wasDraft = post && post.status === 'draft';
+  // (LOTE DESCARTE-TERMINAL) Borrar un posteo con día (programado, o
+  // borrador con fecha movida a mano) también vacía ese día a
+  // propósito: la fila desaparece, así que el freno del día se escribe
+  // ANTES del DELETE, con origen 'dueno_descarte' — si no, el ensure
+  // del día crea un reemplazo y el posteo «eliminado» reaparece (caso
+  // 725, 19/11). El borrado de borradores sin fecha (Bandeja, «reempla-
+  // zar borradores») sigue como siempre: sin día no hay stop, y su
+  // reconstrucción es otro gesto. Lo publicado no gana stop (su día
+  // ya pasó o ya salió; el espejo con Instagram es de feed-reconcile).
+  if (post && post.scheduled_at && post.status !== 'published' && post.media_type !== 'story') {
+    try { dayStopSet(req.session.userId, ymdInTz(post.scheduled_at, userTz(req.session.userId)), post.id, 'dueno_descarte'); } catch (e) {}
+  }
   db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
   // Track 4 (agregado): si borrando uno por uno llegó a cero borradores de esa
   // semana, se dispara la reconstrucción con otro enfoque (igual que Vaciar).
@@ -46601,7 +46629,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1184';
+const BUILD_ID = '20261105-v1185';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
