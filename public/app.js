@@ -7835,21 +7835,8 @@ function landingView(cfg) {
 .wd-price-n{font-size:clamp(56px,9vw,92px);font-weight:900;letter-spacing:-2px;color:#0A1E33;line-height:1}
 .wd-price-n small{font-size:.34em;font-weight:800;color:#7C8DA0;letter-spacing:0;margin-left:4px}
 .wd-price p{font-weight:700;color:#47617A;margin-top:8px;font-size:15px}
-.wd-trial{display:flex;gap:12px;justify-content:center;margin:28px auto 4px;max-width:540px;text-align:left}
-.wd-tday{flex:1;background:#fff;border-radius:16px;padding:10px;box-shadow:0 10px 24px rgba(10,30,51,.12);min-width:0}
-.wd-tday img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
-.wd-td-n{font-weight:900;font-size:13px;margin-top:9px;display:flex;justify-content:space-between;align-items:center;color:#0A1E33}
-.wd-td-c{font-size:12px;color:#47617A;margin-top:2px;line-height:1.4}
-.wd-tchk{width:20px;height:20px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
-.wd-on .wd-tchk{transform:scale(0)}
-.wd-tchk svg{width:11px;height:11px}
-.wd-on .wd-tday{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
-.wd-on .lp-final.wd-live .wd-tday{opacity:1;transform:none}
-.wd-on .lp-final.wd-live .wd-tday:nth-child(2){transition-delay:.3s}
-.wd-on .lp-final.wd-live .wd-tday:nth-child(3){transition-delay:.6s}
-.wd-on .lp-final.wd-live .wd-tday:nth-child(1) .wd-tchk{animation:wd-pop .35s cubic-bezier(.2,2.2,.4,1) .4s forwards}
-.wd-on .lp-final.wd-live .wd-tday:nth-child(2) .wd-tchk{animation:wd-pop .35s cubic-bezier(.2,2.2,.4,1) .7s forwards}
-.wd-on .lp-final.wd-live .wd-tday:nth-child(3) .wd-tchk{animation:wd-pop .35s cubic-bezier(.2,2.2,.4,1) 1s forwards}
+.btn.lp-cta-glass{background:linear-gradient(135deg,rgba(62,166,219,.88),rgba(27,111,160,.86));border:1px solid rgba(255,255,255,.5);border-top:1.5px solid rgba(255,255,255,.9);-webkit-backdrop-filter:blur(16px) saturate(165%);backdrop-filter:blur(16px) saturate(165%);box-shadow:0 10px 24px rgba(39,147,200,.38),inset 0 1px 0 rgba(255,255,255,.65);color:#fff}
+.btn.lp-cta-glass:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 14px 30px rgba(39,147,200,.45),inset 0 1px 0 rgba(255,255,255,.65)}
 .wd-garden{display:flex;flex-direction:column;align-items:center;margin:12px auto 0}
 .wd-garden svg{width:150px;height:168px;overflow:visible}
 .wd-g-stem{stroke:#1FA855;stroke-width:5;fill:none;stroke-linecap:round;stroke-dasharray:130;transition:stroke-dashoffset 1s ease .25s}
@@ -7876,8 +7863,6 @@ function landingView(cfg) {
 .wd-strip{gap:6px}
 .wd-dname{font-size:10px}
 .wd-posted{font-size:10px;padding:2px 7px 2px 3px;left:5px;bottom:5px}.wd-posted-ck{width:14px;height:14px}
-.wd-trial{flex-direction:column;max-width:320px}
-.wd-tday img{aspect-ratio:16/10}
 }
 
 /* ===== pared de ejemplos: contenida como el resto y feeds apagados salvo hoy ===== */
@@ -8446,10 +8431,9 @@ function landingView(cfg) {
   <div class="lp-final"><div class="wrap">
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
     <h2>Probás 3 días gratis antes de pagar.</h2>
-    <p>Contanos de tu negocio en el chat y mirá tu semana. Gratis, sin tarjeta.</p>
-    <div class="wd-trial"><div class="wd-tday"><img loading="lazy" src="lp-bigtop-dia1.jpg" alt="Día 1 de la prueba: tu posteo estrella"><div class="wd-td-n">Día 1 <span class="wd-tchk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-td-c">Tu posteo estrella, con tu producto real.</div></div><div class="wd-tday"><img loading="lazy" src="lp-bigtop-dia2.jpg" alt="Día 2 de la prueba: tu carrusel"><div class="wd-td-n">Día 2 <span class="wd-tchk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-td-c">Tu carrusel, placa por placa.</div></div><div class="wd-tday"><img loading="lazy" src="lp-bigtop-dia3.jpg" alt="Día 3 de la prueba: tu video"><div class="wd-td-n">Día 3 <span class="wd-tchk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="wd-td-c">Tu video de 30 segundos, como una película.</div></div></div>
-    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Sumate a mi equipo</a>
-    <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
+    <p>Conectá tu Instagram y mirá tu semana ya armada. Gratis, sin tarjeta.</p>
+    <a class="btn lp-cta-glass" href="/prueba" style="font-size:16px;padding:18px 44px">Empezar mis 3 días gratis</a>
+    <div class="hero-note" style="margin-top:18px">✓ Sin contraseña · ✓ Cancelá cuando quieras</div>
   </div></div>
   ${lpProgresoHTML()}
   <div class="section wd-reveal" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
