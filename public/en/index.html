@@ -540,10 +540,50 @@
   <div class="section" id="voz"><div class="wrap">
     <div class="wd-vk">Ask by voice note and it gets done</div>
     <h2 class="wd-vh2">You talk, and it gets done.</h2>
-    <p class="wd-vsub">No forms, no fuss: one voice note from the app.</p>
-    <div class="wd-vozrow">
-      <div class="wd-vnote"><span class="wd-vplay">▶</span><span class="wd-vwave"><i style="animation-delay:0.00s"></i><i style="animation-delay:0.09s"></i><i style="animation-delay:0.18s"></i><i style="animation-delay:0.27s"></i><i style="animation-delay:0.36s"></i><i style="animation-delay:0.45s"></i><i style="animation-delay:0.54s"></i><i style="animation-delay:0.63s"></i><i style="animation-delay:0.72s"></i><i style="animation-delay:0.81s"></i><i style="animation-delay:0.90s"></i><i style="animation-delay:0.99s"></i><i style="animation-delay:1.08s"></i><i style="animation-delay:1.17s"></i><i style="animation-delay:1.26s"></i><i style="animation-delay:1.35s"></i><i style="animation-delay:1.44s"></i><i style="animation-delay:1.53s"></i></span><span class="wd-vquote">“Change today's post for tomorrow's”</span></div>
-      <div class="wd-vreply"><img class="wd-vava" src="ai-avatar.png" alt="Posty"><div class="wd-vbub"><div class="wd-vmeta"><b>Posty</b><span>now</span><span class="wd-vck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#0A1E33" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><p><b>Done.</b> Tomorrow's post goes out today, just as you asked.</p></div></div>
+    <p class="wd-vsub">You ask for it <b>between clients</b>, and it gets done.<span class="whisper">No forms, no fuss: one voice note from the app.</span></p>
+    <div class="vz-scene" id="vzScene">
+      <div class="vz-toprow">
+        <div class="vz-vnote" id="vzNote">
+          <span class="vz-vplay" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13l11-6.5z"/></svg></span>
+          <span class="vz-vwave" id="vzWave" aria-hidden="true"><i style="height:34%;animation-delay:0s"></i><i style="height:58%;animation-delay:.07s"></i><i style="height:42%;animation-delay:.14s"></i><i style="height:76%;animation-delay:.21s"></i><i style="height:52%;animation-delay:.28s"></i><i style="height:88%;animation-delay:.35s"></i><i style="height:64%;animation-delay:.42s"></i><i style="height:95%;animation-delay:.49s"></i><i style="height:58%;animation-delay:.56s"></i><i style="height:80%;animation-delay:.63s"></i><i style="height:44%;animation-delay:.7s"></i><i style="height:70%;animation-delay:.77s"></i><i style="height:92%;animation-delay:.84s"></i><i style="height:54%;animation-delay:.91s"></i><i style="height:74%;animation-delay:.98s"></i><i style="height:40%;animation-delay:1.05s"></i><i style="height:62%;animation-delay:1.12s"></i><i style="height:36%;animation-delay:1.19s"></i></span>
+          <span class="vz-vquote" id="vzQuote">Change today's post for tomorrow's</span>
+          <span class="vz-vdur" id="vzDur">0:06</span>
+        </div>
+        <div class="vz-vreply on" id="vzReply">
+          <img class="vz-vava" src="ai-avatar.png" alt="Posty">
+          <div class="vz-vbub">
+            <div class="vz-vmeta"><b>Posty</b><span>now</span><span class="vz-vck" id="vzCk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#0A1E33" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            <p id="vzText"><b>Done.</b> Tomorrow's post goes out today, just as you asked.</p>
+            <div class="vz-proof on" id="vzProof"><span class="pthumb"><img src="lp-billlawrence-corte.jpg" alt=""><em>today</em></span><span class="parrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4"/></svg></span><span class="pthumb"><img src="lp-billlawrence-equipo.jpg" alt=""><em>tomorrow</em></span><span class="plabel">Swapped,<br>just as you asked.</span></div>
+            <div class="vz-answers" id="vzAnswers">
+              <button class="vz-ansbtn" data-ans="manana" type="button">In the morning</button>
+              <button class="vz-ansbtn" data-ans="noche" type="button">At night</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="vz-weekhead">
+        <div class="vz-wk-label">Bill Lawrence Salon's week</div>
+        <div class="vz-wk-note">it moves with your voice</div>
+      </div>
+      <div class="vz-week" id="vzWeek">
+        <div class="vz-day today"><div class="vz-dname">MON</div><div class="vz-slot"><div class="vz-piece" data-key="equipo"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-equipo.jpg" alt="The team, in the salon"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip on"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span><span class="vz-hoychip">TODAY</span></div><div class="vz-pname">The team</div></div></div></div>
+        <div class="vz-day"><div class="vz-dname">TUE</div><div class="vz-slot"><div class="vz-piece" data-key="corte"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-corte.jpg" alt="Natural cut"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip on"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span></div><div class="vz-pname">Natural cut</div></div></div></div>
+        <div class="vz-day"><div class="vz-dname">WED</div><div class="vz-slot"><div class="vz-piece" data-key="rubio"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-rubio.jpg" alt="The blonde"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span></div><div class="vz-pname">The blonde</div></div></div></div>
+        <div class="vz-day"><div class="vz-dname">THU</div><div class="vz-slot"><div class="vz-piece" data-key="espera"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-espera.jpg" alt="The wait"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span></div><div class="vz-pname">The wait</div></div></div></div>
+        <div class="vz-day"><div class="vz-dname">FRI</div><div class="vz-slot"><div class="vz-piece" data-key="salon"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-salon.jpg" alt="The salon"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span></div><div class="vz-pname">The salon</div></div></div></div>
+        <div class="vz-day"><div class="vz-dname">SAT</div><div class="vz-slot"><div class="vz-piece" data-key="ondas"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-ondas.jpg" alt="Long waves"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span></div><div class="vz-pname">Long waves</div></div></div></div>
+        <div class="vz-day"><div class="vz-dname">SUN</div><div class="vz-slot"><div class="vz-piece" data-key="aniv"><div class="vz-ph"><img loading="lazy" src="lp-billlawrence-aniv.jpg" alt="35 years of the salon"><span class="vz-starchip"><svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>THE STAR</span><span class="vz-movedchip"><svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="mc-t">moved by your voice note</span></span></div><div class="vz-pname">35 years</div></div></div></div>
+      </div>
+      <div class="vz-rot">
+        <div class="vz-rot-t">Ask however you like</div>
+        <div class="vz-rotchips" id="vzChips">
+          <button class="vz-rotchip on" type="button"><span class="dot"></span>Swap the order</button>
+          <button class="vz-rotchip" type="button"><span class="dot"></span>Push the star</button>
+          <button class="vz-rotchip" type="button"><span class="dot"></span>Shift the week</button>
+          <button class="vz-rotchip" type="button"><span class="dot"></span>Ask first</button>
+        </div>
+      </div>
     </div>
   </div></div>
   <div class="section" id="ads"><div class="wrap">
@@ -2068,6 +2108,291 @@ function lpCalcRateSlider() {
   }
 })();
 
+/* ===== LOTE VOZ-VIVO: la semana que obedece (EN mirror engine) ===== */
+function lpVozInitEN() {
+  var sec = document.getElementById('voz');
+  if (!sec || sec.dataset.vzInit) return;
+  sec.dataset.vzInit = '1';
+  var gen = (window.__vzGen = (window.__vzGen || 0) + 1);
+  var PIECES = {
+    corte:   { img:'lp-billlawrence-corte.jpg',  name:'Natural cut' },
+    equipo:  { img:'lp-billlawrence-equipo.jpg', name:'The team' },
+    rubio:   { img:'lp-billlawrence-rubio.jpg',  name:'The blonde' },
+    espera:  { img:'lp-billlawrence-espera.jpg', name:'The wait' },
+    salon:   { img:'lp-billlawrence-salon.jpg',  name:'The salon' },
+    ondas:   { img:'lp-billlawrence-ondas.jpg',  name:'Long waves' },
+    aniv:    { img:'lp-billlawrence-aniv.jpg',   name:'35 years' }
+  };
+  var DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+  var BASE = ['corte','equipo','rubio','espera','salon','ondas','aniv'];
+  var BEATS = [
+    { chip:'Swap the order', dur:'0:06',
+      quote:"Change today's post for tomorrow's",
+      reply:'<b>Done.</b> Tomorrow\'s post goes out today, just as you asked.',
+      after:['equipo','corte','rubio','espera','salon','ondas','aniv'],
+      moved:['equipo','corte'], star:null, proof:'swap' },
+    { chip:'Push the star', dur:'0:07',
+      quote:'This week push the blonde, it is the one everyone asks for',
+      reply:'<b>Done.</b> The blonde opens the week.',
+      after:['rubio','corte','equipo','espera','salon','ondas','aniv'],
+      moved:['rubio'], star:'rubio', proof:'star' },
+    { chip:'Shift the week', dur:'0:05',
+      quote:"We are closed this Friday for renovations, shift it all",
+      reply:'<b>Done.</b> Shifted — Friday stays free.',
+      after:['corte','equipo','rubio','espera',null,'salon','ondas'],
+      moved:['salon','ondas'], star:null, proof:'week' },
+    { chip:'Ask first', dur:'0:05',
+      quote:"Move Saturday's post a bit",
+      question:'Move it to Saturday <b>morning</b> or <b>night</b>?',
+      after:BASE.slice(), moved:[], star:null, proof:null }
+  ];
+  var scene = sec.querySelector('#vzScene'),
+      vnote = sec.querySelector('#vzNote'),
+      vwave = sec.querySelector('#vzWave'),
+      vquote = sec.querySelector('#vzQuote'),
+      vdur = sec.querySelector('#vzDur'),
+      vreply = sec.querySelector('#vzReply'),
+      vtext = sec.querySelector('#vzText'),
+      vck = sec.querySelector('#vzCk'),
+      proof = sec.querySelector('#vzProof'),
+      answers = sec.querySelector('#vzAnswers'),
+      weekEl = sec.querySelector('#vzWeek');
+  if (!scene || !vnote || !vquote || !vreply || !weekEl) return;
+
+  /* waveform bars (visual only — no audio anywhere) */
+  var heights = [34,58,42,76,52,88,64,95,58,80,44,70,92,54,74,40,62,36];
+  vwave.innerHTML = '';
+  heights.forEach(function(h, i){
+    var bar = document.createElement('i');
+    bar.style.height = h + '%';
+    bar.style.animationDelay = (i * 0.07) + 's';
+    vwave.appendChild(bar);
+  });
+
+  /* week skeleton */
+  weekEl.innerHTML = '';
+  var slotEls = [];
+  DAYS.forEach(function(d, i){
+    var day = document.createElement('div');
+    day.className = 'vz-day' + (i === 0 ? ' today' : '');
+    day.innerHTML = '<div class="vz-dname">' + d + '</div><div class="vz-slot"></div>';
+    weekEl.appendChild(day);
+    slotEls.push(day.querySelector('.vz-slot'));
+  });
+  var hoyChip = document.createElement('span');
+  hoyChip.className = 'vz-hoychip'; hoyChip.textContent = 'TODAY';
+
+  var MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="#2793C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  var STAR = '<svg viewBox="0 0 24 24" fill="#0A1E33"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>';
+
+  var pool = {};
+  function pieceEl(key){
+    if (pool[key]) return pool[key];
+    var p = document.createElement('div');
+    p.className = 'vz-piece'; p.dataset.key = key;
+    p.innerHTML =
+      '<div class="vz-ph"><img src="' + PIECES[key].img + '" alt="' + PIECES[key].name + '">' +
+      '<span class="vz-starchip">' + STAR + 'THE STAR</span>' +
+      '<span class="vz-movedchip">' + MIC + '<span class="mc-t">moved by your voice note</span></span></div>' +
+      '<div class="vz-pname">' + PIECES[key].name + '</div>';
+    pool[key] = p;
+    return p;
+  }
+
+  function setWeek(order){
+    order.forEach(function(key, i){
+      var slot = slotEls[i];
+      slot.classList.remove('empty');
+      slot.innerHTML = '';
+      if (key){
+        slot.appendChild(pieceEl(key));
+        if (i === 0) slot.querySelector('.vz-ph').appendChild(hoyChip);
+      } else {
+        slot.classList.add('empty');
+        slot.innerHTML = '<span class="free-t">Free</span><span class="free-s">no post</span>';
+      }
+    });
+  }
+
+  function flip(mutate){
+    var first = {};
+    Object.keys(pool).forEach(function(k){
+      var el = pool[k];
+      if (el.isConnected) first[k] = el.getBoundingClientRect();
+    });
+    mutate();
+    Object.keys(first).forEach(function(k){
+      var el = pool[k];
+      if (!el.isConnected) return;
+      var f = first[k], l = el.getBoundingClientRect();
+      var dx = f.left - l.left, dy = f.top - l.top;
+      if (dx || dy){
+        el.style.transition = 'none';
+        el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){
+          el.style.transition = 'transform .85s cubic-bezier(.3,1.15,.3,1)';
+          el.style.transform = '';
+        });});
+      }
+    });
+  }
+
+  function clearChips(){
+    Object.keys(pool).forEach(function(k){
+      pool[k].classList.remove('star');
+      pool[k].querySelector('.vz-movedchip').classList.remove('on');
+      pool[k].querySelector('.mc-t').textContent = 'moved by your voice note';
+    });
+  }
+  function showMoved(key, text){
+    var el = pool[key]; if (!el) return;
+    if (text) el.querySelector('.mc-t').textContent = text;
+    el.querySelector('.vz-movedchip').classList.add('on');
+  }
+  function hideMoved(){
+    Object.keys(pool).forEach(function(k){
+      pool[k].querySelector('.vz-movedchip').classList.remove('on');
+    });
+  }
+
+  /* ---------- proof strips (inside Posty's bubble) ---------- */
+  var SWAPARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4"/></svg>';
+  var ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 5l7 7-7 7"/></svg>';
+  function thumb(key, cap){
+    return '<span class="pthumb"><img src="' + PIECES[key].img + '" alt=""><em>' + cap + '</em></span>';
+  }
+  function renderProof(beat){
+    var kind = beat.proof;
+    if (!kind){ proof.classList.remove('on'); proof.innerHTML = ''; return; }
+    var html = '';
+    if (kind === 'swap'){
+      html = thumb('corte','today') + '<span class="parrow">' + SWAPARROW + '</span>' + thumb('equipo','tomorrow') +
+             '<span class="plabel">Swapped,<br>just as you asked.</span>';
+    } else if (kind === 'star'){
+      html = thumb('rubio','the blonde') + '<span class="parrow">' + ARROW + '</span>' +
+             '<span class="pstar">' + STAR + '<em>STAR</em></span>' +
+             '<span class="plabel">Opens the week,<br>from Monday.</span>';
+    } else if (kind === 'week'){
+      var mini = beat.after.map(function(key, i){
+        var inner = key ? '<img src="' + PIECES[key].img + '" alt="">' : '<span class="pempty"></span>';
+        return '<span class="pd' + (key ? '' : ' free') + '">' + inner + '<em>' + (key ? DAYS[i] : 'FREE') + '</em></span>';
+      }).join('');
+      html = '<span class="pweek">' + mini + '</span><span class="plabel">Friday<br>stays free.</span>';
+    }
+    proof.innerHTML = html;
+    proof.classList.add('on');
+  }
+
+  /* ---------- rotation engine ---------- */
+  var timers = [], beatIdx = 0, started = false;
+  function later(fn, ms){ timers.push(setTimeout(function(){ if (gen === window.__vzGen) fn(); }, ms)); }
+  function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+
+  var rotChips = Array.prototype.slice.call(sec.querySelectorAll('.vz-rotchip'));
+  rotChips.forEach(function(c, j){
+    c.addEventListener('click', function(){ started = true; runBeat(j); });
+  });
+
+  function buildQuote(text){
+    vquote.innerHTML = '';
+    text.split(' ').forEach(function(word, wi, arr){
+      var s = document.createElement('span');
+      s.className = 'w'; s.textContent = wi < arr.length - 1 ? word + '\u00A0' : word;
+      vquote.appendChild(s);
+    });
+    var caret = document.createElement('span');
+    caret.className = 'caret';
+    vquote.appendChild(caret);
+    return vquote.querySelectorAll('.w');
+  }
+
+  function showReply(i){
+    var b = BEATS[i];
+    vtext.innerHTML = b.question ? b.question : b.reply;
+    vreply.classList.add('on');
+    if (b.question){ answers.classList.add('on'); }
+    else { renderProof(b); }
+  }
+
+  function applyEffect(i){
+    var b = BEATS[i];
+    if (b.question) return;
+    flip(function(){ setWeek(b.after); });
+    if (b.star && pool[b.star]) pool[b.star].classList.add('star');
+    b.moved.forEach(function(k){ showMoved(k); });
+  }
+
+  function settle(i){
+    /* settled end-state of a beat (no-JS paint / reduced motion) */
+    var b = BEATS[i];
+    var words = buildQuote(b.quote);
+    words.forEach(function(w){ w.classList.add('on'); });
+    scene.classList.add('vz-done');
+    vdur.textContent = b.dur;
+    showReply(i);
+    setWeek(b.after);
+    clearChips();
+    if (b.star && pool[b.star]) pool[b.star].classList.add('star');
+    b.moved.forEach(function(k){ showMoved(k); });
+  }
+
+  function runBeat(i){
+    clearTimers();
+    beatIdx = i;
+    var b = BEATS[i];
+    rotChips.forEach(function(c, j){ c.classList.toggle('on', j === i); });
+    /* reset */
+    scene.classList.remove('vz-done');
+    vnote.classList.remove('vz-playing');
+    vreply.classList.remove('on');
+    answers.classList.remove('on');
+    answers.querySelectorAll('.vz-ansbtn').forEach(function(x){ x.classList.remove('picked'); });
+    proof.classList.remove('on'); proof.innerHTML = '';
+    vtext.innerHTML = '';
+    vck.classList.toggle('ask', !!b.question);
+    vck.innerHTML = b.question
+      ? '<svg viewBox="0 0 24 24"><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="900" fill="#fff" font-family="Inter,sans-serif">?</text></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#0A1E33" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    clearChips();
+    setWeek(BASE);
+    vdur.textContent = b.dur;
+
+    var words = buildQuote(b.quote);
+    later(function(){ vnote.classList.add('vz-playing'); }, 400);
+    words.forEach(function(w, wi){ later(function(){ w.classList.add('on'); }, 450 + wi * 175); });
+    var typeEnd = 450 + words.length * 175 + 350;
+    later(function(){ vnote.classList.remove('vz-playing'); scene.classList.add('vz-done'); }, typeEnd);
+    later(function(){ showReply(i); }, typeEnd + 250);
+    later(function(){ applyEffect(i); }, typeEnd + 800);
+    later(function(){ hideMoved(); }, typeEnd + 3900);
+    later(function(){ runBeat((i + 1) % BEATS.length); }, typeEnd + 5000);
+  }
+
+  /* beat 4: choosing an answer applies it */
+  answers.querySelectorAll('.vz-ansbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if (beatIdx !== 3) return;
+      answers.querySelectorAll('.vz-ansbtn').forEach(function(x){ x.classList.remove('picked'); });
+      btn.classList.add('picked');
+      var morning = btn.dataset.ans === 'manana';
+      vtext.innerHTML = morning ? '<b>Done.</b> Saturday goes out in the morning.' : '<b>Done.</b> Saturday goes out at night.';
+      vck.classList.remove('ask');
+      vck.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#0A1E33" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      showMoved('ondas', morning ? 'goes out in the morning' : 'goes out at night');
+    });
+  });
+
+  /* ---------- init: paint the approved settled state, rotate when visible ---------- */
+  settle(0);
+  var RM = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (RM) return;
+  function start(){ if (!started){ started = true; runBeat(0); } }
+  if ('IntersectionObserver' in window) {
+    var vio = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { start(); vio.disconnect(); } }); }, { threshold: 0.22 });
+    vio.observe(sec);
+  } else { start(); }
+}
+try { lpVozInitEN(); } catch (e) {}
 </script>
 
 <script>
@@ -3791,6 +4116,91 @@ function switchPlansCountry(c) {
 .wd-on #voz .wd-vdone{opacity:0;transform:translateY(6px);transition:opacity .5s ease 1s,transform .5s ease 1s}
 .wd-on #voz.wd-live .wd-vdone{opacity:1;transform:none}
 @media(max-width:760px){#voz .wd-vozrow{transform:none}}
+/* ===== LOTE VOZ-VIVO: la semana que obedece (mock aprobado 18/11) ===== */
+#voz .wd-vsub .whisper{display:block;margin-top:6px;font-size:13.5px;color:#8CA3B8;font-weight:600}
+#voz .vz-scene{margin-top:36px;background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:24px;box-shadow:0 18px 40px rgba(10,30,51,.10);padding:32px 36px 30px;text-align:left}
+#voz .vz-toprow{display:flex;gap:30px;align-items:flex-start}
+#voz .vz-vnote{flex:1.25;min-width:0;background:#fff;border-radius:99px;box-shadow:0 14px 32px rgba(10,30,51,.13);border:1px solid rgba(10,30,51,.05);padding:14px 24px 14px 14px;display:flex;gap:14px;align-items:center}
+#voz .vz-vplay{width:46px;height:46px;border-radius:50%;flex:0 0 auto;background:linear-gradient(135deg,rgba(62,166,219,.88),rgba(27,111,160,.84));border:1px solid rgba(255,255,255,.55);box-shadow:0 8px 20px rgba(39,147,200,.35),inset 0 1px 0 rgba(255,255,255,.65);display:flex;align-items:center;justify-content:center}
+#voz .vz-vplay svg{width:17px;height:17px;margin-left:2px}
+#voz .vz-vwave{display:flex;gap:3px;align-items:center;height:32px;flex:0 0 auto}
+#voz .vz-vwave i{width:3.5px;border-radius:3px;background:#2793C8;opacity:.45;height:30%;display:block}
+#voz .vz-vnote.vz-playing .vz-vwave i{opacity:1;animation:vz-wv .9s ease-in-out infinite alternate}
+@keyframes vz-wv{from{transform:scaleY(.45)}to{transform:scaleY(1.15)}}
+#voz .vz-vquote{font-weight:600;font-size:15.5px;line-height:1.45;color:#0A1E33;min-height:45px;display:flex;align-items:center;flex-wrap:wrap;flex:1}
+#voz .vz-vquote .w{opacity:0;transform:translateY(3px);transition:opacity .25s ease,transform .25s ease}
+#voz .vz-vquote .w.on{opacity:1;transform:none}
+#voz .vz-vquote .caret{display:inline-block;width:2px;height:17px;background:#2793C8;margin-left:3px;animation:vz-blink .8s steps(1) infinite}
+#voz .vz-scene.vz-done .vz-vquote .caret{display:none}
+@keyframes vz-blink{50%{opacity:0}}
+#voz .vz-vdur{flex:0 0 auto;font-size:12px;font-weight:700;color:#8CA3B8}
+#voz .vz-vreply{flex:1;min-width:0;display:flex;gap:11px;align-items:flex-start;opacity:0;transform:translateY(10px) scale(.97);transition:opacity .45s ease,transform .45s cubic-bezier(.2,1.6,.4,1)}
+#voz .vz-vreply.on{opacity:1;transform:none}
+#voz .vz-vava{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 6px 14px rgba(10,30,51,.18)}
+#voz .vz-vbub{background:#fff;border:1px solid rgba(10,30,51,.06);border-radius:4px 18px 18px 18px;box-shadow:0 14px 32px rgba(10,30,51,.12);padding:12px 16px 14px;flex:1;min-width:0}
+#voz .vz-vmeta{display:flex;align-items:center;gap:7px;font-size:13px}
+#voz .vz-vmeta b{font-weight:800;color:#0A1E33}
+#voz .vz-vmeta span{color:#8CA3B8;font-weight:600}
+#voz .vz-vck{margin-left:auto;width:21px;height:21px;border-radius:50%;background:#FEC14D;display:flex;align-items:center;justify-content:center;flex:none}
+#voz .vz-vck svg{width:11px;height:11px}
+#voz .vz-vck.ask{background:#2793C8}
+#voz .vz-vbub p{margin-top:5px;font-size:14.5px;line-height:1.5;color:#0A1E33}
+#voz .vz-vbub p b{font-weight:800}
+#voz .vz-proof{margin-top:11px;background:#F2F9FD;border:1px solid #E2EDF5;border-radius:14px;padding:9px 12px;display:none;align-items:center;gap:10px}
+#voz .vz-proof.on{display:flex;animation:vz-proofin .45s ease both}
+@keyframes vz-proofin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+#voz .vz-proof .pthumb{text-align:center;flex:0 0 auto}
+#voz .vz-proof .pthumb img{width:40px;height:50px;object-fit:cover;border-radius:8px;display:block;box-shadow:0 4px 10px rgba(10,30,51,.16)}
+#voz .vz-proof .pthumb em{display:block;font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.8px;color:#47617A;margin-top:4px;text-transform:uppercase}
+#voz .vz-proof .parrow{color:#2793C8;flex:0 0 auto;display:flex}
+#voz .vz-proof .parrow svg{width:22px;height:22px}
+#voz .vz-proof .pstar{width:47px;height:50px;border-radius:8px;border:2px solid #FEC14D;background:rgba(254,193,77,.14);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#0A1E33;flex:0 0 auto}
+#voz .vz-proof .pstar svg{width:15px;height:15px}
+#voz .vz-proof .pstar em{font-style:normal;font-size:7.5px;font-weight:800;letter-spacing:.2px}
+#voz .vz-proof .pweek{display:flex;gap:3.5px;align-items:flex-start}
+#voz .vz-proof .pweek .pd{text-align:center}
+#voz .vz-proof .pweek img,#voz .vz-proof .pweek .pempty{width:25px;height:32px;object-fit:cover;border-radius:5px;display:block;box-shadow:0 3px 7px rgba(10,30,51,.14)}
+#voz .vz-proof .pweek .pempty{border:1.5px dashed rgba(71,97,122,.45);background:rgba(255,255,255,.6);box-shadow:none}
+#voz .vz-proof .pweek em{display:block;font-style:normal;font-size:8px;font-weight:800;letter-spacing:.4px;color:#47617A;margin-top:3px}
+#voz .vz-proof .pweek .pd.free em{color:#2793C8}
+#voz .vz-proof .plabel{font-size:11.5px;font-weight:700;color:#47617A;line-height:1.35}
+#voz .vz-answers{margin-top:11px;display:none;gap:9px}
+#voz .vz-answers.on{display:flex}
+#voz .vz-ansbtn{font-family:inherit;cursor:pointer;padding:9px 18px;border-radius:99px;font-size:13.5px;font-weight:800;color:#0A1E33;background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(255,255,255,.4));border:1px solid rgba(39,147,200,.45);box-shadow:0 6px 16px rgba(10,30,51,.10),inset 0 1px 0 rgba(255,255,255,.9);transition:all .25s ease}
+#voz .vz-ansbtn:hover{border-color:#2793C8;box-shadow:0 8px 20px rgba(39,147,200,.25),inset 0 1px 0 rgba(255,255,255,.9);transform:translateY(-1px)}
+#voz .vz-ansbtn.picked{background:linear-gradient(135deg,rgba(62,166,219,.92),rgba(27,111,160,.88));color:#fff;border-color:rgba(255,255,255,.5)}
+#voz .vz-weekhead{display:flex;align-items:baseline;justify-content:space-between;margin:30px 2px 14px;padding-top:24px;border-top:1px solid #EDF4FA}
+#voz .vz-wk-label{font-weight:800;letter-spacing:2.2px;font-size:12.5px;color:#2793C8;text-transform:uppercase}
+#voz .vz-wk-note{font-size:12.5px;font-weight:600;color:#8CA3B8}
+#voz .vz-week{display:grid;grid-template-columns:repeat(7,1fr);gap:13px}
+#voz .vz-day{min-width:0}
+#voz .vz-dname{text-align:center;font-weight:800;font-size:13.5px;letter-spacing:1.2px;color:#9AA7B4;margin-bottom:8px}
+#voz .vz-day.today .vz-dname{color:#0A1E33}
+#voz .vz-slot{position:relative;border-radius:14px}
+#voz .vz-slot.empty{border:2px dashed rgba(71,97,122,.35);background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(242,249,253,.5));aspect-ratio:4/5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#47617A;margin-bottom:37px}
+#voz .vz-slot.empty .free-t{font-weight:900;font-size:14px;letter-spacing:1.5px;text-transform:uppercase}
+#voz .vz-slot.empty .free-s{font-size:10.5px;font-weight:600;color:#8CA3B8}
+#voz .vz-piece{position:relative;will-change:transform}
+#voz .vz-piece .vz-ph{position:relative}
+#voz .vz-piece img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:14px;display:block;box-shadow:0 8px 20px rgba(10,30,51,.13)}
+#voz .vz-piece .vz-pname{margin-top:7px;font-size:11.5px;font-weight:700;line-height:1.3;color:#0A1E33;text-align:center;min-height:30px}
+#voz .vz-day.today .vz-piece img{box-shadow:0 0 0 2px #2793C8,0 10px 22px rgba(39,147,200,.28)}
+#voz .vz-hoychip{position:absolute;top:8px;left:8px;z-index:3;background:#2793C8;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:1px;padding:3px 8px;border-radius:99px;box-shadow:0 4px 10px rgba(39,147,200,.4)}
+#voz .vz-piece.star .vz-ph img{box-shadow:0 0 0 2.5px #FEC14D,0 12px 30px rgba(254,193,77,.5)}
+#voz .vz-starchip{position:absolute;top:8px;right:8px;z-index:3;display:none;align-items:center;gap:4px;background:rgba(254,193,77,.94);color:#0A1E33;font-size:9.5px;font-weight:800;letter-spacing:.6px;padding:3px 8px;border-radius:99px;box-shadow:0 4px 12px rgba(254,193,77,.5)}
+#voz .vz-piece.star .vz-starchip{display:inline-flex}
+#voz .vz-starchip svg{width:10px;height:10px}
+#voz .vz-movedchip{position:absolute;left:8px;bottom:8px;z-index:3;display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.86);border:1px solid rgba(255,255,255,.95);color:#0A1E33;font-size:9.5px;font-weight:800;letter-spacing:.2px;padding:3.5px 8px;border-radius:99px;box-shadow:0 4px 12px rgba(10,30,51,.2);opacity:0;transform:scale(.6);transition:opacity .35s ease,transform .4s cubic-bezier(.2,2.2,.4,1);pointer-events:none;white-space:nowrap}
+#voz .vz-movedchip svg{width:10px;height:10px;flex:none}
+#voz .vz-movedchip.on{opacity:1;transform:scale(1)}
+#voz .vz-rot{margin-top:28px;text-align:center}
+#voz .vz-rot-t{font-size:12px;font-weight:800;letter-spacing:2.2px;color:#8CA3B8;text-transform:uppercase;margin-bottom:11px}
+#voz .vz-rotchips{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+#voz .vz-rotchip{font-family:inherit;cursor:pointer;border:1px solid rgba(10,30,51,.12);background:rgba(255,255,255,.65);color:#47617A;font-size:13px;font-weight:700;padding:8px 16px;border-radius:99px;transition:all .3s ease;display:inline-flex;align-items:center;gap:8px}
+#voz .vz-rotchip .dot{width:7px;height:7px;border-radius:50%;background:#C4D6E4;transition:all .3s}
+#voz .vz-rotchip.on{background:rgba(39,147,200,.12);border-color:rgba(39,147,200,.5);color:#0A1E33}
+#voz .vz-rotchip.on .dot{background:#2793C8;box-shadow:0 0 0 4px rgba(39,147,200,.18)}
+@media(max-width:900px){#voz .vz-toprow{flex-direction:column}#voz .vz-week{grid-template-columns:repeat(4,1fr)}#voz .vz-scene{padding:24px 18px}}
 @keyframes wd-wave{from{transform:scaleY(.5)}to{transform:scaleY(1.18)}}
 .wd-on #ads .cap-grow>*{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
 .wd-on #ads.wd-live .cap-grow>*{opacity:1;transform:none}
