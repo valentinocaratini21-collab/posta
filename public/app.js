@@ -8368,26 +8368,27 @@ function landingView(cfg) {
    plantilla de la landing: styles.css NO se toca y las reglas .eq-* viejas
    quedan inertes. La foto es el asset de producción valentino-posty-fundador
    .jpg (md5 idéntico al del mock: no hay asset nuevo). — */
+#equipo .wrap{max-width:1240px}
 #equipo .eqv-head{text-align:center}
 .eqv-kicker{display:inline-block;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(255,255,255,.85);box-shadow:0 8px 28px rgba(10,30,51,.13),inset 0 1px 0 rgba(255,255,255,.8);border-radius:999px;padding:9px 20px;font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#2793C8}
 #equipo .eqv-head h2{margin-top:18px}
 .eqv-intro{color:#47617A;font-size:16.5px;line-height:1.6;max-width:640px;margin:14px auto 0;text-align:center}
-.eqv-scene{display:grid;grid-template-columns:1fr 372px 1fr;gap:34px;align-items:center;margin-top:46px;text-align:left}
+.eqv-scene{display:grid;grid-template-columns:1fr 480px 1fr;gap:36px;align-items:center;margin-top:46px;text-align:left}
 .eqv-photo-card{background:#fff;border:1px solid rgba(10,30,51,.07);border-radius:24px;box-shadow:0 1px 2px rgba(10,30,51,.05),0 22px 44px -14px rgba(10,30,51,.20);padding:10px}
 .eqv-photo-frame{position:relative;border-radius:16px;overflow:hidden}
 .eqv-photo-frame img{display:block;width:100%;height:auto}
 .eqv-deg-top{position:absolute;left:0;right:0;top:0;height:110px;z-index:2;background:linear-gradient(180deg,rgba(10,30,51,.30) 0%,rgba(10,30,51,0) 100%)}
-.eqv-deg-bottom{position:absolute;left:0;right:0;bottom:0;height:150px;z-index:2;background:linear-gradient(0deg,rgba(10,30,51,.52) 0%,rgba(10,30,51,.18) 55%,rgba(10,30,51,0) 100%)}
+.eqv-deg-bottom{position:absolute;left:0;right:0;bottom:0;height:176px;z-index:2;background:linear-gradient(0deg,rgba(10,30,51,.52) 0%,rgba(10,30,51,.18) 55%,rgba(10,30,51,0) 100%)}
 .eqv-photo-names{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:flex-end;justify-content:space-between;padding:0 18px 14px}
-.eqv-pn{color:#fff;font-size:13px;font-weight:900;letter-spacing:.22em;line-height:1;text-shadow:0 2px 10px rgba(10,30,51,.5)}
+.eqv-pn{color:#fff;font-size:15px;font-weight:900;letter-spacing:.22em;line-height:1;text-shadow:0 2px 10px rgba(10,30,51,.5)}
 .eqv-anchor{position:absolute;top:50%;z-index:4;width:9px;height:9px;border-radius:50%;background:#fff;border:2px solid #2793C8;box-shadow:0 2px 8px rgba(10,30,51,.35);transform:translateY(-50%)}
 .eqv-anchor-l{left:7px}
 .eqv-anchor-r{right:7px}
 .eqv-panel{position:relative;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(255,255,255,.85);box-shadow:0 8px 28px rgba(10,30,51,.13),inset 0 1px 0 rgba(255,255,255,.8),inset 0 -1px 0 rgba(255,255,255,.25);border-radius:24px;padding:22px 22px 20px}
-.eqv-panel-v::after{content:"";position:absolute;right:-34px;top:50%;width:34px;height:2px;background:linear-gradient(90deg,rgba(39,147,200,.05),rgba(39,147,200,.55))}
-.eqv-panel-v::before{content:"";position:absolute;right:-38px;top:50%;width:7px;height:7px;border-radius:50%;background:#2793C8;transform:translateY(-50%);z-index:2;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(10,30,51,.25)}
-.eqv-panel-p::after{content:"";position:absolute;left:-34px;top:50%;width:34px;height:2px;background:linear-gradient(270deg,rgba(39,147,200,.05),rgba(39,147,200,.55))}
-.eqv-panel-p::before{content:"";position:absolute;left:-38px;top:50%;width:7px;height:7px;border-radius:50%;background:#2793C8;transform:translateY(-50%);z-index:2;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(10,30,51,.25)}
+.eqv-panel-v::after{content:"";position:absolute;right:-36px;top:50%;width:36px;height:2px;background:linear-gradient(90deg,rgba(39,147,200,.05),rgba(39,147,200,.55))}
+.eqv-panel-v::before{content:"";position:absolute;right:-40px;top:50%;width:7px;height:7px;border-radius:50%;background:#2793C8;transform:translateY(-50%);z-index:2;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(10,30,51,.25)}
+.eqv-panel-p::after{content:"";position:absolute;left:-36px;top:50%;width:36px;height:2px;background:linear-gradient(270deg,rgba(39,147,200,.05),rgba(39,147,200,.55))}
+.eqv-panel-p::before{content:"";position:absolute;left:-40px;top:50%;width:7px;height:7px;border-radius:50%;background:#2793C8;transform:translateY(-50%);z-index:2;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(10,30,51,.25)}
 .eqv-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .eqv-pname{font-size:16.5px;font-weight:900;letter-spacing:.14em;color:#0A1E33;line-height:1}
 .eqv-chip{flex:none;font-size:10.5px;font-weight:900;letter-spacing:.12em;padding:6px 11px;border-radius:999px;line-height:1;box-shadow:0 4px 12px rgba(10,30,51,.16),inset 0 1px 0 rgba(255,255,255,.55)}
@@ -8396,9 +8397,9 @@ function landingView(cfg) {
 .eqv-tasks{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .eqv-tasks li{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:600;color:#33475B;padding:7px 8px;border-radius:12px}
 .eqv-tasks li:nth-child(odd){background:rgba(255,255,255,.45)}
-.eqv-pic{flex:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1.5px solid #DCEBF5;box-shadow:0 3px 8px rgba(10,30,51,.07);color:#2793C8}
+.eqv-pic{flex:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1.5px solid #DCEBF5;box-shadow:0 3px 8px rgba(10,30,51,.07);color:#2793C8}
 .eqv-panel-v .eqv-pic{color:#C78F12;border-color:#F3E3B3;background:#FFFDF4}
-.eqv-pic svg{width:19px;height:19px}
+.eqv-pic svg{width:22px;height:22px}
 .eqv-stat{margin-top:16px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,rgba(233,242,248,.85),rgba(255,255,255,.6));-webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%);border:1px solid rgba(255,255,255,.95);box-shadow:0 8px 22px rgba(10,30,51,.10),inset 0 1px 0 #fff,inset 0 -8px 16px rgba(39,147,200,.08);border-radius:999px;padding:8px 16px;font-size:13px;font-weight:700;color:#47617A;white-space:nowrap}
 .eqv-stat b{font-size:24px;font-weight:900;color:#0A1E33;line-height:1;margin-left:2px}
 .eqv-steps{margin:52px auto 0;max-width:860px;border-top:1px solid rgba(10,30,51,.14);padding-top:24px;display:flex;align-items:center;justify-content:center;gap:18px}
@@ -8406,7 +8407,7 @@ function landingView(cfg) {
 .eqv-step-last{color:#0A1E33;font-weight:800}
 .eqv-arr{color:#2793C8;font-size:15px;line-height:1}
 @media (max-width:900px){
-.eqv-scene{grid-template-columns:1fr;gap:26px;max-width:480px;margin-left:auto;margin-right:auto}
+.eqv-scene{grid-template-columns:1fr;gap:26px;max-width:520px;margin-left:auto;margin-right:auto}
 .eqv-photo-card{order:-1}
 .eqv-panel-v::after,.eqv-panel-v::before,.eqv-panel-p::after,.eqv-panel-p::before{display:none}
 .eqv-steps{flex-wrap:wrap;gap:10px 14px}
@@ -8783,6 +8784,35 @@ function landingView(cfg) {
       </div>
       <p class="pz-drag-hint">👆 Arrastrá la línea: así cambia un perfil cuando nos ponemos a trabajar</p>
     </div>
+  <div class="section" id="planes"><div class="wrap">
+    <h2>Precio único y claro.</h2>
+    <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
+    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
+    <div class="wd-price"><p>Un solo plan · todo incluido · sin letra chica</p></div>
+    <div class="country-toggle">
+      ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
+    </div>
+    <p class="lp-pais-nota" id="plansCountryNote">${(PZ_PAIS_META[country] && PZ_PAIS_META[country].nota) || ''}</p>
+    <div id="lpSocial"></div>
+    <div class="cmp-scene" aria-label="Comparación de opciones">
+      <div class="cmp-card cmp-alt cmp-cm">
+        <h3>Un community manager</h3>
+        <div class="cmp-price">US$800–1.500<small>/mes</small></div>
+        <ul><li>+ entrevistas y búsqueda</li><li>+ sueldo, vacaciones y bajas</li><li>+ sigue siendo tu problema si falta</li></ul>
+      </div>
+      <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
+      <div class="cmp-card cmp-alt cmp-diy">
+        <h3>Hacerlo vos</h3>
+        <div class="cmp-price cmp-price-txt">tu tiempo, todos los días</div>
+        <ul><li>pensar qué postear</li><li>diseñar cada pieza</li><li>responder todo</li></ul>
+      </div>
+    </div>
+    <div class="plan-dots" id="planDots"><span class="on"></span></div>
+    <p style="font-size:15px;color:#0A1E33;line-height:1.6;text-align:center;max-width:660px;margin:18px auto 0">⭐ <b>Precio fundador:</b> solo para los primeros 50 clientes — los que entren ahora lo conservan para siempre.</p>
+    <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
+    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los ${lpFounderAmt} para siempre.</p>
+
+  </div></div>
   <div class="section lp-week-sec" id="prueba"><div class="wrap">
       <div class="mk-carr">
   <div class="mk-carr-head"><b>El día 2 es un carrusel</b><span>Patagonia · deslizá →</span></div>
@@ -8818,42 +8848,6 @@ function landingView(cfg) {
       <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
     </div>
   </div>
-  <div class="section" id="planes"><div class="wrap">
-    <h2>Precio único y claro.</h2>
-    <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
-    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
-    <div class="wd-price"><p>Un solo plan · todo incluido · sin letra chica</p></div>
-    <div class="country-toggle">
-      ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
-    </div>
-    <p class="lp-pais-nota" id="plansCountryNote">${(PZ_PAIS_META[country] && PZ_PAIS_META[country].nota) || ''}</p>
-    <div id="lpSocial"></div>
-    <div class="cmp-scene" aria-label="Comparación de opciones">
-      <div class="cmp-card cmp-alt cmp-cm">
-        <h3>Un community manager</h3>
-        <div class="cmp-price">US$800–1.500<small>/mes</small></div>
-        <ul><li>+ entrevistas y búsqueda</li><li>+ sueldo, vacaciones y bajas</li><li>+ sigue siendo tu problema si falta</li></ul>
-      </div>
-      <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
-      <div class="cmp-card cmp-alt cmp-diy">
-        <h3>Hacerlo vos</h3>
-        <div class="cmp-price cmp-price-txt">tu tiempo, todos los días</div>
-        <ul><li>pensar qué postear</li><li>diseñar cada pieza</li><li>responder todo</li></ul>
-      </div>
-    </div>
-    <div class="plan-dots" id="planDots"><span class="on"></span></div>
-    <p style="font-size:15px;color:#0A1E33;line-height:1.6;text-align:center;max-width:660px;margin:18px auto 0">⭐ <b>Precio fundador:</b> solo para los primeros 50 clientes — los que entren ahora lo conservan para siempre.</p>
-    <p class="lp-plans-note">Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
-    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Precio fundador</b> para los primeros 50 clientes: los que entren ahora conservan los ${lpFounderAmt} para siempre.</p>
-
-  </div></div>
-  <div class="lp-final"><div class="wrap">
-    <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
-    <h2>Probás 3 días gratis antes de pagar.</h2>
-    <p>Conectá tu Instagram y mirá tu semana ya armada. Gratis, sin tarjeta.</p>
-    <a class="btn lp-cta-glass" href="/prueba" style="font-size:16px;padding:18px 44px">Empezar mis 3 días gratis</a>
-    <div class="hero-note" style="margin-top:18px">✓ Sin contraseña · ✓ Cancelá cuando quieras</div>
-  </div></div>
   ${lpProgresoHTML()}
   <div class="section wd-reveal" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
@@ -8875,6 +8869,13 @@ function landingView(cfg) {
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary lp-cta-big" href="/prueba">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a>
     </div>
+  </div></div>
+  <div class="lp-final"><div class="wrap">
+    <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
+    <h2>Probás 3 días gratis antes de pagar.</h2>
+    <p>Conectá tu Instagram y mirá tu semana ya armada. Gratis, sin tarjeta.</p>
+    <a class="btn lp-cta-glass" href="/prueba" style="font-size:16px;padding:18px 44px">Empezar mis 3 días gratis</a>
+    <div class="hero-note" style="margin-top:18px">✓ Sin contraseña · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img class="logo-img-foot" src="/posty-logo.png" width="226" height="62" alt="Posty"></span>
