@@ -4578,6 +4578,142 @@ function lpDisenoInit() {
             }
     })();
   }
+  /* PROGRESO-VIVO: «Tu mes se llena» — el teléfono muestra el mes de Tomoko
+     vacío (30 casilleros de vidrio) y lo llena día a día a las 19:00: pulso
+     celeste, tilde verde solo en el día publicado, contadores que suben
+     juntos (día y racha, sin llama) y la tarjeta de reacciones siguiendo a
+     la pieza más fresca. Al día 30, píldora «30 de 30 · Mes completo» y el
+     loop descansa ~4 s y recomienza. Con reduced-motion reposa en el mes
+     completo. Las fotos se precargan de a 3 con reintentos: ningún día se
+     marca publicado antes de que su foto esté cargada. */
+  var pgSec = q('#progreso');
+  if (pgSec) {
+    var PG_TOTAL = 30, PG_FILL = 235, PG_HOLD = 4000, PG_START = 900;
+    var pgGrid = q('#pgGrid', pgSec), pgDiaN = q('#pgDiaN', pgSec),
+        pgRachaN = q('#pgRachaN', pgSec), pgRachaTxt = q('#pgRachaTxt', pgSec),
+        pgChipDia = q('#pgChipDia', pgSec), pgChipRacha = q('#pgChipRacha', pgSec),
+        pgHora = q('#pgHora', pgSec), pgBanner = q('#pgBanner', pgSec),
+        pgThumb = q('#pgThumb', pgSec), pgTitle = q('#pgTitle', pgSec),
+        pgLikeN = q('#pgLikeN', pgSec), pgHeart = q('#pgHeart', pgSec),
+        pgComment = q('#pgComment', pgSec), pgCUser = q('#pgCUser', pgSec),
+        pgCText = q('#pgCText', pgSec), pgCEstado = q('#pgCEstado', pgSec),
+        pgReplay = q('#pgReplay', pgSec);
+    function pgPad(n) { return (n < 10 ? '0' : '') + n; }
+    var pgSlots = [], pgi, pgd;
+    for (pgi = 0; pgi < 6; pgi++) { var pgB1 = document.createElement('div'); pgB1.className = 'pg-blank'; pgB1.setAttribute('aria-hidden', 'true'); pgGrid.appendChild(pgB1); }
+    for (pgd = 1; pgd <= PG_TOTAL; pgd++) {
+      var pgSlot = document.createElement('div');
+      pgSlot.className = 'pg-slot';
+      pgSlot.innerHTML = '<img class="pg-ph" data-src="lp-mes-' + pgPad(pgd) + '.jpg" alt="" decoding="async" />' +
+        '<span class="pg-num">' + pgd + '</span>' +
+        '<span class="pg-chk"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+      pgGrid.appendChild(pgSlot);
+      pgSlots.push(pgSlot);
+    }
+    for (pgi = 0; pgi < 6; pgi++) { var pgB2 = document.createElement('div'); pgB2.className = 'pg-blank'; pgB2.setAttribute('aria-hidden', 'true'); pgGrid.appendChild(pgB2); }
+    function pgLikesFor(day) { return 84 + day * 9 + ((day * 37) % 53); }
+    var pgLikeTimer = null;
+    function pgTickLikes(day) {
+      if (pgLikeTimer) { clearInterval(pgLikeTimer); pgLikeTimer = null; }
+      var target = pgLikesFor(day), current = Math.max(0, target - 46);
+      pgLikeN.textContent = current;
+      pgLikeTimer = setInterval(function () {
+        current += 3;
+        if (current >= target) { current = target; clearInterval(pgLikeTimer); pgLikeTimer = null; }
+        pgLikeN.textContent = current;
+      }, 34);
+    }
+    function pgRenderComment(day) {
+      var data = null;
+      if (day >= 17) data = { user: 'cami.eats', text: '— ¿Hacen envíos a domicilio?', answered: day >= 18 };
+      else if (day >= 5) data = { user: 'sofi.m', text: '— ¿Precio?', answered: day >= 6 };
+      if (!data) { pgComment.classList.remove('pg-show'); return; }
+      pgCUser.textContent = data.user;
+      pgCText.textContent = data.text;
+      if (data.answered) { pgCEstado.textContent = 'Respondido ✓'; pgCEstado.className = 'pg-estado pg-resp'; }
+      else { pgCEstado.textContent = 'Nuevo'; pgCEstado.className = 'pg-estado pg-nuevo'; }
+      pgComment.classList.add('pg-show');
+    }
+    function pgRenderDay(day, instant) {
+      pgDiaN.textContent = day;
+      pgRachaN.textContent = day;
+      pgRachaTxt.textContent = (day === 1) ? 'día seguido' : 'días seguidos';
+      if (day >= 1) {
+        pgThumb.src = 'lp-mes-' + pgPad(day) + '.jpg';
+        pgTitle.innerHTML = 'Posteo del día ' + day + ' · <span class="pg-ok">ya salió</span>';
+        if (instant) pgLikeN.textContent = pgLikesFor(day); else pgTickLikes(day);
+      } else {
+        pgTitle.textContent = 'Tu mes está por empezar.';
+        pgLikeN.textContent = '0';
+      }
+      pgRenderComment(day);
+      pgBanner.classList.toggle('pg-show', day >= PG_TOTAL);
+    }
+    function pgSetPosted(day) {
+      for (var k = 0; k < PG_TOTAL; k++) pgSlots[k].classList.toggle('pg-on', k < day);
+    }
+    function pgPreload(done) {
+      var queue = [], k;
+      for (k = 0; k < PG_TOTAL; k++) queue.push(k);
+      var settled = 0, active = 0;
+      function finishOne() { settled++; active--; if (settled >= PG_TOTAL) { done(); return; } pump(); }
+      function attempt(idx, tries) {
+        var img = pgSlots[idx].querySelector('img.pg-ph');
+        var probe = new Image();
+        probe.onload = function () { img.src = probe.src; finishOne(); };
+        probe.onerror = function () {
+          if (tries < 3) setTimeout(function () { attempt(idx, tries + 1); }, 500 * (tries + 1));
+          else finishOne();
+        };
+        probe.src = img.getAttribute('data-src') + (tries ? '?r=' + tries : '');
+      }
+      function pump() { while (active < 3 && queue.length) { active++; attempt(queue.shift(), 0); } }
+      pump();
+    }
+    var pgTimers = [];
+    function pgLater(fn, ms) { pgTimers.push(setTimeout(fn, ms)); }
+    function pgClearTimers() {
+      for (var t = 0; t < pgTimers.length; t++) clearTimeout(pgTimers[t]);
+      pgTimers = [];
+      if (pgLikeTimer) { clearInterval(pgLikeTimer); pgLikeTimer = null; }
+    }
+    function pgBump(el) { el.classList.remove('pg-bump'); void el.offsetWidth; el.classList.add('pg-bump'); }
+    function pgRunLoop() {
+      pgClearTimers();
+      pgSetPosted(0);
+      pgRenderDay(0, true);
+      pgBanner.classList.remove('pg-show');
+      for (var day = 1; day <= PG_TOTAL; day++) {
+        (function (day) {
+          pgLater(function () {
+            pgSlots[day - 1].classList.add('pg-on');
+            pgSlots[day - 1].classList.add('pg-pulse');
+            setTimeout(function () { pgSlots[day - 1].classList.remove('pg-pulse'); }, 700);
+            pgHora.classList.remove('pg-flash'); void pgHora.offsetWidth; pgHora.classList.add('pg-flash');
+            pgHeart.classList.remove('pg-beat'); void pgHeart.getBoundingClientRect; pgHeart.classList.add('pg-beat');
+            pgBump(pgChipDia); pgBump(pgChipRacha);
+            pgRenderDay(day, false);
+          }, PG_START + (day - 1) * PG_FILL);
+        })(day);
+      }
+      pgLater(pgRunLoop, PG_START + PG_TOTAL * PG_FILL + PG_HOLD);
+    }
+    if (pgReplay) pgReplay.addEventListener('click', pgRunLoop);
+    if (RM) {
+      if (pgReplay) pgReplay.hidden = true;
+      pgPreload(function () { pgSetPosted(PG_TOTAL); pgRenderDay(PG_TOTAL, true); });
+    } else if ('IntersectionObserver' in window) {
+      var pgStarted = false;
+      var pgIO = new IntersectionObserver(function (es) {
+        es.forEach(function (en) {
+          if (en.isIntersecting && !pgStarted) { pgStarted = true; pgPreload(pgRunLoop); pgIO.disconnect(); }
+        });
+      }, { threshold: 0.25 });
+      pgIO.observe(pgSec);
+    } else {
+      pgPreload(pgRunLoop);
+    }
+  }
   upd();
 }
 
@@ -5650,11 +5786,40 @@ function lpAtiendeHTML() {
 }
 function lpProgresoHTML() {
   return `
-  <div class="section" id="progreso"><div class="wrap" style="max-width:760px">
-    <h2>Ves el progreso.</h2>
-    <p class="lede">Tu Instagram avanza — y se ve.</p>
-    <p style="text-align:center;font-size:16.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">En la app ves el posteo de hoy, tu semana completa y tu jardín, que crece día a día con tu constancia. El progreso no se promete: se muestra.</p>
-    <div class="wd-garden"><svg viewBox="0 0 150 168" aria-hidden="true"><path class="wd-g-stem" d="M75,126 C75,100 70,84 75,46"/><path class="wd-g-leaf l" d="M62,100 C44,100 34,88 34,74 C50,76 62,84 62,100 Z"/><path class="wd-g-leaf r" d="M88,82 C106,82 116,70 116,56 C100,58 88,66 88,82 Z"/><g class="wd-g-flower"><circle cx="75" cy="24" r="9" fill="#FEC14D"/><circle cx="86" cy="32" r="9" fill="#FEC14D"/><circle cx="82" cy="45" r="9" fill="#FEC14D"/><circle cx="68" cy="45" r="9" fill="#FEC14D"/><circle cx="64" cy="32" r="9" fill="#FEC14D"/><circle cx="75" cy="35" r="6.5" fill="#DFA856"/></g><path d="M45,132 L105,132 L98,164 L52,164 Z" fill="#C96F4A"/><rect x="40" y="123" width="70" height="11" rx="4" fill="#B85F3C"/></svg><div class="wd-g-dots"><i></i><i></i><i></i><i></i></div><div class="wd-g-cap">Tu jardín crece con tu constancia</div></div>
+  <div class="section" id="progreso"><div class="wrap">
+    <div class="pg-head">
+      <p class="pg-kick">El progreso</p>
+      <h2>Ves el progreso.</h2>
+      <p class="lede">Tu Instagram avanza — y se ve.</p>
+    </div>
+    <div class="pg-zone">
+      <div class="pg-phone">
+        <div class="pg-app-head">
+          <img class="pg-ava" src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko">
+          <div class="pg-id"><b>patisserietomoko</b><span>Tu mes · noviembre</span></div>
+          <span class="pg-hora" id="pgHora"><span class="pg-dot"></span>19:00</span>
+        </div>
+        <div class="pg-chips">
+          <span class="pg-chip pg-chip-dia" id="pgChipDia">Día <b id="pgDiaN">0</b> de 30</span>
+          <span class="pg-chip pg-chip-racha" id="pgChipRacha"><span class="pg-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#FEC14D" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b id="pgRachaN">0</b> <span id="pgRachaTxt">días seguidos</span></span></span>
+        </div>
+        <div class="pg-grid-wrap">
+          <div class="pg-dow" aria-hidden="true"><i>L</i><i>M</i><i>M</i><i>J</i><i>V</i><i>S</i><i>D</i></div>
+          <div class="pg-grid" id="pgGrid" role="img" aria-label="Calendario de noviembre de Patisserie Tomoko que se va llenando de posteos día a día"></div>
+          <div class="pg-banner" id="pgBanner"><span class="pg-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>30 de 30 · Mes completo</div>
+        </div>
+        <div class="pg-react" aria-live="polite">
+          <img class="pg-rthumb" id="pgThumb" src="lp-mes-01.jpg" alt="La pieza más reciente de Patisserie Tomoko">
+          <div class="pg-rmain">
+            <p class="pg-rtitle" id="pgTitle">Tu mes está por empezar.</p>
+            <p class="pg-likes"><svg class="pg-heart" id="pgHeart" viewBox="0 0 24 24" fill="#E0245E" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span id="pgLikeN">0</span> <small>me gusta en la pieza de hoy</small></p>
+            <div class="pg-comment" id="pgComment"><b id="pgCUser"></b> <span class="pg-q" id="pgCText"></span><span class="pg-estado pg-nuevo" id="pgCEstado"></span></div>
+          </div>
+        </div>
+      </div>
+      <p class="pg-payoff">Esto es lo que ves en la app: <b>tu feed llenándose, día a día.</b> El progreso no se promete: se muestra.</p>
+      <button class="pg-replay" id="pgReplay" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3"/><path d="M3 4v5h5"/></svg>Ver el mes de nuevo</button>
+    </div>
   </div></div>`;
 }
 function lpSubirHTML() {
@@ -7975,28 +8140,76 @@ function landingView(cfg) {
 .wd-price p{font-weight:700;color:#47617A;margin-top:8px;font-size:15px}
 .btn.lp-cta-glass{background:linear-gradient(135deg,rgba(62,166,219,.88),rgba(27,111,160,.86));border:1px solid rgba(255,255,255,.5);border-top:1.5px solid rgba(255,255,255,.9);-webkit-backdrop-filter:blur(16px) saturate(165%);backdrop-filter:blur(16px) saturate(165%);box-shadow:0 10px 24px rgba(39,147,200,.38),inset 0 1px 0 rgba(255,255,255,.65);color:#fff}
 .btn.lp-cta-glass:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 14px 30px rgba(39,147,200,.45),inset 0 1px 0 rgba(255,255,255,.65)}
-.wd-garden{display:flex;flex-direction:column;align-items:center;margin:12px auto 0}
-.wd-garden svg{width:150px;height:168px;overflow:visible}
-.wd-g-stem{stroke:#1FA855;stroke-width:5;fill:none;stroke-linecap:round;stroke-dasharray:130;transition:stroke-dashoffset 1s ease .25s}
-.wd-on .wd-g-stem{stroke-dashoffset:130}
-.wd-on #progreso.wd-live .wd-g-stem{stroke-dashoffset:0}
-.wd-g-leaf{fill:#1FA855;transition:transform .5s cubic-bezier(.2,2,.4,1)}
-.wd-g-leaf.l{transform-origin:62px 100px;transition-delay:.8s}
-.wd-g-leaf.r{transform-origin:88px 82px;transition-delay:1.05s}
-.wd-on .wd-g-leaf{transform:scale(0)}
-.wd-on #progreso.wd-live .wd-g-leaf{transform:scale(1)}
-.wd-g-flower{transition:transform .55s cubic-bezier(.2,2.2,.4,1) 1.3s;transform-origin:75px 35px}
-.wd-on .wd-g-flower{transform:scale(0)}
-.wd-on #progreso.wd-live .wd-g-flower{transform:scale(1)}
-.wd-g-dots{display:flex;gap:8px;margin-top:12px}
-.wd-g-dots i{width:9px;height:9px;border-radius:50%;background:#1FA855;transition:background .4s}
-.wd-on .wd-g-dots i{background:#E3DCC8}
-.wd-on #progreso.wd-live .wd-g-dots i{background:#1FA855}
-.wd-on #progreso.wd-live .wd-g-dots i:nth-child(1){transition-delay:.3s}
-.wd-on #progreso.wd-live .wd-g-dots i:nth-child(2){transition-delay:.85s}
-.wd-on #progreso.wd-live .wd-g-dots i:nth-child(3){transition-delay:1.1s}
-.wd-on #progreso.wd-live .wd-g-dots i:nth-child(4){transition-delay:1.4s}
-.wd-g-cap{font-size:12.5px;font-weight:700;color:#7C8DA0;margin-top:8px}
+.pg-head{text-align:center;max-width:720px;margin:0 auto 40px}
+.pg-kick{font-size:12px;font-weight:800;letter-spacing:1.8px;color:#2793C8;text-transform:uppercase;margin-bottom:12px}
+.pg-zone{display:flex;flex-direction:column;align-items:center}
+.pg-phone{width:100%;max-width:520px;background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:24px;box-shadow:0 18px 40px rgba(10,30,51,.10);padding:22px 22px 20px;position:relative}
+.pg-app-head{display:flex;align-items:center;gap:12px}
+.pg-ava{width:46px;height:46px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #fff;box-shadow:0 4px 12px rgba(10,30,51,.20)}
+.pg-id{min-width:0;flex:1}
+.pg-id b{display:block;font-size:16.5px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0A1E33}
+.pg-id span{display:block;font-size:12.5px;font-weight:700;color:#2793C8;margin-top:1px}
+.pg-hora{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#0A1E33;padding:7px 13px;border-radius:999px;background:rgba(233,242,248,.75);border:1px solid rgba(255,255,255,.9);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 12px rgba(10,30,51,.08);-webkit-backdrop-filter:blur(8px) saturate(150%);backdrop-filter:blur(8px) saturate(150%)}
+.pg-hora .pg-dot{width:7px;height:7px;border-radius:50%;background:#2793C8;flex:none}
+.pg-hora.pg-flash{animation:pg-hora-flash .55s ease}
+@keyframes pg-hora-flash{0%{background:#2793C8;color:#fff;transform:scale(1)}35%{background:#2793C8;color:#fff;transform:scale(1.12)}100%{background:rgba(233,242,248,.75);color:#0A1E33;transform:scale(1)}}
+.pg-hora.pg-flash .pg-dot{background:#fff}
+.pg-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.pg-chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:#0A1E33;padding:8px 14px;border-radius:999px;white-space:nowrap}
+.pg-chip-dia{background:rgba(233,242,248,.8);border:1px solid rgba(10,30,51,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.9);-webkit-backdrop-filter:blur(8px) saturate(150%);backdrop-filter:blur(8px) saturate(150%)}
+.pg-chip-dia b{font-weight:900}
+.pg-chip-racha{background:#FEC14D;box-shadow:0 6px 16px rgba(254,193,77,.45)}
+.pg-chip-racha .pg-ck{width:16px;height:16px;border-radius:50%;background:#0A1E33;flex:none;display:flex;align-items:center;justify-content:center}
+.pg-chip-racha .pg-ck svg{width:10px;height:10px}
+.pg-chip.pg-bump{animation:pg-bump .4s cubic-bezier(.2,2.2,.4,1)}
+@keyframes pg-bump{0%{transform:scale(1)}40%{transform:scale(1.09)}100%{transform:scale(1)}}
+.pg-grid-wrap{position:relative;margin-top:18px}
+.pg-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.pg-dow i{font-style:normal;text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.6px;color:#9AA7B4}
+.pg-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.pg-blank{aspect-ratio:1}
+.pg-slot{aspect-ratio:1;border-radius:10px;position:relative;overflow:visible;background:rgba(255,255,255,.42);border:1px solid rgba(10,30,51,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 0 0 1px rgba(255,255,255,.25);-webkit-backdrop-filter:blur(6px) saturate(140%);backdrop-filter:blur(6px) saturate(140%);display:flex;align-items:center;justify-content:center}
+.pg-slot .pg-num{font-size:13px;font-weight:800;color:#A9BACA;transition:opacity .25s ease}
+.pg-slot img.pg-ph{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:1;opacity:0;transform:scale(.55);transition:opacity .3s ease,transform .5s cubic-bezier(.2,1.5,.4,1)}
+.pg-slot.pg-on{background:transparent;border-color:transparent;box-shadow:none}
+.pg-slot.pg-on img.pg-ph{opacity:1;transform:scale(1)}
+.pg-slot.pg-on .pg-num{position:absolute;top:3px;left:3px;z-index:2;font-size:10px;color:#0A1E33;opacity:1;background:rgba(255,255,255,.9);border-radius:999px;padding:1px 6px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:center}
+.pg-slot .pg-chk{position:absolute;right:3px;bottom:3px;z-index:3;width:16px;height:16px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;transform:scale(0);transition:transform .38s cubic-bezier(.2,2.2,.4,1) .08s;box-shadow:0 2px 6px rgba(10,30,51,.3)}
+.pg-slot .pg-chk svg{width:10px;height:10px}
+.pg-slot.pg-on .pg-chk{transform:scale(1)}
+.pg-slot.pg-pulse::after{content:"";position:absolute;inset:-3px;border-radius:13px;z-index:4;border:2px solid #2793C8;pointer-events:none;animation:pg-pulse-ring .65s ease-out forwards}
+@keyframes pg-pulse-ring{0%{opacity:.95;transform:scale(.92);box-shadow:0 0 0 0 rgba(39,147,200,.45)}100%{opacity:0;transform:scale(1.14);box-shadow:0 0 0 12px rgba(39,147,200,0)}}
+.pg-banner{position:absolute;left:50%;top:50%;z-index:10;transform:translate(-50%,-50%) scale(.6);background:#0A1E33;color:#fff;font-size:15px;font-weight:800;letter-spacing:.1px;padding:11px 20px;border-radius:999px;white-space:nowrap;box-shadow:0 16px 34px rgba(10,30,51,.38);opacity:0;pointer-events:none;display:inline-flex;align-items:center;gap:9px}
+.pg-banner .pg-ck{width:19px;height:19px;border-radius:50%;background:#1FA855;flex:none;display:flex;align-items:center;justify-content:center}
+.pg-banner .pg-ck svg{width:12px;height:12px}
+.pg-banner.pg-show{animation:pg-banner-pop .55s cubic-bezier(.2,2.2,.4,1) forwards}
+@keyframes pg-banner-pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.pg-react{margin-top:18px;border-top:1px solid rgba(10,30,51,.07);padding-top:16px;display:flex;gap:13px;align-items:flex-start;min-height:96px}
+.pg-rthumb{width:64px;height:64px;border-radius:14px;object-fit:cover;flex:none;background:#EAF4FA;box-shadow:0 6px 14px rgba(10,30,51,.14)}
+.pg-rmain{flex:1;min-width:0}
+.pg-rtitle{font-size:14.5px;font-weight:800;line-height:1.3;color:#0A1E33}
+.pg-rtitle .pg-ok{color:#1FA855}
+.pg-likes{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:14px;font-weight:800;color:#0A1E33}
+.pg-likes .pg-heart{width:18px;height:18px;flex:none}
+.pg-likes .pg-heart.pg-beat{animation:pg-beat .45s cubic-bezier(.2,2.2,.4,1)}
+@keyframes pg-beat{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+.pg-likes small{font-size:12.5px;font-weight:700;color:#8CA3B8}
+.pg-comment{margin-top:10px;background:rgba(233,242,248,.75);border:1px solid rgba(10,30,51,.06);border-radius:14px;padding:9px 12px;font-size:13.5px;line-height:1.4;opacity:0;transform:translateY(6px);transition:opacity .4s ease,transform .4s ease;color:#0A1E33}
+.pg-comment.pg-show{opacity:1;transform:translateY(0)}
+.pg-comment b{font-weight:800}
+.pg-comment .pg-q{color:#47617A;font-weight:600}
+.pg-comment .pg-estado{display:inline-flex;align-items:center;gap:5px;margin-left:8px;font-size:11.5px;font-weight:800;white-space:nowrap;padding:2px 9px;border-radius:999px;vertical-align:1px}
+.pg-comment .pg-estado.pg-nuevo{background:#FDEBC8;color:#7A5A08}
+.pg-comment .pg-estado.pg-resp{background:rgba(31,168,85,.14);color:#1FA855}
+.pg-payoff{margin-top:34px;text-align:center;font-size:clamp(17px,2.3vw,21px);line-height:1.55;font-weight:700;color:#0A1E33;max-width:640px}
+.pg-payoff b{font-weight:900}
+.pg-replay{margin-top:22px;min-height:44px;display:inline-flex;align-items:center;gap:8px;font-size:14.5px;font-weight:800;color:#2793C8;background:rgba(255,255,255,.65);border:1px solid rgba(39,147,200,.35);border-radius:999px;padding:10px 20px;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background .2s ease,transform .2s ease;font-family:inherit;touch-action:manipulation}
+.pg-replay:hover{background:#fff}
+.pg-replay:active{transform:scale(.97)}
+.pg-replay svg{width:16px;height:16px}
+.pg-replay[hidden]{display:none}
+@media (max-width:560px){.pg-head{margin-bottom:32px}.pg-phone{padding:16px 14px 15px}.pg-grid,.pg-dow{gap:4px}.pg-slot{border-radius:8px}.pg-slot img.pg-ph{border-radius:8px}.pg-slot .pg-num{font-size:11px}.pg-slot.pg-on .pg-num{font-size:9px;padding:1px 5px;top:2px;left:2px}.pg-slot .pg-chk{width:13px;height:13px;right:2px;bottom:2px}.pg-slot .pg-chk svg{width:8px;height:8px}.pg-id b{font-size:15px}.pg-banner{font-size:13px;padding:9px 16px}.pg-rthumb{width:54px;height:54px;border-radius:12px}.pg-comment .pg-estado{margin-left:0;margin-top:5px}}
+@media (prefers-reduced-motion: reduce){.pg-slot img.pg-ph,.pg-slot .pg-chk,.pg-comment{transition:none}.pg-hora.pg-flash,.pg-chip.pg-bump,.pg-likes .pg-heart.pg-beat,.pg-banner.pg-show{animation:none}.pg-banner.pg-show{opacity:1;transform:translate(-50%,-50%) scale(1)}.pg-slot.pg-pulse::after{animation:none;opacity:0}}
 @media(max-width:760px){
 .wd-strip{gap:6px}
 .wd-dname{font-size:10px}
