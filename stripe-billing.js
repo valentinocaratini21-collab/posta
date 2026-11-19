@@ -151,10 +151,11 @@ function buildCheckoutParams({ priceId, plan, user, baseUrl, trialEndSec }) {
   return params;
 }
 
-// ---------- Precio fundador (v317): el alta paga de Los Primeros 200 ----------
+// ---------- Precio fundador (v317): el alta paga de Los Primeros 50 ----------
 // Precio de Stripe con el monto EXACTO del alta del fundador (lookup_key por
 // monto: idempotente y compartido por todos los fundadores del mismo monto).
-// Se usa solo cuando un fundador re-suscribe dentro de sus 12 meses.
+// Se usa cuando un fundador re-suscribe: su precio es para siempre (regla
+// 2026-11-18, sin vencimiento).
 const founderPriceCache = new Map(); // lookup_key -> priceId (por proceso)
 async function ensureFounderPrice(client, plan, amountUsd) {
   client = client || stripeClient();

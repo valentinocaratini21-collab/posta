@@ -1075,7 +1075,7 @@ function bindSettings() {
     loadBw();
   }
   // --- SEMANA-DOS-IDIOMAS:END ---
-  // ⭐ Los Primeros 200 (growth ola 2): distintivo de fundador + captura del
+  // ⭐ Los Primeros 50 (growth ola 2): distintivo de fundador + captura del
   // permiso de aparición pública. Vive en Mi plan (la superficie post-pago) y
   // solo aparece para cuentas pagas con número de fundador asignado.
   (async () => {
@@ -1088,9 +1088,9 @@ function bindSettings() {
     const fpN = Number((ME && ME.founder_price) || 0);
     const fpCur = (ME && ME.founder_currency) || '';
     const fpLbl = fpN ? ((fpCur === 'UYU' ? '$U ' : '$') + fpN.toLocaleString('es-AR') + (fpCur === 'USD' ? ' USD' : '')) : '';
-    const fpLine = fpN ? (en ? `${pzIc('heart', 14)} Your founder price (${fpLbl}/mo) stays fixed for 12 months from your signup.` : `${pzIc('heart', 14)} Tu precio de fundador (${fpLbl}/mes) queda fijo por 12 meses desde tu alta.`) : '';
+    const fpLine = fpN ? (en ? `${pzIc('heart', 14)} Your founder price (${fpLbl}/mo) is yours forever: it never goes up.` : `${pzIc('heart', 14)} Tu precio de fundador (${fpLbl}/mes) queda para siempre: no sube nunca.`) : '';
     z.innerHTML = `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
-      <div style="font-size:15px;font-weight:800">${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 200' : 'de Los Primeros 200'}</div>
+      <div style="font-size:15px;font-weight:800">${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 50' : 'de Los Primeros 50'}</div>
       <p style="color:var(--mut);font-size:13px;line-height:1.55;margin:6px 0 10px">${en ? 'Your spot in the founding cohort is yours. Do you want your business on the public founders page, with its name, trade and city?' : 'Tu lugar en la cohorte fundadora ya es tuyo. ¿Te sumás a la página de fundadores con el nombre de tu negocio, su rubro y su ciudad?'}</p>
       ${fpLine ? `<p style="color:var(--mut);font-size:13px;line-height:1.55;margin:0 0 10px">${fpLine}</p>` : ''}
       <label style="display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;cursor:pointer"><input type="checkbox" id="founderPub" ${pub ? 'checked' : ''} style="width:18px;height:18px"> ${en ? 'Yes, list my business' : 'Sí, sumame a la página'}</label>

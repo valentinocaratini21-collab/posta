@@ -446,7 +446,7 @@ function markFollowDone(db, id, doneBy, capOverride) {
 }
 
 // La lista de clientes YA seguidos (fuente para la página de fundadores
-// "Los Primeros 200": se publica solo con el permiso de cada cliente).
+// "Los Primeros 50": se publica solo con el permiso de cada cliente).
 function followedClients(db) {
   try {
     return db.prepare(`SELECT cf.client_user_id, cf.ig_handle, cf.posty_account, cf.lang, cf.done_at,

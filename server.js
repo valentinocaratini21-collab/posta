@@ -5563,9 +5563,9 @@ app.get('/api/auth/me', (req, res) => {
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
       billing_provider: user.stripe_subscription_id ? 'stripe' : (user.mp_preapproval_id ? 'mp' : null), // (v285) qué riel cobra esta cuenta
-      founder_number: user.founder_number || 0, // (growth ola 2) Los Primeros 200: 0 = todavía no
+      founder_number: user.founder_number || 0, // (growth ola 2) Los Primeros 50: 0 = todavía no
       founder_public: !!user.founder_public, // permiso registrado para la página pública de fundadores
-      founder_price: user.founder_price || 0, // (v317) precio de alta congelado por 12 meses (0 = sin precio fundador)
+      founder_price: user.founder_price || 0, // (v317) precio de alta congelado para siempre (0 = sin precio fundador)
       founder_currency: user.founder_currency || '',
       founder_plan: user.founder_plan || '',
       founder_price_at: user.founder_price_at || 0,
@@ -28438,14 +28438,15 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
     // Descuento por referidos: 2 amigos con suscripción activa = 50% off (tiene prioridad);
     // si no, invitado con link = 20% off
-    // (v317) Precio fundador: Los Primeros 200 conservan el precio de su
-    // alta por 12 meses — si re-suscribe dentro de la ventana, mismo plan y
-    // misma moneda, la BASE es su precio fundador. Los descuentos de
-    // referidos se aplican sobre esa base, como siempre (no se tocan).
+    // (v317) Precio fundador: Los Primeros 50 conservan el precio de su
+    // alta PARA SIEMPRE (regla 2026-11-18: sin vencimiento) — si
+    // re-suscribe, mismo plan y misma moneda, la BASE es su precio fundador.
+    // Los descuentos de referidos se aplican sobre esa base, como siempre
+    // (no se tocan).
     let basePlan = plan;
     if (user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
         && String(user.founder_currency || '') === String(plan.currency || 'ARS')
-        && Number(user.founder_price_at) > 0 && (Date.now() - Number(user.founder_price_at)) < 365 * 24 * 3600 * 1000) {
+        && Number(user.founder_price_at) > 0) {
       basePlan = { ...plan, price: Number(user.founder_price) };
     }
     let finalPlan = basePlan;
@@ -28705,14 +28706,15 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
       const endMs = trialEffectiveEnd(user);
       if (endMs - Date.now() > (48 * 3600 + 300) * 1000) trialEndSec = Math.floor(endMs / 1000);
     }
-    // (v317) Precio fundador: dentro de los 12 meses y si su monto difiere
-    // del catálogo vigente, el checkout cobra con un precio de Stripe a su
-    // monto de alta (las suscripciones vivas ya conservan su precio solas).
+    // (v317) Precio fundador: sin límite de tiempo (regla 2026-11-18: el
+    // precio fundador es para siempre) y si su monto difiere del catálogo
+    // vigente, el checkout cobra con un precio de Stripe a su monto de alta
+    // (las suscripciones vivas ya conservan su precio solas).
     let founderPriceId = null;
     // (Pagos lado app) Precio fundador: solo Posty (es precio de su plan).
     if (agenteStripe === 'posty' && user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
         && String(user.founder_currency || '') === 'USD' && String(plan.currency || '') === 'USD'
-        && Number(user.founder_price_at) > 0 && (Date.now() - Number(user.founder_price_at)) < 365 * 24 * 3600 * 1000
+        && Number(user.founder_price_at) > 0
         && Number(user.founder_price) !== Number(plan.price)) {
       try { founderPriceId = await stripeBilling.ensureFounderPrice(null, plan, Number(user.founder_price)); }
       catch (e) { console.error('[stripe] precio fundador:', e.message); }
@@ -38761,12 +38763,14 @@ app.get('/api/capacity', (req, res) => {
   res.json({ ok: true, spots_left: spotsLeft(), spots_total: MONTHLY_SPOTS });
 });
 
-// ---------- Los Primeros 200 + campañas (growth ola 2, 2026-10-21) ----------
-// Cohorte fundadora: los primeros 200 clientes PAGOS reales reciben su número
+// ---------- Los Primeros 50 + campañas (growth ola 2, 2026-10-21;
+// regla alineada 2026-11-18, decisión de Valentino: cohorte fundadora =
+// los primeros 50 clientes, US$199/mes para siempre) ----------
+// Cohorte fundadora: los primeros 50 clientes PAGOS reales reciben su número
 // de fundador en orden de alta paga. Regla de verdad: el contador público
 // sale SOLO de la base (hoy 0) y la lista pública muestra ÚNICAMENTE a
 // quienes registraron su permiso (founder_public=1).
-const FOUNDERS_TOTAL = 200;
+const FOUNDERS_TOTAL = 50;
 function stampFounder(userId) {
   try {
     const u = db.prepare(`SELECT founder_number, plan, plan_status, lang, mp_base_amount, stripe_subscription_id FROM users WHERE id = ?`).get(userId);
@@ -38776,9 +38780,10 @@ function stampFounder(userId) {
     const next = (row ? row.n : 0) + 1;
     if (next > FOUNDERS_TOTAL) return 0;
     db.prepare(`UPDATE users SET founder_number = ? WHERE id = ? AND COALESCE(founder_number, 0) = 0`).run(next, userId);
-    // (v317) Precio fundador: se congela el precio de ESTA alta paga por 12
-    // meses. Stripe → el precio USD del plan; MP → mp_base_amount (el precio
-    // lleno de su suscripción; la moneda se deduce del catálogo UY).
+    // (v317) Precio fundador: se congela el precio de ESTA alta paga PARA
+    // SIEMPRE (regla 2026-11-18: los primeros 50 conservan su precio sin
+    // vencimiento). Stripe → el precio USD del plan; MP → mp_base_amount
+    // (el precio lleno de su suscripción; la moneda se deduce del catálogo UY).
     try {
       let fPrice = 0, fCur = '';
       if (u.stripe_subscription_id) {
@@ -39020,7 +39025,7 @@ app.get('/prueba', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
 });
 
-// ---------- Los Primeros 200: página pública de la cohorte fundadora ----------
+// ---------- Los Primeros 50: página pública de la cohorte fundadora ----------
 // El contador y la lista salen SOLO de /api/founders (datos reales; hoy 0).
 app.get('/fundadores', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
@@ -46504,7 +46509,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1179';
+const BUILD_ID = '20261105-v1180';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

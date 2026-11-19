@@ -1896,14 +1896,15 @@ try { db.exec(`ALTER TABLE users ADD COLUMN notify_letter INTEGER DEFAULT 1`); }
 try { db.exec(`ALTER TABLE users ADD COLUMN notify_failed INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
 // Pausar todo (v283): snapshot reversible del freno de cuenta {at, autopilot_enabled, post_ids}.
 try { db.exec(`ALTER TABLE users ADD COLUMN pause_snapshot TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
-// Los Primeros 200 (growth ola 2, 2026-10-21): lugar de fundador 1-200 asignado
+// Los Primeros 50 (growth ola 2, 2026-10-21; regla alineada 2026-11-18): lugar de fundador 1-50 asignado
 // al primer alta paga, en orden; founder_public = permiso registrado del cliente
 // para aparecer en la página pública con nombre de negocio + rubro + ciudad.
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_number INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_public INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
-// Precio fundador (v317, decisión de Valentino 2026-10-21): el precio del alta
-// paga queda registrado (monto + moneda + plan + cuándo) y las renovaciones /
-// re-suscripciones lo respetan durante 12 meses.
+// Precio fundador (v317, decisión de Valentino 2026-10-21; regla alineada
+// 2026-11-18): el precio del alta paga queda registrado (monto + moneda +
+// plan + cuándo) y las renovaciones / re-suscripciones lo respetan PARA
+// SIEMPRE, sin vencimiento.
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_price INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_currency TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_plan TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
