@@ -8518,8 +8518,8 @@ function landingView(cfg) {
     <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
   </div></div>
   <div class="hero"><div class="wrap">
-    <div class="pill">Tus community managers</div>
-    <h1>«No tengo tiempo de postear en Instagram todos los días», <span class="hl">nosotros posteamos por tu negocio <b>todos los días</b>, con tu producto real.</span></h1>
+    
+    <h1>«No tengo tiempo de postear en Instagram todos los días», <span class="hl">Nosotros te posteamos por tu negocio <b>todos los días</b>, con tu producto real.</span></h1>
     <style>
     /* (LOTE PUERTA-NUEVA · ENMIENDA 21:49) El trío de formatos + la
        tira de ejemplo real en el hero que renderiza la app: la puerta
@@ -8530,7 +8530,7 @@ function landingView(cfg) {
     .trio span{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.66);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:700;color:#0A1E33;box-shadow:0 6px 18px rgba(10,30,51,.06)}
     .trio span i{width:7px;height:7px;border-radius:50%;background:var(--yl);flex:none}
     .ej{margin-top:26px}
-    .ej-title{font-size:14.5px;font-weight:800;color:#0A1E33;margin-bottom:12px}
+    .ej-title{font-size:38px;font-weight:800;color:#0A1E33;text-align:center;letter-spacing:-.015em;line-height:1.15;margin:0 auto 20px;max-width:640px}
     .ej-row{display:flex;gap:10px;justify-content:center}
     .ej-card{position:relative;flex:1 1 0;max-width:204px;background:#fff;border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(10,30,51,.10)}
     .ej-card img.ph,.ej-card video{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--bg2)}
@@ -8540,12 +8540,61 @@ function landingView(cfg) {
     .daychip{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.6);color:#0A1E33;font-size:12px;font-weight:800;border-radius:999px;padding:6px 11px;box-shadow:0 4px 14px rgba(10,30,51,.12)}
     .ej-count{position:absolute;top:10px;right:10px;z-index:3;background:rgba(10,30,51,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:6px 10px}
     </style>
-    <div class=\"trio\">
-      <span><i></i>Día 1: una imagen</span>
-      <span><i></i>Día 2: un carrusel</span>
-      <span><i></i>Día 3: un video</span>
+    
+    
+    
+    <form class="lp-igform" onsubmit="return lpGoTrial(event)">
+      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
+      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu web o tu link" aria-label="Tu web o tu link"></span>
+      <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+    </form>
+    <p class="lp-noweb-row"><button type="button" class="lp-noweb" onclick="lpNoWeb(this)">No tengo web</button></p>
+    <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
+<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
+    <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
+  </div></div>
+  <div class="section wd-reveal eqv" id="equipo"><div class="wrap">
+    <div class="eqv-head">
+      <span class="eqv-kicker">Tus community managers</span>
+      <h2>Somos un equipo, Posty y yo</h2>
+      <p class="eqv-intro">Contratás a un equipo: un community manager de verdad + la tecnología que creó, posteando por tu negocio todos los días.</p>
     </div>
-    <div class=\"ej\">
+    <div class="eqv-scene">
+      <aside class="eqv-panel eqv-panel-v">
+        <div class="eqv-panel-head"><span class="eqv-pname">VALENTINO</span><span class="eqv-chip eqv-chip-y">EL CRITERIO</span></div>
+        <div class=\"eqv-who\"><p class=\"eqv-who-name\">Valentino Caratini · Founder de Posty</p><p class=\"eqv-who-line\">Títulos en International Business y en Management · Máster en Project Management</p></div>
+        <ul class="eqv-tasks">
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></span>Estudia tu negocio</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>Mira cada posteo antes de que salga</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>Arma la estrategia de tu semana</li>
+        </ul>
+        <p class="eqv-stat">Posteos feos que se escaparon: <b>0</b></p>
+      </aside>
+      <div class="eqv-photo-card" id="homeFounderCard">
+        <div class="eqv-photo-frame">
+          <img src="valentino-posty-fundador.jpg?v=2" alt="Valentino y Posty juntos, espalda con espalda">
+          <div class="eqv-deg-top"></div>
+          <div class="eqv-deg-bottom"></div>
+          <span class="eqv-anchor eqv-anchor-l"></span>
+          <span class="eqv-anchor eqv-anchor-r"></span>
+          <div class="eqv-photo-names"><span class="eqv-pn">VALENTINO</span><span class="eqv-pn">POSTY</span></div>
+        </div>
+      </div>
+      <aside class="eqv-panel eqv-panel-p">
+        <div class="eqv-panel-head"><span class="eqv-pname">POSTY</span><span class="eqv-chip eqv-chip-s">LA CONSTANCIA</span></div>
+        <div class=\"eqv-who\"><p class=\"eqv-who-name\">Posty · Tu community manager</p><p class=\"eqv-who-line\">Un agente de IA experto en community management: hace los posteos y los videos de tu negocio, todos los días</p></div>
+        <ul class="eqv-tasks">
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 2.8V6.5M16 2.8V6.5"/></svg></span>Postea todos los días</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.3a8.3 8.3 0 0 1-8.3 8.3c-1.4 0-2.8-.35-4-1L3.5 20l1.5-4.6a8.3 8.3 0 1 1 15.5-4.1Z"/></svg></span>Responde tus comentarios</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10v4"/></svg></span>Convierte tus audios en cambios</li>
+        </ul>
+        <p class="eqv-stat">Días sin postear: <b>0</b></p>
+      </aside>
+    </div>
+    <div class="eqv-steps"><span class="eqv-step">TU PRODUCTO</span><span class="eqv-arr">&rarr;</span><span class="eqv-step">EL CRITERIO</span><span class="eqv-arr">&rarr;</span><span class="eqv-step eqv-step-last">PUBLICADO TODOS LOS DÍAS</span></div>
+  </div></div>
+  <div class="lp-prueba"><div class="wrap">
+<div class=\"ej\">
       <p class=\"ej-title\">La prueba real de Big Top Candy Shop</p>
       <div class=\"ej-row\">
         <div class=\"ej-card\">
@@ -8569,54 +8618,6 @@ function landingView(cfg) {
         </div>
       </div>
     </div>
-    
-    <form class="lp-igform" onsubmit="return lpGoTrial(event)">
-      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
-      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu web o tu link" aria-label="Tu web o tu link"></span>
-      <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
-    </form>
-    <p class="lp-noweb-row"><button type="button" class="lp-noweb" onclick="lpNoWeb(this)">No tengo web</button></p>
-    <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
-<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
-    <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
-  </div></div>
-  <div class="section wd-reveal eqv" id="equipo"><div class="wrap">
-    <div class="eqv-head">
-      <span class="eqv-kicker">Tus community managers</span>
-      <h2>Somos un equipo, Posty y yo</h2>
-      <p class="eqv-intro">Contratás a un equipo: un community manager de verdad + la tecnología que creó, posteando por tu negocio todos los días.</p>
-    </div>
-    <div class="eqv-scene">
-      <aside class="eqv-panel eqv-panel-v">
-        <div class="eqv-panel-head"><span class="eqv-pname">VALENTINO</span><span class="eqv-chip eqv-chip-y">EL CRITERIO</span></div>
-        <ul class="eqv-tasks">
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></span>Estudia tu negocio</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>Mira cada posteo antes de que salga</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>Arma la estrategia de tu semana</li>
-        </ul>
-        <p class="eqv-stat">Posteos feos que se escaparon: <b>0</b></p>
-      </aside>
-      <div class="eqv-photo-card" id="homeFounderCard">
-        <div class="eqv-photo-frame">
-          <img src="valentino-posty-fundador.jpg?v=2" alt="Valentino y Posty juntos, espalda con espalda">
-          <div class="eqv-deg-top"></div>
-          <div class="eqv-deg-bottom"></div>
-          <span class="eqv-anchor eqv-anchor-l"></span>
-          <span class="eqv-anchor eqv-anchor-r"></span>
-          <div class="eqv-photo-names"><span class="eqv-pn">VALENTINO</span><span class="eqv-pn">POSTY</span></div>
-        </div>
-      </div>
-      <aside class="eqv-panel eqv-panel-p">
-        <div class="eqv-panel-head"><span class="eqv-pname">POSTY</span><span class="eqv-chip eqv-chip-s">LA CONSTANCIA</span></div>
-        <ul class="eqv-tasks">
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 2.8V6.5M16 2.8V6.5"/></svg></span>Postea todos los días</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.3a8.3 8.3 0 0 1-8.3 8.3c-1.4 0-2.8-.35-4-1L3.5 20l1.5-4.6a8.3 8.3 0 1 1 15.5-4.1Z"/></svg></span>Responde tus comentarios</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10v4"/></svg></span>Convierte tus audios en cambios</li>
-        </ul>
-        <p class="eqv-stat">Días sin postear: <b>0</b></p>
-      </aside>
-    </div>
-    <div class="eqv-steps"><span class="eqv-step">TU PRODUCTO</span><span class="eqv-arr">&rarr;</span><span class="eqv-step">EL CRITERIO</span><span class="eqv-arr">&rarr;</span><span class="eqv-step eqv-step-last">PUBLICADO TODOS LOS DÍAS</span></div>
   </div></div>
   <div class="wd-scrolly"><div class="wd-sticky"><div class="wrap"><div class="wd-wk-label">Tu semana con nosotros</div><div class="wd-wk-title">Lunes a domingo, publicado.</div><div class="wd-strip"><div class="wd-cell"><div class="wd-dname">LUN</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt="Posteo del lunes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MAR</div><div class="wd-ph"><img loading="lazy" src="g2-moda-1.jpg" alt="Posteo del martes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MIÉ</div><div class="wd-ph"><img loading="lazy" src="g2-barber-5.jpg" alt="Posteo del miércoles"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">JUE</div><div class="wd-ph"><img loading="lazy" src="g2-belleza-1.jpg" alt="Posteo del jueves"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">VIE</div><div class="wd-ph"><img loading="lazy" src="g4-mascotas-1.jpg" alt="Posteo del viernes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">SÁB</div><div class="wd-ph"><img loading="lazy" src="g4-fitness-1.jpg" alt="Posteo del sábado"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">DOM</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-3.jpg" alt="Posteo del domingo"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div></div><div class="wd-payoff"><span class="wd-payoff-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>7 de 7 días posteados — <b>tu Instagram nunca más abandonado.</b></span></div><div class="wd-bar"><i></i></div><div class="wd-hint">Seguí bajando ↓</div></div></div></div>
   <div class="section" id="como-funciona"><div class="wrap">
