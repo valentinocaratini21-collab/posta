@@ -67,10 +67,13 @@ check('ES: #ejemplos conserva la escena de Tomoko (mk-arrive)', ejES.includes('m
 check('ES: handles inventados dentro de #ejemplos = 0', HANDLES.every((x) => !ejES.includes(x)));
 
 // --- ES: vecinos protegidos byte-idénticos (hash sobre la base f841fe44) ---
-check('ES: comparador byte-idéntico', h16(block(app, '<div class="pz-beforeafter">', '<div class="section lp-week-sec" id="prueba">')) === '38c3999ebd58452a');
+// RE-PIN liberación PURGA-HANDLES: comparador/LP_WEEK/LP_PROFILES ES y comparador EN
+// cambian POR DISEÑO en ese lote (purga de handles inventados); hashes re-fijados
+// sobre el árbol de liberación de PURGA. mk-arrive queda intacto en ambos idiomas.
+check('ES: comparador byte-idéntico', h16(block(app, '<div class="pz-beforeafter">', '<div class="section lp-week-sec" id="prueba">')) === 'ff06d9ef0c2b935c');
 check('ES: mk-arrive byte-idéntico', h16(block(app, '<div class="mk-arrive">', '<div class="pz-beforeafter">')) === '9dafbf981845f6d4');
-check('ES: LP_WEEK (semana de muestra) byte-idéntico', h16(block(app, 'const LP_WEEK = {', 'const LP_WEEK_POOLS = {')) === 'ccc713432ed1674e');
-check('ES: LP_PROFILES (sobreviviente declarado) byte-idéntico', h16(block(app, 'const LP_PROFILES = [', 'function lpTiles(p)')) === '5ba2488390804820');
+check('ES: LP_WEEK (semana de muestra) byte-idéntico', h16(block(app, 'const LP_WEEK = {', 'const LP_WEEK_POOLS = {')) === 'c7e81de87651dda8');
+check('ES: LP_PROFILES (sobreviviente declarado) byte-idéntico', h16(block(app, 'const LP_PROFILES = [', 'function lpTiles(p)')) === 'ddfa5f99442396e9');
 check('ES: carrusel de Patagonia presente (mk-carr)', app.includes('mk-carr-head') && app.includes('Patagonia · deslizá'));
 
 // --- EN: espejo ---
@@ -82,7 +85,7 @@ check('EN: clases lp-wall/lp-gal en EN = 0', count(en, 'lp-wall') === 0 && count
 const ejEN = block(en, 'id="ejemplos"', '<div class="pz-beforeafter">');
 check('EN: #ejemplos presente con form + mk-arrive', ejEN.includes('lp-show-cta') && ejEN.includes('mk-arrive'));
 check('EN: handles inventados dentro de #ejemplos = 0', HANDLES.every((x) => !ejEN.includes(x)));
-check('EN: comparador byte-idéntico', h16(block(en, '<div class="pz-beforeafter">', '<div class="section lp-week-sec" id="prueba">')) === '76b75be736412fab');
+check('EN: comparador byte-idéntico', h16(block(en, '<div class="pz-beforeafter">', '<div class="section lp-week-sec" id="prueba">')) === '9c283104c13bd311');
 check('EN: mk-arrive byte-idéntico', h16(block(en, '<div class="mk-arrive">', '<div class="pz-beforeafter">')) === 'fe2126cfb9069ccf');
 
 // --- CSS: reglas exclusivas de la galería en 0, vecinos intactos ---
@@ -98,7 +101,7 @@ check('CSS: .igp-grid.igp-pre (vecina) sobrevive idéntica', css.includes('.igp-
 check('CSS: llaves balanceadas', count(css, '{') === count(css, '}'));
 
 // --- stamps preparados (el liberador re-fija por orden de aterrizaje) ---
-check('stamps: index ES app.js?v=803', idx.includes('app.js?v=803'));
+check('stamps: index ES app.js?v=804', idx.includes('app.js?v=804'));
 check('stamps: index ES styles.css?v=20261300', idx.includes('styles.css?v=20261300'));
 check('stamps: EN styles.css?v=20261300', en.includes('styles.css?v=20261300'));
 

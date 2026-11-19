@@ -4616,21 +4616,6 @@ function lpInitHero() {
 
 /* ---------- v176: carrusel de perfiles soñados (29 rubros desde v316: + boliche) ---------- */
 const LP_PROFILES = [
-  { rubro: 'Cafetería', user: 'cafe.aurora', name: 'Café Aurora ☕', cat: 'Cafetería · Palermo', stats: ['128', '4.812', '96'],
-    bio: ['☕ Café de especialidad y brunch', '🥐 Medialunas recién horneadas, todos los días', '📍 Gorriti 4380 · 8 a 20 h'], link: 'cafe-aurora',
-    ava: 'ig-cafe.jpg', avaAlt: 'Foto de perfil de Café Aurora',
-    hls: [['hl-menu.jpg', 'Menú'], ['hl-promos.jpg', 'Promos'], ['hl-local.jpg', 'El local'], ['hl-clientes.jpg', 'Clientes']],
-    cells: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-pasta.jpg', 'g-latte.jpg', 'VIDEO', 'g-platos.jpg', 'g-vaso.jpg', 'g-tres.jpg', 'g-gourmet.jpg'],
-    cellAlt: 'Posteo de Instagram de Café Aurora' },
-  { rubro: 'Detailing', user: 'bustos.detailing', name: 'Bustos Detailing 🔧', cat: 'Detailing y mecánica · Boedo', stats: ['86', '2.340', '61'],
-    bio: ['🔧 Detailing y mecánica ligera', '✨ Cerámico, pulidos y tapizados', '📍 Av. La Plata 2180 · 9 a 19 h'], link: 'bustos',
-    slug: 'bustos', hls: ['Pulidos', 'Cerámico', 'El taller', 'Clientes'] },
-  { rubro: 'Moda', user: 'tiendacora', name: 'Tienda Cora 👕', cat: 'Tienda de ropa · Recoleta', stats: ['210', '6.540', '132'],
-    bio: ['👕 Nueva colección cada semana', '🛵 Envíos a todo el país', '📍 Santa Fe 2140 · 10 a 20 h'], link: 'tiendacora',
-    slug: 'tiendacora', hls: ['Nuevo', 'Looks', 'El local', 'Clientas'] },
-  { rubro: 'Inmobiliaria', user: 'roca.propiedades', name: 'Roca Propiedades 🏠', cat: 'Inmobiliaria · Belgrano', stats: ['164', '3.905', '88'],
-    bio: ['🏠 Ventas y alquileres en zona norte', '🔑 Tasaciones sin cargo', '📍 Cabildo 2040 · 10 a 19 h'], link: 'roca',
-    slug: 'roca', hls: ['Propiedades', 'Tasaciones', 'El equipo', 'Clientes'] },
   { rubro: 'Boliche', user: 'nocta.club', name: 'NOCTA Club 🪩', cat: 'Boliche · Palermo', stats: ['214', '18.400', '312'],
     bio: ['🪩 Dos pistas: cachengue y electrónica', '🎟️ Anticipadas en el link', '📍 Gorriti 5120 · vie y sáb desde las 00'], link: 'nocta',
     slug: 'nocta', hls: ['Fiestas', 'La pista', 'DJs', 'La barra'] },
@@ -4897,20 +4882,20 @@ const LP_WEEK_DAYS = [
 ];
 const LP_WEEK = {
   mixto: { ejemplo: 'con negocios de varios rubros', cards: [
-    { u: 'cafe.aurora', l: 'C', c: '#FDEBD2', img: 'ig-cafe.jpg', alt: 'Posteo de Instagram de una cafetería hecho por nosotros' },
-    { u: 'tiendacora', l: 'T', c: '#E4F0FA', img: 'ig-moda.jpg', alt: 'Posteo de Instagram de una tienda de ropa hecho por nosotros' },
+    { u: 'thecoffeebardc', l: 'T', c: '#FDEBD2', img: 'ig-cafe.jpg', alt: 'Posteo de Instagram de una cafetería hecho por nosotros' },
+    { u: '', k: 'moda', l: 'M', c: '#E4F0FA', img: 'ig-moda.jpg', alt: 'Posteo de Instagram de una tienda de ropa hecho por nosotros' },
     { u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', img: 'ig-barber.jpg', alt: 'Posteo de Instagram de una barbería hecho por nosotros' },
     { u: 'estetica.alma', l: 'A', c: '#FBE4EC', img: 'ig-belleza.jpg', alt: 'Posteo de Instagram de una estética hecho por nosotros' },
     { u: 'petshop.huella', l: 'H', c: '#E2F2E4', img: 'ig-mascotas.jpg', alt: 'Posteo de Instagram de un pet shop hecho por nosotros' }
   ] },
-  cafeteria: { ejemplo: 'de una cafetería', u: 'cafe.aurora', l: 'C', c: '#FDEBD2', alt: 'Posteo de Instagram de Café Aurora hecho por nosotros', imgs: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg'] },
+  cafeteria: { ejemplo: 'de una cafetería', u: 'thecoffeebardc', l: 'T', c: '#FDEBD2', alt: 'Posteo de Instagram de The Coffee Bar hecho por nosotros', imgs: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg'] },
   barberia: { ejemplo: 'de una barbería', u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', alt: 'Posteo de Instagram de El Corte Barbería hecho por nosotros', imgs: ['ig-barber.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-8.jpg'] },
-  moda: { ejemplo: 'de una tienda de moda', u: 'tiendacora', l: 'T', c: '#E4F0FA', alt: 'Posteo de Instagram de Tienda Cora hecho por nosotros', imgs: ['ig-moda.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-8.jpg'] },
+  moda: { ejemplo: 'de una tienda de moda', u: '', l: 'M', c: '#E4F0FA', alt: 'Posteo de Instagram de una tienda de moda hecho por nosotros', imgs: ['ig-moda.jpg', 'g-moda-2.jpg', 'g-moda-4.jpg', 'g-moda-6.jpg', 'g-moda-8.jpg'] },
   belleza: { ejemplo: 'de una estética', u: 'estetica.alma', l: 'A', c: '#FBE4EC', alt: 'Posteo de Instagram de Estética Alma hecho por nosotros', imgs: ['ig-belleza.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-8.jpg'] },
   mascotas: { ejemplo: 'de un pet shop', u: 'petshop.huella', l: 'H', c: '#E2F2E4', alt: 'Posteo de Instagram de Pet Shop Huella hecho por nosotros', imgs: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-4.jpg', 'gt-petshop-6.jpg', 'gt-petshop-8.jpg'] },
   fitness: { ejemplo: 'de un gimnasio', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Posteo de Instagram de Gym Norte hecho por nosotros', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] },
-  detailing: { ejemplo: 'de un taller de detailing', u: 'bustos.detailing', l: 'B', c: '#F3E3C2', alt: 'Posteo de Instagram de Bustos Detailing hecho por nosotros', imgs: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-4.jpg', 'gt-bustos-6.jpg', 'gt-bustos-9.jpg'] },
-  inmobiliaria: { ejemplo: 'de una inmobiliaria', u: 'roca.propiedades', l: 'R', c: '#EFE6DA', alt: 'Posteo de Instagram de Roca Propiedades hecho por nosotros', imgs: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-9.jpg'] },
+  detailing: { ejemplo: 'de un taller de detailing', u: '', l: 'D', c: '#F3E3C2', alt: 'Posteo de Instagram de un taller de detailing hecho por nosotros', imgs: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-4.jpg', 'gt-bustos-6.jpg', 'gt-bustos-9.jpg'] },
+  inmobiliaria: { ejemplo: 'de una inmobiliaria', u: '', l: 'I', c: '#EFE6DA', alt: 'Posteo de Instagram de una inmobiliaria hecho por nosotros', imgs: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-9.jpg'] },
   boliche: { ejemplo: 'de un boliche', u: 'nocta.club', l: 'N', c: '#E9E4F5', alt: 'Flyer de fiesta de NOCTA Club hecho por nosotros', imgs: ['gt-nocta-1.jpg', 'gt-nocta-2.jpg', 'gt-nocta-3.jpg', 'gt-nocta-4.jpg', 'gt-nocta-5.jpg'] },
   odontologia: { ejemplo: 'de una clínica dental', u: 'dental.prado', l: 'D', c: '#DFF3EC', alt: 'Posteo de Instagram de Dental Prado hecho por nosotros', imgs: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-3.jpg'] },
   cerveceria: { ejemplo: 'de una cervecería', u: 'cerveceria.ambar', l: 'A', c: '#F3E3C2', alt: 'Posteo de Instagram de Cervecería Ámbar hecho por nosotros', imgs: ['gt-ambar-1.jpg', 'gt-ambar-2.jpg', 'gt-ambar-3.jpg', 'gt-ambar-4.jpg', 'gt-ambar-6.jpg'] },
@@ -4928,7 +4913,7 @@ const LP_WEEK = {
 const LP_WEEK_POOLS = {
   cafeteria: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg', 'g-cappu.jpg', 'g-gourmet.jpg', 'g-platos.jpg', 'g-tres.jpg'],
   barberia: ['ig-barber.jpg', 'gt-elcorte-1.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-3.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-5.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-7.jpg', 'gt-elcorte-8.jpg', 'gt-elcorte-9.jpg'],
-  moda: ['ig-moda.jpg', 'gt-tiendacora-1.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-3.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-5.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-7.jpg', 'gt-tiendacora-8.jpg', 'gt-tiendacora-9.jpg'],
+  moda: ['ig-moda.jpg', 'g-moda-1.jpg', 'g-moda-2.jpg', 'g-moda-3.jpg', 'g-moda-4.jpg', 'g-moda-5.jpg', 'g-moda-6.jpg', 'g-moda-7.jpg', 'g-moda-8.jpg', 'g-moda-9.jpg'],
   belleza: ['ig-belleza.jpg', 'gt-esteticaalma-1.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-3.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-5.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-7.jpg', 'gt-esteticaalma-8.jpg', 'gt-esteticaalma-9.jpg'],
   mascotas: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-2.jpg', 'gt-petshop-3.jpg', 'gt-petshop-4.jpg', 'gt-petshop-5.jpg', 'gt-petshop-6.jpg', 'gt-petshop-7.jpg', 'gt-petshop-8.jpg', 'gt-petshop-9.jpg'],
   fitness: ['ig-fitness.jpg', 'gt-gymnorte-1.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-3.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-5.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-7.jpg', 'gt-gymnorte-8.jpg', 'gt-gymnorte-9.jpg'],
@@ -4945,7 +4930,7 @@ const LP_WEEK_POOLS = {
 };
 const LP_WEEK_ALIAS = {
   'gt-petshop-2.jpg': 'ig-mascotas.jpg',
-  'gt-tiendacora-3.jpg': 'ig-moda.jpg',
+  'g-moda-3.jpg': 'ig-moda.jpg',
   'gt-elcorte-1.jpg': 'ig-barber.jpg',
   'gt-esteticaalma-3.jpg': 'ig-belleza.jpg',
   'gt-gymnorte-5.jpg': 'ig-fitness.jpg'
@@ -5006,13 +4991,13 @@ const LP_WEEK_CAPS = {
   {
    "img": "g-pasta.jpg",
    "tag": "CLIENTES",
-   "cap": "El rincón favorito de la tarde ☕\n\nNuestros habitués ya tienen su mesa en Café Aurora.\n\nPasá por tu café de hoy\n#barista #cafe #merienda #cafedeespecialidad #cafeargentina",
+   "cap": "El rincón favorito de la tarde ☕\n\nNuestros habitués ya tienen su mesa en The Coffee Bar.\n\nPasá por tu café de hoy\n#barista #cafe #merienda #cafedeespecialidad #cafeargentina",
    "why": "Porque muestra prueba real de tu trabajo"
   },
   {
    "img": "g-vaso.jpg",
    "tag": "MESA",
-   "cap": "Tu mesa de la tarde te espera ☕\n\nTe la guardamos en Café Aurora: vení directo.\n\nReservá por DM 📩\n#barista #merienda #cafe #cafeargentina #cafedeespecialidad",
+   "cap": "Tu mesa de la tarde te espera ☕\n\nTe la guardamos en The Coffee Bar: vení directo.\n\nReservá por DM 📩\n#barista #merienda #cafe #cafeargentina #cafedeespecialidad",
    "why": "Porque está pensado para que te reserven"
   }
  ],
@@ -5148,7 +5133,7 @@ const LP_WEEK_CAPS = {
   {
    "img": "gt-bustos-1.jpg",
    "tag": "NUEVO",
-   "cap": "Nuevo: service de caja automática 🔧\n\nCon equipo de diagnóstico propio en Bustos Detailing.\n\nPedí tu turno por DM 📩\n#autos #mecanica #serviceautomotor #taller #autosargentina",
+   "cap": "Nuevo: service de caja automática 🔧\n\nCon equipo de diagnóstico propio en el taller.\n\nPedí tu turno por DM 📩\n#autos #mecanica #serviceautomotor #taller #autosargentina",
    "why": "Porque está pensado para vender"
   },
   {
@@ -5166,13 +5151,13 @@ const LP_WEEK_CAPS = {
   {
    "img": "gt-bustos-6.jpg",
    "tag": "CUOTAS",
-   "cap": "Estrená tu próximo auto 🚗\n\nCuotas que se adaptan a tu bolsillo en Bustos Detailing.\n\nComentá INFO y te pasamos todo 👇\n#serviceautomotor #taller #mecanica #autos #autosargentina",
+   "cap": "Estrená tu próximo auto 🚗\n\nCuotas que se adaptan a tu bolsillo en el taller.\n\nComentá INFO y te pasamos todo 👇\n#serviceautomotor #taller #mecanica #autos #autosargentina",
    "why": "Porque está pensado para vender"
   },
   {
    "img": "gt-bustos-9.jpg",
    "tag": "CLIENTES",
-   "cap": "Otro 0km en la calle 🚗\n\nFelicitaciones a la familia que retiró esta semana en Bustos Detailing.\n\nVení a verlo: escribinos por DM 📩\n#autosargentina #serviceautomotor #mecanica #taller #autos",
+   "cap": "Otro 0km en la calle 🚗\n\nFelicitaciones a la familia que retiró esta semana en el taller.\n\nVení a verlo: escribinos por DM 📩\n#autosargentina #serviceautomotor #mecanica #taller #autos",
    "why": "Porque muestra prueba real de tu trabajo"
   }
  ],
@@ -5198,13 +5183,13 @@ const LP_WEEK_CAPS = {
   {
    "img": "gt-roca-5.jpg",
    "tag": "VENDIDA",
-   "cap": "Vendida en 20 días 🏠\n\nOtra familia ya está en su casa gracias a Roca Propiedades.\n\nContanos qué buscás por DM 📩\n#inmobiliariaargentina #alquileres #ventadepropiedades #propiedades #realestateargentina",
+   "cap": "Vendida en 20 días 🏠\n\nOtra familia ya está en su casa gracias a nuestro equipo.\n\nContanos qué buscás por DM 📩\n#inmobiliariaargentina #alquileres #ventadepropiedades #propiedades #realestateargentina",
    "why": "Porque muestra prueba real de tu trabajo"
   },
   {
    "img": "gt-roca-9.jpg",
    "tag": "VISITA",
-   "cap": "Este finde se muestra 🏠\n\nVisitas sábado y domingo a la tarde en Roca Propiedades.\n\nCoordiná la tuya por DM 📩\n#inmobiliariaargentina #alquileres #propiedades #realestateargentina #ventadepropiedades",
+   "cap": "Este finde se muestra 🏠\n\nVisitas sábado y domingo a la tarde.\n\nCoordiná la tuya por DM 📩\n#inmobiliariaargentina #alquileres #propiedades #realestateargentina #ventadepropiedades",
    "why": "Porque está pensado para que te reserven"
   }
  ],
@@ -5273,7 +5258,7 @@ const LP_WEEK_CAPS = {
   }
  ]
 };
-const LP_WEEK_MIXKEY = { 'cafe.aurora': 'cafeteria', 'tiendacora': 'moda', 'elcorte.barberia': 'barberia', 'estetica.alma': 'belleza', 'petshop.huella': 'mascotas' };
+const LP_WEEK_MIXKEY = { 'thecoffeebardc': 'cafeteria', 'elcorte.barberia': 'barberia', 'estetica.alma': 'belleza', 'petshop.huella': 'mascotas' };
 let LP_WEEK_CUR = [];
 function lpWeekFilterChips() {
   document.querySelectorAll('.lp-wchip').forEach((ch) => {
@@ -5294,7 +5279,7 @@ function lpWeekSet(key, btn) {
   const apply = () => {
     if (grid) {
       LP_WEEK_CUR = lpWeekCards(key).map((card, i) => {
-        const bankKey = key === 'mixto' ? LP_WEEK_MIXKEY[card.u] : key;
+        const bankKey = key === 'mixto' ? (card.k || LP_WEEK_MIXKEY[card.u]) : key;
         const bank = (bankKey && LP_WEEK_CAPS[bankKey] && LP_WEEK_CAPS[bankKey][i]) || null;
         return { ...card, cap: bank ? bank.cap : '', why: bank ? bank.why : '', tag: bank ? bank.tag : '' };
       });
@@ -5338,7 +5323,7 @@ function lpViewRender() {
   const c = LP_WEEK_CUR[LP_VIEW_I];
   if (!c) return;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  set('lpViewU', '@' + c.u);
+  set('lpViewU', c.u ? '@' + c.u : '');
   set('lpViewDay', LP_WEEK_DAYS[LP_VIEW_I].d + ' · ' + LP_WEEK_DAYS[LP_VIEW_I].t);
   const av = document.getElementById('lpViewAv');
   if (av) { av.textContent = c.l; av.style.background = c.c; }
@@ -8378,15 +8363,15 @@ function landingView(cfg) {
       <h3>La diferencia se ve en una semana</h3>
       <div class="pz-drag" id="pzDrag">
         <div class="pz-drag-layer">
-          <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="ig-cafe.jpg" alt=""></span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
-          <p class="pz-ba-bio">☕ Café de especialidad y brunch<br>📍 Gorriti 4380 · 8 a 20 h</p>
-          <div class="pz-ba-grid pz-ba-grid-live"><img src="ig-cafe.jpg" alt=""><img loading="lazy" src="g-tazas.jpg" alt=""><img loading="lazy" src="g-pasta.jpg" alt=""><img loading="lazy" src="g-latte.jpg" alt=""><img loading="lazy" src="g-cappu.jpg" alt=""><img loading="lazy" src="g-platos.jpg" alt=""><img loading="lazy" src="g-vaso.jpg" alt=""><img loading="lazy" src="g-tres.jpg" alt=""><img loading="lazy" src="g-gourmet.jpg" alt=""></div>
+          <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="lp-rosehip-avatar.jpg" alt=""></span><span class="pz-ba-who"><b>rosehipfloral</b><small>Florería · Williamsburg, Brooklyn</small></span></div>
+          <p class="pz-ba-bio">💐 Florería y diseño floral para eventos<br>📍 Williamsburg, Brooklyn</p>
+          <div class="pz-ba-grid pz-ba-grid-live"><img src="lp-rosehip-1.jpg" alt=""><img loading="lazy" src="lp-rosehip-2.jpg" alt=""><img loading="lazy" src="lp-rosehip-3.jpg" alt=""><img loading="lazy" src="lp-rosehip-4.jpg" alt=""><img loading="lazy" src="lp-rosehip-1.jpg" alt=""><img loading="lazy" src="lp-rosehip-2.jpg" alt=""><img loading="lazy" src="lp-rosehip-3.jpg" alt=""><img loading="lazy" src="lp-rosehip-4.jpg" alt=""><img loading="lazy" src="lp-rosehip-1.jpg" alt=""></div>
           <p class="pz-ba-last pz-ba-last-on">🔥 Publicando esta semana</p>
         </div>
         <div class="pz-drag-layer pz-drag-hoy pz-ba-dead" aria-hidden="true">
-          <div class="pz-ba-prof"><span class="pz-ba-ava">C</span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
-          <p class="pz-ba-bio">Café ☕</p>
-          <div class="pz-ba-grid"><span class="pz-ba-dull"><img src="ig-cafe.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-vaso.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-tres.jpg" alt=""></span></div>
+          <div class="pz-ba-prof"><span class="pz-ba-ava">R</span><span class="pz-ba-who"><b>rosehipfloral</b><small>Florería · Williamsburg, Brooklyn</small></span></div>
+          <p class="pz-ba-bio">Florería 💐</p>
+          <div class="pz-ba-grid"><span class="pz-ba-dull"><img src="lp-rosehip-1.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="lp-rosehip-3.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="lp-rosehip-2.jpg" alt=""></span></div>
           <p class="pz-ba-last">⏸ Última publicación: hace 6 semanas</p>
         </div>
         <span class="pz-tag pz-tag-hoy">HOY</span>

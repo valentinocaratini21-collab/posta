@@ -94,7 +94,7 @@ if (block && block.LP_WEEK) {
     weekSrcs[key] = key === 'mixto' ? d.cards.map((c) => c.img) : d.imgs.slice();
   }
   const poolFiles = fs.readdirSync(PUBLIC).filter((f) =>
-    /^(ig-.+\.jpg|g-.+\.jpg|gt-(elcorte|tiendacora|esteticaalma|petshop|gymnorte|cafemartinez)-\d+\.jpg)$/.test(f));
+    /^(ig-.+\.jpg|g-.+\.jpg|gt-(elcorte|esteticaalma|petshop|gymnorte|cafemartinez)-\d+\.jpg)$/.test(f));
   const allFiles = [...new Set([...Object.values(weekSrcs).flat(), ...poolFiles])];
   const groups = photoGroups(allFiles.map((f) => path.join(PUBLIC, f)));
   const identity = (src) => groups[src] || src;
@@ -118,7 +118,12 @@ if (block && block.LP_WEEK) {
       const dup = ids.filter((v, i) => ids.indexOf(v) !== i);
       ok(dup.length === 0, `${key}: render sin fotos repetidas${dup.length ? ' — DUPLICADA: ' + dup.join(', ') : ''}`);
       // Las tarjetas conservan usuario/alt coherentes (no quedaron huérfanas).
-      ok(cards.every((c) => c.u && c.img && c.alt), `${key}: tarjetas completas (usuario, foto, alt)`);
+      // RE-PIN PURGA-HANDLES (liberación): moda (y su tarjeta en mixto) lleva
+      // u:'' POR DISEÑO — sin negocio real para el rubro, el @ se dropeó y el
+      // visor no cuelga un «@» vacío. La guarda exige u string, jamás un
+      // handle purgado, y foto+alt siempre.
+      const PURGADOS = ['cafe.aurora', 'bustos.detailing', 'tiendacora', 'roca.propiedades'];
+      ok(cards.every((c) => typeof c.u === 'string' && !PURGADOS.includes(c.u) && c.img && c.alt), `${key}: tarjetas completas (usuario, foto, alt)`);
     }
     // Robustez: aun con una data adulterada (duplicado a propósito), el
     // render tiene que resolverlo desde el pool.
