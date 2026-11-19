@@ -11857,6 +11857,66 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
   } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 
+// ---------- (LOTE IMPORTACIÓN-PUERTA) EL GATILLO ADMIN DE LA IMPORTACIÓN ----------
+// El hueco que cierra: importTrialWeek solo corre desde caminos de
+// SESIÓN (guest/start, set-ig, alta/login, magic) y los dos gatillos
+// del reimport (GET /api/guest/return y GET /api/posts, LOTE
+// REIMPORTACIÓN DEL INVITADO) exigen la sesión del invitado. El
+// invitado de la línea a mano cuya sesión no vuelve — o cuya semana se
+// cargó DESPUÉS de su última apertura — queda con las piezas solo en
+// el payload de trial_cache y cero filas, sin ningún camino que las
+// importe. Esta ruta es ese camino: el operador nombra al invitado
+// (user_id, o ig/domain/cache_key para resolverlo por la marca — el
+// mismo camino que pieza-mano) y corre el MISMO gancho de siempre
+// (reimportInvitadoSiAplica): la misma puerta (invitado + marca
+// activa suya + piezas con medio + cero filas), la misma importación
+// (importTrialWeek con el límite de la prueba, 3) y el mismo cierre
+// que guest/start (cierreReimportInvitado: idioma, siembra del
+// fundamento, registro, entrega, perfil y agenda). NO regenera la
+// semana, NO toca el payload salvo lo que la propia importación hace
+// y NO pasa por la puerta pública: la re-entrada por /prueba regenera
+// la semana y pisa las piezas a mano — esta ruta jamás la imita.
+// IDEMPOTENTE por construcción: la puerta exige cero filas e
+// importTrialWeek aborta si la cuenta tiene posteos; la segunda
+// llamada responde motivo 'ya-importada' con el detalle ya creado y
+// cero filas nuevas.
+// FECHAS (decisión de diseño, declarada): las asigna el cierre de
+// siempre (scheduleAllDrafts → scheduleDraftsPerWeek), sin lógica
+// nueva — para los posteos source='trial' los días se anclan corridos
+// EN ORDEN desde el primer slot cuya hora sigue en el futuro (hoy si
+// el horario de hoy no pasó — la prueba cubre hoy, v978 —; si no,
+// mañana), nunca en el pasado, nunca dos el mismo día, saltando días
+// cerrados y ocupados. Una semana vencida NO se publica en masa ni se
+// desordena: renace con sus días 1, 2 y 3 en orden en los próximos
+// slots. Lo que la vara de calidad manda a revisión queda 'draft' con
+// needs_review=1 y el detalle de la respuesta lo muestra tal cual.
+app.post('/api/admin/trial/importar-semana', requireAdminToken, express.json({ limit: '1mb' }), (req, res) => {
+  const body = req.body || {};
+  let uid = Number(body.user_id) || 0;
+  const igKey = trialLock ? trialLock.normalizeIg(body.ig || '') : String(body.ig || '').trim().replace(/^@/, '').toLowerCase();
+  const domainKey = trialLock ? trialLock.normalizeDomain(body.domain || '') : '';
+  const cacheKeyIn = String(body.cache_key || '').trim() || (lineaMano ? lineaMano.claveCache(igKey, domainKey) : '');
+  if (!uid && cacheKeyIn) {
+    // Resolución por la marca (espejo de pieza-mano): la marca activa
+    // de la clave trae el user_id; sin marca atada, la identidad del
+    // invitado por @/dominio.
+    try { const marca = lineaMano.marcaActiva(db, cacheKeyIn); if (marca && marca.user_id) uid = Number(marca.user_id) || 0; } catch (e) {}
+    if (!uid && guestTrial && guestTrial.findGuestByIdentity) {
+      try { const g = guestTrial.findGuestByIdentity(db, igKey, domainKey); if (g && g.id) uid = Number(g.id) || 0; } catch (e) {}
+    }
+  }
+  if (!uid) return res.status(400).json({ ok: false, error: 'sin_invitado', detalle: 'Pasá user_id, o ig/domain/cache_key que resuelvan a un invitado.' });
+  const r = reimportInvitadoSiAplica(uid);
+  if (!r) return res.status(500).json({ ok: false, error: 'reimport_no_disponible' });
+  const filas = db.prepare('SELECT id, media_type, status, scheduled_at FROM posts WHERE user_id = ? ORDER BY created_at ASC, id ASC').all(uid);
+  const posteos = filas.map((f, i) => ({ dia: i + 1, post_id: f.id, media_type: f.media_type, status: f.status, scheduled_at: f.scheduled_at || null }));
+  const base = { user_id: uid, cache_key: r.cacheKey || cacheKeyIn || '', motivo: r.reason || '', posteos };
+  if (r.applied) return res.json({ ok: true, aplicado: true, importados: r.imported || posteos.length, ...base });
+  if (r.reason === 'ya-importada') return res.json({ ok: true, aplicado: false, importados: 0, ...base });
+  const status = r.reason === 'sin-usuario' ? 404 : 409;
+  return res.status(status).json({ ok: false, aplicado: false, importados: 0, ...base });
+});
+
 // ---------- (LOTE MODELO-NUEVO) EL PLAN DE LA SEMANA, EN LA CASA ----------
 // Decisión de Valentino (18/11/2026): «hoy te estudiamos, mañana
 // sale» — lo instantáneo de la puerta nueva es el PLAN, no la pieza.
@@ -46629,7 +46689,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1185';
+const BUILD_ID = '20261105-v1186';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
