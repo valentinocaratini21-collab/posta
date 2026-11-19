@@ -3870,9 +3870,6 @@ function lpCarrInit() {
   sc.addEventListener('scroll', function () { requestAnimationFrame(paint); });
   if (btn) btn.addEventListener('click', function () { var w = sc.querySelector('.mk-carr-slide').offsetWidth + 8; sc.scrollBy({ left: w, behavior: 'smooth' }); });
   paint();
-  var a = document.getElementById('mkVidRaw');
-  var b = document.getElementById('mkVidPro');
-  if (a && b) { var sync = function () { if (Math.abs(a.currentTime - b.currentTime) > 0.25) { b.currentTime = a.currentTime; } }; a.addEventListener('timeupdate', sync); b.addEventListener('play', function () { sync(); }); }
 }
 function lpDisenoInit() {
   var de = document.documentElement;
@@ -4114,6 +4111,359 @@ function lpDisenoInit() {
       }
     });
     if (avReplay) avReplay.addEventListener('click', function () { avSeen = true; avPlay(); });
+  }
+  /* SUBIR-VIVO: el viaje + la prueba — se acota a #subir; sin JS o con
+     reduced-motion queda el estado final (la escena armada). */
+  var sbSec = q('#subir');
+  if (sbSec) {
+    (function () {
+      "use strict";
+            var reduced = RM;
+            var panels = {};
+            sbSec.querySelectorAll("[data-sb-lane-panel]").forEach(function(p){ panels[p.getAttribute("data-sb-lane-panel")] = p; });
+            var currentLane = "foto";
+            var timers = [];
+            var rafs = [];
+
+            function later(fn, ms){ timers.push(window.setTimeout(fn, ms)); }
+            function clearAll(){
+              timers.forEach(function(t){ window.clearTimeout(t); }); timers = [];
+              rafs.forEach(function(r){ cancelAnimationFrame(r); }); rafs = [];
+              sbSec.querySelectorAll(".sb-fly-clone").forEach(function(c){ c.remove(); });
+            }
+            function isMobile(){ return window.matchMedia("(max-width: 900px)").matches; }
+
+            function moveSpark(panel, stageIdx){
+              var spark = panel.querySelector("[data-sb-spark]");
+              if(!spark) return;
+              var frac = [0, 0.3333, 0.6666, 1][stageIdx];
+              if(isMobile()){
+                spark.style.left = "50%";
+                var tops = ["2%","35%","67%","98%"];
+                spark.style.top = tops[stageIdx];
+              } else {
+                spark.style.top = "50%";
+                spark.style.left = (frac * 100) + "%";
+              }
+            }
+            function setSparkInstant(panel, stageIdx){
+              var spark = panel.querySelector("[data-sb-spark]");
+              if(!spark) return;
+              var prev = spark.style.transition;
+              spark.style.transition = "none";
+              moveSpark(panel, stageIdx);
+              void spark.offsetWidth;
+              spark.style.transition = prev;
+            }
+
+            function setWipe(wipeEl, pct){
+              pct = Math.max(4, Math.min(96, pct));
+              wipeEl.style.setProperty("--wipe", pct + "%");
+              wipeEl.setAttribute("aria-valuenow", Math.round(pct));
+            }
+            function sweepWipe(wipeEl, toPct, dur){
+              var from = parseFloat(getComputedStyle(wipeEl).getPropertyValue("--wipe")) || 6;
+              var start = null;
+              function step(ts){
+                if(!start) start = ts;
+                var t = Math.min(1, (ts - start) / dur);
+                var e = 1 - Math.pow(1 - t, 3);
+                setWipe(wipeEl, from + (toPct - from) * e);
+                if(t < 1){ rafs.push(requestAnimationFrame(step)); }
+              }
+              rafs.push(requestAnimationFrame(step));
+            }
+            function countLikes(el, target, dur){
+              var start = null;
+              function step(ts){
+                if(!start) start = ts;
+                var t = Math.min(1, (ts - start) / dur);
+                var e = 1 - Math.pow(1 - t, 3);
+                el.textContent = Math.round(target * e);
+                if(t < 1){ rafs.push(requestAnimationFrame(step)); }
+                else { el.textContent = target; }
+              }
+              rafs.push(requestAnimationFrame(step));
+            }
+
+            function setFinal(panel){
+              var slot = panel.querySelector("[data-sb-fly-target]");
+              if(slot){ slot.classList.remove("sb-is-empty"); slot.classList.remove("sb-landed"); }
+              var wipe = panel.querySelector("[data-sb-wipe]");
+              if(wipe){ setWipe(wipe, 62); }
+              panel.querySelectorAll("[data-sb-stamp],[data-sb-pub],[data-sb-push]").forEach(function(el){ el.classList.remove("sb-pop-hidden"); });
+              var likes = panel.querySelector("[data-sb-likes]");
+              if(likes){ likes.textContent = likes.getAttribute("data-sb-likes"); }
+              setSparkInstant(panel, 3);
+            }
+
+            function resetLane(panel){
+              var slot = panel.querySelector("[data-sb-fly-target]");
+              if(slot){ slot.classList.add("sb-is-empty"); slot.classList.remove("sb-landed"); }
+              var wipe = panel.querySelector("[data-sb-wipe]");
+              if(wipe){ setWipe(wipe, 6); }
+              panel.querySelectorAll("[data-sb-stamp],[data-sb-pub],[data-sb-push]").forEach(function(el){ el.classList.add("sb-pop-hidden"); });
+              var likes = panel.querySelector("[data-sb-likes]");
+              if(likes){ likes.textContent = "0"; }
+              var bar = panel.querySelector("[data-sb-reel-bar]");
+              if(bar){ bar.style.transition = "none"; bar.style.width = "4%"; }
+              setSparkInstant(panel, 0);
+            }
+
+            function fly(panel, done){
+              var srcImg = panel.querySelector("[data-sb-fly-source]");
+              var slot = panel.querySelector("[data-sb-fly-target]");
+              var slotImg = panel.querySelector("[data-sb-slot-img]");
+              if(!slot || !slotImg){ done && done(); return; }
+              var srcRect;
+              if(panel.getAttribute("data-sb-lane-panel") === "idea"){
+                var bubble = panel.querySelector("[data-voice]");
+                srcRect = bubble ? bubble.getBoundingClientRect() : null;
+              } else if(srcImg){
+                srcRect = srcImg.getBoundingClientRect();
+              }
+              var dstRect = slotImg.getBoundingClientRect();
+              if(!srcRect || !dstRect.width){ if(slot){ slot.classList.remove("sb-is-empty"); } done && done(); return; }
+              var clone = document.createElement("img");
+              clone.src = slotImg.getAttribute("src");
+              clone.alt = "";
+              clone.className = "sb-fly-clone";
+              clone.style.left = srcRect.left + "px";
+              clone.style.top = srcRect.top + "px";
+              clone.style.width = srcRect.width + "px";
+              clone.style.height = srcRect.height + "px";
+              document.body.appendChild(clone);
+              var dx = (dstRect.left + dstRect.width/2) - (srcRect.left + srcRect.width/2);
+              var dy = (dstRect.top + dstRect.height/2) - (srcRect.top + srcRect.height/2);
+              var endScale = Math.max(0.08, dstRect.width / srcRect.width);
+              var anim = clone.animate([
+                { transform: "translate(0,0) scale(1) rotate(-5deg)", opacity: 1 },
+                { transform: "translate(" + (dx*0.5) + "px," + (dy - 46) + "px) scale(" + ((1+endScale)/2) + ") rotate(3deg)", opacity: 1, offset: 0.55 },
+                { transform: "translate(" + dx + "px," + dy + "px) scale(" + endScale + ") rotate(0deg)", opacity: 1 }
+              ], { duration: 900, easing: "cubic-bezier(.45,.05,.3,1)", fill: "forwards" });
+              anim.onfinish = function(){
+                clone.remove();
+                slot.classList.remove("sb-is-empty");
+                slot.classList.add("sb-landed");
+                window.setTimeout(function(){ slot.classList.remove("sb-landed"); }, 600);
+                done && done();
+              };
+            }
+
+            function playJourney(key){
+              var panel = panels[key];
+              if(!panel) return;
+              clearAll();
+              if(reduced){ setFinal(panel); return; }
+              resetLane(panel);
+              var wipe = panel.querySelector("[data-sb-wipe]");
+              var likes = panel.querySelector("[data-sb-likes]");
+              var bar = panel.querySelector("[data-sb-reel-bar]");
+
+              later(function(){ moveSpark(panel, 1); }, 350);
+              later(function(){ fly(panel); }, 800);
+              later(function(){ moveSpark(panel, 2); }, 1950);
+              later(function(){
+                if(wipe){ sweepWipe(wipe, 62, 1400); }
+                if(bar){ bar.style.transition = "width 1.6s cubic-bezier(.4,0,.2,1)"; bar.style.width = "68%"; }
+              }, 2150);
+              later(function(){
+                var stamps = panel.querySelectorAll("[data-sb-stamp]");
+                stamps.forEach(function(s, i){ later(function(){ s.classList.remove("sb-pop-hidden"); }, i * 260); });
+              }, 2750);
+              later(function(){ moveSpark(panel, 3); }, 3750);
+              later(function(){
+                var pub = panel.querySelector("[data-sb-pub]");
+                if(pub){ pub.classList.remove("sb-pop-hidden"); }
+              }, 4100);
+              later(function(){
+                var push = panel.querySelector("[data-sb-push]");
+                if(push){ push.classList.remove("sb-pop-hidden"); }
+              }, 4400);
+              later(function(){
+                if(likes){ countLikes(likes, parseInt(likes.getAttribute("data-sb-likes"), 10) || 0, 1000); }
+              }, 4550);
+            }
+
+            /* ---- Switcher ---- */
+            var btns = sbSec.querySelectorAll("[data-sb-lane-btn]");
+            btns.forEach(function(btn){
+              btn.addEventListener("click", function(){
+                var key = btn.getAttribute("data-sb-lane-btn");
+                if(key === currentLane){ playJourney(key); return; }
+                currentLane = key;
+                btns.forEach(function(b){
+                  var on = b === btn;
+                  b.classList.toggle("sb-is-active", on);
+                  b.setAttribute("aria-selected", on ? "true" : "false");
+                });
+                Object.keys(panels).forEach(function(k){
+                  if(k === key){ panels[k].removeAttribute("hidden"); }
+                  else { panels[k].setAttribute("hidden", ""); }
+                });
+                requestAnimationFrame(function(){ playJourney(key); });
+              });
+            });
+
+            /* ---- Replay ---- */
+            sbSec.querySelector("#sbReplay").addEventListener("click", function(){ playJourney(currentLane); });
+
+            /* ---- Wipe drag ---- */
+            sbSec.querySelectorAll("[data-sb-wipe]").forEach(function(wipe){
+              var dragging = false;
+              function pctFromEvent(e){
+                var r = wipe.getBoundingClientRect();
+                return ((e.clientX - r.left) / r.width) * 100;
+              }
+              wipe.addEventListener("pointerdown", function(e){
+                dragging = true;
+                wipe.setPointerCapture(e.pointerId);
+                setWipe(wipe, pctFromEvent(e));
+              });
+              wipe.addEventListener("pointermove", function(e){
+                if(dragging){ setWipe(wipe, pctFromEvent(e)); }
+              });
+              ["pointerup","pointercancel"].forEach(function(ev){
+                wipe.addEventListener(ev, function(){ dragging = false; });
+              });
+              wipe.addEventListener("keydown", function(e){
+                var cur = parseFloat(getComputedStyle(wipe).getPropertyValue("--wipe")) || 62;
+                if(e.key === "ArrowLeft"){ setWipe(wipe, cur - 4); e.preventDefault(); }
+                if(e.key === "ArrowRight"){ setWipe(wipe, cur + 4); e.preventDefault(); }
+              });
+            });
+
+            /* ---- Autoplay once in view ---- */
+            var played = false;
+            var card = sbSec.querySelector("#sbSceneCard");
+            if("IntersectionObserver" in window && !reduced){
+              var io = new IntersectionObserver(function(entries){
+                entries.forEach(function(en){
+                  if(en.isIntersecting && !played){
+                    played = true;
+                    playJourney(currentLane);
+                    io.disconnect();
+                  }
+                });
+              }, { threshold: 0.25 });
+              io.observe(card);
+            } else {
+              setFinal(panels[currentLane]);
+            }
+
+            /* ================= ACT 2 · LA PRUEBA ================= */
+            /* COMPLETAR CON EL DATO REAL DE LA PUBLICACIÓN — NO INVENTAR.
+               Hoy no hay métrica verificable de este video: queda en null y la
+               franja se muestra en placeholder («—», a medir). Cuando exista el
+               dato real, cargarlo acá y el conteo se activa solo. */
+            var RESULTADO_48H = { views: null, likes: null };
+            function resultadoListo(){
+              return typeof RESULTADO_48H.views === "number" && typeof RESULTADO_48H.likes === "number";
+            }
+            function pintarResultado(animar){
+              var vEl = sbSec.querySelector('[data-sb-result="views"]');
+              var lEl = sbSec.querySelector('[data-sb-result="likes"]');
+              if(!vEl || !lEl) return;
+              if(!resultadoListo()){ vEl.textContent = "—"; lEl.textContent = "—"; return; }
+              if(animar && !reduced){
+                countLikes(vEl, RESULTADO_48H.views, 1100);
+                countLikes(lEl, RESULTADO_48H.likes, 1100);
+              } else {
+                vEl.textContent = RESULTADO_48H.views;
+                lEl.textContent = RESULTADO_48H.likes;
+              }
+            }
+            var vwipe = sbSec.querySelector("#sbVwipe");
+            var cropCorners = sbSec.querySelector("#sbCrop");
+            var captionCard = sbSec.querySelector("#sbCapCard");
+            var feedChrome = sbSec.querySelector("#sbChrome");
+            var pub2Chip = sbSec.querySelector("#sbPub2");
+            var proofCard = sbSec.querySelector("#sbProofCard");
+
+            function setVWipe(pct){
+              pct = Math.max(4, Math.min(96, pct));
+              vwipe.style.setProperty("--wipe", pct + "%");
+              vwipe.setAttribute("aria-valuenow", Math.round(pct));
+            }
+            function setProofFinal(){
+              if(!vwipe) return;
+              setVWipe(62);
+              if(cropCorners){ cropCorners.classList.add("sb-on"); }
+              vwipe.querySelectorAll("[data-sb-vstamp]").forEach(function(s){ s.classList.remove("sb-pop-hidden"); });
+              if(captionCard){ captionCard.classList.remove("sb-slide-hidden"); }
+              if(feedChrome){ feedChrome.classList.remove("sb-chrome-hidden"); }
+              if(pub2Chip){ pub2Chip.classList.remove("sb-pop-hidden"); }
+              pintarResultado(false);
+            }
+            function playProof(){
+              if(!vwipe) return;
+              clearAll();
+              if(reduced){ setProofFinal(); return; }
+              /* reset */
+              setVWipe(10);
+              if(cropCorners){ cropCorners.classList.remove("sb-on"); }
+              vwipe.querySelectorAll("[data-sb-vstamp]").forEach(function(s){ s.classList.add("sb-pop-hidden"); });
+              if(captionCard){ captionCard.classList.add("sb-slide-hidden"); }
+              if(feedChrome){ feedChrome.classList.add("sb-chrome-hidden"); }
+              if(pub2Chip){ pub2Chip.classList.add("sb-pop-hidden"); }
+              /* play */
+              later(function(){ sweepWipe(vwipe, 62, 1500); }, 250);
+              later(function(){ if(cropCorners){ cropCorners.classList.add("sb-on"); } }, 1100);
+              later(function(){
+                var s = vwipe.querySelector(".sb-vstamp-1"); if(s){ s.classList.remove("sb-pop-hidden"); }
+              }, 1600);
+              later(function(){
+                var s = vwipe.querySelector(".sb-vstamp-2"); if(s){ s.classList.remove("sb-pop-hidden"); }
+              }, 2350);
+              later(function(){
+                var s = vwipe.querySelector(".sb-vstamp-3"); if(s){ s.classList.remove("sb-pop-hidden"); }
+                if(captionCard){ captionCard.classList.remove("sb-slide-hidden"); }
+              }, 3450);
+              later(function(){ if(feedChrome){ feedChrome.classList.remove("sb-chrome-hidden"); } }, 4100);
+              later(function(){
+                if(pub2Chip){ pub2Chip.classList.remove("sb-pop-hidden"); }
+                pintarResultado(true);
+              }, 4450);
+            }
+
+            if(vwipe){
+              var vDragging = false;
+              function vPct(e){
+                var r = vwipe.getBoundingClientRect();
+                return ((e.clientX - r.left) / r.width) * 100;
+              }
+              vwipe.addEventListener("pointerdown", function(e){
+                vDragging = true;
+                vwipe.setPointerCapture(e.pointerId);
+                setVWipe(vPct(e));
+              });
+              vwipe.addEventListener("pointermove", function(e){ if(vDragging){ setVWipe(vPct(e)); } });
+              ["pointerup","pointercancel"].forEach(function(ev){ vwipe.addEventListener(ev, function(){ vDragging = false; }); });
+              vwipe.addEventListener("keydown", function(e){
+                var cur = parseFloat(getComputedStyle(vwipe).getPropertyValue("--wipe")) || 62;
+                if(e.key === "ArrowLeft"){ setVWipe(cur - 4); e.preventDefault(); }
+                if(e.key === "ArrowRight"){ setVWipe(cur + 4); e.preventDefault(); }
+              });
+            }
+            var proofReplayBtn = sbSec.querySelector("#sbProofReplay");
+            if(proofReplayBtn){ proofReplayBtn.addEventListener("click", function(){ playProof(); }); }
+
+            var proofPlayed = false;
+            if("IntersectionObserver" in window && !reduced && proofCard){
+              var io2 = new IntersectionObserver(function(entries){
+                entries.forEach(function(en){
+                  if(en.isIntersecting && !proofPlayed){
+                    proofPlayed = true;
+                    playProof();
+                    io2.disconnect();
+                  }
+                });
+              }, { threshold: 0.3 });
+              io2.observe(proofCard);
+            } else {
+              setProofFinal();
+            }
+    })();
   }
   upd();
 }
@@ -5167,47 +5517,407 @@ function lpProgresoHTML() {
 function lpSubirHTML() {
   return `
   <div class="section" id="subir"><div class="wrap">
-    <h2>Tu material también sale.</h2>
-    <p class="lede">¿Ya tenés fotos, un video o una idea dando vueltas? Mandánoslos desde la app y los sumamos a tu semana.</p>
-    <div class="wd-jcard">
-      <div class="wd-jtrack" aria-hidden="true"><svg viewBox="0 0 1000 24" preserveAspectRatio="none"><path d="M16,12 H984" pathLength="100"/></svg><img class="wd-traveler" src="gt-miogelato-6.jpg" alt=""></div>
-      <div class="wd-jgrid">
-        <div class="wd-jst"><div class="wd-jst-t">1 · En tu app</div><div class="wd-jphone"><div class="wd-jphone-t">Subir</div><span class="wd-jupload">＋ Subir fotos o video</span><div class="wd-jgal"><img class="wd-jhero" loading="lazy" src="gt-miogelato-6.jpg" alt="La foto que subís desde tu app"><img loading="lazy" src="gt-miogelato-7.jpg" alt=""><img loading="lazy" src="gt-miogelato-8.jpg" alt=""><img loading="lazy" src="gt-miogelato-9.jpg" alt=""></div></div></div>
-        <div class="wd-jst"><div class="wd-jst-t">2 · Cae en tu semana</div><div class="wd-jweek"><div class="wd-jslot"><span>LUN</span></div><div class="wd-jslot"><span>MAR</span></div><div class="wd-jslot"><span>MIÉ</span></div><div class="wd-jslot on"><img loading="lazy" src="gt-miogelato-6.jpg" alt="Tu foto en el jueves de tu semana"><span>JUE</span><em class="wd-jtag">Tu material</em></div><div class="wd-jslot"><span>VIE</span></div><div class="wd-jslot"><span>SÁB</span></div><div class="wd-jslot"><span>DOM</span></div></div></div>
-        <div class="wd-jst"><div class="wd-jst-t">3 · Lo trabajamos</div><div class="wd-jwork"><img class="wd-jwork-img" loading="lazy" src="gt-miogelato-6.jpg" alt="Tu foto recibiendo su diseño"><span class="wd-jstamp s1">¡Recién hecho!</span><span class="wd-jstamp s2">con tu voz y tu estilo</span><img class="wd-jposty" src="ai-avatar.png" alt="Posty trabajando tu foto"></div></div>
-        <div class="wd-jst"><div class="wd-jst-t">4 · Sale en su día</div><div class="wd-jfeed"><img loading="lazy" src="gt-miogelato-6.jpg" alt="Tu foto publicada en tu feed"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Publicado</span><div class="wd-jpush"><img src="ai-avatar.png" alt="Posty"><div><b>Posty · 19:00</b><span>Tu posteo salió</span></div></div></div></div>
-      </div>
-    </div>
-    <div class="wd-doors">
-      <div class="wd-door"><span class="wd-door-ic">📷</span><p><b>Tus fotos</b> — entran y salen como posteos con tu voz y tu estilo.</p></div>
-      <div class="wd-door"><span class="wd-door-ic">🎬</span><p><b>Tus videos</b> — los editamos a vertical, con música, listos en su día.</p></div>
-      <div class="wd-door"><span class="wd-door-ic">💡</span><p><b>Tus ideas</b> — las contás por nota de voz y salen al día siguiente.</p></div>
-    </div>
-    <div>
+<p class="sb-kicker">Subí lo que tengas</p>
+      <h2>Tu material también sale.</h2>
+      <p class="sb-subline">No necesitás saber diseñar, ni grabar, ni editar. Vos mandás lo que tengas — nosotros lo convertimos en posteos.</p>
 
-<div class="mk-block">
-  <div class="mk-block-head"><b>Así se ve en la práctica</b><span>El video que nos mandó Filthy Rich Barbershop: así sale publicado.</span></div>
-  <div class="mk-duo"><div class="mk-duo-pan"><video id="mkVidRaw" autoplay muted loop playsinline preload="auto" poster="lp-subir-poster-crudo.jpg"><source src="lp-subir-crudo.mp4" type="video/mp4"/></video><span class="mk-raw-tag">ASÍ COMO LLEGÓ</span></div><div class="mk-duo-pan"><video id="mkVidPro" autoplay muted loop playsinline preload="auto" poster="lp-subir-poster-disenado.jpg"><source src="lp-subir-disenado.mp4" type="video/mp4"/></video><span class="mk-raw-tag ok">ASÍ LO PUBLICAMOS</span></div></div>
-  <ul class="mk-checks">
-    <li><b>✓</b> Encuadre y recorte profesional</li>
-    <li><b>✓</b> Subtítulos y tu marca</li>
-    <li><b>✓</b> Caption listo para publicar</li>
-  </ul>
-  <div class="mk-pub">
-    <img src="lp-subir-poster-disenado.jpg" alt="Video de Filthy Rich Barbershop publicado en el feed">
-    <div>
-      <p class="mk-cap"><b>filthyrichbarbershop</b> walk in filthy, come out rich. book at the link in bio · 148 Havemeyer St, Williamsburg 💈</p>
-      <span class="mk-pub-chip">✓ Publicado en tu feed · 19:00</span>
-    </div>
-  </div>
-</div>
-</div>
-    <p style="text-align:center;font-size:15.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:26px auto 0">Lo que nos mandás <b>ocupa su día</b> en tu semana, como un posteo más: un día, un posteo.</p>
-    <p style="text-align:center;font-size:15.5px;line-height:1.55;color:#0A1E33;max-width:720px;margin:14px auto 0">🎬 Además, cada semana te creamos un video cinematográfico de tu producto, listo para postear — incluido en todos los planes.</p>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
+      <div class="sb-switcher">
+        <div class="sb-switcher-inner sb-glass" role="tablist" aria-label="Tipo de material">
+          <button class="sb-lane-btn sb-is-active" type="button" role="tab" aria-selected="true" data-sb-lane-btn="foto">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Foto
+          </button>
+          <button class="sb-lane-btn" type="button" role="tab" aria-selected="false" data-sb-lane-btn="video">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m8.2 5.4 3.1 5.1"/><path d="m13.4 3.9 3.1 5.1"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+            Video
+          </button>
+          <button class="sb-lane-btn" type="button" role="tab" aria-selected="false" data-sb-lane-btn="idea">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+            Idea
+          </button>
+        </div>
+      </div>
+
+      <div class="sb-card" id="sbSceneCard">
+        <!-- ================= FOTO LANE ================= -->
+        <div class="sb-lane sb-is-active" data-sb-lane-panel="foto">
+          <div class="sb-stages-wrap">
+            <div class="sb-thread" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="sb-spark" data-sb-spark style="left:100%"></span></div>
+            <div class="sb-stages">
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">1</span><h3>Llega como es</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-snapshot">
+                    <img data-sb-fly-source src="gt-miogelato-6.jpg" alt="Dos cucuruchos de helado brindando, uno de frutilla y uno de pistacho, tal como salieron de la cámara" />
+                    <span class="sb-chip sb-glass">tu foto, así como la sacaste</span>
+                  </div>
+                  <p class="sb-mini-cap">desde tu app · recién subida</p>
+                </div>
+                <p class="sb-stage-cap">La subís desde la app, como esté. Sin editar nada.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">2</span><h3>Cae en tu semana</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-week">
+                    <div class="sb-slot"><span class="sb-day">LUN</span><div class="sb-thumb"><img src="gt-miogelato-1.jpg" alt="Posteo del lunes: vitrina de helados con sabores rotulados" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">MAR</span><div class="sb-thumb"><img src="gt-miogelato-2.jpg" alt="Posteo del martes: mostrador de la heladería" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">MIÉ</span><div class="sb-thumb"><img src="gt-miogelato-3.jpg" alt="Posteo del miércoles: helados servidos en la vitrina" /></div></div>
+                    <div class="sb-slot sb-slot-target" data-sb-fly-target><span class="sb-day">JUE</span><div class="sb-thumb"><img data-sb-slot-img src="gt-miogelato-6.jpg" alt="Tu foto ya ubicada en el jueves de tu semana" /><span class="sb-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L6 21"/></svg></span></div><span class="sb-chip sb-glass sb-slot-chip">tu material entra acá</span></div>
+                    <div class="sb-slot"><span class="sb-day">VIE</span><div class="sb-thumb"><img src="gt-miogelato-4.jpg" alt="Posteo del viernes: detalle de la vitrina de helados" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">SÁB</span><div class="sb-thumb"><img src="gt-miogelato-5.jpg" alt="Posteo del sábado: sabores de la casa en el mostrador" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">DOM</span><div class="sb-thumb"><img src="gt-miogelato-7.jpg" alt="Posteo del domingo: vitrina completa de Mio Gelato" /></div></div>
+                  </div>
+                  <p class="sb-week-note">una semana llena, de verdad</p>
+                </div>
+                <p class="sb-stage-cap">Tu semana ya viene llena. Tu material ocupa su día: un día, un posteo.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">3</span><h3>La magia</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-wipe" data-sb-wipe role="slider" aria-label="Arrastrá para comparar antes y después" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62" tabindex="0">
+                    <div class="sb-layer sb-before">
+                      <img class="sb-dull" src="gt-miogelato-6.jpg" alt="" aria-hidden="true" />
+                      <span class="sb-wipe-tag sb-t-before">ANTES</span>
+                    </div>
+                    <div class="sb-layer sb-after">
+                      <img src="gt-miogelato-6.jpg" alt="La misma foto enderezada, a todo color y con el nombre diseñado adentro" />
+                      <div class="sb-post-design">
+                        <span class="sb-brand">MIO GELATO</span>
+                        <div class="sb-band"><b>Pistacho &amp; Frutilla</b><span>los favoritos de la casa</span></div>
+                      </div>
+                      <span class="sb-wipe-tag sb-t-after">DESPUÉS</span>
+                    </div>
+                    <span class="sb-chip sb-glass sb-stamp sb-stamp-1 sb-pop-target" data-sb-stamp>¡Recién hecho!</span>
+                    <span class="sb-chip sb-glass sb-stamp sb-stamp-2 sb-pop-target" data-sb-stamp>con tu voz y tu estilo</span>
+                    <div class="sb-wipe-handle"><span class="sb-wipe-grip sb-glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-5 6 5 6"/><path d="m15 6 5 6-5 6"/></svg></span></div>
+                  </div>
+                </div>
+                <p class="sb-stage-cap">Se endereza, el color florece y el nombre se diseña adentro. Arrastrá la línea y mirá.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">4</span><h3>Sale en su día</h3></div>
+                <div class="sb-visual sb-feed-visual">
+                  <div class="sb-push sb-glass sb-pop-target" data-sb-push>
+                    <img src="ai-avatar.png" alt="Posty" />
+                    <div>
+                      <div class="sb-push-top"><strong>Posty</strong><span>19:00</span></div>
+                      <p>Tu posteo salió</p>
+                    </div>
+                  </div>
+                  <div class="sb-feed">
+                    <div class="sb-feed-head"><span class="sb-feed-ava">M</span><b>miogelato</b><span class="sb-dots">···</span></div>
+                    <div class="sb-feed-img-wrap">
+                      <img src="gt-miogelato-6.jpg" alt="El posteo terminado de Mio Gelato, publicado en el feed" />
+                      <div class="sb-post-design">
+                        <span class="sb-brand">MIO GELATO</span>
+                        <div class="sb-band"><b>Pistacho &amp; Frutilla</b><span>los favoritos de la casa</span></div>
+                      </div>
+                      <span class="sb-chip sb-glass sb-pub-chip sb-pop-target" data-sb-pub><span class="sb-pub-check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Publicado</span>
+                    </div>
+                    <div class="sb-feed-actions">
+                      <svg class="sb-heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                      <span class="sb-like-count" data-sb-likes="214">214</span><span style="font-weight:600;color:var(--ink-soft)">Me gusta</span>
+                      <span class="sb-spacer"></span>
+                      <svg class="sb-mini-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.4-.7L3 21l1.8-5.6a8.4 8.4 0 1 1 16.2-3.9z"/></svg>
+                      <svg class="sb-mini-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                    </div>
+                    <p class="sb-feed-caption"><b>miogelato</b> Pistacho &amp; Frutilla — los favoritos de la casa, recién hechos.</p>
+                  </div>
+                </div>
+                <p class="sb-stage-cap">Publicado el jueves a las 19:00 — y los likes llegan solos.</p>
+              </article>
+
+            </div>
+          </div>
+        </div>
+        <!-- ================= VIDEO LANE ================= -->
+        <div class="sb-lane" data-sb-lane-panel="video" hidden>
+          <div class="sb-stages-wrap">
+            <div class="sb-thread" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="sb-spark" data-sb-spark style="left:100%"></span></div>
+            <div class="sb-stages">
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">1</span><h3>Llega como es</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-clip-frame">
+                    <img data-sb-fly-source src="gt-miogelato-8.jpg" alt="Clip casero y tembloroso de las bateas de helado de colores" />
+                    <span class="sb-rec-tag"><span class="sb-rec-dot"></span>REC 0:12</span>
+                  </div>
+                  <div class="sb-clip-chip-row"><span class="sb-chip sb-glass">tu video, así como lo grabaste</span></div>
+                  <p class="sb-mini-cap">desde tu app · recién grabado</p>
+                </div>
+                <p class="sb-stage-cap">Lo grabás como salga: tembloroso, apurado, con ruido. Vale igual.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">2</span><h3>Cae en tu semana</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-week">
+                    <div class="sb-slot"><span class="sb-day">LUN</span><div class="sb-thumb"><img src="gt-miogelato-1.jpg" alt="Posteo del lunes: vitrina de helados con sabores rotulados" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">MAR</span><div class="sb-thumb"><img src="gt-miogelato-2.jpg" alt="Posteo del martes: mostrador de la heladería" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">MIÉ</span><div class="sb-thumb"><img src="gt-miogelato-3.jpg" alt="Posteo del miércoles: helados servidos en la vitrina" /></div></div>
+                    <div class="sb-slot sb-slot-target" data-sb-fly-target><span class="sb-day">JUE</span><div class="sb-thumb"><img data-sb-slot-img src="gt-miogelato-8.jpg" alt="Tu video ya ubicado en el jueves de tu semana" /><span class="sb-play-badge sb-glass"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg></span><span class="sb-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></span></div><span class="sb-chip sb-glass sb-slot-chip">tu video entra acá</span></div>
+                    <div class="sb-slot"><span class="sb-day">VIE</span><div class="sb-thumb"><img src="gt-miogelato-4.jpg" alt="Posteo del viernes: detalle de la vitrina de helados" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">SÁB</span><div class="sb-thumb"><img src="gt-miogelato-5.jpg" alt="Posteo del sábado: sabores de la casa en el mostrador" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">DOM</span><div class="sb-thumb"><img src="gt-miogelato-7.jpg" alt="Posteo del domingo: vitrina completa de Mio Gelato" /></div></div>
+                  </div>
+                  <p class="sb-week-note">una semana llena, de verdad</p>
+                </div>
+                <p class="sb-stage-cap">Tu semana ya viene llena. Tu video ocupa su día: un día, un posteo.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">3</span><h3>La magia</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-reel-wrap">
+                    <div style="position:relative">
+                      <div class="sb-reel">
+                        <img src="gt-miogelato-9.jpg" alt="El clip editado como reel vertical: bateas de helado de colores en primer plano" />
+                        <div class="sb-reel-progress"><i data-sb-reel-bar></i></div>
+                        <span class="sb-note sb-n1">♪</span><span class="sb-note sb-n2">♪</span><span class="sb-note sb-n3">♪</span>
+                        <div class="sb-reel-band"><b>Recién servido</b><span>MIO GELATO</span></div>
+                      </div>
+                      <span class="sb-chip sb-glass sb-stamp sb-reel-stamp-1 sb-pop-target" data-sb-stamp>¡Recién hecho!</span>
+                      <span class="sb-chip sb-glass sb-stamp sb-reel-stamp-2 sb-pop-target" data-sb-stamp>a vertical, con música</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="sb-stage-cap">Lo cortamos, lo ponemos vertical y le sumamos música. Así de simple.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">4</span><h3>Sale en su día</h3></div>
+                <div class="sb-visual sb-feed-visual">
+                  <div class="sb-push sb-glass sb-pop-target" data-sb-push>
+                    <img src="ai-avatar.png" alt="Posty" />
+                    <div>
+                      <div class="sb-push-top"><strong>Posty</strong><span>19:00</span></div>
+                      <p>Tu posteo salió</p>
+                    </div>
+                  </div>
+                  <div class="sb-feed">
+                    <div class="sb-feed-head"><span class="sb-feed-ava">M</span><b>miogelato</b><span class="sb-dots">···</span></div>
+                    <div class="sb-feed-img-wrap sb-tall">
+                      <img src="gt-miogelato-9.jpg" alt="El reel de Mio Gelato publicado en el feed" />
+                      <div class="sb-post-design">
+                        <span class="sb-brand">MIO GELATO</span>
+                        <div class="sb-band"><b>Recién servido</b><span>pasá a probarlo hoy</span></div>
+                      </div>
+                      <span class="sb-chip sb-glass sb-pub-chip sb-pop-target" data-sb-pub><span class="sb-pub-check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Publicado</span>
+                    </div>
+                    <div class="sb-feed-actions">
+                      <svg class="sb-heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                      <span class="sb-like-count" data-sb-likes="327">327</span><span style="font-weight:600;color:var(--ink-soft)">Me gusta</span>
+                      <span class="sb-spacer"></span>
+                      <svg class="sb-mini-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.4-.7L3 21l1.8-5.6a8.4 8.4 0 1 1 16.2-3.9z"/></svg>
+                      <svg class="sb-mini-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                    </div>
+                    <p class="sb-feed-caption"><b>miogelato</b> Recién servido — el reel de la vitrina, como todos los jueves.</p>
+                  </div>
+                </div>
+                <p class="sb-stage-cap">Publicado el jueves a las 19:00 — y las vistas llegan solas.</p>
+              </article>
+
+            </div>
+          </div>
+        </div>
+        <!-- ================= IDEA LANE ================= -->
+        <div class="sb-lane" data-sb-lane-panel="idea" hidden>
+          <div class="sb-stages-wrap">
+            <div class="sb-thread" aria-hidden="true"><i></i><i></i><i></i><i></i><span class="sb-spark" data-sb-spark style="left:100%"></span></div>
+            <div class="sb-stages">
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">1</span><h3>Llega como es</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-voice-bubble sb-glass" data-sb-voice>
+                    <div class="sb-voice-row">
+                      <span class="sb-play-disc" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+                      <div class="sb-wave" aria-hidden="true">
+                        <span style="--h:34%;--d:0s"></span><span style="--h:58%;--d:.08s"></span><span style="--h:82%;--d:.16s"></span><span style="--h:48%;--d:.24s"></span><span style="--h:96%;--d:.32s"></span><span style="--h:66%;--d:.4s"></span><span style="--h:40%;--d:.48s"></span><span style="--h:74%;--d:.56s"></span><span style="--h:100%;--d:.64s"></span><span style="--h:55%;--d:.72s"></span><span style="--h:38%;--d:.8s"></span><span style="--h:70%;--d:.88s"></span><span style="--h:90%;--d:.96s"></span><span style="--h:52%;--d:1.04s"></span><span style="--h:33%;--d:1.12s"></span><span style="--h:62%;--d:.2s"></span><span style="--h:84%;--d:.44s"></span><span style="--h:46%;--d:.68s"></span><span style="--h:30%;--d:.92s"></span>
+                      </div>
+                      <span class="sb-voice-dur">0:12</span>
+                    </div>
+                    <p class="sb-voice-quote">Saquemos un posteo con los cucuruchos brindando, que se ven re lindos.</p>
+                  </div>
+                  <div class="sb-voice-chip-row"><span class="sb-chip sb-glass">tu idea, contada por nota de voz</span></div>
+                  <p class="sb-mini-cap">desde tu app · recién contada</p>
+                </div>
+                <p class="sb-stage-cap">La contás hablando, como un audio más. Sin escribir ni diseñar nada.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">2</span><h3>Cae en tu semana</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-week">
+                    <div class="sb-slot"><span class="sb-day">LUN</span><div class="sb-thumb"><img src="gt-miogelato-1.jpg" alt="Posteo del lunes: vitrina de helados con sabores rotulados" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">MAR</span><div class="sb-thumb"><img src="gt-miogelato-2.jpg" alt="Posteo del martes: mostrador de la heladería" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">MIÉ</span><div class="sb-thumb"><img src="gt-miogelato-3.jpg" alt="Posteo del miércoles: helados servidos en la vitrina" /></div></div>
+                    <div class="sb-slot sb-slot-target" data-sb-fly-target><span class="sb-day">JUE</span><div class="sb-thumb"><img data-sb-slot-img src="gt-miogelato-6.jpg" alt="El posteo nacido de tu idea, ya ubicado en el jueves de tu semana" /><span class="sb-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span></div><span class="sb-chip sb-glass sb-slot-chip">tu idea entra acá</span></div>
+                    <div class="sb-slot"><span class="sb-day">VIE</span><div class="sb-thumb"><img src="gt-miogelato-4.jpg" alt="Posteo del viernes: detalle de la vitrina de helados" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">SÁB</span><div class="sb-thumb"><img src="gt-miogelato-5.jpg" alt="Posteo del sábado: sabores de la casa en el mostrador" /></div></div>
+                    <div class="sb-slot"><span class="sb-day">DOM</span><div class="sb-thumb"><img src="gt-miogelato-7.jpg" alt="Posteo del domingo: vitrina completa de Mio Gelato" /></div></div>
+                  </div>
+                  <p class="sb-week-note">una semana llena, de verdad</p>
+                </div>
+                <p class="sb-stage-cap">Tu semana ya viene llena. Tu idea ocupa su día: un día, un posteo.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">3</span><h3>La magia</h3></div>
+                <div class="sb-visual">
+                  <div class="sb-wipe" data-sb-wipe role="slider" aria-label="Arrastrá para comparar tu idea y el posteo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62" tabindex="0">
+                    <div class="sb-layer sb-before">
+                      <div class="sb-idea-before-bg" style="background-image:url(gt-miogelato-6.jpg)"></div>
+                      <div class="sb-idea-before-shade"></div>
+                      <div class="sb-idea-quote-card sb-glass"><small>TU IDEA</small>“los cucuruchos brindando”</div>
+                      <span class="sb-wipe-tag sb-t-before">TU IDEA</span>
+                    </div>
+                    <div class="sb-layer sb-after">
+                      <img src="gt-miogelato-6.jpg" alt="El posteo terminado a partir de la idea: los cucuruchos brindando, diseñados" />
+                      <div class="sb-post-design">
+                        <span class="sb-brand">MIO GELATO</span>
+                        <div class="sb-band"><b>Pistacho &amp; Frutilla</b><span>los favoritos de la casa</span></div>
+                      </div>
+                      <span class="sb-wipe-tag sb-t-after">EL POSTEO</span>
+                    </div>
+                    <span class="sb-chip sb-glass sb-stamp sb-stamp-1 sb-pop-target" data-sb-stamp>¡Recién hecho!</span>
+                    <span class="sb-chip sb-glass sb-stamp sb-stamp-2 sb-pop-target" data-sb-stamp>de tu idea a posteo</span>
+                    <div class="sb-wipe-handle"><span class="sb-wipe-grip sb-glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-5 6 5 6"/><path d="m15 6 5 6-5 6"/></svg></span></div>
+                  </div>
+                </div>
+                <p class="sb-stage-cap">De tu idea a posteo, con tu voz y tu estilo. Arrastrá la línea y mirá.</p>
+              </article>
+
+              <article class="sb-stage">
+                <div class="sb-stage-head"><span class="sb-num">4</span><h3>Sale en su día</h3></div>
+                <div class="sb-visual sb-feed-visual">
+                  <div class="sb-push sb-glass sb-pop-target" data-sb-push>
+                    <img src="ai-avatar.png" alt="Posty" />
+                    <div>
+                      <div class="sb-push-top"><strong>Posty</strong><span>19:00</span></div>
+                      <p>Tu posteo salió</p>
+                    </div>
+                  </div>
+                  <div class="sb-feed">
+                    <div class="sb-feed-head"><span class="sb-feed-ava">M</span><b>miogelato</b><span class="sb-dots">···</span></div>
+                    <div class="sb-feed-img-wrap">
+                      <img src="gt-miogelato-6.jpg" alt="El posteo nacido de la nota de voz, publicado en el feed" />
+                      <div class="sb-post-design">
+                        <span class="sb-brand">MIO GELATO</span>
+                        <div class="sb-band"><b>Pistacho &amp; Frutilla</b><span>los favoritos de la casa</span></div>
+                      </div>
+                      <span class="sb-chip sb-glass sb-pub-chip sb-pop-target" data-sb-pub><span class="sb-pub-check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Publicado</span>
+                    </div>
+                    <div class="sb-feed-actions">
+                      <svg class="sb-heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                      <span class="sb-like-count" data-sb-likes="178">178</span><span style="font-weight:600;color:var(--ink-soft)">Me gusta</span>
+                      <span class="sb-spacer"></span>
+                      <svg class="sb-mini-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.4-.7L3 21l1.8-5.6a8.4 8.4 0 1 1 16.2-3.9z"/></svg>
+                      <svg class="sb-mini-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                    </div>
+                    <p class="sb-feed-caption"><b>miogelato</b> Lo pensaste, lo dijiste… y salió.</p>
+                  </div>
+                </div>
+                <p class="sb-stage-cap">Lo pensaste, lo dijiste… y salió.</p>
+              </article>
+
+            </div>
+          </div>
+        </div>
+
+        <footer class="sb-card-foot">
+          <a class="sb-cta" href="/prueba"><span class="sb-cta-dot"></span>Probá gratis 3 días</a>
+          <button class="sb-replay-btn sb-glass" type="button" id="sbReplay">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3L3 8"/><path d="M3 3v5h5"/></svg>
+            Ver el viaje de nuevo
+          </button>
+          <p class="sb-microcopy">Lo que nos mandás ocupa su día en tu semana, como un posteo más: un día, un posteo.</p>
+        </footer>
+      </div>
+
+      <!-- ================= ACT 2 · LA PRUEBA ================= -->
+      <div class="sb-act2-head">
+        <p class="sb-kicker">La prueba</p>
+        <h2 class="sb-act-title">Así se ve en la práctica.</h2>
+        <p class="sb-subline">El video que nos mandó Filthy Rich Barbershop: así llegó, así salió.</p>
+      </div>
+
+      <div class="sb-card" id="sbProofCard" style="margin-top:26px">
+        <div class="sb-proof-grid">
+          <div class="sb-proof-frame-col">
+          <div class="sb-vwipe" id="sbVwipe" role="slider" aria-label="Arrastrá para comparar el video como llegó y como lo publicamos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62" tabindex="0">
+            <div class="sb-layer sb-before">
+              <img class="sb-raw-vid" src="lp-subir-poster-crudo.jpg" alt="El video como llegó: un cuadro quieto, torcido, apagado y sin trabajar" />
+              <span class="sb-wipe-tag sb-vtag sb-t-before">ASÍ COMO LLEGÓ</span>
+            </div>
+            <div class="sb-layer sb-after">
+              <video class="sb-treated-vid" autoplay muted loop playsinline preload="auto" poster="lp-subir-poster-disenado.jpg" aria-label="El mismo video reencuadrado, con color y subtítulos, listo para publicar">
+                <source src="lp-subir-disenado.mp4" type="video/mp4" />
+              </video>
+              <span class="sb-vbrand">FILTHY RICH BARBERSHOP</span>
+            </div>
+            <span class="sb-wipe-tag sb-vtag sb-t-after">ASÍ LO PUBLICAMOS</span>
+            <div class="sb-crop-corners sb-on" id="sbCrop" aria-hidden="true"><span class="sb-tl"></span><span class="sb-tr"></span><span class="sb-bl"></span><span class="sb-br"></span></div>
+            <span class="sb-chip sb-glass sb-vstamp sb-vstamp-1 sb-pop-target" data-sb-vstamp>Encuadre y recorte profesional</span>
+            <span class="sb-chip sb-glass sb-vstamp sb-vstamp-2 sb-pop-target" data-sb-vstamp>Subtítulos y tu marca</span>
+            <span class="sb-chip sb-glass sb-vstamp sb-vstamp-3 sb-pop-target" data-sb-vstamp>Caption listo para publicar</span>
+            <div class="sb-feed-chrome" id="sbChrome">
+              <span class="sb-feed-ava">F</span><b>filthyrichbarbershop</b><span class="sb-dots">···</span>
+            </div>
+            <span class="sb-chip sb-glass sb-pub2-chip sb-pop-target" id="sbPub2"><span class="sb-pub-check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Publicado en tu feed · 19:00</span>
+            <div class="sb-wipe-handle"><span class="sb-wipe-grip sb-glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-5 6 5 6"/><path d="m15 6 5 6-5 6"/></svg></span></div>
+          </div>
+          </div>
+
+          <div class="sb-proof-side">
+            <p class="sb-side-lead">Es <b>el mismo video</b>. Lo único que hizo Filthy Rich fue mandarlo — el encuadre, los subtítulos, la marca y el caption los pusimos nosotros.</p>
+            <div class="sb-speed-chip sb-glass">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <span>lo mandó a la mañana <span class="sb-arr">→</span> salió <b>19:00</b>, ese mismo día</span>
+            </div>
+            <div class="sb-caption-card sb-glass" id="sbCapCard">
+              <span class="sb-cap-tag">Caption · listo para publicar</span>
+              <div class="sb-cap-head"><span class="sb-feed-ava">F</span><b>filthyrichbarbershop</b></div>
+              <p>walk in filthy, come out rich. book at the link in bio · 148 Havemeyer St, Williamsburg</p>
+            </div>
+            <!-- COMPLETAR CON EL DATO REAL DE LA PUBLICACIÓN — NO INVENTAR: los números de esta franja salen de la constante RESULTADO_48H del script (null = a medir, se muestra «—»). -->
+            <div class="sb-result-strip sb-glass" id="resultStrip">
+              <span class="sb-result-label">En sus primeras 48 horas</span>
+              <span class="sb-result-note">cifras reales por cargar — todavía sin medir</span>
+              <div class="sb-result-metrics">
+                <div class="sb-result-slot"><b data-sb-result="views">—</b><span>vistas</span></div>
+                <div class="sb-result-slot"><b data-sb-result="likes">—</b><span>me gusta</span></div>
+              </div>
+            </div>
+            <button class="sb-replay-btn sb-glass sb-proof-replay" type="button" id="sbProofReplay">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3L3 8"/><path d="M3 3v5h5"/></svg>
+              Ver la prueba de nuevo
+            </button>
+            <div class="sb-cine">
+              <div class="sb-filmstrip">
+                <div class="sb-holes sb-top"></div>
+                <div class="sb-film-img">
+                  <img src="lp-subir-poster-disenado.jpg" alt="La misma pieza de Filthy Rich, en un cuadro cinematográfico ancho" />
+                  <span class="sb-chip sb-glass sb-film-tag">La misma pieza · Filthy Rich</span>
+                  <span class="sb-film-play sb-glass" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+                </div>
+                <div class="sb-holes sb-bottom"></div>
+              </div>
+              <div class="sb-cine-text">
+                <p class="sb-cine-kicker">Cada semana</p>
+                <p class="sb-cine-line">Esto mismo, cada semana: un <strong>video cinematográfico</strong> de su producto, listo para postear — <strong>incluido en todos los planes</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
   </div></div>`;
-}
-function lpVozHTML() {
+}function lpVozHTML() {
   return `
   <div class="section" id="voz"><div class="wrap">
     <div class="wd-vk">Pedís por nota de voz y se hace</div>
@@ -5357,9 +6067,9 @@ function landingView(cfg) {
 .pv-caption{font-size:13px}
 }
 /* --- chip Posteado compartido (escena 3 / viaje) --- */
-.ms-feed .wd-posted,.wd-jfeed .wd-posted{position:absolute;left:8px;bottom:8px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.92);color:#0A1E33;font-size:11px;font-weight:800;padding:4px 10px 4px 5px;border-radius:99px;box-shadow:0 6px 16px rgba(10,30,51,.18);z-index:2}
-.ms-feed .wd-posted-ck,.wd-jfeed .wd-posted-ck{width:17px;height:17px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;flex:none}
-.ms-feed .wd-posted-ck svg,.wd-jfeed .wd-posted-ck svg{width:10px;height:10px}
+.ms-feed .wd-posted{position:absolute;left:8px;bottom:8px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.88);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.92);color:#0A1E33;font-size:11px;font-weight:800;padding:4px 10px 4px 5px;border-radius:99px;box-shadow:0 6px 16px rgba(10,30,51,.18);z-index:2}
+.ms-feed .wd-posted-ck{width:17px;height:17px;border-radius:50%;background:#1FA855;display:flex;align-items:center;justify-content:center;flex:none}
+.ms-feed .wd-posted-ck svg{width:10px;height:10px}
 /* --- 20 · el mes vivo --- */
 .wd-cal{position:relative}
 .wd-cal-d{overflow:hidden;padding:0}
@@ -5463,65 +6173,963 @@ function landingView(cfg) {
 #voz .wd-vmeta .wd-vck{margin-left:auto;width:20px;height:20px}
 #voz .wd-vmeta .wd-vck svg{width:11px;height:11px}
 #voz .wd-vbub p{font-size:14.5px;line-height:1.45;color:#0A1E33;margin:3px 0 0}
-/* --- 24 · el viaje de tu material (escena 2.5D, pantallas planas) --- */
-.wd-jcard{position:relative;background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:26px;box-shadow:0 24px 54px rgba(10,30,51,.12);padding:28px 26px 26px;margin:6px auto 30px;max-width:1060px;text-align:left}
-.wd-jtrack{position:relative;height:24px;margin:0 6px 14px;perspective:1100px}
-.wd-jtrack svg{width:100%;height:24px;display:block;overflow:visible}
-.wd-jtrack path{fill:none;stroke:#2793C8;stroke-width:3;stroke-linecap:round}
-.wd-on #subir .wd-jtrack path{stroke-dasharray:100;stroke-dashoffset:100;transition:stroke-dashoffset 3.4s ease .3s}
-.wd-on #subir.wd-live .wd-jtrack path{stroke-dashoffset:0}
-.wd-traveler{display:none}
-.wd-on #subir.wd-live .wd-traveler{display:block;position:absolute;top:-14px;left:6%;width:50px;height:50px;object-fit:cover;border-radius:12px;border:2.5px solid #fff;z-index:4;animation:wd-travel 4.6s cubic-bezier(.4,.05,.3,1) .2s forwards}
-@keyframes wd-travel{0%{left:6%;opacity:0;transform:translateZ(0) scale(.8);box-shadow:0 4px 10px rgba(10,30,51,.25)}7%{opacity:1}18%{left:11%;transform:translateZ(46px) scale(1.14);box-shadow:0 22px 34px rgba(10,30,51,.35)}38%{left:36%;transform:translateZ(46px) scale(1.14);box-shadow:0 22px 34px rgba(10,30,51,.35)}44%{transform:translateZ(10px) scale(1)}58%{left:61%;transform:translateZ(46px) scale(1.14);box-shadow:0 22px 34px rgba(10,30,51,.35)}78%{left:86%;transform:translateZ(46px) scale(1.14);box-shadow:0 22px 34px rgba(10,30,51,.35)}90%{left:86%;opacity:1;transform:translateZ(8px) scale(.96);box-shadow:0 8px 16px rgba(10,30,51,.25)}100%{left:86%;opacity:0;transform:translateZ(8px) scale(.96)}}
-.wd-jgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;position:relative}
-@media(min-width:1024px){.wd-on .wd-jgrid{transform:rotateX(2.6deg);transform-origin:center top}}
-.wd-jst-t{font-size:12px;font-weight:900;letter-spacing:1.1px;text-transform:uppercase;color:#2793C8;margin-bottom:10px}
-.wd-jphone,.wd-jweek,.wd-jwork,.wd-jfeed{position:relative;background:#FDFDFB;border:1.5px solid #E7EDF3;border-radius:18px;padding:12px;min-height:196px;box-shadow:0 14px 30px rgba(10,30,51,.10)}
-.wd-jphone-t{font-weight:900;font-size:14.5px;color:#0A1E33;margin-bottom:9px}
-.wd-jupload{display:block;text-align:center;background:#2793C8;color:#fff;font-weight:800;font-size:13px;padding:10px 6px;border-radius:11px;margin-bottom:10px}
-.wd-jgal{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.wd-jgal img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}
-.wd-on #subir.wd-live .wd-jhero{animation:wd-tapring 1.1s ease .35s 2}
-@keyframes wd-tapring{0%{box-shadow:0 0 0 0 rgba(254,193,77,0)}35%{box-shadow:0 0 0 3px #FEC14D,0 10px 20px rgba(10,30,51,.25);transform:translateY(-4px) scale(1.05)}100%{box-shadow:0 0 0 0 rgba(254,193,77,0)}}
-.wd-jweek{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;align-content:start}
-.wd-jslot{border:1.5px dashed #C7D8E6;border-radius:10px;min-height:52px;display:flex;align-items:flex-start;padding:5px 6px;position:relative;background:rgba(255,255,255,.5)}
-.wd-jslot span{font-size:9.5px;font-weight:800;letter-spacing:.6px;color:#7C8DA0}
-.wd-jslot.on{border:2px solid #FEC14D;background:#FFF8E6;overflow:hidden;padding:0}
-.wd-jslot.on img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
-.wd-jslot.on span{position:relative;z-index:2;background:rgba(255,255,255,.88);border-radius:99px;padding:1px 6px;margin:4px}
-.wd-jtag{position:absolute;left:5px;bottom:5px;z-index:2;background:#FEC14D;color:#0A1E33;font-style:normal;font-size:9.5px;font-weight:900;padding:3px 7px;border-radius:99px;transition:opacity .4s ease 1.9s,transform .4s ease 1.9s}
-.wd-on #subir:not(.wd-live) .wd-jtag{opacity:0;transform:translateY(6px)}
-.wd-on #subir.wd-live .wd-jslot.on{animation:wd-slotlight 1s ease 1.55s both}
-@keyframes wd-slotlight{0%{box-shadow:0 0 0 0 rgba(254,193,77,0)}40%{box-shadow:0 0 0 3px #FEC14D,0 0 26px 4px rgba(254,193,77,.55)}100%{box-shadow:0 0 0 2px rgba(254,193,77,.7)}}
-.wd-jwork-img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;display:block;border:3px solid #fff;box-shadow:0 10px 22px rgba(10,30,51,.14)}
-.wd-jstamp{position:absolute;background:#0A1E33;color:#fff;font-size:11px;font-weight:800;padding:5px 10px;border-radius:8px;transition:opacity .35s ease,transform .35s cubic-bezier(.2,2.2,.4,1)}
-.wd-jstamp.s1{top:16px;left:16px;transform:rotate(-4deg)}
-.wd-jstamp.s2{bottom:46px;left:16px;background:#2793C8;transform:rotate(2deg)}
-.wd-on #subir:not(.wd-live) .wd-jstamp{opacity:0;transform:scale(.5)}
-.wd-on #subir.wd-live .wd-jstamp.s1{transition-delay:2.5s}
-.wd-on #subir.wd-live .wd-jstamp.s2{transition-delay:2.85s}
-.wd-jposty{position:absolute;right:10px;bottom:8px;width:46px;height:46px;border-radius:50%;object-fit:cover;border:2.5px solid #fff;box-shadow:0 8px 18px rgba(10,30,51,.22)}
-.wd-on #subir.wd-live .wd-jposty{animation:wd-busy 1.2s ease-in-out 2.2s infinite alternate}
-@keyframes wd-busy{from{transform:rotate(-4deg) translateY(0)}to{transform:rotate(4deg) translateY(-3px)}}
-.wd-jfeed>img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;display:block}
-.wd-jfeed .wd-posted{transition:opacity .4s cubic-bezier(.2,2.2,.4,1) 3.6s,transform .4s cubic-bezier(.2,2.2,.4,1) 3.6s}
-.wd-on #subir:not(.wd-live) .wd-jfeed .wd-posted{opacity:0;transform:scale(.5)}
-.wd-jpush{position:absolute;top:-14px;right:-6px;background:#fff;border-radius:13px;box-shadow:0 14px 30px rgba(10,30,51,.20);padding:8px 11px;display:flex;gap:8px;align-items:center;transition:opacity .5s ease 3.9s,transform .5s cubic-bezier(.2,1.6,.4,1) 3.9s;z-index:3}
-.wd-jpush img{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none}
-.wd-jpush b{display:block;font-size:11px;color:#0A1E33;line-height:1.2}
-.wd-jpush span{font-size:11.5px;font-weight:800;color:#0A1E33}
-.wd-on #subir:not(.wd-live) .wd-jpush{opacity:0;transform:translateY(-12px)}
-.wd-doors{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:1060px;margin:0 auto}
-.wd-door{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1px solid rgba(10,30,51,.08);border-radius:16px;padding:14px 16px;text-align:left;box-shadow:0 10px 24px rgba(10,30,51,.07)}
-.wd-door-ic{font-size:19px;flex:none}
-.wd-door p{font-size:13.5px;line-height:1.5;color:#5B7A94}
-.wd-door p b{color:#0A1E33}
+/* --- 24 · SUBIR-VIVO: el viaje de tu foto + la prueba (mock aprobado 18/11) --- */
+/* ---------- Section shell ---------- */
+      
+      .sb-kicker{
+        margin:0 0 14px;
+        text-align:center;
+        color:#2793C8;
+        font-size:12px;
+        font-weight:800;
+        letter-spacing:.24em;
+        text-transform:uppercase;
+      }
+      
+      .sb-subline{
+        margin:16px auto 0;
+        max-width:640px;
+        text-align:center;
+        font-size:clamp(14.5px,2vw,16.5px);
+        font-weight:600;
+        line-height:1.55;
+        color:rgba(10,30,51,.64);
+      }
+
+      /* ---------- Glass law ---------- */
+      .sb-glass{
+        background:rgba(255,255,255,.58);
+        -webkit-backdrop-filter:blur(12px) saturate(1.5);
+        backdrop-filter:blur(12px) saturate(1.5);
+        border:1px solid rgba(255,255,255,.8);
+        box-shadow:0 6px 18px rgba(10,30,51,.12);
+      }
+      .sb-chip{
+        display:inline-flex;
+        align-items:center;
+        gap:5px;
+        padding:6px 11px;
+        border-radius:999px;
+        font-size:11px;
+        font-weight:700;
+        line-height:1.25;
+        color:#0A1E33;
+        white-space:nowrap;
+      }
+
+      /* ---------- Switcher ---------- */
+      .sb-switcher{
+        display:flex;
+        justify-content:center;
+        margin:28px auto 22px;
+      }
+      .sb-switcher-inner{
+        display:inline-flex;
+        gap:6px;
+        padding:6px;
+        border-radius:999px;
+      }
+      .sb-lane-btn{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:9px 20px;
+        border-radius:999px;
+        border:1px solid transparent;
+        background:transparent;
+        color:rgba(10,30,51,.64);
+        font-size:14px;
+        font-weight:800;
+        transition:background .25s ease, color .25s ease, box-shadow .25s ease;
+      }
+      .sb-lane-btn svg{ width:18px; height:18px; flex:none; }
+      .sb-lane-btn:hover{ color:#0A1E33; }
+      .sb-lane-btn.sb-is-active{
+        background:rgba(255,255,255,.92);
+        border-color:rgba(255,255,255,.9);
+        box-shadow:0 6px 16px rgba(10,30,51,.12);
+        color:#0A1E33;
+      }
+      .sb-lane-btn.sb-is-active svg{ color:#2793C8; }
+      .sb-lane-btn:focus-visible, .sb-replay-btn:focus-visible, .sb-cta:focus-visible{
+        outline:2px solid #2793C8; outline-offset:2px;
+      }
+
+      /* ---------- The one white card ---------- */
+      .sb-card{
+        background:#fff;
+        border:1px solid rgba(10,30,51,.08);
+        border-radius:24px;
+        box-shadow:0 18px 40px rgba(10,30,51,.10);
+        padding:30px 30px 26px;
+      }
+      .sb-lane[hidden]{ display:none; }
+
+      /* ---------- Magic thread ---------- */
+      .sb-stages-wrap{ position:relative; }
+      .sb-thread{
+        position:absolute;
+        top:13px;
+        left:12.5%;
+        right:12.5%;
+        height:0;
+        border-top:2px dashed rgba(39,147,200,.45);
+        z-index:1;
+        pointer-events:none;
+      }
+      .sb-thread i{
+        position:absolute;
+        top:50%;
+        width:7px; height:7px;
+        border-radius:50%;
+        background:#fff;
+        border:2px solid #2793C8;
+        transform:translate(-50%,-50%);
+      }
+      .sb-thread i:nth-child(1){ left:0%; }
+      .sb-thread i:nth-child(2){ left:33.333%; }
+      .sb-thread i:nth-child(3){ left:66.666%; }
+      .sb-thread i:nth-child(4){ left:100%; }
+      .sb-spark{
+        position:absolute;
+        top:50%;
+        left:100%;
+        width:13px; height:13px;
+        border-radius:50%;
+        background:#2793C8;
+        border:2.5px solid #fff;
+        transform:translate(-50%,-50%);
+        box-shadow:0 0 0 5px rgba(39,147,200,.22), 0 0 18px 6px rgba(39,147,200,.55);
+        transition:left 1s cubic-bezier(.55,0,.25,1), top 1s cubic-bezier(.55,0,.25,1);
+        z-index:2;
+      }
+
+      /* ---------- Stages grid ---------- */
+      .sb-stages{
+        position:relative;
+        z-index:2;
+        display:grid;
+        grid-template-columns:repeat(4,1fr);
+        gap:22px;
+        padding-top:40px;
+      }
+      .sb-stage{ display:flex; flex-direction:column; min-width:0; }
+      .sb-stage-head{
+        display:flex; align-items:center; gap:9px;
+        margin-bottom:14px;
+      }
+      .sb-num{
+        flex:none;
+        width:26px; height:26px;
+        border-radius:50%;
+        background:#0A1E33;
+        color:#fff;
+        font-size:12.5px; font-weight:800;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 4px 10px rgba(10,30,51,.22);
+      }
+      .sb-stage-head h3{
+        margin:0;
+        font-size:15px; font-weight:800; color:#0A1E33;
+        letter-spacing:.01em;
+      }
+      .sb-visual{ position:relative; flex:1; }
+      .sb-stage-cap{
+        margin:14px 0 0;
+        font-size:12.5px;
+        font-weight:600;
+        line-height:1.55;
+        color:rgba(10,30,51,.64);
+      }
+      .sb-mini-cap{
+        margin:10px 0 0;
+        text-align:center;
+        font-size:11px; font-weight:600;
+        color:rgba(10,30,51,.46);
+      }
+
+      /* pop-in states (applied by JS only during play) */
+      .sb-pop-target{ transition:opacity .45s ease, transform .5s cubic-bezier(.2,1.5,.4,1); }
+      .sb-pop-hidden{ opacity:0 !important; transform:scale(.55) rotate(-4deg) !important; pointer-events:none; }
+      .sb-push.sb-pop-hidden{ transform:rotate(-9deg) translateY(-16px) scale(.85) !important; }
+
+
+      /* ---------- Stage 1 · Foto: snapshot ---------- */
+      .sb-snapshot{
+        position:relative;
+        width:86%;
+        margin:6px auto 0;
+        background:#fff;
+        padding:8px 8px 30px;
+        border-radius:6px;
+        box-shadow:0 14px 28px rgba(10,30,51,.18);
+        transform:rotate(-5deg);
+      }
+      .sb-snapshot img{
+        width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:3px;
+        filter:saturate(.5) sepia(.28) contrast(.96) brightness(.93);
+      }
+      .sb-snapshot .sb-chip{
+        position:absolute;
+        right:-8px; bottom:12px;
+        transform:rotate(3deg);
+        max-width:96%;
+      }
+      .sb-dull{ filter:saturate(.5) sepia(.28) contrast(.96) brightness(.93); }
+
+      /* ---------- Stage 1 · Video: shaky clip ---------- */
+      .sb-clip-frame{
+        position:relative;
+        border:6px solid #0A1E33;
+        border-radius:20px;
+        overflow:hidden;
+        aspect-ratio:16/9;
+        background:#0A1E33;
+        box-shadow:0 14px 28px rgba(10,30,51,.18);
+      }
+      .sb-clip-frame img{
+        width:100%; height:100%; object-fit:cover;
+        filter:saturate(.72) contrast(.97) brightness(.95);
+        animation:sb-shake .45s linear infinite;
+      }
+      @keyframes sb-shake{
+        0%{ transform:translate(0,0) rotate(0deg) scale(1.06); }
+        25%{ transform:translate(1.6px,-1.2px) rotate(.45deg) scale(1.06); }
+        50%{ transform:translate(-1.4px,.8px) rotate(-.4deg) scale(1.06); }
+        75%{ transform:translate(1px,1.4px) rotate(.3deg) scale(1.06); }
+        100%{ transform:translate(0,0) rotate(0deg) scale(1.06); }
+      }
+      .sb-rec-tag{
+        position:absolute; top:9px; left:9px;
+        display:inline-flex; align-items:center; gap:6px;
+        padding:5px 9px; border-radius:999px;
+        background:rgba(10,30,51,.55);
+        -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+        color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.08em;
+      }
+      .sb-rec-dot{
+        width:8px; height:8px; border-radius:50%;
+        background:#FF4D42;
+        animation:sb-blink 1.1s ease infinite;
+      }
+      @keyframes sb-blink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+      .sb-clip-chip-row{ display:flex; justify-content:center; margin-top:12px; }
+
+      /* ---------- Stage 1 · Idea: voice note ---------- */
+      .sb-voice-bubble{
+        border-radius:20px;
+        padding:16px 15px 14px;
+      }
+      .sb-voice-row{ display:flex; align-items:center; gap:11px; }
+      .sb-play-disc{
+        flex:none;
+        width:46px; height:46px;
+        border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        background:rgba(39,147,200,.16);
+        border:1px solid rgba(39,147,200,.35);
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 6px 14px rgba(39,147,200,.18);
+        color:#1B7AAB;
+      }
+      .sb-play-disc svg{ width:17px; height:17px; margin-left:2px; }
+      .sb-wave{
+        flex:1; display:flex; align-items:center; gap:2.5px;
+        height:38px; min-width:0;
+      }
+      .sb-wave span{
+        flex:1; min-width:2px;
+        height:var(--h,40%);
+        border-radius:3px;
+        background:#2793C8;
+        opacity:.75;
+        transform-origin:center;
+        animation:sb-wavePulse 1.15s ease-in-out infinite;
+        animation-delay:var(--d,0s);
+      }
+      @keyframes sb-wavePulse{
+        0%,100%{ transform:scaleY(.55); }
+        50%{ transform:scaleY(1); }
+      }
+      .sb-voice-dur{ font-size:11.5px; font-weight:800; color:rgba(10,30,51,.64); flex:none; }
+      .sb-voice-quote{
+        margin:13px 0 0;
+        font-size:13.5px; font-weight:600; font-style:italic;
+        line-height:1.55; color:#0A1E33;
+      }
+      .sb-voice-quote::before{ content:"“"; color:#2793C8; font-weight:900; }
+      .sb-voice-quote::after{ content:"”"; color:#2793C8; font-weight:900; }
+      .sb-voice-chip-row{ display:flex; margin-top:12px; }
+
+      /* ---------- Stage 2 · The week ---------- */
+      .sb-week{
+        display:grid;
+        grid-template-columns:repeat(4,1fr);
+        gap:6px;
+      }
+      .sb-slot{
+        position:relative;
+        border-radius:10px;
+        overflow:visible;
+      }
+      .sb-slot .sb-day{
+        display:block;
+        font-size:8.5px; font-weight:800; letter-spacing:.1em;
+        color:rgba(10,30,51,.46);
+        text-align:center;
+        margin-bottom:4px;
+      }
+      .sb-slot .sb-thumb{
+        position:relative;
+        border-radius:10px;
+        overflow:hidden;
+        aspect-ratio:1/1;
+        background:#EAF3F8;
+        box-shadow:0 4px 10px rgba(10,30,51,.10);
+      }
+      .sb-slot .sb-thumb img{ width:100%; height:100%; object-fit:cover; }
+      .sb-slot-target .sb-thumb{
+        outline:2px solid rgba(254,193,77,.95);
+        outline-offset:1px;
+        animation:sb-slotPulse 1.6s ease-out infinite;
+      }
+      @keyframes sb-slotPulse{
+        0%{ box-shadow:0 0 0 0 rgba(254,193,77,.55), 0 4px 10px rgba(10,30,51,.10); }
+        70%{ box-shadow:0 0 0 11px rgba(254,193,77,0), 0 4px 10px rgba(10,30,51,.10); }
+        100%{ box-shadow:0 0 0 0 rgba(254,193,77,0), 0 4px 10px rgba(10,30,51,.10); }
+      }
+      .sb-slot-target.sb-landed .sb-thumb{ animation:sb-landPop .5s cubic-bezier(.2,1.6,.4,1), sb-slotPulse 1.6s ease-out .55s infinite; }
+      @keyframes sb-landPop{
+        0%{ transform:scale(.6) rotate(-6deg); }
+        100%{ transform:scale(1) rotate(0deg); }
+      }
+      .sb-slot .sb-thumb .sb-ph{
+        position:absolute; inset:0;
+        display:none;
+        align-items:center; justify-content:center;
+        background:rgba(255,255,255,.5);
+        -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+        color:#1B7AAB;
+      }
+      .sb-slot .sb-thumb .sb-ph svg{ width:24px; height:24px; }
+      .sb-slot.sb-is-empty .sb-thumb img{ display:none; }
+      .sb-slot.sb-is-empty .sb-thumb .sb-ph{ display:flex; }
+      .sb-slot .sb-play-badge{
+        position:absolute;
+        top:50%; left:50%;
+        transform:translate(-50%,-50%);
+        width:26px; height:26px;
+        border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        color:#0A1E33;
+      }
+      .sb-slot .sb-play-badge svg{ width:11px; height:11px; margin-left:1.5px; }
+      .sb-slot.sb-is-empty .sb-play-badge{ display:none; }
+      .sb-slot-chip{
+        position:absolute;
+        left:50%; bottom:-11px;
+        transform:translateX(-50%) rotate(-2deg);
+        z-index:6;
+        font-size:9.5px;
+        padding:5px 8px;
+      }
+      .sb-week-note{
+        margin:20px 0 0;
+        text-align:center;
+        font-size:11px; font-weight:600; color:rgba(10,30,51,.46);
+      }
+
+      /* ---------- Designed post overlay ---------- */
+      .sb-post-design{ position:absolute; inset:0; pointer-events:none; }
+      .sb-post-design .sb-brand{
+        position:absolute; top:10px; left:12px;
+        color:#fff;
+        font-size:11.5px; font-weight:800;
+        letter-spacing:.34em;
+        text-shadow:0 1px 8px rgba(10,30,51,.55);
+      }
+      .sb-post-design .sb-band{
+        position:absolute; left:0; right:0; bottom:0;
+        padding:26px 12px 10px;
+        background:linear-gradient(to top, rgba(10,30,51,.82), rgba(10,30,51,0));
+        color:#fff;
+        text-align:left;
+      }
+      .sb-post-design .sb-band b{
+        display:block;
+        font-size:13.5px; font-weight:800; line-height:1.25;
+      }
+      .sb-post-design .sb-band span{
+        display:block;
+        font-size:11px; font-weight:600; opacity:.88; margin-top:2px;
+      }
+
+      /* ---------- Stage 3 · Wipe ---------- */
+      .sb-wipe{
+        --wipe:62%;
+        position:relative;
+        border-radius:16px;
+        overflow:hidden;
+        aspect-ratio:1/1.06;
+        box-shadow:0 14px 28px rgba(10,30,51,.16);
+        cursor:ew-resize;
+        touch-action:none;
+        user-select:none;
+        -webkit-user-select:none;
+      }
+      .sb-wipe .sb-layer{ position:absolute; inset:0; }
+      .sb-wipe .sb-layer img{ width:100%; height:100%; object-fit:cover; pointer-events:none; }
+      .sb-wipe .sb-before img{ transform:rotate(-3deg) scale(1.1); }
+      .sb-wipe .sb-after{ clip-path:inset(0 0 0 var(--wipe)); }
+      .sb-wipe-tag{
+        position:absolute; top:9px;
+        padding:4px 9px; border-radius:999px;
+        font-size:9.5px; font-weight:800; letter-spacing:.12em;
+        background:rgba(10,30,51,.55); color:#fff;
+        -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+        pointer-events:none;
+      }
+      .sb-wipe-tag.sb-t-before{ left:9px; }
+      .sb-wipe-tag.sb-t-after{ right:9px; background:rgba(39,147,200,.65); }
+      .sb-wipe-handle{
+        position:absolute; top:0; bottom:0;
+        left:var(--wipe);
+        width:2.5px;
+        background:#fff;
+        box-shadow:0 0 10px rgba(10,30,51,.35);
+        transform:translateX(-50%);
+        pointer-events:none;
+        z-index:5;
+      }
+      .sb-wipe-grip{
+        position:absolute; top:50%; left:50%;
+        transform:translate(-50%,-50%);
+        width:36px; height:36px;
+        border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        color:#0A1E33;
+      }
+      .sb-wipe-grip svg{ width:18px; height:18px; }
+      .sb-idea-before-bg{
+        position:absolute; inset:0;
+        background-size:cover; background-position:center;
+        filter:blur(7px) brightness(1.06) saturate(.8);
+        transform:scale(1.08);
+      }
+      .sb-idea-before-shade{
+        position:absolute; inset:0;
+        background:rgba(244,249,252,.38);
+      }
+      .sb-idea-quote-card{
+        position:absolute;
+        left:50%; top:50%;
+        transform:translate(-50%,-50%) rotate(-2deg);
+        width:78%;
+        border-radius:14px;
+        padding:12px 13px;
+        font-size:12.5px; font-weight:700; line-height:1.5;
+        color:#0A1E33;
+        pointer-events:none;
+      }
+      .sb-idea-quote-card small{
+        display:block;
+        font-size:9.5px; font-weight:800; letter-spacing:.14em;
+        color:#1B7AAB; margin-bottom:5px;
+      }
+      .sb-stamp{
+        position:absolute;
+        z-index:6;
+        pointer-events:none;
+        font-size:11px;
+      }
+      .sb-stamp-sky{
+        background:rgba(39,147,200,.20);
+        border-color:rgba(39,147,200,.45);
+        color:#0A1E33;
+      }
+      .sb-stamp-1{ top:12px; left:10px; transform:rotate(-5deg); }
+      .sb-stamp-2{ bottom:12px; left:10px; transform:rotate(3deg); }
+      .sb-stamp.sb-pop-hidden{ opacity:0 !important; }
+      .sb-stamp-1.sb-pop-hidden{ transform:scale(.5) rotate(-16deg) !important; }
+      .sb-stamp-2.sb-pop-hidden{ transform:scale(.5) rotate(12deg) !important; }
+
+
+      /* ---------- Stage 3 · Video: the reel ---------- */
+      .sb-reel-wrap{ display:flex; justify-content:center; }
+      .sb-reel{
+        position:relative;
+        width:172px;
+        max-width:72%;
+        aspect-ratio:9/16;
+        border-radius:18px;
+        overflow:hidden;
+        box-shadow:0 16px 32px rgba(10,30,51,.22);
+        background:#0A1E33;
+      }
+      .sb-reel img{
+        width:100%; height:100%; object-fit:cover;
+        animation:sb-reelZoom 9s ease-in-out infinite alternate;
+      }
+      @keyframes sb-reelZoom{
+        from{ transform:scale(1); }
+        to{ transform:scale(1.14); }
+      }
+      .sb-reel-progress{
+        position:absolute; top:8px; left:10px; right:10px;
+        height:3.5px; border-radius:99px;
+        background:rgba(255,255,255,.35);
+        overflow:hidden;
+        z-index:4;
+      }
+      .sb-reel-progress i{
+        display:block; height:100%;
+        width:68%;
+        background:#fff;
+        border-radius:99px;
+      }
+      .sb-reel-band{
+        position:absolute; left:0; right:0; bottom:0;
+        padding:30px 12px 12px;
+        background:linear-gradient(to top, rgba(10,30,51,.85), rgba(10,30,51,0));
+        color:#fff;
+        z-index:3;
+      }
+      .sb-reel-band b{ display:block; font-size:15px; font-weight:800; }
+      .sb-reel-band span{
+        display:block; margin-top:3px;
+        font-size:10px; font-weight:800; letter-spacing:.3em; opacity:.92;
+      }
+      .sb-note{
+        position:absolute;
+        z-index:4;
+        color:#fff;
+        font-size:19px; font-weight:800;
+        text-shadow:0 2px 8px rgba(10,30,51,.5);
+        animation:sb-noteFloat 3.4s ease-in-out infinite;
+        pointer-events:none;
+      }
+      .sb-note.sb-n1{ top:16%; right:12%; }
+      .sb-note.sb-n2{ top:30%; right:22%; font-size:14px; animation-delay:1.1s; }
+      .sb-note.sb-n3{ top:11%; right:30%; font-size:12px; animation-delay:2s; }
+      @keyframes sb-noteFloat{
+        0%,100%{ transform:translateY(0) rotate(-6deg); opacity:.95; }
+        50%{ transform:translateY(-9px) rotate(7deg); opacity:.65; }
+      }
+      .sb-reel-stamp-1{ top:14px; left:-6px; }
+      .sb-reel-stamp-2{ bottom:16px; right:-6px; left:auto; }
+
+      /* ---------- Stage 4 · Feed ---------- */
+      .sb-feed-visual{ padding-top:34px; }
+      .sb-push{
+        position:absolute;
+        top:0; right:2px;
+        z-index:8;
+        display:flex; align-items:center; gap:9px;
+        padding:8px 13px 8px 8px;
+        border-radius:16px;
+        transform:rotate(-3deg);
+        max-width:96%;
+      }
+      .sb-push img{
+        width:30px; height:30px;
+        border-radius:50%;
+        object-fit:cover;
+        flex:none;
+        background:#fff;
+      }
+      .sb-push-top{
+        display:flex; align-items:baseline; gap:6px;
+        font-size:11.5px; line-height:1.2;
+      }
+      .sb-push-top strong{ font-weight:800; }
+      .sb-push-top span{ color:rgba(10,30,51,.46); font-weight:700; font-size:10.5px; }
+      .sb-push p{
+        margin:1px 0 0;
+        font-size:11.5px; font-weight:600; color:rgba(10,30,51,.64);
+        line-height:1.25; white-space:nowrap;
+      }
+      .sb-feed{
+        position:relative;
+        background:#fff;
+        border:1px solid rgba(10,30,51,.08);
+        border-radius:16px;
+        box-shadow:0 10px 24px rgba(10,30,51,.10);
+        overflow:hidden;
+      }
+      .sb-feed-head{
+        display:flex; align-items:center; gap:8px;
+        padding:9px 11px;
+      }
+      .sb-feed-ava{
+        flex:none;
+        width:26px; height:26px;
+        border-radius:50%;
+        background:#0A1E33;
+        color:#fff;
+        font-size:11px; font-weight:800;
+        display:flex; align-items:center; justify-content:center;
+      }
+      .sb-feed-head b{ font-size:12.5px; font-weight:800; }
+      .sb-feed-head .sb-dots{ margin-left:auto; color:rgba(10,30,51,.46); font-weight:900; letter-spacing:2px; font-size:11px; }
+      .sb-feed-img-wrap{ position:relative; aspect-ratio:1/1; overflow:hidden; }
+      .sb-feed-img-wrap.sb-tall{ aspect-ratio:4/4.6; }
+      .sb-feed-img-wrap > img{ width:100%; height:100%; object-fit:cover; }
+      .sb-pub-chip{
+        position:absolute; top:9px; left:9px;
+        z-index:5;
+        font-size:11px;
+      }
+      .sb-pub-check{
+        flex:none;
+        width:16px; height:16px;
+        border-radius:50%;
+        background:#1FA855;
+        display:inline-flex; align-items:center; justify-content:center;
+      }
+      .sb-pub-check svg{ width:9px; height:9px; }
+      .sb-feed-actions{
+        display:flex; align-items:center; gap:7px;
+        padding:9px 11px 0;
+        font-size:12.5px;
+      }
+      .sb-heart{ width:19px; height:19px; color:#F0563F; flex:none; }
+      .sb-feed-actions .sb-spacer{ flex:1; }
+      .sb-feed-actions .sb-mini-ic{ width:17px; height:17px; color:rgba(10,30,51,.64); }
+      .sb-like-count{ font-weight:800; font-variant-numeric:tabular-nums; }
+      .sb-feed-caption{
+        margin:0;
+        padding:5px 11px 12px;
+        font-size:12px; font-weight:600; line-height:1.5;
+        color:rgba(10,30,51,.64);
+      }
+      .sb-feed-caption b{ color:#0A1E33; font-weight:800; }
+
+      /* ---------- Card footer ---------- */
+      .sb-card-foot{
+        margin-top:28px;
+        padding-top:22px;
+        border-top:1px solid rgba(10,30,51,.08);
+        display:flex;
+        flex-wrap:wrap;
+        align-items:center;
+        justify-content:center;
+        gap:12px;
+      }
+      .sb-cta{
+        display:inline-flex; align-items:center; gap:8px;
+        padding:13px 26px;
+        border-radius:999px;
+        background:rgba(39,147,200,.16);
+        border:1px solid rgba(39,147,200,.38);
+        -webkit-backdrop-filter:blur(12px) saturate(1.5);
+        backdrop-filter:blur(12px) saturate(1.5);
+        box-shadow:0 10px 22px rgba(39,147,200,.20), inset 0 1px 0 rgba(255,255,255,.65);
+        color:#0A1E33;
+        font-size:14.5px; font-weight:800;
+        text-decoration:none;
+        transition:transform .2s ease, box-shadow .2s ease;
+      }
+      .sb-cta:hover{ transform:translateY(-1px); box-shadow:0 14px 26px rgba(39,147,200,.26), inset 0 1px 0 rgba(255,255,255,.65); }
+      .sb-cta .sb-cta-dot{
+        width:8px; height:8px; border-radius:50%;
+        background:#FEC14D;
+        box-shadow:0 0 0 3px rgba(254,193,77,.3);
+      }
+      .sb-replay-btn{
+        display:inline-flex; align-items:center; gap:7px;
+        padding:9px 16px;
+        border-radius:999px;
+        font-size:12.5px; font-weight:700; color:#0A1E33;
+      }
+      .sb-replay-btn svg{ width:14px; height:14px; color:#1B7AAB; }
+      .sb-microcopy{
+        flex-basis:100%;
+        margin:4px 0 0;
+        text-align:center;
+        font-size:11.5px; font-weight:600;
+        color:rgba(10,30,51,.46);
+        line-height:1.5;
+      }
+
+      /* fly clone */
+      .sb-fly-clone{
+        position:fixed;
+        z-index:60;
+        border-radius:12px;
+        object-fit:cover;
+        box-shadow:0 18px 36px rgba(10,30,51,.35);
+        pointer-events:none;
+      }
+
+      /* ---------- Act 2 · La prueba ---------- */
+      .sb-act2-head{ margin-top:72px; }
+      .sb-act-title{
+        margin:0; text-align:center;
+        font-size:clamp(27px,4.4vw,40px);
+        font-weight:900; line-height:1.1; color:#0A1E33;
+      }
+      .sb-proof-grid{
+        display:grid;
+        grid-template-columns:minmax(0,340px) 1fr;
+        gap:36px;
+        align-items:start;
+      }
+      .sb-vwipe{
+        --wipe:62%;
+        position:relative;
+        border-radius:20px;
+        overflow:hidden;
+        aspect-ratio:9/16;
+        width:100%;
+        box-shadow:0 18px 36px rgba(10,30,51,.22);
+        cursor:ew-resize;
+        touch-action:none;
+        user-select:none;
+        -webkit-user-select:none;
+        background:#0A1E33;
+      }
+      .sb-vwipe .sb-layer{ position:absolute; inset:0; }
+      .sb-vwipe video, .sb-vwipe img.sb-raw-vid{
+        width:100%; height:100%;
+        object-fit:cover;
+        display:block;
+        pointer-events:none;
+      }
+      .sb-vwipe .sb-raw-vid{
+        transform:rotate(-2.4deg) scale(1.16);
+        filter:saturate(.52) sepia(.24) contrast(.95) brightness(.93);
+      }
+      .sb-vwipe .sb-after{ clip-path:inset(0 0 0 var(--wipe)); }
+      .sb-vwipe .sb-treated-vid{ filter:saturate(1.14) contrast(1.06); }
+      .sb-vtag{ font-size:10.5px; padding:6px 11px; }
+      .sb-vwipe > .sb-wipe-tag.sb-t-after{ top:46px; right:10px; z-index:8; }
+      .sb-vwipe .sb-wipe-tag.sb-t-before{ top:66px; left:10px; z-index:8; }
+      .sb-result-note{
+        font-size:10.5px; font-weight:600;
+        color:rgba(10,30,51,.46);
+      }
+      .sb-vbrand{
+        position:absolute; top:48px; left:14px;
+        color:#fff;
+        font-size:11px; font-weight:800;
+        letter-spacing:.3em;
+        text-shadow:0 1px 8px rgba(10,30,51,.6);
+        pointer-events:none;
+      }
+      .sb-crop-corners{
+        position:absolute; inset:13px;
+        z-index:4; pointer-events:none;
+        opacity:0; transform:scale(1.14);
+        transition:opacity .7s ease, transform .8s cubic-bezier(.3,1.2,.4,1);
+      }
+      .sb-crop-corners.sb-on{ opacity:1; transform:scale(1); }
+      .sb-crop-corners span{
+        position:absolute; width:27px; height:27px;
+        border:3.5px solid #fff;
+        filter:drop-shadow(0 2px 6px rgba(10,30,51,.5));
+      }
+      .sb-crop-corners .sb-tl{ top:0; left:0; border-right:none; border-bottom:none; border-radius:7px 0 0 0; }
+      .sb-crop-corners .sb-tr{ top:0; right:0; border-left:none; border-bottom:none; border-radius:0 7px 0 0; }
+      .sb-crop-corners .sb-bl{ bottom:0; left:0; border-right:none; border-top:none; border-radius:0 0 0 7px; }
+      .sb-crop-corners .sb-br{ bottom:0; right:0; border-left:none; border-top:none; border-radius:0 0 7px 0; }
+      .sb-vstamp{ position:absolute; z-index:6; font-size:11.5px; pointer-events:none; }
+      .sb-vstamp-1{ top:17%; right:10px; transform:rotate(-3deg); }
+      .sb-vstamp-2{ top:33%; right:10px; transform:rotate(2deg); }
+      .sb-vstamp-3{ top:49%; right:10px; transform:rotate(-2deg); }
+      .sb-feed-chrome{
+        position:absolute; top:0; left:0; right:0;
+        z-index:7;
+        display:flex; align-items:center; gap:8px;
+        padding:11px 13px 20px;
+        background:linear-gradient(to bottom, rgba(10,30,51,.6), rgba(10,30,51,0));
+        color:#fff;
+        transition:opacity .55s ease, transform .55s cubic-bezier(.3,1.1,.4,1);
+      }
+      .sb-feed-chrome .sb-dots{ margin-left:auto; font-weight:900; letter-spacing:2px; font-size:11px; opacity:.9; }
+      .sb-feed-chrome b{ font-size:13px; font-weight:800; text-shadow:0 1px 6px rgba(10,30,51,.5); }
+      .sb-chrome-hidden{ opacity:0; transform:translateY(-102%); }
+      .sb-pub2-chip{ position:absolute; left:12px; bottom:12px; z-index:7; font-size:11.5px; }
+      .sb-proof-frame-col{ min-width:0; }
+      .sb-result-strip{
+        margin-top:0;
+        border-radius:16px;
+        padding:13px 15px;
+        display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+      }
+      .sb-result-label{
+        font-size:11px; font-weight:800;
+        letter-spacing:.1em; text-transform:uppercase;
+        color:rgba(10,30,51,.64);
+      }
+      .sb-result-metrics{ display:flex; gap:10px; margin-left:auto; }
+      .sb-result-slot{
+        border:1.5px dashed rgba(10,30,51,.28);
+        border-radius:12px;
+        padding:7px 13px;
+        text-align:center;
+        min-width:88px;
+        background:rgba(255,255,255,.35);
+      }
+      .sb-result-slot b{
+        display:block;
+        font-size:17px; font-weight:900;
+        font-variant-numeric:tabular-nums;
+      }
+      .sb-result-slot span{
+        display:block;
+        font-size:10px; font-weight:700;
+        color:rgba(10,30,51,.46);
+        letter-spacing:.06em; text-transform:uppercase;
+        margin-top:1px;
+      }
+      .sb-speed-chip{
+        display:flex; align-items:center; gap:9px;
+        padding:11px 15px;
+        border-radius:14px;
+        font-size:13px; font-weight:700; color:#0A1E33;
+        line-height:1.45;
+      }
+      .sb-speed-chip svg{ width:16px; height:16px; color:#1B7AAB; flex:none; }
+      .sb-speed-chip .sb-arr{ color:#2793C8; font-weight:900; }
+      .sb-proof-side{ display:flex; flex-direction:column; gap:16px; padding-top:8px; }
+      .sb-side-lead{
+        margin:0;
+        font-size:15px; font-weight:600; line-height:1.65;
+        color:rgba(10,30,51,.64);
+      }
+      .sb-side-lead b{ color:#0A1E33; }
+      .sb-caption-card{
+        border-radius:18px;
+        padding:17px 18px;
+        transition:opacity .5s ease, transform .65s cubic-bezier(.25,1.25,.4,1);
+      }
+      .sb-caption-card.sb-slide-hidden{ opacity:0; transform:translateX(38px); }
+      .sb-cap-tag{
+        display:block;
+        font-size:9.5px; font-weight:800; letter-spacing:.16em;
+        color:#1B7AAB; margin-bottom:9px;
+      }
+      .sb-cap-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+      .sb-cap-head b{ font-size:13.5px; font-weight:800; }
+      .sb-caption-card p{
+        margin:0;
+        font-size:13.5px; font-weight:600; line-height:1.6;
+        color:rgba(10,30,51,.64);
+      }
+      .sb-proof-replay{ align-self:flex-start; }
+      .sb-cine{
+        margin-top:2px;
+        padding-top:20px;
+        border-top:1px solid rgba(10,30,51,.08);
+        display:grid;
+        grid-template-columns:1.15fr 1fr;
+        gap:20px;
+        align-items:center;
+      }
+      .sb-film-tag{
+        position:absolute; top:8px; left:8px;
+        z-index:3;
+        font-size:9.5px;
+        padding:5px 9px;
+      }
+      .sb-filmstrip{
+        background:#0A1E33;
+        border-radius:14px;
+        padding:9px 12px;
+        box-shadow:0 16px 32px rgba(10,30,51,.25);
+      }
+      .sb-holes{
+        height:9px;
+        background-image:radial-gradient(circle at 50% 50%, rgba(244,249,252,.92) 3px, transparent 3.9px);
+        background-size:24px 9px;
+        background-repeat:repeat-x;
+      }
+      .sb-holes.sb-top{ margin-bottom:8px; }
+      .sb-holes.sb-bottom{ margin-top:8px; }
+      .sb-film-img{
+        position:relative;
+        border-radius:6px;
+        overflow:hidden;
+        aspect-ratio:21/9;
+      }
+      .sb-film-img img{
+        width:100%; height:100%;
+        object-fit:cover;
+        object-position:center 32%;
+      }
+      .sb-film-play{
+        position:absolute; right:9px; bottom:9px;
+        width:32px; height:32px;
+        border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        color:#0A1E33;
+        opacity:.88;
+        box-shadow:0 4px 10px rgba(10,30,51,.18);
+        pointer-events:none;
+      }
+      .sb-film-play svg{ width:12px; height:12px; margin-left:2px; }
+      .sb-cine-kicker{
+        margin:0 0 10px;
+        color:#2793C8;
+        font-size:11px; font-weight:800;
+        letter-spacing:.22em; text-transform:uppercase;
+      }
+      .sb-cine-line{
+        margin:0;
+        font-size:15.5px; font-weight:700; line-height:1.6;
+        color:#0A1E33;
+      }
+      .sb-cine-line strong{ font-weight:900; }
+      @media (max-width:900px){
+        .sb-proof-grid{ grid-template-columns:1fr; }
+        .sb-vwipe{ max-width:340px; margin:0 auto; }
+        .sb-cine{ grid-template-columns:1fr; }
+        .sb-act2-head{ margin-top:52px; }
+      }
+
+      /* ---------- Mobile ---------- */
+      @media (max-width:900px){
+        
+        .sb-card{ padding:22px 16px 20px; border-radius:20px; }
+        .sb-stages{
+          grid-template-columns:1fr;
+          gap:34px;
+          padding-top:6px;
+          padding-left:30px;
+        }
+        .sb-thread{
+          top:4%; bottom:4%;
+          left:9px; right:auto;
+          height:auto; width:0;
+          border-top:none;
+          border-left:2px dashed rgba(39,147,200,.45);
+        }
+        .sb-thread i{
+          left:50%; top:auto;
+          transform:translate(-50%,-50%);
+        }
+        .sb-thread i:nth-child(1){ top:2%; left:50%; }
+        .sb-thread i:nth-child(2){ top:35%; left:50%; }
+        .sb-thread i:nth-child(3){ top:67%; left:50%; }
+        .sb-thread i:nth-child(4){ top:98%; left:50%; }
+        .sb-spark{ left:50%; }
+        .sb-snapshot{ width:72%; max-width:300px; }
+        .sb-week{ max-width:340px; }
+        .sb-wipe{ max-width:340px; }
+        .sb-feed{ max-width:340px; }
+        .sb-lane-btn{ padding:9px 15px; font-size:13px; }
+      }
+
+      /* ---------- Reduced motion ---------- */
+      @media (prefers-reduced-motion: reduce){
+        *, *::before, *::after{
+          animation-duration:.01ms !important;
+          animation-iteration-count:1 !important;
+          transition-duration:.01ms !important;
+        }
+        .sb-clip-frame img, .sb-reel img{ animation:none !important; }
+        .sb-slot-target .sb-thumb{ animation:none !important; }
+      }
 @media(max-width:760px){
-.wd-jgrid{grid-template-columns:1fr;gap:22px}
-.wd-jgrid:before{content:"";position:absolute;left:15px;top:6px;bottom:6px;border-left:2.5px dashed rgba(39,147,200,.45)}
-.wd-jst{padding-left:25px}
-.wd-jtrack{display:none}
-.wd-doors{grid-template-columns:1fr}
 .wd-cal-mile{top:auto;bottom:70px;right:10px}
 .strat-chip{font-size:12px;padding:7px 11px}
 }
@@ -5529,11 +7137,6 @@ function landingView(cfg) {
 .wd-on .wd-cal:not(.wd-full) .wd-cal-payoff{opacity:1;transform:none}
 .wd-on .wd-cal-mile{display:none}
 .wd-on .strat-body.deal .strat-head,.wd-on .strat-body.deal .strat-row{animation:none}
-.wd-on #subir .wd-jtrack path{transition:none;stroke-dashoffset:0}
-.wd-on #subir .wd-jtag,.wd-on #subir .wd-jstamp,.wd-on #subir .wd-jpush,.wd-on #subir .wd-jfeed .wd-posted{opacity:1;transform:none;transition:none}
-.wd-on #subir .wd-jposty,.wd-on #subir .wd-jhero,.wd-on #subir .wd-jslot.on{animation:none}
-.wd-on .wd-jgrid{transform:none}
-.wd-traveler{display:none!important}
 }
 
 @media (prefers-reduced-motion: reduce){.wd-on .wd-cell:not(.on) .wd-ph{animation:none}.wd-on .wd-payoff{opacity:1;transform:none}}
@@ -5726,15 +7329,6 @@ function landingView(cfg) {
 #ads .cap-send{display:inline-block}
 #ads.wd-live .cap-send{animation:wd-pulse 1.1s ease 1s 2}
 @keyframes wd-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-.wd-on #subir .mk-duo-pan:nth-child(2){clip-path:inset(0 100% 0 0);transition:clip-path 1.1s ease .25s}
-.wd-on #subir.wd-live .mk-duo-pan:nth-child(2){clip-path:inset(0 0 0 0)}
-.wd-on #subir .mk-checks li{opacity:0;transform:translateX(-8px);transition:opacity .45s ease,transform .45s ease}
-.wd-on #subir.wd-live .mk-checks li{opacity:1;transform:none}
-.wd-on #subir.wd-live .mk-checks li:nth-child(1){transition-delay:.35s}
-.wd-on #subir.wd-live .mk-checks li:nth-child(2){transition-delay:.6s}
-.wd-on #subir.wd-live .mk-checks li:nth-child(3){transition-delay:.85s}
-.wd-on #subir .mk-pub{opacity:0;transform:translateY(14px);transition:opacity .55s ease 1s,transform .55s ease 1s}
-.wd-on #subir.wd-live .mk-pub{opacity:1;transform:none}
 .wd-price{text-align:center;margin:4px 0 12px}
 .wd-price-n{font-size:clamp(56px,9vw,92px);font-weight:900;letter-spacing:-2px;color:#0A1E33;line-height:1}
 .wd-price-n small{font-size:.34em;font-weight:800;color:#7C8DA0;letter-spacing:0;margin-left:4px}
