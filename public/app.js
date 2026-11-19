@@ -5077,8 +5077,8 @@ function lpAdsHTML() {
               <span class="av-fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5L20 6.5"/></svg> Parecido a tus seguidores</span>
             </div>
             <div class="av-money"><span>US$20 de pauta + US$2 de gestión</span><b>Total&nbsp;US$22</b></div>
-            <button class="av-sale" type="button" data-av-sale>Sale así</button>
-            <p class="av-note">Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Sale así».</p>
+            <button class="av-sale" type="button" data-av-sale>Impulsar este posteo con Ads</button>
+            <p class="av-note">Lo armó Posty desde tu negocio. Tocá lo que quieras cambiar; nada sale hasta que digas «Impulsar este posteo con Ads».</p>
           </section>
         </div>
         <div class="av-active-wrap">
