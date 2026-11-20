@@ -3967,7 +3967,7 @@ function lpDisenoInit() {
   if (RM || !('IntersectionObserver' in window)) { targets.forEach(arm); }
   else {
     if (window.__wdIO) window.__wdIO.disconnect();
-    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { arm(en.target); io.unobserve(en.target); } }); }, { threshold: 0.22, rootMargin: '0px 0px -6% 0px' });
+    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { arm(en.target); io.unobserve(en.target); } }); }, { threshold: 0.10, rootMargin: '0px 0px -6% 0px' });
     window.__wdIO = io;
     targets.forEach(function (t) { io.observe(t); });
   }
@@ -4065,7 +4065,7 @@ function lpDisenoInit() {
       atAt(14800, function () { atChat.classList.add('at-fading'); });
       atAt(15800, function () { if (atPlaying) atPlay(); });
     }
-    var atIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { if (!atPlaying) atPlay(); } else if (atPlaying) { atStop(); } }); }, { threshold: 0.25 });
+    var atIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { if (!atPlaying) atPlay(); } else if (atPlaying) { atStop(); } }); }, { threshold: 0.10 });
     atIO.observe(atChat);
   }
   /* PRODUCTO-VIVO: el panel 3 cobra vida cuando la historia entra en pantalla
@@ -4124,7 +4124,7 @@ function lpDisenoInit() {
     }
     if (RM || !('IntersectionObserver' in window)) { pvFinal(); }
     else {
-      var pvIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { pvCycle(); pvIO.disconnect(); } }); }, { threshold: 0.25 });
+      var pvIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { pvCycle(); pvIO.disconnect(); } }); }, { threshold: 0.10 });
       pvIO.observe(pvStory);
     }
   }
@@ -4158,7 +4158,7 @@ function lpDisenoInit() {
       mvSet(12, false);
       if ('IntersectionObserver' in window) {
         if (window.__mvIO) window.__mvIO.disconnect();
-        var mvIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { mvScene.classList.add('mv-live'); if (mvSvg && mvSvg.unpauseAnimations) mvSvg.unpauseAnimations(); mvCycle(); } else { mvScene.classList.remove('mv-live'); if (mvSvg && mvSvg.pauseAnimations) mvSvg.pauseAnimations(); mvClear(); } }); }, { threshold: 0.22 });
+        var mvIO = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { mvScene.classList.add('mv-live'); if (mvSvg && mvSvg.unpauseAnimations) mvSvg.unpauseAnimations(); mvCycle(); } else { mvScene.classList.remove('mv-live'); if (mvSvg && mvSvg.pauseAnimations) mvSvg.pauseAnimations(); mvClear(); } }); }, { threshold: 0.10 });
         window.__mvIO = mvIO;
         mvIO.observe(mvScene);
       } else { mvScene.classList.add('mv-live'); if (mvSvg && mvSvg.unpauseAnimations) mvSvg.unpauseAnimations(); mvCycle(); }
@@ -5771,11 +5771,11 @@ function lpAtiendeHTML() {
     <div class="at-card"><div class="at-chat">
       <div class="at-row-v at-anim at-from-left on" data-at-step="m1"><div class="at-bubble-v"><span class="at-sender">Comentario en tu posteo</span><p>¿La torta de chocolate viene en tamaño grande? Es para un cumpleaños</p></div></div>
       <div class="at-typing-row" data-at-typing="t1" aria-hidden="true"><div class="at-typing"><span></span><span></span><span></span></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
-      <div class="at-row-p at-anim at-from-right on" data-at-step="a1"><div class="at-posty-wrap"><div class="at-bubble-p"><span class="at-sender">Posty responde</span><p>¡Hola! Sí — viene en tamaño grande, para 12 personas. ¿Querés que te reservemos una para el sábado?</p></div><div class="at-chip-anchor"><span class="at-glass-chip"><span class="at-dot" aria-hidden="true"></span>respondido en el momento</span></div></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-row-p at-anim at-from-right on" data-at-step="a1"><div class="at-posty-wrap"><div class="at-bubble-p"><span class="at-sender">Posty responde</span><p>holaa, sí! viene en tamaño grande, rinde para unas 12 personas. querés que te reservemos una para el sábado?</p></div><div class="at-chip-anchor"><span class="at-glass-chip"><span class="at-dot" aria-hidden="true"></span>respondido en el momento</span></div></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
       <div class="at-chip-spacer" aria-hidden="true"></div>
       <div class="at-row-v at-anim at-from-left on" data-at-step="m2"><div class="at-bubble-v"><span class="at-sender">Mensaje directo</span><p>¿Mañana abren? ¿Desde qué hora?</p></div></div>
       <div class="at-typing-row" data-at-typing="t2" aria-hidden="true"><div class="at-typing"><span></span><span></span><span></span></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
-      <div class="at-row-p at-anim at-from-right on" data-at-step="a2"><div class="at-posty-wrap"><div class="at-bubble-p"><span class="at-sender">Posty responde</span><p>¡Hola! Mañana abrimos de 9 a 19 h. ¡Te esperamos!</p></div></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
+      <div class="at-row-p at-anim at-from-right on" data-at-step="a2"><div class="at-posty-wrap"><div class="at-bubble-p"><span class="at-sender">Posty responde</span><p>sisi! mañana abrimos de 9 a 19. te esperamos!</p></div></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
       <div class="at-row-v at-anim at-from-left on" data-at-step="m3"><div class="at-bubble-v"><span class="at-sender">Mensaje directo</span><p>Quiero encargar 30 tortas para el cumpleaños de mi empresa, ¿me pasás precio?</p></div></div>
       <div class="at-typing-row" data-at-typing="t3" aria-hidden="true"><div class="at-typing"><span></span><span></span><span></span></div><img class="at-avatar" src="ai-avatar.png" alt="Posty" width="34" height="34"></div>
       <div class="at-esc on" data-at-step="esc" role="group" aria-label="Esto necesita tu criterio"><div class="at-esc-top"><div class="at-bell-disc" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5a5.5 5.5 0 0 0-5.5 5.5c0 4-1.3 5.4-2.2 6.2-.3.3-.1.8.3.8h14.8c.4 0 .6-.5.3-.8-.9-.8-2.2-2.2-2.2-6.2A5.5 5.5 0 0 0 12 3.5Z" fill="#fff"/><path d="M9.8 19a2.3 2.3 0 0 0 4.4 0" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg><span class="at-bell-dot"></span></div><p class="at-esc-title">Esto necesita tu criterio</p><span class="at-tag-para">PARA VOS</span></div><div class="at-quote"><span class="at-sender">Mensaje directo · recién</span><p>Quiero encargar 30 tortas para el cumpleaños de mi empresa, ¿me pasás precio?</p></div><div class="at-esc-actions"><a class="at-glass-btn at-esc-btn" href="/prueba">Ver y responder</a><p class="at-esc-note">Posty no lo respondió solo: te lo pasó a vos.</p></div></div>
@@ -6555,7 +6555,7 @@ function landingView(cfg) {
 /* ===== WEB-DISEÑO: cada sección muestra cómo funciona ===== */
 .wd-scrolly{height:auto;position:relative}
 .wd-sticky{position:relative;top:auto;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:36px 0 18px}
-.wd-on.wd-scrolly.wd-done.wd-hint{display:none}
+.wd-on .wd-scrolly.wd-done .wd-hint{display:none}
 .wd-wk-label{text-align:center;font-weight:800;letter-spacing:2.5px;font-size:13px;color:#2793C8;text-transform:uppercase}
 .wd-wk-title{text-align:center;font-size:clamp(26px,3.6vw,44px);font-weight:900;margin:8px 0 18px;color:#0A1E33}
 .wd-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:14px;max-width:1060px;margin:0 auto}
@@ -8521,7 +8521,7 @@ function landingView(cfg) {
     .ej2 .daychip{top:auto;bottom:10px}
     .ej2-foot{display:flex;align-items:center;gap:16px;padding:18px 6px 4px;flex-wrap:wrap}
     .ej2-cta{background:linear-gradient(135deg,rgba(62,166,219,.92),rgba(27,111,160,.9));color:#fff;font-weight:800;font-size:16.5px;padding:15px 28px;border-radius:999px;text-decoration:none;box-shadow:0 10px 24px rgba(39,147,200,.38)}
-    .ej2-foot p{font-size:13.5px;color:#7A8FA3;margin:0}
+    .ej2-foot p{font-size:13.5px;color:#7A8FA3;margin:0}.pz-ba-grid .pz-cell{background:none}.pz-ba-grid .pz-cell video{width:100%;height:100%;object-fit:cover;display:block}.pz-ba-grid .pz-car-track{display:flex;width:300%;height:100%;aspect-ratio:auto;background:none;border-radius:0;animation:pzCarX 7.5s ease-in-out infinite}.pz-ba-grid .pz-car-track img{flex:0 0 33.3334%;width:33.3334%;height:100%;aspect-ratio:auto;border-radius:0}@keyframes pzCarX{0%,26%{transform:translateX(0)}36%,60%{transform:translateX(-33.3334%)}70%,94%{transform:translateX(-66.6667%)}100%{transform:translateX(0)}}.pz-ba-grid .pz-fmt{position:absolute;top:6px;right:6px;width:17px;height:17px;color:#fff;filter:drop-shadow(0 1px 3px rgba(10,30,51,.5));z-index:2;line-height:0;font-style:normal}.pz-ba-grid .pz-fmt svg{width:100%;height:100%;display:block}
 .ej2-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.65);background:rgba(255,255,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#0A1E33;font-size:21px;font-weight:800;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 16px rgba(10,30,51,.18);padding:0}
 .ej2-prev{left:8px}
 .ej2-next{right:8px}
@@ -8768,7 +8768,7 @@ function landingView(cfg) {
         <div class="pz-drag-layer">
           <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="lp-rosehip-avatar.jpg" alt=""></span><span class="pz-ba-who"><b>rosehipfloral</b><small>Florería · Williamsburg, Brooklyn</small></span></div>
           <p class="pz-ba-bio">💐 Florería y diseño floral para eventos<br>📍 Williamsburg, Brooklyn</p>
-          <div class="pz-ba-grid pz-ba-grid-live"><img src="lp-rosehip-1.jpg" alt=""><img loading="lazy" src="lp-rosehip-2.jpg" alt=""><img loading="lazy" src="lp-rosehip-3.jpg" alt=""><img loading="lazy" src="lp-rosehip-4.jpg" alt=""><img loading="lazy" src="lp-rosehip-1.jpg" alt=""><img loading="lazy" src="lp-rosehip-2.jpg" alt=""><img loading="lazy" src="lp-rosehip-3.jpg" alt=""><img loading="lazy" src="lp-rosehip-4.jpg" alt=""><img loading="lazy" src="lp-rosehip-1.jpg" alt=""></div>
+          <div class="pz-ba-grid pz-ba-grid-live"><span class="pz-cell"><video src="lp-rosehip-video.mp4" autoplay muted loop playsinline></video><i class="pz-fmt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19M7 5l3 5M13.5 5l3 5"/></svg></i></span><img src="lp-rosehip-5.jpg" alt=""><span class="pz-cell"><span class="pz-car-track"><img src="lp-rosehip-c1.jpg" alt=""><img src="lp-rosehip-c2.jpg" alt=""><img src="lp-rosehip-c3.jpg" alt=""></span><i class="pz-fmt"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="2.5" width="14.5" height="14.5" rx="3.5" opacity=".55"/><rect x="2.5" y="7" width="14.5" height="14.5" rx="3.5"/></svg></i></span><img src="lp-rosehip-1.jpg" alt=""><img loading="lazy" src="lp-rosehip-6.jpg" alt=""><img loading="lazy" src="lp-rosehip-2.jpg" alt=""><img loading="lazy" src="lp-rosehip-7.jpg" alt=""><img loading="lazy" src="lp-rosehip-3.jpg" alt=""><img loading="lazy" src="lp-rosehip-4.jpg" alt=""></div>
           <p class="pz-ba-last pz-ba-last-on">🔥 Publicando esta semana</p>
         </div>
         <div class="pz-drag-layer pz-drag-hoy pz-ba-dead" aria-hidden="true">
