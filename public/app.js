@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1200';
+const PZ_BUILD = '20261105-v1201';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24860,7 +24860,26 @@ function pzPrefetchKick() {
   if (tab === 'oficina' || tab === 'negocio') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
   else if (tab === 'subir') { pzPaintSkeleton(tab); content = await subirView(); } // (LOTE TAB-SUBIR · 13/11) El tab Subir: subir tocando, Posty resuelve
   else if (tab === 'chat') { if (!(typeof pzIsGuest === 'function' && pzIsGuest())) { location.hash = '#/app/inicio'; return; } pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE TAB-SUBIR · 13/11) Sale el tab de Chat: la ruta queda SOLO para el invitado (su conversación de onboarding vive ahí, verificado) y como compat de deep-links; el cliente registrado vuelve a Inicio
-  else if (tab === 'inicio') { pzPaintSkeleton(tab); content = await inicioView(); } // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
+  else if (tab === 'inicio') { // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
+    // (LOTE INICIO-AL-INSTANTE) Con foto guardada de esta cuenta, la
+    // pantalla ESTÁ: se pinta el último estado conocido al instante y
+    // inicioView() corre invisible por detrás (al llegar, la foto se
+    // actualiza y pzInicioRepaint re-pinta solo si algo cambió). Sin
+    // foto (primera entrada de la sesión), el camino de siempre:
+    // esqueleto con la ruedita y espera de datos.
+    const pzSnapI = pzInicioSnapGet();
+    if (pzSnapI != null) {
+      content = pzSnapI;
+      const pzSeqI = mySeq;
+      inicioView().then((fresh) => {
+        try { pzInicioSnapSet(fresh); pzInicioRepaint(fresh, pzSnapI, pzSeqI); } catch (e) {}
+      }).catch(() => {});
+    } else {
+      pzPaintSkeleton(tab);
+      content = await inicioView();
+      pzInicioSnapSet(content);
+    }
+  }
   else if (tab === 'feed') { location.hash = '#/app/inicio'; return; } // (v846) La pestaña Feed salió: el feed ya vive en Hoy. #/app/feed redirige a Hoy.
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
@@ -30156,6 +30175,80 @@ function pzConserjeHoyHTML() {
       + '<small>' + esc(en ? 'Open now · 7:00–12:00 PM' : 'Abierta ahora · 19:00–00:00') + '</small></span>'
       + '<span class="pz-conserje-hoy-ir">' + esc(en ? 'Review →' : 'Revisar →') + '</span></a>';
   } catch (e) { return ''; }
+}
+/* ===== LOTE INICIO-AL-INSTANTE · 20/11 · cierre del caso Inicio del
+   arreglo de las 3 pantallas (v1199) =====
+   Residual del dueño (20/11 08:30, sobre v1199 vivo): «siempre que
+   clickeo en inicio me aparece cargando. deberia ser automatico, como
+   subir y ads...». En v1199 Inicio cambió solo el cargador (la ruedita
+   por los 3 puntitos): su vista siguió esperando TODOS sus datos en
+   cada entrada antes de pintar. Este lote le aplica el patrón que
+   v1199 ya le dio a la vuelta de Ads: el ÚLTIMO ESTADO CONOCIDO se
+   pinta AL INSTANTE y el refresco corre invisible por detrás.
+   - La foto es el HTML exacto que inicioView() rindió la última vez
+     en ESTA sesión, guardado en memoria (nada persiste entre cargas:
+     la primera entrada de cada sesión sigue siendo en frío, con su
+     esqueleto y la ruedita, como hoy).
+   - Aislamiento por cuenta (clase prohibida del 15/11 si se cruzara:
+     la app mostrando una realidad que no es la del que mira): la
+     clave es id de la cuenta + idioma + modo (dueño/visitante) +
+     pestaña del feed; una foto jamás se pinta para otra clave, y al
+     salir (doLogout) se borra todo.
+   - El refresco de fondo re-pinta SOLO si el HTML nuevo difiere del
+     pintado (sin cambios: cero parpadeo) y si seguimos en Inicio sin
+     capas abiertas (detalle .scf-pop, hoja de chat, lightbox): con
+     una capa abierta la foto nueva ya quedó guardada y la próxima
+     entrada la pinta fresca.
+   - Qué datos trae Inicio y su contenido NO cambian: solo CUÁNDO se
+     pinta. INICIO-STICKY y BARRA-VIVA quedan fuera, como se mandó. */
+const PZ_INICIO_SNAPS = new Map();
+function pzInicioSnapKey() {
+  try {
+    if (typeof ME === 'undefined' || !ME || !ME.id) return '';
+    const vis = (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) ? 'v' : 'd';
+    const ft = (typeof HF_TAB !== 'undefined' && HF_TAB) || 'posts';
+    return String(ME.id) + '|' + (ME.lang || '') + '|' + vis + '|' + ft;
+  } catch (e) { return ''; }
+}
+function pzInicioSnapGet() {
+  try {
+    const k = pzInicioSnapKey();
+    if (!k) return null;
+    const s = PZ_INICIO_SNAPS.get(k);
+    return (typeof s === 'string' && s) ? s : null;
+  } catch (e) { return null; }
+}
+function pzInicioSnapSet(html) {
+  try {
+    const k = pzInicioSnapKey();
+    if (!k || typeof html !== 'string' || !html) return;
+    if (!PZ_INICIO_SNAPS.has(k) && PZ_INICIO_SNAPS.size >= 6) PZ_INICIO_SNAPS.clear();
+    PZ_INICIO_SNAPS.set(k, html);
+  } catch (e) {}
+}
+function pzInicioSnapClear() { try { PZ_INICIO_SNAPS.clear(); } catch (e) {} }
+function pzInicioRepaint(freshHtml, paintedHtml, seq) {
+  try {
+    if (seq !== RENDER_SEQ) return; // otro render ya corrió: la foto nueva ya quedó guardada
+    const route = (location.hash || '').split('?')[0].split('/')[2] || 'inicio';
+    if (route !== 'inicio') return; // ya no estamos en Inicio
+    const view = document.getElementById('inicioView');
+    if (!view) return;
+    if (view.querySelector('.scf-pop')) return; // detalle abierto: no repintar debajo
+    if (document.body.classList.contains('mz-sheet-open')) return; // hoja de chat abierta
+    const lb = document.getElementById('lightbox');
+    if (lb && lb.style.display === 'flex') return; // visor abierto
+    if (freshHtml === paintedHtml) return; // nada cambió: cero parpadeo
+    view.outerHTML = freshHtml;
+    bindApp('inicio');
+    // Los fills idempotentes que render() re-dispara tras pintar
+    // (LOTE VELOCIDAD): la vista nueva los necesita igual que la de
+    // una pintura directa.
+    setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 0);
+    setTimeout(() => { try { pzFillRelacion(); } catch (e) {} }, 0);
+    setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 0);
+    setTimeout(() => { try { pzShellDatosHoy(); } catch (e) {} }, 0);
+  } catch (e) {}
 }
 async function inicioView() {
   try { await pzRevalidateIdentity(); } catch (e) {}
@@ -37828,6 +37921,7 @@ async function doLogout() {
   // hashchange: la vista de la app (con los datos del negocio) quedaba
   // pintada hasta la próxima navegación.
   try { ME = null; } catch (e) {}
+  try { pzInicioSnapClear(); } catch (e) {} // (LOTE INICIO-AL-INSTANTE) las fotos de Inicio son de esta cuenta: al salir, se van con ella
   try { PROFILE = null; } catch (e) {}
   try { await api.post('/api/auth/logout'); } catch (e) {}
   try { sessionStorage.removeItem('posta_return_to'); } catch (e) {}
