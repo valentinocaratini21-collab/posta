@@ -66,6 +66,12 @@ function ajustesView() {
   const rsPagoTx = (typeof ME !== 'undefined' && ME && ME.billing_provider === 'stripe') ? (ajEn ? 'Saved card' : 'Tarjeta guardada')
     : (typeof ME !== 'undefined' && ME && ME.billing_provider === 'mp') ? 'MercadoPago'
     : (ajEn ? 'No payment yet' : 'Sin pago todavía');
+  // (AJUSTES-TRES-BLOQUES) La fila fundida «Plan» lee plan + pago en una sola
+  // línea («Esencial · sin pago»): el pago va en su forma corta, como
+  // continuación de la frase. Misma fuente (ME.billing_provider), mismo dato.
+  const rsPagoShortTx = (typeof ME !== 'undefined' && ME && ME.billing_provider === 'stripe') ? (ajEn ? 'saved card' : 'tarjeta guardada')
+    : (typeof ME !== 'undefined' && ME && ME.billing_provider === 'mp') ? 'MercadoPago'
+    : (ajEn ? 'no payment' : 'sin pago');
   // --- Bloque Instagram (vive dentro de "🔌 Conexiones") ---
   // Conectado y sano (con @ y sin aviso de token): colapsa a la fila de estado
   // + el botón de actualizar lo que Posty sabe. Con cualquier problema (o sin conectar) vuelve
@@ -123,42 +129,28 @@ function ajustesView() {
       <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
     <div id="igMsg"></div>`;
-  return `<div class="page-head aj-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">${ajEn ? 'Billing, language and connections only. Your business is not edited here.' : 'Solo facturación, idioma y conexiones. Acá no se edita tu negocio.'}</p></div></div>
+  return `<div class="page-head aj-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div id="ajMenu"${ajInitSec ? ' hidden' : ''}>
-    <div class="insight chat-fix">
-      ${pzIc('chat', 18)}
-      <p><b>${ajEn ? 'Something Posty knows about you is wrong?' : '¿Algo de lo que Posty sabe de vos está mal?'}</b> ${ajEn ? 'What you sell, your tone, a promo or prices are not changed with a form: tell Posty in the chat and it fixes it.' : 'Qué vendés, tu tono, una promo o los precios no se cambian con un formulario: decíselo por el chat y Posty lo corrige.'}</p>
-    </div>
-    <button type="button" class="big-ghost" onclick="bbGo('#/app/chat')">${ajEn ? 'Fix it in the chat →' : 'Corregirlo en el chat →'}</button>
-    <div class="sec-head"><h2>${ajEn ? 'Billing' : 'Facturación'}</h2></div>
+    <button type="button" class="aj-chatline" onclick="bbGo('#/app/chat')">${ajEn ? 'Something Posty knows about you is wrong? Fix it in the chat →' : '¿Algo de tu negocio está mal? Corregilo en el chat →'}</button>
+    <div class="sec-head"><h2>${ajEn ? 'Your account' : 'Tu cuenta'}</h2></div>
     <div class="know">
-      <div class="row" data-ajnav="plan"><span class="k">${ajEn ? 'Plan' : 'Plan'}</span><span class="v" id="rsPlanVal">${esc(stPlanTx) || (ajEn ? 'Monthly' : 'Mensual')}</span><button type="button" class="linklike">${ajEn ? 'View' : 'Ver'}</button></div>
-      <div class="row" data-ajnav="plan"><span class="k">${ajEn ? 'Payment' : 'Pago'}</span><span class="v">${esc(rsPagoTx)}</span><button type="button" class="linklike">${ajEn ? 'Change' : 'Cambiar'}</button></div>
-      <div class="row" onclick="bbGo('#/app/ads')"><span class="k">${ajEn ? 'Balance' : 'Saldo'}</span><span class="v" id="rsSaldoVal">${ajEn ? 'To boost · loading…' : 'Para impulsar · cargando…'}</span><button type="button" class="linklike">${ajEn ? 'Top up' : 'Cargar'}</button></div>
+      <div class="row" data-ajnav="plan"><span class="k">${ajEn ? 'Plan' : 'Plan'}</span><span class="v"><span id="rsPlanVal">${esc(stPlanTx) || (ajEn ? 'Monthly' : 'Mensual')}</span> · ${esc(rsPagoShortTx)}</span><button type="button" class="linklike">${ajEn ? 'View' : 'Ver'}</button></div>
+      <div class="row" onclick="bbGo('#/app/ads')"><span class="k">${ajEn ? 'Boost balance' : 'Saldo para impulsar'}</span><span class="v" id="rsSaldoVal">${ajEn ? 'Loading…' : 'Cargando…'}</span><button type="button" class="aj-glass-btn">${ajEn ? 'Top up' : 'Cargar'}</button></div>
     </div>
-    <div class="sec-head"><h2>${ajEn ? 'Language' : 'Idioma'}</h2></div>
+    <div class="sec-head"><h2>${ajEn ? 'How Posty works' : 'Cómo trabaja Posty'}</h2></div>
     <div class="know">
-      <div class="row"><span class="k">${ajEn ? 'Language' : 'Idioma'}</span><span class="v" id="rsLangVal">${ajEn ? 'English' : 'Español'}</span><button type="button" class="linklike" id="rsLangBtn">${ajEn ? 'Change' : 'Cambiar'}</button></div>
+      <div class="row" data-ajnav="auto"><span class="k">${ajEn ? 'Autopilot' : 'Automático'}</span><span class="v" id="ajStAutoMenu"></span><span class="chev">›</span></div>
+      <div class="row" data-ajnav="notif"><span class="k">${ajEn ? 'Alerts' : 'Avisos'}</span><span class="v">${ajEn ? 'Before every post' : 'Antes de cada posteo'}</span><span class="st st-ok" id="rsAvisosChip">…</span><span class="chev">›</span></div>
     </div>
     <div class="sec-head"><h2>${ajEn ? 'Connections' : 'Conexiones'}</h2></div>
     <div class="know">
       <div class="row" data-ajnav="conex"><span class="k">Instagram</span><span class="v">${esc(p.ig_username ? '@' + p.ig_username : (ajEn ? 'Not connected' : 'Sin conectar'))}</span><span class="st ${p.ig_connected ? 'st-ok' : 'st-off'}">${p.ig_connected ? (ajEn ? 'Connected' : 'Conectado') : (ajEn ? 'Not connected' : 'Sin conectar')}</span><span class="chev">›</span></div>
       <div class="row" data-ajnav="conex"><span class="k">${ajEn ? 'Ads' : 'Publicidad'}</span><span class="v" id="rsAdsVal">${ajEn ? 'Loading…' : 'Cargando…'}</span><span class="st st-off" id="rsAdsChip">…</span><span class="chev">›</span></div>
-      <div class="row" data-ajnav="notif"><span class="k">${ajEn ? 'Alerts' : 'Avisos'}</span><span class="v">${ajEn ? 'Before every post' : 'Antes de cada posteo'}</span><span class="st st-ok" id="rsAvisosChip">…</span><span class="chev">›</span></div>
+      <div class="row"><span class="k">${ajEn ? 'Language' : 'Idioma'}</span><span class="v" id="rsLangVal">${ajEn ? 'English' : 'Español'}</span><button type="button" class="linklike" id="rsLangBtn">${ajEn ? 'Change' : 'Cambiar'}</button></div>
     </div>
-    <div class="sec-head"><h2>${ajEn ? 'More' : 'Más'}</h2></div>
-    <div class="know">
-      <div class="row" data-ajnav="auto"><span class="k">${ajEn ? 'Posty on autopilot' : 'Posty en automático'}</span><span class="v" id="ajStAutoMenu"></span><span class="chev">›</span></div>
-      <div class="row" data-ajnav="marca"><span class="k">${ajEn ? 'Your brand' : 'Tu marca'}</span><span class="v">${esc(stBrandTx)}</span><span class="chev">›</span></div>
-      <div class="row" data-ajnav="pagina"><span class="k">${ajEn ? 'Your page' : 'Tu página'}</span><span class="v">${esc(stPageTx) || (ajEn ? 'Your link in bio' : 'Tu link en la bio')}</span><span class="chev">›</span></div>
-      <div class="row" data-ajnav="contacto"><span class="k">${pzIc('help', 20)} ${ajEn ? 'Something not working? Contact us' : '¿Algo no funciona? Contactanos'}</span><span class="v">${ajEn ? 'We help you' : 'Te ayudamos'}</span><span class="chev">›</span></div>
-      <div class="row" data-ajnav="avanzado"><span class="k">${ajEn ? 'Advanced settings' : 'Configuración avanzada'}</span><span class="v">${ajEn ? 'Meta embed URL' : 'Dirección de embed de Meta'}</span><span class="chev">›</span></div>
-      <div class="row" onclick="bbGo('#/app/terminos')"><span class="k">${pzIc('shield', 20)} ${ajEn ? 'Terms and Conditions' : 'Términos y Condiciones'}</span><span class="v">${ajEn ? 'Version 1.0 · November 9, 2026' : 'Versión 1.0 · 9 de noviembre de 2026'}</span><span class="chev">›</span></div>
-    </div>
-    <div class="know" style="margin-top:14px">
-      <div class="row" id="btnLogoutAj"><span class="k" style="color:var(--red)">${ajEn ? 'Log out' : 'Salir'}</span><span class="chev">›</span></div>
-    </div>
+    <div class="aj-foot"><span data-ajnav="contacto">${ajEn ? 'Help' : 'Ayuda'}</span> · <span onclick="bbGo('#/app/terminos')">${ajEn ? 'Terms' : 'Términos'}</span> · <span data-ajnav="avanzado">${ajEn ? 'Advanced' : 'Avanzado'}</span></div>
+    <div class="aj-exit" id="btnLogoutAj">${ajEn ? 'Log out' : 'Salir'}</div>
   </div>
   <div id="ajDetail"${ajInitSec ? '' : ' hidden'}>
     <button type="button" class="ajback" id="ajBackBtn">‹ ${ajEn ? 'Settings' : 'Ajustes'}</button>
@@ -334,6 +326,10 @@ function ajustesView() {
     <div id="contactoOk" style="display:none;margin-top:12px" class="okmsg">${pzIc('checkCircle', 15)} ${ajEn ? 'Done, we got it. We will write to you soon.' : 'Listo, ya nos llegó. Te escribimos en breve.'}</div>
   </div></div>
   <details class="card int-advanced"${ajHid('avanzado')} id="ajsec-avanzado"${ajInitSec === 'avanzado' ? ' open' : ''}><summary>${pzIc('gear', 16)} Configuración avanzada</summary>
+    <div class="know" style="margin:12px 0">
+      <div class="row" data-ajnav="marca"><span class="k">${ajEn ? 'Your brand' : 'Tu marca'}</span><span class="v">${esc(stBrandTx)}</span><span class="chev">›</span></div>
+      <div class="row" data-ajnav="pagina"><span class="k">${ajEn ? 'Your page' : 'Tu página'}</span><span class="v">${esc(stPageTx) || (ajEn ? 'Your link in bio' : 'Tu link en la bio')}</span><span class="chev">›</span></div>
+    </div>
     <p class="hint" style="margin:12px 0">Solo si necesitás pegar la dirección de embed que Meta genera para tu Instagram. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>Instagram Embed URL</h4>
       <div class="field"><label>Instagram Embed URL</label>
@@ -726,7 +722,9 @@ function bindSettings() {
     try {
       const cfg = await api.get('/api/ads/config');
       const bal = Number((cfg && cfg.balance_cents) || 0) / 100;
-      el.textContent = (en ? 'To boost · $' : 'Para impulsar · $') + bal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      // (AJUSTES-TRES-BLOQUES) La fila ya se llama «Saldo para impulsar»:
+      // el valor es solo el monto, como en la forma aprobada.
+      el.textContent = '$' + bal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
       // (LOTE RECONEXION-ADS) La fila de Publicidad del menú de
       // Conexiones se llena con la misma respuesta: el @ que quedó
       // en la conexión publicitaria, o «Sin conectar».
@@ -744,7 +742,7 @@ function bindSettings() {
           rsAdsChip.className = 'st st-off';
         }
       }
-    } catch (e) { el.textContent = en ? 'To boost · —' : 'Para impulsar · —'; }
+    } catch (e) { el.textContent = '—'; }
   })();
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
