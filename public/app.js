@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1198';
+const PZ_BUILD = '20261105-v1199';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -2524,6 +2524,45 @@ function chunkFailHTML() {
 // navegar). El registro de disparadores vive en el arranque, junto a los
 // listeners globales de identidad.
 let PZ_VGUARD_LAST = 0;
+// (LOTE ADS-SE-TRABA-AL-VOLVER) La guarda ya no recarga en caliente
+// sobre cualquier pestaña: la recarga forzada al volver de segundo
+// plano aterrizaba sobre la pantalla en uso (Ads) y la dejaba trabada
+// esperando su cadena de datos. Ahora la recarga solo se ejecuta con
+// la pestaña Inicio al frente; en cualquier otra, la actualización
+// queda DIFERIDA (sessionStorage 'pz_vguard_pending', en silencio, sin
+// avisos) y se aplica cuando el usuario aterriza en Inicio (hook en
+// render: pzVersionGuardApplyPending) o en el próximo arranque, donde
+// la guarda corre de nuevo. La deferral NO consume la marca
+// una-vez-por-build ('pz_vguard_<build>' se escribe recién al
+// recargar): si el build vuelve a subir con una deferral pendiente,
+// el pendiente se pisa con el build más nuevo y la aplicación navega
+// una sola vez, al más nuevo. Si el cliente ya alcanzó el build
+// pendiente, el pendiente se descarta solo.
+function pzVGuardTab() {
+  try { return ((location.hash || '').split('?')[0].split('/')[2] || 'inicio'); } catch (e) { return 'inicio'; }
+}
+function pzVGuardReload(build) {
+  const u = new URL(location.href);
+  if (u.searchParams.get('fresh') === String(build)) return false; // ya llego con este sello
+  const key = 'pz_vguard_' + build;
+  try { if (sessionStorage.getItem(key)) return false; sessionStorage.setItem(key, String(Date.now())); } catch (e) {}
+  u.searchParams.set('fresh', String(build));
+  location.replace(u.toString());
+  return true;
+}
+function pzVersionGuardApplyPending() {
+  try {
+    let pend = null;
+    try { pend = sessionStorage.getItem('pz_vguard_pending'); } catch (e) {}
+    if (!pend) return;
+    if (pzVGuardTab() !== 'inicio') return;
+    const pm = /-v(\d+)$/.exec(String(pend));
+    const cli = /-v(\d+)$/.exec(PZ_BUILD);
+    if (pm && cli && Number(pm[1]) <= Number(cli[1])) { try { sessionStorage.removeItem('pz_vguard_pending'); } catch (e) {} return; } // ya llego solo
+    if (!pzVGuardReload(pend)) { try { sessionStorage.removeItem('pz_vguard_pending'); } catch (e) {} return; } // sello ya usado o marca puesta: no insistir
+    try { sessionStorage.removeItem('pz_vguard_pending'); } catch (e) {}
+  } catch (e) {}
+}
 async function pzVersionGuard() {
   try {
     const now = Date.now();
@@ -2536,13 +2575,20 @@ async function pzVersionGuard() {
     const srv = /-v(\d+)$/.exec(String(d.build));
     const cli = /-v(\d+)$/.exec(PZ_BUILD);
     if (!srv || !cli) return;
-    if (Number(srv[1]) <= Number(cli[1])) return; // igual o atras: nada que curar
-    const u = new URL(location.href);
-    if (u.searchParams.get('fresh') === String(d.build)) return; // ya llego con este sello
-    const key = 'pz_vguard_' + d.build;
-    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, String(now)); } catch (e) {}
-    u.searchParams.set('fresh', String(d.build));
-    location.replace(u.toString());
+    if (Number(srv[1]) <= Number(cli[1])) {
+      // Igual o atras: nada que curar; un pendiente viejo ya no aplica.
+      try { const p = sessionStorage.getItem('pz_vguard_pending'); const pm = p && /-v(\d+)$/.exec(String(p)); if (pm && Number(pm[1]) <= Number(cli[1])) sessionStorage.removeItem('pz_vguard_pending'); } catch (e) {}
+      return;
+    }
+    if (pzVGuardTab() !== 'inicio') {
+      // (LOTE ADS-SE-TRABA-AL-VOLVER) Fuera de Inicio no se recarga en
+      // caliente: queda diferida, en silencio, pisando el pendiente
+      // anterior si el build volvio a subir.
+      try { sessionStorage.setItem('pz_vguard_pending', String(d.build)); } catch (e) {}
+      return;
+    }
+    try { sessionStorage.removeItem('pz_vguard_pending'); } catch (e) {}
+    pzVGuardReload(String(d.build));
   } catch (e) {}
 }
 let ME = null;
@@ -21410,6 +21456,21 @@ async function enhanceAdsBoost() {
 let pzAdsBoosts = [];
 let pzAdsPickDesdeAds = false;
 
+// (LOTE ADS-SE-TRABA-AL-VOLVER) Timeout propio de la vista de Ads:
+// sus tres pedidos (billetera, elegibles, historial) corren EN
+// PARALELO dentro de esta ventana única. 8 s: holgado para los tres
+// en una red móvil lenta, y corto frente a los 30 s por pedido de
+// antes — la cadena en serie llegaba a ~90 s con la pantalla anterior
+// congelada, sin señal y sin respuesta al tacto.
+const PZ_ADS_TIMEOUT = 8000;
+async function pzAdsCargarDatos() {
+  const rs = await Promise.all([
+    pzBoostLoad({ timeout: PZ_ADS_TIMEOUT }).catch(() => null),
+    api.req('GET', '/api/ads/boosts', null, { timeout: PZ_ADS_TIMEOUT }).catch(() => null),
+  ]);
+  return rs[1];
+}
+
 async function adsView() {
   // (LOTE TAB-ADS · 11/11 · decisión Valentino «quiero que agreguemos el
   // tab de ads en la app»: el tab Ads es pantalla propia — billetera +
@@ -21417,11 +21478,26 @@ async function adsView() {
   // historial real. La vista vieja del chunk analisis (anaAdsTabHTML)
   // queda sin llamadores: la billetera y el impulso viven en pzBoost*.
   // Sin chunk: la pantalla se rinde directo, sin esperar una descarga.)
-  let s = null;
-  try { s = await pzBoostLoad(); } catch (e) { s = null; }
-  let boosts = null;
-  try { boosts = await api.get('/api/ads/boosts'); } catch (e) { boosts = null; }
-  pzAdsBoosts = (boosts && boosts.ok && Array.isArray(boosts.boosts)) ? boosts.boosts : [];
+  // (LOTE ADS-SE-TRABA-AL-VOLVER) Pintar primero, siempre: la rama de
+  // render ya pintó el esqueleto antes de llamar acá. Con estado ya
+  // cargado en esta sesión (billetera presente), la vista devuelve AL
+  // INSTANTE el último estado conocido — la misma inmediatez que Subir
+  // — y refresca en segundo plano: al llegar los datos re-pinta por
+  // pzAdsPintar si el tab sigue abierto (con un reintento corto por si
+  // el refresco gana la carrera a la pintura de render). Sin estado
+  // (primera entrada), se espera solo la ventana paralela de datos.
+  const warm = !!(pzBoostState && pzBoostState.billetera);
+  if (warm) {
+    pzAdsCargarDatos().then((boosts) => {
+      if (boosts && boosts.ok && Array.isArray(boosts.boosts)) pzAdsBoosts = boosts.boosts;
+      try { pzAdsPintar(); } catch (e) {}
+      setTimeout(() => { try { pzAdsPintar(); } catch (e) {} }, 400);
+    }).catch(() => {});
+  } else {
+    let boosts = null;
+    try { boosts = await pzAdsCargarDatos(); } catch (e) { boosts = null; }
+    pzAdsBoosts = (boosts && boosts.ok && Array.isArray(boosts.boosts)) ? boosts.boosts : [];
+  }
   return `<div class="pz-ads"><div id="pzAdsRoot">${pzAdsHTML()}</div></div>`;
 }
 
@@ -22584,10 +22660,21 @@ function pzBoostGate() {
   return { cerrado: false, motivo: '' };
 }
 
-async function pzBoostLoad() {
+async function pzBoostLoad(opts) {
+  // (LOTE ADS-SE-TRABA-AL-VOLVER) Billetera y elegibles son
+  // independientes: corren EN PARALELO (antes en serie, y la vista de
+  // Ads sumaba los dos viajes a su cadena de espera). Sin opts, el
+  // comportamiento de siempre para todos los demás llamadores
+  // (api.get, timeout por defecto de 30 s); la vista de Ads pasa su
+  // timeout corto propio y los pedidos de la pantalla comparten una
+  // sola ventana. El estado que se arma abajo no cambia en nada.
+  const to = (opts && Number(opts.timeout) > 0) ? Number(opts.timeout) : 0;
+  const getAds = (u) => to ? api.req('GET', u, null, { timeout: to }) : api.get(u);
   let bil = null, elig = null;
-  try { bil = await api.get('/api/ads/billetera'); } catch (e) { bil = null; }
-  try { elig = await api.get('/api/ads/billetera/elegibles?incluir_impulsados=1'); } catch (e) { elig = null; }
+  [bil, elig] = await Promise.all([
+    getAds('/api/ads/billetera').catch(() => null),
+    getAds('/api/ads/billetera/elegibles?incluir_impulsados=1').catch(() => null),
+  ]);
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   s.billetera = (bil && bil.ok) ? bil : { balance_cents: 0, currency: 'USD', montos_usd: [20, 50, 100], billing_provider: null };
   s.elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles.map((e) => pzBoostNormPost(e)).filter(Boolean) : [];
@@ -24338,11 +24425,15 @@ let RENDER_SEQ = 0;
 // clavado.
 function pzSkeletonHTML(tab) {
   // (LOTE CARGA-PUNTITOS · decisión Valentino 2/11: solo 3 puntitos, nunca
-  // pantalla blanca) La pintura intermedia entre rutas es solo esto: 3
-  // puntitos animados sobre el degradado de la app, sin textos, sin
-  // ilustraciones, sin botones. No agrega espera: se pinta al entrar a la
-  // ruta y la pintura final la reemplaza.
-  return '<div class="pz-load" aria-hidden="true"><span class="pz-dot pz-dot-1"></span><span class="pz-dot pz-dot-2"></span><span class="pz-dot pz-dot-3"></span></div>';
+  // pantalla blanca) La pintura intermedia entre rutas era solo esto: 3
+  // puntitos animados sobre el degradado de la app.
+  // (LOTE ADS-SE-TRABA-AL-VOLVER · estándar de carga del dueño 20/11, que
+  // reemplaza a la decisión del 2/11: los 3 puntitos mueren como cargador
+  // genérico) La pintura intermedia es la ruedita en el azul de marca
+  // #2793C8 con su línea de estado, sobre el mismo degradado, sin
+  // botones. No agrega espera: se pinta al entrar a la ruta y la pintura
+  // final la reemplaza. Ninguna pantalla muda.
+  return '<div class="pz-load" aria-hidden="true"><span class="pz-spin"></span><span class="pz-load-txt">' + esc(gzT('Cargando…', 'Loading…')) + '</span></div>';
 }
 function pzPaintSkeleton(tab) {
   // Solo con sesión conocida (ME): sin sesión la ruta rebota a login y el
@@ -24353,6 +24444,13 @@ function pzPaintSkeleton(tab) {
     const root = document.getElementById('app');
     if (!root) return;
     root.innerHTML = appShell(tab, pzSkeletonHTML(tab));
+    // (LOTE ADS-SE-TRABA-AL-VOLVER) El splash de arranque (index.html)
+    // se queda hasta pintar la app para que nunca se vea la landing que
+    // vive debajo en el HTML servido; apenas el shell de la app está
+    // pintado en #app, esa landing ya no existe en el DOM y el splash
+    // puede salir: la espera que sigue se ve en el esqueleto, no en el
+    // splash. En navegaciones internas el splash ya no está: no-op.
+    bootSplashOff();
   } catch (e) {}
 }
 let PZ_PREFETCHED = false;
@@ -24688,6 +24786,11 @@ function pzPrefetchKick() {
   // sigue como vista sin tab propio. El chat sigue vivo
   // en #/app/chat como escape hatch para retoques puntuales.
   let tab = tabRaw || 'inicio';
+  // (LOTE ADS-SE-TRABA-AL-VOLVER) Si la guarda de versión difirió una
+  // actualización por estar fuera de Inicio, aterrizar en Inicio la
+  // aplica (recarga con sello, una sola vez por build). En cualquier
+  // otra pestaña la función no hace nada.
+  if (tab === 'inicio') { try { pzVersionGuardApplyPending(); } catch (e) {} }
   // (PORT MOCK v24) Estado de oficina disponible para la tabbar por agente (cacheado; sin refetch si ya está).
   try { await bbLoadEstado(false); } catch (e) {}
   let content = '';
@@ -24708,7 +24811,7 @@ function pzPrefetchKick() {
   else if (tab === 'onboarding') { location.hash = '#/app/inicio'; return; } // (ONBOARDING-SIMPLE) links viejos aterrizan en el producto
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
-  else if (tab === 'ads') { content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web)
+  else if (tab === 'ads') { pzPaintSkeleton(tab); content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web) · (LOTE ADS-SE-TRABA-AL-VOLVER) Ads pinta su esqueleto como todas: era la única pestaña principal cuyo primer pintado esperaba la cadena entera de datos — la pantalla anterior quedaba congelada hasta ~90 s.
   else if (tab === 'admin') { pzPaintSkeleton(tab); let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
   else if (tab === 'conserje') { // 🧑‍💼 (LOTE PUERTA-CONSERJE) La casa del Conserje es la consola /conserje (la navy del mock v1): la ruta sale de la app hacia la consola. El servidor siembra el token desde la sesión de la casa — un toque, sin tipear nada; sin esa sesión, la consola abre su propio gate. El panel viejo (chunk-conserje) deja de ser la casa; no se borra en este lote.
     try { location.replace('/conserje'); } catch (e) {}

@@ -4207,13 +4207,15 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .drawer-link:active{transform:scale(.97);opacity:.8}
 .bb-btn:active{transform:scale(.97)}
 /* LOTE CARGA-PUNTITOS: entre rutas, solo 3 puntitos sobre el degradado (nunca pantalla blanca) */
-.pz-load{margin:-6px -14px 0;min-height:62dvh;display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
-.pz-dot{width:14px;height:14px;border-radius:50%;flex:none;animation:pz-dot-bounce 1.2s ease-in-out infinite}
-.pz-dot-1{background:#2793C8}
-.pz-dot-2{background:#FEC14D;animation-delay:.15s}
-.pz-dot-3{background:#0A1E33;animation-delay:.3s}
-@keyframes pz-dot-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-@media (prefers-reduced-motion: reduce){.pz-dot{animation:none}}
+/* (LOTE ADS-SE-TRABA-AL-VOLVER · estándar de carga del dueño 20/11: los
+   3 puntitos mueren como cargador genérico — la espera visible es la
+   ruedita en el azul de marca #2793C8 con su línea de estado, sobre el
+   mismo degradado. Ninguna pantalla muda.) */
+.pz-load{margin:-6px -14px 0;min-height:62dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%)}
+.pz-spin{width:34px;height:34px;border-radius:50%;flex:none;border:3.5px solid rgba(39,147,200,.22);border-top-color:#2793C8;animation:pz-spin-rot .8s linear infinite}
+.pz-load-txt{font-size:14px;font-weight:700;color:#47617A;letter-spacing:.01em}
+@keyframes pz-spin-rot{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.pz-spin{animation-duration:2.4s}}
 
 /* ---------- iconos-final (v475): picker de chips dibujados ---------- */
 .pz-pick{display:flex;flex-wrap:wrap;gap:8px}

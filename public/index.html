@@ -81,7 +81,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Gochi+Hand&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261304">
+<link rel="stylesheet" href="/styles.css?v=20261305">
 <link rel="stylesheet" href="/gj.css?v=6">
 <script type="application/ld+json">
 {
@@ -356,14 +356,23 @@
     </div>
   </div></div></div>
 <div id="posty-boot" aria-hidden="true">
-  <span class="pz-dot pz-dot-1"></span><span class="pz-dot pz-dot-2"></span><span class="pz-dot pz-dot-3"></span>
+  <span class="pz-boot-spin"></span><span class="pz-boot-txt">Cargando…</span>
 </div>
 <style>
-#posty-boot{position:fixed;inset:0;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%);display:flex;align-items:center;justify-content:center;gap:12px;z-index:9999;pointer-events:none}
+/* (LOTE ADS-SE-TRABA-AL-VOLVER · estándar de carga del dueño 20/11) El
+   splash de arranque deja los 3 puntitos: la espera de arranque es la
+   ruedita en el azul de marca #2793C8 con su línea de estado, sobre el
+   mismo degradado. CSS propio del bloque: tiene que pintar antes que
+   cualquier otra hoja. */
+#posty-boot{position:fixed;inset:0;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;pointer-events:none}
+.pz-boot-spin{width:34px;height:34px;border-radius:50%;flex:none;border:3.5px solid rgba(39,147,200,.22);border-top-color:#2793C8;animation:pz-boot-rot .8s linear infinite}
+.pz-boot-txt{font-family:Inter,system-ui,-apple-system,sans-serif;font-size:14px;font-weight:700;color:#47617A;letter-spacing:.01em}
+@keyframes pz-boot-rot{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.pz-boot-spin{animation-duration:2.4s}}
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=833"></script>
+<script src="/app.js?v=834"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
