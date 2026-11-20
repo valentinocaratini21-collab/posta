@@ -6562,6 +6562,19 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .pz-vp-mat{margin-top:10px}
 .pz-subir .pz-vp-mat-btns{display:inline-flex;gap:12px;margin-left:10px}
 .pz-subir .pz-vp-link{background:none;border:none;padding:0;font-family:inherit;font-size:12.5px;font-weight:800;color:#1E82BE;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+/* (LOTE SUBIR-DESBORDE · 20/11) La foto de «Tu material» vive en su
+   tarjeta: el <img class="big"> de .pz-vp-mat no tenía NINGUNA regla
+   de tamaño (el bloque de v1197 estiló título, tarjeta y botones,
+   pero no la imagen) y se renderizaba a tamaño natural — 1408px en
+   la foto del dueño. Su min-content subía por #pzVpMaterial hasta
+   .pz-subir, ítem flex de .bb-main con min-width:auto, y la vista
+   entera se inflaba hasta su max-width (560px): todas las tarjetas
+   se salían por la derecha y lo centrado (el «+», el texto de la
+   zona) se centraba sobre la caja inflada. La imagen llena la
+   tarjeta conservando su proporción entera, y la vista gana piso
+   de ancho cero como ítem flex: ningún contenido futuro la infla. */
+.pz-subir .pz-vp-mat img.big{display:block;width:100%;height:auto;border-radius:14px}
+.pz-subir{min-width:0}
 
 /* ---------- Tira de voz bajo cada posteo ---------- */
 .pz-voz{margin-top:12px;border-top:1px solid #EFF3F6;padding-top:10px}
