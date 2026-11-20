@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1206';
+const PZ_BUILD = '20261105-v1207';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -8611,11 +8611,11 @@ function landingView(cfg) {
     <div class="eqv-scene">
       <aside class="eqv-panel eqv-panel-v">
         <div class="eqv-panel-head"><span class="eqv-pname">VALENTINO</span><span class="eqv-chip eqv-chip-y">EL CRITERIO</span></div>
-        <div class=\"eqv-who\"><p class=\"eqv-who-name\">Valentino Caratini · Founder de Posty</p><p class=\"eqv-who-line\">Títulos en International Business y en Management · Máster en Project Management</p></div>
+        <div class=\"eqv-who\"><p class=\"eqv-who-name\">Valentino Caratini · Tu community manager</p><p class=\"eqv-who-line\">Títulos en International Business y en Management · Máster en Project Management</p></div>
         <ul class="eqv-tasks">
           <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></span>Estudia tu negocio</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>Mira cada posteo antes de que salga</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>Arma la estrategia de tu semana</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>Arma la estrategia de tu semana</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>Arma tus posteos, uno por uno</li>
         </ul>
         <p class="eqv-stat">Posteos revisados antes de salir: <b>100%</b></p>
       </aside>
@@ -8631,11 +8631,11 @@ function landingView(cfg) {
       </div>
       <aside class="eqv-panel eqv-panel-p">
         <div class="eqv-panel-head"><span class="eqv-pname">POSTY</span><span class="eqv-chip eqv-chip-s">LA CONSTANCIA</span></div>
-        <div class=\"eqv-who\"><p class=\"eqv-who-name\">Posty · Tu community manager</p><p class=\"eqv-who-line\">Un agente de IA experto en community management: hace los posteos y los videos de tu negocio, todos los días</p></div>
+        <div class=\"eqv-who\"><p class=\"eqv-who-name\">Posty · La tecnología</p><p class=\"eqv-who-line\">La tecnología que creé yo, para que tengas mejores resultados y constancia todos los días.</p></div>
         <ul class="eqv-tasks">
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 2.8V6.5M16 2.8V6.5"/></svg></span>Postea todos los días</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.3a8.3 8.3 0 0 1-8.3 8.3c-1.4 0-2.8-.35-4-1L3.5 20l1.5-4.6a8.3 8.3 0 1 1 15.5-4.1Z"/></svg></span>Responde tus comentarios</li>
-          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10v4"/></svg></span>Convierte tus audios en cambios</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 2.8V6.5M16 2.8V6.5"/></svg></span>Publica tus posteos solo, todos los días</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.3a8.3 8.3 0 0 1-8.3 8.3c-1.4 0-2.8-.35-4-1L3.5 20l1.5-4.6a8.3 8.3 0 1 1 15.5-4.1Z"/></svg></span>Impulsa tus posteos con Ads, en automático</li>
+          <li><span class="eqv-pic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10v4"/></svg></span>Mejora tus imágenes y videos</li>
         </ul>
         <p class="eqv-stat">Días posteando esta semana: <b>7/7</b></p>
       </aside>
