@@ -4074,7 +4074,7 @@ function lpDisenoInit() {
      final poblado, sin animar. */
   var pvStory = q('#como-funciona .pv-story');
   if (pvStory) {
-    var PV_CAPTION = 'Berry Mille Crepe: capas finitas, frutos rojos y esa crema que la hace famosa. Recién hecha, como todos los días.';
+    var PV_CAPTION = 'Matcha Latte: matcha de ceremonia de Kioto, batido al momento. El de todos los días.';
     var pvLike = q('.pv-like-n', pvStory), pvCap = q('.pv-cap-text', pvStory),
         pvC1 = q('.pv-cmt-1', pvStory), pvC2 = q('.pv-cmt-2', pvStory),
         pvBody = q('.pv-live-body', pvStory), pvTimers = [];
@@ -4097,7 +4097,7 @@ function lpDisenoInit() {
     function pvSetLikes(n) { if (!pvLike) return; pvLike.textContent = n; pvLike.classList.remove('pop'); void pvLike.offsetWidth; pvLike.classList.add('pop'); }
     function pvFinal() {
       pvTimers.forEach(clearTimeout); pvTimers = [];
-      if (pvLike) pvLike.textContent = '236';
+      if (pvLike) pvLike.textContent = '214';
       if (pvCap) pvCap.textContent = PV_CAPTION;
       if (pvC1) pvC1.classList.add('in');
       if (pvC2) pvC2.classList.add('in');
@@ -4117,7 +4117,7 @@ function lpDisenoInit() {
       pvTimers.push(typeTimer);
       pvAt(1200, function () { pvSetLikes(47); pvHearts(); });
       pvAt(2700, function () { pvSetLikes(128); pvHearts(); });
-      pvAt(4200, function () { pvSetLikes(236); pvHearts(); });
+      pvAt(4200, function () { pvSetLikes(214); pvHearts(); });
       pvAt(2400, function () { if (pvC1) pvC1.classList.add('in'); });
       pvAt(4000, function () { if (pvC2) pvC2.classList.add('in'); });
       pvAt(11500, pvCycle);
@@ -8630,7 +8630,7 @@ function landingView(cfg) {
         <div class="pv-col">
           <div class="pv-panel">
             <div class="pv-head"><span class="pv-num">1</span><div class="pv-title">Tu foto, tal cual es</div></div>
-            <div class="pv-solo"><img class="pv-solo-img" loading="lazy" src="lp-tomoko-berry.jpg" alt="Berry Mille Crepe, la foto real de Tomoko"></div>
+            <div class="pv-solo"><img class="pv-solo-img" loading="lazy" src="lp-nipponcha-foto.jpg" alt="Matcha Latte, la foto real de Nippon Cha"></div>
           </div>
           <p class="pv-cap">Nos mostrás tu Instagram y tu web.</p>
         </div>
@@ -8640,7 +8640,7 @@ function landingView(cfg) {
             <div class="pv-piece">
               <svg class="pv-sp pv-sp1" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l2.4 9.6L24 12l-9.6 2.4L12 24l-2.4-9.6L0 12l9.6-2.4z"/></svg>
               <svg class="pv-sp pv-sp2" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l2.4 9.6L24 12l-9.6 2.4L12 24l-2.4-9.6L0 12l9.6-2.4z"/></svg>
-              <img loading="lazy" src="lp-pieza-berry.jpg" alt="La misma foto convertida en posteo diseñado: Berry Mille Crepe">
+              <img loading="lazy" src="lp-pieza-matcha.jpg" alt="La misma foto convertida en posteo diseñado: Matcha Latte">
             </div>
           </div>
           <p class="pv-cap">Armamos el posteo con tu producto real.</p>
@@ -8649,20 +8649,20 @@ function landingView(cfg) {
           <div class="pv-panel">
             <div class="pv-head"><span class="pv-num">3</span><div class="pv-title">Y sale publicado</div></div>
             <div class="pv-live">
-              <div class="pv-ig-head"><img src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko"><b>patisserietomoko</b><span class="pv-loc">· Nueva York</span><span class="pv-dots">···</span></div>
+              <div class="pv-ig-head"><img src="lp-nipponcha-avatar.jpg" alt="Nippon Cha"><b>nipponcha</b><span class="pv-loc">· Brooklyn</span><span class="pv-dots">···</span></div>
               <div class="pv-live-img">
-                <img loading="lazy" src="lp-pieza-berry.jpg" alt="El posteo de la Berry Mille Crepe publicado en el perfil">
+                <img loading="lazy" src="lp-pieza-matcha.jpg" alt="El posteo del Matcha Latte publicado en el perfil">
                 <span class="pv-chip-pub"><span class="pv-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Publicado · 19:00</span>
               </div>
               <div class="pv-live-body">
                 <div class="pv-live-actions">
                   <svg class="pv-heart-ic" viewBox="0 0 24 24" fill="#ED4956"><path d="M12 20.7C6.4 17 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.3C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7.1-9 10.8z"/></svg>
-                  <span class="pv-like-n">12</span><span class="pv-mut">Me gusta</span>
+                  <span class="pv-like-n">214</span><span class="pv-mut">Me gusta</span>
                 </div>
-                <p class="pv-caption"><b>patisserietomoko</b> <span class="pv-cap-text">Berry Mille Crepe: capas finitas, frutos rojos y esa crema que la hace famosa. Recién hecha, como todos los días.</span></p>
+                <p class="pv-caption"><b>nipponcha</b> <span class="pv-cap-text">Matcha Latte: matcha de ceremonia de Kioto, batido al momento. El de todos los días.</span></p>
                 <div class="pv-comments">
-                  <div class="pv-cmt pv-cmt-1"><span class="pv-av" style="background:#C96F4A">S</span><p><b>sofia.m</b> Se ve increíble. ¿Precio?</p></div>
-                  <div class="pv-cmt pv-cmt-2"><span class="pv-av" style="background:#5B7FA6">D</span><p><b>diego.r</b> Mañana paso a buscar una</p></div>
+                  <div class="pv-cmt pv-cmt-1"><span class="pv-av" style="background:#C66E50">C</span><p><b>cami.t</b> Se ve increíble. ¿Tienen de hojicha?</p></div>
+                  <div class="pv-cmt pv-cmt-2"><span class="pv-av" style="background:#60748A">A</span><p><b>agus.p</b> Mañana paso por uno</p></div>
                 </div>
               </div>
             </div>

@@ -419,7 +419,7 @@
         <div class="pv-col">
           <div class="pv-panel">
             <div class="pv-head"><span class="pv-num">1</span><div class="pv-title">Your photo, just as it is</div></div>
-            <div class="pv-solo"><img class="pv-solo-img" loading="lazy" src="lp-tomoko-berry.jpg" alt="Berry Mille Crepe, Tomoko's real photo"></div>
+            <div class="pv-solo"><img class="pv-solo-img" loading="lazy" src="lp-nipponcha-foto.jpg" alt="Matcha Latte, Nippon Cha's real photo"></div>
           </div>
           <p class="pv-cap">You show us your Instagram and your website.</p>
         </div>
@@ -429,7 +429,7 @@
             <div class="pv-piece">
               <svg class="pv-sp pv-sp1" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l2.4 9.6L24 12l-9.6 2.4L12 24l-2.4-9.6L0 12l9.6-2.4z"/></svg>
               <svg class="pv-sp pv-sp2" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l2.4 9.6L24 12l-9.6 2.4L12 24l-2.4-9.6L0 12l9.6-2.4z"/></svg>
-              <img loading="lazy" src="lp-pieza-berry.jpg" alt="The same photo turned into a designed post: Berry Mille Crepe">
+              <img loading="lazy" src="lp-pieza-matcha.jpg" alt="The same photo turned into a designed post: Matcha Latte">
             </div>
           </div>
           <p class="pv-cap">We build the post with your real product.</p>
@@ -438,20 +438,20 @@
           <div class="pv-panel">
             <div class="pv-head"><span class="pv-num">3</span><div class="pv-title">And it goes out, published</div></div>
             <div class="pv-live">
-              <div class="pv-ig-head"><img src="lp-tomoko-avatar.jpg" alt="Patisserie Tomoko"><b>patisserietomoko</b><span class="pv-loc">· New York</span><span class="pv-dots">···</span></div>
+              <div class="pv-ig-head"><img src="lp-nipponcha-avatar.jpg" alt="Nippon Cha"><b>nipponcha</b><span class="pv-loc">· Brooklyn</span><span class="pv-dots">···</span></div>
               <div class="pv-live-img">
-                <img loading="lazy" src="lp-pieza-berry.jpg" alt="The Berry Mille Crepe post published on the profile">
+                <img loading="lazy" src="lp-pieza-matcha.jpg" alt="The Matcha Latte post published on the profile">
                 <span class="pv-chip-pub"><span class="pv-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posted · 7:00 PM</span>
               </div>
               <div class="pv-live-body">
                 <div class="pv-live-actions">
                   <svg class="pv-heart-ic" viewBox="0 0 24 24" fill="#ED4956"><path d="M12 20.7C6.4 17 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.3C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7.1-9 10.8z"/></svg>
-                  <span class="pv-like-n">12</span><span class="pv-mut">Likes</span>
+                  <span class="pv-like-n">214</span><span class="pv-mut">Likes</span>
                 </div>
-                <p class="pv-caption"><b>patisserietomoko</b> <span class="pv-cap-text">Berry Mille Crepe: thin little layers, red berries and that cream that made it famous. Freshly made, like every day.</span></p>
+                <p class="pv-caption"><b>nipponcha</b> <span class="pv-cap-text">Matcha Latte: ceremonial matcha from Kyoto, whisked fresh to order. The everyday one.</span></p>
                 <div class="pv-comments">
-                  <div class="pv-cmt pv-cmt-1"><span class="pv-av" style="background:#C96F4A">S</span><p><b>sofia.m</b> That looks amazing. What's the price?</p></div>
-                  <div class="pv-cmt pv-cmt-2"><span class="pv-av" style="background:#5B7FA6">D</span><p><b>diego.r</b> I'll stop by tomorrow to pick one up</p></div>
+                  <div class="pv-cmt pv-cmt-1"><span class="pv-av" style="background:#C66E50">C</span><p><b>cami.t</b> That looks amazing. Do you have hojicha?</p></div>
+                  <div class="pv-cmt pv-cmt-2"><span class="pv-av" style="background:#60748A">A</span><p><b>agus.p</b> I'll stop by tomorrow for one</p></div>
                 </div>
               </div>
             </div>
@@ -4644,7 +4644,7 @@ function switchPlansCountry(c) {
      final poblado, sin animar. */
   var pvStory = q('#como-funciona .pv-story');
   if (pvStory) {
-    var PV_CAPTION = 'Berry Mille Crepe: thin little layers, red berries and that cream that made it famous. Freshly made, like every day.';
+    var PV_CAPTION = 'Matcha Latte: ceremonial matcha from Kyoto, whisked fresh to order. The everyday one.';
     var pvLike = q('.pv-like-n', pvStory), pvCap = q('.pv-cap-text', pvStory),
         pvC1 = q('.pv-cmt-1', pvStory), pvC2 = q('.pv-cmt-2', pvStory),
         pvBody = q('.pv-live-body', pvStory), pvTimers = [];
@@ -4667,7 +4667,7 @@ function switchPlansCountry(c) {
     function pvSetLikes(n) { if (!pvLike) return; pvLike.textContent = n; pvLike.classList.remove('pop'); void pvLike.offsetWidth; pvLike.classList.add('pop'); }
     function pvFinal() {
       pvTimers.forEach(clearTimeout); pvTimers = [];
-      if (pvLike) pvLike.textContent = '236';
+      if (pvLike) pvLike.textContent = '214';
       if (pvCap) pvCap.textContent = PV_CAPTION;
       if (pvC1) pvC1.classList.add('in');
       if (pvC2) pvC2.classList.add('in');
@@ -4687,7 +4687,7 @@ function switchPlansCountry(c) {
       pvTimers.push(typeTimer);
       pvAt(1200, function () { pvSetLikes(47); pvHearts(); });
       pvAt(2700, function () { pvSetLikes(128); pvHearts(); });
-      pvAt(4200, function () { pvSetLikes(236); pvHearts(); });
+      pvAt(4200, function () { pvSetLikes(214); pvHearts(); });
       pvAt(2400, function () { if (pvC1) pvC1.classList.add('in'); });
       pvAt(4000, function () { if (pvC2) pvC2.classList.add('in'); });
       pvAt(11500, pvCycle);
