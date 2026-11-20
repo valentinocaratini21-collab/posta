@@ -357,6 +357,21 @@
   </div></div></div>
 <div id="posty-boot" aria-hidden="true">
   <span class="pz-boot-spin"></span><span class="pz-boot-txt">Cargando…</span>
+  <div class="pzsp-stage">
+    <span class="pzsp-tiny" style="left:13.5%;top:20.1%"></span>
+    <span class="pzsp-tiny" style="left:81.7%;top:15.5%;animation-delay:.3s"></span>
+    <span class="pzsp-tiny" style="left:74.6%;top:54.8%;animation-delay:.5s"></span>
+    <span class="pzsp-tiny" style="left:17.5%;top:49.8%;animation-delay:.7s"></span>
+    <div class="pzsp-glow"></div>
+    <div class="pzsp-ring"></div>
+    <svg class="pzsp-star" style="--sx:-33.3cqw;--sy:-21.8cqh" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z"/></svg>
+    <svg class="pzsp-star" style="--sx:36.5cqw;--sy:-15.1cqh;animation-delay:.03s" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z"/></svg>
+    <svg class="pzsp-star" style="--sx:-38.1cqw;--sy:13.8cqh;animation-delay:.05s" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z"/></svg>
+    <svg class="pzsp-star" style="--sx:31cqw;--sy:20.1cqh;animation-delay:.08s" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z"/></svg>
+    <div class="pzsp-face"><img src="/posty-splash-cara.webp" alt="" width="380" height="387"></div>
+    <div class="pzsp-word">Posty<span class="pzsp-dot">.</span></div>
+    <div class="pzsp-sub" id="pz-splash-sub">tus community managers</div>
+  </div>
 </div>
 <style>
 /* (LOTE ADS-SE-TRABA-AL-VOLVER · estándar de carga del dueño 20/11) El
@@ -369,10 +384,78 @@
 .pz-boot-txt{font-family:Inter,system-ui,-apple-system,sans-serif;font-size:14px;font-weight:700;color:#47617A;letter-spacing:.01em}
 @keyframes pz-boot-rot{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.pz-boot-spin{animation-duration:2.4s}}
+/* (LOTE APERTURA-MAGIA · opción 1 «la magia», mock aprobado por el dueño
+   20/11) Presentación de apertura de la APP: solo en contexto app
+   (instalada/nativa o ruta #/app|#/login|…) y solo en el arranque de
+   cero — el shell la activa con la clase .pz-magic; la landing web
+   sigue con la ruedita de arriba, byte a byte. Geometría y secuencia
+   del mock (unidades de contenedor sobre el escenario): 4 estrellitas
+   #FEC14D vuelan al centro, aro de magia, nace la cara VERDADERA de
+   Posty (asset /posty-splash-cara.webp = posty-cara-v2 del mock, con
+   su terminación: el busto se DISUELVE con mask-image en degradé,
+   negro hasta 76% y transparente a 97% — nada de corte duro), sube
+   «Posty» y el punto cae en amarillo; abajo, el subtítulo por idioma.
+   Los % de los keyframes son los del mock; la duración total es
+   1,6 s (< 2 s) y la salida es fundido de 300 ms. */
+#posty-boot.pz-magic{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
+#posty-boot.pz-magic-out{opacity:0}
+#posty-boot .pzsp-stage{display:none}
+#posty-boot.pz-magic .pz-boot-spin,#posty-boot.pz-magic .pz-boot-txt{display:none}
+#posty-boot.pz-magic .pzsp-stage{display:block;position:absolute;inset:0;container-type:size;overflow:hidden;font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif}
+.pzsp-tiny{position:absolute;border-radius:50%;background:rgba(255,255,255,.5);width:5px;height:5px;animation:pzspFloat 2.6s ease-in-out infinite}
+.pzsp-glow{position:absolute;left:50%;top:37.2%;width:210px;width:83.3cqw;height:210px;height:83.3cqw;margin:-105px 0 0 -105px;margin:-41.65cqw 0 0 -41.65cqw;border-radius:50%;background:radial-gradient(circle,rgba(254,193,77,.55) 0%,rgba(254,193,77,0) 68%);animation:pzspGlow 1.6s ease-in-out 1 both}
+.pzsp-ring{position:absolute;left:50%;top:37.2%;width:172px;width:68.3cqw;height:172px;height:68.3cqw;margin:-86px 0 0 -86px;margin:-34.15cqw 0 0 -34.15cqw;border-radius:50%;border:2px solid rgba(254,193,77,.8);animation:pzspRing 1.6s ease-out 1 both}
+.pzsp-star{position:absolute;left:50%;top:36%;width:24px;width:9.5cqw;height:24px;height:9.5cqw;margin:-12px 0 0 -12px;margin:-4.75cqw 0 0 -4.75cqw;color:#FEC14D;animation:pzspIn 1.6s cubic-bezier(.22,.8,.32,1) 1 both}
+.pzsp-face{position:absolute;left:50%;top:10.9%;width:204px;width:81cqw;margin-left:-102px;margin-left:-40.5cqw;animation:pzspFace 1.6s cubic-bezier(.22,.8,.32,1) 1 both}
+.pzsp-face img{width:100%;display:block;filter:drop-shadow(0 16px 22px rgba(10,30,51,.35));-webkit-mask-image:linear-gradient(to bottom,#000 76%,transparent 97%);mask-image:linear-gradient(to bottom,#000 76%,transparent 97%)}
+.pzsp-word{position:absolute;left:0;right:0;top:67.4%;text-align:center;font-size:39px;font-size:15.5cqw;font-weight:800;color:#fff;letter-spacing:-1px;letter-spacing:-.4cqw;animation:pzspWord 1.6s ease-in-out 1 both}
+.pzsp-dot{display:inline-block;color:#FEC14D;animation:pzspDot 1.6s ease-in-out 1 both}
+.pzsp-sub{position:absolute;left:0;right:0;top:77.8%;text-align:center;color:rgba(255,255,255,.88);font-size:15px;font-size:5.75cqw;font-weight:500;letter-spacing:.2px;animation:pzspSub 1.6s ease-in-out 1 both}
+@keyframes pzspIn{0%{transform:translate(var(--sx),var(--sy)) scale(.3) rotate(0deg);opacity:0}16%{opacity:1}40%{transform:translate(0,0) scale(1) rotate(100deg);opacity:1}52%,100%{transform:translate(0,0) scale(0) rotate(160deg);opacity:0}}
+@keyframes pzspFace{0%,28%{transform:scale(.45) translateY(26px);opacity:0}50%{transform:scale(1.05) translateY(0);opacity:1}57%{transform:scale(.99)}64%{transform:scale(1)}86%{transform:scale(1) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(-3px);opacity:1}}
+@keyframes pzspGlow{0%,34%{opacity:0;transform:scale(.55)}58%{opacity:.6}86%{opacity:.6}100%{opacity:.55}}
+@keyframes pzspRing{0%,50%{transform:scale(.55);opacity:0}60%{opacity:.75}80%,100%{transform:scale(1.25);opacity:0}}
+@keyframes pzspWord{0%,56%{transform:translateY(16px);opacity:0}68%,100%{transform:translateY(0);opacity:1}}
+@keyframes pzspDot{0%,64%{transform:translateY(-16px) scale(.4);opacity:0}76%{transform:translateY(1px) scale(1.25);opacity:1}83%,100%{transform:translateY(0) scale(1);opacity:1}}
+@keyframes pzspSub{0%,70%{transform:translateY(8px);opacity:0}80%,100%{transform:translateY(0);opacity:1}}
+@keyframes pzspFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@media (prefers-reduced-motion: reduce){.pzsp-star,.pzsp-face,.pzsp-glow,.pzsp-ring,.pzsp-word,.pzsp-dot,.pzsp-sub{animation-duration:.5s}}
 </style>
-<script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
+<script>
+/* (LOTE APERTURA-MAGIA) Activación de la presentación: SOLO contexto
+   app y SOLO este documento (arranque de cero). Las navegaciones SPA
+   nunca recrean #posty-boot y ningún visibilitychange/pageshow/focus
+   lo vuelve a armar: volver de segundo plano no la repite jamás. La
+   landing web (sin contexto app) ni la toca: queda la ruedita. */
+(function () {
+  var boot = document.getElementById('posty-boot');
+  if (!boot) return;
+  var kill = setTimeout(function () { var b = document.getElementById('posty-boot'); if (b) b.remove(); }, 6000);
+  try {
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+    var nativeApp = false;
+    try { nativeApp = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()); } catch (e) {}
+    var h = location.hash || '';
+    var appCtx = standalone || nativeApp || h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0;
+    try { if (sessionStorage.getItem('posta_ver_web') === '1') appCtx = false; } catch (e) {}
+    if (!appCtx) return;
+    boot.classList.add('pz-magic');
+    try { if (localStorage.getItem('posty-lang') === 'en') { var sub = document.getElementById('pz-splash-sub'); if (sub) sub.textContent = 'your community managers'; } } catch (e) {}
+    var sp = window.__pzSplash = { t0: performance.now(), done: false, appReady: false, finish: null };
+    sp.finish = function (fadeMs) {
+      if (sp.done) return; sp.done = true;
+      clearTimeout(kill);
+      boot.classList.add('pz-magic-out');
+      setTimeout(function () { if (boot.parentNode) boot.remove(); }, fadeMs || 300);
+    };
+    boot.addEventListener('pointerdown', function () { sp.finish(200); });
+    var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(function () { sp.finish(300); }, reduced ? 500 : 1600);
+  } catch (e) {}
+})();
+</script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=841"></script>
+<script src="/app.js?v=842"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
