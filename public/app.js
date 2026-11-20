@@ -8536,9 +8536,9 @@ function landingView(cfg) {
       <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-noweb-row"><button type="button" class="lp-noweb" onclick="lpNoWeb(this)">No tengo web</button></p>
-    <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
-<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
-    <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
+    
+<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 Entrás con el login oficial de Meta: sin contraseña y sin tarjeta.</p>
+    
   </div></div>
   <div class="section wd-reveal eqv" id="equipo"><div class="wrap">
     <div class="eqv-head">
@@ -8819,7 +8819,7 @@ function landingView(cfg) {
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
         <button class="btn btn-primary" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
-<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 <b>Nunca vemos tu contraseña.</b> Entrás con el login oficial de Meta.</p>
+<p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 Entrás con el login oficial de Meta: sin contraseña y sin tarjeta.</p>
     </div>
   </div></div>
   <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Posteo de la semana de muestra" onclick="if(event.target===this)lpWeekClose()">
