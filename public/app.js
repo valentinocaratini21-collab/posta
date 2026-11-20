@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1193';
+const PZ_BUILD = '20261105-v1194';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -28263,6 +28263,12 @@ function pzHoySemanaMiniHTML(sem, en, pendProg) {
 // en VM. BLOQUE RS-2 — extraíble en tests (test-lote-rediseno-rs2.js).
 var PZ_HOY_TIRA_SEL = ''; // clave del día seleccionado en la tira (sesión)
 var PZ_HOY_TIRA_DIAS = []; // días de la tira vigente (los pinta inicioView)
+// (LOTE TARJETA-HOY-MINIMA · 20/11) El último motivo honesto de la
+// generación de hoy, leído de la señal que el servidor ya expone
+// (GET /api/week/last-result): '' = sin motivo. 'cuenta_propia' es el
+// freno de la cuenta de la casa (el software no genera ahí) y la
+// tarjeta lo presenta como estado, no como fallo.
+var PZ_HOY_ARMAR_MOTIVO = '';
 
 // Días de la tira enriquecidos con su posteo: para cada día de la
 // semana corriente, el posteo de ese día (publicado, o el
@@ -28334,6 +28340,33 @@ function pzHoyTiraDias(sem, posts, hoyKey, tz) {
 // es hoy, nota «es el posteo de arriba». Día revelado sin posteo
 // (hoy vacío): invitación al chat. Día bloqueado: el mensaje del
 // mock (mañana: «apenas salga el de hoy»; futuro: «uno por uno»).
+// (LOTE TARJETA-HOY-MINIMA · 20/11) El motivo que devuelve la
+// guardia, en palabras de la tarjeta: la generación frenada nunca
+// queda muda — la tarjeta del día vacío lo dice con el motivo
+// honesto. 'cuenta_propia' NO pasa por acá: es el estado de freno
+// de la tarjeta (sin botón), no un fallo reintentable.
+function pzHoyMotivoTxt(reason, en) {
+  const M = {
+    publishing_stopped: ['tu cuenta está frenada: Posty no está generando posteos.', 'your account is paused: Posty is not generating posts.'],
+    dia_frenado_dueno: ['frenaste este día: hoy no se genera nada.', 'you paused this day: nothing is generated today.'],
+    dia_cerrado: ['hoy tu negocio está cerrado: no sale posteo.', 'your business is closed today: no post goes out.'],
+    dia_de_serie: ['el posteo de hoy es de tu serie y todavía no está listo.', "today's post belongs to your series and is not ready yet."],
+    prueba_linea_mano: ['tu posteo de hoy lo está armando el equipo: ya llega.', "today's post is being made by the team: it's on its way."],
+    prueba_por_empezar: ['tu prueba arranca mañana: el primer posteo sale ahí.', 'your trial starts tomorrow: the first post goes out then.'],
+    plan_limit: ['llegaste al límite de posteos de tu plan esta semana.', "you reached your plan's post limit for this week."],
+    no_plan: ['tu plan no está activo: sin plan no se genera.', 'your plan is not active: nothing is generated without one.'],
+    no_idea: ['Posty no encontró la idea de hoy: probá de nuevo en un rato.', "Posty couldn't find today's idea: try again in a bit."],
+    ai_error: ['la generación falló esta vez: probá de nuevo en un rato.', 'generation failed this time: try again in a bit.'],
+    exception: ['la generación falló esta vez: probá de nuevo en un rato.', 'generation failed this time: try again in a bit.'],
+    sin_slot: ['no quedó un horario libre para hoy: probá de nuevo en un rato.', 'no free slot was left for today: try again in a bit.'],
+    ya_publicado_hoy: ['el posteo de hoy ya salió.', "today's post already went out."],
+    sin_dia: ['no se pudo leer el día de hoy.', "today's date couldn't be read."],
+  };
+  const t = M[String(reason || '')];
+  if (t) return en ? t[1] : t[0];
+  return en ? "Posty couldn't build it this time: try again in a bit." : 'Posty no pudo armarlo esta vez: probá de nuevo en un rato.';
+}
+
 function pzHoyTiraDetalleHTML(d, o) {
   try {
     if (!d) return '';
@@ -28367,7 +28400,30 @@ function pzHoyTiraDetalleHTML(d, o) {
       // invitado de v1025 quedó SUPERADA por este lote: su tarjeta
       // de hoy lo mandaba a un chat que no arma el día; el ensure
       // corre con su sesión (verificado con boot en la suite).
-      return `<div class="pz-hoy-tira-detalle"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet — Posty can build it, or upload something of yours.' : 'Hoy todavía no hay posteo — Posty te lo arma, o subí algo tuyo.'}</small></div><div class="side"><button type="button" class="btn btn-primary btn-sm" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="btn btn-soft btn-sm" data-pz-hoy-subir="1">${en ? 'Upload my own' : 'Subir algo mío'}</button></div></div>`;
+      // (LOTE TARJETA-HOY-MINIMA · 20/11 · opción 1 de 5 aprobada por
+      // el dueño con su GO «Dale. Subilo asi.») La forma mínima del
+      // día vacío: título + «Todavía no hay posteo.» + UN solo botón
+      // — el glass del CTA del website (.pz-hoy-glass-btn, valores
+      // exactos de la regla .lp-cta-big de gj.css) — y «subir algo
+      // mío» como link, no como segundo botón. SOLO el estado vacío:
+      // el estado con posteo (el héroe en grande de «Tu semana,
+      // planeada») no se toca. Los data-* se conservan tal cual: el
+      // cableado (pzHoyBind / pzHoyTiraBindDetalle) no cambia.
+      // (ADDENDA del tablero · defecto del video 20/11 05:04) La
+      // tarjeta nunca ofrece un botón que muere en silencio: si la
+      // guardia frenó la generación, PZ_HOY_ARMAR_MOTIVO trae el
+      // motivo (leído de /api/week/last-result, la señal que el
+      // servidor ya expone) y la tarjeta lo dice acá mismo. Con el
+      // freno de la cuenta propia ni siquiera se ofrece el botón:
+      // el software no genera en la cuenta de la casa (sus posteos
+      // son de la línea a mano) y la tarjeta presenta ese estado
+      // verdadero, con su explicación breve.
+      const motivoHoy = (typeof PZ_HOY_ARMAR_MOTIVO !== 'undefined' && PZ_HOY_ARMAR_MOTIVO) ? String(PZ_HOY_ARMAR_MOTIVO) : '';
+      if (motivoHoy === 'cuenta_propia') {
+        return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div><p class="pz-hoy-freno-txt">${en ? "This account's posts are made by the team by hand, day by day — the software doesn't generate here." : 'Los posteos de esta cuenta los arma el equipo a mano, día a día — el software no genera acá.'}</p><button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button></div>`;
+      }
+      const motivoTxt = (motivoHoy && d.esHoy) ? pzHoyMotivoTxt(motivoHoy, en) : '';
+      return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div>${motivoTxt ? `<p class="pz-hoy-motivo-txt">${esc(motivoTxt)}</p>` : ''}<button type="button" class="pz-hoy-glass-btn" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button></div>`;
     }
     // (LOTE INTEGRIDAD-PRE-PUBLICACIÓN) Fila frenada por el chequeo de
     // integridad del servidor (p.integridad_freno): la tarjeta NO la
@@ -29807,6 +29863,12 @@ async function pzHoyConserjeFill() {
 async function pzHoyArmarHoy(btn) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   if (btn) { btn.disabled = true; btn.textContent = en ? 'Building…' : 'Armando…'; }
+  // (LOTE TARJETA-HOY-MINIMA) Un intento nuevo limpia el motivo del
+  // intento anterior. El freno 'cuenta_propia' no se limpia: es el
+  // estado de la cuenta, no de un intento — y con el freno presente
+  // la tarjeta ni siquiera ofrece este botón.
+  if (typeof PZ_HOY_ARMAR_MOTIVO !== 'undefined' && PZ_HOY_ARMAR_MOTIVO && PZ_HOY_ARMAR_MOTIVO !== 'cuenta_propia') PZ_HOY_ARMAR_MOTIVO = '';
+  const tapAt = Date.now();
   let r = null;
   // (COSTURA PAUSA-DURABLE) { armar: 1 } SOLO desde este botón: es el
   // gesto deliberado del dueño sobre el día — el servidor levanta el
@@ -29814,7 +29876,38 @@ async function pzHoyArmarHoy(btn) {
   // automáticas de Hoy no mandan la marca y no destaban nada.
   try { r = await api.post('/api/week/ensure', { armar: 1 }); } catch (e) { r = null; }
   if (r && r.reason === 'no_dna') { try { bbGo('#/app/ajustes'); } catch (e) { location.hash = '#/app/ajustes'; } return; }
-  if (r && (r.ok || r.generating || r.complete)) { try { render(); } catch (e) {} return; }
+  if (r && r.complete) { try { render(); } catch (e) {} return; }
+  if (r && r.generating) {
+    // (LOTE TARJETA-HOY-MINIMA · addenda del tablero) El ensure
+    // dispara la generación en segundo plano y su resultado queda en
+    // /api/week/last-result — la señal que el servidor ya expone
+    // para mostrar el resultado en pantalla en vez del spinner
+    // eterno. El flujo viejo re-rendía a ciegas: si la guardia
+    // frenaba la generación (la cuenta propia, FRENO-CUENTA-PROPIA),
+    // el posteo nunca aparecía y la tarjeta volvía a Inicio muda,
+    // sin mensaje ni cambio de estado (el defecto del video del
+    // dueño, 20/11 05:04). Ahora el toque espera el resultado de SU
+    // intento (semana y frescura chequeadas): si la generación
+    // frenó, el motivo queda en la tarjeta misma.
+    let resuelto = false;
+    for (let i = 0; i < 20 && !resuelto; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      let lr = null;
+      try { lr = await api.get('/api/week/last-result'); } catch (e) { lr = null; }
+      if (!lr || !lr.has || !lr.result) continue;
+      if (r.week_key && lr.result.weekKey && lr.result.weekKey !== r.week_key) continue;
+      if (lr.result.at && Number(lr.result.at) < tapAt - 5000) continue; // es de un intento anterior
+      if (lr.result.ok) { resuelto = true; break; }
+      if (lr.result.reason && lr.result.reason !== 'running') {
+        try { PZ_HOY_ARMAR_MOTIVO = String(lr.result.reason); } catch (e) {}
+        resuelto = true; break;
+      }
+    }
+    try { render(); } catch (e) {}
+    return;
+  }
+  if (r && r.reason) { try { PZ_HOY_ARMAR_MOTIVO = String(r.reason); } catch (e) {} try { render(); } catch (e) {} return; }
+  if (r && r.ok) { try { render(); } catch (e) {} return; }
   if (btn) { btn.disabled = false; btn.textContent = en ? 'Have Posty build it' : 'Que Posty lo arme'; }
   try { toast(en ? "Couldn't build it — try again" : 'No se pudo armar — probá de nuevo'); } catch (e) {}
 }
@@ -29936,12 +30029,28 @@ async function inicioView() {
   let weekGenerating = false;
   let weekTrialArming = false;
   let weekNoDna = false;
+  // (LOTE TARJETA-HOY-MINIMA) El freno de la cuenta propia se lee de
+  // la señal que el servidor ya expone (GET /api/week/last-result):
+  // si el último resultado de ESTA semana es el freno, la tarjeta del
+  // día vacío presenta el estado verdadero — sin un botón que muera
+  // en silencio — y la pantalla no queda refrescando en loop por un
+  // posteo que nunca va a aparecer. Es la única lectura que Inicio
+  // hace del resultado: los demás motivos los levanta el toque en
+  // «Que Posty lo arme» (pzHoyArmarHoy), en el momento del toque.
+  try {
+    const lr = await api.get('/api/week/last-result').catch(() => null);
+    if (lr && lr.has && lr.result && !lr.result.ok && lr.result.reason === 'cuenta_propia'
+      && (!weekEr || !weekEr.week_key || lr.result.weekKey === weekEr.week_key)) {
+      PZ_HOY_ARMAR_MOTIVO = 'cuenta_propia';
+    }
+  } catch (e) {}
   try {
     const er = weekEr;
     weekTrialArming = !!(er && er.trial_arming);
     weekGenerating = !!(er && (er.generating || er.trial_arming));
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
-    if ((er && (er.generating || er.trial_arming)) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
+    if (PZ_HOY_ARMAR_MOTIVO === 'cuenta_propia') weekGenerating = false;
+    if (((er && (er.generating || er.trial_arming)) || allPosts.some(p => !p.image_path && p.status === 'draft')) && PZ_HOY_ARMAR_MOTIVO !== 'cuenta_propia') {
       pzScheduleRender(8000); // (LOTE L7) por el guardian: un solo timer pendiente a la vez
     }
   } catch (e) {}

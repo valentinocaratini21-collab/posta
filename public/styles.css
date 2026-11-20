@@ -6018,6 +6018,23 @@ body.pz-postchat-open{overflow:hidden}
 .pz-hoy-tira-detalle .side .pz-hoy-hoy-pill{white-space:normal;text-align:right;line-height:1.35;max-width:150px}
 /* (LOTE TARJETA-HOY-REAPUNTE) La nota de archivado recibe el mismo trato que la píldora: sin regla propia, su ancho max-content (371px medidos en vivo por el diagnóstico de la app) aplastaba la columna del caption a una palabra por línea y sacaba la columna lateral fuera de la tarjeta. */
 .pz-hoy-tira-detalle .side .pz-hoy-arch{white-space:normal;text-align:right;line-height:1.35;max-width:150px;font-size:12px;font-weight:700;color:var(--dim)}
+/* (LOTE TARJETA-HOY-MINIMA · 20/11) La forma mínima del día vacío
+   (opción 1 aprobada por el dueño): columna, un solo botón glass y el
+   link debajo. Todo con scope .vacia: el detalle con posteo (héroe)
+   y el bloqueado no cambian una sola regla. El botón copia EXACTOS
+   los valores de la regla compartida .lp-cta-big / #prueba
+   .btn-primary de gj.css (el CTA «Probá 3 días gratis» del website).
+   .pz-hoy-freno-txt es el estado de freno de la cuenta propia (sin
+   botón); .pz-hoy-motivo-txt, el motivo honesto de un intento
+   frenado, en la tarjeta misma. */
+.pz-hoy-tira-detalle.vacia{flex-direction:column;align-items:stretch;gap:0;padding:18px}
+.pz-hoy-tira-detalle.vacia .t b{font-size:19px}
+.pz-hoy-tira-detalle.vacia .t small{display:block;margin-top:5px;font-size:14.5px;font-weight:600}
+.pz-hoy-glass-btn{display:block;width:100%;margin-top:16px;text-align:center;background:linear-gradient(135deg,rgba(62,166,219,.88),rgba(27,111,160,.86));color:#fff;border:1px solid rgba(255,255,255,.5);border-top:1.5px solid rgba(255,255,255,.9);box-shadow:0 10px 24px rgba(39,147,200,.38),inset 0 1px 0 rgba(255,255,255,.65);font-weight:700;font-size:17px;border-radius:99px;padding:16px 18px;cursor:pointer;font-family:inherit}
+.pz-hoy-glass-btn:disabled{opacity:.65;cursor:default}
+.pz-hoy-subir-link{display:block;width:100%;margin-top:13px;padding:0;background:none;border:none;text-align:center;color:#5B7A94;font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-family:inherit}
+.pz-hoy-tira-detalle.vacia .pz-hoy-freno-txt{margin-top:10px;font-size:13.5px;line-height:1.5;font-weight:600;color:var(--dim)}
+.pz-hoy-tira-detalle.vacia .pz-hoy-motivo-txt{margin-top:8px;font-size:13px;line-height:1.5;font-weight:600;color:var(--dim)}
 .pz-hoy-para{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 2px 8px}
 .pz-hoy-para h2{font-size:16px;font-weight:900;color:#0A1E33;margin:0}
 /* (v846) Sección Impulsar de Hoy: título como las demás secciones de
