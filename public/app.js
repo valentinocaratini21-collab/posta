@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1203';
+const PZ_BUILD = '20261105-v1204';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24867,12 +24867,18 @@ function pzPrefetchKick() {
     // actualiza y pzInicioRepaint re-pinta solo si algo cambió). Sin
     // foto (primera entrada de la sesión), el camino de siempre:
     // esqueleto con la ruedita y espera de datos.
+    // (LOTE INICIO-REFRESH-VIVO) La pintura tibia lleva la versión de
+    // la foto como marca y la corrida de fondo guarda y repinta con
+    // la clave y la versión de ESTA entrada: el repintado ya no
+    // depende de la secuencia global de renders (ver el bloque del
+    // lote junto a pzInicioSnapSet).
     const pzSnapI = pzInicioSnapGet();
     if (pzSnapI != null) {
-      content = pzSnapI;
-      const pzSeqI = mySeq;
+      const pzKeyI = pzInicioSnapKey();
+      const pzVI = pzInicioSnapVersion();
+      content = pzInicioMarkPaint(pzSnapI, pzVI);
       inicioView().then((fresh) => {
-        try { pzInicioSnapSet(fresh); pzInicioRepaint(fresh, pzSnapI, pzSeqI); } catch (e) {}
+        try { const pzVF = pzInicioSnapSet(fresh, pzKeyI); pzInicioRepaint(fresh, pzSnapI, pzKeyI, pzVI, pzVF); } catch (e) {}
       }).catch(() => {});
     } else {
       pzPaintSkeleton(tab);
@@ -30201,7 +30207,38 @@ function pzConserjeHoyHTML() {
      entrada la pinta fresca.
    - Qué datos trae Inicio y su contenido NO cambian: solo CUÁNDO se
      pinta. INICIO-STICKY y BARRA-VIVA quedan fuera, como se mandó. */
+/* ===== LOTE INICIO-REFRESH-VIVO · 20/11 · follow-up del residual
+   «falta el refresh» (dueño, 09:06, sobre v1201 vivo) =====
+   En v1201 la pantalla pintaba al instante, pero el contenido no se
+   actualizaba en el momento: la condición de aterrizaje del
+   repintado era seq === RENDER_SEQ, y cualquier render que respirara
+   durante la ventana de ~2 s de inicioView() lo descartaba. En el
+   teléfono esa ventana nunca está quieta (la revalidación de
+   identidad ante foco/pageshow re-renderiza cuando la identidad se
+   re-lee; el re-toque de la pestaña vía bbGo renderiza de nuevo; los
+   renders post-acción llegan a los ~900 ms): el repintado caía
+   sistemáticamente y la pantalla quedaba con la foto anterior, sin
+   refresh visible ni forma de forzarlo (el pull-to-refresh corría su
+   render, pero su actualización en el lugar dependía del mismo
+   repintado). La foto fresca sí quedaba guardada: el síntoma era
+   «nunca se actualiza en el momento», no «queda vieja para siempre».
+   EL ARREGLO: la identidad de la pintura es la FOTO, no la secuencia
+   global de renders. Cada foto guardada lleva una versión (contador
+   por clave, en PZ_INICIO_SNAP_VS); la rama tibia pinta la foto con
+   su versión como marca (data-pz-paint en la raíz de la vista,
+   inyectada solo en la copia pintada: la foto guardada queda limpia)
+   y el repintado aterriza si la pantalla SIGUE MOSTRANDO ESA FOTO
+   para la misma clave de cuenta, con las guardas de siempre (ruta
+   Inicio, sin detalle .scf-pop, sin hoja de chat, sin lightbox). Un
+   render intermedio que re-pinta la misma foto no lo mata; uno que
+   pinta otra cosa (otra vista, una pintura directa en frío, una foto
+   más nueva) deja otra marca o ninguna, y este repintado no lo pisa:
+   esa pintura corre su propio ciclo. La foto fresca se guarda
+   siempre, y con la clave de la entrada que la pidió: una corrida
+   cuya clave ya no es la del que mira no escribe ni repinta nada. */
 const PZ_INICIO_SNAPS = new Map();
+const PZ_INICIO_SNAP_VS = new Map();
+let PZ_INICIO_SNAP_VN = 0;
 function pzInicioSnapKey() {
   try {
     if (typeof ME === 'undefined' || !ME || !ME.id) return '';
@@ -30218,28 +30255,49 @@ function pzInicioSnapGet() {
     return (typeof s === 'string' && s) ? s : null;
   } catch (e) { return null; }
 }
-function pzInicioSnapSet(html) {
+function pzInicioSnapSet(html, key) {
+  try {
+    const k = key || pzInicioSnapKey();
+    if (!k || typeof html !== 'string' || !html) return 0;
+    if (!PZ_INICIO_SNAPS.has(k) && PZ_INICIO_SNAPS.size >= 6) pzInicioSnapClear();
+    if (PZ_INICIO_SNAPS.get(k) === html) return PZ_INICIO_SNAP_VS.get(k) || 0;
+    PZ_INICIO_SNAPS.set(k, html);
+    const v = ++PZ_INICIO_SNAP_VN;
+    PZ_INICIO_SNAP_VS.set(k, v);
+    return v;
+  } catch (e) { return 0; }
+}
+function pzInicioSnapClear() { try { PZ_INICIO_SNAPS.clear(); PZ_INICIO_SNAP_VS.clear(); } catch (e) {} }
+function pzInicioSnapVersion() {
   try {
     const k = pzInicioSnapKey();
-    if (!k || typeof html !== 'string' || !html) return;
-    if (!PZ_INICIO_SNAPS.has(k) && PZ_INICIO_SNAPS.size >= 6) PZ_INICIO_SNAPS.clear();
-    PZ_INICIO_SNAPS.set(k, html);
-  } catch (e) {}
+    if (!k) return 0;
+    return PZ_INICIO_SNAP_VS.get(k) || 0;
+  } catch (e) { return 0; }
 }
-function pzInicioSnapClear() { try { PZ_INICIO_SNAPS.clear(); } catch (e) {} }
-function pzInicioRepaint(freshHtml, paintedHtml, seq) {
+function pzInicioMarkPaint(html, v) {
   try {
-    if (seq !== RENDER_SEQ) return; // otro render ya corrió: la foto nueva ya quedó guardada
+    if (typeof html !== 'string' || !html) return html;
+    return html.replace('<div id="inicioView"', '<div id="inicioView" data-pz-paint="' + (v || 0) + '"');
+  } catch (e) { return html; }
+}
+function pzInicioRepaint(freshHtml, paintedHtml, key, fromV, freshV) {
+  try {
+    // (LOTE INICIO-REFRESH-VIVO) Sin condición de secuencia global: la
+    // clave tiene que seguir siendo la de esta entrada y la pantalla
+    // tiene que seguir mostrando la foto de esta entrada (su marca).
+    if (!key || pzInicioSnapKey() !== key) return; // la clave cambió en el medio: esta corrida no es del que mira
     const route = (location.hash || '').split('?')[0].split('/')[2] || 'inicio';
     if (route !== 'inicio') return; // ya no estamos en Inicio
     const view = document.getElementById('inicioView');
     if (!view) return;
+    if (view.getAttribute('data-pz-paint') !== String(fromV || 0)) return; // la pantalla ya no muestra la foto de esta entrada: otra pintura manda y corre su ciclo
     if (view.querySelector('.scf-pop')) return; // detalle abierto: no repintar debajo
     if (document.body.classList.contains('mz-sheet-open')) return; // hoja de chat abierta
     const lb = document.getElementById('lightbox');
     if (lb && lb.style.display === 'flex') return; // visor abierto
     if (freshHtml === paintedHtml) return; // nada cambió: cero parpadeo
-    view.outerHTML = freshHtml;
+    view.outerHTML = pzInicioMarkPaint(freshHtml, freshV);
     bindApp('inicio');
     // Los fills idempotentes que render() re-dispara tras pintar
     // (LOTE VELOCIDAD): la vista nueva los necesita igual que la de
