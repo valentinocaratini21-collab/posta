@@ -875,6 +875,7 @@ function exactDupOf(caption, input) {
 const WEEK_CLASH_REASONS = [
   'duplicado exacto en la misma semana (DEDUP)',
   'dispositivo de apertura repetido en la misma semana',
+  'opening device repeated in the same week',
   'dispositivo repetido fuera de la apertura',
   '(D8)',
 ];
@@ -1950,6 +1951,49 @@ function captionPassesEn(caption, input) {
   // repeat of a caption from the same week always passed.
   if (exactDupOf(c, input)) {
     return { ok: false, reason: 'exact duplicate caption in the same week (DEDUP): this same text already went out in another post of this batch — rewrite it with a different opening, angle and close' };
+  }
+  // OPENING-DEVICE-EN (Juli, 2026-11-20 — real ids 735/739, RAZOR RICK,
+  // account 125): the Spanish door has rejected a repeated opening
+  // device within the same week since M79 (2026-10-19) — same question
+  // family, or the same first three words of a declarative opening —
+  // but this door never got the check: it only knew the EXACT
+  // duplicate. So id 739 (scheduled 2026-11-22) opens with the exact
+  // headline of id 735 (published 2026-11-20, same account, same
+  // week) — "old school skill. modern style." — and passed this door
+  // whole whenever prevs were passed (verified on HEAD v1207: with
+  // prev=[735] its only failure was the poster-format CTA). Mirror of
+  // the ES deviceOf, placed BEFORE the CTA check on purpose: the
+  // poster format of the hand line carries no CTA by design, and a
+  // check behind the CTA would never surface for exactly the posts
+  // that repeat headlines. Families: "how many times", "did you
+  // know", "have you ever"; any question/exclamation opening keys on
+  // its first three words; a declarative opening keys on its first
+  // three words (a series opener like "day two: the calzone" vs
+  // "day three: the slice" differs at word two and stays legal).
+  {
+    const prevsDev = [];
+    if (input && Array.isArray(input.prevCaptions)) prevsDev.push(...input.prevCaptions);
+    if (input && input.prevCaption) prevsDev.push(input.prevCaption);
+    if (prevsDev.length) {
+      const deviceOfEn = (txt) => {
+        const fl = (String(txt || '').split('\n').map((s) => s.trim()).filter(Boolean)[0] || '')
+          .toLowerCase().replace(/[\p{Extended_Pictographic}]/gu, '');
+        const words = fl.replace(/[^\p{L}\p{N}\s']/gu, ' ').split(/\s+/).filter(Boolean);
+        if (!words.length) return null;
+        const head = words.slice(0, 4).join(' ');
+        if (/^how many times\b/.test(head)) return 'how-many-times';
+        if (/^did you know\b/.test(head)) return 'did-you-know';
+        if (/^have you ever\b/.test(head)) return 'have-you-ever';
+        if (fl.includes('?')) return 'q:' + words.slice(0, 3).join(' ');
+        if (fl.includes('!')) return 'e:' + words.slice(0, 3).join(' ');
+        if (words.length >= 3) return 'h:' + words.slice(0, 3).join(' ');
+        return null;
+      };
+      const dev = deviceOfEn(c);
+      if (dev && prevsDev.map(deviceOfEn).includes(dev)) {
+        return { ok: false, reason: `opening device repeated in the same week (M79-EN): another post in this batch already opened with the same formula ("${dev.startsWith('q:') || dev.startsWith('e:') ? dev.slice(2) : dev}") — one use per week; open with the scene, the fact, or a different statement (real ids 735/739: the same headline twice in one week)` };
+      }
+    }
   }
   // CTA: al menos UNA señal concreta (las hashtags no cuentan).
   const bodyLow = c.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').toLowerCase();

@@ -379,7 +379,21 @@ function captionOpenIsGarbled(caption, negocio) {
   // (un «Posty.» enmascarado a «negocio» no cuenta como mayúscula).
   // Las demás reglas (puntuación huérfana, nombre duplicado, largo)
   // siguen corriendo igual sobre la línea en minúscula.
-  if (/[A-ZÁÉÍÓÚÑ]/.test(masked) && /\.\s+[a-záéíóúñ]/.test(first)) return true;
+  // (b'') LINT v12 (Juli, 2026-11-20) — la mayúscula que delata la
+  // mezcla es la que ABRE una oración (inicio de línea o tras un
+  // terminador), no cualquier mayúscula de la línea: el id 740 real
+  // (cuenta 12, creado hoy) — «los que vuelven no vuelven por
+  // cualquier par. vuelven por la Volt, la chunky de siempre. y ese
+  // posteo lo hizo posty.» — es la voz en minúscula de la línea a
+  // mano (la misma familia aprobada de los ids 592/593/594) y la v10
+  // lo marcaba empalmado SOLO por la mayúscula de «Volt», un nombre
+  // propio en mitad de oración (tras «la»), que no abre ninguna
+  // frase. La costura real (el esquema del id 91: «El Regalá… de
+  // Posty. sin margen…») abre con mayúscula: esa sigue cayendo,
+  // porque su primera oración SÍ arranca capitalizada. Una apertura
+  // cosida que arranca entera en minúscula ya era el hueco aceptado
+  // de la v10 y sigue igual: esta firma no lo empeora.
+  if (/(?:^|[.!?…]\s+)[\s¿¡"«]*[A-ZÁÉÍÓÚÑ]/.test(masked) && /\.\s+[a-záéíóúñ]/.test(first)) return true;
   if (/[¿¡]/.test(first.slice(1))) return true;
   if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(masked)) return true;
   // (d) LINT v3 (Juli, 2026-10-18) — la firma residual pre-registrada el
