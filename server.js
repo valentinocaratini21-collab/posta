@@ -14202,7 +14202,7 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
           name: `Posty · Destacado u${uid} · p${targetId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
           spendCents: spendDest, days: 7, country: adCountry(uid),
-          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' },
+          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' },
         });
       } catch (e) { crD = null; crDError = e; }
       if (!crD || !crD.campaignId) {
@@ -14262,7 +14262,7 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
           name: `Posty · Destacado u${uid} · p${a.posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
           spendCents: a.spendCents, days: 7, country: adCountry(uid),
-          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' } : null,
+          ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' } : null,
         });
         return { ok: true, anuncioId: cr.campaignId, campaignId: cr.campaignId, adsetId: cr.adsetId, adId: cr.adId };
       },
@@ -15687,7 +15687,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           spendCents: pautaCents, days: 7, country: adCountry(uid),
           objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
           destinationType: mapeoAds.destinationType, targeting: targetingAds,
-          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' },
+          ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' },
         });
       } catch (e) { cr = null; crError = e; }
       if (!cr || !cr.campaignId) {
@@ -15791,7 +15791,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
             spendCents: a.spendCents, days: 7, country: adCountry(uid),
             objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
             destinationType: mapeoAds.destinationType, targeting: targetingAds,
-            ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' } : null,
+            ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' } : null,
           });
         } catch (e) {
           // (LOTE ADS-HARDENING-ACTIVACION) Si la activación falló, el
@@ -16089,6 +16089,10 @@ async function adsReadiness(userId) {
       // sin lecturas en vivo.
       igAccounts: conn.ig_accounts || [],
       publicadaUsername: (() => { try { const p = getProfile(userId); return (p && p.ig_username) || ''; } catch (e) { return ''; } })(),
+      // (LOTE ADS-IG-RESOLUCION-VIVA-2) El business de la conexión,
+      // guardado al conectar: la resolución en vivo lo usa directo
+      // en vez de re-derivarlo de la cuenta en cada impulso.
+      businessId: conn.client_business_id || '',
     };
   }
   // (2) Riel histórico de la cuenta propia: la Página resuelve con el
@@ -16241,7 +16245,7 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
         name: `Posty · Boost u${req.session.userId} · p${postId}`,
         pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
         spendCents: budgetCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
-        ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' },
+        ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' },
       });
     } catch (e) {
       return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
@@ -16287,7 +16291,7 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
         spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
         // (LOTE CONEXIÓN-PÁGINA) Riel del cliente: la campaña se crea
         // en SU cuenta publicitaria, con su SUAT.
-        ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '' } : null,
+        ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' } : null,
       });
     } catch (e) {
       return res.status(409).json({ error: 'No se pudo lanzar la pauta en Meta. No se debitó nada.', launch_error: String(e.message || e).slice(0, 300) });
@@ -47089,7 +47093,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1191';
+const BUILD_ID = '20261105-v1192';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

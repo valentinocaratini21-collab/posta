@@ -260,11 +260,19 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
   };
   const nom = (x) => x.username ? `@${x.username} (${x.id})` : x.id;
   const detalleDe = (r) => r.error ? detalleErrorMeta(r.error) : (r.dato ? `leída: ${nom(r.dato)}` : 'sin id en la respuesta');
+  // (LOTE ADS-IG-RESOLUCION-VIVA-2) El resultado de CADA borde vivo
+  // de la resolución (cuántas cuentas trajo, con qué usernames, o el
+  // error de Meta) viaja en el detalle de cualquier freno de este
+  // resolver: la primera corrida en vivo (19/11 23:40) frenó sin
+  // dejar rastro de qué devolvieron los bordes nuevos y el freno
+  // quedó ciego. Con esto, el registro del impulso dice exactamente
+  // qué borde falló y cómo.
+  let detalleVivas = '';
   const freno = (code, mensaje, ld, lp) => {
     const err = new Error(mensaje);
     err.code = code;
     err.paso = 'creativo';
-    err.detalleLecturas = `dueño del medio — ${detalleDe(ld)} · IG de la Página — ${detalleDe(lp)}`;
+    err.detalleLecturas = `dueño del medio — ${detalleDe(ld)} · IG de la Página — ${detalleDe(lp)}` + (detalleVivas ? ` · vivas: ${detalleVivas}` : '');
     return err;
   };
   // Las cuentas de IG que la PROPIA conexión del cliente guardó al
@@ -310,6 +318,7 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
   // ig_no_resuelto de abajo, que ya no desempata con publicadaId).
   if (ctx && ctx.token && ctx.adAccountId) {
     const vivas = new Map();
+    const dv = [];
     const sumarViva = (id, username, fuente) => {
       const k = String(id || '');
       if (!k) return;
@@ -317,24 +326,44 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
       if (!prev) vivas.set(k, { id: k, username: String(username || ''), fuente });
       else if (!prev.username && username) prev.username = String(username);
     };
+    const notaBorde = (nombreBorde, antes) => {
+      const nuevas = [...vivas.values()].slice(antes);
+      dv.push(nuevas.length ? `${nombreBorde}: ${nuevas.map(nom).join(', ')}` : `${nombreBorde}: 0`);
+    };
     try {
+      const antesV = vivas.size;
       const d = await g(`${act(ctx)}/instagram_accounts`, { params: { fields: 'id,username', limit: '100' }, ctx });
       for (const x of (d.data || [])) sumarViva(x && x.id, x && x.username, 'cuenta_publicitaria');
-    } catch (e) {}
-    try {
-      const a = await g(`${act(ctx)}`, { params: { fields: 'business{id}' }, ctx });
-      const bizId = a && a.business && a.business.id;
-      if (bizId) {
+      notaBorde('cuenta_publicitaria', antesV);
+    } catch (e) { dv.push(`cuenta_publicitaria: ERROR ${detalleErrorMeta(e)}`); }
+    // El business sale del guardado de la conexión (lo capturó la
+    // enumeración confiable al conectar); la lectura en vivo de la
+    // cuenta queda de respaldo.
+    let bizIdV = ctx.businessId ? String(ctx.businessId) : '';
+    if (!bizIdV) {
+      try {
+        const a = await g(`${act(ctx)}`, { params: { fields: 'business{id}' }, ctx });
+        bizIdV = (a && a.business && a.business.id) ? String(a.business.id) : '';
+        dv.push(bizIdV ? 'business: leído de la cuenta' : 'business: la cuenta no devolvió business');
+      } catch (e) { dv.push(`business: ERROR ${detalleErrorMeta(e)}`); }
+    } else dv.push('business: guardado');
+    if (bizIdV) {
+      try {
+        const antesV = vivas.size;
+        const d = await g(`/${bizIdV}/instagram_accounts`, { params: { fields: 'id,username', limit: '100' }, ctx });
+        for (const x of (d.data || [])) sumarViva(x && x.id, x && x.username, 'portfolio');
+        notaBorde('portfolio_ig', antesV);
+      } catch (e) { dv.push(`portfolio_ig: ERROR ${detalleErrorMeta(e)}`); }
+      for (const bordeP of ['owned_pages', 'client_pages']) {
         try {
-          const d = await g(`/${bizId}/instagram_accounts`, { params: { fields: 'id,username', limit: '100' }, ctx });
-          for (const x of (d.data || [])) sumarViva(x && x.id, x && x.username, 'portfolio');
-        } catch (e) {}
-        try {
-          const d = await g(`/${bizId}/owned_pages`, { params: { fields: 'id,instagram_business_account{id,username}', limit: '100' }, ctx });
+          const antesV = vivas.size;
+          const d = await g(`/${bizIdV}/${bordeP}`, { params: { fields: 'id,instagram_business_account{id,username}', limit: '100' }, ctx });
           for (const p of (d.data || [])) { const iba = p && p.instagram_business_account; if (iba) sumarViva(iba.id, iba.username, 'portfolio_paginas'); }
-        } catch (e) {}
+          notaBorde(bordeP, antesV);
+        } catch (e) { dv.push(`${bordeP}: ERROR ${detalleErrorMeta(e)}`); }
       }
-    } catch (e) {}
+    }
+    detalleVivas = dv.join(' · ');
     if (vivas.size) {
       const ldV = await leerDueno();
       if (ldV.dato) {
