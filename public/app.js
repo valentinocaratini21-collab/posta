@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1192';
+const PZ_BUILD = '20261105-v1193';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24693,7 +24693,10 @@ function pzPrefetchKick() {
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
   else if (tab === 'ads') { content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web)
   else if (tab === 'admin') { pzPaintSkeleton(tab); let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
-  else if (tab === 'conserje') { pzPaintSkeleton(tab); let __okC = true; try { await loadChunk('conserje'); } catch (e) { __okC = false; } content = __okC ? await conserjeView() : chunkFailHTML(); } // 🧑‍💼 Conserje — revisión de la noche (solo el dueño)
+  else if (tab === 'conserje') { // 🧑‍💼 (LOTE PUERTA-CONSERJE) La casa del Conserje es la consola /conserje (la navy del mock v1): la ruta sale de la app hacia la consola. El servidor siembra el token desde la sesión de la casa — un toque, sin tipear nada; sin esa sesión, la consola abre su propio gate. El panel viejo (chunk-conserje) deja de ser la casa; no se borra en este lote.
+    try { location.replace('/conserje'); } catch (e) {}
+    content = `<div class="card" style="text-align:center;padding:28px 18px"><div style="font-size:34px">🧑‍💼</div><p class="d" style="margin:8px 0 0">Abriendo tu consola…</p></div>`;
+  }
   else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') { pzPaintSkeleton(tab); content = await dogfoodView(postId); } // 🤖 Posty dogfood: propuesta del día
   else if (tab === 'ajustes') { pzPaintSkeleton(tab); let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
@@ -29753,9 +29756,10 @@ async function pzHoyEliminar(id, btn) {
   try { render(); } catch (e) {}
 }
 
-// Contador del conserje: solo con token de admin guardado (el dueño).
-// Sin token, sin revisión o sin clientes que revisar, la entrada se
-// quita (fail-closed: nunca un botón que no lleva a ningún lado). El
+// Contador del conserje: con token de admin guardado (el dueño) o con
+// la puerta de la sesión de la casa (LOTE PUERTA-CONSERJE, en el fill).
+// Sin acceso probado, sin revisión o sin clientes que revisar, la
+// entrada se quita (fail-closed: nunca un botón que no lleva a ningún lado). El
 // conteo es el del conserje (conserjeConteo: TODOS cuentan, también
 // los sin posteo). Un 401/403 quita la entrada sin recargar la página
 // (a diferencia de adminApi, que recarga).
@@ -29764,7 +29768,21 @@ async function pzHoyConserjeFill() {
   if (!slot) return;
   let t = '';
   try { t = localStorage.getItem('posta_admin_token') || ''; } catch (e) {}
-  if (!t) { try { slot.remove(); } catch (e) {} return; }
+  if (!t) {
+    // (LOTE PUERTA-CONSERJE) Este dispositivo nunca guardó el token:
+    // la puerta del servidor dice si ESTA sesión es de la casa. Si lo
+    // es, la entrada se muestra igual — al tocarla, /conserje siembra
+    // el token desde la sesión y la consola abre sin pedir nada. La
+    // sonda devuelve solo el sí/no de la propia sesión, jamás el token.
+    let casa = false;
+    try {
+      const rp = await fetch('/api/conserje/puerta', { credentials: 'same-origin' });
+      if (rp && rp.ok) { const dp = await rp.json().catch(() => null); casa = !!(dp && dp.casa); }
+    } catch (e) {}
+    if (!casa) { try { slot.remove(); } catch (e) {} return; }
+    slot.hidden = false;
+    return;
+  }
   try {
     const d = await api.get('/api/admin/support/conserje/revision?token=' + encodeURIComponent(t));
     if (!d || !d.ok) throw new Error('sin revision');
@@ -30196,7 +30214,12 @@ async function inicioView() {
     PZ_HOY_TIRA_DIAS = tiraDiasR1;
     PZ_HOY_POST_ID = hoyPostR1 ? String(hoyPostR1.id) : '';
     if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
-    const hayAdminR1 = (() => { try { return !!(localStorage.getItem('posta_admin_token') || ''); } catch (e) { return false; } })();
+    // (LOTE PUERTA-CONSERJE) La tarjeta nace oculta y la decide
+    // pzHoyConserjeFill: se emite con token guardado O con sesión real
+    // (el fill le pregunta a la puerta si esta sesión es de la casa y
+    // la muestra sin que el dueño haya tipeado el token jamás). Sin
+    // prueba de acceso, el fill la quita: nunca visible para un cliente.
+    const hayAdminR1 = (() => { try { if (localStorage.getItem('posta_admin_token')) return true; } catch (e) {} try { return !!(typeof ME !== 'undefined' && ME && ME.id && !ME.is_guest); } catch (e) { return false; } })();
     // (LOTE TIRA-SEMANA-V4 · v874 · 10/11 · decisión Valentino: la tira
     // sube a primera en Hoy, justo debajo del encabezado fijo — indicador
     // de semana, no bloque de contenido. El saludo y el posteo de hoy

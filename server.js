@@ -39638,8 +39638,46 @@ app.get('/panel', (req, res) => {
 // y la cola de producción. La página es pública como archivo, pero no
 // muestra NADA sin el token: todos sus datos salen de /api/admin/*
 // con requireAdminToken, la puerta de siempre.
+//
+// ---------- (LOTE PUERTA-CONSERJE) La puerta: la sesión de la casa ----------
+// La entrada «Conserje» de la app aterriza en /conserje. Si el pedido
+// trae la sesión de una cuenta de la casa (HOUSE_USER_IDS, la misma
+// lista que usa esCuentaPropia para el id), el servidor siembra el
+// token de admin en el localStorage de la consola DESDE ESA SESIÓN:
+// el dueño entra en un toque y nunca tipea el token. El token viaja
+// solo dentro de este HTML servido a la sesión de la casa — nunca en
+// una URL, nunca en código servido a otra sesión. Sin sesión de la
+// casa, la página sale como siempre y su propio gate pide el token
+// (y las APIs siguen en 403 sin token). Si ADMIN_TOKEN no está
+// configurado, no se siembra nada (fail-closed).
+function puertaConserjeEsCasa(req) {
+  try {
+    const uid = req.session && req.session.userId;
+    if (!uid) return false;
+    const ids = String(process.env.HOUSE_USER_IDS || '12').split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0);
+    return ids.includes(Number(uid));
+  } catch (e) { return false; }
+}
+// Sonda de la entrada: la app pregunta si ESTA sesión es de la casa
+// para mostrar la tarjeta «Conserje» aunque el dispositivo nunca haya
+// guardado el token. Devuelve solo el sí/no de la propia sesión —
+// jamás el token.
+app.get('/api/conserje/puerta', requireAuth, (req, res) => {
+  res.json({ ok: true, casa: puertaConserjeEsCasa(req) });
+});
 app.get('/conserje', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
+  const adminToken = process.env.ADMIN_TOKEN || '';
+  if (adminToken && puertaConserjeEsCasa(req)) {
+    try {
+      const html = fs.readFileSync(path.join(__dirname, 'public', 'conserje.html'), 'utf8');
+      const tag = '<script src="/conserje.js?v=2"></script>';
+      if (html.includes(tag)) {
+        const siembra = '<script>try{localStorage.setItem(\'posta_admin_token\',' + JSON.stringify(adminToken) + ')}catch(e){}</script>';
+        return res.type('html').send(html.replace(tag, siembra + tag));
+      }
+    } catch (e) { /* siembra falló: la página sale como siempre y su gate pide el token */ }
+  }
   res.sendFile(path.join(__dirname, 'public', 'conserje.html'));
 });
 
@@ -47093,7 +47131,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1192';
+const BUILD_ID = '20261105-v1193';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
