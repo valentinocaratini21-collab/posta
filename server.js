@@ -14228,7 +14228,11 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
         // (LOTE RECONEXION-ADS) El freno de identidad lleva las dos
         // cuentas en el cuerpo: la tarjeta dice la causa exacta y
         // ofrece reconectar, en vez del genérico sin salida.
-        return res.status(409).json({ ok: false, motivo: motivoFrenoD, ...(crDError && crDError.code === 'ig_fuera_de_conexion' ? { ig_duena: crDError.igDuena || null, ig_conexion: Array.isArray(crDError.igConexion) ? crDError.igConexion : [] } : {}) });
+        // (LOTE ADS-IG-RESOLUCION-VIVA) Ídem riel billetera: el
+        // mensaje para el usuario de Meta viaja con anuncio_fallido.
+        const metaMsgD = (motivoFrenoD === 'anuncio_fallido' && crDError && crDError.metaError)
+          ? String(crDError.metaError.user_msg || crDError.metaError.user_title || '').slice(0, 300) : '';
+        return res.status(409).json({ ok: false, motivo: motivoFrenoD, ...(metaMsgD ? { meta_msg: metaMsgD } : {}), ...(crDError && crDError.code === 'ig_fuera_de_conexion' ? { ig_duena: crDError.igDuena || null, ig_conexion: Array.isArray(crDError.igConexion) ? crDError.igConexion : [] } : {}) });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
@@ -15720,7 +15724,13 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // (LOTE RECONEXION-ADS) El freno de identidad lleva las dos
         // cuentas en el cuerpo: la tarjeta dice la causa exacta y
         // ofrece reconectar, en vez del genérico sin salida.
-        return res.status(409).json({ ok: false, motivo: motivoFreno, ...(crError && crError.code === 'ig_fuera_de_conexion' ? { ig_duena: crError.igDuena || null, ig_conexion: Array.isArray(crError.igConexion) ? crError.igConexion : [] } : {}) });
+        // (LOTE ADS-IG-RESOLUCION-VIVA) Con anuncio_fallido viaja el
+        // mensaje PARA EL USUARIO que Meta mismo devolvió
+        // (error_user_msg / error_user_title): la tarjeta lo muestra
+        // bajo el genérico y un rechazo real deja de ser ciego.
+        const metaMsg = (motivoFreno === 'anuncio_fallido' && crError && crError.metaError)
+          ? String(crError.metaError.user_msg || crError.metaError.user_title || '').slice(0, 300) : '';
+        return res.status(409).json({ ok: false, motivo: motivoFreno, ...(metaMsg ? { meta_msg: metaMsg } : {}), ...(crError && crError.code === 'ig_fuera_de_conexion' ? { ig_duena: crError.igDuena || null, ig_conexion: Array.isArray(crError.igConexion) ? crError.igConexion : [] } : {}) });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
@@ -27907,7 +27917,15 @@ app.get('/api/ig/unified/callback', async (req, res) => {
     const assets = await metaAds.fetchClientAssets(suat);
     const s = getSettings(uid);
     // La Página capturada: la del IG conectado; si compartió una sola, esa.
-    const page = assets.pages.find(p => p.ig_user_id && String(p.ig_user_id) === String(s.ig_user_id || ''))
+    // (LOTE ADS-IG-RESOLUCION-VIVA) La Página del IG conectado se
+    // empareja por USERNAME: el ig_user_id de la Página es del
+    // grafo de Meta y el de settings es de Instagram Login —
+    // compararlos nunca emparejaba y, con más de una Página
+    // compartida, la Página quedaba sin capturar (fb_page_id '').
+    // Respaldo: la única Página con IG; si no, la única compartida.
+    const pubUserCb = (() => { try { const p = getProfile(uid); return String((p && p.ig_username) || '').replace(/^@+/, '').trim().toLowerCase(); } catch (e) { return ''; } })();
+    const page = (pubUserCb ? assets.pages.find(p => p.ig_username && String(p.ig_username).replace(/^@+/, '').trim().toLowerCase() === pubUserCb) : null)
+      || (() => { const conIg = assets.pages.filter(p => p.ig_user_id); return conIg.length === 1 ? conIg[0] : null; })()
       || (assets.pages.length === 1 ? assets.pages[0] : null);
     // La cuenta publicitaria principal: la primera activa compartida.
     const primary = assets.adAccounts.find(a => Number(a.account_status) === 1) || assets.adAccounts[0] || null;
@@ -27925,8 +27943,14 @@ app.get('/api/ig/unified/callback', async (req, res) => {
       console.error('[ig/unified/callback] enumeración de cuentas sin resultado y con error:', assets.adAccountsError);
       return res.redirect(adsWithQs(dest(), 'igads=error&msg=' + encodeURIComponent(assets.adAccountsError)));
     }
+    // (LOTE ADS-IG-RESOLUCION-VIVA) ig_account_ids guarda SOLO ids
+    // del grafo de Meta (los instagram_business_account de las
+    // Páginas compartidas): el id de settings (Instagram Login, el
+    // de publicar) NO entra — no es válido como instagram_user_id
+    // del creativo, y su presencia en la lista hacía que la
+    // resolución lo tratara como verificado y lo mandara: el code
+    // 100 de Meta en todos los intentos del 18 y 19/11.
     const igIds = new Set(assets.igAccountIds);
-    if (s.ig_user_id) igIds.add(String(s.ig_user_id));
     // Sin cuenta publicitaria compartida (la salteó en el diálogo), la
     // conexión de posteos queda completa igual: la fila se guarda con
     // el SUAT y estado 'sin_cuenta'; la compuerta ofrece el mismo
@@ -47065,7 +47089,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1190';
+const BUILD_ID = '20261105-v1191';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

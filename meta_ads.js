@@ -286,13 +286,80 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
   // conectar respondió). Lo que no cierra frena ANTES de crear
   // nada, con el motivo honesto — jamás viaja un id de otra cuenta.
   const normU = (u) => String(u || '').replace(/^@+/, '').trim().toLowerCase();
+  // (LOTE ADS-IG-RESOLUCION-VIVA) La fuente primaria pasa a ser la
+  // cuenta publicitaria MISMA, leída en vivo con el token del riel:
+  // /{act}/instagram_accounts es el borde que la doc de Meta manda
+  // para instagram_user_id (ids en el espacio de nombres que el
+  // creativo valida, con su username), y el portfolio dueño de la
+  // cuenta expone las suyas y las instagram_business_account de sus
+  // Páginas por business_management — los permisos que el SUAT del
+  // diálogo SÍ trae. Hace falta porque las dos vías anteriores
+  // volvieron vacías para el dueño: leer el dueño del medio y la IG
+  // de la Página por los bordes de lectura general falló con ese
+  // token (intento 8), y la captura al conectar por /me/accounts
+  // volvió sin ninguna instagram_business_account — la fila guardó
+  // SOLO el id de Instagram Login que el callback sumaba a
+  // ig_account_ids, y ese id (el de PUBLICAR, inválido en este
+  // grafo) viajó como instagram_user_id: el code 100 de Meta en
+  // TODOS los intentos del 18 y 19/11 (posteos 582, 713 y 695).
+  // Arbitraje: la dueña del medio manda si su lectura responde y
+  // está entre las vivas (si responde y NO está, hay contradicción
+  // demostrada y frena); si no, el username de publicación entre
+  // las vivas; si hay una sola viva, esa. Lo guardado queda de
+  // respaldo y el id de publicación no viaja nunca (ver el freno
+  // ig_no_resuelto de abajo, que ya no desempata con publicadaId).
+  if (ctx && ctx.token && ctx.adAccountId) {
+    const vivas = new Map();
+    const sumarViva = (id, username, fuente) => {
+      const k = String(id || '');
+      if (!k) return;
+      const prev = vivas.get(k);
+      if (!prev) vivas.set(k, { id: k, username: String(username || ''), fuente });
+      else if (!prev.username && username) prev.username = String(username);
+    };
+    try {
+      const d = await g(`${act(ctx)}/instagram_accounts`, { params: { fields: 'id,username', limit: '100' }, ctx });
+      for (const x of (d.data || [])) sumarViva(x && x.id, x && x.username, 'cuenta_publicitaria');
+    } catch (e) {}
+    try {
+      const a = await g(`${act(ctx)}`, { params: { fields: 'business{id}' }, ctx });
+      const bizId = a && a.business && a.business.id;
+      if (bizId) {
+        try {
+          const d = await g(`/${bizId}/instagram_accounts`, { params: { fields: 'id,username', limit: '100' }, ctx });
+          for (const x of (d.data || [])) sumarViva(x && x.id, x && x.username, 'portfolio');
+        } catch (e) {}
+        try {
+          const d = await g(`/${bizId}/owned_pages`, { params: { fields: 'id,instagram_business_account{id,username}', limit: '100' }, ctx });
+          for (const p of (d.data || [])) { const iba = p && p.instagram_business_account; if (iba) sumarViva(iba.id, iba.username, 'portfolio_paginas'); }
+        } catch (e) {}
+      }
+    } catch (e) {}
+    if (vivas.size) {
+      const ldV = await leerDueno();
+      if (ldV.dato) {
+        if (vivas.has(ldV.dato.id)) return { id: ldV.dato.id, fuente: 'viva_dueno' };
+        throw freno('ig_conflicto', `La cuenta de Instagram dueña del posteo (${nom(ldV.dato)}) no está entre las cuentas que la cuenta publicitaria puede usar (${[...vivas.values()].map(nom).join(', ')}): el impulso se frenó antes de crear el aviso.`, ldV, { dato: null, error: null });
+      }
+      const pubUV = normU(ctx.publicadaUsername);
+      if (pubUV) {
+        const mV = [...vivas.values()].filter((a) => normU(a.username) && normU(a.username) === pubUV);
+        if (mV.length === 1) return { id: mV[0].id, fuente: 'viva_username' };
+      }
+      if (vivas.size === 1) { const uV = [...vivas.values()][0]; return { id: uV.id, fuente: 'viva_unica' }; }
+    }
+  }
   const detalladas = [...new Map((ctx && Array.isArray(ctx.igAccounts) ? ctx.igAccounts : [])
     .map((a) => ({ id: String((a && a.id) || ''), username: String((a && a.username) || ''), page_id: String((a && a.page_id) || ''), usable: (a && a.usable_en_cuenta !== undefined) ? a.usable_en_cuenta : null }))
     .filter((a) => a.id).map((a) => [a.id, a])).values()];
   const guardadas = detalladas.length
     ? detalladas.map((a) => a.id)
     : [...new Set((ctx && Array.isArray(ctx.igAccountIds) ? ctx.igAccountIds : []).map((x) => String(x || '')).filter(Boolean))];
-  if (guardadas.length === 1) {
+  // (LOTE ADS-IG-RESOLUCION-VIVA) Si la única guardada ES el id de
+  // publicación (publicadaId), es el id de Instagram Login que el
+  // callback sumaba a la lista: no viaja como verificada — se cae
+  // al arbitraje en vivo de abajo, que frena si no puede verificar.
+  if (guardadas.length === 1 && String(guardadas[0]) !== String(publicadaId || '')) {
     // Una sola guardada SIN detalle (fila vieja) o con el username
     // de publicación coincidente: viaja como hoy (v1167, el caso
     // del intento 8). Pero una sola DETALLADA cuyo username
@@ -392,17 +459,14 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
       }
       return { id: pagina.id, fuente: 'guardada_pagina' };
     }
-    // Ninguna lectura respondió: desempata la cuenta que PUBLICA
-    // los posteos de este usuario (settings.ig_user_id — la fila
-    // del posteo no guarda cuenta; es la única identidad de
-    // publicación que el servidor conoce y el llamador la pasa
-    // como publicadaId). Si tampoco está entre las compartidas,
-    // no hay desempate concluyente: freno.
-    const pub = String(publicadaId || '');
-    if (pub && guardadas.includes(pub)) {
-      return { id: pub, fuente: 'guardada_publicada' };
-    }
-    throw freno('ig_no_resuelto', `No se pudo verificar cuál de las cuentas de Instagram compartidas (${guardadas.join(', ')}) es la dueña del posteo ${igMediaId} (ni el dueño del medio ni la Instagram de la Página pudieron leerse, y la cuenta de publicación no está entre las compartidas): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
+    // Ninguna lectura respondió ni hubo candidata verificada:
+    // freno. (LOTE ADS-IG-RESOLUCION-VIVA) La cuenta que PUBLICA
+    // (publicadaId = settings.ig_user_id, el id de Instagram
+    // Login) ya NO desempata devolviéndose como instagram_user_id:
+    // ese id no es válido en este grafo y mandarlo era el code 100
+    // de Meta en todos los intentos del dueño. Sin verificación no
+    // viaja ningún id, como manda la regla de la función.
+    throw freno('ig_no_resuelto', `No se pudo verificar cuál de las cuentas de Instagram compartidas (${guardadas.join(', ')}) es la dueña del posteo ${igMediaId} (ni el dueño del medio ni la Instagram de la Página pudieron leerse): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
   }
   // Sin cuentas guardadas útiles (riel de Posty o filas viejas): la
   // resolución de v1163 tal cual — la dueña manda, la IG de la

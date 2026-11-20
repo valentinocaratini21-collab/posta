@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1190';
+const PZ_BUILD = '20261105-v1191';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -23488,8 +23488,12 @@ function pzBoostErrorHTML(motivo, monto, cobroId) {
       return `<div role="alert" style="border:1.5px solid #E5A3A3;background:#FDF0F0;border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.5;color:#7A1F1F"><b>${esc(causa)}</b><br>${esc(gzT('No se cobró nada.', 'Nothing was charged.'))}<button type="button" class="btn btn-primary btn-block" style="margin-top:10px" onclick="pzAdsCambiarConexion(this)">${esc(gzT('Reconectar con la cuenta correcta', 'Reconnect with the right account'))}</button></div>`;
     }
   }
+  // (LOTE ADS-IG-RESOLUCION-VIVA) Si Meta mandó su mensaje para el
+  // usuario (meta_msg del 409), va pegado al genérico: el motivo
+  // real se lee en la tarjeta, no queda solo en el registro.
+  const beMM = (pzBoostState && pzBoostState.boostError) || {};
   const paso = (motivo === 'anuncio_fallido')
-    ? gzT('Meta no aceptó la campaña.', 'Meta didn’t accept the campaign.')
+    ? gzT('Meta no aceptó la campaña.', 'Meta didn’t accept the campaign.') + (beMM.metaMsg ? ' ' + beMM.metaMsg : '')
     : pzBoostMotivo(motivo, monto, cobroId);
   const yaDice = /no se (cobró|gastó)|nothing was (charged|spent)/i.test(paso);
   const garantia = yaDice ? '' : gzT('No se cobró nada.', 'Nothing was charged.');
@@ -23585,7 +23589,7 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     // mensaje es el FEE que hay que pagar (feeCents del 409), no la
     // pauta del impulso frenado.
     const montoMsg = (motivo === 'fee_pendiente' && j && j.feeCents) ? Math.round(Number(j.feeCents)) / 100 : monto;
-    s.boostError = { motivo, monto: montoMsg, cobroId: (j && j.cobroId) || null, igDuena: (j && j.ig_duena) || '', igConexion: (j && Array.isArray(j.ig_conexion)) ? j.ig_conexion : [] };
+    s.boostError = { motivo, monto: montoMsg, cobroId: (j && j.cobroId) || null, igDuena: (j && j.ig_duena) || '', igConexion: (j && Array.isArray(j.ig_conexion)) ? j.ig_conexion : [], metaMsg: (j && j.meta_msg) || '' };
     if (msgEl) msgEl.innerHTML = pzBoostErrorHTML(motivo, montoMsg, j && j.cobroId);
     pzBoostPintarError();
     // (LOTE CIERRE-ADS · FIX 2.6) Garantía de visibilidad: si la
