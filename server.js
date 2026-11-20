@@ -21589,6 +21589,119 @@ app.post('/api/admin/posts/reparar-porque-ajeno', requireAdminToken, express.jso
   }
 });
 
+// ---------- (LOTE PUERTA-PIEZA-MANO) LA CARGA DEL OPERADOR EN CUALQUIER CUENTA ----------
+// El hueco que cierra (verificado en fuente sobre v1201): la línea a
+// mano no tenía puerta para cargar una pieza TERMINADA en una cuenta
+// que no es invitada de prueba. La creación de posteos es solo por
+// sesión del dueño (POST /api/posts, requireAuth; cookie httpOnly +
+// SameSite=Lax: el navegador firmado no puede emitir el POST), la UI
+// no tiene compositor manual, «Que Posty lo arme» no crea nada en la
+// cuenta propia (freno + guarda, correcto) y pieza-mano solo escribe
+// dentro de semanas de prueba (trial_cache). Las demás candidatas no
+// sirven para una pieza terminada: ideas/make genera el borrador por
+// software, vista/producir solo abre una orden, ig/adopt adopta un
+// posteo ya publicado y pedidos-subir/:id/aprobar genera el caption
+// (albumPropuesta), agenda desde mañana y aplica enhancePhotoGenerate
+// sobre la foto. Esta ruta es la puerta del OPERADOR (token admin; el
+// software nunca la llama): crea el posteo con la semántica exacta de
+// la creación por sesión — caption y hashtags VERBATIM, scheduled_at
+// exacto, status 'scheduled', needs_review nace 0 y corre el mismo
+// lint v198-A (scheduleLintForPost) que corre POST /api/posts al
+// nacer programado — y respeta las guardas de siempre: el
+// anti-duplicado por caption de la creación (24 h, todo estado no
+// cancelado) Y el de programar (captionDuplicadoProgramadoDe:
+// programado o publicado en 7 días). El chequeo de integridad
+// pre-publicación es función del dato (proyección de GET /api/posts +
+// freno del scheduler): la fila creada queda sujeta a él igual que
+// una de sesión, y su veredicto además se devuelve acá al cargar.
+// La marca de origen es source='pieza-mano': en posts no existía una
+// marca genérica de pieza a mano del operador — la de pieza-mano en
+// semanas de prueba es 'trial', atada a la semana importada (con
+// efectos propios: selectores de borradores de prueba, exención del
+// lint, ancla de días) y por eso no se reutiliza en cuentas reales.
+// Las guardas de GENERACIÓN (FRENO-CUENTA-PROPIA y familia) no se
+// tocan: viven en los caminos de creación del software, no acá.
+// Cierre del pedido-subir: con pedido_id de un pedido abierto del
+// mismo usuario y el mismo asset, la carga lo deja 'armado' contra el
+// posteo creado (la misma forma final que deja la aprobación) — un
+// aprobar posterior por la ruta del software cae en su rama de
+// «ya armado» y no crea nada.
+app.post('/api/admin/posts/cargar-pieza', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    const uid = parseInt(body.user_id, 10);
+    if (!Number.isInteger(uid) || uid <= 0) return res.status(400).json({ ok: false, error: 'user_id requerido' });
+    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(uid);
+    if (!user) return res.status(404).json({ ok: false, error: 'usuario_no_existe' });
+    const imagePath = String(body.image_path || '').trim();
+    if (!imagePath) return res.status(400).json({ ok: false, error: 'falta image_path' });
+    // El material es de ESA cuenta: fila suya en assets + archivo en disco.
+    const asset = db.prepare('SELECT id, file_path, kind FROM assets WHERE user_id = ? AND file_path = ? ORDER BY id DESC LIMIT 1').get(uid, imagePath);
+    if (!asset) return res.status(400).json({ ok: false, error: 'asset_ajeno_o_inexistente' });
+    if (!fs.existsSync(path.join(MEDIA_DIR, path.basename(imagePath)))) return res.status(400).json({ ok: false, error: 'asset_sin_archivo' });
+    const scheduledAt = String(body.scheduled_at || '').trim();
+    if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) return res.status(400).json({ ok: false, error: 'scheduled_at_invalido' });
+    const caption = body.caption == null ? '' : String(body.caption);
+    const hashtags = body.hashtags == null ? '' : String(body.hashtags);
+    // Normalización de formato: la misma de la creación por sesión.
+    const mt = body.media_type === 'video' ? 'video' : body.media_type === 'story' ? 'story' : body.media_type === 'carousel' ? 'carousel' : 'image';
+    let cpaths = '';
+    if (mt === 'carousel' && Array.isArray(body.carousel_paths)) cpaths = JSON.stringify(body.carousel_paths.filter(Boolean).slice(0, 10));
+    // Anti-duplicado (1): el de la creación por sesión (POST /api/posts).
+    const capTrim = caption.trim();
+    if (capTrim) {
+      const dup = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`).get(uid, capTrim);
+      if (dup) return res.status(409).json({ ok: false, error: 'Ya creaste este posteo hoy. Lo ves en tu historial.', post_id: dup.id });
+    }
+    // Anti-duplicado (2): el de programar (mismo caption ya programado
+    // o publicado en los últimos 7 días, por cuerpo normalizado).
+    const dupProg = captionDuplicadoProgramadoDe(uid, caption, 0);
+    if (dupProg) return res.status(409).json({ ok: false, error: 'caption_duplicado', duplicado_de: dupProg.id, message: 'Este posteo repite el texto de otro posteo ya programado o publicado en los últimos 7 días, así que no se programó. Cambiá el texto y probá de nuevo.' });
+    // Cierre del pedido-subir: se valida ANTES de crear (todo o nada).
+    let ped = null;
+    if (body.pedido_id != null) {
+      ped = subirPedidoRow(body.pedido_id);
+      if (!ped) return res.status(404).json({ ok: false, error: 'pedido_no_existe' });
+      if (Number(ped.user_id) !== uid) return res.status(409).json({ ok: false, error: 'pedido_de_otra_cuenta' });
+      if (Number(ped.asset_id) !== Number(asset.id)) return res.status(409).json({ ok: false, error: 'pedido_de_otro_asset' });
+      if (ped.estado !== 'pendiente_revision') return res.status(409).json({ ok: false, error: 'pedido_no_abierto', estado: ped.estado });
+    }
+    const coverPath = body.cover_path ? String(body.cover_path) : '';
+    const r = db.prepare(
+      'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review, script, source, cover_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(uid, imagePath, caption, hashtags, scheduledAt, 'scheduled', mt, '', '', cpaths, '', '', 0, '', 'pieza-mano', coverPath);
+    const newId = Number(r.lastInsertRowid);
+    // (v198-A) El mismo lint que la creación por sesión al nacer
+    // programado: si el caption no pasa el gate, marca needs_review
+    // (el fundador es exento, como en todo el sistema). Nunca rompe.
+    try { scheduleLintForPost(uid, newId); } catch (e) { /* el lint nunca frena la carga */ }
+    // Cierre del pedido contra el posteo creado, en la misma operación.
+    let pedidoOut = null;
+    if (ped) {
+      let dia = scheduledAt.slice(0, 10), hora = '';
+      try { dia = ymdInTz(scheduledAt, userTz(uid)) || dia; } catch (e) {}
+      try { hora = armarSlotLabel(uid, scheduledAt).hora || ''; } catch (e) {}
+      const armado = { scheduled_at: scheduledAt, dia, hora, camino: 'pieza-mano', desplazado_post_id: null, mejora_aplicada: false, subs_aplicados: false, subs_quemados: null };
+      db.prepare(`UPDATE subir_pedidos_voz SET estado = 'armado', post_id = ?, armado = ?, error = '', decided_at = datetime('now'), decided_by = 'equipo' WHERE id = ?`)
+        .run(newId, JSON.stringify(armado), ped.id);
+      pedidoOut = { id: Number(ped.id), estado: 'armado', post_id: newId };
+    }
+    // Integridad pre-publicación: el veredicto sobre la fila creada
+    // (la proyección y el scheduler lo siguen corriendo igual).
+    let integridad = { ok: true };
+    try {
+      const row = db.prepare('SELECT * FROM posts WHERE id = ?').get(newId);
+      const v = require('./integridad-prepublicacion').chequeoIntegridad(db, row, { mediaDir: MEDIA_DIR });
+      if (v && v.ok === false) integridad = { ok: false, motivo: v.motivo, contra_id: v.contra_id || null };
+    } catch (e) { /* fail-open, como la proyección */ }
+    const post = db.prepare('SELECT id, user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source, needs_review, cover_path FROM posts WHERE id = ?').get(newId);
+    console.log(`[admin] cargar-pieza: post ${newId} (usuario ${uid}) programado para ${scheduledAt} desde asset ${asset.id}${ped ? ` · pedido-subir ${ped.id} cerrado contra el posteo` : ''}`);
+    return res.json({ ok: true, id: newId, post, integridad, ...(pedidoOut ? { pedido: pedidoOut } : {}) });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String((e && e.message) || e).slice(0, 200) });
+  }
+});
+
 // Si el usuario nunca configuró image_base_url, la deducimos del host actual (https en
 // producción). Sin esto Instagram no puede descargar la imagen y la publicación real falla.
 function ensureImageBaseUrl(db, userId, req) {
@@ -47636,7 +47749,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1202';
+const BUILD_ID = '20261105-v1203';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
