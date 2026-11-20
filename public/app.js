@@ -8848,9 +8848,6 @@ function landingView(cfg) {
       <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí: cuando un posteo anda muy bien te lo marcamos y te proponemos potenciarlo, siempre con tu OK en un toque; la pauta va por tu cuenta de Meta, aparte de la suscripción.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo: las ideas, el diseño y la publicación están dentro de tu plan, sin contratar a nadie más. Con nosotros alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
     <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con nosotros <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a></p>
-    <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-primary lp-cta-big" href="/prueba">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></a>
-    </div>
   </div></div>
   <div class="lp-final"><div class="wrap">
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
