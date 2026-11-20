@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1210';
+const PZ_BUILD = '20261105-v1211';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24476,11 +24476,11 @@ function bootSplashOff() {
     const sp = window.__pzSplash;
     if (sp && !sp.done) {
       // (LOTE APERTURA-MAGIA) La app ya pintó detrás de la presentación
-      // de apertura: el subtítulo sigue el idioma de la CUENTA y la
-      // salida espera a que la animación cumpla su duración — nunca un
-      // corte a mitad de la magia y nunca una espera de más si ya
-      // cumplió (el timer propio del shell la saca igual a los 1600 ms).
-      try { const sub = document.getElementById('pz-splash-sub'); if (sub && typeof ME !== 'undefined' && ME && ME.lang === 'en') sub.textContent = 'your community managers'; } catch (e) {}
+      // de apertura: la salida espera a que la animación cumpla su
+      // duración — nunca un corte a mitad de la magia y nunca una
+      // espera de más si ya cumplió (el timer propio del shell la saca
+      // igual a los 1600 ms). (LOTE APERTURA-UNICA: la presentación ya
+      // no lleva subtítulo en ningún idioma — no hay texto que ajustar.)
       sp.appReady = true;
       const wait = 1600 - (performance.now() - sp.t0);
       if (wait > 0) { setTimeout(() => { try { sp.finish(300); } catch (e) {} }, wait); return; }

@@ -27,6 +27,26 @@
 })();
 </script>
 <script>
+/* (LOTE APERTURA-UNICA) Contexto app desde el PRIMER paint: la misma
+   detección que activa la magia al final del body, pero acá — antes de
+   que se pinte nada — para marcar <html> con .pz-appctx. Con esa clase
+   el boot nace con el degradé de la magia y sin su contenido anterior
+   (ruedita + «Cargando…»): en la app, la primera pintura ES la
+   presentación, nunca la pantalla anterior. En web (sin la clase) el
+   boot queda exactamente como siempre. */
+(function () {
+  try {
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+    var nativeApp = false;
+    try { nativeApp = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()); } catch (e) {}
+    var h = location.hash || '';
+    var appCtx = standalone || nativeApp || h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0;
+    try { if (sessionStorage.getItem('posta_ver_web') === '1') appCtx = false; } catch (e) {}
+    if (appCtx) { document.documentElement.classList.add('pz-appctx'); window.__pzAppCtx = true; }
+  } catch (e) {}
+})();
+</script>
+<script>
 /* 🩹 Auto-cura de cáscara: compara el build con el que se SIRVIÓ este HTML
    (lo inyecta el servidor en __POSTY_BUILD__) contra /api/version en vivo.
    Si difieren, este teléfono quedó con una copia vieja guardada (caché/PWA
@@ -370,7 +390,6 @@
     <svg class="pzsp-star" style="--sx:31cqw;--sy:20.1cqh;animation-delay:.08s" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z"/></svg>
     <div class="pzsp-face"><img src="/posty-splash-cara.webp" alt="" width="380" height="387"></div>
     <div class="pzsp-word">Posty<span class="pzsp-dot">.</span></div>
-    <div class="pzsp-sub" id="pz-splash-sub">tus community managers</div>
   </div>
 </div>
 <style>
@@ -394,32 +413,41 @@
    Posty (asset /posty-splash-cara.webp = posty-cara-v2 del mock, con
    su terminación: el busto se DISUELVE con mask-image en degradé,
    negro hasta 76% y transparente a 97% — nada de corte duro), sube
-   «Posty» y el punto cae en amarillo; abajo, el subtítulo por idioma.
+   «Posty» y el punto cae en amarillo. (Corrección del dueño 20/11 ·
+   LOTE APERTURA-UNICA: la cara va en TAMAÑO LOGO — como el logo de la
+   apertura de Oppi, proporcionada como ícono de app — con estrellitas,
+   aro y glow reescalados a su alrededor, y la presentación NO lleva
+   subtítulo en ningún idioma.)
    Los % de los keyframes son los del mock; la duración total es
    1,6 s (< 2 s) y la salida es fundido de 300 ms. */
+/* (LOTE APERTURA-UNICA) En contexto app el boot NACE con el degradé de
+   la magia y sin su contenido anterior: la clase .pz-appctx la pone el
+   script del <head> antes del primer paint, así la primera pintura ya
+   es la presentación y la etapa aparece sobre el mismo fondo, sin
+   flash de la pantalla anterior. */
+html.pz-appctx #posty-boot{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%)}
+html.pz-appctx #posty-boot .pz-boot-spin,html.pz-appctx #posty-boot .pz-boot-txt{display:none}
 #posty-boot.pz-magic{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
 #posty-boot.pz-magic-out{opacity:0}
 #posty-boot .pzsp-stage{display:none}
 #posty-boot.pz-magic .pz-boot-spin,#posty-boot.pz-magic .pz-boot-txt{display:none}
 #posty-boot.pz-magic .pzsp-stage{display:block;position:absolute;inset:0;container-type:size;overflow:hidden;font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif}
 .pzsp-tiny{position:absolute;border-radius:50%;background:rgba(255,255,255,.5);width:5px;height:5px;animation:pzspFloat 2.6s ease-in-out infinite}
-.pzsp-glow{position:absolute;left:50%;top:37.2%;width:210px;width:83.3cqw;height:210px;height:83.3cqw;margin:-105px 0 0 -105px;margin:-41.65cqw 0 0 -41.65cqw;border-radius:50%;background:radial-gradient(circle,rgba(254,193,77,.55) 0%,rgba(254,193,77,0) 68%);animation:pzspGlow 1.6s ease-in-out 1 both}
-.pzsp-ring{position:absolute;left:50%;top:37.2%;width:172px;width:68.3cqw;height:172px;height:68.3cqw;margin:-86px 0 0 -86px;margin:-34.15cqw 0 0 -34.15cqw;border-radius:50%;border:2px solid rgba(254,193,77,.8);animation:pzspRing 1.6s ease-out 1 both}
-.pzsp-star{position:absolute;left:50%;top:36%;width:24px;width:9.5cqw;height:24px;height:9.5cqw;margin:-12px 0 0 -12px;margin:-4.75cqw 0 0 -4.75cqw;color:#FEC14D;animation:pzspIn 1.6s cubic-bezier(.22,.8,.32,1) 1 both}
-.pzsp-face{position:absolute;left:50%;top:10.9%;width:204px;width:81cqw;margin-left:-102px;margin-left:-40.5cqw;animation:pzspFace 1.6s cubic-bezier(.22,.8,.32,1) 1 both}
-.pzsp-face img{width:100%;display:block;filter:drop-shadow(0 16px 22px rgba(10,30,51,.35));-webkit-mask-image:linear-gradient(to bottom,#000 76%,transparent 97%);mask-image:linear-gradient(to bottom,#000 76%,transparent 97%)}
-.pzsp-word{position:absolute;left:0;right:0;top:67.4%;text-align:center;font-size:39px;font-size:15.5cqw;font-weight:800;color:#fff;letter-spacing:-1px;letter-spacing:-.4cqw;animation:pzspWord 1.6s ease-in-out 1 both}
+.pzsp-glow{position:absolute;left:50%;top:40%;width:136px;width:54cqw;height:136px;height:54cqw;margin:-68px 0 0 -68px;margin:-27cqw 0 0 -27cqw;border-radius:50%;background:radial-gradient(circle,rgba(254,193,77,.55) 0%,rgba(254,193,77,0) 68%);animation:pzspGlow 1.6s ease-in-out 1 both}
+.pzsp-ring{position:absolute;left:50%;top:40%;width:106px;width:42cqw;height:106px;height:42cqw;margin:-53px 0 0 -53px;margin:-21cqw 0 0 -21cqw;border-radius:50%;border:2px solid rgba(254,193,77,.8);animation:pzspRing 1.6s ease-out 1 both}
+.pzsp-star{position:absolute;left:50%;top:40%;width:24px;width:9.5cqw;height:24px;height:9.5cqw;margin:-12px 0 0 -12px;margin:-4.75cqw 0 0 -4.75cqw;color:#FEC14D;animation:pzspIn 1.6s cubic-bezier(.22,.8,.32,1) 1 both}
+.pzsp-face{position:absolute;left:50%;top:40%;width:71px;width:28cqw;margin:-36px 0 0 -36px;margin:-14.25cqw 0 0 -14cqw;animation:pzspFace 1.6s cubic-bezier(.22,.8,.32,1) 1 both}
+.pzsp-face img{width:100%;height:auto;display:block;filter:drop-shadow(0 16px 22px rgba(10,30,51,.35));-webkit-mask-image:linear-gradient(to bottom,#000 76%,transparent 97%);mask-image:linear-gradient(to bottom,#000 76%,transparent 97%)}
+.pzsp-word{position:absolute;left:0;right:0;top:51%;text-align:center;font-size:39px;font-size:15.5cqw;font-weight:800;color:#fff;letter-spacing:-1px;letter-spacing:-.4cqw;animation:pzspWord 1.6s ease-in-out 1 both}
 .pzsp-dot{display:inline-block;color:#FEC14D;animation:pzspDot 1.6s ease-in-out 1 both}
-.pzsp-sub{position:absolute;left:0;right:0;top:77.8%;text-align:center;color:rgba(255,255,255,.88);font-size:15px;font-size:5.75cqw;font-weight:500;letter-spacing:.2px;animation:pzspSub 1.6s ease-in-out 1 both}
 @keyframes pzspIn{0%{transform:translate(var(--sx),var(--sy)) scale(.3) rotate(0deg);opacity:0}16%{opacity:1}40%{transform:translate(0,0) scale(1) rotate(100deg);opacity:1}52%,100%{transform:translate(0,0) scale(0) rotate(160deg);opacity:0}}
 @keyframes pzspFace{0%,28%{transform:scale(.45) translateY(26px);opacity:0}50%{transform:scale(1.05) translateY(0);opacity:1}57%{transform:scale(.99)}64%{transform:scale(1)}86%{transform:scale(1) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(-3px);opacity:1}}
 @keyframes pzspGlow{0%,34%{opacity:0;transform:scale(.55)}58%{opacity:.6}86%{opacity:.6}100%{opacity:.55}}
 @keyframes pzspRing{0%,50%{transform:scale(.55);opacity:0}60%{opacity:.75}80%,100%{transform:scale(1.25);opacity:0}}
 @keyframes pzspWord{0%,56%{transform:translateY(16px);opacity:0}68%,100%{transform:translateY(0);opacity:1}}
 @keyframes pzspDot{0%,64%{transform:translateY(-16px) scale(.4);opacity:0}76%{transform:translateY(1px) scale(1.25);opacity:1}83%,100%{transform:translateY(0) scale(1);opacity:1}}
-@keyframes pzspSub{0%,70%{transform:translateY(8px);opacity:0}80%,100%{transform:translateY(0);opacity:1}}
 @keyframes pzspFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
-@media (prefers-reduced-motion: reduce){.pzsp-star,.pzsp-face,.pzsp-glow,.pzsp-ring,.pzsp-word,.pzsp-dot,.pzsp-sub{animation-duration:.5s}}
+@media (prefers-reduced-motion: reduce){.pzsp-star,.pzsp-face,.pzsp-glow,.pzsp-ring,.pzsp-word,.pzsp-dot{animation-duration:.5s}}
 </style>
 <script>
 /* (LOTE APERTURA-MAGIA) Activación de la presentación: SOLO contexto
@@ -440,7 +468,6 @@
     try { if (sessionStorage.getItem('posta_ver_web') === '1') appCtx = false; } catch (e) {}
     if (!appCtx) return;
     boot.classList.add('pz-magic');
-    try { if (localStorage.getItem('posty-lang') === 'en') { var sub = document.getElementById('pz-splash-sub'); if (sub) sub.textContent = 'your community managers'; } } catch (e) {}
     var sp = window.__pzSplash = { t0: performance.now(), done: false, appReady: false, finish: null };
     sp.finish = function (fadeMs) {
       if (sp.done) return; sp.done = true;
@@ -455,7 +482,7 @@
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=842"></script>
+<script src="/app.js?v=843"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */

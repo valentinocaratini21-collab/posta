@@ -1034,6 +1034,35 @@ app.use('/fonts', express.static(path.join(__dirname, 'fonts'), {
 app.use(waitlist.createWaitlistGate());
 waitlist.registerWaitlistRoutes(app, db);
 
+// (LOTE APERTURA-UNICA) La cáscara ES se sirve con el build INYECTADO.
+// El script «Auto-cura de cáscara» del propio index.html compara el
+// __POSTY_BUILD__ servido contra /api/version y recarga una vez si el
+// teléfono quedó con una copia vieja (caché/PWA de iOS — el caso del
+// dueño 20/11: su PWA abría con la pantalla de arranque retirada en
+// v561, la de la cara en círculo). Hasta este lote NADIE reemplazaba el
+// placeholder: el HTML servido lo traía literal, el script veía
+// '__POSTY…' y volvía temprano — la auto-cura nacía muerta y la cáscara
+// vieja quedaba para siempre. Esta ruta va DESPUÉS del gate de lista de
+// espera y ANTES del static (si no, el static ya habría servido el
+// archivo crudo). BUILD_ID se lee dentro del handler: su const vive más
+// abajo en este archivo y al atender pedidos ya está inicializada. El
+// index EN no tiene boot ni placeholder: no se toca.
+let PZ_SHELL_ES = null;
+const pzServeShellEs = (req, res) => {
+  try {
+    if (PZ_SHELL_ES === null) {
+      PZ_SHELL_ES = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').split('__POSTY_BUILD__').join(BUILD_ID);
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.send(PZ_SHELL_ES);
+  } catch (e) {
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+};
+app.get('/', pzServeShellEs);
+app.get('/index.html', pzServeShellEs);
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, fp) => {
     // sw.js: SIEMPRE fresco — si queda cacheado, la PWA no se entera de
@@ -47856,7 +47885,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1210';
+const BUILD_ID = '20261105-v1211';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
