@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1189';
+const PZ_BUILD = '20261105-v1190';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -21604,6 +21604,66 @@ async function pzBoostConectarCuenta(btn) {
   sinSaltoBoost();
 }
 
+// (LOTE RECONEXION-ADS) La tarjeta de conexión del tab Ads: el
+// estado REAL de la conexión publicitaria, visible también — y
+// sobre todo — cuando la compuerta está «lista». Hasta este lote
+// ese estado no se pintaba en ningún lado: la conexión podía estar
+// capturada con las cuentas de otro idioma y el dueño lo descubría
+// recién cuando el impulso moría (19/11). La línea dice qué
+// Página, qué Instagram y qué cuenta publicitaria quedaron
+// guardados; lo que la fila no trae no se inventa: se omite.
+function pzAdsConexionHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = pzBoostState || {};
+  const cx = s.conexion || null;
+  let linea = '';
+  let btnTxt = '';
+  if (cx && (cx.page_id || cx.ig_id || cx.ad_account_id)) {
+    const partes = [];
+    if (cx.page_name || cx.page_id) partes.push((en ? 'Page ' : 'Página ') + (cx.page_name || cx.page_id));
+    if (cx.ig_username) partes.push('Instagram @' + cx.ig_username);
+    else if (cx.ig_id) partes.push('Instagram ' + cx.ig_id);
+    if (cx.ad_account_name || cx.ad_account_id) partes.push((en ? 'Ad account ' : 'Cuenta publicitaria ') + (cx.ad_account_name || cx.ad_account_id));
+    linea = (en ? 'Connected: ' : 'Conectado: ') + partes.join(' · ');
+    if (cx.ad_account_id) {
+      btnTxt = en ? 'Change connection' : 'Cambiar conexión';
+    } else {
+      linea += en ? ' · the ad account is still missing' : ' · falta la cuenta publicitaria';
+      btnTxt = en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria';
+    }
+  } else {
+    linea = en ? 'Your ad account isn’t connected yet.' : 'Todavía no conectaste tu cuenta publicitaria.';
+    btnTxt = en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria';
+  }
+  return `<section style="margin:0 0 12px"><div style="border:1.5px solid #dce6ee;background:#fff;border-radius:16px;padding:12px 14px"><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p><button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div></section>`;
+}
+
+// (LOTE RECONEXION-ADS) «Cambiar conexión» (y «Reconectar con la
+// cuenta correcta» de la tarjeta de identidad): abre el flujo
+// unificado de Meta con el aviso previo de siempre, TAMBIÉN con la
+// compuerta lista — es el botón que no existía en ningún estado
+// «listo». Relee el estado (la URL fresca), salta con la vuelta al
+// tab Ads y, si el flujo no está habilitado, deja el motivo honesto
+// en la tarjeta: nunca un toque mudo. Conectar no crea campañas
+// ni cobra.
+async function pzAdsCambiarConexion(btn) {
+  const txt0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = gzT('Verificando…', 'Checking…'); }
+  try { await pzBoostLoad(); } catch (e) {}
+  const urlAds = (pzBoostState && pzBoostState.connectUrl) || '';
+  const restaurar = () => { if (btn) { btn.disabled = false; if (txt0) btn.textContent = txt0; } };
+  if (!urlAds) {
+    restaurar();
+    const el = document.getElementById('pzAdsConexionMsg');
+    if (el && !el.textContent) el.textContent = pzBoostMotivo(pzBoostGate().motivo || 'sin_autorizacion_publicitaria', 0);
+    return;
+  }
+  const destAds = urlAds + (urlAds.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent('/#/app/ads');
+  pzConectarConAviso(
+    () => { try { window.location.href = destAds; } catch (e) { restaurar(); } },
+    () => { restaurar(); });
+}
+
 // (LOTE TARJETA-IMPULSAR) Las recomendaciones chicas: otros posteos
 // CON DATOS REALES (alcance o me gusta > 0), sin el de la tarjeta
 // grande y sin los ya impulsados. Sin datos no hay sección: nunca se
@@ -21837,7 +21897,7 @@ function pzAdsHTML() {
     recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   }
   const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
-  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${recHTML}${pzAdsElegirBtnHTML()}${histHTML}`;
+  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${pzAdsConexionHTML()}${recHTML}${pzAdsElegirBtnHTML()}${histHTML}`;
 }
 function pzAdsPintar() {
   const box = document.getElementById('pzAdsRoot');
@@ -22248,7 +22308,7 @@ let pzBoostState = null; // { elegibles, billetera, adsReady, motivoGate, boostH
 let pzBoostImpulsados = new Set(); // claves pzBoostKey impulsadas en esta sesión (además de ya_impulsado del servidor)
 
 function pzBoostNewState() {
-  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', rielAds: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
+  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', conexion: null, rielAds: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
 }
 
 function pzBoostSaldoUSD() {
@@ -22517,9 +22577,13 @@ async function pzBoostLoad() {
   s.adsReady = (elig && elig.ok) ? !!elig.ads_ready : null;
   s.motivoGate = (elig && elig.ok && !elig.ads_ready) ? String(elig.motivo || 'page_not_authorized') : '';
   // (LOTE CAMINO-CLIENTE-ADS) La URL del flujo de conexión, cuando el
-  // servidor la ofrece (login unificado configurado y falta la
-  // conexión del cliente): es lo que abre el botón de la tarjeta.
-  s.connectUrl = (elig && elig.ok && !elig.ads_ready) ? String(elig.connect_url || '') : '';
+  // servidor la ofrece: es lo que abre el botón de la tarjeta.
+  // (LOTE RECONEXION-ADS) Ahora viaja también con la compuerta lista
+  // (el servidor la manda siempre que el flujo esté configurado): es
+  // la URL de «Cambiar conexión». Y el detalle de la conexión
+  // guardada queda en el estado, para la tarjeta de conexión del tab.
+  s.connectUrl = (elig && elig.ok) ? String(elig.connect_url || '') : '';
+  s.conexion = (elig && elig.ok && elig.conexion) ? elig.conexion : null;
   // (LOTE TARJETA-SIMPLE) El riel que correría un impulso hoy, según
   // el gate que el servidor ya calculó para esta misma respuesta:
   // la tarjeta de audiencia lo usa para explicar de dónde sale cada
@@ -23408,6 +23472,22 @@ async function pzAdsAudienciaSale(btn) {
 // de la hoja, con la hoja cerrada): el cliente tocaba y «no pasaba
 // nada» (reporte del dueño, 17/11).
 function pzBoostErrorHTML(motivo, monto, cobroId) {
+  // (LOTE RECONEXION-ADS) El freno de identidad dice la causa
+  // EXACTA con las dos cuentas y ofrece la salida en la misma
+  // tarjeta: «Reconectar con la cuenta correcta» abre el flujo
+  // unificado. Sin las identidades en el estado (una respuesta que
+  // no las trajo), cae al texto de motivo de siempre.
+  if (motivo === 'ig_fuera_de_conexion') {
+    const be = (pzBoostState && pzBoostState.boostError) || {};
+    const du = String(be.igDuena || '').replace(/^@+/, '');
+    const cxL = (Array.isArray(be.igConexion) ? be.igConexion : []).map((u) => '@' + String(u || '').replace(/^@+/, '')).filter((u) => u.length > 1);
+    if (du && cxL.length) {
+      const causa = gzT(
+        `El posteo es de @${du} y tu conexión de Ads es de ${cxL.join(', ')}. Meta solo acepta impulsar desde la cuenta dueña.`,
+        `This post is from @${du} and your Ads connection is ${cxL.join(', ')}. Meta only accepts boosting from the owning account.`);
+      return `<div role="alert" style="border:1.5px solid #E5A3A3;background:#FDF0F0;border-radius:12px;padding:10px 12px;margin:12px 0 0;font-size:14px;line-height:1.5;color:#7A1F1F"><b>${esc(causa)}</b><br>${esc(gzT('No se cobró nada.', 'Nothing was charged.'))}<button type="button" class="btn btn-primary btn-block" style="margin-top:10px" onclick="pzAdsCambiarConexion(this)">${esc(gzT('Reconectar con la cuenta correcta', 'Reconnect with the right account'))}</button></div>`;
+    }
+  }
   const paso = (motivo === 'anuncio_fallido')
     ? gzT('Meta no aceptó la campaña.', 'Meta didn’t accept the campaign.')
     : pzBoostMotivo(motivo, monto, cobroId);
@@ -23505,7 +23585,7 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     // mensaje es el FEE que hay que pagar (feeCents del 409), no la
     // pauta del impulso frenado.
     const montoMsg = (motivo === 'fee_pendiente' && j && j.feeCents) ? Math.round(Number(j.feeCents)) / 100 : monto;
-    s.boostError = { motivo, monto: montoMsg, cobroId: (j && j.cobroId) || null };
+    s.boostError = { motivo, monto: montoMsg, cobroId: (j && j.cobroId) || null, igDuena: (j && j.ig_duena) || '', igConexion: (j && Array.isArray(j.ig_conexion)) ? j.ig_conexion : [] };
     if (msgEl) msgEl.innerHTML = pzBoostErrorHTML(motivo, montoMsg, j && j.cobroId);
     pzBoostPintarError();
     // (LOTE CIERRE-ADS · FIX 2.6) Garantía de visibilidad: si la

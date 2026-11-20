@@ -14225,7 +14225,10 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
               `${esActD ? (crDError.code === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta') + ': ' : 'creación fallida en la cuenta del cliente (destacado, riel cliente): '}${metaAds.detalleErrorMeta(crDError)}`);
         } catch (e) {}
         const motivoFrenoD = (crDError && (crDError.code === 'ig_fuera_de_conexion' || crDError.code === 'ig_otra_pagina')) ? crDError.code : 'anuncio_fallido';
-        return res.status(409).json({ ok: false, motivo: motivoFrenoD });
+        // (LOTE RECONEXION-ADS) El freno de identidad lleva las dos
+        // cuentas en el cuerpo: la tarjeta dice la causa exacta y
+        // ofrece reconectar, en vez del genérico sin salida.
+        return res.status(409).json({ ok: false, motivo: motivoFrenoD, ...(crDError && crDError.code === 'ig_fuera_de_conexion' ? { ig_duena: crDError.igDuena || null, ig_conexion: Array.isArray(crDError.igConexion) ? crDError.igConexion : [] } : {}) });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
@@ -14404,6 +14407,11 @@ app.get('/api/ads/config', requireAuth, (req, res) => {
     default_days: AD_DEFAULT_DAYS,
     ads_ready: metaAds.adsConfigured(),
     mp_ready: mp.mpConfigured(),
+    // (LOTE RECONEXION-ADS) El mismo estado de conexión que
+    // alimenta la pestaña Ads, por el canal liviano que Ajustes ya
+    // consume: la fila de Ads en Conexiones lo lee de acá.
+    conexion: adsConexionDetalle(req.session.userId),
+    connect_url: unifiedReady(req.session.userId) ? '/api/ig/unified/go' : '',
   });
 });
 
@@ -15065,9 +15073,17 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     // acto. Sin config_id en el entorno no viaja nada: el flujo queda
     // inerte y la tarjeta muestra el motivo honesto, sin prometer un
     // paso que no existe.
-    const faltaConexionAds = !gate.ready && (gate.code === 'ads_not_connected' || gate.code === 'page_not_authorized');
-    const connectUrlAds = gate.connect_url || (faltaConexionAds && unifiedReady(uid) ? '/api/ig/unified/go' : '');
-    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? { riel: gate.via === 'cliente' ? 'cliente' : 'billetera' } : { motivo: gate.code || 'page_not_authorized' }), ...(connectUrlAds ? { connect_url: connectUrlAds } : {}), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
+    // (LOTE RECONEXION-ADS) La URL del flujo unificado y el detalle
+    // de la conexión guardada viajan SIEMPRE, con la compuerta lista
+    // o cerrada: la pestaña muestra qué quedó conectado y ofrece
+    // cambiarlo sin salir de la app. Con la compuerta «lista» y la
+    // conexión capturada con OTRAS cuentas, ese estado era invisible
+    // y el impulso moría sin causa ni salida (la noche del dueño,
+    // 19/11). La URL viaja solo si el login unificado está
+    // configurado (unifiedReady): sin config_id no hay flujo que
+    // prometer, como ya decía el comentario de CAMINO-CLIENTE-ADS.
+    const connectUrlAds = unifiedReady(uid) ? '/api/ig/unified/go' : '';
+    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? { riel: gate.via === 'cliente' ? 'cliente' : 'billetera' } : { motivo: gate.code || 'page_not_authorized' }), ...(connectUrlAds ? { connect_url: connectUrlAds } : {}), conexion: adsConexionDetalle(uid), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
 });
 
@@ -15701,7 +15717,10 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // vinculado a otra Página — nunca el genérico
         // «anuncio_fallido», que diría que Meta no aceptó algo.
         const motivoFreno = (crError && (crError.code === 'ig_fuera_de_conexion' || crError.code === 'ig_otra_pagina')) ? crError.code : 'anuncio_fallido';
-        return res.status(409).json({ ok: false, motivo: motivoFreno });
+        // (LOTE RECONEXION-ADS) El freno de identidad lleva las dos
+        // cuentas en el cuerpo: la tarjeta dice la causa exacta y
+        // ofrece reconectar, en vez del genérico sin salida.
+        return res.status(409).json({ ok: false, motivo: motivoFreno, ...(crError && crError.code === 'ig_fuera_de_conexion' ? { ig_duena: crError.igDuena || null, ig_conexion: Array.isArray(crError.igConexion) ? crError.igConexion : [] } : {}) });
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
@@ -15981,6 +16000,29 @@ function getAdsConnection(userId) {
     const parse = (t) => { try { const v = JSON.parse(t || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
     return { ...row, ig_account_ids: parse(row.ig_account_ids), ig_accounts: parse(row.ig_accounts), ad_accounts: parse(row.ad_accounts) };
   } catch (e) { return null; }
+}
+// (LOTE RECONEXION-ADS) El detalle de la conexión publicitaria que
+// la superficie muestra SIEMPRE (pestaña Ads y Ajustes → Conexiones):
+// qué Página, qué Instagram y qué cuenta publicitaria quedaron
+// guardados al conectar. Sale de la fila capturada
+// (ig_ads_connections), sin lecturas en vivo; lo que la fila no
+// trae queda null — honesto, nunca inventado. Sin fila, null.
+function adsConexionDetalle(userId) {
+  const conn = getAdsConnection(userId);
+  if (!conn) return null;
+  const igs = Array.isArray(conn.ig_accounts) ? conn.ig_accounts : [];
+  const dePagina = igs.find((a) => a && conn.fb_page_id && String(a.page_id || '') === String(conn.fb_page_id)) || igs[0] || null;
+  const igIds = Array.isArray(conn.ig_account_ids) ? conn.ig_account_ids : [];
+  const cuentas = Array.isArray(conn.ad_accounts) ? conn.ad_accounts : [];
+  const primaria = cuentas.find((a) => a && conn.primary_ad_account_id && String(a.account_id || '') === String(conn.primary_ad_account_id)) || null;
+  return {
+    page_id: conn.fb_page_id || null,
+    page_name: conn.fb_page_name || null,
+    ig_id: (dePagina && dePagina.id) ? String(dePagina.id) : (igIds.length ? String(igIds[0]) : null),
+    ig_username: (dePagina && dePagina.username) ? String(dePagina.username) : null,
+    ad_account_id: conn.primary_ad_account_id || null,
+    ad_account_name: (primaria && primaria.name) ? String(primaria.name) : null,
+  };
 }
 function adsConnectionReady(userId) {
   const c = getAdsConnection(userId);
@@ -47023,7 +47065,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1189';
+const BUILD_ID = '20261105-v1190';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

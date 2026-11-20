@@ -309,6 +309,11 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
         err.code = 'ig_fuera_de_conexion';
         err.paso = 'creativo';
         err.detalleLecturas = 'arbitraje por lo guardado (sin lecturas en vivo): la única cuenta guardada con username no es la que publica el posteo';
+        // (LOTE RECONEXION-ADS) Las dos identidades viajan
+        // estructuradas: el 409 las pasa al cuerpo y la tarjeta del
+        // cliente dice la causa exacta, con su salida.
+        err.igDuena = pubU1;
+        err.igConexion = [unica.username || unica.id];
         throw err;
       }
     }
@@ -327,9 +332,13 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
         return err;
       };
       if (match.length === 0) {
-        throw frenoGuardado('ig_fuera_de_conexion',
+        const errSin = frenoGuardado('ig_fuera_de_conexion',
           `Este posteo es de la cuenta de Instagram @${pubU}, que no está en la conexión publicitaria (la conexión tiene ${lista}): el impulso se frenó antes de crear nada en Meta. Para impulsarlo, esa cuenta tiene que estar vinculada a una Página compartida en la conexión.`,
           'arbitraje por lo guardado (sin lecturas en vivo): la cuenta que publica no está entre las cuentas guardadas con username');
+        // (LOTE RECONEXION-ADS) Identidades estructuradas para el 409.
+        errSin.igDuena = pubU;
+        errSin.igConexion = detalladas.map((a) => a.username || a.id);
+        throw errSin;
       }
       if (match.length === 1) {
         const m = match[0];
@@ -343,9 +352,13 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
             'arbitraje por lo guardado (sin lecturas en vivo): la dueña está guardada pero su Página guardada no es la del riel');
         }
         if (m.usable === false) {
-          throw frenoGuardado('ig_fuera_de_conexion',
+          const errNoU = frenoGuardado('ig_fuera_de_conexion',
             `Este posteo es de la cuenta de Instagram @${pubU}, que no está asignada a la cuenta publicitaria de la conexión (la conexión tiene ${lista}): el impulso se frenó antes de crear nada en Meta. Asignala a la cuenta publicitaria en Meta y volvé a conectar.`,
             'arbitraje por lo guardado (sin lecturas en vivo): la dueña está guardada pero usable_en_cuenta quedó false al conectar');
+          // (LOTE RECONEXION-ADS) Identidades estructuradas para el 409.
+          errNoU.igDuena = pubU;
+          errNoU.igConexion = detalladas.map((a) => a.username || a.id);
+          throw errNoU;
         }
         return { id: m.id, fuente: 'guardada_username' };
       }

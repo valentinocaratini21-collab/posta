@@ -144,6 +144,7 @@ function ajustesView() {
     <div class="sec-head"><h2>${ajEn ? 'Connections' : 'Conexiones'}</h2></div>
     <div class="know">
       <div class="row" data-ajnav="conex"><span class="k">Instagram</span><span class="v">${esc(p.ig_username ? '@' + p.ig_username : (ajEn ? 'Not connected' : 'Sin conectar'))}</span><span class="st ${p.ig_connected ? 'st-ok' : 'st-off'}">${p.ig_connected ? (ajEn ? 'Connected' : 'Conectado') : (ajEn ? 'Not connected' : 'Sin conectar')}</span><span class="chev">›</span></div>
+      <div class="row" data-ajnav="conex"><span class="k">${ajEn ? 'Ads' : 'Publicidad'}</span><span class="v" id="rsAdsVal">${ajEn ? 'Loading…' : 'Cargando…'}</span><span class="st st-off" id="rsAdsChip">…</span><span class="chev">›</span></div>
       <div class="row" data-ajnav="notif"><span class="k">${ajEn ? 'Alerts' : 'Avisos'}</span><span class="v">${ajEn ? 'Before every post' : 'Antes de cada posteo'}</span><span class="st st-ok" id="rsAvisosChip">…</span><span class="chev">›</span></div>
     </div>
     <div class="sec-head"><h2>${ajEn ? 'More' : 'Más'}</h2></div>
@@ -253,6 +254,10 @@ function ajustesView() {
     <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">Posty lee tu catálogo y stock para postear solo lo que tenés. Solo lee: nunca toca precios ni stock.</p>
     <div id="tnZone"><p class="hint">Cargando…</p></div>
     <div id="tnMsg"></div>
+    <div style="font-weight:800;margin:12px 0 6px">Publicidad en Meta (Ads)</div>
+    <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px">La Página, el Instagram y la cuenta publicitaria con los que salen tus impulsos. Si quedaron conectadas las cuentas equivocadas, acá las cambiás.</p>
+    <div id="adsZone"><p class="hint">Cargando…</p></div>
+    <div id="adsMsg"></div>
   </div></div>
   <div class="card ajsec ajflat"${ajHid('marca')} id="ajsec-marca"><div class="ajsec-h"><h3>${pzIc('palette', 20)} Tu marca</h3>${stBrand}</div><div class="ajsec-b">
         <div class="row2">
@@ -507,6 +512,48 @@ async function tnZoneLoad() {
   };
 }
 
+// Zona Ads (LOTE RECONEXION-ADS): el estado real de la conexión
+// publicitaria — la misma información y el mismo botón que la
+// tarjeta del tab Ads — leído del payload liviano de siempre
+// (GET /api/ads/config: conexion + connect_url). Es donde el
+// cliente busca primero su conexión (evidencia del dueño, 19/11:
+// «no hay conexion de ads!»).
+async function adsZoneLoad() {
+  const zone = $('#adsZone');
+  if (!zone) return;
+  let cfg = null;
+  try { cfg = await api.get('/api/ads/config'); } catch (e) { /* queda el fallback */ }
+  if (!cfg || !cfg.ok) { zone.innerHTML = '<p class="hint">No se pudo cargar el estado de tu conexión publicitaria.</p>'; return; }
+  const cx = cfg.conexion || null;
+  const url = cfg.connect_url || '';
+  const abrir = () => {
+    if (!url) { const m = $('#adsMsg'); if (m) m.innerHTML = '<div class="err">La conexión no está disponible ahora. Probá de nuevo en un momento.</div>'; return; }
+    const dest = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'next=' + encodeURIComponent('/#/app/ajustes');
+    if (typeof pzConectarConAviso === 'function') {
+      pzConectarConAviso(() => { location.href = dest; }, () => {});
+    } else { location.href = dest; }
+  };
+  if (cx && (cx.page_id || cx.ig_id || cx.ad_account_id)) {
+    const partes = [];
+    if (cx.page_name || cx.page_id) partes.push(`Página <b>${esc(cx.page_name || cx.page_id)}</b>`);
+    if (cx.ig_username) partes.push(`Instagram <b>@${esc(cx.ig_username)}</b>`);
+    else if (cx.ig_id) partes.push(`Instagram <b>${esc(cx.ig_id)}</b>`);
+    if (cx.ad_account_name || cx.ad_account_id) partes.push(`cuenta publicitaria <b>${esc(cx.ad_account_name || cx.ad_account_id)}</b>`);
+    const falta = !cx.ad_account_id;
+    zone.innerHTML = `<div class="set-row"><div><div class="t">Conexión publicitaria</div>
+      <div class="d">${pzIc('checkCircle', 15)} Conectado: ${partes.join(' · ')}${falta ? ' — <b>falta la cuenta publicitaria</b>' : ''}</div>
+      <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Entrás con el login oficial de Meta. Nunca vemos ni guardamos tu contraseña.</div></div>
+      <button class="btn btn-soft btn-sm" id="btnAdsConn" style="flex:none">${falta ? 'Conectar mi cuenta publicitaria' : 'Cambiar conexión'}</button></div>`;
+  } else {
+    zone.innerHTML = `<div class="set-row"><div><div class="t">Tu cuenta publicitaria</div>
+      <div class="d">Todavía no conectaste la cuenta con la que salen tus impulsos en Meta.</div>
+      <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Entrás con el login oficial de Meta. Nunca vemos ni guardamos tu contraseña.</div></div>
+      <button class="btn btn-primary btn-sm" id="btnAdsConn" style="flex:none">Conectar mi cuenta publicitaria</button></div>`;
+  }
+  const bc = $('#btnAdsConn');
+  if (bc) bc.onclick = abrir;
+}
+
 // v186: galería "${pzIc('palette', 16)} Estilos de tus posteos" — muestras fieles (mismo motor
 // de composición que los posteos) y hasta 3 favoritos persistidos. Todo
 // opcional: sin favoritos, Posty elige como siempre.
@@ -680,11 +727,29 @@ function bindSettings() {
       const cfg = await api.get('/api/ads/config');
       const bal = Number((cfg && cfg.balance_cents) || 0) / 100;
       el.textContent = (en ? 'To boost · $' : 'Para impulsar · $') + bal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      // (LOTE RECONEXION-ADS) La fila de Publicidad del menú de
+      // Conexiones se llena con la misma respuesta: el @ que quedó
+      // en la conexión publicitaria, o «Sin conectar».
+      const rsAdsVal = document.getElementById('rsAdsVal');
+      const rsAdsChip = document.getElementById('rsAdsChip');
+      if (rsAdsVal && rsAdsChip) {
+        const cxA = (cfg && cfg.conexion) || null;
+        if (cxA && (cxA.ig_username || cxA.page_name || cxA.ad_account_id)) {
+          rsAdsVal.textContent = cxA.ig_username ? ('@' + cxA.ig_username) : (cxA.page_name || (en ? 'Connected' : 'Conectada'));
+          rsAdsChip.textContent = en ? 'Connected' : 'Conectado';
+          rsAdsChip.className = 'st st-ok';
+        } else {
+          rsAdsVal.textContent = en ? 'Not connected' : 'Sin conectar';
+          rsAdsChip.textContent = en ? 'Not connected' : 'Sin conectar';
+          rsAdsChip.className = 'st st-off';
+        }
+      }
     } catch (e) { el.textContent = en ? 'To boost · —' : 'Para impulsar · —'; }
   })();
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
   try { tnZoneLoad(); } catch (e) {}
+  try { adsZoneLoad(); } catch (e) {}
   try { styleGalleryLoad(); } catch (e) {}
   try { gustosZoneLoad(); } catch (e) {}
   // (fix chunk-ajustes v487) La caja Gesty vive en #gzAjustesBox (arriba, en ajustesView):
