@@ -35,6 +35,13 @@ const PZ_IC = {
   sprout: '<path d="M12 21V9"/><path d="M12 14Q8 14 5.5 10.5Q9 9.5 12 14Z"/><path d="M12 11Q16 11 18.5 7.5Q15 6.5 12 11Z"/>',
   // (LOTE WEB-MEJORAS · 4/11) Íconos de navegación = los del dock del celular.
   navCasa: '<path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10v10h13V10"/>',
+  // (LOTE ICONOS-BARRA · 20/11) Set «Hilo» de la barra inferior (mock aprobado
+  // por Valentino: casa con puertita, «+» solo y megáfono con dos ondas).
+  // Claves NUEVAS: navCasa/megaphone quedan intactos para el drawer y el
+  // contenido, que no son parte de este lote. Se renderizan con pzIcHilo.
+  navCasaHilo: '<path d="M2.8 11.2 12 3.6l9.2 7.6"/><path d="M5.6 9.6V20h12.8V9.6"/><path d="M10.3 20v-5h3.4v5"/>',
+  masHilo: '<path d="M12 4.8v14.4M4.8 12h14.4"/>',
+  megaHilo: '<path d="M4.5 10.4v3.2L17 18.4V5.6L4.5 10.4Z"/><path d="M9.4 15.6l.5 3.4h2.2l-.5-3.1"/><path d="M19.4 9.7a3.3 3.3 0 0 1 0 4.6"/><path d="M21.5 7.9a6.1 6.1 0 0 1 0 8.2"/>',
   navBarras: '<path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/>',
   navBambu: '<path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/>',
   share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.3 10.8 15.6 7.7M8.3 13.2 15.6 16.3"/>',
@@ -193,6 +200,14 @@ function pzIc(name, px) {
   if (!p) return '';
   const s = px || 24;
   return '<span class="pz-ic" style="display:inline-flex;line-height:0;vertical-align:-0.18em"><svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="' + PZ_IC_CEL + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg></span>';
+}
+// (LOTE ICONOS-BARRA · 20/11) Variante «hilo» de pzIc para la barra inferior:
+// mismo color y envoltura, trazo 1.5 en vez de 2.
+function pzIcHilo(name, px) {
+  const p = PZ_IC[name];
+  if (!p) return '';
+  const s = px || 24;
+  return '<span class="pz-ic" style="display:inline-flex;line-height:0;vertical-align:-0.18em"><svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" fill="none" stroke="' + PZ_IC_CEL + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg></span>';
 }
 
 // Variante liviana de una imagen /media (la maestra no se toca: es la que
@@ -997,15 +1012,15 @@ function bbShell(tab, content) {
     oficina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     jardin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21v-8"/><path d="M12 13c0-4 3-7 8-7 0 5-3 8-8 7z"/><path d="M12 13c0-3.4-2.4-5.6-6.4-5.6C5.6 11 8 13.4 12 13z"/></svg>',
     impulsar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
-    ads: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11v3a1 1 0 0 0 1 1h1.5v-5H5a1 1 0 0 0-1 1z"/><path d="M6.5 10 20 5.5v13L6.5 14"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg>',
+    ads: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.4v3.2L17 18.4V5.6L4.5 10.4Z"/><path d="M9.4 15.6l.5 3.4h2.2l-.5-3.1"/><path d="M19.4 9.7a3.3 3.3 0 0 1 0 4.6"/><path d="M21.5 7.9a6.1 6.1 0 0 1 0 8.2"/></svg>',
     estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg>',
     feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>',
-    subir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 9.5 12 3.5l6 6"/><path d="M4 20h16"/></svg>',
+    subir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.8v14.4M4.8 12h14.4"/></svg>',
     bandeja: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-5l2-7z"/></svg>',
     negocio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M2.5 6.5 4 3h16l1.5 3.5a3.2 3.2 0 0 1-6.1 1.4 3.4 3.4 0 0 1-6.8 0 3.2 3.2 0 0 1-6.1-1.4z"/><path d="M9.5 20v-6h5v6"/></svg>',
     ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.9 10.4L21.9 13.6L18.5 16.7L20.1 17.9L17.9 20.1L13.3 19.9L13.6 21.9L10.4 21.9L7.3 18.5L6.1 20.1L3.9 17.9L4.1 13.3L2.1 13.6L2.1 10.4L5.5 7.3L3.9 6.1L6.1 3.9L10.7 4.1L10.4 2.1L13.6 2.1L16.7 5.5L17.9 3.9L20.1 6.1L19.9 10.7Z"/><circle cx="12" cy="12" r="3.2"/></svg>',
-    inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10v10h13V10"/></svg>',
+    inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 11.2 12 3.6l9.2 7.6"/><path d="M5.6 9.6V20h12.8V9.6"/><path d="M10.3 20v-5h3.4v5"/></svg>',
     semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
@@ -1014,7 +1029,7 @@ function bbShell(tab, content) {
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}</nav><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
+    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}</nav><!-- (LOTE ICONOS-BARRA · 20/11) orden Inicio · Subir · Ads: Subir queda como acción central, con el set «Hilo» --><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -2462,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1197';
+const PZ_BUILD = '20261105-v1198';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -10095,7 +10110,9 @@ function mzTabsHTML(tab) {
   // ya se entra desde la ruedita del encabezado (pzShellHeadHTML). La
   // vista y la ruta #/app/ajustes quedan intactas; en Ajustes ninguna
   // pestaña queda resaltada (el mapeo `on` ya no tiene botón que case).
-  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIc('navCasa'), gzT('Inicio', 'Home'))}${t('ads', 'ads', pzIc('megaphone'), gzT('Ads', 'Ads'))}${t('subir', 'subir', '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3l5 5h-3.5v7h-3V8H7zM5 19h14v2.5H5z"/></svg>', gzT('Subir', 'Upload'))}</nav>`;
+  // (LOTE ICONOS-BARRA · 20/11) Set «Hilo» + orden Inicio · Subir · Ads:
+  // Subir («+» solo) queda como acción central de la barra.
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIcHilo('navCasaHilo'), gzT('Inicio', 'Home'))}${t('subir', 'subir', pzIcHilo('masHilo'), gzT('Subir', 'Upload'))}${t('ads', 'ads', pzIcHilo('megaHilo'), gzT('Ads', 'Ads'))}</nav>`;
 }
 
 /* (LOTE DOCK-MAS) */
@@ -10174,10 +10191,10 @@ function appShell(tab, content) {
   <aside class="drawer" id="drawer" aria-label="Menú">
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
     <div class="side-posty" id="sidePosty" aria-label="Tu negocio"></div>
-    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIc('navCasa')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
-    <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIc('megaphone')}</span>Ads</button>
-    <button class="drawer-link ${tab === 'subir' ? 'on' : ''}" data-tab="subir"><span class="di"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3l5 5h-3.5v7h-3V8H7zM5 19h14v2.5H5z"/></svg></span>Subir</button>
-    <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">${pzIc('gear')}</span>Ajustes</button>
+    <button class="drawer-link ${tab === 'inicio' ? 'on' : ''}" data-tab="inicio"><span class="di">${pzIcHilo('navCasaHilo')}</span>${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Home' : 'Inicio'}</button>
+    <button class="drawer-link ${tab === 'subir' ? 'on' : ''}" data-tab="subir"><span class="di">${pzIcHilo('masHilo')}</span>Subir</button>
+    <button class="drawer-link ${tab === 'ads' ? 'on' : ''}" data-tab="ads"><span class="di">${pzIcHilo('megaHilo')}</span>Ads</button>
+    <!-- (LOTE ICONOS-BARRA · 20/11) La sidebar espeja la barra de la app: mismos tabs, mismo orden (Inicio · Subir · Ads) y mismos glifos «Hilo». Ajustes sale de los tabs de la web: su única puerta acá es la ruedita del encabezado (pzShellHeadHTML), igual que en la app. -->
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">${pzIc('logout')}</span>Salir</button>
   </aside>
