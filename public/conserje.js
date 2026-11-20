@@ -1,4 +1,6 @@
-/* LOTE VISTA-CONSERJE — la consola del operador (bamboo).
+/* LOTE CONSERJE-V1 — la consola del operador (bamboo) con la piel del
+   mock v1 aprobado por Valentino. El cableado es el de VISTA-CONSERJE
+   (v1184), intacto: mismos endpoints, mismas acciones, mismas fuentes.
    La página no guarda estado propio: cada render sale de la API admin
    en el acto y cada acción escribe en la fuente real de la cosa (la
    decisión de la revisión, el chat del cliente, el registro del
@@ -26,18 +28,20 @@
     var p = String(nombre || '?').trim().split(/\s+/);
     return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
   }
-  function avaClass(uid) { return 'ava a' + (Math.abs(Number(uid) || 0) % 6); }
+  function avaClass(uid) { return 'avatar a' + (Math.abs(Number(uid) || 0) % 7); }
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   function fechaCorta(key) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
     return m ? Number(m[3]) + ' ' + MESES[Number(m[2]) - 1] : String(key || '');
   }
+  function trunc(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
   function toast(msg, kind) {
     var t = document.createElement('div');
     t.className = 'toast' + (kind ? ' ' + kind : '');
     t.textContent = msg;
     $('toasts').appendChild(t);
-    setTimeout(function () { t.remove(); }, 5200);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () { t.classList.remove('show'); setTimeout(function () { t.remove(); }, 300); }, 5200);
   }
 
   function api(path, opts) {
@@ -57,28 +61,42 @@
   var vista = null;
   var selUser = null;
   var cliente = null;
-  var filtro = 'todas';
+  var filtro = 'todos';
   var centroVista = 'semana';
   var feedPorUsuario = {};
 
   // ---------------- tira superior ----------------
+  function setBadge(id, n) {
+    var b = $(id);
+    if (!b) return;
+    b.textContent = (n == null ? '—' : n);
+    if (n === 0) b.classList.add('zero'); else b.classList.remove('zero');
+  }
   function renderTop() {
     var h = (vista && vista.hoy) || {};
     $('hoyFecha').textContent = h.fecha_label || '';
-    $('statPublica').innerHTML = 'Hoy publica <b>' + (h.publica_hoy != null ? h.publica_hoy : '—') + '</b> posteos'
-      + (h.proxima_hora ? ' · próximo ' + esc(h.proxima_hora) : '');
-    $('statPruebas').innerHTML = 'Pruebas activas <b>' + (h.pruebas_activas != null ? h.pruebas_activas : '—') + '</b>';
-    $('statDecisiones').innerHTML = 'Decisiones <span class="pill">' + (h.decisiones_pendientes != null ? h.decisiones_pendientes : '—') + '</span>';
-    $('statSubs').innerHTML = 'Suscriptores <b>' + (h.suscriptores != null ? h.suscriptores : '—') + '/' + (h.meta_marzo || 30) + '</b> marzo';
+    $('statPublica').innerHTML = '<span class="ts-label">Hoy publica</span><span class="ts-value">'
+      + (h.publica_hoy != null ? h.publica_hoy : '—') + ' posteos</span>'
+      + (h.proxima_hora ? '<span class="ts-label">· próximo ' + esc(h.proxima_hora) + '</span>' : '');
+    $('statPruebas').innerHTML = '<span class="ts-label">Pruebas activas</span><span class="ts-value">'
+      + (h.pruebas_activas != null ? h.pruebas_activas : '—') + '</span>';
+    setBadge('topPending', h.decisiones_pendientes != null ? h.decisiones_pendientes : null);
+    $('statSubs').innerHTML = '<span class="ts-label">Suscriptores</span><span class="ts-value">'
+      + (h.suscriptores != null ? h.suscriptores : '—') + '/' + (h.meta_marzo || 30)
+      + ' <span style="color:var(--ink-3);font-weight:500">marzo</span></span>';
     if (h.disco_mb != null) {
       $('statDisco').style.display = '';
-      $('statDisco').innerHTML = 'Disco libre <b>' + h.disco_mb + ' MB</b>';
+      $('statDisco').innerHTML = '<span class="ts-label">Disco</span>'
+        + (h.disco_mb < 1500
+          ? '<span class="warn">⚠ ' + h.disco_mb + ' MB libres</span>'
+          : '<span class="ts-value">' + h.disco_mb + ' MB libres</span>');
     }
   }
   function renderGasto() {
     api('/api/admin/ai-costs').then(function (j) {
       if (j && j.ok && j.today_spend_usd != null) {
-        $('statGasto').innerHTML = 'Gasto IA hoy <b>US$ ' + Number(j.today_spend_usd).toFixed(2) + '</b>';
+        $('statGasto').innerHTML = '<span class="ts-label">Gasto IA hoy</span><span class="ts-value">US$'
+          + Number(j.today_spend_usd).toFixed(2).replace('.', ',') + '</span>';
       }
     }).catch(function () { /* el gasto es una tira más: si falla, queda el guion */ });
   }
@@ -93,67 +111,82 @@
   function renderFiltros() {
     var cs = (vista && vista.clientes) || [];
     var defs = [
-      ['todas', 'Todas · ' + cs.length],
-      ['pruebas', 'Pruebas · ' + cs.filter(function (f) { return f.plan_status === 'trial'; }).length],
-      ['clientes', 'Clientes · ' + cs.filter(function (f) { return f.plan_status === 'active'; }).length],
-      ['pendientes', 'Con pendientes · ' + cs.filter(function (f) { return f.pendientes && f.pendientes.total > 0; }).length],
+      ['todos', 'Todos', cs.length],
+      ['pruebas', 'Pruebas', cs.filter(function (f) { return f.plan_status === 'trial'; }).length],
+      ['clientes', 'Clientes', cs.filter(function (f) { return f.plan_status === 'active'; }).length],
+      ['pendientes', 'Con pendientes', cs.filter(function (f) { return f.pendientes && f.pendientes.total > 0; }).length],
     ];
     $('filtros').innerHTML = defs.map(function (d) {
-      return '<button class="chip' + (filtro === d[0] ? ' on' : '') + '" data-filtro="' + d[0] + '" type="button">' + esc(d[1]) + '</button>';
+      return '<button class="chip' + (filtro === d[0] ? ' active' : '') + '" data-filtro="' + d[0] + '" type="button">'
+        + esc(d[1]) + ' <span class="chip-n">' + d[2] + '</span></button>';
     }).join('');
+    $('rosterCount').textContent = cs.length + (cs.length === 1 ? ' cuenta' : ' cuentas');
+  }
+  function renderRosterFoot() {
+    var cs = ((vista && vista.clientes) || []).filter(function (f) { return f.pendientes && f.pendientes.total > 0; });
+    if (!cs.length) { $('rosterFoot').innerHTML = ''; return; }
+    var nombres = cs.slice(0, 4).map(function (f) { return f.business_name || ('@' + (f.ig_username || '')); });
+    var lista = nombres.join(', ') + (cs.length > 4 ? ' y ' + (cs.length - 4) + ' más' : '');
+    $('rosterFoot').innerHTML = '<div class="roster-foot"><b>' + cs.length + (cs.length === 1 ? ' cuenta te necesita' : ' cuentas te necesitan')
+      + ' hoy:</b> ' + esc(lista) + '. Todo está en Decisiones →</div>';
   }
   function renderRoster() {
     renderFiltros();
+    renderRosterFoot();
     var q = ($('buscador').value || '').trim().toLowerCase();
     var cs = ((vista && vista.clientes) || []).filter(pasaFiltro).filter(function (f) {
       if (!q) return true;
       return (f.business_name || '').toLowerCase().indexOf(q) >= 0 || (f.ig_username || '').toLowerCase().indexOf(q) >= 0;
     });
-    if (!cs.length) { $('roster').innerHTML = '<div class="vacio">Ninguna cuenta coincide.</div>'; return; }
+    if (!cs.length) { $('roster').innerHTML = '<div class="roster-empty">Ningún cliente coincide con ese filtro.</div>'; return; }
     $('roster').innerHTML = cs.map(function (f) {
-      var dot = f.dot === 'green' ? 'g' : (f.dot === 'yellow' ? 'y' : 'gr');
-      var estado = esc(f.estado || '');
-      if (f.pendientes && f.pendientes.revision) estado = '<b>●</b> ' + estado;
-      return '<div class="client' + (selUser === f.user_id ? ' sel' : '') + '" data-sel="' + f.user_id + '">'
-        + '<div class="' + avaClass(f.user_id) + '">' + esc(iniciales(f.business_name)) + '</div>'
-        + '<div style="flex:1;min-width:0"><div class="nm">' + esc(f.business_name || 'Sin nombre')
-        + (f.racha >= 2 ? '<span class="racha">🔥 ' + f.racha + ' días</span>' : '') + '</div>'
-        + '<div class="ig">@' + esc(f.ig_username || '—') + (f.categoria ? ' · ' + esc(f.categoria) : '') + '</div>'
-        + '<div class="st">' + estado + '</div></div>'
-        + '<span class="dotst ' + dot + '"></span></div>';
+      var dot = f.dot === 'green' ? 'green' : (f.dot === 'yellow' ? 'yellow' : 'grey');
+      var meta = [f.categoria || '', f.plan_status === 'trial' ? 'Prueba' : (f.plan_status === 'active' ? 'Cliente' : '')].filter(Boolean).join(' · ');
+      return '<button class="client-row' + (selUser === f.user_id ? ' selected' : '') + '" data-sel="' + f.user_id + '" type="button">'
+        + '<span class="' + avaClass(f.user_id) + '">' + esc(iniciales(f.business_name)) + '</span>'
+        + '<span class="cr-main"><span class="cr-name">' + esc(f.business_name || 'Sin nombre') + '</span>'
+        + (f.racha >= 2 ? '<span class="racha">🔥 ' + f.racha + ' días</span>' : '')
+        + ' <span class="cr-handle">@' + esc(f.ig_username || '—') + '</span>'
+        + (meta ? '<span class="cr-meta">' + esc(meta) + '</span>' : '')
+        + '<span class="cr-state"><span class="dot ' + dot + '"></span>' + esc(f.estado || '') + '</span></span></button>';
     }).join('');
   }
 
   // ---------------- centro: la ficha ----------------
-  function estadoPill(p) {
-    if (p.status === 'published') return '<span class="estado pub">Publicado</span>';
-    if (p.status === 'scheduled') return '<span class="estado prog">Programado · ' + esc(fechaCorta(p.dia_key)) + '</span>';
-    if (p.status === 'draft') return '<span class="estado draft">Borrador</span>';
-    return '<span class="estado plan">' + esc(p.status || '') + '</span>';
+  function chipDePost(p) {
+    if (p.status === 'published') return '<span class="state-chip green">Publicado ✓</span>';
+    if (p.status === 'scheduled') return '<span class="state-chip sky">Programado · ' + esc(fechaCorta(p.dia_key)) + '</span>';
+    if (p.status === 'draft') return '<span class="state-chip yellow">Borrador</span>';
+    return '<span class="state-chip">' + esc(p.status || '') + '</span>';
   }
-  function postCard(p, conAcciones) {
+  function postCard(p, conAcciones, inicial) {
     var img = p.poster_url || p.image_url || '';
     var esVideo = /video|reel/.test(String(p.media_type || ''));
     var acts = '';
     if (conAcciones && (p.status === 'draft' || p.status === 'scheduled')) {
-      acts = '<div class="acts">'
-        + '<button class="btn small primary" data-act="post-sale" data-id="' + p.id + '" data-fecha="' + esc(p.dia_key || '') + '" type="button">✓ Sale así</button>'
+      acts = '<div class="p-actions">'
+        + '<button class="btn primary small" data-act="post-sale" data-id="' + p.id + '" data-fecha="' + esc(p.dia_key || '') + '" type="button">✓ Sale así</button>'
         + '<button class="btn small" data-act="post-reprogramar" data-id="' + p.id + '" type="button">Reprogramar</button>'
-        + '<button class="btn small warn" data-act="post-descartar" data-id="' + p.id + '" type="button">Descartar</button></div>';
+        + '<button class="btn small ghost-danger" data-act="post-descartar" data-id="' + p.id + '" type="button">Descartar</button></div>';
     }
     return '<article class="post"><div class="thumb">'
-      + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<span class="ph">🖼</span>')
+      + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(inicial || 'P') + '</span></div>')
       + (esVideo ? '<span class="play">▶</span>' : '')
-      + '</div><div class="body"><div class="t">' + esc(p.titulo || 'Posteo') + '</div>'
-      + (p.caption ? '<div class="c">' + esc(p.caption) + '</div>' : '')
-      + '<div class="meta">' + estadoPill(p) + (p.tipo ? '<span class="estado plan">' + esc(p.tipo) + '</span>' : '') + '</div>'
+      + chipDePost(p)
+      + '</div><div class="p-body">'
+      + (p.dia_key ? '<div class="p-day">' + esc(fechaCorta(p.dia_key)) + '</div>' : '')
+      + '<div class="p-title">' + esc(p.titulo || 'Posteo') + '</div>'
+      + (p.caption ? '<div class="p-cap">' + esc(trunc(p.caption, 280)) + '</div>' : '')
+      + (p.tipo ? '<div class="p-meta"><span class="mini-chip celeste">' + esc(p.tipo) + '</span></div>' : '')
       + acts + '</div></article>';
   }
-  function planCard(slot) {
-    return '<article class="post"><div class="thumb"><div class="plan-veil"><div>Día ' + slot.dia + '<br><span style="color:var(--ink70);font-weight:500">En producción · sale ' + esc(slot.fecha || '') + (slot.hora ? ' ' + esc(slot.hora) : '') + '</span></div></div></div>'
-      + '<div class="body"><div class="t">' + esc(slot.nombre || 'Pieza del día ' + slot.dia) + '</div>'
-      + '<div class="meta"><span class="estado plan">Plan de prueba</span>'
-      + (slot.formato ? '<span class="fchip">' + esc(slot.formato) + '</span>' : '') + '</div></div></article>';
+  function planCard(slot, inicial) {
+    return '<article class="post"><div class="thumb"><div class="ph"><span class="ph-initial">' + esc(inicial || 'P') + '</span>'
+      + '<span class="ph-txt">Pieza en producción<br>sale ' + esc(slot.fecha || '') + (slot.hora ? ' · ' + esc(slot.hora) : '') + '</span></div>'
+      + '<span class="state-chip">Día ' + slot.dia + ' · plan de prueba</span></div>'
+      + '<div class="p-body"><div class="p-title">' + esc(slot.nombre || 'Pieza del día ' + slot.dia) + '</div>'
+      + (slot.formato ? '<div class="p-meta"><span class="fchip">' + esc(slot.formato) + '</span></div>' : '')
+      + '</div></article>';
   }
   function renderCentro() {
     var c = cliente;
@@ -166,71 +199,77 @@
     var proxPost = (c.posteos || []).filter(function (p) { return p.status === 'scheduled' || p.status === 'draft'; })
       .sort(function (a, b) { return String(a.scheduled_at || '').localeCompare(String(b.scheduled_at || '')); })[0];
     var etapaTag = c.etapa && c.etapa.etiqueta
-      ? '<span class="tag ' + (c.etapa.clave === 'en_rojo' ? 'warn' : '') + '">' + esc(c.etapa.etiqueta) + '</span>' : '';
+      ? '<span class="tag ' + (c.etapa.clave === 'en_rojo' ? 'warn' : 'grey') + '">' + esc(c.etapa.etiqueta) + '</span>' : '';
     var progresoHtml;
     if (plan) {
       var listos = plan.slots.filter(function (s) { return s.estado === 'listo'; }).length;
-      progresoHtml = '<div class="kpi"><small>Progreso de la prueba</small><b>' + listos + ' de ' + plan.slots.length + ' piezas</b>'
+      progresoHtml = '<div class="kpi"><div class="k-label">Progreso de la prueba</div><div class="k-value">' + listos + ' de ' + plan.slots.length + ' piezas</div>'
         + '<div class="bar"><i style="width:' + Math.round(100 * listos / Math.max(1, plan.slots.length)) + '%"></i></div>'
-        + '<span>' + (plan.estrategia_aprobada ? 'Estrategia aprobada por el cliente' : 'Estrategia todavía sin aprobar') + '</span></div>';
+        + '<div class="k-sub">' + (plan.estrategia_aprobada ? 'Estrategia aprobada por el cliente' : 'Estrategia todavía sin aprobar') + '</div></div>';
     } else {
-      progresoHtml = '<div class="kpi"><small>Esta semana</small><b>' + publicadosSemana + ' posteos publicados</b><span>De lunes a domingo, su zona horaria</span></div>';
+      progresoHtml = '<div class="kpi"><div class="k-label">Esta semana</div><div class="k-value">' + publicadosSemana + ' posteos publicados</div><div class="k-sub">De lunes a domingo, su zona horaria</div></div>';
     }
     var necesita = pend.total === 0
-      ? '<div class="kpi"><small>Te necesita</small><b style="color:#8FE3A5">Nada pendiente</b><span>Está al día con el equipo</span></div>'
-      : '<div class="kpi"><small>Te necesita</small><b style="color:#FFD98A">' + pend.total + (pend.total === 1 ? ' cosa' : ' cosas') + '</b><span>'
-        + [pend.voz ? pend.voz + ' por voz' : '', pend.chat ? pend.chat + ' mensajes' : '', pend.revision ? 'la pieza de mañana' : '', pend.casos ? pend.casos + ' casos' : ''].filter(Boolean).join(' · ') + '</span></div>';
+      ? '<div class="kpi"><div class="k-label">Te necesita</div><div class="k-value green">Nada pendiente</div><div class="k-sub">Está al día con el equipo</div></div>'
+      : '<div class="kpi"><div class="k-label">Te necesita</div><div class="k-value yellow">' + pend.total + (pend.total === 1 ? ' cosa' : ' cosas') + '</div><div class="k-sub">'
+        + [pend.voz ? pend.voz + ' por voz' : '', pend.chat ? pend.chat + ' mensajes' : '', pend.revision ? 'la pieza de mañana' : '', pend.casos ? pend.casos + ' casos' : ''].filter(Boolean).join(' · ') + '</div></div>';
     var impulsoKpi = c.boost
-      ? '<div class="kpi"><small>Último impulso</small><b>' + esc(c.boost.status === 'error' ? 'En error' : (c.boost.status || '—')) + '</b><span>US$ ' + (Number(c.boost.budget_cents || 0) / 100).toFixed(0) + ' de pauta · posteo #' + (c.boost.post_id || '—') + '</span></div>'
-      : '<div class="kpi"><small>Impulso</small><b>Sin impulsos</b><span>Todavía no impulsó ningún posteo</span></div>';
-    var funda = '<div class="funda">'
-      + '<div class="fcard"><small>⭐ Producto estrella</small><p>' + (vende.estrella ? esc(vende.estrella) : '<span style="color:var(--ink50)">Sin registrar</span>') + '</p></div>'
-      + '<div class="fcard"><small>Estrategia</small><p>' + (ficha.estrategia && ficha.estrategia.linea ? esc(ficha.estrategia.linea) : '<span style="color:var(--ink50)">Sin registrar</span>') + '</p>'
+      ? '<div class="kpi"><div class="k-label">Último impulso</div><div class="k-value">' + esc(c.boost.status === 'error' ? 'En error' : (c.boost.status || '—')) + '</div><div class="k-sub">US$ ' + (Number(c.boost.budget_cents || 0) / 100).toFixed(0) + ' de pauta · posteo #' + (c.boost.post_id || '—') + '</div></div>'
+      : '<div class="kpi"><div class="k-label">Impulso</div><div class="k-value">Sin impulsos</div><div class="k-sub">Todavía no impulsó ningún posteo</div></div>';
+    var sinReg = '<span class="sin">Sin registrar</span>';
+    var funda = '<div class="fundamento">'
+      + '<div class="fund"><div class="f-label">⭐ Producto estrella</div><div class="f-value">' + (vende.estrella ? esc(vende.estrella) : sinReg) + '</div></div>'
+      + '<div class="fund"><div class="f-label">Estrategia</div><div class="f-value">' + (ficha.estrategia && ficha.estrategia.linea ? esc(ficha.estrategia.linea) : sinReg) + '</div>'
       + (ficha.estrategia && ficha.estrategia.fuente && ficha.estrategia.fuente !== 'sin_datos' ? '<span class="fuente">Fuente: ' + esc(ficha.estrategia.fuente) + '</span>' : '') + '</div>'
-      + '<div class="fcard"><small>Audiencia estudiada</small><p>' + (vende.audiencia ? esc(vende.audiencia) : '<span style="color:var(--ink50)">Sin registrar</span>') + '</p></div></div>';
+      + '<div class="fund"><div class="f-label">Audiencia estudiada</div><div class="f-value">' + (vende.audiencia ? esc(vende.audiencia) : sinReg) + '</div></div></div>';
     var familias = (vista && vista.familias) || [];
     var trat = familias.length
-      ? '<div class="trat"><small>Tratamiento</small><select id="tratSel">'
+      ? '<div class="trat"><span class="t-label">Tratamiento</span><select id="tratSel">'
         + '<option value="">Sin tratamiento asignado</option>'
         + familias.map(function (f) { return '<option value="' + esc(f.key) + '"' + (c.tratamiento === f.key ? ' selected' : '') + '>' + esc(f.nombre) + '</option>'; }).join('')
-        + '</select><span style="color:var(--ink50);font-size:11.5px">Una familia por negocio: si otro ya la lleva, no se aplica y te avisamos.</span>'
+        + '</select><span class="t-hint">Una familia por negocio: si otro ya la lleva, no se aplica y te avisamos.</span>'
         + (plan && plan.formatos && plan.formatos.length ? '<span class="fchips">' + plan.formatos.map(function (f) { return '<span class="fchip">' + esc(f) + '</span>'; }).join('') + '</span>' : '')
         + '</div>'
       : '';
     var nota = '<div class="nota"><input id="notaInput" maxlength="200" placeholder="Nota interna de la ficha (máx. 200)…" value="' + esc((ficha.nota && ficha.nota.texto) || '') + '">'
       + '<button class="btn small" data-act="nota-guardar" type="button">Guardar nota</button></div>';
     var week = '<div class="week">' + (c.semana || []).map(function (d) {
-      var cls = d.estado === 'publicado' ? 'ok' : (d.estado === 'falta' ? 'miss' : '');
-      if (d.es_hoy) cls += ' hoy';
-      var inner = d.estado === 'publicado' ? 'Publicó' : d.estado === 'programado' ? 'Sale ' + esc(d.hora || '')
-        : d.estado === 'borrador' ? 'Borrador' : d.estado === 'frenado' ? 'Frenado por el cliente'
-        : d.estado === 'falta' ? '⚠ Falta' : '—';
-      return '<div class="day ' + cls + '"><b>' + esc(d.dia) + ' ' + esc(d.fecha) + '</b>' + inner
-        + (d.estado === 'falta' ? '<div class="mini"><button class="btn small warn" data-act="producir" data-fecha="' + esc(d.key) + '" type="button">Producir ahora</button></div>' : '')
+      var cls = '', sym = '—', note = '';
+      if (d.estado === 'publicado') { cls = 'done'; sym = '✓'; note = 'Publicó'; }
+      else if (d.estado === 'programado') { sym = '◷'; note = 'Sale ' + (d.hora || ''); }
+      else if (d.estado === 'borrador') { sym = '✎'; note = 'Borrador'; }
+      else if (d.estado === 'frenado') { cls = 'frenado'; sym = '⛔'; note = 'Frenado por el cliente'; }
+      else if (d.estado === 'falta') { cls = 'missing'; sym = '⚠'; note = 'Falta'; }
+      if (d.es_hoy) cls += ' today';
+      return '<div class="day ' + cls + '"><div class="d-name">' + esc(d.dia) + ' ' + esc(d.fecha) + '</div><div class="d-state">' + sym + '</div><div class="d-note">' + esc(note) + '</div>'
+        + (d.estado === 'falta' ? '<div class="d-mini"><button class="btn small" data-act="producir" data-fecha="' + esc(d.key) + '" type="button">Producir ahora</button></div>' : '')
         + '</div>';
     }).join('') + '</div>';
+    var ini = iniciales(c.business_name);
     var enPosteos = {};
     (c.posteos || []).forEach(function (p) { enPosteos[p.id] = true; });
     var planCards = plan ? plan.slots.filter(function (s) { return s.estado !== 'listo' || !s.post_id || !enPosteos[s.post_id]; })
-      .filter(function (s) { return s.estado !== 'listo'; }).map(planCard).join('') : '';
-    var grid = '<div class="grid">' + (c.posteos || []).map(function (p) { return postCard(p, true); }).join('') + planCards + '</div>';
+      .filter(function (s) { return s.estado !== 'listo'; }).map(function (s) { return planCard(s, ini); }).join('') : '';
+    var grid = '<div class="posts">' + (c.posteos || []).map(function (p) { return postCard(p, true, ini); }).join('') + planCards + '</div>';
     if (!(c.posteos || []).length && !planCards) grid = '<div class="vacio">Esta cuenta todavía no tiene posteos.</div>';
     var boostStrip = c.boost && c.boost.status !== 'error'
-      ? '<div class="boost"><div style="flex:1"><b>🚀 Impulso ' + esc(c.boost.status || '') + '</b><span>Posteo #' + (c.boost.post_id || '—') + ' · US$ ' + (Number(c.boost.budget_cents || 0) / 100).toFixed(0) + ' de pauta' + (c.boost.fee_cents ? ' · US$ ' + (Number(c.boost.fee_cents) / 100).toFixed(2) + ' de gestión' : '') + '</span></div></div>'
+      ? '<div class="boost"><span class="b-ico">🚀</span><div class="b-main"><div class="b-title">Impulso ' + esc(c.boost.status || '') + '</div><div class="b-txt">Posteo #' + (c.boost.post_id || '—') + ' · US$ ' + (Number(c.boost.budget_cents || 0) / 100).toFixed(0) + ' de pauta' + (c.boost.fee_cents ? ' · US$ ' + (Number(c.boost.fee_cents) / 100).toFixed(2) + ' de gestión' : '') + '</div></div></div>'
       : '';
     $('centro').innerHTML =
-      '<div class="head"><div class="' + avaClass(c.user_id) + '">' + esc(iniciales(c.business_name)) + '</div>'
-      + '<div style="flex:1;min-width:200px"><h2>' + esc(c.business_name || 'Sin nombre') + '</h2>'
-      + '<div class="sub">@' + esc(c.ig_username || '—') + (c.categoria ? ' · ' + esc(c.categoria) : '') + (c.es_invitado ? ' · invitado de la puerta' : '') + '</div></div>'
-      + etapaTag + (c.racha >= 2 ? '<span class="tag warn">🔥 Racha de ' + c.racha + ' días</span>' : '') + '</div>'
-      + '<div class="kpis">' + progresoHtml
-      + '<div class="kpi"><small>Próximo posteo</small><b>' + (proxPost ? esc(fechaCorta(proxPost.dia_key)) : '—') + '</b><span>' + (proxPost ? esc(proxPost.titulo || '') + (proxPost.status === 'draft' ? ' · borrador por decidir' : '') : 'Nada programado') + '</span></div>'
+      '<div class="c-head"><div class="c-id"><span class="' + avaClass(c.user_id) + '">' + esc(ini) + '</span>'
+      + '<div><div class="c-name">' + esc(c.business_name || 'Sin nombre') + '</div>'
+      + '<div class="c-sub"><span class="handle">@' + esc(c.ig_username || '—') + '</span>' + (c.categoria ? ' · ' + esc(c.categoria) : '') + (c.es_invitado ? ' · invitado de la puerta' : '') + '</div></div></div>'
+      + '<div class="c-side">' + etapaTag + (c.racha >= 2 ? '<span class="tag warn">🔥 Racha de ' + c.racha + ' días</span>' : '')
+      + (c.ig_username ? '<a class="btn" href="https://instagram.com/' + esc(c.ig_username) + '" target="_blank" rel="noopener">Ver su Instagram ↗</a>' : '') + '</div></div>'
+      + '<div class="control-strip">' + progresoHtml
+      + '<div class="kpi"><div class="k-label">Próximo posteo</div><div class="k-value">' + (proxPost ? esc(fechaCorta(proxPost.dia_key)) : '—') + '</div><div class="k-sub">' + (proxPost ? esc(proxPost.titulo || '') + (proxPost.status === 'draft' ? ' · borrador por decidir' : '') : 'Nada programado') + '</div></div>'
       + necesita + impulsoKpi + '</div>'
       + funda + trat + nota
-      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.6px;color:var(--ink50)">Su semana</h3>'
+      + '<div class="sec-title">Su semana <span class="hint">así la ve el cliente</span><span class="spacer"></span>'
       + '<span class="toggle"><button data-vista="semana" class="' + (centroVista === 'semana' ? 'on' : '') + '" type="button">Semana</button><button data-vista="feed" class="' + (centroVista === 'feed' ? 'on' : '') + '" type="button">Su feed</button></span></div>'
       + '<div id="centroCuerpo">' + (centroVista === 'semana' ? week + grid : '<div class="cargando">Cargando su feed…</div>') + '</div>'
       + boostStrip;
+    $('centro').classList.remove('fade-swap'); void $('centro').offsetWidth; $('centro').classList.add('fade-swap');
     var sel = $('tratSel');
     if (sel) sel.addEventListener('change', onTratamiento);
     if (centroVista === 'feed') renderFeed();
@@ -248,19 +287,20 @@
       }
       var porId = {};
       ((cliente && cliente.posteos) || []).forEach(function (p) { porId[p.id] = p; });
-      cuerpo.innerHTML = '<div class="grid">' + (j.tiles || []).map(function (t) {
+      var ini = iniciales(cliente && cliente.business_name);
+      cuerpo.innerHTML = '<div class="posts">' + (j.tiles || []).map(function (t) {
         var img = t.poster_url || t.image_url || '';
         var esVideo = /video|reel/.test(String(t.media_type || ''));
         var aprobable = (t.status === 'scheduled' || t.status === 'draft') && porId[t.post_id] && porId[t.post_id].dia_key;
+        var chip = t.status === 'published' ? '<span class="state-chip green">En su Instagram</span>'
+          : t.status === 'scheduled' ? '<span class="state-chip sky">Programado</span>'
+          : '<span class="state-chip yellow">' + esc(t.status || '') + '</span>';
         return '<article class="post"><div class="thumb">'
-          + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<span class="ph">🖼</span>')
-          + (esVideo ? '<span class="play">▶</span>' : '') + '</div>'
-          + '<div class="body"><div class="c">' + esc(trunc(t.caption || '', 90)) + '</div>'
-          + '<div class="meta">' + (t.status === 'published' ? '<span class="estado pub">En su Instagram</span>'
-            : t.status === 'scheduled' ? '<span class="estado prog">Programado</span>'
-            : '<span class="estado draft">' + esc(t.status || '') + '</span>')
-          + (t.es_revision ? '<span class="estado draft">Sale mañana</span>' : '') + '</div>'
-          + (aprobable ? '<div class="acts"><button class="btn small primary" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button">✓ Sale así</button></div>' : '')
+          + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(ini) + '</span></div>')
+          + (esVideo ? '<span class="play">▶</span>' : '') + chip + '</div>'
+          + '<div class="p-body"><div class="p-cap">' + esc(trunc(t.caption || '', 90)) + '</div>'
+          + (t.es_revision ? '<div class="p-meta"><span class="mini-chip amarillo">Sale mañana</span></div>' : '')
+          + (aprobable ? '<div class="p-actions"><button class="btn primary small" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button">✓ Sale así</button></div>' : '')
           + '</div></article>';
       }).join('') + '</div>';
     }
@@ -270,7 +310,6 @@
       if (selUser === uid && centroVista === 'feed') pintar(j);
     }).catch(function () { cuerpo.innerHTML = '<div class="vacio">No se pudo leer el feed.</div>'; });
   }
-  function trunc(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
   function onTratamiento(ev) {
     var sel = ev.target;
@@ -291,56 +330,68 @@
   }
 
   // ---------------- decisiones ----------------
+  function decTag(d) {
+    if (d.tipo === 'voz') return '<span class="d-tag">🎙 Nota de voz</span>';
+    if (d.tipo === 'pieza') return '<span class="d-tag">🖼 Pieza para aprobar</span>';
+    if (d.tipo === 'pieza_falta') return '<span class="d-tag">🗓 Mañana sin posteo</span>';
+    if (d.tipo === 'impulso') return '<span class="d-tag">🚀 Impulso</span>';
+    if (d.tipo === 'alerta') return '<span class="d-tag alert">⚠ Alerta</span>';
+    return '<span class="d-tag">📋 Caso</span>';
+  }
   function decCard(d) {
-    var who = '<div class="who"><span class="kind ' + (d.tipo === 'voz' ? 'voice' : d.tipo === 'alerta' ? 'alert' : 'piece') + '">'
-      + (d.tipo === 'voz' ? '🎙 Nota de voz' : d.tipo === 'pieza' ? '🖼 Pieza para aprobar' : d.tipo === 'pieza_falta' ? '🗓 Mañana sin posteo'
-        : d.tipo === 'impulso' ? '🚀 Impulso en error' : d.tipo === 'alerta' ? '⚠ Alerta' : '📋 Caso') + '</span>'
-      + (d.business_name ? '<span>' + esc(d.business_name) + (d.ig_username ? ' · @' + esc(d.ig_username) : '') + '</span>' : '')
-      + (d.cuando ? '<span style="margin-left:auto">' + esc(d.cuando) + '</span>' : '') + '</div>';
+    var head = '<div class="d-top">' + decTag(d) + (d.cuando ? '<span class="d-cuando">' + esc(d.cuando) + '</span>' : '') + '</div>';
+    var who = '';
+    if (d.tipo === 'alerta') {
+      who = '<div class="d-who">' + esc(d.titulo || 'Alerta') + '</div>';
+    } else if (d.business_name || d.ig_username) {
+      who = '<div class="d-who">' + esc(d.business_name || '') + (d.ig_username ? ' <span class="h">@' + esc(d.ig_username) + '</span>' : '') + '</div>';
+    }
     var cuerpo = '';
     if (d.tipo === 'voz') {
-      cuerpo = '<p><b>Pidió:</b> «' + esc(d.pedido || '') + '»</p>'
-        + (d.respuesta ? '<div class="promise">Posty entendió: ' + esc(d.respuesta) + '</div>' : '')
+      cuerpo = '<div class="d-txt">Transcripción: <em>«' + esc(d.pedido || '') + '»</em></div>'
         + (d.posteo ? '<div class="thumbrow">' + (d.posteo.image_url || d.posteo.poster_url ? '<img src="' + esc(d.posteo.poster_url || d.posteo.image_url) + '" alt="">' : '')
           + '<div class="cap">Sobre el posteo #' + d.posteo.id + ' (' + esc(d.posteo.status || '') + ')<br>' + esc(trunc(d.posteo.caption || '', 110)) + '</div></div>' : '')
+        + (d.respuesta ? '<div class="d-promise"><small>Posty entendió</small>' + esc(d.respuesta) + '</div>' : '')
         + '<div id="vozReply-' + d.message_id + '"></div>'
-        + '<div class="acts"><button class="btn small primary" data-act="voz-responder" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Responder</button>'
+        + '<div class="d-actions"><button class="btn primary small" data-act="voz-responder" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Responder</button>'
         + '<button class="btn small" data-act="voz-resuelto" data-mid="' + d.message_id + '" type="button">Resuelto a mano</button>'
-        + '<button class="btn small warn" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';
+        + '<button class="btn small ghost-danger" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';
     } else if (d.tipo === 'pieza') {
-      cuerpo = (d.necesita_atencion ? '<p style="color:#FFD98A"><b>⚠ ' + esc(d.motivo_atencion || 'Necesita atención') + '</b></p>' : '')
-        + '<div class="thumbrow">' + (d.image_url || d.poster_url ? '<img src="' + esc(d.poster_url || d.image_url) + '" alt="">' : '')
-        + '<div class="cap"><b style="color:var(--ink)">' + esc(d.titulo || '') + '</b><br>' + esc(trunc(d.texto || '', 160)) + '</div></div>'
-        + '<div class="acts"><button class="btn small primary" data-act="pieza-sale" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">✓ Sale así</button>'
+      var esVid = /video|reel/.test(String(d.media_type || ''));
+      cuerpo = (d.necesita_atencion ? '<div class="d-txt"><span class="att">⚠ ' + esc(d.motivo_atencion || 'Necesita atención') + '</span></div>' : '')
+        + (d.image_url || d.poster_url ? '<div class="d-thumb"><img src="' + esc(d.poster_url || d.image_url) + '" alt="">' + (esVid ? '<span class="play">▶</span>' : '') + '</div>' : '')
+        + '<div class="d-txt"><b style="color:var(--ink)">' + esc(d.titulo || '') + '</b><br>' + esc(trunc(d.texto || '', 160)) + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-act="pieza-sale" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">✓ Sale así</button>'
         + '<button class="btn small" data-act="pieza-arreglar" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">Pedir arreglo</button>'
-        + '<button class="btn small warn" data-act="pieza-nosale" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">No sale</button></div>';
+        + '<button class="btn small ghost-danger" data-act="pieza-nosale" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">No sale</button></div>';
     } else if (d.tipo === 'pieza_falta') {
-      cuerpo = '<p>' + esc(d.texto || '') + '</p>'
-        + '<div class="acts"><button class="btn small primary" data-act="falta-pedir" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" type="button">Posty lo arma</button>'
+      cuerpo = '<div class="d-txt">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-act="falta-pedir" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" type="button">Posty lo arma</button>'
         + '<button class="btn small" data-act="ver-cliente" data-uid="' + d.user_id + '" type="button">Ver la ficha</button></div>';
     } else if (d.tipo === 'impulso') {
-      cuerpo = '<p>El impulso del posteo #' + (d.post_id || '—') + ' (US$ ' + (Number(d.budget_cents || 0) / 100).toFixed(0) + ' de pauta) quedó en error. No se cobró gestión.</p>'
-        + '<pre class="err" id="err-' + d.boost_id + '">' + esc(d.texto || '') + '</pre>'
-        + '<div class="acts"><button class="btn small" data-act="impulso-detalle" data-bid="' + d.boost_id + '" type="button">Ver el error</button>'
-        + '<button class="btn small primary" data-act="impulso-ok" data-uid="' + d.user_id + '" data-bid="' + d.boost_id + '" data-pid="' + (d.post_id || '') + '" type="button">Entendido</button></div>';
+      cuerpo = '<div class="d-txt">El impulso del posteo #' + (d.post_id || '—') + ' (US$ ' + (Number(d.budget_cents || 0) / 100).toFixed(0) + ' de pauta) quedó en error. No se cobró gestión.</div>'
+        + '<div class="d-error" id="err-' + d.boost_id + '">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-act="impulso-ok" data-uid="' + d.user_id + '" data-bid="' + d.boost_id + '" data-pid="' + (d.post_id || '') + '" type="button">Entendido</button>'
+        + '<button class="btn small" data-act="impulso-detalle" data-bid="' + d.boost_id + '" type="button">Ver error</button></div>';
     } else if (d.tipo === 'alerta') {
-      cuerpo = '<p><b>' + esc(d.titulo || 'Alerta') + '</b></p><p>' + esc(d.texto || '') + '</p>'
-        + (d.kind === 'portada' ? '<div class="acts"><button class="btn small primary" data-act="portada-ok" data-uid="' + d.user_id + '" data-pid="' + d.post_id + '" type="button">Entendido</button>'
+      cuerpo = '<div class="d-txt">' + esc(d.texto || '') + '</div>'
+        + (d.kind === 'portada' ? '<div class="d-actions"><button class="btn primary small" data-act="portada-ok" data-uid="' + d.user_id + '" data-pid="' + d.post_id + '" type="button">Entendido</button>'
           + '<button class="btn small" data-act="ver-cliente" data-uid="' + d.user_id + '" type="button">Ver la ficha</button></div>'
-          : '<div class="acts"><a class="btn small" href="/panel" target="_blank" rel="noopener">Ver el panel</a></div>');
+          : '<div class="d-actions"><a class="btn small" href="/panel" target="_blank" rel="noopener" style="flex:1;justify-content:center">Ver el panel</a></div>');
     } else if (d.tipo === 'caso') {
-      cuerpo = '<p><b>' + esc(d.titulo || 'Caso') + '</b></p>'
-        + (d.texto ? '<p style="color:var(--ink70)">' + esc(d.texto) + '</p>' : '')
-        + (d.siguiente_paso ? '<div class="quote"><small>Siguiente paso</small>' + esc(d.siguiente_paso) + '</div>' : '')
-        + '<div class="acts"><button class="btn small" data-act="ver-cliente" data-uid="' + d.user_id + '" type="button">Ver la ficha</button>'
-        + '<button class="btn small warn" data-act="caso-cerrar" data-cid="' + d.case_id + '" type="button">Cerrar caso</button></div>';
+      cuerpo = '<div class="d-txt"><b style="color:var(--ink)">' + esc(d.titulo || 'Caso') + '</b></div>'
+        + (d.texto ? '<div class="d-txt">' + esc(d.texto) + '</div>' : '')
+        + (d.siguiente_paso ? '<div class="d-promise"><small>Siguiente paso</small>' + esc(d.siguiente_paso) + '</div>' : '')
+        + '<div class="d-actions"><button class="btn small" data-act="ver-cliente" data-uid="' + d.user_id + '" type="button">Ver la ficha</button>'
+        + '<button class="btn small ghost-danger" data-act="caso-cerrar" data-cid="' + d.case_id + '" type="button">Cerrar caso</button></div>';
     }
-    return '<div class="dec' + (d.tipo === 'alerta' ? ' alert' : '') + '">' + who + cuerpo + '</div>';
+    return '<article class="decision">' + head + who + cuerpo + '</article>';
   }
   function renderDecisiones() {
     var ds = (vista && vista.decisiones) || [];
-    $('decN').textContent = ds.length;
-    $('decisiones').innerHTML = ds.length ? ds.map(decCard).join('') : '<div class="vacio">Nada espera decisión. 🎉</div>';
+    setBadge('rightPending', ds.length);
+    $('decisiones').innerHTML = ds.length ? ds.map(decCard).join('') : '';
+    $('allDone').classList.toggle('show', !ds.length);
   }
   var ETIQUETAS_VISTA = { tratamiento: 'Asignó tratamiento', voz_resuelta_mano: 'Resolvió un pedido de voz a mano' };
   function renderUltimas() {
@@ -355,8 +406,8 @@
   function renderCola() {
     var cs = (vista && vista.cola) || [];
     $('cola').innerHTML = cs.length ? cs.map(function (j) {
-      return '<div class="job" data-sel="' + j.user_id + '"><span class="spin"></span><span><b>' + esc(j.business_name || '') + '</b> · ' + esc(j.titulo || '')
-        + (j.detalle ? '<br><small>' + esc(j.detalle) + '</small>' : '') + '</span></div>';
+      return '<button class="q-chip" data-sel="' + j.user_id + '" type="button"><span class="pulse"></span><b>' + esc(j.business_name || '') + '</b><span class="q-state">· ' + esc(j.titulo || '') + '</span><span class="q-arrow">›</span>'
+        + (j.detalle ? '<span class="q-det">' + esc(j.detalle) + '</span>' : '') + '</button>';
     }).join('') : '<span class="vacio">La cola está vacía: no hay producción a mano en curso.</span>';
   }
 
@@ -412,7 +463,7 @@
       var box = $('vozReply-' + mid);
       if (box) {
         box.innerHTML = '<textarea id="vozText-' + mid + '" placeholder="Tu respuesta, como Posty, en el chat del cliente…"></textarea>'
-          + '<div class="acts"><button class="btn small primary" data-act="voz-enviar" data-mid="' + mid + '" data-uid="' + uid + '" type="button">Enviar y cerrar el pedido</button></div>';
+          + '<div class="d-actions"><button class="btn primary small" data-act="voz-enviar" data-mid="' + mid + '" data-uid="' + uid + '" type="button">Enviar y cerrar el pedido</button></div>';
         var ta = $('vozText-' + mid); if (ta) ta.focus();
       }
       re();
