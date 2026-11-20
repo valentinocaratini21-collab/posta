@@ -14134,6 +14134,11 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
     if (!destacadoSemana.boostHabilitado(process.env)) return res.status(403).json({ ok: false, motivo: 'boost_deshabilitado' });
     const monto = Number(req.body.montoUSD);
     if (!destacadoSemana.validarMonto(monto)) return res.status(400).json({ ok: false, motivo: 'monto_invalido' });
+    // (LOTE CIERRE-ADS · FIX 3b) Fee pendiente: el mismo gate que en
+    // /api/ads/billetera/impulsar — antes de cualquier gasto, sin
+    // tocar la campaña que está corriendo.
+    const feePendDest = feePendienteGate(uid);
+    if (feePendDest) return res.status(409).json({ ok: false, motivo: 'fee_pendiente', feeCents: feePendDest.fee_cents, campanaRef: feePendDest.campana_ref });
     const st = destacadoSemanaEstado(uid);
     // LOTE IMPULSAR EN ESTRATEGIA: la carta puede impulsar su mejor posteo
     // (por dato real), no solo el destacado de la semana. Sin posteoId, el
@@ -14208,10 +14213,16 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
         // identidad de la resolución salen con su motivo honesto,
         // igual que en el impulso.
         try {
+          // (LOTE CIERRE-ADS · FIX 1) Si la falla fue de ACTIVACIÓN,
+          // la fila guarda los ids de Meta y la marca de activación:
+          // es la materia prima del barrido de reparación (sin ids,
+          // la campaña quedaba huérfana sin camino de arreglo).
+          const esActD = crDError && (crDError.code === 'activacion_fallida' || crDError.code === 'activacion_sin_dato');
           db.prepare(`INSERT INTO ad_boosts
-            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
-            VALUES (?,?,?,0,0,0,?,'error','engagement',7,?)`)
-            .run(uid, targetId, post.ig_media_id, monedaCuenta, `creación fallida en la cuenta del cliente (destacado, riel cliente): ${metaAds.detalleErrorMeta(crDError)}`);
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error)
+            VALUES (?,?,?,0,0,0,?,'error',?,?,?,'engagement',7,?)`)
+            .run(uid, targetId, post.ig_media_id, monedaCuenta, (crDError && crDError.campaignId) || '', (crDError && crDError.adsetId) || '', (crDError && crDError.adId) || '',
+              `${esActD ? (crDError.code === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta') + ': ' : 'creación fallida en la cuenta del cliente (destacado, riel cliente): '}${metaAds.detalleErrorMeta(crDError)}`);
         } catch (e) {}
         const motivoFrenoD = (crDError && (crDError.code === 'ig_fuera_de_conexion' || crDError.code === 'ig_otra_pagina')) ? crDError.code : 'anuncio_fallido';
         return res.status(409).json({ ok: false, motivo: motivoFrenoD });
@@ -14255,38 +14266,37 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
             VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7)`)
             .run(uid, rec.posteoId, post.ig_media_id, rec.spendCents, 0, rec.spendCents, monedaCuenta, rec.campaignId || '', rec.adsetId || '', rec.adId || '');
         } else {
-          db.prepare(`INSERT INTO ad_boosts
+          const insErr = db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error)
             VALUES (?,?,?,0,0,0,?,'error','engagement',7,?)`)
             .run(uid, rec.posteoId, post.ig_media_id, monedaCuenta, `cobro ${rec.cobroId || ''} sin anuncio: ${rec.error || ''}`);
-          // (LOTE v888 · decisión Valentino 10/11 14:17) El cobro quedó en
-          // Stripe pero el anuncio no se creó: SIN reembolso — el monto
-          // queda como CRÉDITO en la billetera del cliente (USD) para usar
-          // después. Idempotente por cobroId (un reintento no acredita dos
-          // veces). Si la acreditación falla, el tablero lo ve en el log y
-          // en la fila 'error' de arriba.
+          // (LOTE CIERRE-ADS · FIX 3a — decisión de Valentino 15/11,
+          // reemplaza al crédito de v888 como comportamiento por
+          // defecto) El cobro quedó en Stripe pero el anuncio nunca
+          // salió (incluida la forma activacion_fallida, que en este
+          // riel también cae a anuncio_fallido): la plata vuelve
+          // ENTERA Y SOLA al medio de pago original — refund sobre el
+          // PaymentIntent de cobrarImpulso, idempotente por cobroId
+          // (ref reembolso_<cobroId>) — y el id del refund queda en la
+          // fila. Si el refund mismo falla, queda registrado como
+          // URGENCIA en la fila y en el log (patrón
+          // cobro_sin_acreditar): nunca silencio. El crédito en
+          // billetera (acreditarCreditoAnuncioFallido) queda solo para
+          // un opt-in explícito del cliente, no como default.
           if (rec.tipo === 'anuncio_fallido' && rec.cobroId) {
             try {
-              const cred = await adsBilletera.acreditarCreditoAnuncioFallido({
-                clienteId: uid, montoUSD: monto, cobroId: rec.cobroId,
-                leerBilletera: async () => getAdWallet(uid),
-                mover: async (cents, kind, ref, note) => {
-                  try { return { ok: true, saldoNuevo: adWalletMove(uid, cents, kind, ref, note) }; }
-                  catch (e) { return { ok: false, motivo: 'acreditar_fallido' }; }
-                },
-                yaAcreditado: async (ref) => {
-                  try {
-                    const f = db.prepare(`SELECT id FROM ad_transactions WHERE user_id = ? AND ref = ? AND kind = 'credito_anuncio_fallido'`).get(uid, ref);
-                    return !!f;
-                  } catch (e) { return false; }
-                },
-                fijarMoneda: async (moneda) => {
-                  try { db.prepare(`UPDATE ad_wallets SET currency = ? WHERE user_id = ?`).run(moneda, uid); } catch (e) { /* seguir */ }
-                },
-              });
-              if (!cred.ok) console.warn('[ads] credito_anuncio_fallido fallido', uid, rec.cobroId, cred.motivo);
-              else if (cred.moneda_mezclada) console.warn('[ads] credito_anuncio_fallido en billetera ARS con saldo: el crédito USD quedó junto al saldo en pesos, sin conversión', uid, rec.cobroId);
-            } catch (e) { console.warn('[ads] credito_anuncio_fallido error', uid, rec.cobroId, String((e && e.message) || e)); }
+              const rf = await destacadoCobro.reembolsarImpulso({ client: stripeBilling.stripeClient(), cobroId: rec.cobroId });
+              if (rf.ok && rf.refundId) {
+                try { db.prepare(`UPDATE ad_boosts SET refund_id = ? WHERE id = ?`).run(rf.refundId, insErr.lastInsertRowid); } catch (e) {}
+              } else {
+                try { db.prepare(`UPDATE ad_boosts SET error = error || ' · REEMBOLSO PENDIENTE: el refund a la fuente falló (${(rf && rf.motivo) || 'sin_detalle'}) — revisión urgente' WHERE id = ?`).run(insErr.lastInsertRowid); } catch (e) {}
+                console.error('[ads] REEMBOLSO PENDIENTE (urgencia):', uid, rec.cobroId, (rf && rf.motivo) || '');
+                try { track(uid, 'ads_reembolso_pendiente', String(rec.cobroId)); } catch (e) {}
+              }
+            } catch (e) {
+              console.error('[ads] REEMBOLSO PENDIENTE (urgencia):', uid, rec.cobroId, String((e && e.message) || e));
+              try { track(uid, 'ads_reembolso_pendiente', String(rec.cobroId)); } catch (e) {}
+            }
           }
         }
       },
@@ -14513,6 +14523,12 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
       // (LOTE ADS-DIFERENCIA) Diferencia ARS: la billetera tiene que
       // ser ARS, el monto del impulso uno de los presupuestos fijos y
       // el monto pedido EXACTAMENTE lo que falta (en pesos enteros).
+      // (LOTE CIERRE-ADS · FIX 2, constancia) Acá NO hay «total con
+      // gestión encima» que aprender: en el flujo ARS el fee del 10%
+      // va DENTRO del monto elegido (splitARS de impulsarConSaldo),
+      // así que el objetivo de la diferencia ya es el total entero
+      // que el cliente ve. El espejo de los totales 22/55/110 es solo
+      // del flujo USD, donde la gestión va aparte.
       let esDiferenciaARS = false;
       if (difReq && difReq.montoImpulsoARS != null) {
         const wDif = getAdWallet(uid);
@@ -14570,12 +14586,24 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
     // ser USD, el monto del impulso uno de los fijos y el monto
     // pedido EXACTAMENTE lo que falta (en dólares enteros). Cualquier
     // desvío frena con diferencia_invalida, sin cobrar nada.
+    // (LOTE CIERRE-ADS · FIX 2) La diferencia aprende los TOTALES: el
+    // monto del impulso puede ser la pauta fija (20/50/100, el patrón
+    // original) o el TOTAL pauta+gestión (22/55/110) del cartel de la
+    // misma pantalla — el objetivo contra el que se recomputa la
+    // falta es desgloseFee(pauta).totalCents de una pauta fija
+    // vigente (adsFee.desgloseDesdeTotal). La doble llave se mantiene
+    // entera: el monto cargado debe ser EXACTAMENTE la falta contra
+    // ese objetivo, en dólares enteros, con la billetera real.
     let esDiferenciaUSD = false;
     if (difReq && difReq.montoImpulsoUSD != null) {
       const wDif = getAdWallet(uid);
-      const faltaCents = Math.round(Number(difReq.montoImpulsoUSD) * 100) - (wDif.currency === 'USD' ? Number(wDif.balance_cents || 0) : 0);
+      const montoImpUSD = Number(difReq.montoImpulsoUSD);
+      const objetivoCents = adsBilletera.validarMontoUSD(montoImpUSD)
+        ? Math.round(montoImpUSD * 100)
+        : ((adsFee.desgloseDesdeTotal(Math.round(montoImpUSD * 100)) || {}).totalCents || 0);
+      const faltaCents = objetivoCents - (wDif.currency === 'USD' ? Number(wDif.balance_cents || 0) : 0);
       esDiferenciaUSD = wDif.currency === 'USD'
-        && adsBilletera.validarMontoUSD(Number(difReq.montoImpulsoUSD))
+        && objetivoCents > 0
         && faltaCents > 0 && faltaCents % 100 === 0 && montoUSD === faltaCents / 100;
       if (!esDiferenciaUSD) return res.status(409).json({ ok: false, motivo: 'diferencia_invalida' });
     }
@@ -15159,6 +15187,200 @@ function feeImpulsoTrasActivacion(uid, datos) {
 }
 // === FEE-IMPULSAR · LA COSTURA (fin) ===
 
+// (LOTE CIERRE-ADS · FIX 3b) El gate del fee pendiente (decisión de
+// Valentino 15/11): si el usuario tiene una gestión en
+// 'pendiente_fallo' o 'sin_medio' de un impulso que SÍ salió, el
+// PRÓXIMO impulso no sale hasta pagarla. La campaña que está
+// corriendo no se toca jamás — este gate solo LEE ad_fees y frena
+// antes de cualquier gate que gaste. Hasta este lote ningún endpoint
+// leía ad_fees (feesPendientes no tenía llamadores): un fee
+// incobrable no frenaba nada, para siempre.
+function feePendienteGate(uid) {
+  try { return adsFee.feePendienteDeUsuario(db, uid); } catch (e) { return null; }
+}
+
+// (LOTE CIERRE-ADS · FIX 3b) «Pagar la gestión»: reintenta el cobro
+// del fee pendiente del usuario re-invocando la costura sobre la fila
+// guardada. Seguro por la idempotencia de la costura (campana_ref
+// UNIQUE + clave de Stripe por campaña y tarjeta): un doble toque no
+// cobra dos veces, y si la campaña ya pagó devuelve el ya cobrado.
+// La verificación de «corriendo» corre con el token del riel de esa
+// campaña (el SUAT si la conexión sigue capturada).
+app.post('/api/ads/fees/reintentar', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const pend = feePendienteGate(uid);
+    if (!pend) return res.json({ ok: true, estado: 'sin_pendiente' });
+    const campaignId = String(pend.campaign_id || '') || (String(pend.campana_ref || '').startsWith('meta:') ? String(pend.campana_ref).slice(5) : '');
+    if (!campaignId) return res.status(409).json({ ok: false, motivo: 'fee_sin_campana' });
+    let metaToken = '';
+    try { const g2 = await adsReadiness(uid); if (g2 && g2.via === 'cliente' && g2.suat) metaToken = g2.suat; } catch (e) {}
+    const r = await adsFee.cobrarFeeCampanaCorriendo(db, {
+      client: stripeBilling.stripeClient(),
+      ...(metaToken ? { metaToken } : {}),
+      senalEquipo: (info) => {
+        try { track(info.userId, 'fee_impulso_pendiente', String(info.campanaRef || '')); } catch (e) {}
+        console.error('[fee-impulso] fee pendiente (reintento):', JSON.stringify(info));
+      },
+    }, {
+      userId: uid, postId: pend.post_id || null, campaignId, campanaRef: String(pend.campana_ref || ''),
+      adsetId: String(pend.adset_id || ''), pautaCents: Number(pend.pauta_cents || 0), moneda: pend.moneda || 'USD',
+    });
+    if (r && r.cobrado) return res.json({ ok: true, estado: 'cobrado', feeCents: r.feeCents, cobroId: r.cobroId || null, ...(r.yaCobrado ? { ya_cobrado: true } : {}) });
+    const fila = feePendienteGate(uid);
+    return res.status(409).json({ ok: false, motivo: (r && r.motivo) || 'fee_no_cobrado', estado: fila ? fila.estado : 'cobrado' });
+  } catch (e) { res.status(500).json({ ok: false, motivo: 'fee_reintento_fallido' }); }
+});
+
+// === (LOTE CIERRE-ADS · FIX 1) BARRIDO DE REPARACIÓN DE ADS ===
+// Ninguna activación fallada a mitad de camino queda huérfana sin
+// camino de arreglo: el barrido vuelve sobre las filas 'error' de
+// ad_boosts con ids de Meta y error de activación, re-enciende
+// campaña+conjunto+anuncio en Meta, verifica los TRES estados y, si
+// verifica, pasa la fila a 'active' y dispara la costura del fee
+// (idempotente por campaña: no duplica cobro). Tras 3 intentos con
+// backoff (1h, 2h, 4h desde el último) la fila queda 'error'
+// definitiva con señal al equipo. El barrido también reintenta los
+// fees 'pendiente_fallo' una vez por corrida (la costura re-verifica
+// que la campaña corra antes de cobrar; 'sin_medio' solo se reintenta
+// desde el botón «Pagar la gestión»). Corre por intervalo horario y
+// por el disparo admin de abajo.
+const ADS_REPAIR_MAX_INTENTOS = 3;
+async function barridoReparacionAds() {
+  const resumen = { revisadas: 0, reparadas: 0, definitivas: 0, feesReintentados: 0, feesCobrados: 0 };
+  let filas = [];
+  try {
+    filas = db.prepare(`SELECT * FROM ad_boosts WHERE status = 'error' AND meta_campaign_id != ''
+      AND (error LIKE '%activación%' OR error LIKE '%activacion%')
+      AND COALESCE(repair_intentos, 0) < ? ORDER BY id ASC LIMIT 20`).all(ADS_REPAIR_MAX_INTENTOS);
+  } catch (e) { filas = []; }
+  for (const f of filas) {
+    resumen.revisadas++;
+    const intentos = Number(f.repair_intentos || 0);
+    if (f.repair_ultimo) {
+      const esperaH = Math.pow(2, intentos);
+      const ultimo = Date.parse(String(f.repair_ultimo).replace(' ', 'T') + 'Z');
+      if (Number.isFinite(ultimo) && (Date.now() - ultimo) < esperaH * 3600 * 1000) continue;
+    }
+    let gate = { ready: false };
+    try { gate = await adsReadiness(f.user_id); } catch (e) { gate = { ready: false }; }
+    const ctx = (gate && gate.via === 'cliente' && gate.suat) ? { token: gate.suat, adAccountId: gate.adAccountId } : null;
+    let rep = null;
+    try { rep = await metaAds.reactivarBoost({ campaignId: f.meta_campaign_id, adsetId: f.meta_adset_id, adId: f.meta_ad_id, ctx }); } catch (e) { rep = null; }
+    if (rep && rep.ok) {
+      try { db.prepare(`UPDATE ad_boosts SET status = 'active', error = '' WHERE id = ?`).run(f.id); } catch (e) {}
+      resumen.reparadas++;
+      feeImpulsoTrasActivacion(f.user_id, {
+        postId: f.post_id, campaignId: f.meta_campaign_id, adsetId: f.meta_adset_id || '',
+        pautaCents: Number(f.budget_cents || 0), moneda: f.currency || 'USD',
+        ...(ctx ? { metaToken: ctx.token } : {}),
+      });
+    } else {
+      const n = intentos + 1;
+      try { db.prepare(`UPDATE ad_boosts SET repair_intentos = ?, repair_ultimo = datetime('now') WHERE id = ?`).run(n, f.id); } catch (e) {}
+      if (n >= ADS_REPAIR_MAX_INTENTOS) {
+        resumen.definitivas++;
+        try { track(f.user_id, 'ads_reparacion_definitiva', String(f.meta_campaign_id || '')); } catch (e) {}
+        console.error('[ads-repair] activación sin reparar tras', n, 'intentos:', f.id, f.meta_campaign_id);
+      }
+    }
+  }
+  let fees = [];
+  try { fees = db.prepare(`SELECT * FROM ad_fees WHERE estado = 'pendiente_fallo' ORDER BY id ASC LIMIT 20`).all(); } catch (e) { fees = []; }
+  for (const pf of fees) {
+    const campaignId = String(pf.campaign_id || '') || (String(pf.campana_ref || '').startsWith('meta:') ? String(pf.campana_ref).slice(5) : '');
+    if (!campaignId) continue;
+    resumen.feesReintentados++;
+    let metaToken = '';
+    try { const g3 = await adsReadiness(pf.user_id); if (g3 && g3.via === 'cliente' && g3.suat) metaToken = g3.suat; } catch (e) {}
+    try {
+      const r = await adsFee.cobrarFeeCampanaCorriendo(db, {
+        client: stripeBilling.stripeClient(),
+        ...(metaToken ? { metaToken } : {}),
+        senalEquipo: (info) => { try { track(info.userId, 'fee_impulso_pendiente', String(info.campanaRef || '')); } catch (e) {} },
+      }, { userId: pf.user_id, postId: pf.post_id || null, campaignId, campanaRef: String(pf.campana_ref || ''), adsetId: String(pf.adset_id || ''), pautaCents: Number(pf.pauta_cents || 0), moneda: pf.moneda || 'USD' });
+      if (r && r.cobrado) resumen.feesCobrados++;
+    } catch (e) { /* la costura nunca lanza; red de seguridad */ }
+  }
+  return resumen;
+}
+
+// Disparo admin del barrido (el mismo token de /api/admin/ads).
+app.post('/api/admin/ads/reparar', async (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  try { const r = await barridoReparacionAds(); res.json({ ok: true, ...r }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'barrido_fallido' }); }
+});
+
+// (LOTE CIERRE-ADS · FIX 1) Reconciliación ÚNICA de las huérfanas del
+// 17/11: las campañas «Posty · Impulso u<uid> · p<post>» que quedaron
+// PAUSED en Meta sin fila local con sus ids (la creación moría en el
+// paso creativo, antes de que createBoost devolviera ids). Por cada
+// campaña encontrada en la cuenta del usuario: (a) sin anuncio —
+// huérfana del creativo: NO se activa una cáscara sin anuncio; se
+// archiva en Meta y la fila local 'error' de ese posteo se cierra con
+// la causa, fuera del historial «activo» del cliente; (b) con
+// anuncio: un intento de activación verificada — si verifica, la fila
+// pasa a 'active' real y se dispara la costura del fee; si no, queda
+// asentado el resultado. Se corre a mano, una vez por usuario
+// afectado (POST con token admin y user_id).
+app.post('/api/admin/ads/reconciliar-huerfanas', async (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  const uid = Number((req.body && req.body.user_id) || req.query.user_id) || 0;
+  if (!uid) return res.status(400).json({ ok: false, motivo: 'sin_usuario' });
+  try {
+    let gate = { ready: false };
+    try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: 'sin_conexion', code: gate.code || null });
+    const ctx = gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null;
+    const camps = await metaAds.listarCampanasPorNombre(ctx, `Posty · Impulso u${uid} ·`);
+    const detalle = [];
+    for (const c of camps) {
+      const mPost = /· p(\d+)\s*$/.exec(c.name || '');
+      const postId = mPost ? Number(mPost[1]) : 0;
+      const ads = await metaAds.leerAnunciosDeCampana(c.id, ctx).catch(() => null);
+      if (!ads) { detalle.push({ campaignId: c.id, postId, resultado: 'sin_lectura' }); continue; }
+      if (ads.length === 0) {
+        try { await metaAds.archivarCampana(c.id, ctx); } catch (e) {}
+        try {
+          db.prepare(`UPDATE ad_boosts SET meta_campaign_id = ?, error = ? WHERE user_id = ? AND post_id = ? AND status = 'error' AND (meta_campaign_id = '' OR meta_campaign_id IS NULL)`)
+            .run(c.id, 'creación incompleta 17/11: el posteo es de una IG fuera de la conexión publicitaria — la campaña quedó sin anuncio y se archivó en Meta', uid, postId);
+        } catch (e) {}
+        detalle.push({ campaignId: c.id, postId, resultado: 'archivada_sin_anuncio' });
+        continue;
+      }
+      const adset = await metaAds.leerAdsetDeCampana(c.id, ctx).catch(() => null);
+      if (!adset) { detalle.push({ campaignId: c.id, postId, resultado: 'sin_conjunto' }); continue; }
+      const rep = await metaAds.reactivarBoost({ campaignId: c.id, adsetId: adset.id, adId: ads[0].id, ctx }).catch(() => null);
+      if (rep && rep.ok) {
+        let fila = null;
+        try { fila = db.prepare(`SELECT id, budget_cents FROM ad_boosts WHERE user_id = ? AND (meta_campaign_id = ? OR (post_id = ? AND status = 'error')) ORDER BY id DESC LIMIT 1`).get(uid, c.id, postId); } catch (e) { fila = null; }
+        const pautaCents = (fila && Number(fila.budget_cents)) || (adset.lifetime_budget ? Number(adset.lifetime_budget) : 2000);
+        if (fila) {
+          try { db.prepare(`UPDATE ad_boosts SET status = 'active', error = '', meta_campaign_id = ?, meta_adset_id = ?, meta_ad_id = ? WHERE id = ?`).run(c.id, adset.id, ads[0].id, fila.id); } catch (e) {}
+        } else {
+          try {
+            const post = postId ? db.prepare('SELECT ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(postId, uid) : null;
+            db.prepare(`INSERT INTO ad_boosts (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days)
+              VALUES (?,?,?, ?,0,?,'USD','active',?,?,?,'engagement',7)`)
+              .run(uid, postId, (post && post.ig_media_id) || '', pautaCents, pautaCents, c.id, adset.id, ads[0].id);
+          } catch (e) {}
+        }
+        feeImpulsoTrasActivacion(uid, { postId, campaignId: c.id, adsetId: adset.id, pautaCents, moneda: 'USD', ...(ctx ? { metaToken: ctx.token } : {}) });
+        detalle.push({ campaignId: c.id, postId, resultado: 'activada' });
+      } else {
+        detalle.push({ campaignId: c.id, postId, resultado: 'no_verifico', estados: rep ? rep.estados : null });
+      }
+    }
+    res.json({ ok: true, user_id: uid, campanas: detalle });
+  } catch (e) { res.status(500).json({ ok: false, error: 'reconciliacion_fallida' }); }
+});
+
+// El barrido corre solo, una vez por hora.
+setInterval(() => { barridoReparacionAds().catch(() => {}); }, 60 * 60 * 1000);
+
 // Impulsar con saldo: el cliente elige posteo + monto; Posty hace el resto.
 // El débito ocurre SOLO cuando el ad se creó bien en Meta; si la creación
 // falla, NO se debita nada. (v888: la tasa tiene default 1425, el gate
@@ -15347,6 +15569,14 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     let yaActivo = null;
     try { yaActivo = db.prepare(`SELECT id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND status IN ('pending','active') LIMIT 1`).get(uid, posteoId); } catch (e) { yaActivo = null; }
     if (yaActivo) return res.status(409).json({ ok: false, motivo: 'ya_impulsado' });
+    // (LOTE CIERRE-ADS · FIX 3b) Fee pendiente: frena acá — después
+    // del ya_impulsado (re-tocar la campaña que corre muestra su
+    // estado, no el gate) y antes de readiness/elegibilidad/creación:
+    // ningún impulso NUEVO sale con una gestión sin pagar. La
+    // campaña anterior sigue corriendo intacta — el gate solo lee
+    // ad_fees.
+    const feePendImp = feePendienteGate(uid);
+    if (feePendImp) return res.status(409).json({ ok: false, motivo: 'fee_pendiente', feeCents: feePendImp.fee_cents, campanaRef: feePendImp.campana_ref });
     let gate = { ready: false };
     try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
     // (LOTE CONEXIÓN-PÁGINA) Sin configuración de Posty, el riel del
@@ -15387,6 +15617,19 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     // quedó corriendo. El riel es el de los montos USD de la decisión
     // ($20/$50/$100): un pedido en pesos o una cuenta que no opera en
     // USD frena cerrado, sin gasto de ningún lado.
+    // (LOTE CIERRE-ADS · FIX 2 — DECISIÓN DE MODELO, SPEC §5.5) La
+    // superficie presenta UN solo total (pauta + gestión) y compara
+    // el saldo cargado contra ese total EN AMBOS rieles (pzBoostPuede
+    // / pzAdsDiferencia): la billetera es el saldo de la cuenta del
+    // usuario a los efectos de la puerta y del cartel de la
+    // diferencia, también en este riel. Los cobros reales NO cambian
+    // (Meta factura la pauta en la cuenta del cliente; la costura, la
+    // gestión en su tarjeta — así lo dice la línea de dinero de la
+    // propia tarjeta): debitar además la billetera acá cobraría la
+    // pauta dos veces, porque Meta siempre factura la cuenta
+    // publicitaria directamente. Lo que no puede quedar es el estado
+    // anterior a este lote: billetera exhibida, total exhibido y
+    // ningún camino entre los dos.
     if (gate.via === 'cliente') {
       if (esARS || monedaCuenta !== 'USD') return res.status(409).json({ ok: false, motivo: 'moneda_cuenta_incompatible' });
       if ((getSettings(uid) || {}).demo_mode) return res.status(409).json({ ok: false, motivo: 'demo' });
@@ -15439,10 +15682,17 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // solo «Invalid parameter» y el fallo real del 17/11 fue
         // indiagnosticable. La respuesta al cliente no cambia.
         try {
+          // (LOTE CIERRE-ADS · FIX 1) Si la falla fue de ACTIVACIÓN,
+          // la fila guarda los ids de Meta y la marca de activación:
+          // es la materia prima del barrido de reparación (sin ids,
+          // la campaña quedaba huérfana sin camino de arreglo, como
+          // las del 17/11 en el paso del creativo).
+          const esAct = crError && (crError.code === 'activacion_fallida' || crError.code === 'activacion_sin_dato');
           db.prepare(`INSERT INTO ad_boosts
-            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days, error, objetivo, audiencia_json)
-            VALUES (?,?,?,?,0,0,'USD','error','engagement',7,?,?,?)`)
-            .run(uid, posteoId, cand.ig_media_id, pautaCents, `creación fallida en la cuenta del cliente (riel cliente): ${metaAds.detalleErrorMeta(crError)}`, objetivoFinal || '', audienciaJsonDe());
+            (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
+            VALUES (?,?,?,?,0,0,'USD','error',?,?,?,'engagement',7,?,?,?)`)
+            .run(uid, posteoId, cand.ig_media_id, pautaCents, (crError && crError.campaignId) || '', (crError && crError.adsetId) || '', (crError && crError.adId) || '',
+              `${esAct ? (crError.code === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta') + ': ' : 'creación fallida en la cuenta del cliente (riel cliente): '}${metaAds.detalleErrorMeta(crError)}`, objetivoFinal || '', audienciaJsonDe());
         } catch (e) {}
         // (LOTE ADS-CREACIÓN-5) Los frenos de identidad de la
         // resolución NO son un rechazo de Meta (Meta ni vio el
@@ -15519,8 +15769,11 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           // ad SÍ existe en Meta (pausado): el fallo viaja estructurado
           // para que impulsarConSaldo lo asiente como error con los
           // ids. Cualquier otro fallo de creación se propaga como antes.
-          if (e && e.code === 'activacion_fallida') {
-            return { ok: false, motivo: 'activacion_fallida', error: String((e && e.message) || e).slice(0, 300), anuncioId: e.campaignId || null, campaignId: e.campaignId || null, adsetId: e.adsetId || null, adId: e.adId || null };
+          // (LOTE CIERRE-ADS · FIX 1) 'activacion_sin_dato' viaja por
+          // el mismo camino estructurado, con su motivo propio: el
+          // asiento lo distingue y el barrido lo re-verifica.
+          if (e && (e.code === 'activacion_fallida' || e.code === 'activacion_sin_dato')) {
+            return { ok: false, motivo: e.code, error: String((e && e.message) || e).slice(0, 300), anuncioId: e.campaignId || null, campaignId: e.campaignId || null, adsetId: e.adsetId || null, adId: e.adId || null };
           }
           // (LOTE ADS-CREACIÓN) Un rechazo de creación viaja con el
           // detalle ENTERO de Meta (paso + subcódigo + mensaje +
@@ -15576,14 +15829,18 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
               pautaCents: rec.spendCents, moneda: 'USD',
             });
           }
-        } else if (rec.tipo === 'activacion_fallida') {
+        } else if (rec.tipo === 'activacion_fallida' || rec.tipo === 'activacion_sin_dato') {
           // (LOTE ADS-HARDENING-ACTIVACION) El ad SÍ se creó en Meta
           // pero NO quedó activo (pausado): sin débito ni cobro, queda
           // asentado como error con los ids para revisión manual.
+          // (LOTE CIERRE-ADS · FIX 1) Con 'activacion_sin_dato' el
+          // texto lo distingue (Meta no devolvió ninguna lectura: la
+          // campaña puede estar corriendo) y la marca «activación…»
+          // del texto es la que el barrido de reparación busca.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
             VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `activación fallida en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `${rec.tipo === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta'} (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
         } else if (rec.tipo === 'debito_fallido') {
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
@@ -46766,7 +47023,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1188';
+const BUILD_ID = '20261105-v1189';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

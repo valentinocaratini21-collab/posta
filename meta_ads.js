@@ -399,11 +399,17 @@ async function resolverIgUserIdBoost({ pageId, igMediaId, ctx = null, publicadaI
   throw freno('ig_no_resuelto', `No se pudo verificar la cuenta de Instagram dueña del posteo ${igMediaId} en la cuenta publicitaria (ni el dueño del medio ni la Instagram de la Página pudieron leerse): el impulso se frenó antes de crear el aviso, sin mandar ningún id sin verificar.`, ld, lp);
 }
 
-// Lee el estado real de campaña y conjunto en Meta (fuente de verdad
-// tras el encendido), con el token del riel que corre (el del entorno o
-// el SUAT del cliente vía ctx). Si una lectura falla, ese estado queda
-// null — nunca se asume ACTIVE sin haberlo leído.
-async function verificarActivos(campaignId, adsetId, ctx = null) {
+// Lee el estado real de campaña, conjunto Y ANUNCIO en Meta (fuente
+// de verdad tras el encendido), con el token del riel que corre (el
+// del entorno o el SUAT del cliente vía ctx). Si una lectura falla,
+// ese estado queda null — nunca se asume ACTIVE sin haberlo leído.
+// (LOTE CIERRE-ADS · FIX 1) Hasta este lote se leían solo campaña y
+// conjunto: campaña+conjunto ACTIVE con el anuncio pausado daba
+// «éxito» sin entregar nada. La forma histórica de 3 argumentos
+// (camp, adset, ctx) sigue válida: el tercer argumento objeto es el
+// ctx; con id de anuncio (string) se lee también `ad`.
+async function verificarActivos(campaignId, adsetId, adId = null, ctx = null) {
+  if (adId && typeof adId === 'object') { ctx = adId; adId = null; }
   const leer = async (id) => {
     try {
       const d = await g(`/${id}`, { params: { fields: 'status' }, ctx });
@@ -411,7 +417,9 @@ async function verificarActivos(campaignId, adsetId, ctx = null) {
     } catch (e) { return null; }
   };
   const [campaign, adset] = await Promise.all([leer(campaignId), leer(adsetId)]);
-  return { campaign, adset };
+  const out = { campaign, adset };
+  if (adId) out.ad = await leer(adId);
+  return out;
 }
 
 // Crea campaña + conjunto + creativo + anuncio. Devuelve los ids de Meta.
@@ -424,9 +432,10 @@ async function verificarActivos(campaignId, adsetId, ctx = null) {
 // `destinationType` (p. ej. INSTAGRAM_DIRECT) solo se envía si viene.
 // (Composición sobre v1048: el parámetro `ctx` del riel del cliente
 // se conserva intacto, al final de los históricos.)
-// Si la activación NO deja campaña y conjunto en ACTIVE, createBoost
-// LANZA el error (code 'activacion_fallida', con los ids): el llamador
-// NO debe cobrar por un anuncio que quedó pausado.
+// Si la activación NO deja campaña, conjunto y anuncio en ACTIVE,
+// createBoost LANZA el error (code 'activacion_fallida', o
+// 'activacion_sin_dato' si Meta no devolvió ninguna lectura, con los
+// ids): el llamador NO debe cobrar por un anuncio que quedó pausado.
 async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days = 7, country = 'AR', ctx = null, objective = 'OUTCOME_ENGAGEMENT', optimizationGoal = 'POST_ENGAGEMENT', destinationType = null, targeting = null }) {
   // (LOTE CONEXIÓN-PÁGINA) Con ctx, la pauta corre en la cuenta del
   // CLIENTE con su SUAT: no exige la configuración de Posty y el
@@ -570,24 +579,101 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
   catch (e) { activacionErr = `campaña: ${String((e && e.message) || e).slice(0, 120)}`; }
   try { await g(`/${adset.id}`, { method: 'POST', ctx: gctx, params: { status: 'ACTIVE' } }); }
   catch (e) { activacionErr = (activacionErr ? activacionErr + ' · ' : '') + `conjunto: ${String((e && e.message) || e).slice(0, 120)}`; }
-  let estados = await verificarActivos(camp.id, adset.id, gctx);
-  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE') {
+  // (LOTE CIERRE-ADS · FIX 1) La verificación es de los TRES: campaña,
+  // conjunto y anuncio. Y «sin dato» no es «pausado»: si tras la
+  // relectura los tres estados volvieron null (Graph no devolvió
+  // lectura de ninguno), el motivo interno es activacion_sin_dato —
+  // distinguible en el registro del PAUSED confirmado
+  // (activacion_fallida); el barrido de reparación re-verifica ambos
+  // casos por el mismo camino.
+  let estados = await verificarActivos(camp.id, adset.id, ad.id, gctx);
+  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE' || estados.ad !== 'ACTIVE') {
     // Un reintento de lectura: Meta a veces tarda un instante en reflejarlo.
     await new Promise((r) => setTimeout(r, 1200));
-    estados = await verificarActivos(camp.id, adset.id, gctx);
+    estados = await verificarActivos(camp.id, adset.id, ad.id, gctx);
   }
-  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE') {
+  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE' || estados.ad !== 'ACTIVE') {
+    const sinDato = estados.campaign == null && estados.adset == null && estados.ad == null;
     const err = new Error(
-      `La activación del anuncio falló en Meta (campaña ${camp.id}: ${estados.campaign || 'sin dato'}, conjunto ${adset.id}: ${estados.adset || 'sin dato'}${activacionErr ? ' — ' + activacionErr : ''}). El anuncio quedó creado pero pausado; no se cobró nada.`
+      `La activación del anuncio ${sinDato ? 'no se pudo verificar' : 'falló'} en Meta (campaña ${camp.id}: ${estados.campaign || 'sin dato'}, conjunto ${adset.id}: ${estados.adset || 'sin dato'}, anuncio ${ad.id}: ${estados.ad || 'sin dato'}${activacionErr ? ' — ' + activacionErr : ''}). El anuncio quedó creado pero sin confirmar; no se cobró nada.`
     );
-    err.code = 'activacion_fallida';
+    err.code = sinDato ? 'activacion_sin_dato' : 'activacion_fallida';
     err.paso = 'activación';
     err.campaignId = camp.id; err.adsetId = adset.id; err.adId = ad.id; err.creativeId = creative.id;
-    err.campaignStatus = estados.campaign || null; err.adsetStatus = estados.adset || null;
+    err.campaignStatus = estados.campaign || null; err.adsetStatus = estados.adset || null; err.adStatus = estados.ad || null;
     throw err;
   }
 
   return { campaignId: camp.id, adsetId: adset.id, adId: ad.id, creativeId: creative.id };
+}
+
+// ---------- (LOTE CIERRE-ADS · FIX 1) Reparación de activaciones ----------
+// reactivarBoost({ campaignId, adsetId, adId, ctx }): re-enciende
+// campaña y conjunto (y el anuncio, si su id viene: nació ACTIVE pero
+// un encendido parcial pudo dejarlo pausado) y verifica los TRES
+// estados con el criterio completo de verificarActivos. Es el camino
+// de reparación permanente de las activaciones que fallaron a mitad
+// de camino — PAUSED deja de ser un estado terminal. Nunca cobra
+// nada: el cobro es de la costura del fee del llamador, idempotente
+// por campaña.
+async function reactivarBoost({ campaignId, adsetId, adId, ctx = null } = {}) {
+  if (!campaignId || !adsetId) return { ok: false, motivo: 'sin_ids', estados: null };
+  const encender = async (id) => {
+    try { await g(`/${id}`, { method: 'POST', ctx, params: { status: 'ACTIVE' } }); return ''; }
+    catch (e) { return String((e && e.message) || e).slice(0, 120); }
+  };
+  const errores = [];
+  const e1 = await encender(campaignId); if (e1) errores.push('campaña: ' + e1);
+  const e2 = await encender(adsetId); if (e2) errores.push('conjunto: ' + e2);
+  if (adId) { const e3 = await encender(adId); if (e3) errores.push('anuncio: ' + e3); }
+  let estados = await verificarActivos(campaignId, adsetId, adId || null, ctx);
+  if (estados.campaign !== 'ACTIVE' || estados.adset !== 'ACTIVE' || (adId && estados.ad !== 'ACTIVE')) {
+    await new Promise((r) => setTimeout(r, 1200));
+    estados = await verificarActivos(campaignId, adsetId, adId || null, ctx);
+  }
+  const ok = estados.campaign === 'ACTIVE' && estados.adset === 'ACTIVE' && (!adId || estados.ad === 'ACTIVE');
+  return { ok, estados, error: errores.join(' · ') };
+}
+
+// listarCampanasPorNombre(ctx, contiene): las campañas de la cuenta
+// del riel cuyo nombre contiene el texto. La reconciliación de
+// huérfanas la usa porque las campañas del 17/11 no tienen fila local
+// con sus ids: se encuentran EN Meta, por su nombre «Posty · …».
+async function listarCampanasPorNombre(ctx, contiene) {
+  const d = await g(`${act(ctx)}/campaigns`, { params: { fields: 'id,name,status', limit: '200' }, ctx });
+  const rows = Array.isArray(d && d.data) ? d.data : [];
+  const needle = String(contiene || '');
+  return rows
+    .filter((c) => c && c.id && (!needle || String(c.name || '').includes(needle)))
+    .map((c) => ({ id: String(c.id), name: String(c.name || ''), status: c.status || null }));
+}
+
+// leerAnunciosDeCampana(campaignId, ctx): los anuncios de una campaña
+// (id + estado). Lista vacía = huérfana del paso creativo: la campaña
+// y el conjunto existen pero el anuncio nunca se creó.
+async function leerAnunciosDeCampana(campaignId, ctx = null) {
+  const d = await g(`/${campaignId}/ads`, { params: { fields: 'id,status', limit: '50' }, ctx });
+  const rows = Array.isArray(d && d.data) ? d.data : [];
+  return rows.filter((a) => a && a.id).map((a) => ({ id: String(a.id), status: a.status || null }));
+}
+
+// leerAdsetDeCampana(campaignId, ctx): el conjunto de la campaña (las
+// de impulso tienen uno solo; se devuelve el primero), con su
+// lifetime_budget (la pauta con la que nació: la reconciliación la
+// usa para asentar la fila y cobrar el fee correcto).
+async function leerAdsetDeCampana(campaignId, ctx = null) {
+  const d = await g(`/${campaignId}/adsets`, { params: { fields: 'id,status,lifetime_budget', limit: '10' }, ctx });
+  const rows = Array.isArray(d && d.data) ? d.data : [];
+  const a = rows.find((x) => x && x.id);
+  return a ? { id: String(a.id), status: a.status || null, lifetime_budget: a.lifetime_budget != null ? Number(a.lifetime_budget) : null } : null;
+}
+
+// archivarCampana(campaignId, ctx): la huérfana sin anuncio queda
+// ARCHIVED en Meta — fuera de circulación y del historial activo del
+// cliente, sin borrar el registro de que existió.
+async function archivarCampana(campaignId, ctx = null) {
+  await g(`/${campaignId}`, { method: 'POST', ctx, params: { status: 'ARCHIVED' } });
+  return { ok: true };
 }
 
 // ---------- (LOTE CONEXIÓN-PÁGINA) Login unificado del cliente ----------
@@ -943,4 +1029,4 @@ async function findLookalikeAudienceId(ctx) {
   } catch (e) { return null; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, verificarActivos, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, detalleErrorMeta };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, detalleErrorMeta };

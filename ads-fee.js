@@ -70,6 +70,18 @@ function desgloseFee(pautaCents) {
 // muestra ANTES del toque: pauta + gestión = total).
 const DESGLOSE_MONTOS_USD = [2000, 5000, 10000].map(desgloseFee);
 
+// (LOTE CIERRE-ADS · FIX 2) El desglose DESDE el total: la carga de la
+// diferencia aprende los totales (22/55/110) — el cliente pide cargar
+// «lo que falta para llegar a US$22» y el servidor valida que ese
+// total sea exactamente desgloseFee(pauta).totalCents de una pauta
+// fija vigente. Un total que no es de ninguna pauta fija → null
+// (la doble llave de la diferencia no se abre con montos inventados).
+function desgloseDesdeTotal(totalCents) {
+  const t = Number(totalCents);
+  if (!Number.isInteger(t) || t <= 0) return null;
+  return DESGLOSE_MONTOS_USD.find((d) => d && d.totalCents === t) || null;
+}
+
 // ---------- Criterio «corriendo» (espejo de verificarActivos) ----------
 // verificarActivos (ADS-HARDENING) devuelve los status leídos de
 // campaña y conjunto, con null cuando una lectura falla — y el boost
@@ -178,6 +190,21 @@ function feesPendientes(db, limit = 50) {
   ensureFeeSchema(db);
   return db.prepare(`SELECT * FROM ad_fees WHERE estado IN ('pendiente_fallo','sin_medio')
     ORDER BY id DESC LIMIT ?`).all(Math.max(1, Math.min(500, Number(limit) || 50)));
+}
+
+// (LOTE CIERRE-ADS · FIX 3b) El fee pendiente DE UN USUARIO: la fila
+// más reciente en 'pendiente_fallo' o 'sin_medio'. Es la lectura del
+// gate de los endpoints de impulso (decisión de Valentino 15/11: si
+// el fee no se puede cobrar, la campaña que corre sigue — pero el
+// PRÓXIMO impulso no sale hasta pagarlo). Hasta este lote ningún
+// endpoint leía ad_fees: feesPendientes no tenía llamadores y un fee
+// incobrable no frenaba nada, para siempre.
+function feePendienteDeUsuario(db, userId) {
+  ensureFeeSchema(db);
+  const uid = Number(userId) || 0;
+  if (!uid) return null;
+  return db.prepare(`SELECT * FROM ad_fees WHERE user_id = ? AND estado IN ('pendiente_fallo','sin_medio')
+    ORDER BY id DESC LIMIT 1`).get(uid) || null;
 }
 
 // ---------- LA COSTURA ----------
@@ -304,7 +331,7 @@ async function cobrarFeeCampanaCorriendo(db, deps = {}, ev = {}) {
 }
 
 module.exports = {
-  FEE_PCT, desgloseFee, DESGLOSE_MONTOS_USD,
+  FEE_PCT, desgloseFee, DESGLOSE_MONTOS_USD, desgloseDesdeTotal,
   esCorriendoVerificada, verificarCorriendo, crearLectorEstadosGraph,
-  ensureFeeSchema, feesPendientes, cobrarFeeCampanaCorriendo,
+  ensureFeeSchema, feesPendientes, feePendienteDeUsuario, cobrarFeeCampanaCorriendo,
 };

@@ -660,6 +660,14 @@ try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN objetivo TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN audiencia_json TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_clicks INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_conversaciones INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (LOTE CIERRE-ADS) refund_id: el id del reembolso a la fuente cuando
+// el riel destacado cobró y el anuncio nunca salió (FIX 3a — la plata
+// vuelve a la tarjeta, no queda como crédito). repair_intentos /
+// repair_ultimo: el contador y la marca del barrido de reparación de
+// activaciones (FIX 1: N=3 intentos con backoff y después definitivo).
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN refund_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN repair_intentos INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN repair_ultimo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Estado mínimo de la tarea
 // «otra gente»: una fila por usuario con el resumen del anuncio y, si
 // el cliente ya contó en el chat a quién busca, el chip traducido que

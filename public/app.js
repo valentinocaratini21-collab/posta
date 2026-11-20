@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1188';
+const PZ_BUILD = '20261105-v1189';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -21826,7 +21826,14 @@ function pzAdsHTML() {
     const montosHTML = ya
       ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
       : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p><p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`;
-    const bigBtn = ya ? '' : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mSel}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(totalSel))}</button>`;
+    // (LOTE CIERRE-ADS · FIX 2) Con el saldo corto contra el TOTAL,
+    // el botón de impulsar queda REEMPLAZADO por el cartel de la
+    // diferencia (no solo deshabilitado): cargar el faltante exacto
+    // en un toque es la única acción hasta cubrir el total.
+    const difTab = (!ya && moneda === 'USD') ? pzAdsDiferencia() : null;
+    const bigBtn = ya ? '' : ((difTab && !difTab.esMP && difTab.pauta === mSel)
+      ? pzAdsTabDiferenciaHTML()
+      : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mSel}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(totalSel))}</button>`);
     recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
   }
   const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
@@ -21904,12 +21911,18 @@ function pzAdsImpulsarBloqueo(m) {
   let motivo = '';
   if (saldoViejoARS) motivo = 'saldo_ars_pendiente';
   else if (gate.cerrado) motivo = gate.motivo;
-  else if (pzBoostSaldo() < m) {
+  else if (pzBoostSaldo() < pzBoostTotal(m)) {
     const bil = s.billetera || {};
     motivo = (bil.tarjeta && bil.tarjeta.tiene) ? 'saldo_insuficiente' : 'sin_tarjeta_guardada';
   }
   const msgEl = document.getElementById('pzAdsRecMsg');
   if (!msgEl) return;
+  // (LOTE CIERRE-ADS · FIX 2) Saldo corto contra el TOTAL con tarjeta
+  // guardada: el bloqueo ES el cartel de la diferencia (copy de la
+  // SPEC §5.2), en esta misma tarjeta — no un texto que manda a otro
+  // lado. Cargada la diferencia, el impulso sigue desde ahí.
+  const difBloqueo = (motivo === 'saldo_insuficiente') ? pzAdsDiferencia() : null;
+  if (difBloqueo && !difBloqueo.esMP) { msgEl.innerHTML = pzAdsTabDiferenciaHTML(); return; }
   msgEl.textContent = pzBoostMotivo(motivo, m);
   if (motivo === 'sin_tarjeta_guardada') pzAdsImpulsarAdjuntarTarjeta(msgEl);
 }
@@ -22316,6 +22329,11 @@ function pzBoostMotivo(motivo, monto, cobroId) {
         : gzT('Ese monto no es válido. Elegí $20, $50 o $100.', 'That amount isn’t valid. Choose $20, $50 or $100.');
     case 'saldo_insuficiente':
       return gzT('No te alcanza el saldo de la billetera para ' + m + '. Cargá plata primero — un toque y listo.', 'Your wallet balance doesn’t cover ' + m + '. Top it up first — one tap and done.');
+    case 'fee_pendiente':
+      // (LOTE CIERRE-ADS · FIX 3b) Copy de la SPEC: el monto que
+      // viaja en la llamada es el FEE pendiente (feeCents/100 del
+      // 409 del servidor), no la pauta del impulso nuevo.
+      return gzT('Tenés una gestión de US' + m + ' pendiente de un impulso que sí salió. Cuando se paga, podés impulsar de nuevo — tu anuncio actual sigue corriendo normal.', 'You have a US' + m + ' management fee pending from a boost that did run. Once it’s paid, you can boost again — your current ad keeps running as normal.');
     case 'saldo_ars_pendiente':
       return gzT('Todavía tenés saldo viejo en pesos en la billetera. Gastalo o pedinos que lo revisemos antes de cargar en dólares.', 'You still have old pesos balance in the wallet. Spend it or ask us to review it before topping up in dollars.');
     // (LOTE RIEL-SUSCRIPCION v878) Espejo del anterior: con saldo USD no
@@ -22841,6 +22859,23 @@ function pzBoostToggleMontos() {
 // saldo suficiente. Si no se puede, el toque NO impulsa: la hoja
 // muestra el aviso y el camino de carga (que degrada a «Agregar
 // tarjeta» si no hay tarjeta, camino v877). Nunca se rompe.
+// (LOTE CIERRE-ADS · FIX 2) El TOTAL del impulso: pauta + gestión de
+// Posty (10%, el desglose canónico de ads-fee: US$20→US$22, 50→55,
+// 100→110). Es EL número contra el que se compara el saldo donde la
+// UI presenta la billetera como fuente (regla de Valentino 17/11,
+// refuerzo textual 19/11: «si quiero impulsar algo de veintidós,
+// tiene que aparecer algo para cargar dos dólares»). En MP el fee ya
+// va dentro del monto elegido (splitARS) y con billetera en otra
+// moneda no se afirma total: el total es el monto.
+function pzBoostTotal(monto) {
+  const m = Number(monto) || 0;
+  if (pzBoostEsMP()) return m;
+  const s = pzBoostState || {};
+  const monedaWallet = String((s.billetera && s.billetera.currency) || 'USD');
+  if (monedaWallet !== 'USD') return m;
+  return m + Math.round(m * 0.10);
+}
+
 function pzBoostPuede(monto) {
   const s = pzBoostState || {};
   const m = Number(monto) || (pzBoostEsMP() ? 10000 : 50);
@@ -22851,7 +22886,11 @@ function pzBoostPuede(monto) {
   const railMP = pzBoostEsMP();
   const saldoViejoARS = monedaARS && !railMP;
   const saldo = pzBoostSaldo();
-  return !gate.cerrado && !saldoViejoARS && saldo >= m;
+  // (LOTE CIERRE-ADS · FIX 2) La comparación es contra el TOTAL
+  // (pauta + gestión), no contra la pauta sola: con saldo US$20 y
+  // total US$22 el «puede» es NO y el toque cae en el cartel de la
+  // diferencia, antes de cualquier POST a /impulsar.
+  return !gate.cerrado && !saldoViejoARS && saldo >= pzBoostTotal(m);
 }
 
 // (v880) Un toque en un monto = se envía el ad con ese monto (mismo
@@ -23000,27 +23039,37 @@ function pzAdsAudienciaDineroHTML() {
   return `<p style="margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#47617A">${esc(txt)}</p>`;
 }
 
-// (LOTE ADS-DIFERENCIA) La diferencia del riel billetera, con los
-// totales REALES del flujo (censo del lote): en este riel el total a
-// cubrir es el monto elegido, entero — el flujo USD de la billetera
-// no lleva fee (regla del módulo) y en ARS el fee del 10% ya va
-// DENTRO del monto elegido (splitARS), nunca encima. La billetera
-// solo paga si su moneda ES la del riel (espejo del servidor:
-// saldoCentsUSD/ARS según la moneda guardada); con la moneda cruzada
-// corre otro camino (el cobro directo de v888) y acá no se afirma
-// ninguna diferencia. Devuelve null si no falta nada: con el saldo
-// cubriendo el total, la tarjeta queda como estaba.
+// (LOTE CIERRE-ADS · FIX 2) La diferencia contra el TOTAL del botón
+// (pauta + gestión, pzBoostTotal), en cualquier riel en que la UI
+// presenta la billetera como fuente — ya no solo en el riel
+// billetera: en el riel cliente devolvía null por construcción y el
+// caso de Valentino (saldo US$20, total US$22) no tenía cartel ni
+// camino. DECISIÓN DE MODELO (SPEC §5.5, escrita acá y en el riel
+// cliente del servidor): la billetera es el saldo de la cuenta del
+// usuario a los efectos de esta puerta en AMBOS rieles; los cobros
+// reales del riel cliente corren como dice la línea de dinero de la
+// tarjeta (Meta cobra la pauta en su cuenta publicitaria; Posty, la
+// gestión en su tarjeta guardada) y la billetera no se debita en ese
+// riel — debitarla cobraría la pauta dos veces. En el riel billetera
+// la billetera sí debita la pauta al éxito, como siempre. En MP el
+// total es el monto elegido (el fee del 10% ya va DENTRO, splitARS),
+// como siempre. La billetera solo cuenta si su moneda ES la del riel
+// (espejo del servidor); con la moneda cruzada corre otro camino (el
+// cobro directo de v888) y acá no se afirma ninguna diferencia.
+// Devuelve null si no falta nada: con el saldo cubriendo el total,
+// la tarjeta queda como estaba.
 function pzAdsDiferencia() {
   const s = pzBoostState || {};
-  if (s.rielAds !== 'billetera' || !s.billetera) return null;
+  if (!s.billetera) return null;
   const esMP = pzBoostEsMP();
   const monedaWallet = String(s.billetera.currency || 'USD');
   if (esMP ? monedaWallet !== 'ARS' : monedaWallet !== 'USD') return null;
-  const total = Number(s.selMonto) || (esMP ? 10000 : 50);
+  const pauta = Number(s.selMonto) || (esMP ? 10000 : 50);
+  const total = pzBoostTotal(pauta);
   const saldo = Math.floor(Number(s.billetera.balance_cents || 0) / 100);
   const falta = total - saldo;
   if (!(falta > 0)) return null;
-  return { falta, total, saldo, esMP };
+  return { falta, total, saldo, esMP, pauta, fee: total - pauta };
 }
 
 // El bloque de la diferencia EN la tarjeta, antes del «Sale así»:
@@ -23033,15 +23082,21 @@ function pzAdsAudienciaDiferenciaHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const sim = d.esMP ? '$' : 'US$';
   const f = (n) => sim + pzBoostFmtMonto(n);
-  const txt = en
-    ? `You have ${f(d.saldo)} of ${f(d.total)}. You're ${f(d.falta)} short.`
-    : `Tenés ${f(d.saldo)} de ${f(d.total)}. Te faltan ${f(d.falta)}.`;
+  // (LOTE CIERRE-ADS · FIX 2) En USD la copy es la cerrada de la SPEC
+  // §5.2 (título al total + desglose + saldo); en MP queda la de
+  // siempre (el total ahí es el monto entero, sin gestión encima).
+  const txt = d.esMP
+    ? (en ? `You have ${f(d.saldo)} of ${f(d.total)}. You're ${f(d.falta)} short.` : `Tenés ${f(d.saldo)} de ${f(d.total)}. Te faltan ${f(d.falta)}.`)
+    : (en ? `You're ${f(d.falta)} short of ${f(d.total)}` : `Te faltan ${f(d.falta)} para llegar a ${f(d.total)}`);
+  const linea = d.esMP ? '' : (en
+    ? `${f(d.pauta)} in ad spend + ${f(d.fee)} Posty management fee. You have ${f(d.saldo)} in your wallet.`
+    : `${f(d.pauta)} de pauta + ${f(d.fee)} de gestión de Posty. Tenés ${f(d.saldo)} en tu billetera.`);
   const nota = en
     ? 'Top up and the boost is ready to go, right here. Without topping up, it doesn’t run and nothing is charged.'
     : 'Cargás y el impulso queda listo para salir, acá mismo. Sin cargar, no sale y no se cobra nada.';
   const btn = en ? `Top up the missing ${f(d.falta)}` : `Cargar los ${f(d.falta)} que faltan`;
   return `<div id="pzAdsDiferencia" style="border:1.5px solid #F2C94C;background:#FFF9E6;border-radius:12px;padding:10px 12px;margin:12px 0 0">
-    <div style="font-size:14px;line-height:1.5;color:#6B5200"><b>${esc(txt)}</b><br>${esc(nota)}</div>
+    <div style="font-size:14px;line-height:1.5;color:#6B5200"><b>${esc(txt)}</b>${linea ? `<br>${esc(linea)}` : ''}<br>${esc(nota)}</div>
     <button type="button" class="btn btn-primary btn-block" style="margin-top:10px" onclick="pzAdsAudienciaCargarDiferencia(this)">${esc(btn)}</button>
     <p id="pzAdsDiferenciaMsg" style="margin:8px 0 0;font-size:13px;line-height:1.45;color:#6B5200"></p>
   </div>`;
@@ -23089,6 +23144,100 @@ async function pzAdsAudienciaCargarDiferencia(btn) {
     const msgEl = document.getElementById('pzAdsDiferenciaMsg');
     try { await loadChunk('analisis'); } catch (e) {}
     try { if (msgEl && typeof anaAgregarTarjetaBtn === 'function') anaAgregarTarjetaBtn(msgEl); } catch (e) {}
+  }
+}
+
+// (LOTE CIERRE-ADS · FIX 2) El cartel de la diferencia EN EL TAB
+// (copy cerrada de la SPEC §5.2): cuánto falta para el TOTAL, el
+// desglose y la carga exacta en UN toque, sin salir de la pantalla
+// ni rearmar el impulso. Reemplaza al botón de impulsar mientras el
+// saldo no cubre el total — en el render de la tarjeta y en el
+// bloqueo del toque (pzAdsImpulsarBloqueo). La versión de la tarjeta
+// de audiencia es pzAdsAudienciaDiferenciaHTML: mismo contenido,
+// otra ranura.
+function pzAdsTabDiferenciaHTML() {
+  const d = pzAdsDiferencia();
+  if (!d || d.esMP) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const f = (n) => 'US$' + pzBoostFmtMonto(n);
+  const titulo = en ? `You're ${f(d.falta)} short of ${f(d.total)}` : `Te faltan ${f(d.falta)} para llegar a ${f(d.total)}`;
+  const linea = en
+    ? `${f(d.pauta)} in ad spend + ${f(d.fee)} Posty management fee. You have ${f(d.saldo)} in your wallet.`
+    : `${f(d.pauta)} de pauta + ${f(d.fee)} de gestión de Posty. Tenés ${f(d.saldo)} en tu billetera.`;
+  const btn = en ? `Top up the missing ${f(d.falta)}` : `Cargar los ${f(d.falta)} que faltan`;
+  return `<div id="pzAdsDifTab" style="border:1.5px solid #F2C94C;background:#FFF9E6;border-radius:12px;padding:10px 12px;margin:12px 0 0">
+    <div style="font-size:14px;line-height:1.5;color:#6B5200"><b>${esc(titulo)}</b><br>${esc(linea)}</div>
+    <button type="button" class="btn btn-primary btn-block" style="margin-top:10px" onclick="pzAdsTabCargarDiferencia(this)">${esc(btn)}</button>
+    <p id="pzAdsDifTabMsg" style="margin:8px 0 0;font-size:13px;line-height:1.45;color:#6B5200"></p>
+  </div>`;
+}
+
+// La carga de la diferencia del tab: la misma vía de siempre
+// (/cargar con la marca `diferencia`, ahora hacia el TOTAL);
+// acreditada, la tarjeta se repinta con el saldo nuevo y el botón
+// «Impulsar por US$…» listo — el impulso sigue desde ahí mismo.
+async function pzAdsTabCargarDiferencia(btn) {
+  const d = pzAdsDiferencia();
+  if (!d) { try { await pzAdsRefrescar(); } catch (e) {} return; }
+  const decir = (t) => { const el = document.getElementById('pzAdsDifTabMsg'); if (el) el.textContent = t; };
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/ads/billetera/cargar', { montoUSD: d.falta, diferencia: { montoImpulsoUSD: d.total } }); }
+  catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok) {
+    if (pzBoostState && pzBoostState.billetera && j.balance_cents != null) pzBoostState.billetera.balance_cents = j.balance_cents;
+    const msgEl = document.getElementById('pzAdsRecMsg'); if (msgEl) msgEl.innerHTML = '';
+    try { await pzAdsRefrescar(); } catch (e) {}
+    try { toast(gzT('Listo: ya tenés US$' + pzBoostFmtMonto(d.total) + '. Tocá «Impulsar» y sale.', 'Done: you now have US$' + pzBoostFmtMonto(d.total) + '. Tap “Boost” and it runs.')); } catch (e) {}
+    return;
+  }
+  const motivo = (j && j.motivo) || '';
+  decir(motivo === 'diferencia_invalida'
+    ? gzT('Tu saldo cambió mientras tanto: revisá la tarjeta de nuevo. No se cobró nada.', 'Your balance changed in the meantime: check the card again. Nothing was charged.')
+    : pzBoostCargarMotivo(motivo, d.falta, j && j.cobroId));
+  // Sin tarjeta guardada, el camino de agregarla queda pegado al
+  // cartel (patrón v877, como en la carga de la audiencia).
+  if (motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada') {
+    const msgEl = document.getElementById('pzAdsDifTabMsg');
+    try { await loadChunk('analisis'); } catch (e) {}
+    try { if (msgEl && typeof anaAgregarTarjetaBtn === 'function') anaAgregarTarjetaBtn(msgEl); } catch (e) {}
+  }
+}
+
+// (LOTE CIERRE-ADS · FIX 3b) El botón «Pagar la gestión» pegado al
+// error fee_pendiente: reintenta el cobro del fee por el endpoint
+// nuevo y, si cobró, limpia el error y repinta — el próximo impulso
+// ya puede salir. La campaña que corre no se toca en ningún paso.
+function pzBoostFeePendienteAdjuntar(msgEl) {
+  if (!msgEl) return;
+  try {
+    if (msgEl.querySelector('[data-pz-pagar-fee]')) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-primary btn-block';
+    b.setAttribute('data-pz-pagar-fee', '1');
+    b.style.marginTop = '10px';
+    b.textContent = gzT('Pagar la gestión', 'Pay the management fee');
+    b.onclick = () => pzAdsPagarFee(b);
+    msgEl.appendChild(b);
+  } catch (e) {}
+}
+
+async function pzAdsPagarFee(btn) {
+  if (btn) btn.disabled = true;
+  let j = null;
+  try { j = await api.post('/api/ads/fees/reintentar', {}); } catch (e) { j = (e && e.data) || null; }
+  if (btn) btn.disabled = false;
+  if (j && j.ok && j.estado === 'cobrado') {
+    try { toast(gzT('Listo: la gestión quedó pagada. Ya podés impulsar de nuevo.', 'Done: the management fee is paid. You can boost again.')); } catch (e) {}
+    const s = pzBoostState || {}; s.boostError = null;
+    const m1 = document.getElementById('pzAdsRecMsg'); if (m1) m1.innerHTML = '';
+    const m2 = document.getElementById('pzBoostMsg'); if (m2) m2.innerHTML = '';
+    try { if (document.getElementById('pzAdsRoot')) await pzAdsRefrescar(); } catch (e) {}
+    try { pzBoostPintarBoost(); } catch (e) {}
+  } else {
+    try { toast(gzT('No se pudo cobrar la gestión ahora. Probá de nuevo en un momento.', 'The management fee couldn’t be charged right now. Try again in a moment.')); } catch (e) {}
   }
 }
 
@@ -23220,13 +23369,13 @@ async function pzAdsAudienciaSale(btn) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   const p = s.selPost || null;
   const monto = Number(s.selMonto) || (pzBoostEsMP() ? 10000 : 50);
-  // (LOTE ADS-DIFERENCIA) Riel billetera con saldo corto: el «Sale
-  // así» NO corre — primero la diferencia, en esta misma tarjeta.
-  // No se postea nada a /impulsar y no se cobra nada hasta que el
-  // saldo cubra el total; el bloque de la diferencia ya está pintado
-  // sobre este botón y se trae a la vista. (El servidor además sigue
-  // frenando con saldo_insuficiente: este es el aviso y el camino,
-  // no el único freno.)
+  // (LOTE ADS-DIFERENCIA · CIERRE-ADS) Saldo corto contra el TOTAL:
+  // el «Sale así» NO corre — primero la diferencia, en esta misma
+  // tarjeta. No se postea nada a /impulsar y no se cobra nada hasta
+  // que el saldo cubra el total; el bloque de la diferencia ya está
+  // pintado sobre este botón y se trae a la vista. (El servidor
+  // además sigue frenando con saldo_insuficiente en el riel
+  // billetera: este es el aviso y el camino, no el único freno.)
   if (pzAdsDiferencia()) {
     pzAdsAudienciaPintar();
     try { const el = document.getElementById('pzAdsDiferencia'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
@@ -23237,12 +23386,15 @@ async function pzAdsAudienciaSale(btn) {
   const j = await pzBoostConfirmar(btn);
   if (j && j.ok) {
     try { if (document.getElementById('pzAdsRoot')) await pzAdsRefrescar(); } catch (e) {}
-  } else if (j && j.motivo && j.motivo !== 'audiencia_pendiente' && !s.boostError) {
-    // (LOTE ADS-CREACIÓN-2) Si pzBoostConfirmar ya dejó el bloque de
-    // error visible (boostError), este fallback no lo pisa con el
-    // texto chico de antes.
+  } else if (j && j.motivo && j.motivo !== 'audiencia_pendiente') {
+    // (LOTE CIERRE-ADS · FIX 2.6) El fallback ya NO se saltea cuando
+    // hay boostError: si el bloque de error no quedó pintado en
+    // ninguna superficie visible (la ranura de audiencia desarmada y
+    // el mensaje de la hoja cerrado), este texto cae en la tarjeta
+    // del tab. Si pzBoostConfirmar ya pintó el bloque en
+    // #pzAdsRecMsg, el innerHTML no está vacío y no se pisa.
     const m = document.getElementById('pzAdsRecMsg');
-    if (m) m.textContent = pzBoostMotivo(j.motivo, monto, j.cobroId);
+    if (m && !m.innerHTML) m.textContent = pzBoostMotivo(j.motivo, monto, j.cobroId);
   }
   return j;
 }
@@ -23349,9 +23501,23 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     // el mensaje de la hoja/tarjeta — en vez del texto chico que se
     // perdía. El botón ya quedó rehabilitado arriba: puede
     // reintentar en el acto.
-    s.boostError = { motivo, monto, cobroId: (j && j.cobroId) || null };
-    if (msgEl) msgEl.innerHTML = pzBoostErrorHTML(motivo, monto, j && j.cobroId);
+    // (LOTE CIERRE-ADS · FIX 3b) Con fee_pendiente, el monto del
+    // mensaje es el FEE que hay que pagar (feeCents del 409), no la
+    // pauta del impulso frenado.
+    const montoMsg = (motivo === 'fee_pendiente' && j && j.feeCents) ? Math.round(Number(j.feeCents)) / 100 : monto;
+    s.boostError = { motivo, monto: montoMsg, cobroId: (j && j.cobroId) || null };
+    if (msgEl) msgEl.innerHTML = pzBoostErrorHTML(motivo, montoMsg, j && j.cobroId);
     pzBoostPintarError();
+    // (LOTE CIERRE-ADS · FIX 2.6) Garantía de visibilidad: si la
+    // ranura de la audiencia ya no existe en el DOM (la tarjeta se
+    // desarmó al «Sale así»), el bloque cae TAMBIÉN en el mensaje de
+    // la tarjeta del tab — ningún toque muere en silencio, nunca más
+    // (es el defecto del 17/11 y del 19/11).
+    if (!document.getElementById('pzAdsAudienciaError')) {
+      const tabMsg = document.getElementById('pzAdsRecMsg');
+      if (tabMsg && tabMsg !== msgEl) tabMsg.innerHTML = pzBoostErrorHTML(motivo, montoMsg, j && j.cobroId);
+    }
+    if (motivo === 'fee_pendiente') pzBoostFeePendienteAdjuntar(msgEl);
     if (enTarjeta && (motivo === 'sin_cliente_stripe' || motivo === 'sin_tarjeta_guardada')) pzAdsImpulsarAdjuntarTarjeta(msgEl);
   }
   return j;

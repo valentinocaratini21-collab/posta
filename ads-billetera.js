@@ -235,6 +235,9 @@ async function cargarBilleteraARS(input) {
 // campaignId, adsetId, adId, error }, el ad SÍ existe en Meta pero quedó
 // pausado: se asienta como error con los ids (tipo 'activacion_fallida')
 // y hacia afuera el motivo sigue siendo 'anuncio_fallido' (SIN débito).
+// Con motivo 'activacion_sin_dato' (LOTE CIERRE-ADS) el asiento es el
+// mismo pero con su tipo propio: Meta no devolvió ninguna lectura y la
+// campaña puede estar corriendo — el barrido la re-verifica.
 // `debitar({ clienteId, montoUSD | montoARS, ref, campaignId })` devuelve
 // { ok, saldoNuevo }. `registrar` recibe { tipo: 'exito' |
 // 'debito_fallido' | 'activacion_fallida' | 'error', ..., feeCents }.
@@ -339,13 +342,19 @@ async function impulsarConSaldo(input) {
   // para revisión manual — mismo patrón que 'debito_fallido'. Hacia
   // afuera el motivo sigue siendo 'anuncio_fallido' (sin débito ni cobro).
   if (!anuncio || !anuncio.ok) {
-    if (anuncio && anuncio.motivo === 'activacion_fallida' && typeof registrar === 'function') {
+    if (anuncio && (anuncio.motivo === 'activacion_fallida' || anuncio.motivo === 'activacion_sin_dato') && typeof registrar === 'function') {
+      // (LOTE CIERRE-ADS · FIX 1) 'activacion_sin_dato' es la hermana
+      // distinguible: el ad existe pero Meta no devolvió NINGUNA
+      // lectura de estado — puede estar corriendo. Se asienta con su
+      // propio tipo (y los ids) para que el barrido de reparación lo
+      // re-verifique; hacia afuera el motivo es el mismo
+      // 'anuncio_fallido' y tampoco se debita nada.
       try {
         await registrar({
-          tipo: 'activacion_fallida', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+          tipo: anuncio.motivo, posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
           anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
           adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
-          error: anuncio.error || 'activación fallida',
+          error: anuncio.error || (anuncio.motivo === 'activacion_sin_dato' ? 'activación sin dato' : 'activación fallida'),
         });
       } catch (e) { /* el registro nunca tapa el motivo real */ }
     } else if (typeof registrar === 'function') {

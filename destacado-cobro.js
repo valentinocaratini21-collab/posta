@@ -103,7 +103,33 @@ async function cobrarImpulso(input) {
   return { ok: false, motivo: 'cobro_no_confirmado', piStatus: pi.status || null };
 }
 
-module.exports = { MONTOS_USD, validarMontoUSD, validarMontoDiferenciaUSD, resolverTarjetaGuardada, tarjetaGuardadaInfo, cobrarImpulso, cobrarCargaBilletera };
+// (LOTE CIERRE-ADS · FIX 3a) reembolsarImpulso({ client, cobroId })
+//   → { ok: true, refundId } ó { ok: false, motivo [, detalle] }.
+// Decisión de Valentino 15/11: si el anuncio nunca sale, la plata se
+// devuelve ENTERA Y SOLA al medio de pago original — el refund va
+// sobre el PaymentIntent del cobro, nunca como crédito de billetera
+// (el crédito de v888 queda solo para un opt-in explícito del
+// cliente). Idempotente por cobroId (ref reembolso_<cobroId>, espejo
+// del patrón credito_<cobroId>): un reintento del registro no
+// devuelve dos veces. Un refund 'pending' en Stripe ya es plata en
+// camino a la fuente: cuenta como devolución hecha y su id se guarda.
+async function reembolsarImpulso(input) {
+  const { client, cobroId } = input || {};
+  if (!client) return { ok: false, motivo: 'stripe_no_configurado' };
+  if (!cobroId) return { ok: false, motivo: 'sin_cobro' };
+  if (!client.refunds || typeof client.refunds.create !== 'function') return { ok: false, motivo: 'stripe_no_configurado' };
+  let rf;
+  try {
+    rf = await client.refunds.create({ payment_intent: String(cobroId) }, { idempotencyKey: `reembolso_${cobroId}` });
+  } catch (e) {
+    return { ok: false, motivo: 'reembolso_fallido', detalle: String((e && e.message) || e).slice(0, 200) };
+  }
+  if (!rf || !rf.id) return { ok: false, motivo: 'reembolso_fallido' };
+  if (rf.status === 'succeeded' || rf.status === 'pending') return { ok: true, refundId: String(rf.id), status: rf.status };
+  return { ok: false, motivo: 'reembolso_fallido', detalle: `refund ${rf.status || 'sin_estado'}` };
+}
+
+module.exports = { MONTOS_USD, validarMontoUSD, validarMontoDiferenciaUSD, resolverTarjetaGuardada, tarjetaGuardadaInfo, cobrarImpulso, cobrarCargaBilletera, reembolsarImpulso };
 
 // cobrarCargaBilletera({ client, customerId, montoUSD, ref })
 //   → { ok: true, cobroId } ó { ok: false, motivo [, detalle] }.
