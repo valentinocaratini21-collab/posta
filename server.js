@@ -20379,6 +20379,113 @@ app.post('/api/subir/pedidos-voz/:id/respuesta', requireAuth, (req, res) => {
   } catch (e) { console.error('[subir-pedido-respuesta]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu respuesta' }); }
 });
 
+// ---------- LOTE SUBIR-RESPONDE ----------
+// La fila «¿Tenés una idea?» del tab Subir (tira de voz 'extra') era un
+// callejón mudo: pzVozEnviar pintaba la transcripción con un ✓ y el
+// texto quedaba solo en memoria (PZ_SUBIR.extra, por si después había
+// un «Listo» con material) — Posty no respondía nada y el pedido no
+// caía en ninguna cola (verificado en vivo por el dueño, 20/11 16:55:
+// grabó «¿hoy sale el posteo de las 7?» y murió en el ✓). Este endpoint
+// es la respuesta EN EL MOMENTO, pegada a esa fila, con la doctrina de
+// voz del dueño: confirmar qué se entendió y qué se va a hacer, porque
+// si no el cliente queda hablando solo.
+//  · Lo dicho cae SIEMPRE en la cola de la línea a mano: se guarda en
+//    el hilo 'general' (user + assistant) con el mismo INSERT de
+//    /api/chat/hilo/log, de donde lo levanta la cola pedidos-voz del
+//    conserje (support-cases.voiceRequests) como los pedidos del chat
+//    y de las tiras post/semana.
+//  · Si lo dicho es una PREGUNTA por el posteo de hoy o el próximo, se
+//    contesta con el dato REAL del plan de la cuenta (tabla posts:
+//    estado y hora en la zona de la cuenta). Sin posteo se dice que no
+//    hay — jamás una hora inventada.
+//  · Nada de esto genera, agenda ni publica: es lectura + registro.
+//    En la cuenta propia vale igual (confirmar y encolar; el software
+//    no se dispara — FRENO-CUENTA-PROPIA intacto).
+function subirIdeaEsPreguntaPlan(texto) {
+  const crudo = String(texto || '');
+  const t = ' ' + crudo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ' ') + ' ';
+  const pregunta = crudo.includes('?') || /\b(cuando|a que hora|que hora|sale|salen|se publica|publica|hay posteo|va a salir|esta programado)\b/.test(t);
+  if (!pregunta) return false;
+  const tema = /\b(posteo|post|publicacion|reel|historia|video|foto)\b/.test(t);
+  const ancla = /\b(hoy|proximo|siguiente|manana)\b/.test(t) || /\bde las \d{1,2}\b/.test(t) || /\b(sale|salen|se publica|publica|sube)\b/.test(t);
+  return !!(tema && ancla);
+}
+function subirIdeaDatoPlan(uid, tz) {
+  const hoy = tzToday(tz);
+  const rows = db.prepare(`SELECT id, status, scheduled_at, published_at FROM posts
+    WHERE user_id = ? AND status IN ('scheduled','publishing','published')
+    ORDER BY COALESCE(scheduled_at, published_at) ASC`).all(uid) || [];
+  let deHoy = null;
+  for (const p of rows) {
+    const iso = p.scheduled_at || p.published_at;
+    if (!iso || ymdInTz(iso, tz) !== hoy) continue;
+    if (!deHoy || (p.status === 'published' && deHoy.status !== 'published')) deHoy = p;
+  }
+  let proximo = null;
+  const fut = db.prepare(`SELECT id, status, scheduled_at, published_at FROM posts
+    WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL
+    ORDER BY scheduled_at ASC`).all(uid) || [];
+  for (const p of fut) {
+    const ymd = ymdInTz(p.scheduled_at, tz);
+    if (ymd && ymd > hoy) { proximo = p; break; }
+  }
+  return { hoy: deHoy, proximo };
+}
+function subirIdeaDiaLabel(iso, tz, lang) {
+  const hoy = tzToday(tz);
+  const ymd = ymdInTz(iso, tz);
+  if (ymd === shiftDays(hoy, 1)) return lang === 'en' ? 'tomorrow' : 'mañana';
+  try {
+    const s = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'es-ES', { timeZone: tz, weekday: 'long', day: 'numeric' }).format(new Date(String(iso).replace(' ', 'T')));
+    return lang === 'en' ? ('on ' + s) : ('el ' + s);
+  } catch (e) { return ymd || ''; }
+}
+function subirIdeaRespuesta(uid, texto) {
+  const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
+  const tz = userTz(uid);
+  if (subirIdeaEsPreguntaPlan(texto)) {
+    const d = subirIdeaDatoPlan(uid, tz);
+    if (d.hoy) {
+      const iso = d.hoy.scheduled_at || d.hoy.published_at;
+      const hora = horaSalidaEnTz(iso, tz, lang);
+      if (d.hoy.status === 'published') return lang === 'en'
+        ? `Got it — you're asking about today's post: it already went out${hora ? ' at ' + hora : ''}. I left your note in the team's queue.`
+        : `Entendí: preguntás por el posteo de hoy — ya salió${hora ? ', a las ' + hora : ''}. Dejé tu nota en la cola del equipo.`;
+      if (d.hoy.status === 'publishing') return lang === 'en'
+        ? `Got it — you're asking about today's post: it's going out right now. I left your note in the team's queue.`
+        : `Entendí: preguntás por el posteo de hoy — está saliendo ahora. Dejé tu nota en la cola del equipo.`;
+      return lang === 'en'
+        ? `Got it — you're asking about today's post: yes, it goes out today${hora ? ' at ' + hora : ''}. I left your note in the team's queue, in case you want to change anything.`
+        : `Entendí: preguntás si hoy sale tu posteo — sí, sale hoy${hora ? ' a las ' + hora : ''}. Dejé tu nota en la cola del equipo, por si querés cambiar algo.`;
+    }
+    if (d.proximo) {
+      const hora = horaSalidaEnTz(d.proximo.scheduled_at, tz, lang);
+      const dia = subirIdeaDiaLabel(d.proximo.scheduled_at, tz, lang);
+      return lang === 'en'
+        ? `Got it — you're asking about your post: there's none scheduled for today; the next one goes out ${dia}${hora ? ' at ' + hora : ''}. I left your note in the team's queue.`
+        : `Entendí: preguntás por tu posteo — hoy no hay ninguno programado; el próximo sale ${dia}${hora ? ' a las ' + hora : ''}. Dejé tu nota en la cola del equipo.`;
+    }
+    return lang === 'en'
+      ? `Got it — you're asking about your post: there's none scheduled for today. I left your note in the team's queue so we can look at it.`
+      : `Entendí: preguntás por tu posteo — hoy no hay ninguno programado. Dejé tu nota en la cola del equipo para que lo veamos.`;
+  }
+  const eco = texto.length > 90 ? (texto.slice(0, 90).trim() + '…') : texto;
+  return lang === 'en'
+    ? `Got it: “${eco}”. I left it in the team's queue: we go over it by hand and reply to you in the chat.`
+    : `Entendí: «${eco}». Lo dejo en la cola del equipo: lo vemos a mano y te respondemos por el chat.`;
+}
+app.post('/api/subir/idea-voz', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const texto = String((req.body || {}).text || '').trim().slice(0, 2000);
+    if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    const respuesta = subirIdeaRespuesta(uid, texto);
+    db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', texto, 0, 'general');
+    db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', respuesta, 0, 'general');
+    return res.json({ ok: true, respuesta, pregunta: subirIdeaEsPreguntaPlan(texto) });
+  } catch (e) { console.error('[subir-idea-voz]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu idea' }); }
+});
+
 // ---------- CONSERJE · PEDIDOS DE SUBIR POR VOZ (LOTE PEDIDO-VOZ-REVISION) ----------
 // El contrato con la vista del conserje (lote CONSERJE-PEDIDOS-VOZ):
 // el estado del pedido vive en subir_pedidos_voz y SOLO cambia por
@@ -47749,7 +47856,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1208';
+const BUILD_ID = '20261105-v1209';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

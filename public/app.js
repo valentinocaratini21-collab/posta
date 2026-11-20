@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1208';
+const PZ_BUILD = '20261105-v1209';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32320,6 +32320,13 @@ async function pzVozCerrar(strip, key, userText, asstText) {
       : { post_id: Number(key), user_text: userText, assistant_text: asstText });
   } catch (e) {}
 }
+function pzSubirVozRespPintar(strip, txt) {
+  const el = strip.querySelector('[data-subir-voz-resp]');
+  if (!el) return;
+  if (!txt) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = '<img src="/ai-avatar.png" alt=""><span>' + esc(txt) + '</span>';
+}
 async function pzVozEnviar(strip, text) {
   const key = strip.getAttribute('data-pz-voz');
   const en = pzVozEn();
@@ -32334,11 +32341,29 @@ async function pzVozEnviar(strip, text) {
     return;
   }
   if (key === 'extra') {
-    // La nota opcional del tab Subir: no se envía sola — viaja como
-    // dato extra con el «Listo». Ningún paso del flujo depende de ella.
+    // La nota de la fila «¿Tenés una idea?» del tab Subir. Sigue
+    // viajando como dato extra con el «Listo» si después hay material,
+    // pero ya no muere en el ✓ (LOTE SUBIR-RESPONDE): Posty responde
+    // EN EL MOMENTO pegado a la fila — qué entendió y qué va a hacer;
+    // si es una pregunta por el posteo de hoy, la contesta el servidor
+    // con el dato real del plan — y el pedido cae en la cola de la
+    // línea a mano (pedidos-voz, hilo 'general') como el resto de las
+    // puertas de voz. Invitado: sin sesión no hay cola; queda el
+    // comportamiento local de siempre.
     PZ_SUBIR.extra = text;
     const s = strip.querySelector('[data-subir-voz-txt]');
     if (s) s.textContent = '✓ ' + text;
+    if (typeof pzIsGuest === 'function' && pzIsGuest()) return;
+    pzVozEstado(strip, pzVozEn() ? 'Noting it down…' : 'Anotando…');
+    try {
+      const r = await api.post('/api/subir/idea-voz', { text });
+      pzVozEstado(strip, '');
+      if (r && r.ok && r.respuesta) pzSubirVozRespPintar(strip, String(r.respuesta));
+      else pzSubirVozRespPintar(strip, pzVozEn() ? "I couldn't send it just now — it stays written above and travels with your next upload." : 'No pude enviarlo ahora — queda escrito acá arriba y viaja con tu próxima subida.');
+    } catch (e) {
+      pzVozEstado(strip, '');
+      pzSubirVozRespPintar(strip, pzVozEn() ? "I couldn't send it just now — it stays written above and travels with your next upload." : 'No pude enviarlo ahora — queda escrito acá arriba y viaja con tu próxima subida.');
+    }
     return;
   }
   if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzVozEnviar(strip, text)); return; }
@@ -32487,6 +32512,7 @@ async function subirView() {
       <div class="voz-op-txt"><div class="vq">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div><div class="vs" data-subir-voz-txt>${en ? 'Tell Posty with a voice note and we\'ll build it together.' : 'Contale a Posty con una nota de voz y la armamos juntos.'}</div></div>
       <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
       <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
+      <div class="voz-op-resp" data-subir-voz-resp hidden></div>
     </section>
     <div class="pz-subir-err" id="pzSubirErr" hidden></div>
     <div id="pzSubirRecibos"></div>
