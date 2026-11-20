@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1199';
+const PZ_BUILD = '20261105-v1200';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -16824,6 +16824,35 @@ async function pzDetSimpleDel(id, btn) {
   }
 }
 /* ===== FIN LOTE DETALLE-SIMPLE ===== */
+/* ===== (LOTE DETALLE-POSTEO-SIMPLE · 20/11 · elección del dueño: opción 1
+   «Solo la pieza») Forma del detalle del posteo YA PUBLICADO en el pop
+   simple (.scf-pop desde el cofre): la foto a sangre con la X flotante
+   encima, UNA línea de estado («Publicado · lun 16 · 19:00», la fecha
+   una sola vez), el caption sin repetir el username como encabezado y
+   los hashtags en gris suave, y dos acciones y nada más: [Impulsar]
+   glass azul y [Ver en Instagram] fantasma. Mueren EN ESTA superficie:
+   la barra de la X, el encabezado imitación Instagram (avatar/nombre/
+   •••), el menú •••, «Formato: …», la línea «Por qué» y el «hace …»
+   duplicado. Que el «Por qué» deje de pintarse acá NO cierra el defecto
+   PORQUE-AJENO: su destino en las demás superficies y en los datos lo
+   decide su diagnóstico. Borradores y programados conservan la forma
+   simple de DETALLE-SIMPLE byte a byte: la rama nueva vive detrás de
+   (o.simple && status 'published') dentro de weekCardHTML. Las dos
+   acciones conservan su flujo vivo: Impulsar abre la hoja de impulso
+   de siempre (pzBoostOpen, con su etiqueta de confirmación y sus
+   tarjetas de error) y Ver en Instagram abre el permalink vivo de
+   siempre (pzIgLinkVivo: archivado en IG = sin link, como hoy). ===== */
+// Registro del posteo completo para el botón Impulsar de la forma nueva
+// (mismo patrón que HF_ASK_POSTS): el handler recupera el objeto entero
+// sin importar en qué cofre vive la tarjeta.
+let DET_PUB_POSTS = {};
+function detPubImpulsar(id) {
+  try {
+    const p = DET_PUB_POSTS[String(id)] || null;
+    if (p && typeof pzBoostOpen === 'function') { pzBoostOpen(p); return; }
+    if (typeof pzBoostOpenById === 'function') pzBoostOpenById(Number(id) || 0);
+  } catch (e) {}
+}
 function weekCardHTML(d, o) {
   o = o || {};
   const simple = !!(o && o.simple);
@@ -16980,6 +17009,29 @@ function weekCardHTML(d, o) {
   const menuBtnHTML = `<button type="button" class="igmock-dots-btn" data-pc-act="det-menu" aria-expanded="false" aria-label="${enW ? 'More options' : 'Más opciones'}">•••</button>`;
   const simpleMenuHTML = simple ? detSimpleMenuHTML(d, { en: enW, canPubNow, igLink: d.ig_permalink }) : '';
   const simpleAcceptHTML = simpleAccept ? `<button type="button" class="igmock-accept-fixed" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''}>${pzIc('checkCircle', 16)} Aceptar</button>` : '';
+  // (LOTE DETALLE-POSTEO-SIMPLE) Forma «solo la pieza» del PUBLICADO en
+  // el pop simple: retorno temprano — el resto de la función no se toca
+  // y borradores/programados salen por el retorno de siempre. Las
+  // historias publicadas conservan la forma simple de hoy (su detalle
+  // no es el del feed y no se impulsa).
+  if (simple && isPub && !isS) {
+    try { DET_PUB_POSTS[String(d.id)] = d; } catch (e) {}
+    const detWhen = homeWhenLabel(d.published_at || d.scheduled_at);
+    const detTags = String(d.hashtags || '').trim();
+    const detMedia = isCar
+      ? `<div class="igmock-media igmock-media-car">${carTrackHTML}${carArrowsHTML}${carCountHTML}</div>${carDotsHTML}`
+      : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="Ver posteo" aria-label="Ver posteo">${media}</button>`;
+    return `<div class="igmock igmock-fixed igmock-simple igmock-detpub" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
+      <div class="detpub-media">${detMedia}<button type="button" class="detpub-x" data-scf-x aria-label="${enW ? 'Close' : 'Cerrar'}">${pzIc('x', 15)}</button></div>
+      <div class="detpub-body">
+        <div class="detpub-status"><span class="detpub-dot" aria-hidden="true"></span><b>${enW ? 'Published' : 'Publicado'}</b>${detWhen ? `<span class="detpub-when"> · ${esc(detWhen)}</span>` : ''}</div>
+        ${capFull ? `<div class="detpub-cap">${esc(capFull)}</div>` : ''}
+        ${detTags ? `<div class="detpub-tags">${esc(detTags)}</div>` : ''}
+        <div class="detpub-acts"><button type="button" class="detpub-boost" onclick="detPubImpulsar('${esc(String(d.id))}')">${enW ? 'Boost' : 'Impulsar'}</button>${igLink ? `<a class="detpub-ig" href="${esc(igLink)}" target="_blank" rel="noopener">${enW ? 'View on Instagram' : 'Ver en Instagram'}</a>` : ''}</div>
+      </div>
+      ${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(d) : ''}
+    </div>`;
+  }
   const whenTopHTML = `<div class="igmock-when-top"><span>${labelIcon}${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
         ${statusHTML}${d.image_path ? `<button type="button" class="hf-crop-tog hf-crop-mini" data-hf-crop aria-pressed="false" aria-label="${enW ? 'See how it crops' : 'Ver cómo se recorta'}" title="${enW ? 'See how it crops' : 'Ver cómo se recorta'}">${pzIc('grid', 16)}</button>` : ''}</div>`;
   return `<div class="igmock igmock-fixed${simple ? ' igmock-simple' : ''}${simpleAccept ? ' igmock-has-accept' : ''}${o.dia ? ' igmock-dia' : ''}${d.status === 'draft' && !isPending ? ' igmock-draft' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}" data-f3-status="${esc(String(d.status || ''))}" data-f3-appr="${esc(String(d.approval || ''))}">
@@ -17358,9 +17410,13 @@ function scfOpenPop(wrap, pinned) {
   if (!vault) return;
   const card = vault.querySelector(`.igmock[data-post-id="${String(wrap.dataset.postId || '')}"]`);
   if (!card) return;
+  // (LOTE DETALLE-POSTEO-SIMPLE) La forma del publicado no lleva barra:
+  // su X flota sobre la foto, dentro de la tarjeta, y la capa se marca
+  // .detpub para que el anillo azul de «fijada» no la encuadre.
+  const detPubPop = card.classList.contains('igmock-detpub');
   const pop = document.createElement('div');
-  pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc') + (pinned ? ' pinned' : '');
-  pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-x" aria-label="Cerrar">${pzIc("x", 16)}</button></div>`;
+  pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc') + (pinned ? ' pinned' : '') + (detPubPop ? ' detpub' : '');
+  if (!detPubPop) pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-x" aria-label="Cerrar">${pzIc("x", 16)}</button></div>`;
   pop.appendChild(card);
   // (v442 · Corrección de Valentino 02:18: «que este en el medio de la
   // pantalla el post. a veces queda a un costado») La capa va AL BODY
@@ -17396,7 +17452,7 @@ function scfOpenPop(wrap, pinned) {
   // daba el listener de la tile cuando la capa vivía adentro (el ✕
   // cierra por su propio handler, con stopPropagation).
   pop.addEventListener('click', (e) => {
-    if (e.target && e.target.closest && e.target.closest('.scf-pop-x')) return;
+    if (e.target && e.target.closest && e.target.closest('.scf-pop-x, [data-scf-x]')) return;
     SCF_PINNED = true;
     pop.classList.add('pinned');
   });
@@ -17407,6 +17463,12 @@ function scfOpenPop(wrap, pinned) {
   // capas fixed transformadas. Con click queda FIJADA (SCF_PINNED).
   const x = pop.querySelector('.scf-pop-x');
   if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(true); };
+  // (LOTE DETALLE-POSTEO-SIMPLE) La X flotante de la forma del publicado:
+  // mismo cierre que la X de la barra.
+  if (detPubPop) {
+    const dx = pop.querySelector('[data-scf-x]');
+    if (dx) dx.onclick = (e) => { e.stopPropagation(); scfClosePop(true); };
+  }
   // (v436) El botón «Ver el día completo» de la capa murió con la
   // vista Día: la capa ES el detalle del posteo (Aceptar/Editar/💬).
 }

@@ -2848,6 +2848,24 @@ body.hf-sv-open{overflow:hidden}
 .scf-pop-bar + .igmock{border-radius:0 0 20px 20px;border-top:none}
 .scf-pop-day{border:none;background:#EAF4FA;color:var(--cel);font-size:12px;font-weight:800;border-radius:999px;padding:6px 12px;cursor:pointer;font-family:inherit;touch-action:manipulation}
 .scf-pop-x{border:none;background:var(--bg2);color:var(--mut);width:28px;height:28px;border-radius:50%;font-size:13px;cursor:pointer;font-family:inherit;line-height:1;touch-action:manipulation}
+/* (LOTE DETALLE-POSTEO-SIMPLE · 20/11) Detalle del publicado «solo la
+   pieza»: sin barra ni marco de color al fijarse, foto a sangre con la
+   X flotante, una línea de estado, caption y dos acciones. */
+.scf-pop.detpub.pinned{box-shadow:0 26px 80px rgba(10,30,51,.5)}
+.scf-pop .igmock-detpub{border:none}
+.detpub-media{position:relative}
+.detpub-x{position:absolute;top:10px;right:10px;z-index:4;width:34px;height:34px;border-radius:50%;border:none;background:rgba(10,30,51,.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;touch-action:manipulation}
+.detpub-body{padding:14px 16px 16px}
+.detpub-status{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--mut)}
+.detpub-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--cel)}
+.detpub-status b{color:var(--cel);font-weight:700}
+.detpub-when{white-space:nowrap}
+.detpub-cap{margin-top:9px;font-size:15px;line-height:1.45;color:var(--txt);white-space:pre-wrap;overflow-wrap:anywhere}
+.detpub-tags{margin-top:3px;font-size:14px;line-height:1.45;color:#9DB2C3;white-space:pre-wrap;overflow-wrap:anywhere}
+.detpub-acts{display:flex;gap:10px;margin-top:16px}
+.detpub-boost{flex:1 1 0;height:52px;border-radius:99px;border:1px solid rgba(255,255,255,.5);border-top:1.5px solid rgba(255,255,255,.9);background:linear-gradient(135deg,rgba(62,166,219,.88),rgba(27,111,160,.86));box-shadow:0 10px 24px rgba(39,147,200,.38);color:#fff;font-size:15.5px;font-weight:700;font-family:inherit;cursor:pointer;touch-action:manipulation}
+.detpub-ig{flex:1 1 0;height:52px;border-radius:99px;border:1px solid var(--line);background:#fff;color:var(--txt);font-size:15.5px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;touch-action:manipulation}
+.igmock-detpub .pz-voz{margin:0 16px 16px}
 /* MES: el almanaque — semanas apiladas con rótulo, celdas compactas */
 .scf-mweek{margin-bottom:14px}
 .scf-mweek-t{font-size:12.5px;font-weight:800;color:var(--mut);margin:0 2px 5px}
