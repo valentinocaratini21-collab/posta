@@ -315,6 +315,29 @@ db.exec(`CREATE TABLE IF NOT EXISTS subir_pedidos_voz (
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_pedidos_voz_user_estado ON subir_pedidos_voz (user_id, estado)`); } catch (e) { /* índice opcional */ }
 try { db.exec(`ALTER TABLE subir_pedidos_voz ADD COLUMN duda TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE subir_pedidos_voz ADD COLUMN duda_respuesta TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE SUBIR-VOZ-PRIMERO · 20/11) El RECIBO de la anotación por voz
+// del material recién subido: lo que el cliente confirmó con «Va así»
+// queda pegado al material (asset) en esta tabla. datos = lo entendido
+// confirmado {intencion, fechaISO, motivo, condiciones, tratamiento,
+// transcript}; movimientos = el snapshot del desplazamiento de la
+// cola [{post_id, de_iso, a_iso}] para que «Deshacer» restaure el
+// plan anterior exacto. estado: activo | deshecho | reemplazado (un
+// «Cambiar» deshace el anterior y lo marca reemplazado por el nuevo).
+db.exec(`CREATE TABLE IF NOT EXISTS subir_recibos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  asset_id INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'foto',
+  modo TEXT NOT NULL DEFAULT '',
+  datos TEXT NOT NULL DEFAULT '{}',
+  post_id INTEGER,
+  pedido_id INTEGER,
+  movimientos TEXT NOT NULL DEFAULT '[]',
+  estado TEXT NOT NULL DEFAULT 'activo',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_recibos_user_asset ON subir_recibos (user_id, asset_id, estado)`); } catch (e) { /* índice opcional */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN transition_proposal_base TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN kenburns_proposal_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

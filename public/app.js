@@ -2462,7 +2462,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1196';
+const PZ_BUILD = '20261105-v1197';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32100,6 +32100,9 @@ function pzGridScrollNuevo() {
 
 /* ---------- Tab Subir (addendum 14:20: tocando; la voz, un extra) ---------- */
 const PZ_SUBIR = { asset: null, kind: '', thumb: '', todo: false, answers: { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' }, extra: '', busy: false };
+// (LOTE SUBIR-VOZ-PRIMERO) Estado del flujo post-subida: el lote de
+// piezas recién subidas, la transcripción, lo entendido y su plan.
+const PZ_VP = { assets: [], transcript: '', entendido: null, plan: null, guarda: '', busy: false, editReciboId: 0, chipIntencion: '', chipTratamiento: '' };
 function pzSubirPayload() {
   const a = PZ_SUBIR.answers;
   const capEl = document.getElementById('pzSubirCapTxt');
@@ -32116,6 +32119,7 @@ async function subirView() {
   const en = pzVozEn();
   PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = ''; PZ_SUBIR.todo = false; PZ_SUBIR.busy = false;
   PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
+  PZ_VP.assets = []; PZ_VP.transcript = ''; PZ_VP.entendido = null; PZ_VP.plan = null; PZ_VP.guarda = ''; PZ_VP.busy = false; PZ_VP.editReciboId = 0; PZ_VP.chipIntencion = ''; PZ_VP.chipTratamiento = '';
   PZ_EVENTO.es = false; PZ_EVENTO.respondida = false; PZ_EVENTO.nombre = ''; PZ_EVENTO.nombreOk = false; PZ_EVENTO.leido = ''; PZ_EVENTO.fecha = ''; PZ_EVENTO.caraAsset = 0; PZ_EVENTO.caraThumb = ''; PZ_EVENTO.postId = 0; PZ_EVENTO.pedidoId = 0; PZ_EVENTO.busy = false;
   PZ_CERO.idea = ''; PZ_CERO.ent = null; PZ_CERO.conf = { quien: false, fecha: false, que: false }; PZ_CERO.datos = { nombre: '', quien: '', fecha: '', que: '' }; PZ_CERO.caraAsset = 0; PZ_CERO.caraThumb = ''; PZ_CERO.postId = 0; PZ_CERO.pedidoId = 0; PZ_CERO.busy = false;
   const chips = (q, opts) => `<div class="chips">${opts.map(o => `<button type="button" class="chip${o.on ? ' on' : ''}" data-subir-q="${q}" data-subir-v="${o.v}">${o.on ? '✓ ' : ''}${o.t}</button>`).join('')}</div>`;
@@ -32129,55 +32133,30 @@ async function subirView() {
     <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload a photo or a video' : 'Tocá para subir una foto o un video'}</p></div>
     <input type="file" id="pzSubirFile" accept="image/*,video/*" hidden>
     <div id="pzSubirUp"></div>
-    <div class="preg-card pz-ev" id="pzEvCard">
-      <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'DO YOU HAVE A SPECIAL DATE?' : '¿TENÉS UNA FECHA ESPECIAL?'}</div>
-      <div class="q"><p>${en ? 'Is it an event with a date?' : '¿Es un evento con fecha?'}</p><div class="chips"><button type="button" class="chip" data-ev-es="si">${en ? 'Yes, it is an event' : 'Sí, es un evento'}</button><button type="button" class="chip on" data-ev-es="no">✓ No</button></div></div>
-      <div id="pzEvPanel" hidden>
-        <div class="q"><p>${en ? "What's the event called?" : '¿Cómo se llama el evento?'}</p>
-          <div id="pzEvLeido" hidden><div class="pz-ev-leido-txt">${pzEvTxtLeido()} <b id="pzEvLeidoNom"></b></div><div class="chips"><button type="button" class="chip" id="pzEvLeidoOk">✓ ${en ? "That's it" : 'Es ese'}</button><button type="button" class="chip" id="pzEvLeidoNo">${en ? "I'll write it" : 'Lo escribo yo'}</button></div></div>
-          <input type="text" id="pzEvNombre" maxlength="60" placeholder="${en ? 'Name of the event' : 'Nombre del evento'}" hidden>
-          <button type="button" class="fbtn pz-ev-leer" id="pzEvLeer" hidden>${pzEvTxtLeer()}</button>
-          <div class="pz-ev-nota">${pzEvTxtNotaNombre()}</div>
-        </div>
-        <div class="q"><p>${en ? 'What day is it?' : '¿Qué día es?'}</p><div class="pz-ev-cal" id="pzEvCal"></div><div class="pz-ev-sel" id="pzEvSel"></div></div>
-        <div class="q"><p>${en ? "Add the person's photo if you want" : 'Sumá la foto de la persona si querés'} <span class="pz-ev-nota">${pzEvTxtNotaFoto()}</span></p>
-          <button type="button" class="fbtn" id="pzEvCaraBtn">${en ? "Add the person's photo" : 'Sumar la foto de la persona'}</button>
-          <input type="file" id="pzEvCaraFile" accept="image/*" hidden>
-          <div id="pzEvCaraUp"></div>
-        </div>
-        <button type="button" class="listo" id="pzEvCrear">${en ? 'Build the event post' : 'Armar el posteo del evento'}</button>
-        <div class="pz-subir-err" id="pzEvErr" hidden></div>
+    <div class="preg-card pz-vp" id="pzVpCard" hidden>
+      <div id="pzVpThumbs"></div>
+      <div class="kick"><img src="/ai-avatar.png" alt=""> <span id="pzVpKick">${en ? 'POSTY ASKS · ABOUT THIS PHOTO' : 'POSTY PREGUNTA · SOBRE ESTA FOTO'}</span></div>
+      <div class="pz-vp-q" id="pzVpQ">${en ? 'Tell me about this photo?' : '¿Me contás de esta foto?'}</div>
+      <p class="pz-vp-sub" id="pzVpSub">${en ? 'If it is for a special date, if there is anything to take care of — whatever it is, in a voice note.' : 'Si es para una fecha especial, si hay algo que cuidar — lo que sea, en una nota de voz.'}</p>
+      <div class="pz-vp-nota" id="pzVpNota" hidden></div>
+      <div class="pz-vp-micwrap" id="pzVpMicWrap">
+        <button type="button" class="pz-vp-mic" id="pzVpMic" aria-label="${en ? 'Tap and talk' : 'Tocá y hablá'}">${pzIc('mic', 26)}</button>
+        <div class="pz-vp-miclabel" id="pzVpMicLabel">${en ? 'Tap and talk' : 'Tocá y hablá'}</div>
+        <div class="pz-vp-rec" id="pzVpRec" hidden><span class="pz-vp-dot"></span><span id="pzVpRecTxt">${en ? 'Recording · 0:00' : 'Grabando · 0:00'}</span></div>
       </div>
-    </div>
-    <div class="preg-card pz-cero" id="pzCeroCard" hidden>
-      <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'BUILD IT FROM SCRATCH?' : '¿LO ARMAMOS DE CERO?'}</div>
-      <p class="pz-cero-t">${en ? 'Tell me an idea in one line — by voice or in writing — and Posty shows you what it understood so you can confirm it. Nothing is built on unconfirmed data.' : 'Contame una idea en una frase — por voz o escrita — y Posty te devuelve lo que entendió para que lo confirmes. Nada se arma con datos sin confirmar.'}</p>
-      <textarea id="pzCeroIdea" rows="2" maxlength="400" placeholder="${pzEvTxtEjemploIdea()}"></textarea>
-      <section class="pz-voz pz-cero-voz" data-pz-voz="cero">
-        <div class="pz-voz-bar"><span class="pz-voz-hint">${en ? 'Or say it: <b>hold down</b> and tell me the idea' : 'O decila: <b>mantené apretado</b> y contame la idea'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>
-        <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
-      </section>
-      <button type="button" class="listo" id="pzCeroEnviar">${en ? 'Tell Posty' : 'Contale a Posty'}</button>
-      <div class="pz-subir-err" id="pzCeroErr" hidden></div>
-      <div id="pzCeroConf"></div>
-    </div>
-    <button type="button" class="todo" id="pzSubirTodo" hidden><img src="/ai-avatar.png" alt=""><span><b>${en ? 'Posty, take care of everything' : 'Posty, encargate de todo'}</b><i>${en ? 'One tap and done: Posty picks the day, improves it and writes the caption.' : 'Un toque y listo: Posty elige el día, lo mejora y escribe el caption.'} <span id="pzSubirTodoPreg" hidden>${en ? 'The questions below are only if you want to decide something yourself.' : 'Las preguntas de abajo son solo si querés decidir vos algo.'}</span></i></span></button>
-    <div class="preg-card" id="pzSubirPreg" hidden>
-      <div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'POSTY ASKS YOU — ONE TAP EACH' : 'POSTY TE PREGUNTA — UN TOQUE CADA UNA'}</div>
-      <div class="q"><p>${en ? 'When do we post it?' : '¿Cuándo lo subimos?'}</p>${chips('cuando', [{ v: 'posty', t: en ? 'Let Posty pick the day' : 'Que Posty elija el día', on: 1 }, { v: 'hoy', t: en ? 'Today' : 'Hoy' }, { v: 'semana', t: en ? 'This week' : 'Esta semana' }, { v: 'guardar', t: en ? 'Just save it' : 'Solo guardarlo' }])}</div>
-      <div class="q"><p>${en ? 'Is it a promo?' : '¿Es una promo?'}</p>${chips('promo', [{ v: 'no', t: 'No', on: 1 }, { v: 'desc', t: en ? '% off' : '% de descuento' }, { v: '2x1', t: '2x1' }, { v: 'envio', t: en ? 'Free shipping' : 'Envío gratis' }])}</div>
-      <div class="q"><p>${en ? 'Shall we improve it?' : '¿Lo mejoramos?'}</p>${chips('mejora', [{ v: 'si', t: en ? 'Yes, improve it' : 'Sí, mejoralo', on: 1 }, { v: 'no', t: en ? 'As it is' : 'Así como está' }])}</div>
-      <div class="q"><p>${en ? 'The caption?' : '¿El caption?'}</p>${chips('caption', [{ v: 'posty', t: en ? 'You write it' : 'Escribilo vos', on: 1 }, { v: 'mio', t: en ? 'I have mine' : 'Ya tengo el mío' }])}<div id="pzSubirCapWrap" hidden><textarea id="pzSubirCapTxt" rows="3" placeholder="${en ? 'Paste your caption…' : 'Pegá tu caption…'}"></textarea></div></div>
-      <div class="q" id="pzSubirQVideo" hidden><p>${en ? "It's a video: subtitles and polish?" : 'Si es un video: ¿subtítulos y mejora?'}</p>${chips('subs', [{ v: 'si', t: en ? 'Yes, do it' : 'Sí, hacelo', on: 1 }, { v: 'no', t: en ? 'No need' : 'No hace falta' }])}</div>
+      <div class="pz-vp-estado" id="pzVpEstado" hidden></div>
+      <div class="chips pz-vp-chips" id="pzVpChips"></div>
+      <div class="pz-vp-despues" id="pzVpDespues">${en ? 'Answer later' : 'Responder después'}</div>
+      <div id="pzVpConf"></div>
     </div>
     <section class="pz-voz voz-op" data-pz-voz="extra" id="pzSubirVozOp">
       <div class="voz-op-txt"><div class="vq">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div><div class="vs" data-subir-voz-txt>${en ? 'Tell Posty with a voice note and we\'ll build it together.' : 'Contale a Posty con una nota de voz y la armamos juntos.'}</div></div>
       <div class="mic-s" data-pz-voz-mic role="button" aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 19)}</div>
       <div class="pz-voz-estado" data-pz-voz-estado hidden></div>
     </section>
-    <button type="button" class="listo" id="pzSubirListo" hidden>${en ? 'Done' : 'Listo'}</button>
     <div class="pz-subir-err" id="pzSubirErr" hidden></div>
     <div id="pzSubirRecibos"></div>
+    <div id="pzVpMaterial"></div>
   </div>`;
   // (LOTE SUBIR-CABECERA · 13/11) La vista devuelve SOLO su contenido,
   // como todas las demás: el router envuelve UNA vez con appShell al
@@ -32205,21 +32184,12 @@ async function pzSubirUpload(file) {
     PZ_SUBIR.asset = d.id;
     PZ_SUBIR.kind = d.kind === 'video' ? 'video' : 'foto';
     PZ_SUBIR.thumb = d.thumb || d.path || '';
-    const up = document.getElementById('pzSubirUp');
-    if (up) up.innerHTML = `<div class="up">${PZ_SUBIR.thumb ? `<img src="${esc(PZ_SUBIR.thumb)}" alt="">` : ''}<div><div class="n">${en ? 'Just uploaded' : 'Recién subido'}</div><div class="e">✓ ${en ? 'Saved in your material' : 'Guardado en tu material'}</div></div><div class="tag">${PZ_SUBIR.kind === 'video' ? 'VIDEO' : 'FOTO'}</div></div>`;
-    const todoCard = document.getElementById('pzSubirTodo'); if (todoCard) todoCard.hidden = false;
-    const preg = document.getElementById('pzSubirPreg'); if (preg) preg.hidden = false;
-    // (LOTE SUBIR-CABECERA · 13/11) La tarjeta dorada anuncia las
-    // preguntas recién cuando existen (con la pieza ya subida).
-    const todoPreg = document.getElementById('pzSubirTodoPreg'); if (todoPreg) todoPreg.hidden = false;
-    const qv = document.getElementById('pzSubirQVideo'); if (qv) qv.hidden = PZ_SUBIR.kind !== 'video';
-    // (LOTE SUBIR-AVATAR-DEDUP) La tarjeta de voz opcional es la puerta
-    // de idea solo mientras el flujo evento/cero no se activó; con el
-    // flujo activo la puerta es la tarjeta de cero y esta se oculta.
-    const voz = document.getElementById('pzSubirVozOp'); if (voz) voz.hidden = (typeof PZ_EVENTO !== 'undefined' && !!PZ_EVENTO.respondida);
-    const listo = document.getElementById('pzSubirListo'); if (listo) listo.hidden = false;
-    if (PZ_SUBIR.todo) { PZ_SUBIR.todo = false; pzSubirResolver(true); }
-    try { pzEvSyncFlyer(); } catch (e) {}
+    // (LOTE SUBIR-VOZ-PRIMERO) El material se guarda PRIMERO y la
+    // pregunta nace pegada a él. Las piezas que llegan juntas se
+    // acumulan en UN lote: la pregunta se hace una sola vez por lote.
+    PZ_VP.assets.push({ id: d.id, kind: PZ_SUBIR.kind, thumb: PZ_SUBIR.thumb });
+    pzVpPintarLote();
+    pzVpMostrarPregunta();
   } catch (e) {
     pzSubirErr(en ? "It couldn't be uploaded — try again" : 'No se pudo subir — probá de nuevo');
   }
@@ -32356,6 +32326,383 @@ function cardScrollRecibo() {
   const c = document.getElementById('pzSubirRecibos');
   if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
+
+/* ---------- LOTE SUBIR-VOZ-PRIMERO (20/11) ----------
+   La pestaña Subir ya no pregunta nada ANTES de subir: el material
+   se guarda primero y Posty pregunta PEGADO a lo recién subido, con
+   la voz primero. La nota se transcribe por el caño de siempre
+   (/api/ideas/transcribe), el servidor devuelve lo entendido como
+   línea estructurada («Entendí esto») y NADA se asienta sin el
+   «Va así» del cliente. Lo que la pasada estructurada no resuelve
+   cae a la revisión de siempre (la línea a mano), nunca se asienta
+   solo. El recibo queda pegado al material en «Tu material». */
+function pzVpPrimero() { return PZ_VP.assets[0] || null; }
+function pzVpEsVideo() { const a = pzVpPrimero(); return !!a && a.kind === 'video'; }
+function pzVpFechaCorta(ymd, en) {
+  if (!ymd) return '';
+  try {
+    const d = new Date(ymd + 'T12:00:00');
+    return new Intl.DateTimeFormat(en ? 'en-US' : 'es', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  } catch (e) { return ymd; }
+}
+function pzVpDurTxt(seg) {
+  const s = Number(seg) || 0;
+  if (!s) return '';
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function pzVpPintarLote() {
+  const en = pzVozEn();
+  const up = document.getElementById('pzSubirUp');
+  if (!up) return;
+  if (!PZ_VP.assets.length) { up.innerHTML = ''; return; }
+  const n = PZ_VP.assets.length;
+  up.innerHTML = PZ_VP.assets.map((a) => `<div class="up">${a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : ''}<div><div class="n">${en ? 'Just uploaded' : 'Recién subido'}</div><div class="e">✓ ${en ? 'Saved in your material' : 'Guardado en tu material'}</div></div><div class="tag">${a.kind === 'video' ? 'VIDEO' : 'FOTO'}</div></div>`).join('')
+    + (n > 1 ? `<div class="pz-vp-lote">${en ? n + ' pieces together — one question for the whole batch' : n + ' piezas juntas — una sola pregunta por el lote'}</div>` : '');
+}
+function pzVpChipsPintar() {
+  const en = pzVozEn();
+  const box = document.getElementById('pzVpChips');
+  if (!box) return;
+  const chips = pzVpEsVideo()
+    ? [{ v: 'tal_cual', t: en ? 'As it is, in my posts' : 'Tal cual, en mis posteos' }, { v: 'fecha', t: en ? "It's a date" : 'Es una fecha' }]
+    : [{ v: 'posteos', t: en ? 'No · use it in my posts' : 'No · usala en mis posteos' }, { v: 'fecha', t: en ? 'Yes, it is a date' : 'Sí, es una fecha' }];
+  box.innerHTML = chips.map((c) => `<button type="button" class="chip${(PZ_VP.chipIntencion === c.v || PZ_VP.chipTratamiento === c.v) ? ' on' : ''}" data-vp-chip="${c.v}">${c.t}</button>`).join('');
+  box.querySelectorAll('[data-vp-chip]').forEach((b) => { b.onclick = () => pzVpChip(b.getAttribute('data-vp-chip')); });
+}
+function pzVpMostrarPregunta() {
+  const en = pzVozEn();
+  const card = document.getElementById('pzVpCard');
+  if (!card) return;
+  card.hidden = false;
+  const video = pzVpEsVideo();
+  const n = PZ_VP.assets.length;
+  const kick = document.getElementById('pzVpKick');
+  if (kick) kick.textContent = video ? (en ? 'POSTY ASKS · ABOUT THIS VIDEO' : 'POSTY PREGUNTA · SOBRE ESTE VIDEO') : (en ? 'POSTY ASKS · ABOUT THIS PHOTO' : 'POSTY PREGUNTA · SOBRE ESTA FOTO');
+  const q = document.getElementById('pzVpQ');
+  if (q) q.textContent = n > 1
+    ? (en ? 'Tell me about these pieces?' : '¿Me contás de estas piezas?')
+    : (video ? (en ? 'Tell me about this video?' : '¿Me contás de este video?') : (en ? 'Tell me about this photo?' : '¿Me contás de esta foto?'));
+  const sub = document.getElementById('pzVpSub');
+  if (sub) sub.textContent = video
+    ? (en ? 'Whether it goes as it is or needs a cut, if it is for a date — whatever it is, in a voice note.' : 'Si va tal cual o hay que cortarlo, si es para una fecha — lo que sea, en una nota de voz.')
+    : (en ? 'If it is for a special date, if there is anything to take care of — whatever it is, in a voice note.' : 'Si es para una fecha especial, si hay algo que cuidar — lo que sea, en una nota de voz.');
+  const th = document.getElementById('pzVpThumbs');
+  if (th) th.innerHTML = PZ_VP.assets.map((a) => `<div class="pz-vp-thumb">${a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : ''}<span>${a.kind === 'video' ? 'VIDEO' : 'FOTO'}</span></div>`).join('');
+  pzVpChipsPintar();
+  try { card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+}
+function pzVpEstado(txt) {
+  const el = document.getElementById('pzVpEstado');
+  if (!el) return;
+  if (!txt) { el.hidden = true; el.textContent = ''; } else { el.hidden = false; el.textContent = txt; }
+}
+function pzVpNotaPintar() {
+  const el = document.getElementById('pzVpNota');
+  if (!el) return;
+  if (!PZ_VP.transcript) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = '«' + esc(PZ_VP.transcript) + '»';
+}
+/* La grabadora de ESTA tarjeta: mismo mime y mismo caño de
+   transcripción que las tiras de voz, pero la transcripción vuelve a
+   la tarjeta (las tiras, por la doctrina de voz, solo guardan el
+   pedido para la línea a mano; acá el cliente confirma lo entendido
+   antes de que se asiente nada). Toque para grabar, toque para
+   cortar — como el mock aprobado. */
+let PZ_VP_REC = null;
+async function pzVpRecToggle() {
+  const en = pzVozEn();
+  if (PZ_VP_REC) { pzVpRecStop(); return; }
+  if (PZ_VP.busy) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = (typeof pzPickVoiceMime === 'function') ? pzPickVoiceMime() : '';
+    const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    const rec = PZ_VP_REC = { stream, mr, chunks: [], mime: mr.mimeType || mime || 'audio/webm', t0: Date.now(), timer: null };
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+    mr.onstop = () => pzVpRecFinish(rec);
+    mr.start();
+    const wrap = document.getElementById('pzVpMicWrap'); if (wrap) wrap.classList.add('grabando');
+    const lab = document.getElementById('pzVpMicLabel'); if (lab) lab.textContent = en ? 'Tap to stop' : 'Tocá para cortar';
+    const recEl = document.getElementById('pzVpRec'); if (recEl) recEl.hidden = false;
+    const tick = () => {
+      const el = document.getElementById('pzVpRecTxt');
+      if (el && PZ_VP_REC === rec) { const s = Math.floor((Date.now() - rec.t0) / 1000); el.textContent = (en ? 'Recording · ' : 'Grabando · ') + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+    };
+    tick();
+    rec.timer = setInterval(tick, 500);
+  } catch (e) { pzVpEstado(en ? "I couldn't use the microphone — check the permission" : 'No pude usar el micrófono — revisá el permiso'); }
+}
+function pzVpRecStop() {
+  if (PZ_VP_REC && PZ_VP_REC.mr && PZ_VP_REC.mr.state !== 'inactive') { try { PZ_VP_REC.mr.stop(); } catch (e) {} }
+}
+async function pzVpRecFinish(rec) {
+  const en = pzVozEn();
+  try { rec.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+  if (rec.timer) clearInterval(rec.timer);
+  if (PZ_VP_REC === rec) PZ_VP_REC = null;
+  const wrap = document.getElementById('pzVpMicWrap'); if (wrap) wrap.classList.remove('grabando');
+  const lab = document.getElementById('pzVpMicLabel'); if (lab) lab.textContent = en ? 'Tap and talk' : 'Tocá y hablá';
+  const recEl = document.getElementById('pzVpRec'); if (recEl) recEl.hidden = true;
+  const blob = new Blob(rec.chunks, { type: rec.mime });
+  if (!blob.size) return;
+  PZ_VP.busy = true;
+  pzVpEstado(en ? 'Listening…' : 'Escuchando…');
+  try {
+    const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+    const r = await api.post('/api/ideas/transcribe', { audio: dataUrl });
+    const text = String((r && r.transcript) || '').trim();
+    if (!text) { pzVpEstado(en ? "I couldn't make that out — try again" : 'No se entendió — probá de nuevo'); PZ_VP.busy = false; return; }
+    PZ_VP.transcript = text;
+    pzVpNotaPintar();
+    pzVpEstado('');
+    await pzVpEntender();
+  } catch (e) { pzVpEstado(en ? "It couldn't be sent — try again" : 'No se pudo enviar — probá de nuevo'); }
+  PZ_VP.busy = false;
+}
+async function pzVpEntender() {
+  const en = pzVozEn();
+  const a = pzVpPrimero();
+  if (!a) return;
+  pzVpEstado(en ? 'One moment…' : 'Un momento…');
+  try {
+    const bodyE = { asset_ids: PZ_VP.assets.map((x) => x.id), transcript: PZ_VP.transcript };
+    if (PZ_VP.chipIntencion === 'hoy' || PZ_VP.chipIntencion === 'fecha') bodyE.intencion = PZ_VP.chipIntencion;
+    const r = await api.post('/api/subir/voz/entender', bodyE);
+    if (!r || !r.ok) throw new Error((r && r.error) || 'entender');
+    PZ_VP.entendido = r.entendido || null;
+    PZ_VP.plan = r.plan || null;
+    PZ_VP.guarda = r.guarda || '';
+    pzVpEstado('');
+    pzVpConfPintar();
+  } catch (e) { pzVpEstado(en ? "I couldn't understand that — try again" : 'No pude entender eso — probá de nuevo'); }
+}
+function pzVpChip(v) {
+  const en = pzVozEn();
+  if (PZ_VP.busy) return;
+  if (v === 'tal_cual') {
+    PZ_VP.chipIntencion = 'posteos'; PZ_VP.chipTratamiento = 'tal_cual';
+    PZ_VP.entendido = { intencion: 'posteos', fechaISO: null, motivo: '', condiciones: [], tratamiento: 'tal_cual', ambiguo: false, faltantes: [], duracion_seg: (PZ_VP.entendido && PZ_VP.entendido.duracion_seg) || null };
+    PZ_VP.plan = null; PZ_VP.guarda = '';
+    pzVpChipsPintar(); pzVpConfPintar();
+    return;
+  }
+  if (v === 'posteos') {
+    PZ_VP.chipIntencion = 'posteos'; PZ_VP.chipTratamiento = '';
+    PZ_VP.entendido = { intencion: 'posteos', fechaISO: null, motivo: '', condiciones: [], tratamiento: null, ambiguo: false, faltantes: [] };
+    PZ_VP.plan = null; PZ_VP.guarda = '';
+    pzVpChipsPintar(); pzVpConfPintar();
+    return;
+  }
+  if (v === 'fecha') {
+    PZ_VP.chipIntencion = 'fecha';
+    pzVpChipsPintar();
+    if (PZ_VP.transcript) { pzVpEntender(); return; }
+    // Sin nota todavía no hay día que confirmar: la fecha jamás se
+    // inventa — se pide la nota, que es donde el día vive.
+    pzVpEstado(en ? 'Tell me which day it is, in the voice note' : 'Contame qué día es, en la nota de voz');
+    const conf = document.getElementById('pzVpConf'); if (conf) conf.innerHTML = '';
+  }
+}
+
+/* «Entendí esto»: lo entendido vuelve como línea estructurada y el
+   desplazamiento se DECLARA acá — sin «Va así», el plan no se toca. */
+function pzVpConfLineas() {
+  const en = pzVozEn();
+  const e = PZ_VP.entendido || {};
+  const L = [];
+  const motivoTxt = e.motivo ? (en ? (pzVpMotivoEn(e.motivo)) : e.motivo) : '';
+  if (e.intencion === 'fecha' && e.fechaISO) L.push('📌 <b>' + (en ? 'Special date' : 'Fecha especial') + '</b> · ' + esc(pzVpFechaCorta(e.fechaISO, en)) + (motivoTxt ? ' · ' + esc(motivoTxt) : ''));
+  if (e.intencion === 'hoy') {
+    const plan = PZ_VP.plan;
+    if (plan && plan.motivo === 'ya_salio') L.push('🆕 <b>' + (en ? 'It goes tomorrow' : 'Sale mañana') + '</b>' + (plan.hora ? ' · ' + esc(plan.hora) : '') + ' — ' + (en ? "today's post already went out" : 'el posteo de hoy ya salió'));
+    else if (plan && plan.error) L.push('🆕 <b>' + (en ? 'It goes out today' : 'Sale hoy') + '</b>');
+    else L.push('🆕 <b>' + (en ? 'It goes out today' : 'Sale hoy') + '</b>' + (plan && plan.hora ? ' · ' + esc(plan.hora) : ''));
+  }
+  if (e.intencion === 'posteos') {
+    L.push('✓ ' + (en ? 'It stays in your material, for your posts' : 'Queda en tu material, para tus posteos'));
+    if (e.fechaISO || motivoTxt) L.push('📌 ' + (en ? 'Noted' : 'Anotado') + ': ' + (motivoTxt ? esc(motivoTxt) : '') + (e.fechaISO ? (motivoTxt ? ' · ' : '') + esc(pzVpFechaCorta(e.fechaISO, en)) : ''));
+  }
+  for (const c of (e.condiciones || [])) L.push('🤫 ' + esc(c));
+  if (pzVpEsVideo() && e.tratamiento === 'tal_cual') L.push('🎬 ' + (en ? 'Posted as it is, with its sound' : 'Se publica tal cual, con su sonido') + (e.duracion_seg ? ' · ' + (en ? 'runs ' : 'dura ') + pzVpDurTxt(e.duracion_seg) : ''));
+  if (pzVpEsVideo() && e.tratamiento === 'cortar') L.push('🎬 ' + (en ? 'We cut it and get it ready' : 'Lo cortamos y lo dejamos listo') + (e.duracion_seg ? ' · ' + (en ? 'runs ' : 'dura ') + pzVpDurTxt(e.duracion_seg) : ''));
+  if (PZ_VP.guarda === 'cuenta_propia') L.push('🏠 ' + (en ? 'This account\'s plan is handled by the team by hand — your note is saved, nothing moves on its own' : 'El plan de esta cuenta lo mueve el equipo a mano — tu nota queda guardada, nada se mueve solo'));
+  if (PZ_VP.guarda === 'publishing_stopped') L.push('⏸ ' + (en ? 'Your account is paused — your note is saved and nothing is scheduled until you resume' : 'Tu cuenta está en pausa — tu nota queda guardada y nada se programa hasta que la reanudes'));
+  const plan = PZ_VP.plan;
+  if (plan && Array.isArray(plan.movimientos) && plan.movimientos.length) {
+    L.push('↪️ ' + (plan.movimientos.length === 1
+      ? (en ? 'The post that was on ' + plan.movimientos[0].de_label + ' moves to ' + plan.movimientos[0].a_label + ' — it is not lost, it shifts' : 'El posteo que estaba para ' + plan.movimientos[0].de_label + ' pasa a ' + plan.movimientos[0].a_label + ' — no se pierde, se corre')
+      : (en ? 'Your week shifts as a queue from ' + plan.movimientos[0].de_label + ' — nothing is lost, everything moves one day' : 'Tu semana se corre como una cola desde ' + plan.movimientos[0].de_label + ' — no se pierde nada, todo se corre un día')));
+  }
+  return L;
+}
+function pzVpMotivoEn(m) {
+  const map = { 'Aniversario': 'Anniversary', 'Inauguración': 'Opening', 'Cumpleaños': 'Birthday', 'Degustación': 'Tasting', 'Clase': 'Class', 'Show en vivo': 'Live show', 'Fiesta': 'Party', 'Feria': 'Fair', 'Karaoke': 'Karaoke', 'Evento': 'Event', 'DJ set': 'DJ set' };
+  return map[m] || m;
+}
+function pzVpConfPintar() {
+  const en = pzVozEn();
+  const box = document.getElementById('pzVpConf');
+  if (!box) return;
+  const e = PZ_VP.entendido;
+  if (!e) { box.innerHTML = ''; return; }
+  if (e.ambiguo && !PZ_VP.chipIntencion) {
+    // Lo no resuelto NO se asienta solo: va a la revisión de siempre.
+    box.innerHTML = `<div class="pz-vp-conf"><div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'THIS ONE NEEDS A HUMAN LOOK' : 'ESTA NECESITA UNA MIRADA HUMANA'}</div>
+      <div class="pz-vp-conf-txt">${en ? "I couldn't pin this down on my own, so I won't settle it alone: your note is saved and Posty reviews it with you — your material stays saved either way." : 'Esto no lo puedo cerrar solo, así que no lo asiento solo: tu nota queda guardada y Posty la revisa con vos — tu material queda guardado igual.'}</div>
+      <div class="pz-vp-btns"><button type="button" class="listo pz-vp-va" id="pzVpRevision">${en ? 'Save it for review' : 'Guardarlo para revisión'}</button><button type="button" class="chip" id="pzVpCorregir1">${en ? 'Correct' : 'Corregir'}</button></div></div>`;
+    const rv = document.getElementById('pzVpRevision'); if (rv) rv.onclick = () => pzVpConfirmar('revision');
+    const co = document.getElementById('pzVpCorregir1'); if (co) co.onclick = () => pzVpCorregir();
+    return;
+  }
+  if ((e.faltantes || []).includes('tratamiento') && !e.tratamiento && !PZ_VP.chipTratamiento) {
+    box.innerHTML = `<div class="pz-vp-conf"><div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'ONE THING MISSING' : 'FALTA UN DATO'}</div>
+      <div class="pz-vp-conf-txt">${en ? 'I got where the video goes, but not how: as it is with its sound, or do we cut it?' : 'Entendí a dónde va el video, pero no cómo: ¿tal cual con su sonido, o lo cortamos?'}</div>
+      <div class="pz-vp-btns"><button type="button" class="chip" id="pzVpTratTal">${en ? 'As it is, with its sound' : 'Tal cual, con su sonido'}</button><button type="button" class="chip" id="pzVpTratCor">${en ? 'Cut it' : 'A cortar'}</button></div></div>`;
+    const tt = document.getElementById('pzVpTratTal'); if (tt) tt.onclick = () => pzVpSetTratamiento('tal_cual');
+    const tc = document.getElementById('pzVpTratCor'); if (tc) tc.onclick = () => pzVpSetTratamiento('cortar');
+    return;
+  }
+  if ((e.faltantes || []).includes('fecha') && !e.fechaISO) {
+    box.innerHTML = `<div class="pz-vp-conf"><div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'ONE THING MISSING' : 'FALTA UN DATO'}</div>
+      <div class="pz-vp-conf-txt">${en ? 'I got that it is a special date' : 'Entendí que es una fecha especial'}${e.motivo ? ' (' + esc(en ? pzVpMotivoEn(e.motivo) : e.motivo) + ')' : ''}${en ? ', but not which day. Tell me the day in a voice note — I never guess a date.' : ', pero no qué día. Decime el día en una nota de voz — una fecha no se adivina.'}</div>
+      <div class="pz-vp-btns"><button type="button" class="chip" id="pzVpCorregir2">${en ? 'Correct' : 'Corregir'}</button></div></div>`;
+    const co = document.getElementById('pzVpCorregir2'); if (co) co.onclick = () => pzVpCorregir();
+    return;
+  }
+  const lineas = pzVpConfLineas();
+  box.innerHTML = `<div class="pz-vp-conf"><div class="kick"><img src="/ai-avatar.png" alt=""> ${en ? 'GOT IT — THIS IS WHAT I UNDERSTOOD' : 'ENTENDÍ ESTO'}</div>
+    <div class="pz-vp-conf-txt">${lineas.join('<br>')}</div>
+    <div class="pz-vp-btns"><button type="button" class="listo pz-vp-va" id="pzVpVa">${en ? "That's it ✓" : 'Va así ✓'}</button><button type="button" class="chip" id="pzVpCorregir3">${en ? 'Correct' : 'Corregir'}</button></div>
+    <div class="pz-vp-conf-nota">${en ? 'Nothing is settled without this yes.' : 'Nada queda asentado sin este sí.'}</div></div>`;
+  const va = document.getElementById('pzVpVa'); if (va) va.onclick = () => pzVpConfirmar('');
+  const co3 = document.getElementById('pzVpCorregir3'); if (co3) co3.onclick = () => pzVpCorregir();
+}
+function pzVpSetTratamiento(v) {
+  PZ_VP.chipTratamiento = v;
+  if (PZ_VP.entendido) PZ_VP.entendido.tratamiento = v;
+  pzVpConfPintar();
+}
+function pzVpCorregir() {
+  PZ_VP.entendido = null; PZ_VP.plan = null; PZ_VP.guarda = ''; PZ_VP.chipIntencion = ''; PZ_VP.chipTratamiento = '';
+  const conf = document.getElementById('pzVpConf'); if (conf) conf.innerHTML = '';
+  pzVpChipsPintar();
+  pzVpEstado('');
+}
+async function pzVpConfirmar(forzado) {
+  const en = pzVozEn();
+  if (PZ_VP.busy || !PZ_VP.assets.length) return;
+  PZ_VP.busy = true;
+  pzSubirErr('');
+  try {
+    const body = { asset_ids: PZ_VP.assets.map((x) => x.id), transcript: PZ_VP.transcript };
+    if (forzado) body.intencion = forzado;
+    else if (PZ_VP.chipIntencion) body.intencion = PZ_VP.chipIntencion;
+    if (PZ_VP.chipTratamiento) body.tratamiento = PZ_VP.chipTratamiento;
+    if (PZ_VP.editReciboId) body.recibo_id = PZ_VP.editReciboId;
+    const r = await api.post('/api/subir/voz/confirmar', body);
+    if (!r || !r.ok) throw new Error((r && r.error) || 'confirmar');
+    // Listo: la pregunta se cierra, el lote se vacía y el recibo
+    // queda pegado al material en «Tu material».
+    PZ_VP.assets = []; PZ_VP.transcript = ''; PZ_VP.entendido = null; PZ_VP.plan = null; PZ_VP.editReciboId = 0; PZ_VP.chipIntencion = ''; PZ_VP.chipTratamiento = '';
+    const card = document.getElementById('pzVpCard'); if (card) card.hidden = true;
+    const conf = document.getElementById('pzVpConf'); if (conf) conf.innerHTML = '';
+    pzVpNotaPintar(); pzVpPintarLote();
+    await pzVpMaterialPintar(true);
+  } catch (e) {
+    pzSubirErr(String((e && e.message) || (en ? "It couldn't be done — try again" : 'No se pudo — probá de nuevo')));
+  }
+  PZ_VP.busy = false;
+}
+function pzVpDespues() {
+  // Salida digna: el material queda como material de siempre y la
+  // pregunta no retiene nada. Posty puede repreguntar en el chat.
+  PZ_VP.assets = []; PZ_VP.transcript = ''; PZ_VP.entendido = null; PZ_VP.plan = null; PZ_VP.editReciboId = 0;
+  const card = document.getElementById('pzVpCard'); if (card) card.hidden = true;
+  const conf = document.getElementById('pzVpConf'); if (conf) conf.innerHTML = '';
+  pzVpNotaPintar(); pzVpPintarLote();
+}
+/* «Tu material»: cada pieza con su recibo pegado — qué se entendió,
+   a dónde va y sus salidas (Cambiar / Deshacer). */
+function pzVpReciboLinea(r) {
+  const en = pzVozEn();
+  const d = r.datos || {};
+  const parts = [];
+  if (r.modo === 'hoy' || r.modo === 'fecha') {
+    let head = '📌 <b>' + (en ? 'Special date' : 'Fecha especial') + '</b>';
+    if (r.modo === 'hoy') head += ' · ' + (en ? 'today' : 'hoy');
+    else if (d.fechaISO) head += ' · ' + esc(pzVpFechaCorta(d.fechaISO, en));
+    if (d.motivo) head += ' · ' + esc(en ? pzVpMotivoEn(d.motivo) : d.motivo);
+    parts.push(head);
+    if (r.dia_label) parts.push('🗓 ' + esc(r.dia_label) + (r.hora ? ' · ' + esc(r.hora) : ''));
+  } else if (r.modo === 'posteos') {
+    parts.push('✓ ' + (en ? 'In your material, for your posts' : 'En tu material, para tus posteos'));
+    if (d.motivo) parts.push(esc(en ? pzVpMotivoEn(d.motivo) : d.motivo));
+    if (d.fechaISO) parts.push('📌 ' + esc(pzVpFechaCorta(d.fechaISO, en)));
+  } else if (r.modo === 'revision') {
+    parts.push('📝 ' + (en ? 'Your note is saved — Posty is reviewing it' : 'Tu nota quedó guardada — Posty la está revisando'));
+  } else if (r.modo === 'casa_manual') {
+    parts.push('🏠 ' + (en ? 'Note saved — this account\'s plan is moved by hand' : 'Nota guardada — el plan de esta cuenta se mueve a mano'));
+    if (d.fechaISO) parts.push('📌 ' + esc(pzVpFechaCorta(d.fechaISO, en)));
+  } else if (r.modo === 'frenado') {
+    parts.push('⏸ ' + (en ? 'Note saved — your account is paused' : 'Nota guardada — tu cuenta está en pausa'));
+  }
+  for (const c of (d.condiciones || [])) parts.push('🤫 ' + esc(c));
+  if (d.tratamiento === 'tal_cual') parts.push('🎬 ' + (en ? 'As it is, with its sound' : 'Tal cual, con su sonido'));
+  if (d.tratamiento === 'cortar') parts.push('🎬 ' + (en ? 'To be cut' : 'A cortar'));
+  if (r.movimientos && r.movimientos.length) parts.push('↪️ ' + (en ? 'The week shifted as a queue' : 'La semana se corrió como una cola'));
+  return parts.join(' · ');
+}
+async function pzVpMaterialPintar(scroll) {
+  const en = pzVozEn();
+  const box = document.getElementById('pzVpMaterial');
+  if (!box) return;
+  let data = null;
+  try { data = await api.get('/api/subir/recibos'); } catch (e) {}
+  const recibos = (data && data.recibos) || [];
+  if (!recibos.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="pz-vp-mat-t">${en ? 'YOUR MATERIAL' : 'TU MATERIAL'}</div>` + recibos.map((r) => `
+    <div class="card pz-vp-mat">
+      ${r.thumb ? `<img class="big" src="${esc(r.thumb)}" alt="">` : ''}
+      <div class="receipt"><span>${pzVpReciboLinea(r)}</span><span class="pz-vp-mat-btns">
+        <button type="button" class="pz-vp-link" data-vp-cambiar="${r.id}">${en ? 'Change' : 'Cambiar'}</button>${(r.post_id || (r.movimientos && r.movimientos.length)) ? `<button type="button" class="pz-vp-link" data-vp-deshacer="${r.id}">${en ? 'Undo' : 'Deshacer'}</button>` : ''}
+      </span></div>
+    </div>`).join('');
+  box.querySelectorAll('[data-vp-cambiar]').forEach((b) => { b.onclick = () => pzVpCambiar(Number(b.getAttribute('data-vp-cambiar')), recibos); });
+  box.querySelectorAll('[data-vp-deshacer]').forEach((b) => { b.onclick = () => pzVpDeshacer(Number(b.getAttribute('data-vp-deshacer'))); });
+  if (scroll) { try { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
+}
+function pzVpCambiar(reciboId, recibos) {
+  const r = (recibos || []).find((x) => x.id === reciboId);
+  if (!r) return;
+  // Cambiar reabre la pregunta sobre ESA pieza: al confirmar, el
+  // servidor deshace el recibo anterior antes de asentar el nuevo.
+  PZ_VP.assets = [{ id: r.asset_id, kind: r.kind, thumb: r.thumb || '' }];
+  PZ_VP.editReciboId = reciboId;
+  PZ_VP.transcript = (r.datos && r.datos.transcript) || '';
+  PZ_VP.entendido = null; PZ_VP.plan = null;
+  pzVpPintarLote();
+  pzVpNotaPintar();
+  pzVpMostrarPregunta();
+  if (PZ_VP.transcript) pzVpEntender();
+}
+async function pzVpDeshacer(reciboId) {
+  const en = pzVozEn();
+  try {
+    const r = await api.post('/api/subir/voz/deshacer', { recibo_id: reciboId });
+    if (!r || !r.ok) throw new Error((r && r.error) || 'deshacer');
+    await pzVpMaterialPintar(false);
+  } catch (e) {
+    pzSubirErr(String((e && e.message) || (en ? "It couldn't be undone" : 'No se pudo deshacer')));
+  }
+}
+function pzVpBind() {
+  const mic = document.getElementById('pzVpMic');
+  if (mic) mic.onclick = () => pzVpRecToggle();
+  const des = document.getElementById('pzVpDespues');
+  if (des) des.onclick = () => pzVpDespues();
+  pzVpMaterialPintar(false);
+}
 function bindSubir() {
   const pick = () => { const inp = document.getElementById('pzSubirFile'); if (inp) { inp.value = ''; inp.click(); } };
   const zona = document.getElementById('pzSubirZona');
@@ -32384,6 +32731,7 @@ function bindSubir() {
   const listo = document.getElementById('pzSubirListo');
   if (listo) listo.onclick = () => pzSubirResolver(false);
   bindEventoCero();
+  pzVpBind();
 }
 
 

@@ -72,6 +72,7 @@ const photoCliente = require('./photo-cliente.js');
 const fotoGrounding = require('./foto-grounding'); // (CONTENIDO-FOTO) gate foto↔texto
 const mediaCliente = require('./media-cliente.js');
 const vozDueno = require('./voz-dueno.js'); // VOZ DEL DUENO -> POSTEO (29/10/2026, local)
+const subirVozPrimero = require('./subir-voz-primero.js'); // LOTE SUBIR-VOZ-PRIMERO: pasada estructurada de la nota de voz post-subida
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { normalizeIgQuery, isValidIgQuery, lookupIgProfile } = require('./ig-search'); // LOTE IG-CON-BUSCADOR: búsqueda pública por @
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -19479,6 +19480,217 @@ function subirMoverPost(uid, postId, destYmd) {
     return iso;
   } catch (e) { return null; }
 }
+// ===== LOTE SUBIR-VOZ-PRIMERO (20/11) — la cola que se corre =====
+// La regla del dueño (06:10): si lo subido sale el día X, ocupa X y el
+// plan se corre COMO COLA — el de X a X+1, cada siguiente un día más,
+// mismo orden y misma hora; ninguno se pierde ni se duplica; el
+// último desplazado queda primero en la cola de la semana siguiente.
+// Esto NO es el desplazamiento de siempre de subirPlanDia (que salta
+// UN posteo al próximo día libre): acá la cadena se corre en orden,
+// empujando solo lo que choca (en una semana llena, todo).
+//
+// GUARDAS (ninguna se negocia):
+// · Un día con dayStop NO recibe posteos desplazados: la cadena lo
+//   salta y el día queda vacío, como el dueño lo dejó. (El posteo
+//   NUEVO sí puede caer en un día con stop: es el gesto deliberado
+//   del propio cliente sobre ese día — la regla PAUSA-DURABLE de
+//   siempre — y al caer limpia el stop, espejo del resolver.)
+// · Los posteos del cliente (subirEsDeCliente), los fijados y los
+//   frenados por el dueño (user_stopped/frenada) NO se mueven: son
+//   muros. Si el muro ocupa el día de inserción, la inserción corre
+//   al próximo día válido y la confirmación dice el día real.
+// · La pieza gobernada de una serie tampoco se mueve (espejo de
+//   subirPlanDia).
+// · Los días cerrados del negocio no reciben desplazados.
+// · La cadencia del video (mar/jue) aplica al posteo INSERTADO, como
+//   en subirPlanDia; a los desplazados no se les impone (espejo de
+//   subirMoverPost, que mueve conservando la hora).
+function subirVozEsInmovil(uid, p) {
+  if (!p) return true;
+  if (subirEsDeCliente(p)) return true;
+  if (p.pinned) return true;
+  if (Number(p.user_stopped || 0) === 1) return true;
+  if (Number(p.frenada || 0) === 1) return true;
+  try { if (serieFeed.esPiezaGobernada(db, p, userTz(uid))) return true; } catch (e) {}
+  return false;
+}
+function subirVozGuarda(uid) {
+  // La cuenta de la casa no mueve su plan por esta vía (su plan lo
+  // mueve el equipo a mano — FRENO-CUENTA-PROPIA) y una cuenta con el
+  // stop de publicación puesto no crea ni corre nada: la anotación se
+  // guarda igual y el recibo dice la verdad.
+  if (esCuentaPropia(uid)) return 'cuenta_propia';
+  if (publishingStopped(uid)) return 'publishing_stopped';
+  return '';
+}
+// El plan, SIN aplicar: { ok, insertYmd, hhmm, movimientos[], motivo }
+// o { ok:false, motivo }. Lo usan la vista previa de «Entendí esto»
+// (entender) y la aplicación real (confirmar), para que lo declarado
+// en la confirmación sea lo que después se ejecuta.
+function subirVozPlan(uid, kind, destinoYmd) {
+  const tz = userTz(uid);
+  const todayK = tzToday(tz);
+  const hhmm = subirPlannerWall(uid).hhmm;
+  const closed = closedDaysOf(uid);
+  const stops = dayStopsSet(uid);
+  const diaValido = (k) => {
+    const wd = weekdayOfYmd(k);
+    if (closed.has(wd)) return false;
+    if (kind === 'video' && wd !== 2 && wd !== 4) return false;
+    return true;
+  };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(destinoYmd || ''))) return { ok: false, motivo: 'sin_dia' };
+  let motivo = '';
+  let dest = String(destinoYmd);
+  if (dest < todayK) return { ok: false, motivo: 'sin_dia' };
+  if (dest === todayK) {
+    // Casos borde mandados: hoy ya publicado → la confirmación ofrece
+    // mañana, dicho en palabras; hora de siempre ya pasada → mañana.
+    if (subirHoyYaSalio(uid)) { motivo = 'ya_salio'; dest = shiftDays(todayK, 1); }
+    else {
+      const isoT = zonedWallToUtc(todayK + ' ' + hhmm, tz);
+      if (!isoT || new Date(isoT).getTime() <= Date.now()) { motivo = 'hora_pasada'; dest = shiftDays(todayK, 1); }
+    }
+  }
+  let insertYmd = null;
+  for (let k = dest; k <= shiftDays(dest, 21); k = shiftDays(k, 1)) { if (diaValido(k)) { insertYmd = k; break; } }
+  if (!insertYmd) return { ok: false, motivo: 'sin_lugar' };
+  const taken = subirTakenMap(uid);
+  let occ = taken.get(insertYmd) || null;
+  let guard = 0;
+  while (occ && subirVozEsInmovil(uid, occ)) {
+    if (!motivo) motivo = 'ocupado';
+    let next = null;
+    for (let k = shiftDays(insertYmd, 1); k <= shiftDays(insertYmd, 21); k = shiftDays(k, 1)) { if (diaValido(k)) { next = k; break; } }
+    if (!next) return { ok: false, motivo: 'sin_lugar' };
+    insertYmd = next; occ = taken.get(insertYmd) || null;
+    if (++guard > 25) return { ok: false, motivo: 'sin_lugar' };
+  }
+  const asignados = new Set();
+  const librePara = (d) => {
+    if (stops.has(d)) return false;
+    if (closed.has(weekdayOfYmd(d))) return false;
+    if (asignados.has(d)) return false;
+    const o = taken.get(d);
+    if (o && subirVozEsInmovil(uid, o)) return false;
+    return true;
+  };
+  const movimientos = [];
+  let pendiente = occ;
+  let desdeDia = insertYmd;
+  while (pendiente) {
+    const tope = shiftDays(desdeDia, 30);
+    let d = shiftDays(desdeDia, 1);
+    while (d <= tope && !librePara(d)) d = shiftDays(d, 1);
+    if (d > tope) return { ok: false, motivo: 'sin_lugar' };
+    movimientos.push({ post_id: pendiente.id, de_ymd: ymdInTz(pendiente.scheduled_at, tz), a_ymd: d, hhmm: String(wallInTz(pendiente.scheduled_at, tz) || '').slice(11, 16) });
+    asignados.add(d);
+    const sig = taken.get(d) || null;
+    pendiente = (sig && sig.id !== pendiente.id && !subirVozEsInmovil(uid, sig)) ? sig : null;
+    desdeDia = d;
+  }
+  return { ok: true, insertYmd, hhmm, movimientos, motivo };
+}
+// Aplica el plan: corre la cadena (verificado, con reversa si algo
+// falla) y crea el posteo del material en el día de inserción. El
+// caption sale del mismo motor del resolver (albumPropuesta con el
+// brief de la anotación, o el caption propio si vino). Devuelve
+// { ok, postId, movimientos:[{post_id, de_ymd, a_ymd, de_iso, a_iso}] }.
+async function subirVozAplicarPlan(uid, asset, kind, datos, plan, cap) {
+  let caption = '', hashtags = '';
+  if (cap.modo === 'mio') {
+    caption = cap.texto;
+    if (!caption) return { ok: false, error: 'Pegá tu caption o dejá que lo escriba Posty' };
+  } else {
+    const parts = [];
+    if (datos.motivo) parts.push('Es para una fecha especial: ' + datos.motivo + (datos.fechaTexto ? ' — ' + datos.fechaTexto : ''));
+    for (const c of (datos.condiciones || [])) parts.push('Condición del dueño: ' + c);
+    if (datos.transcript) parts.push('Dato extra del dueño (nota de voz): ' + datos.transcript);
+    let prop = null;
+    try { prop = await albumPropuesta(uid, asset.id, parts.join(' · '), ''); } catch (e) { prop = null; }
+    if (!prop || prop.error) return { ok: false, error: 'No pude preparar el posteo desde este material — probá de nuevo' };
+    caption = prop.caption; hashtags = prop.hashtags || '';
+  }
+  const tz = userTz(uid);
+  const hechos = [];
+  const revertir = () => { for (const h of [...hechos].reverse()) { try { subirMoverPost(uid, h.post_id, h.de_ymd); } catch (e) {} } };
+  for (const mv of plan.movimientos) {
+    const antes = db.prepare('SELECT scheduled_at FROM posts WHERE id = ? AND user_id = ?').get(mv.post_id, uid);
+    const iso = subirMoverPost(uid, mv.post_id, mv.a_ymd);
+    if (!iso) { revertir(); return { ok: false, error: 'No pude correr la semana — probá de nuevo' }; }
+    hechos.push({ post_id: mv.post_id, de_ymd: mv.de_ymd, a_ymd: mv.a_ymd, de_iso: antes ? antes.scheduled_at : null, a_iso: iso });
+  }
+  const insertIso = zonedWallToUtc(plan.insertYmd + ' ' + plan.hhmm, tz);
+  let postId = 0;
+  try {
+    if (kind === 'video') {
+      const full = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(asset.id, uid);
+      const built = await buildClientVideoReelPost(uid, full, 'subir', { caption, hashtags });
+      if (!built || built.error || built.gated || !built.postId) throw new Error('video');
+      postId = Number(built.postId);
+      db.prepare('UPDATE posts SET scheduled_at = ?, foto_asset_id = ?, week_key = ?, subir_nuevo = 1 WHERE id = ?').run(insertIso, asset.id, mondayKeyOf(plan.insertYmd), postId);
+    } else {
+      const info = db.prepare(`INSERT INTO posts (user_id, caption, hashtags, image_path, media_type, status, scheduled_at, client_photo, foto_asset_id, source, week_key, subir_nuevo, created_at) VALUES (?,?,?,?,?, 'draft', ?, 1, ?, 'subir', ?, 1, datetime('now'))`).run(uid, caption, hashtags, asset.file_path, 'image', insertIso, asset.id, mondayKeyOf(plan.insertYmd));
+      postId = Number(info.lastInsertRowid);
+    }
+  } catch (e) {
+    revertir();
+    return { ok: false, error: kind === 'video' ? 'No pude armar el video — probá de nuevo' : 'No pude preparar el posteo desde este material — probá de nuevo' };
+  }
+  // El tratamiento «a cortar» se trabaja (subtítulos, espejo del
+  // resolver); «tal cual» sale como vino, sin tocar ni el detector.
+  let subsOk = false;
+  if (kind === 'video' && datos.tratamiento === 'cortar') { try { subsOk = await subirAplicarSubtitulos(uid, postId); } catch (e) {} }
+  try { dayStopClear(uid, plan.insertYmd); } catch (e) {}
+  try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('armar', asset.id); } catch (e) {}
+  return { ok: true, postId, movimientos: hechos, subsOk };
+}
+function subirVozReciboRow(uid, id) {
+  try { return db.prepare('SELECT * FROM subir_recibos WHERE id = ? AND user_id = ?').get(Number(id) || 0, uid) || null; } catch (e) { return null; }
+}
+// Deshacer un recibo: borra el posteo creado (si todavía no salió) y
+// restaura cada posteo corrido a su día y hora exactos — solo si
+// sigue donde este lote lo dejó (si alguien lo movió después, no se
+// pisa: se declara parcial). El material vuelve a estar libre.
+function subirVozDeshacerRecibo(uid, recibo) {
+  let movs = [];
+  try { movs = JSON.parse(recibo.movimientos || '[]'); } catch (e) { movs = []; }
+  if (recibo.post_id) {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(recibo.post_id, uid);
+    if (post) {
+      if (post.status === 'published' || post.status === 'publishing') return { ok: false, error: 'ya_salio' };
+      db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(post.id, uid);
+    }
+  }
+  let restaurados = 0, parcial = false;
+  for (const mv of [...movs].reverse()) {
+    const p = db.prepare('SELECT scheduled_at FROM posts WHERE id = ? AND user_id = ?').get(mv.post_id, uid);
+    if (!p) { parcial = true; continue; }
+    if (mv.a_iso && p.scheduled_at !== mv.a_iso) { parcial = true; continue; }
+    const iso = subirMoverPost(uid, mv.post_id, mv.de_ymd);
+    if (iso) restaurados++; else parcial = true;
+  }
+  try { db.prepare("UPDATE assets SET upload_choice = 'despues' WHERE id = ? AND user_id = ?").run(recibo.asset_id, uid); } catch (e) {}
+  db.prepare("UPDATE subir_recibos SET estado = 'deshecho', updated_at = datetime('now') WHERE id = ?").run(recibo.id);
+  return { ok: true, restaurados, parcial };
+}
+function subirVozReciboJSON(uid, r) {
+  let datos = {}; try { datos = JSON.parse(r.datos || '{}'); } catch (e) {}
+  let movs = []; try { movs = JSON.parse(r.movimientos || '[]'); } catch (e) {}
+  const asset = sftAssetPropio(uid, r.asset_id);
+  let diaLabel = '', hora = '';
+  if (r.post_id) {
+    const p = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(r.post_id);
+    if (p && p.scheduled_at) { const sl = armarSlotLabel(uid, p.scheduled_at); diaLabel = sl.dia_label; hora = sl.hora; }
+  }
+  return {
+    id: r.id, asset_id: r.asset_id, kind: r.kind, modo: r.modo, datos,
+    post_id: r.post_id || null, pedido_id: r.pedido_id || null,
+    movimientos: movs.map((m) => ({ post_id: m.post_id, de_ymd: m.de_ymd, a_ymd: m.a_ymd })),
+    estado: r.estado, thumb: asset ? (asset.thumb_path || asset.file_path || '') : '', file_path: asset ? asset.file_path : '',
+    dia_label: diaLabel, hora, created_at: r.created_at,
+  };
+}
 // Subtítulos quemados DIRECTO sobre el posteo (sin propuesta): espejo
 // de la rama SRT del handler /api/drafts/:id/video-subtitles — mismo
 // texto (transcripción si hay clave; si no, el caption), mismo estilo
@@ -19970,6 +20182,171 @@ app.post('/api/subir/resolver', requireAuth, async (req, res) => {
     const esHoyFin = !!(postRow && postRow.scheduled_at) && ymdInTz(postRow.scheduled_at, userTz(uid)) === tzToday(userTz(uid));
     return res.json({ ok: true, modo: 'posteado', post_id: postId, kind, scheduled_at: postRow ? postRow.scheduled_at : plan.iso, dia: slF.dia, dia_label: slF.dia_label, hora: slF.hora, caption, mejora_aplicada: mejoraOk, subs_aplicados: subsOk, subs_quemados: subsQuemados, desplazado, semana_siguiente: !!plan.semana_siguiente, es_hoy: esHoyFin, hoy_motivo: plan.hoy_motivo || '' });
   } catch (e) { console.error('[subir-resolver]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la subida' }); }
+});
+
+// ===== LOTE SUBIR-VOZ-PRIMERO (20/11) — el flujo post-subida =====
+// El material ya está guardado (POST /api/album/photo, como siempre):
+// estos endpoints ANOTAN sobre seguro, nunca retienen la subida.
+//
+// POST /api/subir/voz/entender — la pasada estructurada sobre la
+// transcripción (módulo puro subir-voz-primero) + la VISTA PREVIA del
+// plan de cola. No escribe nada: lo que la confirmación declara es lo
+// que confirmar ejecuta después, recomputado en el momento.
+app.post('/api/subir/voz/entender', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const ids = (Array.isArray(b.asset_ids) ? b.asset_ids : [b.asset_id]).map((x) => parseInt(x, 10) || 0).filter(Boolean);
+    const first = ids.length ? sftAssetPropio(uid, ids[0]) : null;
+    if (!first) return res.status(404).json({ ok: false, error: 'Ese material ya no está — subilo de nuevo' });
+    const kind = first.kind === 'video' ? 'video' : 'foto';
+    const tz = userTz(uid);
+    const transcript = String(b.transcript || '').trim().slice(0, 2000);
+    const ent = subirVozPrimero.parseNotaVoz(transcript, { hoy: tzToday(tz), lang: langOfUser(uid), kind });
+    // El chip del cliente puede fijar la intención (nunca una fecha):
+    // el plan de la confirmación se computa para ESA intención, así
+    // el desplazamiento se declara siempre antes del «Va así».
+    const forzadaEnt = ['hoy', 'fecha'].includes(String(b.intencion || '')) ? String(b.intencion) : '';
+    if (forzadaEnt) ent.intencion = forzadaEnt;
+    // La duración del video la sabe Posty (ffprobe): no se pregunta.
+    let duracion = null;
+    if (kind === 'video') {
+      try { const abs = path.join(MEDIA_DIR, path.basename(first.file_path)); const d = await mcFfprobeDur(abs); if (d) duracion = Math.round(d); } catch (e) {}
+    }
+    const guarda = (ent.intencion === 'hoy' || ent.intencion === 'fecha') ? subirVozGuarda(uid) : '';
+    let plan = null;
+    if ((ent.intencion === 'hoy' || (ent.intencion === 'fecha' && ent.fechaISO)) && !guarda) {
+      const dest = ent.intencion === 'hoy' ? tzToday(tz) : ent.fechaISO;
+      const p = subirVozPlan(uid, kind, dest);
+      if (p.ok) {
+        const slI = armarSlotLabel(uid, zonedWallToUtc(p.insertYmd + ' ' + p.hhmm, tz));
+        plan = {
+          insert_ymd: p.insertYmd, dia_label: slI.dia_label, hora: slI.hora, motivo: p.motivo || '',
+          movimientos: p.movimientos.map((mv) => ({
+            post_id: mv.post_id, de_ymd: mv.de_ymd, a_ymd: mv.a_ymd,
+            de_label: armarSlotLabel(uid, zonedWallToUtc(mv.de_ymd + ' ' + (mv.hhmm || p.hhmm), tz)).dia_label,
+            a_label: armarSlotLabel(uid, zonedWallToUtc(mv.a_ymd + ' ' + (mv.hhmm || p.hhmm), tz)).dia_label,
+          })),
+        };
+      } else plan = { error: p.motivo };
+    }
+    return res.json({ ok: true, entendido: { ...ent, duracion_seg: duracion }, plan, guarda });
+  } catch (e) { console.error('[subir-voz-entender]', e.message); return res.status(500).json({ ok: false, error: 'No pude entender la nota — probá de nuevo' }); }
+});
+
+// POST /api/subir/voz/confirmar — el «Va así». La estructura se
+// RE-PARSEA acá desde la transcripción (nunca se confía la del
+// cliente); los chips solo pueden fijar intención/tratamiento, jamás
+// una fecha. Sin «Va así» no llega nada a este endpoint: nada se
+// asienta sin la confirmación.
+app.post('/api/subir/voz/confirmar', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const ids = (Array.isArray(b.asset_ids) ? b.asset_ids : [b.asset_id]).map((x) => parseInt(x, 10) || 0).filter(Boolean);
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Falta el material' });
+    const assets = ids.map((id) => sftAssetPropio(uid, id)).filter(Boolean);
+    if (!assets.length) return res.status(404).json({ ok: false, error: 'Ese material ya no está — subilo de nuevo' });
+    const first = assets[0];
+    const kind = first.kind === 'video' ? 'video' : 'foto';
+    const tz = userTz(uid);
+    const transcript = String(b.transcript || '').trim().slice(0, 2000);
+    const ent = subirVozPrimero.parseNotaVoz(transcript, { hoy: tzToday(tz), lang: langOfUser(uid), kind });
+    const forzada = ['hoy', 'fecha', 'posteos', 'revision'].includes(String(b.intencion || '')) ? String(b.intencion) : '';
+    if (forzada && forzada !== 'revision') ent.intencion = forzada;
+    if (kind === 'video' && ['tal_cual', 'cortar'].includes(String(b.tratamiento || ''))) ent.tratamiento = String(b.tratamiento);
+    const cap = { modo: String(b.caption_modo || 'posty') === 'mio' ? 'mio' : 'posty', texto: String(b.caption_text || '').trim().slice(0, 2200) };
+    // «Cambiar»: el recibo anterior se deshace primero y queda
+    // marcado reemplazado. Si su posteo ya salió, el cambio frena
+    // acá y no se toca nada.
+    const prevId = parseInt(b.recibo_id, 10) || 0;
+    if (prevId) {
+      const previo = subirVozReciboRow(uid, prevId);
+      if (previo && previo.estado === 'activo') {
+        if (previo.modo === 'revision') {
+          db.prepare("UPDATE subir_recibos SET estado = 'reemplazado', updated_at = datetime('now') WHERE id = ?").run(previo.id);
+        } else {
+          const d = subirVozDeshacerRecibo(uid, previo);
+          if (!d.ok) return res.status(409).json({ ok: false, error: 'Ese posteo ya salió — no se puede cambiar desde acá' });
+          db.prepare("UPDATE subir_recibos SET estado = 'reemplazado', updated_at = datetime('now') WHERE id = ?").run(previo.id);
+        }
+      }
+    }
+    const datosBase = { intencion: ent.intencion, fechaISO: ent.fechaISO, fechaTexto: ent.fechaTexto, motivo: ent.motivo, condiciones: ent.condiciones, tratamiento: ent.tratamiento, transcript };
+    const crearRecibo = (asset, modo, datos, extra) => {
+      const info = db.prepare(`INSERT INTO subir_recibos (user_id, asset_id, kind, modo, datos, post_id, pedido_id, movimientos) VALUES (?,?,?,?,?,?,?,?)`)
+        .run(uid, asset.id, asset.kind === 'video' ? 'video' : 'foto', modo, JSON.stringify(datos), (extra && extra.post_id) || null, (extra && extra.pedido_id) || null, JSON.stringify((extra && extra.movimientos) || []));
+      return Number(info.lastInsertRowid);
+    };
+    const grupoPosteos = () => { for (const a of assets.slice(1)) crearRecibo(a, 'posteos', { ...datosBase, grupo_de: first.id }, {}); };
+    // LA COSTURA CON LA DOCTRINA DE VOZ (17/11): lo que la pasada
+    // estructurada no resolvió NO se asienta solo — la nota cae a la
+    // revisión de siempre (subir_pedidos_voz, estado
+    // pendiente_revision) y la atiende la línea a mano de bamboo. El
+    // material queda guardado y el recibo dice la verdad.
+    if (forzada === 'revision' || ent.ambiguo) {
+      const pedidoId = subirPedidoCrear(uid, first, kind, transcript, { desde: 'voz_primero', intencion: ent.intencion || '' });
+      try { db.prepare('UPDATE assets SET upload_choice = ? WHERE id = ?').run('pedido_revision', first.id); } catch (e) {}
+      const rid = crearRecibo(first, 'revision', datosBase, { pedido_id: pedidoId });
+      grupoPosteos();
+      return res.json({ ok: true, modo: 'revision', recibo_id: rid, pedido_id: pedidoId, kind });
+    }
+    if (!ent.intencion) return res.status(400).json({ ok: false, error: 'No me quedó claro — contámelo de nuevo o mandalo a revisión' });
+    if (ent.intencion === 'fecha' && !ent.fechaISO) return res.status(400).json({ ok: false, error: 'Falta el día — decime qué día es', codigo: 'fecha_ausente' });
+    if (ent.faltantes.includes('tratamiento') && !ent.tratamiento) return res.status(400).json({ ok: false, error: '¿El video va tal cual o lo cortamos?', codigo: 'tratamiento_dudoso' });
+    // «Usala en mis posteos»: el material queda como material con su
+    // anotación pegada (el recibo). Ningún plan se toca.
+    if (ent.intencion === 'posteos') {
+      const rid = crearRecibo(first, 'posteos', datosBase, {});
+      grupoPosteos();
+      return res.json({ ok: true, modo: 'posteos', recibo_id: rid, kind });
+    }
+    // Sale hoy / es una fecha: las guardas mandan ANTES que el plan.
+    // La anotación se guarda igual (recibo casa_manual / frenado) y
+    // nada se crea ni se corre.
+    const guarda = subirVozGuarda(uid);
+    if (guarda) {
+      const modo = guarda === 'cuenta_propia' ? 'casa_manual' : 'frenado';
+      const rid = crearRecibo(first, modo, datosBase, {});
+      grupoPosteos();
+      return res.json({ ok: true, modo, recibo_id: rid, kind, guarda });
+    }
+    const dest = ent.intencion === 'hoy' ? tzToday(tz) : ent.fechaISO;
+    const plan = subirVozPlan(uid, kind, dest);
+    if (!plan.ok) return res.status(400).json({ ok: false, error: 'No pude ubicarlo en la semana — probá de nuevo', codigo: plan.motivo });
+    const ap = await subirVozAplicarPlan(uid, first, kind, datosBase, plan, cap);
+    if (!ap.ok) return res.status(400).json({ ok: false, error: ap.error });
+    const rid = crearRecibo(first, ent.intencion, datosBase, { post_id: ap.postId, movimientos: ap.movimientos });
+    grupoPosteos();
+    const postRow = db.prepare('SELECT scheduled_at FROM posts WHERE id = ?').get(ap.postId);
+    const slF = postRow && postRow.scheduled_at ? armarSlotLabel(uid, postRow.scheduled_at) : { dia_label: '', hora: '' };
+    return res.json({ ok: true, modo: ent.intencion, recibo_id: rid, post_id: ap.postId, kind, scheduled_at: postRow ? postRow.scheduled_at : null, dia_label: slF.dia_label, hora: slF.hora, movimientos: ap.movimientos.map((m2) => ({ post_id: m2.post_id, de_ymd: m2.de_ymd, a_ymd: m2.a_ymd })), plan_motivo: plan.motivo || '', subs_aplicados: !!ap.subsOk });
+  } catch (e) { console.error('[subir-voz-confirmar]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo confirmar' }); }
+});
+
+// POST /api/subir/voz/deshacer — deshacer desde el recibo restaura
+// el plan anterior exacto (ver subirVozDeshacerRecibo).
+app.post('/api/subir/voz/deshacer', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const r = subirVozReciboRow(uid, parseInt((req.body || {}).recibo_id, 10) || 0);
+    if (!r) return res.status(404).json({ ok: false, error: 'Ese recibo ya no está' });
+    if (r.estado !== 'activo') return res.json({ ok: true, ya: true });
+    if (r.modo === 'revision') return res.status(400).json({ ok: false, error: 'Esa nota ya está en revisión — no se deshace desde acá' });
+    const d = subirVozDeshacerRecibo(uid, r);
+    if (!d.ok) return res.status(409).json({ ok: false, error: 'Ese posteo ya salió — el plan no se puede restaurar desde acá' });
+    return res.json({ ok: true, restaurados: d.restaurados, parcial: d.parcial });
+  } catch (e) { console.error('[subir-voz-deshacer]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo deshacer' }); }
+});
+
+// GET /api/subir/recibos — «Tu material» con su recibo pegado: las
+// anotaciones vigentes del cliente, con la pieza y su destino.
+app.get('/api/subir/recibos', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const rows = db.prepare(`SELECT * FROM subir_recibos WHERE user_id = ? AND estado = 'activo' ORDER BY id DESC LIMIT 20`).all(uid);
+    return res.json({ ok: true, recibos: rows.map((r) => subirVozReciboJSON(uid, r)) });
+  } catch (e) { return res.status(500).json({ ok: false, error: 'No pude leer tu material' }); }
 });
 
 // POST /api/subir/pedidos-voz/:id/respuesta — (LOTE PEDIDO-VOZ-DUDA)
@@ -47131,7 +47508,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1196';
+const BUILD_ID = '20261105-v1197';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

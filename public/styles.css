@@ -6510,6 +6510,39 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .item .w{font-size:12px;font-weight:600;color:#177245;margin-top:1px}
 .pz-subir .r-note{font-size:12.5px;font-weight:600;color:#47617A;line-height:1.45;margin:2px 2px 9px}
 .pz-subir .ver{display:block;width:100%;background:linear-gradient(180deg,#2E9BD8,#1E82BE);color:#fff;border:none;border-radius:999px;padding:14px;text-align:center;font-size:15.5px;font-weight:800;box-shadow:0 10px 20px rgba(39,147,200,.35),inset 0 1.5px 1.5px rgba(255,255,255,.35);cursor:pointer;font-family:inherit;margin-bottom:9px}
+/* ---------- LOTE SUBIR-VOZ-PRIMERO (20/11): pregunta pegada al material ---------- */
+.pz-subir .pz-vp[hidden]{display:none}
+.pz-subir .pz-vp-lote{margin-top:9px;font-size:12px;font-weight:700;color:#47617A;text-align:center}
+.pz-subir .pz-vp #pzVpThumbs{display:flex;gap:8px;margin-bottom:10px}
+.pz-subir .pz-vp-thumb{position:relative;width:64px;height:64px;border-radius:14px;overflow:hidden;box-shadow:0 4px 8px rgba(10,30,51,.16)}
+.pz-subir .pz-vp-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pz-subir .pz-vp-thumb span{position:absolute;left:5px;bottom:5px;font-size:9px;font-weight:800;letter-spacing:.5px;color:#fff;background:rgba(10,30,51,.62);border-radius:999px;padding:2px 6px}
+.pz-subir .pz-vp-q{font-size:19px;font-weight:900;letter-spacing:-.3px;color:#0A1E33;line-height:1.25}
+.pz-subir .pz-vp-sub{font-size:13px;font-weight:600;color:#47617A;line-height:1.45;margin-top:4px}
+.pz-subir .pz-vp-nota{margin-top:11px;background:linear-gradient(180deg,#FDF6DE,#FBF1C8);border:1.5px solid #F1E3AE;border-radius:14px;padding:9px 12px;font-size:13.5px;font-weight:600;color:#0A1E33;line-height:1.45}
+.pz-subir .pz-vp-nota[hidden]{display:none}
+.pz-subir .pz-vp-micwrap{display:flex;flex-direction:column;align-items:center;gap:7px;margin:15px 0 4px}
+.pz-subir .pz-vp-mic{width:62px;height:62px;border:none;border-radius:50%;background:linear-gradient(180deg,#FFD35C,#F2B63D);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 16px rgba(254,193,77,.5),inset 0 2px 2px rgba(255,255,255,.7);color:#0A1E33;cursor:pointer}
+.pz-subir .pz-vp-micwrap.grabando .pz-vp-mic{background:linear-gradient(180deg,#F0766B,#D84A3D);color:#fff;box-shadow:0 8px 16px rgba(216,74,61,.45),inset 0 2px 2px rgba(255,255,255,.5)}
+.pz-subir .pz-vp-miclabel{font-size:12px;font-weight:800;color:#B98A00}
+.pz-subir .pz-vp-rec{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:#A12622}
+.pz-subir .pz-vp-rec[hidden]{display:none}
+.pz-subir .pz-vp-dot{width:9px;height:9px;border-radius:50%;background:#D84A3D;animation:pzVpPulso 1.1s ease-in-out infinite}
+@keyframes pzVpPulso{0%,100%{opacity:1}50%{opacity:.25}}
+.pz-subir .pz-vp-estado{margin-top:10px;font-size:13px;font-weight:700;color:#47617A;text-align:center}
+.pz-subir .pz-vp-estado[hidden]{display:none}
+.pz-subir .pz-vp-chips{justify-content:center;margin-top:12px}
+.pz-subir .pz-vp-despues{margin:13px 0 8px;text-align:center;font-size:13px;font-weight:700;color:#47617A;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.pz-subir .pz-vp-conf{margin-top:6px;border-top:1px solid #EFF3F6;padding-top:12px}
+.pz-subir .pz-vp-conf-txt{font-size:14px;font-weight:600;color:#0A1E33;line-height:1.6}
+.pz-subir .pz-vp-btns{display:flex;gap:9px;align-items:center;margin-top:13px}
+.pz-subir .pz-vp-va{margin-top:0;width:auto;flex:1;padding:12px}
+.pz-subir .pz-vp-conf-nota{margin-top:8px;font-size:11.5px;font-weight:600;color:#8B9AA8;text-align:center}
+.pz-subir .pz-vp-mat-t{margin-top:20px;font-size:11.5px;font-weight:800;letter-spacing:1.2px;color:#8B9AA8}
+.pz-subir .pz-vp-mat{margin-top:10px}
+.pz-subir .pz-vp-mat-btns{display:inline-flex;gap:12px;margin-left:10px}
+.pz-subir .pz-vp-link{background:none;border:none;padding:0;font-family:inherit;font-size:12.5px;font-weight:800;color:#1E82BE;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
 /* ---------- Tira de voz bajo cada posteo ---------- */
 .pz-voz{margin-top:12px;border-top:1px solid #EFF3F6;padding-top:10px}
 .pz-voz-tit{font-size:13px;font-weight:800;color:#0A1E33;margin-bottom:2px}
