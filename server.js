@@ -21369,6 +21369,57 @@ app.post('/api/evento/:id/cancelar', requireAuth, express.json(), (req, res) => 
   return res.json({ ok: true });
 });
 // FIN MODO EVENTO
+// =====================================================================
+// (LOTE PORQUE-AJENO) EL PORQUÉ NUNCA ES DE OTRO — guarda de coherencia
+// del «Por qué» (strategy_why). La plantilla «Porque muestra <ancla>,
+// uno de los fuertes de tu negocio…» afirma que la pieza muestra un
+// producto: ese ancla tiene que corresponder a los campos PROPIOS del
+// posteo (su topic, su producto registrado o su propio caption). Si no
+// corresponde, el porqué guardado es ajeno a la pieza — nació del
+// fallback al fundamento (la estrella del negocio estampada en un
+// posteo de otra cosa: posteo 696, zapatillas firmadas con la
+// colección de café de la vidriera) — y ninguna superficie lo pinta.
+// product_ref NO entra en la guarda: es la RUTA de la foto del
+// producto, no su nombre (ver la nota del puente Gesty en server.js).
+// =====================================================================
+const PQA_MUESTRA_RE = [
+  /^Porque muestra (.+), uno de los fuertes de tu negocio, con tu línea visual\./,
+  /^Because it shows (.+), one of your business strengths, in your visual line\./,
+];
+function pqaAnclaMuestra(why) {
+  const s = String(why || '').trim();
+  if (!s) return null;
+  for (const re of PQA_MUESTRA_RE) { const m = s.match(re); if (m) return String(m[1] || '').trim(); }
+  return null;
+}
+function pqaNorm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+}
+function pqaAnclaCorresponde(ancla, row) {
+  const a = pqaNorm(ancla);
+  if (!a) return false;
+  const campos = [row && row.source_topic, row && row.rg_producto, row && row.caption];
+  for (const c of campos) {
+    const f = pqaNorm(c);
+    if (!f) continue;
+    if (f === a) return true;
+    // Contención en cualquier dirección, con piso de 4 caracteres del
+    // lado contenido: el topic suele ser el título de la idea (largo)
+    // y el ancla el nombre del producto (corto), o al revés.
+    if (f.length >= 4 && a.includes(f)) return true;
+    if (a.length >= 4 && f.includes(a)) return true;
+  }
+  return false;
+}
+// Devuelve el ancla ajena si el porqué del posteo es un «muestra»
+// incoherente con la pieza; null si el porqué no afirma «muestra» o
+// el ancla sí corresponde al posteo.
+function pqaAnclaAjena(row) {
+  const a = pqaAnclaMuestra(row && row.strategy_why);
+  if (!a) return null;
+  return pqaAnclaCorresponde(a, row) ? null : a;
+}
+
 app.get('/api/posts', requireAuth, (req, res) => {
   // (LOTE REIMPORTACIÓN DEL INVITADO · gatillo b) La apertura de la app
   // con sesión de invitado: su primera lectura de posteos. Si su semana
@@ -21417,14 +21468,20 @@ app.get('/api/posts', requireAuth, (req, res) => {
         // el claim «muestra <la estrella del digest>» aunque su imagen
         // fuera un póster sin producto (corrida Veja #6). Para posteos
         // de la prueba la guarda es fail-closed (sin evidencia de la
-        // pieza, no se afirma); el resto conserva el comportamiento
-        // histórico. El ancla propia viaja en topic (source_topic),
-        // que whyForPost ahora sí lee.
+        // pieza, no se afirma). El ancla propia viaja en topic
+        // (source_topic), que whyForPost ahora sí lee.
+        // (LOTE PORQUE-AJENO) La guarda pasa a ser la regla para TODOS
+        // los orígenes, no solo la prueba: en tiempo de lectura no hay
+        // evidencia foto↔producto persistida para ningún posteo, así
+        // que el backfill NUNCA afirma «muestra X» — el porqué que nace
+        // acá es siempre un candidato honesto (intención / semana). El
+        // claim «muestra» solo nace en la generación, con el ancla de
+        // la pieza y su evidencia (foto↔producto del mapa).
         const why = analysisEngine.whyForPost({
           tipo: r.tipo || '', formato: r.media_type || '',
           salesIntent: r.sales_intent || '', intent: r.intent || '',
           porque: '', topic: r.source_topic || '',
-        }, whyAnalysis, digest, { sinMuestra: r.source === 'trial' });
+        }, whyAnalysis, digest, { sinMuestra: true });
         if (why) { upd.run(why, r.id, uid); r.strategy_why = why; }
       }
     }
@@ -21458,7 +21515,78 @@ app.get('/api/posts', requireAuth, (req, res) => {
       }
     }
   } catch (e) { /* la integridad nunca frena la agenda */ }
+  // 🚫 (LOTE PORQUE-AJENO · clase 15/11) Guarda de coherencia del
+  // porqué en la PROYECCIÓN, junto a la integridad: si el strategy_why
+  // guardado afirma «muestra <ancla>» y el ancla no corresponde a los
+  // campos propios del posteo, el payload lo entrega VACÍO — la app
+  // nunca pinta un porqué ajeno frente al dueño, aunque la fila sucia
+  // exista (import futuro, camino nuevo, dato viejo sin reparar). La
+  // fila NO se toca: corregido el dato, el porqué vuelve solo. Y como
+  // la integridad, es fail-open: un error propio nunca rompe la agenda.
+  try {
+    for (const p of rows) {
+      if (p && pqaAnclaAjena(p)) p.strategy_why = '';
+    }
+  } catch (e) { /* el porqué nunca frena la agenda */ }
   res.json(rows);
+});
+
+// (LOTE PORQUE-AJENO) PASADA ÚNICA DE REPARACIÓN del porqué ajeno:
+// barre los posteos cuyo strategy_why lleva la firma de la plantilla
+// «muestra» con un ancla que NO corresponde a sus campos propios y los
+// recomputa con el whyForPost corregido (sinMuestra: true — la misma
+// cuenta del backfill) o los vacía si no hay línea honesta. Sin body
+// {dry_run:false} es DRY-RUN: cuenta y muestra, no escribe nada. El
+// dry-run y la ejecución usan EL MISMO predicado (pqaAnclaAjena +
+// firma + no cancelado). ORDEN DURO: correr DESPUÉS de que la raíz
+// (whyForPost sin fallback al digest + backfill fail-closed) esté
+// viva; antes, el backfill viejo re-ensucia al primer read.
+app.post('/api/admin/posts/reparar-porque-ajeno', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const dryRun = !((req.body || {}).dry_run === false);
+    const candidatas = db.prepare(`SELECT id, user_id, status, source, tipo, media_type, sales_intent, intent, source_topic, rg_producto, caption, strategy_why FROM posts WHERE strategy_why LIKE '%uno de los fuertes de tu negocio%' OR strategy_why LIKE '%one of your business strengths%'`).all();
+    const sucias = candidatas.filter((r) => r.status !== 'cancelled' && pqaAnclaAjena(r));
+    const porEstado = {};
+    for (const r of sucias) porEstado[r.status] = (porEstado[r.status] || 0) + 1;
+    const out = {
+      ok: true, dry_run: dryRun,
+      candidatas: candidatas.length, sucias: sucias.length, por_estado: porEstado,
+      muestra_ids: sucias.slice(0, 20).map((r) => r.id),
+    };
+    if (dryRun) return res.json(out);
+    // Ejecución: recomputar por usuario con el mismo insumo del
+    // backfill (análisis persistido + fundamento; idioma de la marca
+    // para el invitado de la prueba). Sin línea honesta → vacío (la
+    // línea no se pinta en ninguna superficie).
+    const upd = db.prepare('UPDATE posts SET strategy_why = ? WHERE id = ?');
+    const ctxPorUsuario = new Map();
+    let recomputadas = 0, vaciadas = 0;
+    for (const r of sucias) {
+      let ctx = ctxPorUsuario.get(r.user_id);
+      if (!ctx) {
+        const analysis = analysisEngine.latestAnalysis(db, r.user_id);
+        const digest = clientDigest.getDigest(db, r.user_id);
+        let guestAcct = false;
+        try { const gu = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(r.user_id); guestAcct = !!(gu && gu.is_guest); } catch (e) {}
+        ctx = { analysis, digest, guestAcct, guestLang: guestAcct ? contentLangOf(r.user_id) : null };
+        ctxPorUsuario.set(r.user_id, ctx);
+      }
+      const whyAnalysis = (ctx.guestAcct && r.source === 'trial')
+        ? analysisForBrandLang(ctx.analysis || {}, ctx.guestLang)
+        : ctx.analysis;
+      const w = analysisEngine.whyForPost({
+        tipo: r.tipo || '', formato: r.media_type || '',
+        salesIntent: r.sales_intent || '', intent: r.intent || '',
+        porque: '', topic: r.source_topic || '',
+      }, whyAnalysis, ctx.digest, { sinMuestra: true });
+      upd.run(w || '', r.id);
+      if (w) recomputadas++; else vaciadas++;
+    }
+    out.ejecutado = { recomputadas, vaciadas, total: sucias.length };
+    return res.json(out);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'reparacion_fallo' });
+  }
 });
 
 // Si el usuario nunca configuró image_base_url, la deducimos del host actual (https en
@@ -47508,7 +47636,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1201';
+const BUILD_ID = '20261105-v1202';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

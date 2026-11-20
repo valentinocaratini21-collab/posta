@@ -574,16 +574,21 @@ function whyForPost(post, analysis, digest, opts) {
   // source_topic). Antes el ancla era siempre digest.productos[0] — el
   // más mencionado — y el porqué salía idéntico para toda la semana y
   // ajeno a cada pieza (corrida Veja #6: el posteo del Atlas decía
-  // «muestra Salar»). Sin ancla propia, cae a la del digest como antes.
+  // «muestra Salar»).
   const ownAnchor = String(post.anchor || post.digest_anchor || post.photo_product || post.source_topic || post.topic || '').trim();
-  const anchor = ownAnchor ||
-    ((d.productos || [])[0] && (d.productos[0].nombre || d.productos[0])) ||
-    ((d.servicios || [])[0] && (d.servicios[0].nombre || d.servicios[0])) || null;
-  // (LOTE PRUEBA-PRODUCTO-REAL · sinMuestra) «Porque muestra X» solo
-  // si la pieza REALMENTE muestra X (foto↔producto del mapa). Una pieza
-  // de marca/stock sin foto del producto no puede afirmar que lo muestra:
-  // el porqué cae al siguiente candidato honesto (la semana como un todo).
-  if (anchor && !(opts && opts.sinMuestra)) candidates.push(T('Porque muestra ' + String(anchor) + ', uno de los fuertes de tu negocio, con tu línea visual.', 'Because it shows ' + String(anchor) + ', one of your business strengths, in your visual line.'));
+  // (LOTE PORQUE-AJENO) El fallback al digest MUERE (deroga el «sin
+  // ancla propia, cae a la del digest» de L5): «Porque muestra X» solo
+  // puede afirmar el ancla PROPIA del posteo, y solo si el llamador no
+  // declara falta de evidencia (opts.sinMuestra — la guarda de
+  // PRUEBA-PRODUCTO-REAL: sin foto↔producto, no se afirma). El ancla
+  // del fundamento (digest.productos[0] / servicios[0]) estampaba la
+  // estrella del negocio en posteos que muestran OTRA cosa: la cuenta
+  // 12, vidriera de café, firmaba «muestra The Portrait Coffee
+  // Collection» en un posteo de zapatillas (posteo 696, captura del
+  // dueño 20/11). Sin ancla propia, el porqué cae a los candidatos
+  // honestos de abajo (intención / la semana como un todo), nunca al
+  // producto del fundamento.
+  if (ownAnchor && !(opts && opts.sinMuestra)) candidates.push(T('Porque muestra ' + String(ownAnchor) + ', uno de los fuertes de tu negocio, con tu línea visual.', 'Because it shows ' + String(ownAnchor) + ', one of your business strengths, in your visual line.'));
   const intent = String(post.salesIntent || post.intent || post.intencion || '').toLowerCase();
   if (INTENT[intent]) candidates.push(INTENT[intent] + T(': sale en tu mejor franja y con un gancho que frena el scroll.', ': it goes out in your best time band with a hook that stops the scroll.'));
   candidates.push(T('Porque forma parte de una semana pensada como un todo: cada pieza cumple un rol distinto en tu grilla.', 'Because it is part of a week designed as a whole: every piece plays a different role on your grid.'));
