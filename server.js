@@ -1131,7 +1131,7 @@ const requireAuthOrWebToken = (req, res, next) => {
 // Si la prueba gratis venció, no se puede generar ni programar: el paywall es "Mi plan"
 function requireTrialValid(req, res, next) {
   try {
-    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.plan_status === 'trial' && trialEffectiveEnd(u) <= Date.now())
       return res.status(402).json({ error: 'trial_expired', message: 'ey! se terminó tu prueba gratis 😢 elegí tu plan y seguimos publicando juntos — posty te extraña.' });
   } catch (e) {
@@ -1145,13 +1145,22 @@ function requireTrialValid(req, res, next) {
 // Fin efectivo de la prueba: respeta la política vigente (TRIAL_DAYS desde la creación),
 // aunque la cuenta se haya creado cuando la prueba duraba más.
 function trialEffectiveEnd(u) {
+  // (LOTE PRUEBA-CONECTA) Prueba nacida pendiente (trial_started_at = 0):
+  // el reloj de los 3 días arranca en la conexión de Instagram de
+  // publicación, no en el alta — mientras tanto no vence ni consume
+  // días. Sin la columna en la fila (SELECT viejo) manda lo de siempre.
+  if (u && u.trial_started_at !== undefined && u.trial_started_at !== null && Number(u.trial_started_at) === 0) return Infinity;
   // Extensión manual de soporte: si hay una vigente, manda ella (2026-10-03 fix:
   // se chequea PRIMERO, antes el early return por trial_ends_at vacío la ignoraba).
   const ext = u.trial_extended_until || 0;
   if (ext > Date.now()) return ext;
   const tEnds = u.trial_ends_at || 0;
   if (!tEnds) return 0;
-  const cMs = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+  // Tope de política: desde el arranque real del reloj (la conexión) en
+  // las cuentas nuevas; en las viejas el backfill dejó arranque =
+  // created_at, y el tope queda idéntico al histórico.
+  const startedMs = u && Number(u.trial_started_at) > 0 ? Number(u.trial_started_at) : 0;
+  const cMs = startedMs || Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
   const policyEnd = cMs ? cMs + TRIAL_DAYS * 86400000 : Infinity;
   const base = Math.min(tEnds, policyEnd);
   return base;
@@ -3660,13 +3669,13 @@ app.post('/api/auth/register', (req, res) => {
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
     // (LOTE TERMINOS-CONDICIONES) Aceptación de los T&C v1.0 en el alta: se guarda cuándo aceptó (ISO). Fail-open: sin el flag queda NULL (app.js cacheado viejo sigue pudiendo registrarse).
     const termsAt = terms_accepted ? new Date().toISOString() : null;
-    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC, regEn ? 'en' : 'es', termsAt);
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang, terms_accepted_at, trial_started_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 0)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC, regEn ? 'en' : 'es', termsAt);
     const newUserId = r.lastInsertRowid;
     // (LOTE PRUEBA-ENTRADA-DIRECTA) Email ya usado → sin prueba fresca
     // (trial_ends_at = ahora). Y el email queda registrado como "usó su
     // prueba" en ambos casos: este registro ES su uso de la prueba.
     if (registerConsumed) {
-      try { db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?').run(Date.now(), newUserId); } catch (e) {}
+      try { db.prepare('UPDATE users SET trial_ends_at = ?, trial_started_at = ? WHERE id = ?').run(Date.now(), Date.now(), newUserId); } catch (e) {}
     }
     try {
       if (trialLock && trialLock.recordUsed) {
@@ -4075,7 +4084,7 @@ Devolvé SOLO un JSON {"ideas":[...]} con 2 o 3 ideas, cada una basada en UNA se
 // (plan/key/tope se respetan siempre); solo lo usan el cron y el admin.
 async function runIdeasForUser(uid, opts = {}) {
   const skip = (reason, extra) => Object.assign({ ok: false, skipped: reason, user_id: uid }, extra || {});
-  const u = db.prepare('SELECT id, plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
+  const u = db.prepare('SELECT id, plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(uid);
   if (!u) return skip('no_user');
   const ps = String(u.plan_status || 'trial');
   if (ps === 'trial' && trialEffectiveEnd(u) <= Date.now()) return skip('trial_expired');
@@ -4880,7 +4889,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
         }
         const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
         const utmO = (utm && typeof utm === 'object') ? utm : {};
-        const r2 = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?)")
+        const r2 = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang, trial_started_at) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?, 0)")
           .run(em, code, referredBy, trialEnds, String(utmO.source || '').slice(0, 40), String(utmO.campaign || '').slice(0, 80), magicLang);
         const userId = r2.lastInsertRowid;
         // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado por email, espejo del
@@ -4888,7 +4897,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
         // (trial_ends_at = ahora); el email queda registrado como usado.
         try {
           if (trialLock && trialLock.findUsed && trialLock.findUsed(db, '', '', em)) {
-            db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?').run(Date.now(), userId);
+            db.prepare('UPDATE users SET trial_ends_at = ?, trial_started_at = ? WHERE id = ?').run(Date.now(), Date.now(), userId);
           }
           if (trialLock && trialLock.recordUsed) {
             trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
@@ -4986,7 +4995,7 @@ app.get('/api/auth/magic', (req, res) => {
       const utm = (payload.utm && typeof payload.utm === 'object') ? payload.utm : {};
       const utmS = String(utm.source || '').slice(0, 40);
       const utmC = String(utm.campaign || '').slice(0, 80);
-      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?)")
+      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled, lang, trial_started_at) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1, ?, 0)")
         .run(email, code, referredBy, trialEnds, utmS, utmC, payload.lang === 'en' ? 'en' : 'es');
       const userId = r.lastInsertRowid;
       // (LOTE PRUEBA-ENTRADA-DIRECTA) Candado por email, espejo del
@@ -4994,7 +5003,7 @@ app.get('/api/auth/magic', (req, res) => {
       // (trial_ends_at = ahora); el email queda registrado como usado.
       try {
         if (trialLock && trialLock.findUsed && trialLock.findUsed(db, '', '', email)) {
-          db.prepare('UPDATE users SET trial_ends_at = ? WHERE id = ?').run(Date.now(), userId);
+          db.prepare('UPDATE users SET trial_ends_at = ?, trial_started_at = ? WHERE id = ?').run(Date.now(), Date.now(), userId);
         }
         if (trialLock && trialLock.recordUsed) {
           trialLock.ensureTrialUsedSchema && trialLock.ensureTrialUsedSchema(db);
@@ -5568,7 +5577,7 @@ app.post('/api/auth/device-issue', requireAuth, (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at, bambooty_shell, is_guest, guest_ig FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, trial_started_at, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at, bambooty_shell, is_guest, guest_ig FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   // Sello de fundador (red de seguridad): cualquier alta paga real —MP, Stripe
   // o manual— recibe su número al primer /me, en orden, hasta 200.
@@ -5583,7 +5592,11 @@ app.get('/api/auth/me', (req, res) => {
   // ya la trata como vencida (0 <= ahora). /me debe decir lo mismo, si no la
   // cuenta queda bloqueada en acciones sin que el cliente muestre la pantalla.
   const trialExpired = user.plan_status === 'trial' && tEnds <= nowMs;
-  const trialDaysLeft = (!trialExpired && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0;
+  // (LOTE PRUEBA-CONECTA) Cuenta nacida pendiente: su prueba no arrancó
+  // (arranca al conectar Instagram) — no está vencida, le quedan los
+  // días enteros, y el cliente muestra el paso de conexión pendiente.
+  const trialPendingConnect = user.plan_status === 'trial' && user.trial_started_at !== undefined && user.trial_started_at !== null && Number(user.trial_started_at) === 0;
+  const trialDaysLeft = trialPendingConnect ? TRIAL_DAYS : ((!trialExpired && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0);
   res.json({
     user: {
       id: user.id,
@@ -5600,6 +5613,7 @@ app.get('/api/auth/me', (req, res) => {
       is_trial: user.plan_status !== 'active',
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
+      trial_pending_connect: trialPendingConnect,
       billing_provider: user.stripe_subscription_id ? 'stripe' : (user.mp_preapproval_id ? 'mp' : null), // (v285) qué riel cobra esta cuenta
       founder_number: user.founder_number || 0, // (growth ola 2) Los Primeros 50: 0 = todavía no
       founder_public: !!user.founder_public, // permiso registrado para la página pública de fundadores
@@ -9805,7 +9819,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     let sales = null;
     let su = null;
     try {
-      su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at, client_name, media_asked_at FROM users WHERE id = ?').get(req.session.userId);
+      su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at, trial_started_at, client_name, media_asked_at FROM users WHERE id = ?').get(req.session.userId);
       if (su) {
         const tEnds = trialEffectiveEnd(su);
         const nowMs = Date.now();
@@ -9828,7 +9842,7 @@ app.post('/api/ideas/chat', async (req, res) => {
         sales = {
           isTrial: su.plan_status !== 'active',
           trialExpired: su.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs,
-          trialDaysLeft: (su.plan_status === 'trial' && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0,
+          trialDaysLeft: (su.plan_status === 'trial' && su.trial_started_at !== undefined && su.trial_started_at !== null && Number(su.trial_started_at) === 0) ? TRIAL_DAYS : ((su.plan_status === 'trial' && Number.isFinite(tEnds) && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0),
           planName: su.plan_status === 'active' ? (su.plan || '') : '',
           quota,
           upcoming,
@@ -11597,7 +11611,7 @@ app.post('/api/admin/extend-trial', requireAdminToken, express.json(), (req, res
   const days = Math.min(Math.max(Number((req.body || {}).days) || 7, 1), 90);
   if (!uid) return res.status(400).json({ error: 'falta user_id' });
   try {
-    const u = db.prepare('SELECT id, email, plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
+    const u = db.prepare('SELECT id, email, plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(uid);
     if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
     const until = Date.now() + days * 86400000;
     db.prepare('UPDATE users SET trial_extended_until = ? WHERE id = ?').run(until, uid);
@@ -24631,7 +24645,7 @@ function planOrTrialOk(uid) {
   // La lógica de trial (trialEffectiveEnd) no se toca.
   if (userOnHold(uid)) return false;
   try {
-    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(uid);
     return !!(u && (u.plan_status === 'active' || trialEffectiveEnd(u) > Date.now()));
   } catch (e) { return false; }
 }
@@ -28609,6 +28623,15 @@ app.get('/api/ig/callback', async (req, res) => {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(finalIgId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
+    // (LOTE PRUEBA-CONECTA) La conexión de publicación ARRANCA el reloj
+    // de la prueba si la cuenta nació pendiente (trial_started_at = 0):
+    // los 3 días cuentan desde este momento, no desde el alta. Nunca
+    // frena la conexión: cualquier fallo se registra y se sigue.
+    try {
+      if (guestTrial && guestTrial.startTrialOnConnect && guestTrial.startTrialOnConnect(db, req.session.userId, TRIAL_DAYS)) {
+        try { evTrack(req.session.userId, 'trial_clock_started', {}); } catch (e) {}
+      }
+    } catch (e) { console.error('[ig/callback] arranque de prueba:', e.message); }
     // Análisis de su Instagram en background: la IA los conoce desde el día uno. Nunca bloquea la conexión.
     try {
       const { analyzeInstagram } = require('./instagram');
@@ -30150,7 +30173,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Payments are not configured yet.' });
   }
   try {
-    const user = db.prepare('SELECT id, email, plan_status, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, created_at, lang, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
+    const user = db.prepare('SELECT id, email, plan_status, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, created_at, trial_started_at, lang, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
     if (!user) {
       return res.status(400).json({ error: 'Stripe checkout is only available for US, UK and Eurozone accounts.' });
     }
@@ -30171,7 +30194,12 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     // nunca antes. Stripe exige trial_end ≥48 h en el futuro en Checkout: si a
     // la prueba le queda menos que eso, la suscripción cobra al confirmar.
     let trialEndSec = null;
-    if (user.plan_status === 'trial') {
+    // (LOTE PRUEBA-CONECTA) Prueba pendiente de conexión: su reloj no
+    // arrancó y no hay fin de prueba que pasarle a Stripe — la
+    // suscripción cobra al confirmar, como cuando a la prueba le
+    // queda menos que el mínimo que exige Stripe.
+    const checkoutTrialPending = user.trial_started_at !== undefined && user.trial_started_at !== null && Number(user.trial_started_at) === 0;
+    if (user.plan_status === 'trial' && !checkoutTrialPending) {
       const endMs = trialEffectiveEnd(user);
       if (endMs - Date.now() > (48 * 3600 + 300) * 1000) trialEndSec = Math.floor(endMs / 1000);
     }
@@ -48040,7 +48068,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1212';
+const BUILD_ID = '20261105-v1213';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

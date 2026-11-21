@@ -50,6 +50,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .noweb-link{background:none;border:0;padding:0;margin-top:8px;font:inherit;font-size:13px;font-weight:700;color:var(--cel);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .noweb-note{font-size:13px;color:var(--navy);background:var(--bg2);border-radius:10px;padding:9px 12px;margin-top:8px;line-height:1.5}
 .field input:disabled{background:var(--bg2);color:var(--mut)}
+/* (LOTE PRUEBA-CONECTA) Selector de @: la tarjeta de la cuenta real. */
+.ig-sug{margin-top:8px}
+.ig-sug-card{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1.5px solid var(--cel);border-radius:14px;padding:9px 12px;cursor:pointer;font:inherit}
+.ig-sug-card img{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:var(--bg2)}
+.ig-sug-card .u{font-weight:800;color:var(--navy);font-size:15px}
+.ig-sug-card .n{display:block;font-weight:500;color:var(--mut);font-size:13px}
+.ig-sug-card .ok{margin-left:auto;font-weight:800;color:var(--cel);font-size:13.5px;white-space:nowrap}
+.ig-sug-note{font-size:13px;line-height:1.5;color:var(--mut);background:var(--bg2);border-radius:12px;padding:9px 12px}
 .btn{display:inline-block;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:16px;border-radius:999px;padding:15px 28px;text-decoration:none}
 .btn-primary{background:var(--cel);color:#fff;width:100%}
 .btn-ghost{background:#fff;border:1.5px solid var(--cel);color:var(--cel);flex:1}
@@ -165,6 +173,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div class="field">
       <label for="fIg">Your Instagram *</label>
       <input id="fIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
+      <div class="ig-sug" id="fIgSug" hidden></div>
     </div>
     <div class="field">
       <label for="fWeb">Your website or your link</label>
@@ -197,6 +206,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="fWait" class="wait" hidden></div>
     <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">See my planned week</button>
+    <p class="hint" style="text-align:center;margin-top:10px">No card needed 💙 Your 3-day trial starts only when you connect your Instagram — no day runs before that.</p>
     <p class="tiny">Already have an account? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
   </form>
   <div class="card" id="returnDoor" style="margin-top:14px">
@@ -869,6 +879,64 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       btn.disabled = false; btn.textContent = 'See my planned week';
     }
   });
+  // (LOTE PRUEBA-CONECTA) Selector de @: mientras el visitante escribe,
+  // se busca la cuenta real con el lookup que ya usa el producto
+  // (GET /api/ig/search: coincidencia exacta contra la página pública
+  // de Instagram — Instagram no expone búsqueda por prefijo sin login,
+  // así que la tarjeta aparece cuando el @ escrito coincide con una
+  // cuenta real). Tocar la tarjeta confirma el @, y es ese el que sigue
+  // al armado de la semana. Si la cuenta no aparece (nueva o privada),
+  // se dice con honestidad y lo escrito a mano sigue valiendo igual.
+  (function () {
+    var box = $('fIgSug');
+    if (!box || !igEl) return;
+    var seq = 0, timer = null;
+    function hide() { box.hidden = true; box.innerHTML = ''; }
+    function fmtN(n) { n = Number(n) || 0; return n >= 1000 ? (Math.round(n / 100) / 10).toLocaleString('en-US').replace(/\.0$/, '') + 'k' : String(n); }
+    function note(msg) {
+      box.innerHTML = '';
+      var d = document.createElement('div');
+      d.className = 'ig-sug-note'; d.textContent = msg;
+      box.appendChild(d); box.hidden = false;
+    }
+    function card(p) {
+      box.innerHTML = '';
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'ig-sug-card';
+      if (p.pic_url) { var im = document.createElement('img'); im.src = p.pic_url; im.alt = ''; im.onerror = function () { im.remove(); }; b.appendChild(im); }
+      var mid = document.createElement('span');
+      var u = document.createElement('span'); u.className = 'u'; u.textContent = '@' + p.username;
+      var n = document.createElement('span'); n.className = 'n';
+      n.textContent = (p.name || '') + (p.followers != null ? ' · ' + fmtN(p.followers) + ' followers' : '');
+      mid.appendChild(u); mid.appendChild(n); b.appendChild(mid);
+      var ok = document.createElement('span'); ok.className = 'ok'; ok.textContent = 'This is me ✓';
+      b.appendChild(ok);
+      b.addEventListener('click', function () {
+        igEl.value = '@' + p.username;
+        igEl.dataset.igConfirmed = '1';
+        hide();
+      });
+      box.appendChild(b); box.hidden = false;
+    }
+    igEl.addEventListener('input', function () {
+      if (igEl.dataset.igConfirmed === '1') { delete igEl.dataset.igConfirmed; hide(); }
+      var q = (igEl.value || '').trim().replace(/^@+/, '');
+      clearTimeout(timer);
+      if (q.length < 3) { hide(); return; }
+      var my = ++seq;
+      timer = setTimeout(function () {
+        fetch('/api/ig/search?q=' + encodeURIComponent(q) + '&lang=' + LANG)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (my !== seq) return;
+            if (d && d.found && d.profile && d.profile.username) card(d.profile);
+            else if (d && d.error === 'not_found') note('We couldn't find that @ yet — it may be new or private. Double-check it: if it's right, keep typing it by hand and we'll build your week anyway.');
+            else hide();
+          })
+          .catch(function () { if (my === seq) hide(); });
+      }, 650);
+    });
+  })();
   // (LOTE IMAGEN-PRUEBA-TEMPRANA) En cuanto el @ está puesto y validado,
   // se dispara en segundo plano la generación de la imagen del primer
   // posteo, en paralelo con el resto del onboarding: cuando el usuario

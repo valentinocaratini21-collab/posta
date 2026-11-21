@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1212';
+const PZ_BUILD = '20261105-v1213';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -4778,6 +4778,71 @@ function lpDisenoInit() {
   upd();
 }
 
+// (LOTE PRUEBA-CONECTA) Selector de @ en los formularios de prueba del
+// landing: mientras el visitante escribe, se busca la cuenta real con
+// el lookup que ya usa el producto (GET /api/ig/search — coincidencia
+// exacta contra la página pública de Instagram; Instagram no expone
+// búsqueda por prefijo sin login, así que la tarjeta aparece cuando el
+// @ escrito coincide con una cuenta real). Tocar la tarjeta confirma
+// el @ y es ese el que sigue al armado de la semana. Si la cuenta no
+// aparece (nueva o privada), se dice con honestidad y lo escrito a
+// mano sigue valiendo igual.
+function lpIgSuggestInit() {
+  function fmtN(n) { n = Number(n) || 0; return n >= 1000 ? (Math.round(n / 100) / 10).toLocaleString('en-US').replace(/\.0$/, '') + 'k' : String(n); }
+  document.querySelectorAll('form.lp-igform').forEach(function (form) {
+    if (form.dataset.igSugInit) return; form.dataset.igSugInit = '1';
+    var input = form.querySelector('input[name="ig"]') || form.querySelector('#lpIg') || form.querySelector('input[type="text"]');
+    if (!input) return;
+    var box = document.createElement('div');
+    box.className = 'lp-ig-sug'; box.hidden = true;
+    input.parentNode.insertBefore(box, input.nextSibling);
+    var seq = 0, timer = null;
+    function hide() { box.hidden = true; box.innerHTML = ''; }
+    function note(msg) {
+      box.innerHTML = '';
+      var d = document.createElement('div');
+      d.className = 'lp-ig-sug-note'; d.textContent = msg;
+      box.appendChild(d); box.hidden = false;
+    }
+    function card(p) {
+      box.innerHTML = '';
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'lp-ig-sug-card';
+      if (p.pic_url) { var im = document.createElement('img'); im.src = p.pic_url; im.alt = ''; im.onerror = function () { im.remove(); }; b.appendChild(im); }
+      var mid = document.createElement('span');
+      var u = document.createElement('span'); u.className = 'u'; u.textContent = '@' + p.username;
+      var n = document.createElement('span'); n.className = 'n';
+      n.textContent = (p.name || '') + (p.followers != null ? ' · ' + fmtN(p.followers) + ' seguidores' : '');
+      mid.appendChild(u); mid.appendChild(n); b.appendChild(mid);
+      var ok = document.createElement('span'); ok.className = 'ok'; ok.textContent = 'Es esta ✓';
+      b.appendChild(ok);
+      b.addEventListener('click', function () {
+        input.value = '@' + p.username;
+        input.dataset.igConfirmed = '1';
+        hide();
+      });
+      box.appendChild(b); box.hidden = false;
+    }
+    input.addEventListener('input', function () {
+      if (input.dataset.igConfirmed === '1') { delete input.dataset.igConfirmed; hide(); }
+      var q = (input.value || '').trim().replace(/^@+/, '');
+      clearTimeout(timer);
+      if (q.length < 3) { hide(); return; }
+      var my = ++seq;
+      timer = setTimeout(function () {
+        fetch('/api/ig/search?q=' + encodeURIComponent(q) + '&lang=es')
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (my !== seq) return;
+            if (d && d.found && d.profile && d.profile.username) card(d.profile);
+            else if (d && d.error === 'not_found') note('No encontramos ese @ todavía — puede ser nuevo o privado. Revisalo: si está bien, seguí escribiéndolo a mano y armamos tu semana igual.');
+            else hide();
+          })
+          .catch(function () { if (my === seq) hide(); });
+      }, 650);
+    });
+  });
+}
 function lpInitHero() {
   lpCarrInit();
   lpSemanaInit();
@@ -4822,6 +4887,7 @@ function lpInitHero() {
     ['pointerup', 'pointercancel'].forEach((ev) => drag.addEventListener(ev, () => { on = false; }));
     if (range) range.addEventListener('input', () => { drag.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
   }
+  try { lpIgSuggestInit(); } catch (e) {}
   try { lpDisenoInit(); } catch (e) {}
 }
 
@@ -8445,6 +8511,14 @@ function landingView(cfg) {
 .lp-noweb{background:none;border:none;font:inherit;font-size:13.5px;font-weight:600;color:#47617A;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:2px 6px}
 .lp-noweb:hover{color:#0A1E33}
 .lp-igform.lp-noweb-on input[data-lp-web]{opacity:.45}
+/* (LOTE PRUEBA-CONECTA) Selector de @ del landing: la tarjeta de la cuenta real. */
+.lp-ig-sug{margin-top:8px;text-align:left}
+.lp-ig-sug-card{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1.5px solid #2793C8;border-radius:14px;padding:9px 12px;cursor:pointer;font:inherit;box-shadow:0 6px 18px rgba(10,30,51,.08)}
+.lp-ig-sug-card img{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:#EEF4F9}
+.lp-ig-sug-card .u{font-weight:800;color:#0A1E33;font-size:15px}
+.lp-ig-sug-card .n{display:block;font-weight:500;color:#5B7186;font-size:13px}
+.lp-ig-sug-card .ok{margin-left:auto;font-weight:800;color:#2793C8;font-size:13.5px;white-space:nowrap}
+.lp-ig-sug-note{font-size:13px;line-height:1.5;color:#47617A;background:#F2F7FB;border-radius:12px;padding:9px 12px}
 /* SEMANA-VIVA · «Una semana, posteo por posteo.» */
 #semana .sv-head{text-align:center;max-width:760px;margin:0 auto 38px}
 #semana .sv-kick{color:#2793C8;font-size:13px;font-weight:800;letter-spacing:3.5px;text-transform:uppercase;margin-bottom:16px}
@@ -9947,12 +10021,36 @@ function setupChecklistHtml(title, opts) {
   // Filas INFORMATIVAS cumplidas (setup-done): se pintan dentro de la
   // tarjeta pero NO son pasos pendientes — no suman al título, no frenan
   // la desaparición de la tarjeta ni la celebración (eso mira `rows`).
+  // (LOTE PRUEBA-CONECTA) Prueba nacida pendiente: la cuenta existe y la
+  // semana se ve, pero el reloj de los 3 días todavía no arrancó —
+  // arranca con la conexión de Instagram. La compuerta de activación
+  // vive en estas filas: (2) la cuenta de Posty y (3) la conexión.
+  const trialPendingConnect = !!(typeof ME !== 'undefined' && ME && ME.trial_pending_connect);
   let infoRows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
     rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">${pzIc('store', 20)}</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar ${pzIc("arrowRight", 14)}</span></button>`);
   }
+  // (LOTE PRUEBA-CONECTA) Paso (2) de la activación — la cuenta de
+  // Posty: solo para el invitado con la prueba pendiente (con cuenta
+  // real el paso ya está cumplido y no se muestra). La copia distingue
+  // las dos credenciales: la cuenta de Posty es el email con su link de
+  // entrada (sin contraseña, como ya funciona la hoja de cuenta); el
+  // Instagram se conecta aparte, con el login oficial de Meta.
+  if (trialPendingConnect && typeof ME !== 'undefined' && ME && ME.is_guest) {
+    rows.push(en
+      ? `<button class="setup-row" id="setupAccountRow"><span class="setup-ico">${pzIc('mail', 20)}</span><span class="setup-txt"><b>Create your Posty account</b><small>With your email — we send you a sign-in link, no password. It's your way back in to see and approve your posts.</small></span><span class="setup-go">Create ${pzIc("arrowRight", 14)}</span></button>`
+      : `<button class="setup-row" id="setupAccountRow"><span class="setup-ico">${pzIc('mail', 20)}</span><span class="setup-txt"><b>Creá tu cuenta de Posty</b><small>Con tu email — te mandamos un link para entrar, sin contraseña. Es tu puerta para volver, ver y aprobar tus posteos.</small></span><span class="setup-go">Crear ${pzIc("arrowRight", 14)}</span></button>`);
+  }
   if (!(PROFILE && PROFILE.ig_connected)) {
-    rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar ${pzIc("arrowRight", 14)}</span></button>`);
+    // (LOTE PRUEBA-CONECTA) Paso (3) de la activación: con la prueba
+    // pendiente, esta fila ES el arranque — la copia dice que los 3
+    // días arrancan con este paso y que la contraseña de Instagram
+    // nunca pasa por Posty (login oficial de Meta).
+    rows.push(trialPendingConnect
+      ? (en
+        ? `<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Connect your Instagram</b><small>With Meta's official login — your Instagram password never passes through Posty. Your 3-day trial starts with this step.</small></span><span class="setup-go">Connect ${pzIc("arrowRight", 14)}</span></button>`
+        : `<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Con el login oficial de Meta — tu contraseña de Instagram nunca pasa por Posty. Tu prueba de 3 días arranca con este paso.</small></span><span class="setup-go">Conectar ${pzIc("arrowRight", 14)}</span></button>`)
+      : `<button class="setup-row" id="setupIgRow"><span class="setup-ico">${pzIc('camera', 20)}</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar ${pzIc("arrowRight", 14)}</span></button>`);
   }
   // (v426 · ÍTEM 4) Paso «primera semana»: pendiente solo si la semana
   // todavía no está en marcha (PROFILE.first_week_live, del server).
@@ -9982,7 +10080,11 @@ function setupChecklistHtml(title, opts) {
   // informativa cumplida en infoRows (visible con la tarjeta, jamás
   // cuenta como pendiente). Trial vencido o plan cancelado → pendiente.
   const planStatus = (typeof ME !== 'undefined' && ME && ME.plan_status) || '';
-  if (planStatus === 'trial' && !(ME && ME.trial_expired)) {
+  if (trialPendingConnect) {
+    infoRows.push(en
+      ? `<div class="setup-row setup-done"><span class="setup-ico">${pzIc('clock', 20)}</span><span class="setup-txt"><b>Your trial hasn't started yet</b><small>Your 3 days start when you connect your Instagram — no day is running yet.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`
+      : `<div class="setup-row setup-done"><span class="setup-ico">${pzIc('clock', 20)}</span><span class="setup-txt"><b>Tu prueba todavía no arrancó</b><small>Tus 3 días arrancan cuando conectás tu Instagram — todavía no corre ningún día.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`);
+  } else if (planStatus === 'trial' && !(ME && ME.trial_expired)) {
     const dLeft = (ME && typeof ME.trial_days_left === 'number') ? ME.trial_days_left : 0;
     infoRows.push(en
       ? `<div class="setup-row setup-done"><span class="setup-ico">${pzIc('clock', 20)}</span><span class="setup-txt"><b>Your trial is in progress</b><small>${dLeft === 1 ? 'You have 1 day of trial left' : `You have ${dLeft} days of trial left`} — your plan starts whenever you want.</small></span><span class="setup-go">${pzIc('check', 14)}</span></div>`
@@ -10069,6 +10171,8 @@ function setupSecondaryHtml() {
 function bindSetupRows() {
   const sg = $('#setupIgRow');
   if (sg) sg.onclick = igConnectHere;
+  const sac = $('#setupAccountRow');
+  if (sac) sac.onclick = () => { if (typeof pzGuestAccountSheet === 'function') pzGuestAccountSheet(); };
   const sb = $('#setupBizRow');
   if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
   const pi = $('#pwaInstallBtn');
@@ -25408,6 +25512,18 @@ async function showExpiredModal() {
         <span class="pz-exp-go">${en ? 'Choose' : 'Elegir'} →</span>
       </button>
     </div>`).join('');
+  // (LOTE PRUEBA-CONECTA) El cartel vende con la prueba del propio
+  // trial: los posteos que de verdad salieron por este negocio (vía
+  // /api/posts, el mismo dato que la tarjeta «Ya salió»). Si no salió
+  // ninguno, la franja no se muestra: jamás se inventa un resultado.
+  let proofHtml = '';
+  try {
+    const posts = await api.get('/api/posts');
+    const pub = (Array.isArray(posts) ? posts : []).filter(p => p && p.status === 'published' && p.image_path).slice(0, 3);
+    if (pub.length) {
+      proofHtml = `<div style="margin:16px 0 2px"><div style="display:flex;gap:8px;justify-content:center">${pub.map(p => `<img src="${esc(p.image_path)}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:12px">`).join('')}</div><p style="margin:10px 0 0;font-size:13.5px;line-height:1.5;color:var(--mut)">${en ? 'These posts really went out for your business during your trial.' : 'Estos posteos salieron de verdad por tu negocio durante tu prueba.'}</p></div>`;
+    }
+  } catch (e) {}
   const ov = document.createElement('div');
   ov.id = 'pzExpOverlay';
   ov.className = 'pz-exp-overlay';
@@ -25417,6 +25533,7 @@ async function showExpiredModal() {
       <img src="ai-avatar.png" alt="Posty" style="width:74px;height:74px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
       <h2>${en ? 'Your trial ended' : 'Se terminó tu prueba'}</h2>
       <p class="pz-exp-sub">${en ? "Your posts don't have to stop: pick your plan and your week will be ready as always." : 'Tus posteos no tienen por qué frenar: elegí tu plan y el lunes tu semana está lista como siempre.'}</p>
+      ${proofHtml}
       <div class="pz-exp-plans">${rows}</div>
       ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">' + (en ? 'See plans ' : 'Ver planes ') + pzIc('rocket', 14) + '</button>'}
       <button class="pz-exp-later" id="pzExpLater">${en ? 'Pause my posts' : 'Pausar mis posteos'}</button>

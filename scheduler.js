@@ -119,7 +119,7 @@ async function publishSinglePost(db, post, opts = {}) {
   // (Posty publicando en su propia cuenta, con aprobación explícita del dueño).
   if (!opts.house) {
   try {
-    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(post.user_id);
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(post.user_id);
     if (u && u.plan_status === 'trial' && trialExpiryEffectiveEnd(u, Date.now()) <= Date.now()) {
       db.prepare(`UPDATE posts SET status = 'paused', error = ? WHERE id = ?`)
         .run('Se terminó tu prueba gratis 😢 Elegí tu plan y seguimos publicando juntos.', post.id);
@@ -443,7 +443,7 @@ async function publishSinglePost(db, post, opts = {}) {
 // plan_status 'active' O fin efectivo del trial en el futuro.
 function schedCanPublish(db, userId) {
   try {
-    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(userId);
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(userId);
     if (!u) return true;
     if (u.plan_status === 'active') return true;
     return trialExpiryEffectiveEnd(u, Date.now()) > Date.now();
@@ -1575,7 +1575,7 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
   }
   const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
-    SELECT u.id, u.email, u.lang, u.plan_status, u.trial_ends_at, u.trial_extended_until, u.created_at, p.business_name FROM users u
+    SELECT u.id, u.email, u.lang, u.plan_status, u.trial_ends_at, u.trial_extended_until, u.created_at, u.trial_started_at, p.business_name FROM users u
     LEFT JOIN profiles p ON p.user_id = u.id
     WHERE u.email IS NOT NULL AND u.email != ''
       AND COALESCE(u.is_guest, 0) = 0
@@ -1765,9 +1765,17 @@ async function sendTrialAbandonEmails(db) {
 // soporte vigente, manda ella.
 const TRIAL_DAYS_LOCAL = 3;
 function trialExpiryEffectiveEnd(u, now) {
+  // (LOTE PRUEBA-CONECTA) Prueba nacida pendiente (trial_started_at = 0):
+  // el reloj arranca en la conexión de Instagram — no vence ni se pausa
+  // nada hasta ese momento. Sin la columna en la fila, lo de siempre.
+  if (u && u.trial_started_at !== undefined && u.trial_started_at !== null && Number(u.trial_started_at) === 0) return Infinity;
   const tEnds = u.trial_ends_at || 0;
   if (!tEnds) return 0;
-  const cMs = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+  // Tope de política: desde el arranque real del reloj (la conexión) en
+  // las cuentas nuevas; en las viejas el backfill dejó el arranque =
+  // created_at y el tope es el de siempre.
+  const startedMs = u && Number(u.trial_started_at) > 0 ? Number(u.trial_started_at) : 0;
+  const cMs = startedMs || Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
   const policyEnd = cMs ? cMs + TRIAL_DAYS_LOCAL * 86400000 : Infinity;
   const base = Math.min(tEnds, policyEnd);
   const ext = u.trial_extended_until || 0;
@@ -1858,7 +1866,7 @@ async function sendTrialCloseNotices(db) {
   try {
     users = db.prepare(`
       SELECT u.id, u.email, u.lang, u.client_name AS name,
-             u.trial_ends_at, u.trial_extended_until, u.created_at,
+             u.trial_ends_at, u.trial_extended_until, u.created_at, u.trial_started_at,
              COALESCE(u.email_opt_out, 0) AS email_opt_out,
              COALESCE(p.business_name, '') AS biz
       FROM users u

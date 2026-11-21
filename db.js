@@ -1208,6 +1208,18 @@ db.exec(`CREATE TABLE IF NOT EXISTS photo_missions (
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e) { /* ya existe */ }
 // Extensión manual de trial (soporte): si está vigente, manda sobre el clamp de TRIAL_DAYS
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_extended_until INTEGER`); } catch (e) { /* ya existe */ }
+// (LOTE PRUEBA-CONECTA) Arranque del reloj de prueba: la columna guarda
+// CUÁNDO arrancó el reloj (la conexión de Instagram de publicación).
+// 0 = la cuenta nació pendiente y todavía no arrancó; las filas
+// preexistentes ya arrancaron bajo el régimen anterior (el reloj corría
+// desde el alta), así que su arranque es su created_at y el tope de
+// política queda idéntico al de siempre.
+try { db.exec(`ALTER TABLE users ADD COLUMN trial_started_at INTEGER`); } catch (e) { /* ya existe */ }
+try {
+  db.prepare(`UPDATE users SET trial_started_at = CAST(strftime('%s', created_at) AS INTEGER) * 1000
+              WHERE trial_started_at IS NULL AND trial_ends_at IS NOT NULL
+                AND created_at IS NOT NULL AND created_at != ''`).run();
+} catch (e) { /* noop */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_base_amount INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_mult REAL DEFAULT 1`); } catch (e) { /* ya existe */ }
 // (v285) Stripe — espejo de las columnas MP para el cobro US (USD): customer y

@@ -482,7 +482,7 @@ html.pz-appctx #posty-boot .pz-boot-spin,html.pz-appctx #posty-boot .pz-boot-txt
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=845"></script>
+<script src="/app.js?v=846"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
@@ -531,5 +531,76 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <script src="/gj.js?v=4" defer></script>
+<style>
+/* (LOTE PRUEBA-CONECTA) Selector de @ del landing. */
+.lp-ig-sug{margin-top:8px;text-align:left}
+.lp-ig-sug-card{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1.5px solid #2793C8;border-radius:14px;padding:9px 12px;cursor:pointer;font:inherit;box-shadow:0 6px 18px rgba(10,30,51,.08)}
+.lp-ig-sug-card img{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:#EEF4F9}
+.lp-ig-sug-card .u{font-weight:800;color:#0A1E33;font-size:15px}
+.lp-ig-sug-card .n{display:block;font-weight:500;color:#5B7186;font-size:13px}
+.lp-ig-sug-card .ok{margin-left:auto;font-weight:800;color:#2793C8;font-size:13.5px;white-space:nowrap}
+.lp-ig-sug-note{font-size:13px;line-height:1.5;color:#47617A;background:#F2F7FB;border-radius:12px;padding:9px 12px}
+</style>
+<script>
+/* (LOTE PRUEBA-CONECTA) Selector de @ en los formularios de prueba del
+   landing: misma fuente que /prueba (GET /api/ig/search, coincidencia
+   exacta — Instagram no expone búsqueda por prefijo sin login). */
+(function () {
+  var LANG = 'es';
+  function fmtN(n) { n = Number(n) || 0; return n >= 1000 ? (Math.round(n / 100) / 10).toLocaleString('en-US').replace(/\.0$/, '') + 'k' : String(n); }
+  document.querySelectorAll('form.lp-igform').forEach(function (form) {
+    var input = form.querySelector('input[name="ig"]') || form.querySelector('input[type="text"]');
+    if (!input) return;
+    var box = document.createElement('div');
+    box.className = 'lp-ig-sug'; box.hidden = true;
+    input.parentNode.insertBefore(box, input.nextSibling);
+    var seq = 0, timer = null;
+    function hide() { box.hidden = true; box.innerHTML = ''; }
+    function note(msg) {
+      box.innerHTML = '';
+      var d = document.createElement('div');
+      d.className = 'lp-ig-sug-note'; d.textContent = msg;
+      box.appendChild(d); box.hidden = false;
+    }
+    function card(p) {
+      box.innerHTML = '';
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'lp-ig-sug-card';
+      if (p.pic_url) { var im = document.createElement('img'); im.src = p.pic_url; im.alt = ''; im.onerror = function () { im.remove(); }; b.appendChild(im); }
+      var mid = document.createElement('span');
+      var u = document.createElement('span'); u.className = 'u'; u.textContent = '@' + p.username;
+      var n = document.createElement('span'); n.className = 'n';
+      n.textContent = (p.name || '') + (p.followers != null ? ' · ' + fmtN(p.followers) + ' seguidores' : '');
+      mid.appendChild(u); mid.appendChild(n); b.appendChild(mid);
+      var ok = document.createElement('span'); ok.className = 'ok'; ok.textContent = 'Es esta ✓';
+      b.appendChild(ok);
+      b.addEventListener('click', function () {
+        input.value = '@' + p.username;
+        input.dataset.igConfirmed = '1';
+        hide();
+      });
+      box.appendChild(b); box.hidden = false;
+    }
+    input.addEventListener('input', function () {
+      if (input.dataset.igConfirmed === '1') { delete input.dataset.igConfirmed; hide(); }
+      var q = (input.value || '').trim().replace(/^@+/, '');
+      clearTimeout(timer);
+      if (q.length < 3) { hide(); return; }
+      var my = ++seq;
+      timer = setTimeout(function () {
+        fetch('/api/ig/search?q=' + encodeURIComponent(q) + '&lang=' + LANG)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (my !== seq) return;
+            if (d && d.found && d.profile && d.profile.username) card(d.profile);
+            else if (d && d.error === 'not_found') note('No encontramos ese @ todavía — puede ser nuevo o privado. Revisalo: si está bien, seguí escribiéndolo a mano y armamos tu semana igual.');
+            else hide();
+          })
+          .catch(function () { if (my === seq) hide(); });
+      }, 650);
+    });
+  });
+})();
+</script>
 </body>
 </html>

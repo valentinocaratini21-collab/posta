@@ -64,11 +64,20 @@ function guestPlaceholderEmail() {
 // menor entre trial_ends_at y created_at + 3 días).
 function guestTrialEnd(u, now) {
   const t = now || Date.now();
+  // (LOTE PRUEBA-CONECTA) Prueba nacida pendiente (trial_started_at = 0):
+  // el reloj arranca en la conexión de Instagram, no en el alta — hasta
+  // ese momento la prueba no vence ni consume días. Sin la columna en
+  // la fila (SELECT viejo) manda el comportamiento de siempre.
+  if (u && u.trial_started_at !== undefined && u.trial_started_at !== null && Number(u.trial_started_at) === 0) return Infinity;
   const ext = Number(u.trial_extended_until || 0);
   if (ext > t) return ext;
   const tEnds = Number(u.trial_ends_at || 0);
   if (!tEnds) return 0;
-  const cMs = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+  // Tope de política: desde el arranque real del reloj (la conexión) en
+  // las cuentas nuevas; en las viejas el arranque = created_at y el
+  // tope es el de siempre.
+  const startedMs = Number(u.trial_started_at) > 0 ? Number(u.trial_started_at) : 0;
+  const cMs = startedMs || Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
   const policyEnd = cMs ? cMs + TRIAL_DAYS_GUEST * 86400000 : Infinity;
   return Math.min(tEnds, policyEnd);
 }
@@ -112,15 +121,18 @@ function findGuestByIdentity(db, igKey, domainKey) {
   } catch (e) { return null; }
 }
 
-// Crea la fila invitada. NO verifica candados (el handler lo hace antes,
+// Crea la fila invitada. (LOTE PRUEBA-CONECTA) La fila nace PENDIENTE
+// (trial_started_at = 0): el trial_ends_at guardado es el de siempre
+// pero queda inerte — el reloj de 3 días arranca en la conexión de
+// Instagram (startTrialOnConnect), no en esta alta. NO verifica candados (el handler lo hace antes,
 // con allowlist y modo test): esta función solo persiste.
 function createGuest(db, { referralCode, lang, ig, domain, device, sinWeb }) {
   const email = guestPlaceholderEmail();
   const trialEnds = Date.now() + TRIAL_DAYS_GUEST * 24 * 3600 * 1000;
   const r = db.prepare(
     `INSERT INTO users (email, password_hash, referral_code, trial_ends_at,
-       trust_level, autopilot_enabled, lang, is_guest, guest_ig, guest_domain, guest_device)
-     VALUES (?, '', ?, ?, 1, 1, ?, 1, ?, ?, ?)`
+       trust_level, autopilot_enabled, lang, is_guest, guest_ig, guest_domain, guest_device, trial_started_at)
+     VALUES (?, '', ?, ?, 1, 1, ?, 1, ?, ?, ?, 0)`
   ).run(email, referralCode || '', trialEnds, lang === 'en' ? 'en' : 'es',
     String(ig || ''), String(domain || ''), String(device || ''));
   // (LOTE PUERTA-NUEVA) La declaración «No tengo web» de la puerta se
@@ -162,7 +174,7 @@ function upgradeGuest(db, { userId, email, passwordHash, findUsed }) {
       .run(em, keepHash, userId);
     // Reloj consumido: fin = ahora. created_at NO se toca (el min() con
     // trial_ends_at manda igual); la prueba queda vencida → paywall.
-    db.prepare(`UPDATE users SET trial_ends_at = ? WHERE id = ?`).run(Date.now(), userId);
+    db.prepare(`UPDATE users SET trial_ends_at = ?, trial_started_at = ? WHERE id = ?`).run(Date.now(), Date.now(), userId);
   } else {
     db.prepare(`UPDATE users SET email = ?, password_hash = ?, is_guest = 0 WHERE id = ?`)
       .run(em, keepHash, userId);
@@ -287,7 +299,7 @@ async function sendGuestTrialNudges(db, { pushFn, now } = {}) {
   let guests = [];
   try {
     guests = db.prepare(`
-      SELECT u.id, u.lang, u.created_at, u.trial_ends_at, u.trial_extended_until,
+      SELECT u.id, u.lang, u.created_at, u.trial_ends_at, u.trial_extended_until, u.trial_started_at,
              COALESCE(p.business_name, '') AS biz
       FROM users u LEFT JOIN profiles p ON p.user_id = u.id
       WHERE COALESCE(u.is_guest, 0) = 1 AND COALESCE(u.plan_status, 'trial') = 'trial'
@@ -357,6 +369,24 @@ async function sendGuestTrialNudges(db, { pushFn, now } = {}) {
   return out;
 }
 
+// (LOTE PRUEBA-CONECTA) El reloj de la prueba arranca en la conexión de
+// Instagram de publicación: si la cuenta está en trial y nació pendiente
+// (trial_started_at = 0), la conexión lo arranca — arranque = ahora,
+// fin = ahora + los días de prueba. Cuentas ya arrancadas o pagas no se
+// tocan. Devuelve true si el reloj arrancó con esta conexión.
+function startTrialOnConnect(db, userId, trialDays) {
+  try {
+    const u = db.prepare('SELECT plan_status, trial_started_at FROM users WHERE id = ?').get(userId);
+    if (!u || u.plan_status !== 'trial') return false;
+    if (u.trial_started_at === undefined || u.trial_started_at === null || Number(u.trial_started_at) !== 0) return false;
+    const now = Date.now();
+    const days = Number(trialDays) > 0 ? Number(trialDays) : TRIAL_DAYS_GUEST;
+    db.prepare('UPDATE users SET trial_started_at = ?, trial_ends_at = ? WHERE id = ?')
+      .run(now, now + days * 24 * 3600 * 1000, userId);
+    return true;
+  } catch (e) { return false; }
+}
+
 module.exports = {
   TRIAL_DAYS_GUEST,
   GUEST_EMAIL_DOMAIN,
@@ -365,6 +395,7 @@ module.exports = {
   isGuestEmail,
   guestPlaceholderEmail,
   guestTrialEnd,
+  startTrialOnConnect,
   deviceUsed,
   recordDevice,
   createGuest,
