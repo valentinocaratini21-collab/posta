@@ -331,7 +331,7 @@
 
   // ---------------- decisiones ----------------
   function decTag(d) {
-    if (d.tipo === 'voz') return '<span class="d-tag">🎙 Nota de voz</span>';
+    if (d.tipo === 'voz') return d.es_idea ? '<span class="d-tag">💡 Idea escrita</span>' : '<span class="d-tag">🎙 Nota de voz</span>';
     if (d.tipo === 'pieza') return '<span class="d-tag">🖼 Pieza para aprobar</span>';
     if (d.tipo === 'pieza_falta') return '<span class="d-tag">🗓 Mañana sin posteo</span>';
     if (d.tipo === 'impulso') return '<span class="d-tag">🚀 Impulso</span>';
@@ -347,7 +347,12 @@
       who = '<div class="d-who">' + esc(d.business_name || '') + (d.ig_username ? ' <span class="h">@' + esc(d.ig_username) + '</span>' : '') + '</div>';
     }
     var cuerpo = '';
-    if (d.tipo === 'voz') {
+    if (d.tipo === 'voz' && d.es_idea) {
+      cuerpo = '<div class="d-txt">Idea: <em>«' + esc(d.pedido || '') + '»</em></div>'
+        + '<div id="ideaRes-' + d.message_id + '"></div>'
+        + '<div class="d-actions"><button class="btn primary small" data-act="idea-resolver" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Resolver y avisar</button>'
+        + '<button class="btn small ghost-danger" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';
+    } else if (d.tipo === 'voz') {
       cuerpo = '<div class="d-txt">Transcripción: <em>«' + esc(d.pedido || '') + '»</em></div>'
         + (d.posteo ? '<div class="thumbrow">' + (d.posteo.image_url || d.posteo.poster_url ? '<img src="' + esc(d.posteo.poster_url || d.posteo.image_url) + '" alt="">' : '')
           + '<div class="cap">Sobre el posteo #' + d.posteo.id + ' (' + esc(d.posteo.status || '') + ')<br>' + esc(trunc(d.posteo.caption || '', 110)) + '</div></div>' : '')
@@ -458,7 +463,29 @@
     var act = b.getAttribute('data-act');
     b.disabled = true;
     var re = function () { b.disabled = false; };
-    if (act === 'voz-responder') {
+    if (act === 'idea-resolver') {
+      var midI = b.getAttribute('data-mid'), uidI = b.getAttribute('data-uid');
+      var boxI = $('ideaRes-' + midI);
+      if (boxI) {
+        boxI.innerHTML = '<textarea id="ideaText-' + midI + '" placeholder="Respuesta o pregunta, como Posty (si el resultado es un posteo, podés dejarlo vacío)…"></textarea>'
+          + '<input id="ideaPost-' + midI + '" type="number" min="1" placeholder="N° del posteo hecho (opcional)" style="width:100%;margin-top:6px">'
+          + '<div class="d-actions"><button class="btn primary small" data-act="idea-enviar" data-mid="' + midI + '" data-uid="' + uidI + '" type="button">Resolver y avisar (push)</button></div>';
+        var taI = $('ideaText-' + midI); if (taI) taI.focus();
+      }
+      re();
+    } else if (act === 'idea-enviar') {
+      var midI2 = b.getAttribute('data-mid');
+      var textoI = (($('ideaText-' + midI2) || {}).value || '').trim();
+      var postI = Number((($('ideaPost-' + midI2) || {}).value || '')) || 0;
+      if (!textoI && !postI) { toast('Escribí la respuesta o cargá el N° del posteo hecho.', 'warn'); re(); return; }
+      var bodyI = { message_id: Number(midI2) };
+      if (textoI) bodyI.texto = textoI;
+      if (postI) bodyI.post_id = postI;
+      api('/api/admin/support/conserje/pedidos-voz/resolver-idea', { method: 'POST', body: bodyI }).then(function (j) {
+        if (j && j.ok) despuesDeActuar('Idea resuelta: el cliente recibió la push y ve el resultado en la tarjeta de su idea.');
+        else { toast('No se pudo resolver la idea (' + ((j && j.error) || 'error') + ').', 'err'); re(); }
+      }).catch(function () { toast('No se pudo resolver la idea.', 'err'); re(); });
+    } else if (act === 'voz-responder') {
       var mid = b.getAttribute('data-mid'), uid = b.getAttribute('data-uid');
       var box = $('vozReply-' + mid);
       if (box) {

@@ -20515,6 +20515,161 @@ app.post('/api/subir/idea-voz', requireAuth, (req, res) => {
   } catch (e) { console.error('[subir-idea-voz]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu idea' }); }
 });
 
+// ===== LOTE SUBIR-ESCRITO (20/11) — la idea del tab Subir, sin voz =====
+// Decisión del dueño (19:12): «nos piden solo por mensaje, y vos
+// respondes a la media hora con el resultado ya hecho o con alguna
+// pregunta si la necesitas para hacerlo perfecto». La tarjeta «¿Tenés
+// una idea?» es 100% escrita: el pedido cae en la MISMA cola de
+// siempre (chat_messages hilo 'general' → pedidos-voz del conserje) y
+// su estado vive en subir_ideas. Acá NO hay respuesta automática de
+// contenido (la de SUBIR-RESPONDE queda sin llamador en este
+// espacio): el acuse es honesto — recibida, con su hora y el
+// estimado — y el contenido lo resuelve la línea a mano desde la
+// cola, con push al resolver. Nada genera, agenda ni publica desde
+// estos endpoints: lectura + registro (FRENO-CUENTA-PROPIA intacto;
+// en la cuenta de la casa el pedido cae en la misma cola, sin
+// desplazamiento automático, como siempre).
+function subirIdeaHoraCorta(isoUtc, tz, lang) {
+  try {
+    const raw = String(isoUtc || '');
+    const d = new Date(raw.replace(' ', 'T') + (raw.includes('Z') ? '' : 'Z'));
+    if (isNaN(d)) return '';
+    return new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'es', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+  } catch (e) { return ''; }
+}
+// Los DOS ejemplos del mensaje predeterminado de la tarjeta (diseño
+// «Dos ejemplos, dos mundos», aprobado por el dueño 19:18 y
+// confirmado 19:20 «para todos los negocios»): uno de producto y uno
+// de fecha especial, generados POR NEGOCIO desde su fundamento — el
+// digest compilado (digestForUser): productos/servicios reales,
+// protagonista y promos reales. Regla de verdad: el precio sale SOLO
+// si el fundamento lo trae, y verbatim; el rubro y los productos
+// jamás se inventan ni se toman de otro negocio (la única fuente es
+// el digest del propio usuario). Si no consta ningún producto ni
+// servicio, el ejemplo de producto va EN LA FORMA, sin nombre; el de
+// fecha usa una promo real si el fundamento la trae y, si no, la
+// forma del aniversario, sin fecha ni descuento inventados.
+function subirIdeaEjemplos(uid) {
+  const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
+  const dg = digestForUser(uid) || {};
+  const items = [];
+  const juntar = (list) => {
+    for (const p of (Array.isArray(list) ? list : [])) {
+      const n = String((p && typeof p === 'object') ? (p.nombre || '') : (p || '')).trim();
+      if (!n) continue;
+      const pr = (p && typeof p === 'object' && p.precio != null) ? String(p.precio).trim() : '';
+      items.push({ nombre: n, precio: pr });
+    }
+  };
+  juntar(dg.productos);
+  if (!items.length) juntar(dg.servicios);
+  let it = null;
+  const prota = String(dg.protagonista || '').trim();
+  if (prota) it = items.find((x) => x.nombre === prota) || null;
+  if (!it) it = items[0] || null;
+  const producto = it
+    ? (lang === 'en'
+      ? `I want a post about ${it.nombre}${it.precio ? ' — it goes for ' + it.precio : ''} — show it up close, like to sell it this week`
+      : `quiero un posteo de ${it.nombre}${it.precio ? ' — sale ' + it.precio : ''} — que se vea bien de cerca, como para venderlo esta semana`)
+    : (lang === 'en'
+      ? 'I want a post about my star product — with its price and when I want it out'
+      : 'quiero un posteo de mi producto estrella — con su precio y para cuándo lo quiero');
+  let promo = '';
+  for (const p of (Array.isArray(dg.promos) ? dg.promos : [])) {
+    const n = String((p && typeof p === 'object') ? (p.titulo || p.nombre || '') : (p || '')).trim();
+    if (n) { promo = n; break; }
+  }
+  const fecha = promo
+    ? (lang === 'en'
+      ? `we have ${promo} coming up — I want a post announcing it a few days ahead`
+      : `se viene ${promo} — quiero un posteo que lo avise unos días antes`)
+    : (lang === 'en'
+      ? "for our anniversary I want a special post — announce it a few days ahead, with what we're doing that day"
+      : 'para nuestro aniversario quiero un posteo especial — avisalo desde unos días antes, con lo que hacemos ese día');
+  return { producto, fecha };
+}
+function subirIdeaPayload(uid, row) {
+  if (!row) return null;
+  const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
+  const tz = userTz(uid);
+  let posteo = null;
+  if (row.post_id) {
+    const p = db.prepare('SELECT id, status, media_type, caption, image_path, scheduled_at, published_at FROM posts WHERE id = ? AND user_id = ?').get(Number(row.post_id), uid);
+    if (p) {
+      const iso = p.scheduled_at || p.published_at;
+      const sl = iso ? armarSlotLabel(uid, iso) : { dia_label: '', hora: '' };
+      posteo = { id: p.id, status: p.status || '', media_type: p.media_type || 'image', caption: p.caption || '', image_path: p.image_path || '', dia_label: sl.dia_label || '', hora: sl.hora || '', published: p.status === 'published' };
+    }
+  }
+  return {
+    id: Number(row.id), texto: row.texto || '', estado: row.estado || 'recibida',
+    hora: subirIdeaHoraCorta(row.created_at, tz, lang),
+    respuesta: row.respuesta || '', posteo,
+  };
+}
+app.post('/api/subir/idea', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const texto = String((req.body || {}).text || '').trim().slice(0, 2000);
+    if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    const m = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', texto, 0, 'general');
+    const ins = db.prepare('INSERT INTO subir_ideas (user_id, message_id, texto) VALUES (?,?,?)').run(uid, Number(m.lastInsertRowid), texto);
+    const row = db.prepare('SELECT * FROM subir_ideas WHERE id = ?').get(Number(ins.lastInsertRowid));
+    return res.json({ ok: true, idea: subirIdeaPayload(uid, row) });
+  } catch (e) { console.error('[subir-idea]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu idea' }); }
+});
+app.get('/api/subir/idea', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const row = db.prepare('SELECT * FROM subir_ideas WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(uid);
+    return res.json({ ok: true, idea: subirIdeaPayload(uid, row), ejemplos: subirIdeaEjemplos(uid) });
+  } catch (e) { console.error('[subir-idea-get]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo leer tu idea' }); }
+});
+// La resolución del operador, desde la cola del conserje: con un
+// posteo hecho y/o con una respuesta/pregunta en palabras. Escribe la
+// respuesta en el hilo (la cola la muestra entregada), marca la
+// revisión como resuelta a mano (el mismo estado de
+// marcarVozResuelto) y avisa con PUSH: la tarjeta del cliente
+// muestra el resultado ahí mismo — el posteo enlazado es el de su
+// semana, no una copia.
+app.post('/api/admin/support/conserje/pedidos-voz/resolver-idea', requireAdminToken, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const mid = Number(b.message_id) || 0;
+    const idea = mid ? db.prepare('SELECT * FROM subir_ideas WHERE message_id = ?').get(mid) : null;
+    if (!idea) return res.status(404).json({ ok: false, error: 'idea_inexistente' });
+    const uid = Number(idea.user_id);
+    const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
+    let post = null;
+    const pid = Number(b.post_id) || 0;
+    if (pid) {
+      post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+      if (!post) return res.status(400).json({ ok: false, error: 'posteo_invalido' });
+    }
+    const texto = String(b.texto || '').trim().slice(0, 2000);
+    if (!post && !texto) return res.status(400).json({ ok: false, error: 'sin_resolucion' });
+    let respuesta = texto;
+    if (post && !respuesta) {
+      const isoP = post.scheduled_at || post.published_at;
+      const sl = isoP ? armarSlotLabel(uid, isoP) : { dia_label: '', hora: '' };
+      respuesta = lang === 'en'
+        ? `Done! Your idea is now a post${sl.dia_label ? ' — it goes out ' + sl.dia_label : ''}${sl.hora ? ' at ' + sl.hora : ''}.`
+        : `¡Listo! Tu idea ya es un posteo${sl.dia_label ? ' — sale ' + sl.dia_label : ''}${sl.hora ? ' a las ' + sl.hora : ''}.`;
+    }
+    db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', respuesta, 0, 'general');
+    db.prepare(`UPDATE subir_ideas SET estado = 'resuelta', respuesta = ?, post_id = ?, resuelta_at = datetime('now') WHERE id = ?`)
+      .run(texto, post ? Number(post.id) : null, Number(idea.id));
+    try { conserjeVista.marcarVozResuelto(db, mid, 'equipo'); } catch (e) {}
+    let pushR = { ok: false, reason: 'sin_intento' };
+    try {
+      pushR = await push.sendPush(uid, post
+        ? { title: lang === 'en' ? 'Your idea is now a post ✨' : 'Tu idea ya es un posteo ✨', body: respuesta, url: '/#/app/subir', data: { idea_id: Number(idea.id), post_id: Number(post.id) } }
+        : { title: lang === 'en' ? 'Posty replied to your idea 💬' : 'Posty respondió tu idea 💬', body: respuesta.slice(0, 140), url: '/#/app/subir', data: { idea_id: Number(idea.id) } });
+    } catch (e) { pushR = { ok: false, reason: 'push_error' }; }
+    return res.json({ ok: true, idea_id: Number(idea.id), push: pushR });
+  } catch (e) { console.error('[resolver-idea]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la idea' }); }
+});
+
 // ---------- CONSERJE · PEDIDOS DE SUBIR POR VOZ (LOTE PEDIDO-VOZ-REVISION) ----------
 // El contrato con la vista del conserje (lote CONSERJE-PEDIDOS-VOZ):
 // el estado del pedido vive en subir_pedidos_voz y SOLO cambia por
@@ -47885,7 +48040,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1211';
+const BUILD_ID = '20261105-v1212';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -399,7 +399,8 @@ function decisiones(db, filas, opts, nowMs) {
         tipo: 'voz', id: 'voz-' + p.id, user_id: p.user_id,
         business_name: (f && f.business_name) || p.business_name || '',
         ig_username: (f && f.ig_username) || p.ig_username || '',
-        titulo: 'Nota de voz', ambito: p.ambito, cuando: p.cuando || '',
+        titulo: p.es_idea ? 'Idea escrita' : 'Nota de voz', ambito: p.ambito, cuando: p.cuando || '',
+        es_idea: !!p.es_idea,
         pedido: p.pedido || '', respuesta: p.respuesta || '',
         message_id: p.id, posteo: p.posteo || null,
       });

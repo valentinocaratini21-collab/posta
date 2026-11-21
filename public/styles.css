@@ -6519,6 +6519,31 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .voz-op-resp{flex-basis:100%;display:flex;gap:8px;align-items:flex-start;background:#EFF7FC;border:1px solid #CFE6F5;border-radius:14px;padding:9px 11px;margin-top:2px}
 .pz-subir .voz-op-resp[hidden]{display:none}
 .pz-subir .voz-op-resp img{width:22px;height:22px;border-radius:50%;flex:none}
+/* (LOTE SUBIR-ESCRITO) La pregunta post-subida se responde por escrito y la tarjeta «¿Tenés una idea?» es 100% escrita: acuse con hora, estimado de 30 min y el resultado (posteo o respuesta) en la misma tarjeta. */
+.pz-subir .pz-vp-txtwrap{margin-top:10px}
+.pz-subir .pz-vp-txtwrap textarea{width:100%;border:1.5px solid #D8E2EA;border-radius:14px;padding:10px 12px;font:inherit;font-size:14px;color:#0A1E33;background:#fff;resize:vertical}
+.pz-subir .pz-vp-enviar{margin-top:8px;width:100%}
+.pz-subir .pz-idea{margin-top:14px;background:#fff;border:1px solid #E4EBF1;border-radius:20px;padding:14px;box-shadow:0 10px 20px rgba(10,30,51,.06)}
+.pz-subir .pz-idea-t{font-size:16.5px;font-weight:800;color:#0A1E33;margin-bottom:9px}
+.pz-subir .pz-idea-bub{display:flex;gap:8px;align-items:flex-start;margin-bottom:9px}
+.pz-subir .pz-idea-bub img{width:26px;height:26px;border-radius:50%;flex:none}
+.pz-subir .pz-idea-bub span{background:#EFF7FC;border-radius:4px 14px 14px 14px;padding:7px 10px;font-size:13.5px;color:#0A1E33}
+.pz-subir .pz-idea-ej{border:1px solid #E1EAF1;border-radius:14px;padding:9px 11px;font-size:13.5px;font-style:italic;color:#40536A;background:#FBFDFE;margin-bottom:8px;line-height:1.45}
+.pz-subir .pz-idea textarea{width:100%;border:1.5px solid #D8E2EA;border-radius:14px;padding:10px 12px;font:inherit;font-size:14px;color:#0A1E33;background:#fff;resize:vertical;margin-top:2px}
+.pz-subir .pz-idea-est{display:flex;gap:6px;align-items:center;font-size:12.5px;color:#5A6B7C;margin:10px 0}
+.pz-subir .pz-idea-enviar{width:100%;background:linear-gradient(135deg,rgba(62,166,219,.92),rgba(27,111,160,.9));color:#fff;border:1px solid rgba(255,255,255,.5);box-shadow:0 8px 18px rgba(39,147,200,.35)}
+.pz-subir .pz-idea-err{font-size:12.5px;color:#B3261E;margin:6px 0}
+.pz-subir .pz-idea-sent{font-style:italic;color:#33475C;background:#F8FBFD;border:1px solid #E1EAF1;border-radius:12px;padding:9px 11px;font-size:13.5px;line-height:1.5}
+.pz-subir .pz-idea-ok{color:#1E8A3C;font-weight:800;font-size:13.5px;margin:10px 0 4px}
+.pz-subir .pz-idea-sub{font-size:13px;color:#5A6B7C;line-height:1.5}
+.pz-subir .pz-idea-link{background:none;border:none;color:#2793C8;font-weight:700;font-size:13px;padding:8px 0 0;cursor:pointer}
+.pz-subir .pz-idea-resp{display:flex;gap:8px;align-items:flex-start;background:#EFF7FC;border:1px solid #CFE6F5;border-radius:14px;padding:9px 11px;margin-top:8px;font-size:13.5px;color:#0A1E33;line-height:1.5}
+.pz-subir .pz-idea-resp img{width:22px;height:22px;border-radius:50%;flex:none}
+.pz-subir .pz-idea-post{margin-top:10px;border:1px solid #E1EAF1;border-radius:14px;overflow:hidden}
+.pz-subir .pz-idea-post img{width:100%;display:block}
+.pz-subir .pz-idea-post-cap{font-size:13px;color:#33475C;padding:8px 11px 0;line-height:1.45}
+.pz-subir .pz-idea-post-when{font-size:12.5px;font-weight:700;color:#1E8A3C;padding:4px 11px 0}
+.pz-subir .pz-idea-post .pz-idea-link{padding:6px 11px 10px}
 .pz-subir .voz-op-resp span{font-size:13.5px;font-weight:600;line-height:1.35;color:#0A1E33}
 .pz-subir .listo{margin-top:14px;width:100%;background:linear-gradient(180deg,#35A2DB,#1E82BE);color:#fff;text-align:center;font-size:16.5px;font-weight:800;border:none;border-radius:999px;padding:15px;box-shadow:0 10px 20px rgba(39,147,200,.38),inset 0 1.5px 1px rgba(255,255,255,.45),inset 0 -3px 5px rgba(0,60,100,.25);cursor:pointer;font-family:inherit}
 .pz-subir .listo:disabled{opacity:.6}

@@ -1561,6 +1561,13 @@ function voiceRequests(db, opts) {
     // cuando exista; sin entendido no se aprueba (no a ciegas).
     const rev = safe(() => db.prepare(
       'SELECT estado, decidido_en FROM support_voz_pedidos WHERE message_id = ?').get(Number(r.id)), null);
+    // (LOTE SUBIR-ESCRITO) Si el pedido es la idea ESCRITA del tab
+    // Subir, su estado de tarjeta vive en subir_ideas: la cola lo
+    // marca para que la consola lo distinga de una nota de voz y lo
+    // resuelva por su puerta (resolver-idea: push + resultado en la
+    // tarjeta). Sin fila, no es idea: es_idea queda en false.
+    const ideaRow = safe(() => db.prepare(
+      'SELECT id, estado FROM subir_ideas WHERE message_id = ?').get(Number(r.id)), null);
     let posteo = null;
     if (hilo === 'post' && pid > 0) {
       const p = safe(() => db.prepare(
@@ -1611,6 +1618,8 @@ function voiceRequests(db, opts) {
         estado: rev && rev.estado ? String(rev.estado) : 'pendiente',
         decidido_en: rev && rev.decidido_en ? String(rev.decidido_en) : null,
       },
+      es_idea: !!ideaRow,
+      idea_estado: ideaRow ? String(ideaRow.estado) : '',
       posteo,
     };
   });

@@ -315,6 +315,25 @@ db.exec(`CREATE TABLE IF NOT EXISTS subir_pedidos_voz (
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_pedidos_voz_user_estado ON subir_pedidos_voz (user_id, estado)`); } catch (e) { /* índice opcional */ }
 try { db.exec(`ALTER TABLE subir_pedidos_voz ADD COLUMN duda TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE subir_pedidos_voz ADD COLUMN duda_respuesta TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE SUBIR-ESCRITO · 20/11) La idea ESCRITA del tab Subir («¿Tenés
+// una idea?» sin voz): el pedido vive en chat_messages (hilo 'general',
+// la misma cola pedidos-voz de siempre) y ESTA tabla es su estado del
+// lado de la tarjeta: recibida → resuelta, con la respuesta en palabras
+// y/o el posteo que la resolvió (el mismo posteo de su semana: la
+// tarjeta lo muestra y lo enlaza, nunca lo duplica).
+db.exec(`CREATE TABLE IF NOT EXISTS subir_ideas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  texto TEXT NOT NULL DEFAULT '',
+  estado TEXT NOT NULL DEFAULT 'recibida',
+  respuesta TEXT NOT NULL DEFAULT '',
+  post_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resuelta_at TEXT
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_ideas_user ON subir_ideas (user_id, id)`); } catch (e) { /* índice opcional */ }
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_ideas_msg ON subir_ideas (message_id)`); } catch (e) { /* índice opcional */ }
 // (LOTE SUBIR-VOZ-PRIMERO · 20/11) El RECIBO de la anotación por voz
 // del material recién subido: lo que el cliente confirmó con «Va así»
 // queda pegado al material (asset) en esta tabla. datos = lo entendido
