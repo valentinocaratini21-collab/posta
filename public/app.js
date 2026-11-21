@@ -8606,7 +8606,7 @@ function landingView(cfg) {
     <div class="eqv-head">
       <span class="eqv-kicker">Tus community managers</span>
       <h2>Somos un equipo, Posty y yo</h2>
-      <p class="eqv-intro">Contratás a un equipo: un community manager de verdad + la tecnología que creó, posteando por tu negocio todos los días.</p>
+      <p class="eqv-intro">Contratás a un equipo: un community manager de verdad + la tecnología que creó, posteando por tu negocio todos los días. Te creás la cuenta y recibís tu posteo diario, todos los días, sin hacer nada: lo posteamos nosotros.</p>
     </div>
     <div class="eqv-scene">
       <aside class="eqv-panel eqv-panel-v">
@@ -8641,44 +8641,6 @@ function landingView(cfg) {
       </aside>
     </div>
     <div class="eqv-steps"><span class="eqv-step">TU PRODUCTO</span><span class="eqv-arr">&rarr;</span><span class="eqv-step">EL CRITERIO</span><span class="eqv-arr">&rarr;</span><span class="eqv-step eqv-step-last">PUBLICADO TODOS LOS DÍAS</span></div>
-  </div></div>
-  <div class="lp-prueba"><div class="wrap">
-<div class=\"ej ej2\">
-      <p class=\"ej-title\">Esto le hicimos a Tomoko. <span class=\"ej2-free\">Gratis.</span></p>
-      <p class=\"ej2-sub\">Tres días de posteos con sus productos reales, diseñados uno por uno. Tu negocio se puede ver así esta misma semana.</p>
-      <div class=\"ej2-feed\">
-        <div class=\"ej2-head\">
-          <img src=\"/lp-tomoko-avatar.jpg\" alt=\"Patisserie Tomoko\">
-          <div class=\"ej2-hid\"><b>patisserie.tomoko</b><span>Patisserie Tomoko · Brooklyn</span></div>
-          <span class=\"ej2-tag\">Prueba gratis</span>
-        </div>
-        <div class=\"ej2-grid\">
-          <div class=\"ej-card ej2-big\">
-            <img class=\"ph\" src=\"/prueba-tomoko-dia1.jpg\" alt=\"Día 1 de la prueba de Tomoko: la Mille Crêpe de frutos rojos, diseñada\" loading=\"lazy\">
-            <span class=\"daychip\">Día 1<small>Imagen</small></span>
-          </div>
-          <div class=\"ej2-col\">
-            <div class=\"ej-card\">
-              <div class=\"ej-car\" onscroll=\"var n=this.parentNode.querySelector('.ej-count');if(n){var i=Math.round(this.scrollLeft/Math.max(1,this.clientWidth));if(i<0)i=0;if(i>2)i=2;n.textContent=(i+1)+' / 3'}\">
-                <img src=\"/prueba-tomoko-yuzu.jpg\" alt=\"Día 2 de la prueba de Tomoko: carrusel de la tarta de yuzu, foto 1 de 3\" loading=\"lazy\">
-                <img src=\"/prueba-tomoko-yuzu-det.jpg\" alt=\"Día 2 de la prueba de Tomoko: el domo de yuzu de cerca, foto 2 de 3\" loading=\"lazy\">
-                <img src=\"/prueba-tomoko-yuzu-caja.jpg\" alt=\"Día 2 de la prueba de Tomoko: la caja de la casa, foto 3 de 3\" loading=\"lazy\">
-              </div>
-              <span class=\"daychip\">Día 2<small>Carrusel</small></span>
-              <span class=\"ej-count\">1 / 3</span><button type=\"button\" class=\"ej2-arrow ej2-prev\" aria-label=\"Foto anterior\" onclick=\"var c=this.closest('.ej-card').querySelector('.ej-car');c.scrollBy({left:-c.clientWidth,behavior:'smooth'})\">‹</button><button type=\"button\" class=\"ej2-arrow ej2-next\" aria-label=\"Foto siguiente\" onclick=\"var c=this.closest('.ej-card').querySelector('.ej-car');c.scrollBy({left:c.clientWidth,behavior:'smooth'})\">›</button>
-            </div>
-            <div class=\"ej-card\">
-              <video src=\"/prueba-tomoko-dia3.mp4\" poster=\"/prueba-tomoko-dia3-poster.jpg\" autoplay muted loop playsinline preload=\"metadata\" oncanplay=\"try{var pr=this.play();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}\" aria-label=\"Día 3 de la prueba de Tomoko: el video del hojicha\"></video>
-              <span class=\"daychip\">Día 3<small>Video completo</small></span>
-            </div>
-          </div>
-        </div>
-        <div class=\"ej2-foot\">
-          <a class=\"ej2-cta\" href=\"/prueba\">Quiero mi prueba así</a>
-          <p>3 días gratis · sin tarjeta · cancelás cuando querás</p>
-        </div>
-      </div>
-    </div>
   </div></div>
   <div class="wd-scrolly"><div class="wd-sticky"><div class="wrap"><div class="wd-wk-label">Tu semana con nosotros</div><div class="wd-wk-title">Lunes a domingo, publicado.</div><div class="wd-strip"><div class="wd-cell"><div class="wd-dname">LUN</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt="Posteo del lunes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MAR</div><div class="wd-ph"><img loading="lazy" src="g2-moda-1.jpg" alt="Posteo del martes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">MIÉ</div><div class="wd-ph"><img loading="lazy" src="g2-barber-5.jpg" alt="Posteo del miércoles"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">JUE</div><div class="wd-ph"><img loading="lazy" src="g2-belleza-1.jpg" alt="Posteo del jueves"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">VIE</div><div class="wd-ph"><img loading="lazy" src="g4-mascotas-1.jpg" alt="Posteo del viernes"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">SÁB</div><div class="wd-ph"><img loading="lazy" src="g4-fitness-1.jpg" alt="Posteo del sábado"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div><div class="wd-cell"><div class="wd-dname">DOM</div><div class="wd-ph"><img loading="lazy" src="gt-cafemartinez-3.jpg" alt="Posteo del domingo"><span class="wd-posted"><span class="wd-posted-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Posteado</span></div><div class="wd-hora">19:00</div></div></div><div class="wd-payoff"><span class="wd-payoff-ck"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>7 de 7 días posteados — <b>tu Instagram nunca más abandonado.</b></span></div><div class="wd-bar"><i></i></div><div class="wd-hint">Seguí bajando ↓</div></div></div></div>
   <div class="section" id="como-funciona"><div class="wrap">
@@ -8793,6 +8755,44 @@ function landingView(cfg) {
     </div>
     <div class="vd-ctarow"><a class="vd-btnglass" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
+  <div class="lp-prueba"><div class="wrap">
+<div class=\"ej ej2\">
+      <p class=\"ej-title\">Esto le hicimos a Tomoko. <span class=\"ej2-free\">Gratis.</span></p>
+      <p class=\"ej2-sub\">Tres días de posteos con sus productos reales, diseñados uno por uno. Tu negocio se puede ver así esta misma semana.</p>
+      <div class=\"ej2-feed\">
+        <div class=\"ej2-head\">
+          <img src=\"/lp-tomoko-avatar.jpg\" alt=\"Patisserie Tomoko\">
+          <div class=\"ej2-hid\"><b>patisserie.tomoko</b><span>Patisserie Tomoko · Brooklyn</span></div>
+          <span class=\"ej2-tag\">Prueba gratis</span>
+        </div>
+        <div class=\"ej2-grid\">
+          <div class=\"ej-card ej2-big\">
+            <img class=\"ph\" src=\"/prueba-tomoko-dia1.jpg\" alt=\"Día 1 de la prueba de Tomoko: la Mille Crêpe de frutos rojos, diseñada\" loading=\"lazy\">
+            <span class=\"daychip\">Día 1<small>Imagen</small></span>
+          </div>
+          <div class=\"ej2-col\">
+            <div class=\"ej-card\">
+              <div class=\"ej-car\" onscroll=\"var n=this.parentNode.querySelector('.ej-count');if(n){var i=Math.round(this.scrollLeft/Math.max(1,this.clientWidth));if(i<0)i=0;if(i>2)i=2;n.textContent=(i+1)+' / 3'}\">
+                <img src=\"/prueba-tomoko-yuzu.jpg\" alt=\"Día 2 de la prueba de Tomoko: carrusel de la tarta de yuzu, foto 1 de 3\" loading=\"lazy\">
+                <img src=\"/prueba-tomoko-yuzu-det.jpg\" alt=\"Día 2 de la prueba de Tomoko: el domo de yuzu de cerca, foto 2 de 3\" loading=\"lazy\">
+                <img src=\"/prueba-tomoko-yuzu-caja.jpg\" alt=\"Día 2 de la prueba de Tomoko: la caja de la casa, foto 3 de 3\" loading=\"lazy\">
+              </div>
+              <span class=\"daychip\">Día 2<small>Carrusel</small></span>
+              <span class=\"ej-count\">1 / 3</span><button type=\"button\" class=\"ej2-arrow ej2-prev\" aria-label=\"Foto anterior\" onclick=\"var c=this.closest('.ej-card').querySelector('.ej-car');c.scrollBy({left:-c.clientWidth,behavior:'smooth'})\">‹</button><button type=\"button\" class=\"ej2-arrow ej2-next\" aria-label=\"Foto siguiente\" onclick=\"var c=this.closest('.ej-card').querySelector('.ej-car');c.scrollBy({left:c.clientWidth,behavior:'smooth'})\">›</button>
+            </div>
+            <div class=\"ej-card\">
+              <video src=\"/prueba-tomoko-dia3.mp4\" poster=\"/prueba-tomoko-dia3-poster.jpg\" autoplay muted loop playsinline preload=\"metadata\" oncanplay=\"try{var pr=this.play();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}\" aria-label=\"Día 3 de la prueba de Tomoko: el video del hojicha\"></video>
+              <span class=\"daychip\">Día 3<small>Video completo</small></span>
+            </div>
+          </div>
+        </div>
+        <div class=\"ej2-foot\">
+          <a class=\"ej2-cta\" href=\"/prueba\">Quiero mi prueba así</a>
+          <p>3 días gratis · sin tarjeta · cancelás cuando querás</p>
+        </div>
+      </div>
+    </div>
+  </div></div>
   ${lpIdeasHTML()}
   ${lpAtiendeHTML()}
   ${lpCrecimientoHTML()}
@@ -8825,7 +8825,7 @@ function landingView(cfg) {
 </div>
     </div>
     <div class="pz-beforeafter">
-      <h3>La diferencia se ve en una semana</h3>
+      <h2>La diferencia se ve en una semana</h2>
       <div class="pz-drag" id="pzDrag">
         <div class="pz-drag-layer">
           <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="lp-rosehip-avatar.jpg" alt=""></span><span class="pz-ba-who"><b>rosehipfloral</b><small>Florería · Williamsburg, Brooklyn</small></span></div>

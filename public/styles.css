@@ -573,7 +573,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* ===== Posta extras (pz-*): landing + referidos ===== */
 .pz-perday{font-size:11.5px;color:var(--dim);margin:-8px 0 14px;font-weight:600}
 .pz-beforeafter{margin-top:64px}
-.pz-beforeafter h3{font-size:21px;font-weight:800;margin-bottom:24px}
+.pz-beforeafter h2{font-size:clamp(26.5px,4vw,40.5px);font-weight:800;letter-spacing:-.02em;text-align:center;margin-bottom:16px}
 .pz-ba-row{display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap}
 .pz-ba-panel{background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:var(--shadow);width:300px}
 .pz-ba-label{font-size:10.5px;font-weight:800;letter-spacing:.08em;color:var(--dim);margin-bottom:14px}
@@ -1342,7 +1342,7 @@ textarea.in{resize:vertical;min-height:96px}
 /* ===== Antes/después lado a lado en mobile ===== */
 @media(max-width:760px){
   .pz-beforeafter{margin-top:44px}
-  .pz-beforeafter h3{font-size:16.5px;margin-bottom:16px}
+  .pz-beforeafter h2{font-size:23px}
   .pz-ba-row{flex-direction:row;flex-wrap:nowrap;gap:10px}
   .pz-ba-panel{width:auto;flex:1;min-width:0;padding:14px;border-radius:16px}
   .pz-ba-label{font-size:10px;margin-bottom:10px}
