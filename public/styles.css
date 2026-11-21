@@ -6392,6 +6392,28 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-ads-hist h2{font-size:14.5px;letter-spacing:.09em;font-weight:800;text-transform:uppercase;margin:8px 0 10px}
 .pz-ads-empty{border:1.5px dashed #cfdde8;border-radius:20px;padding:18px 16px;text-align:center;color:#5b7186;font-size:14px;line-height:1.5;font-weight:600;background:rgba(255,255,255,.55)}
 .pz-ads-empty b{color:#0A1E33;display:block;font-size:15px;margin-bottom:4px}
+/* (LOTE ADS-TARJETA-UNICA) La fila tranquila del selector, la tarjeta
+   de filas utilitarias (Conexión · Billetera · Tus impulsos) y la
+   grilla del feed en el lugar, con la geometría del mock aprobado. */
+.pz-ads-pickrow{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;box-sizing:border-box;background:#fff;border:0;border-radius:14px;box-shadow:0 4px 14px rgba(20,60,95,.08);padding:12px 14px;font:inherit;font-size:13.5px;font-weight:700;color:var(--txt);cursor:pointer;margin:0 0 12px;text-align:left}
+.pz-ads-pickrow-go{color:#2793C8;font-weight:800;white-space:nowrap}
+.pz-ads-rows{background:#fff;border-radius:18px;box-shadow:0 6px 18px rgba(20,60,95,.07);padding:4px 14px;margin:0 0 6px}
+.pz-ads-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;box-sizing:border-box;background:none;border:0;border-top:1px solid #EFF3F6;padding:11px 0;font:inherit;font-size:13.5px;color:var(--txt);cursor:pointer;text-align:left}
+.pz-ads-rows>.pz-ads-row:first-child{border-top:0}
+.pz-ads-row-flat{cursor:default}
+.pz-ads-row-k{color:#5B7A94}
+.pz-ads-row-v{font-weight:700;display:flex;align-items:center;gap:6px;text-align:right}
+.pz-ads-row-ch{color:#8CA1B5;font-weight:400}
+.pz-ads-row-det{padding:2px 0 12px}
+.pz-ads-rows .pz-ads-msg:empty{margin:0}
+.pz-ads-pick-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pz-ads-volver{background:none;border:0;color:#2793C8;font:inherit;font-weight:800;font-size:13.5px;cursor:pointer;padding:6px 2px}
+.pz-ads-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:0 0 14px}
+.pz-ads-grid-cell{position:relative;padding:0;border:0;border-radius:11px;overflow:hidden;aspect-ratio:1;background:#EAF5FB;cursor:pointer}
+.pz-ads-grid-cell img{width:100%;height:100%;object-fit:cover;display:block}
+.pz-ads-grid-cell.sel{outline:3px solid #2793C8;outline-offset:-3px}
+.pz-ads-grid-cell[disabled]{cursor:default}
+.pz-ads-grid-ya{position:absolute;left:0;right:0;bottom:0;background:rgba(10,30,51,.72);color:#fff;font-size:10.5px;font-weight:800;text-align:center;padding:3px 2px}
 
 /* ---------- LOTE CHAT-MEJORAS · reacciones / buscar / fijar / editar-borrar / galería ---------- */
 .pz-chat-tools{display:flex;gap:8px;margin:0 0 8px}

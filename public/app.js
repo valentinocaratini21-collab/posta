@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1213';
+const PZ_BUILD = '20261105-v1214';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -21622,6 +21622,16 @@ async function enhanceAdsBoost() {
 // dólares) no se tocan: este lote solo mueve la superficie a su tab.
 let pzAdsBoosts = [];
 let pzAdsPickDesdeAds = false;
+// (LOTE ADS-TARJETA-UNICA) Estado de presentación del tab: el modo
+// «elegir» (la grilla del feed en el lugar) y la fila utilitaria
+// abierta (conexión / billetera / impulsos). Es SOLO presentación:
+// los datos son los de siempre (pzBoostState, pzAdsBoosts) y la
+// grilla lee el endpoint del feed que ya existe
+// (/api/ads/billetera/feed, LOTE ADS-DIRECTO).
+let pzAdsModoElegir = false;
+let pzAdsFeedPosts = null; // null = la grilla todavía no se pidió
+let pzAdsFeedError = false;
+let pzAdsFilaAbierta = ''; // '', 'conexion', 'billetera', 'impulsos'
 
 // (LOTE ADS-SE-TRABA-AL-VOLVER) Timeout propio de la vista de Ads:
 // sus tres pedidos (billetera, elegibles, historial) corren EN
@@ -21872,31 +21882,124 @@ async function pzBoostConectarCuenta(btn) {
 // recién cuando el impulso moría (19/11). La línea dice qué
 // Página, qué Instagram y qué cuenta publicitaria quedaron
 // guardados; lo que la fila no trae no se inventa: se omite.
+// (LOTE RECONEXION-ADS) La conexión guardada, visible en el tab: qué
+// Página, qué Instagram y qué cuenta publicitaria quedaron conectados
+// (el detalle viaja en el payload de elegibles). Antes de ese lote la
+// tarjeta «Conectado» no existía: tras conectar, el tab no mostraba
+// qué quedó conectado ni dejaba reconectar sin salir a Ajustes.
+// (LOTE ADS-TARJETA-UNICA) La tarjeta entera se comprime a su LÍNEA
+// DE ESTADO en la tarjeta de filas (pzAdsFilasHTML): esta función
+// pasa a pintar el DETALLE que se abre en el lugar — la misma línea
+// completa de siempre (Página · Instagram · cuenta publicitaria) y
+// el mismo botón de reconexión (pzAdsCambiarConexion), con su
+// #pzAdsConexionMsg. Ninguna capacidad de RECONEXION-ADS se pierde.
 function pzAdsConexionHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
   const cx = s.conexion || null;
-  let linea = '';
-  let btnTxt = '';
-  if (cx && (cx.page_id || cx.ig_id || cx.ad_account_id)) {
-    const partes = [];
+  const partes = [];
+  if (cx) {
     if (cx.page_name || cx.page_id) partes.push((en ? 'Page ' : 'Página ') + (cx.page_name || cx.page_id));
     if (cx.ig_username) partes.push('Instagram @' + cx.ig_username);
-    else if (cx.ig_id) partes.push('Instagram ' + cx.ig_id);
     if (cx.ad_account_name || cx.ad_account_id) partes.push((en ? 'Ad account ' : 'Cuenta publicitaria ') + (cx.ad_account_name || cx.ad_account_id));
-    linea = (en ? 'Connected: ' : 'Conectado: ') + partes.join(' · ');
-    if (cx.ad_account_id) {
-      btnTxt = en ? 'Change connection' : 'Cambiar conexión';
-    } else {
-      linea += en ? ' · the ad account is still missing' : ' · falta la cuenta publicitaria';
-      btnTxt = en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria';
-    }
-  } else {
-    linea = en ? 'Your ad account isn’t connected yet.' : 'Todavía no conectaste tu cuenta publicitaria.';
-    btnTxt = en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria';
   }
-  return `<section style="margin:0 0 12px"><div style="border:1.5px solid #dce6ee;background:#fff;border-radius:16px;padding:12px 14px"><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p><button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div></section>`;
+  const linea = partes.length
+    ? (en ? 'Connected: ' : 'Conectado: ') + partes.join(' · ')
+    : (en ? 'Connected.' : 'Conectado.');
+  const btnTxt = (cx && cx.ad_account_id)
+    ? (en ? 'Change connection' : 'Cambiar conexión')
+    : (en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria');
+  return `<div><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p><button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div>`;
 }
+
+// (LOTE ADS-TARJETA-UNICA) El valor corto de la fila «Conexión»: el
+// nombre de la cuenta publicitaria cuando está; si falta justo la
+// cuenta, se dice; si no hay nada guardado, «Sin conectar». El
+// detalle completo vive en el detalle que se abre en el lugar
+// (pzAdsConexionHTML, arriba).
+function pzAdsConexionValor() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const cx = (pzBoostState || {}).conexion || null;
+  if (cx && cx.ad_account_id) return cx.ad_account_name || (en ? 'Ad account' : 'Cuenta publicitaria');
+  if (cx && (cx.page_id || cx.ig_id)) return en ? 'Ad account missing' : 'Falta la cuenta publicitaria';
+  return en ? 'Not connected' : 'Sin conectar';
+}
+
+// (LOTE ADS-TARJETA-UNICA) Las herramientas de la billetera (cargar
+// plata con los montos de siempre, la tarjeta guardada, Apple Pay)
+// dejan de ser una sección propia que repetía la plata de la
+// tarjeta: pasan al detalle de la fila «Billetera», con los mismos
+// ids (#pzAdsTarjeta, #pzAdsApplePay) y los mismos onclicks de
+// siempre (pzAdsCargar / pzTarjetaInlineAbrir). El saldo se dice en
+// la fila y, cuando falta, en el cartel de la tarjeta — nunca dos
+// veces en la misma pantalla.
+function pzAdsBilleteraHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = pzBoostState || {};
+  const cargas = pzAdsMontosCarga();
+  // (LOTE AGREGAR-TARJETA-INLINE) La tarjeta guardada se muestra en
+  // la billetera: si hay, «Cambiar tarjeta •••• last4»; si no,
+  // «Agregar tarjeta». El botón abre el form inline en #pzAdsTarjeta,
+  // ahí mismo.
+  const bil = s.billetera || {};
+  const tarjetaBil = (bil && bil.tarjeta) || null;
+  const tarjetaLabel = (tarjetaBil && tarjetaBil.tiene)
+    ? (en ? 'Change card' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : '') : 'Cambiar tarjeta' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : ''))
+    : (en ? 'Add a card' : 'Agregar tarjeta');
+  // (LOTE BILLETERA-APPLE-PAY) Sección Apple Pay: empieza oculta; el
+  // montaje (pzAdsApplePayMontar) la muestra solo si el dispositivo
+  // tiene Apple Pay / Google Pay disponible. Las píldoras eligen el
+  // monto del pago con Apple Pay (siempre USD: Apple Pay es solo
+  // riel Stripe).
+  const apPills = [20, 50, 100].map((m) => `<button type="button" class="pz-applepay-pill${pzApplePayMonto === m ? ' pz-applepay-pill-sel' : ''}" data-monto="${m}" onclick="pzAdsApplePayElegir(${m}, this)">$${m}</button>`).join('');
+  const apHTML = `<div class="pz-applepay" id="pzAdsApplePay" hidden><div class="pz-applepay-titulo">${esc(en ? 'Or pay with Apple Pay' : 'O pagá con Apple Pay')}</div><div class="pz-applepay-montos">${apPills}</div><div id="pzAdsApplePayBtn"></div><p class="pz-applepay-msg" id="pzAdsApplePayMsg"></p></div>`;
+  return `<div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><div class="pz-ads-tarjeta"><button type="button" class="pz-ads-tarjeta-btn" onclick="pzTarjetaInlineAbrir(document.getElementById('pzAdsTarjeta'))">${esc(tarjetaLabel)}</button></div>${apHTML}<div id="pzAdsTarjeta"></div>`;
+}
+
+// (LOTE ADS-TARJETA-UNICA) La tarjeta de filas utilitarias que cierra
+// la pantalla: Conexión (su línea de estado; el detalle de
+// RECONEXION-ADS y el cambio se abren en el lugar), Billetera (el
+// saldo; las herramientas se abren en el lugar) y Tus impulsos (sin
+// historial, UNA línea — «Todavía ninguno» — y la sección entera de
+// antes desaparece; con historial, el conteo en la fila y las filas
+// de siempre — pzAdsHistorialHTML intacta — al abrir). Una sola fila
+// abierta por vez; el estado vive en pzAdsFilaAbierta y sobrevive a
+// los re-pintados. #pzAdsMsg queda al pie de la tarjeta, siempre en
+// el DOM como antes vivía en la sección de billetera: ahí siguen
+// cayendo los mensajes de carga y de tarjeta guardada.
+function pzAdsFilasHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = pzBoostState || {};
+  const moneda = pzBoostEsMP() ? 'ARS' : 'USD';
+  const saldo = pzBoostSaldo();
+  const amtTxt = moneda === 'USD' ? ('US$' + saldo) : ('$' + saldo.toLocaleString('es-AR'));
+  const boosts = Array.isArray(pzAdsBoosts) ? pzAdsBoosts : [];
+  // Con el cartel de la diferencia en la tarjeta (misma condición
+  // que lo pinta ahí), el saldo ya se dijo en el cartel («Tenés US$X
+  // en tu billetera»): la fila no lo repite y ofrece la carga.
+  const montosF = pzBoostMontos();
+  const mSelF = montosF.includes(Number(s.selMonto)) ? Number(s.selMonto) : (montosF.length > 1 ? montosF[1] : montosF[0]);
+  const pSel = s.selPost || null;
+  const yaSel = !!pSel && (!!pSel.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(pSel)));
+  const difF = (moneda === 'USD' && pSel && !yaSel) ? pzAdsDiferencia() : null;
+  const cartelF = !!(difF && !difF.esMP && difF.pauta === mSelF);
+  const fila = (cual, k, v, detHTML) => {
+    const open = pzAdsFilaAbierta === cual;
+    return `<button type="button" class="pz-ads-row" onclick="pzAdsFilaToggle('${cual}')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-row-k">${esc(k)}</span><span class="pz-ads-row-v">${esc(v)}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${open ? `<div class="pz-ads-row-det">${detHTML}</div>` : ''}`;
+  };
+  const cxFila = fila('conexion', en ? 'Connection' : 'Conexión', pzAdsConexionValor(), pzAdsConexionHTML());
+  const bilFila = fila('billetera', en ? 'Wallet' : 'Billetera', cartelF ? (en ? 'Top up' : 'Cargar') : amtTxt, pzAdsBilleteraHTML());
+  const impFila = boosts.length
+    ? fila('impulsos', en ? 'Your boosts' : 'Tus impulsos', String(boosts.length), `<div id="pzAdsHist">${pzAdsHistorialHTML(boosts)}</div>`)
+    : `<div class="pz-ads-row pz-ads-row-flat"><span class="pz-ads-row-k">${esc(en ? 'Your boosts' : 'Tus impulsos')}</span><span class="pz-ads-row-v">${esc(en ? 'None yet' : 'Todavía ninguno')}</span></div>`;
+  return `<section class="pz-ads-rows">${cxFila}${bilFila}${impFila}<p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+}
+
+function pzAdsFilaToggle(cual) {
+  pzAdsFilaAbierta = (pzAdsFilaAbierta === cual) ? '' : cual;
+  pzAdsPintar();
+}
+
 
 // (LOTE RECONEXION-ADS) «Cambiar conexión» (y «Reconectar con la
 // cuenta correcta» de la tarjeta de identidad): abre el flujo
@@ -21924,42 +22027,81 @@ async function pzAdsCambiarConexion(btn) {
     () => { restaurar(); });
 }
 
-// (LOTE TARJETA-IMPULSAR) Las recomendaciones chicas: otros posteos
-// CON DATOS REALES (alcance o me gusta > 0), sin el de la tarjeta
-// grande y sin los ya impulsados. Sin datos no hay sección: nunca se
-// rellena con posteos sin números.
-function pzAdsOtrosConDatos(p) {
-  const s = pzBoostState || {};
-  const clave = pzBoostKey(p);
-  return (Array.isArray(s.elegibles) ? s.elegibles : []).filter((e) => {
-    if (!e) return false;
-    const k = pzBoostKey(e);
-    if (!k || k === clave) return false;
-    if (e.ya_impulsado || pzBoostImpulsados.has(k)) return false;
-    return Number(e.reach || 0) > 0 || Number(e.likes || 0) > 0;
-  }).slice(0, 3);
+// (LOTE ADS-TARJETA-UNICA) El selector del tab, EN EL LUGAR (la
+// enmienda que Valentino aprobó sobre la opción 1): la fila tranquila
+// «¿Otro posteo? Elegilo de tu feed» abre la GRILLA del feed del
+// propio negocio en la misma pantalla — sin salir a la hoja de
+// Impulsar, que sigue siendo la entrada de Hoy y del detalle de
+// posteo — y al tocar un posteo la MISMA tarjeta de plata se rearma
+// con ese posteo como «TU ELECCIÓN» (la selección es la de siempre:
+// pzAdsElegirOtro sobre los elegibles). Los montos, el total y el
+// faltante no se tocan: la plata no cambia, cambia el posteo. Las
+// recomendaciones chicas que vivían bajo la tarjeta salen del tab:
+// la grilla las reemplaza, y con ellas se va el dato cruzado (el
+// recomendado con su alcance en la tarjeta y otro posteo con otro
+// alcance en la tarjeta chica de abajo): queda UN solo número, el
+// del posteo de la tarjeta, de la única fuente (los elegibles).
+async function pzAdsFeedAbrir() {
+  pzAdsModoElegir = true;
+  pzAdsPintar();
+  if (pzAdsFeedPosts === null) {
+    try {
+      const j = await api.get('/api/ads/billetera/feed');
+      pzAdsFeedPosts = (j && Array.isArray(j.posts)) ? j.posts : [];
+    } catch (e) { pzAdsFeedError = true; pzAdsFeedPosts = []; }
+    if (pzAdsModoElegir) pzAdsPintar();
+  }
 }
 
-function pzAdsOtrosHTML(p) {
+// La grilla: las fotos del feed (endpoint /feed: posteos locales
+// publicados) más los posteos solo-IG de los elegibles, que en la
+// hoja se eligen igual — ningún posteo elegible pierde su camino.
+// Una celda ya impulsada o sin elegible queda inerte, con su velo.
+function pzAdsFeedGridHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const otros = pzAdsOtrosConDatos(p);
-  if (!otros.length) return '';
-  const cards = otros.map((e) => {
-    const key = pzBoostKey(e);
-    const img = e.image_path
-      ? `<img src="${esc(e.image_path)}" alt="" style="width:100%;height:64px;object-fit:cover;border-radius:12px;display:block">`
-      : `<div style="width:100%;height:64px;border-radius:12px;background:#EAF5FB"></div>`;
-    const l1 = Number(e.reach || 0) > 0 ? `<div style="font-size:12.5px;font-weight:800;color:#0A1E33">${esc(Number(e.reach) + (en ? ' reach' : ' de alcance'))}</div>` : '';
-    const l2 = Number(e.likes || 0) > 0 ? `<div style="font-size:12.5px;color:#7d93a7;font-weight:600">${esc(Number(e.likes) + (en ? ' likes' : ' me gusta'))}</div>` : '';
-    return `<button type="button" onclick="pzAdsElegirOtro('${key}')" style="flex:1;background:#fff;border:1.5px solid #e3ebf1;border-radius:16px;padding:6px;cursor:pointer;font-family:inherit;text-align:center;box-shadow:0 3px 0 rgba(16,42,67,.05)">${img}<div style="margin-top:6px">${l1}${l2}</div></button>`;
+  if (pzAdsFeedPosts === null) return `<p class="pz-ads-note" style="margin:10px 0 14px">${esc(en ? 'Loading your feed…' : 'Cargando tu feed…')}</p>`;
+  if (pzAdsFeedError) return `<p class="pz-ads-note" style="margin:10px 0 14px">${esc(en ? 'Your feed couldn’t load. Go back and try again.' : 'No se pudo cargar tu feed. Volvé y probá de nuevo.')}</p>`;
+  const s = pzBoostState || {};
+  const eleg = Array.isArray(s.elegibles) ? s.elegibles : [];
+  const elegKeys = new Set(eleg.map((e) => pzBoostKey(e)));
+  const items = [];
+  (pzAdsFeedPosts || []).forEach((f) => { items.push({ key: 'p' + f.post_id, img: f.image_path || '', ya: !!f.ya_impulsado }); });
+  eleg.forEach((e) => {
+    const k = pzBoostKey(e);
+    if (k.indexOf('ig:') === 0) items.push({ key: k, img: e.image_path || '', ya: !!e.ya_impulsado });
+  });
+  if (!items.length) return `<p class="pz-ads-note" style="margin:10px 0 14px">${esc(en ? 'There are no published posts in your feed yet.' : 'Todavía no hay posteos publicados en tu feed.')}</p>`;
+  const cells = items.map((it) => {
+    const sel = s.selId === it.key;
+    const okCell = elegKeys.has(it.key) && !it.ya;
+    const veil = it.ya ? `<span class="pz-ads-grid-ya">${esc(en ? 'Boosted ✓' : 'Impulsado ✓')}</span>` : '';
+    return `<button type="button" class="pz-ads-grid-cell${sel ? ' sel' : ''}" ${okCell ? `onclick="pzAdsFeedElegir('${it.key}')"` : 'disabled'}><img src="${esc(it.img)}" alt="">${veil}</button>`;
   }).join('');
-  return `<section style="margin:2px 0 12px"><h3 style="font-size:14.5px;letter-spacing:.09em;font-weight:800;text-transform:uppercase;color:#0A1E33;margin:8px 0 10px">${esc(en ? 'You can also boost' : 'También podés impulsar')}</h3><div style="display:flex;gap:8px">${cards}</div></section>`;
+  return `<div class="pz-ads-grid">${cells}</div>`;
 }
 
-// (LOTE TARJETA-IMPULSAR) Tocar una recomendación chica la sube a la
-// tarjeta grande (la selección es por clave, como en el picker); la
-// que estaba grande vuelve a la lista si tiene datos, porque la lista
-// se deriva del estado en cada pintado.
+// Tocar un posteo de la grilla: la selección de siempre
+// (pzAdsElegirOtro busca en los elegibles y re-pinta); el modo
+// elegir queda abierto con la tarjeta rearmada abajo, como en el
+// mock aprobado.
+function pzAdsFeedElegir(key) {
+  pzAdsElegirOtro(String(key));
+}
+
+function pzAdsElegirCerrar() {
+  pzAdsModoElegir = false;
+  pzAdsPintar();
+}
+
+// La vista del modo elegir: el encabezado del mock («Elegí el
+// posteo»), la grilla y LA MISMA tarjeta de plata rearmada. El
+// «Volver» es el camino de vuelta (el mock no lo dibuja; sin él el
+// modo no tendría salida sin elegir).
+function pzAdsElegirHTML(recHTML) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  return `<div class="pz-ads-pick-head"><h1 class="pz-ads-title" style="font-size:19px;margin:0">${esc(en ? 'Choose the post' : 'Elegí el posteo')}</h1><button type="button" class="pz-ads-volver" onclick="pzAdsElegirCerrar()">${esc(en ? '← Back' : '← Volver')}</button></div><p class="pz-ads-sub">${esc(en ? 'Your feed — tap one and the card re-arms with it.' : 'Tu feed — tocá uno y la tarjeta se rearma con ese.')}</p>${pzAdsFeedGridHTML()}${recHTML}`;
+}
+
 function pzAdsElegirOtro(key) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   const e = (s.elegibles || []).find((x) => pzBoostKey(x) === key);
@@ -21981,18 +22123,18 @@ function pzAdsElegirMonto(m) {
   pzAdsPintar();
 }
 
-// (LOTE ADS-PANTALLA-2) El botón «Elegir otro posteo» del tab: la
-// tarjeta muestra el recomendado, pero la opción de elegir CUALQUIER
-// posteo del feed tiene que estar a la vista acá. Antes el tab no
-// rendía ninguna entrada a la hoja de elegir (pzAdsPickOpen existía
-// sin llamador en esta pantalla; solo quedaban las ≤3 tarjetas con
-// métricas de pzAdsOtrosHTML, que sin métricas ni se muestran).
-function pzAdsElegirBtnHTML() {
+// (LOTE ADS-TARJETA-UNICA) La fila tranquila del selector, tal como
+// la aprobó Valentino en la enmienda de la opción 1: una línea bajo
+// la tarjeta — «¿Otro posteo? Elegilo de tu feed — Elegir otro →» —
+// que abre la grilla en el lugar (pzAdsFeedAbrir). Reemplaza al
+// botón ancho que abría la hoja de Impulsar; la hoja queda como
+// entrada de Hoy y del detalle de posteo, intacta.
+function pzAdsPickRowHTML() {
   const s = pzBoostState || {};
   const list = Array.isArray(s.elegibles) ? s.elegibles : [];
   if (!list.length) return '';
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  return `<button type="button" onclick="pzAdsPickOpen()" style="width:100%;box-sizing:border-box;padding:12px;border-radius:14px;border:2px solid #DCEFFF;background:#fff;font-weight:800;font-size:14.5px;color:var(--txt);cursor:pointer;margin:2px 0 14px">${esc(en ? 'Choose another post' : 'Elegir otro posteo')}</button>`;
+  return `<button type="button" class="pz-ads-pickrow" onclick="pzAdsFeedAbrir()"><span>${esc(en ? 'Another post? Pick it from your feed' : '¿Otro posteo? Elegilo de tu feed')}</span><span class="pz-ads-pickrow-go">${esc(en ? 'Choose another →' : 'Elegir otro →')}</span></button>`;
 }
 
 // (LOTE ADS-GUÍA-CUENTA) La guía corta del caso sin cuenta: la
@@ -22029,7 +22171,6 @@ function pzAdsGuiaSinCuentaHTML() {
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
-  const saldo = pzBoostSaldo();
   // (LOTE POST-GRANDE-ADS-LINDO · ARS · 11/11 · Valentino: la moneda
   // mostrada es la del RIEL de pago (billing_provider → pzBoostEsMP),
   // no la de la billetera: la billetera puede ir rezagada del riel
@@ -22043,40 +22184,21 @@ function pzAdsHTML() {
   const mB = montos.length > 2 ? montos[2] : montos[0];
   const p = s.selPost || null;
   const gate = pzBoostGate();
-  const cargas = pzAdsMontosCarga();
-  // (LOTE POST-GRANDE-ADS-LINDO · 11/11 · el tab Ads como el mock
-  // inicio-y-ads-mock-3-tabs: título + subtítulo, billetera con ícono y
-  // monto a la derecha, tarjeta del recomendado con kick + foto +
-  // motivo, 3 montos en fila con RECOMENDADO · 7 DÍAS, botón grande,
-  // fineprint de crédito, «Elegir otro posteo» como link, «Tus
-  // impulsos». Misma funcionalidad: mismos montos, mismo recomendado,
-  // misma billetera, mismo historial, mismas rutas/API, mismos ids y
-  // onclicks (pzAdsCargar / pzAdsImpulsar / pzAdsPickOpen).)
-  // (LOTE TARJETA-IMPULSAR · 13/11 · mock v3: ese diseño se redibuja —
-  // la línea pasa a pzAdsRecLinea sin caption, los montos se eligen con
-  // pzAdsElegirMonto y la moneda con la duración va una sola vez, el
-  // link pasa a ser las recomendaciones chicas (pzAdsOtrosHTML) y sin
-  // Página la tarjeta se reduce a «Autorizar mi Página». La billetera,
-  // el historial, las rutas/API y los ids no cambian.)
-  const amtTxt = moneda === 'USD' ? ('US$' + saldo) : ('$' + saldo.toLocaleString('es-AR'));
-  const walSub = en ? 'Credit to boost' : (moneda === 'USD' ? 'Crédito para impulsar' : 'Crédito para impulsar · en pesos');
-  const walletSVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 0 1 0-4h14v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H4"/><circle cx="16.5" cy="14" r="1.3" fill="currentColor" stroke="none"/></svg>';
-  // (LOTE AGREGAR-TARJETA-INLINE) La tarjeta guardada se muestra en la
-  // billetera: si hay, «Cambiar tarjeta •••• last4»; si no, «Agregar
-  // tarjeta». El botón abre el form inline en #pzAdsTarjeta, ahí mismo.
-  const bil = s.billetera || {};
-  const tarjetaBil = (bil && bil.tarjeta) || null;
-  const tarjetaLabel = (tarjetaBil && tarjetaBil.tiene)
-    ? (en ? 'Change card' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : '') : 'Cambiar tarjeta' + (tarjetaBil.last4 ? ' •••• ' + tarjetaBil.last4 : ''))
-    : (en ? 'Add a card' : 'Agregar tarjeta');
-  // (LOTE BILLETERA-APPLE-PAY) Sección Apple Pay: empieza oculta; el
-  // montaje (pzAdsApplePayMontar) la muestra solo si el dispositivo tiene
-  // Apple Pay / Google Pay disponible. Las píldoras eligen el monto del
-  // pago con Apple Pay (siempre USD: Apple Pay es solo riel Stripe).
-  const apPills = [20, 50, 100].map((m) => `<button type="button" class="pz-applepay-pill${pzApplePayMonto === m ? ' pz-applepay-pill-sel' : ''}" data-monto="${m}" onclick="pzAdsApplePayElegir(${m}, this)">$${m}</button>`).join('');
-  const apHTML = `<div class="pz-applepay" id="pzAdsApplePay" hidden><div class="pz-applepay-titulo">${esc(en ? 'Or pay with Apple Pay' : 'O pagá con Apple Pay')}</div><div class="pz-applepay-montos">${apPills}</div><div id="pzAdsApplePayBtn"></div><p class="pz-applepay-msg" id="pzAdsApplePayMsg"></p></div>`;
-  const walletHTML = `<section class="pz-ads-wallet"><div class="pz-ads-wallet-row"><span class="pz-ads-wicon">${walletSVG}</span><div class="pz-ads-wallet-txt"><b>${esc(en ? 'Your wallet' : 'Tu Billetera')}</b><span>${esc(walSub)}</span></div><span class="pz-ads-amt">${esc(amtTxt)}</span></div><div class="pz-ads-cargar"><span>${esc(en ? 'Top up:' : 'Cargar plata:')}</span>${cargas.map((x) => `<button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsCargar(${x}, this)">$${esc(pzBoostFmtMonto(x))}</button>`).join(' ')}</div><div class="pz-ads-tarjeta"><button type="button" class="pz-ads-tarjeta-btn" onclick="pzTarjetaInlineAbrir(document.getElementById('pzAdsTarjeta'))">${esc(tarjetaLabel)}</button></div>${apHTML}<div id="pzAdsTarjeta"></div><p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
-  const kickHTML = `<div class="pz-ads-kick">${esc(en ? 'POSTY RECOMMENDS' : 'POSTY RECOMIENDA')}</div>`;
+  // (LOTE ADS-TARJETA-UNICA) La pantalla se rearma como la aprobó
+  // Valentino (opción 1 + la enmienda del selector): UNA sola tarjeta
+  // de plata — el posteo (el recomendado, o «TU ELECCIÓN» cuando el
+  // cliente eligió otro), los montos una sola vez, el cartel de la
+  // diferencia cuando el saldo no llega y UN solo botón —; debajo,
+  // la fila tranquila del selector y la tarjeta de filas (Conexión ·
+  // Billetera · Tus impulsos). Salen: la sección de billetera que
+  // repetía la plata, la tarjeta entera de conexión, las
+  // recomendaciones chicas y la sección «Tus impulsos». La lógica no
+  // cambia: mismos montos, mismo recomendado, el mismo cartel
+  // INTOCABLE (pzAdsTabDiferenciaHTML), mismas rutas/API, mismos ids
+  // vivos (#pzAdsRecMsg, #pzAdsAudiencia, #pzAdsMsg, y los de los
+  // detalles: #pzAdsConexionMsg, #pzAdsTarjeta, #pzAdsApplePay,
+  // #pzAdsHist) y los mismos onclicks.
+  const kickHTML = `<div class="pz-ads-kick">${esc(p && !p.recomendado ? (en ? 'YOUR PICK' : 'TU ELECCIÓN') : (en ? 'POSTY RECOMMENDS' : 'POSTY RECOMIENDA'))}</div>`;
   let recHTML = '';
   // (LOTE TARJETA-IMPULSAR + ADDENDUM 13/11 13:35 — modelo decidido
   // por Valentino: la pauta corre desde la cuenta publicitaria del
@@ -22096,8 +22218,7 @@ function pzAdsHTML() {
     // se reduce a ese único paso — foto + una línea + el botón de
     // conexión + «No se gastó nada.». Sin montos, sin botón de impulso
     // y sin párrafo de error. Es el estado principal de todo cliente
-    // externo hoy (auditoría de autorización 13/11). La billetera y el
-    // historial son secciones hermanas y quedan como están.
+    // externo hoy (auditoría de autorización 13/11).
     // (LOTE CAMINO-CLIENTE-ADS · solución aprobada por Valentino
     // 14/11) El botón pasa a ser «Conectar mi cuenta publicitaria» y
     // abre el flujo unificado en el acto (pzAdsAutorizarPagina): es
@@ -22109,7 +22230,7 @@ function pzAdsHTML() {
     const lineaAut = p.recomendado
       ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: connect your ad account.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.')
       : (en ? 'One tap is all it takes to boost it: connect your ad account.' : 'Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.');
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p>${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p>${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
@@ -22143,21 +22264,28 @@ function pzAdsHTML() {
       const tag = m === mMain ? `<span class="pz-ads-tag">${esc(en ? 'RECOMMENDED' : 'RECOMENDADO')}</span>` : '';
       return `<button type="button" class="pz-ads-amount${sel ? ' sel' : ''}" onclick="pzAdsElegirMonto(${m})">${tag}<b>$${esc(pzBoostFmtMonto(m))}</b></button>`;
     };
-    const montosHTML = ya
-      ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
-      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p><p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`;
     // (LOTE CIERRE-ADS · FIX 2) Con el saldo corto contra el TOTAL,
     // el botón de impulsar queda REEMPLAZADO por el cartel de la
     // diferencia (no solo deshabilitado): cargar el faltante exacto
     // en un toque es la única acción hasta cubrir el total.
+    // (LOTE ADS-TARJETA-UNICA) Con el cartel puesto, el desglose NO
+    // se repite arriba: la plata se dice una sola vez por estado —
+    // el desglose cuando el botón es Impulsar; el cartel (que ya
+    // trae pauta + gestión + saldo + faltante) cuando no llega.
     const difTab = (!ya && moneda === 'USD') ? pzAdsDiferencia() : null;
-    const bigBtn = ya ? '' : ((difTab && !difTab.esMP && difTab.pauta === mSel)
+    const cartelActivo = !!(difTab && !difTab.esMP && difTab.pauta === mSel);
+    const montosHTML = ya
+      ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
+      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p>${cartelActivo ? '' : `<p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`}`;
+    const bigBtn = ya ? '' : (cartelActivo
       ? pzAdsTabDiferenciaHTML()
       : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mSel}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(totalSel))}</button>`);
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>${pzAdsOtrosHTML(p)}`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
   }
-  const histHTML = `<section class="pz-ads-hist"><h2>${esc(en ? 'Your boosts' : 'Tus impulsos')}</h2><div id="pzAdsHist">${pzAdsHistorialHTML(pzAdsBoosts)}</div></section>`;
-  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${walletHTML}${pzAdsConexionHTML()}${recHTML}${pzAdsElegirBtnHTML()}${histHTML}`;
+  // (LOTE ADS-TARJETA-UNICA) El modo elegir reemplaza el cuerpo por
+  // el encabezado + la grilla + LA MISMA tarjeta rearmada.
+  if (pzAdsModoElegir) return pzAdsElegirHTML(recHTML);
+  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${recHTML}${pzAdsPickRowHTML()}${pzAdsFilasHTML()}`;
 }
 function pzAdsPintar() {
   const box = document.getElementById('pzAdsRoot');
@@ -23910,6 +24038,11 @@ function bindAds() {
   try {
     const q = new URLSearchParams((location.hash.split('?')[1] || ''));
     if (q.get('tarjeta') === 'ok') {
+      // (LOTE ADS-TARJETA-UNICA) La confirmación cae en #pzAdsMsg, al
+      // pie de la tarjeta de filas: se abre la fila Billetera y se
+      // re-pinta para que el mensaje se vea al volver de Stripe
+      // (antes la billetera era una sección siempre a la vista).
+      try { pzAdsFilaAbierta = 'billetera'; pzAdsPintar(); } catch (e) {}
       const m = document.getElementById('pzAdsMsg');
       if (m) m.textContent = gzT('Tarjeta guardada. Ya podés cargar con un toque.', 'Card saved. You can top up with one tap now.');
       try { history.replaceState(null, '', location.pathname + '#/app/ads'); } catch (e) {}
