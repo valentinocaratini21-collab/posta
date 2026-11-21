@@ -879,10 +879,27 @@ const WEEK_CLASH_REASONS = [
   'dispositivo repetido fuera de la apertura',
   '(D8)',
 ];
-function captionWeekClash(caption, prevCaptions, business) {
+function captionWeekClash(caption, prevCaptions, business, langOpt) {
   const prevs = Array.isArray(prevCaptions) ? prevCaptions : [];
   if (!prevs.length) return { ok: true };
-  const r = captionPasses(caption, { business: business || '', prevCaptions: prevs });
+  // PARIDAD-CLASH (Juli, 2026-11-21 — candidato (i) de la corrida
+  // 2026-11-20, verificado hoy con los ids reales 735/739): este
+  // re-chequeo de último momento corría SIEMPRE la puerta ES, también
+  // para posteos EN: el 739 (RAZOR RICK, scheduled 2026-11-22, abre
+  // con el titular exacto del 735 publicado el 20/11) devolvía
+  // ok:true con la nota del CTA en español y el choque de dispositivo
+  // EN nunca asomaba — la puerta de su idioma ya lo rechazaba desde
+  // v1208, pero este helper nunca la consultaba. Ahora la puerta se
+  // elige por idioma: langOpt explícito manda; sin él, el detector
+  // determinístico (detectTextLang) sobre el propio caption — un
+  // veredicto 'en' usa captionPassesEn; 'es'/'other'/sin veredicto
+  // conserva el comportamiento histórico ES. Los llamadores de
+  // server.js (que pasan solo el negocio) quedan cubiertos por la
+  // detección, sin tocar su firma.
+  const enClash = langOpt === 'en' || (!langOpt && detectTextLang(caption) === 'en');
+  const r = enClash
+    ? captionPassesEn(caption, { business: business || '', prevCaptions: prevs })
+    : captionPasses(caption, { business: business || '', prevCaptions: prevs });
   if (r.ok) return { ok: true };
   if (WEEK_CLASH_REASONS.some((s) => String(r.reason || '').includes(s))) return { ok: false, reason: r.reason };
   return { ok: true, note: r.reason };
@@ -1057,6 +1074,46 @@ function captionPasses(caption, input) {
   // cuerpo) se rechaza acá — no depende de la apertura ni del idioma.
   if (exactDupOf(c, input)) {
     return { ok: false, reason: 'caption duplicado exacto en la misma semana (DEDUP): este mismo texto ya salió en otro posteo de la tanda — reescribilo con otra apertura, otro ángulo y otro cierre' };
+  }
+  // DISPOSITIVO-ANTES-DEL-CTA (Juli, 2026-11-21 — candidato (h) de la
+  // corrida 2026-11-20, verificado hoy): en esta puerta el chequeo de
+  // dispositivo de apertura repetido (M79, más abajo) vive DESPUÉS del
+  // chequeo de CTA — para el formato póster de la línea a mano, que
+  // por diseño no trae CTA, una repetición de dispositivo quedaba
+  // tapada por el motivo de CTA y captionWeekClash la devolvía como
+  // ok:true con nota (la puerta EN lo resolvió en v1208 colocando su
+  // chequeo ANTES del CTA; esta es la paridad que faltaba en ES).
+  // Chequeo angosto y duplicado a propósito: la misma deviceOf de M79,
+  // solo el dispositivo de apertura contra los previos, antes del CTA;
+  // el bloque M79 completo sigue corriendo después para el resto de
+  // sus reglas. Reproducido pre-fix hoy: un póster ES sin CTA que
+  // repetía «¿cuántas veces te…?» de su previo devolvía el motivo de
+  // CTA en captionPasses y ok:true en captionWeekClash.
+  {
+    const prevsEarly = [];
+    if (input && Array.isArray(input.prevCaptions)) prevsEarly.push(...input.prevCaptions);
+    if (input && input.prevCaption) prevsEarly.push(input.prevCaption);
+    if (prevsEarly.length) {
+      const deviceOfEarly = (txt) => {
+        const fl = (String(txt || '').split('\n')[0] || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const words = fl.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+        if (!words.length) return null;
+        const head = words.slice(0, 4).join(' ');
+        if (/^cuantas veces te\b/.test(head)) return 'cuantas-veces-te';
+        if (/^cuantas veces\b/.test(head)) return 'cuantas-veces';
+        if (/^te preguntaste\b/.test(head)) return 'te-preguntaste';
+        if (/^te imagina/.test(head)) return 'te-imaginas';
+        if (/^sabias que\b/.test(head)) return 'sabias-que';
+        if (fl.includes('¿')) return 'q:' + words.slice(0, 3).join(' ');
+        if (fl.includes('¡')) return 'e:' + words.slice(0, 3).join(' ');
+        if (words.length >= 3) return 'h:' + words.slice(0, 3).join(' ');
+        return null;
+      };
+      const devEarly = deviceOfEarly(c);
+      if (devEarly && prevsEarly.map(deviceOfEarly).includes(devEarly)) {
+        return { ok: false, reason: `dispositivo de apertura repetido en la misma semana (M79): otro posteo de esta tanda ya abrió con la misma fórmula ("${devEarly.startsWith('q:') || devEarly.startsWith('e:') ? devEarly.slice(2) : devEarly}") — un solo uso por semana; abrí con la escena, el dato o una afirmación` };
+      }
+    }
   }
   const hasCta = CTA_SIGNALS.some(s => low.includes(s)) || /\bdm\b/.test(low);
   if (!hasCta) return { ok: false, reason: 'le falta un llamado a la acción claro (DM, comentario, guardado…)' };
