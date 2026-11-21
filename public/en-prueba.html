@@ -182,6 +182,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <button type="button" class="noweb-link" id="fNoWeb">I don't have a website</button>
       <p class="noweb-note" id="fNoWebNote" hidden>No website: we build your week from your Instagram, and whatever is missing we'll ask you later, one question at a time.</p>
     </div>
+    <div class="field">
+      <label for="fEmail">Your email *</label>
+      <input id="fEmail" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@email.com" aria-label="Your email *">
+      <p class="hint">We'll let you know when each post goes out</p>
+    </div>
     <div class="field" id="fStarWrap" hidden>
       <label for="fStar">What do you sell the most? *</label>
       <input id="fStar" type="text" autocomplete="off" placeholder="E.g.: specialty coffee" aria-label="What do you sell the most">
@@ -242,7 +247,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   var qs = new URLSearchParams(location.search);
   var TEST_KEY_QS = qs.get('test_key') ? ('?test_key=' + encodeURIComponent(qs.get('test_key'))) : '';
   var $ = function (id) { return document.getElementById(id); };
-  var igEl = $('fIg'), webEl = $('fWeb'), starEl = $('fStar'), starWrap = $('fStarWrap');
+  var igEl = $('fIg'), webEl = $('fWeb'), starEl = $('fStar'), starWrap = $('fStarWrap'), emailEl = $('fEmail');
   // (LOTE PUERTA-NUEVA · DOOR RULE 11/18) Both fields always show and
   // are always expected; the only way out is the «I don't have a
   // website» escape: tap it and the website is waived (field off and
@@ -279,6 +284,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   var qWeb = (qs.get('web') || '').trim();
   if (qIg) igEl.value = '@' + qIg;
   if (qWeb) webEl.value = qWeb;
+  var qEmail = (qs.get('email') || '').trim();
+  if (qEmail) emailEl.value = qEmail;
   function cleanIg(v) { return String(v || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40); }
   function cleanWeb(v) {
     var s = String(v || '').trim();
@@ -327,6 +334,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     try {
       localStorage.setItem(PENDING_KEY, JSON.stringify({
         ig: ig, web: web, sinWeb: !!noWeb, star: String(star || '').slice(0, 60),
+        email: String((emailEl && emailEl.value) || '').trim().slice(0, 120),
         brandLang: brandLangChoice || '', ts: Date.now(),
         // (LOTE FUNDAMENTO-QUE-DUDA) The trial question's answers also
         // survive a reload: an answered question is never re-asked.
@@ -853,13 +861,18 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // (LOTE REANUDAR-TRAS-RECARGA) The in-progress intent is persisted
     // BEFORE building: if this tab reloads or closes halfway, the next
     // load resumes by itself with this same data.
+    // (LOTE PRUEBA-RECUERDA · enmienda del dueño 2026-11-20 23:00) El
+    // email es el tercer dato y es OBLIGATORIO: sin un email válido la
+    // semana no se arma — es la llave de los recordatorios.
+    var email = String(emailEl.value || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) { showErr('Leave a valid email — we'll let you know when each post goes out 🙂'); emailEl.focus(); return; }
     savePending(ig, web, star);
     btn.disabled = true; btn.textContent = 'Building…';
     try {
       var built = await buildFirstPost(ig, web, star || '', brandLangChoice);
       if (built === 'need_star' || built === 'need_lang' || built === 'need_question' || !built) { btn.disabled = false; btn.textContent = 'See my planned week'; return; }
       showStatus('Entering your product…');
-      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, domain: web, sin_web: noWeb ? 1 : 0, device: deviceId(), lang: LANG, tz: browserTz() });
+      var gs = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, email: email, domain: web, sin_web: noWeb ? 1 : 0, device: deviceId(), lang: LANG, tz: browserTz() });
       if (!gs.ok) {
         if (gs.status === 409 || (gs.j && (gs.j.trial_used || gs.j.device_used))) {
           clearPending();
@@ -1035,6 +1048,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (pend) {
       igEl.value = '@' + pend.ig;
       if (pend.web) webEl.value = pend.web;
+      if (pend.email) emailEl.value = pend.email;
       if (pend.sinWeb) { noWeb = true; applyNoWeb(); }
       if (pend.star) starEl.value = pend.star;
       if (pend.brandLang) brandLangChoice = pend.brandLang;

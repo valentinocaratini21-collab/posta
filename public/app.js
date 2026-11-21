@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1214';
+const PZ_BUILD = '20261105-v1215';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -2860,6 +2860,9 @@ function pzGuestAccountSheet(pending) {
   ov.addEventListener('click', (e) => { if (e.target === ov) pzGuestCloseSheet(); });
   document.body.appendChild(ov);
   const emEl = document.getElementById('pzGuestEmail');
+  // (LOTE PRUEBA-RECUERDA) Pre-carga: el email que el invitado dejó en
+  // el formulario de la prueba ya viene puesto en la hoja de cuenta.
+  if (emEl && typeof ME !== 'undefined' && ME && ME.notify_email) emEl.value = ME.notify_email;
   const errEl = document.getElementById('pzGuestErr');
   const goBtn = document.getElementById('pzGuestGo');
   if (emEl) emEl.focus();
@@ -3907,9 +3910,22 @@ function lpGoTrial(e) {
   const webInp = form ? form.querySelector('input[data-lp-web]') : null;
   const w = webInp ? String(webInp.value || '').trim() : '';
   const ig = cleanIgHandle(inp && inp.value);
+  // (LOTE PRUEBA-RECUERDA · enmienda del dueño 2026-11-20 23:00) El
+  // email es el tercer dato del formulario y es OBLIGATORIO: sin un
+  // email válido la semana no se arma (es la llave de los
+  // recordatorios de la prueba).
+  const emInp = form ? form.querySelector('input[data-lp-email]') : null;
+  const em = emInp ? String(emInp.value || '').trim().toLowerCase() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em) || em.length > 120) {
+    const er = form ? form.querySelector('.lp-email-err') : null;
+    if (er) er.hidden = false;
+    if (emInp) emInp.focus();
+    return false;
+  }
   const q = [];
   if (ig) q.push('ig=' + encodeURIComponent(ig));
   if (w) q.push('web=' + encodeURIComponent(w));
+  q.push('email=' + encodeURIComponent(em));
   location.href = '/prueba' + (q.length ? '?' + q.join('&') : '');
   return false;
 }
@@ -8669,6 +8685,9 @@ function landingView(cfg) {
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu web o tu link" aria-label="Tu web o tu link"></span>
+      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
       <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-noweb-row"><button type="button" class="lp-noweb" onclick="lpNoWeb(this)">No tengo web</button></p>
@@ -8876,10 +8895,13 @@ function landingView(cfg) {
   ${lpSubirHTML()}
     <div class="lp-show" id="ejemplos">
       <div class="lp-show-cta">
-        <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);var w=this.querySelector('input[data-lp-web]');var q=[];if(v)q.push('ig='+encodeURIComponent(v));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
+        <form class="lp-igform lp-show-form" onsubmit="var f=this;var v=cleanIgHandle(f.querySelector('input').value);var w=f.querySelector('input[data-lp-web]');var e=f.querySelector('input[data-lp-email]');var em=e?e.value.trim().toLowerCase():'';if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)||em.length>120){var er=f.querySelector('.lp-email-err');if(er)er.hidden=false;if(e)e.focus();return false}var q=[];if(v)q.push('ig='+encodeURIComponent(v));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));q.push('email='+encodeURIComponent(em));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
           <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad2)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
-          <button class="btn btn-primary" type="submit">Quiero mi perfil así <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+          <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
+      <button class="btn btn-primary" type="submit">Quiero mi perfil así <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
       </div>
@@ -8950,10 +8972,13 @@ function landingView(cfg) {
   </div></div>
   <div class="section lp-week-sec" id="prueba"><div class="wrap">
       
-      <form class="lp-igform" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);var w=this.querySelector('input[data-lp-web]');var q=[];if(v)q.push('ig='+encodeURIComponent(v));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
+      <form class="lp-igform" onsubmit="var f=this;var v=cleanIgHandle(f.querySelector('input').value);var w=f.querySelector('input[data-lp-web]');var e=f.querySelector('input[data-lp-email]');var em=e?e.value.trim().toLowerCase():'';if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)||em.length>120){var er=f.querySelector('.lp-email-err');if(er)er.hidden=false;if(e)e.focus();return false}var q=[];if(v)q.push('ig='+encodeURIComponent(v));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));q.push('email='+encodeURIComponent(em));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
-        <button class="btn btn-primary" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+        <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
+      <button class="btn btn-primary" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 Entrás con el login oficial de Meta: sin contraseña y sin tarjeta.</p>
     </div>
@@ -10167,6 +10192,41 @@ function setupSecondaryHtml() {
   if (!h) return '';
   return `<section class="setup-secondary" aria-label="Para que la magia siga">${h}</section>`;
 }
+// (LOTE PRUEBA-RECUERDA) Aterrizaje desde el email de la serie: el link
+// firmado deja al usuario en su semana con ?paso=conectar — acá se trae
+// a la vista la fila del paso de conectar del checklist y se la resalta
+// unos segundos. Para el invitado, tocar esa fila lo deriva primero a
+// crear su cuenta (el orden 2→3 de PRUEBA-CONECTA). Sin el parámetro,
+// no hace nada.
+function pzRecuerdaPasoHl(tries) {
+  try {
+    const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+    if (q.get('paso') !== 'conectar') return;
+    // El paso de conectar, ABIERTO: para el invitado pendiente, Inicio
+    // ya abre el overlay de conexión (igFirstOverlay) — ese overlay ES
+    // el paso abierto; no hay nada que resaltar detrás de él.
+    if (document.getElementById('igFirstOverlay')) return;
+    const el = document.getElementById('setupIgRow') || document.getElementById('setupAccountRow');
+    if (!el) {
+      // La vista puede estar todavía pintando (la píldora y el
+      // checklist llegan tras el perfil): se reintenta unas veces y se
+      // rinde en silencio — el link ya dejó al invitado en SU semana.
+      const n = tries || 0;
+      if (n < 6) setTimeout(() => pzRecuerdaPasoHl(n + 1), 800);
+      return;
+    }
+    // Si la fila vive en la píldora cerrada de Inicio/Semana, se abre.
+    const pop = el.closest ? el.closest('.setup-pill-pop') : null;
+    if (pop && pop.hidden) {
+      const wrap = el.closest('.setup-pillwrap');
+      const pill = wrap && wrap.querySelector('[data-setup-pill]');
+      if (pill) pill.click();
+    }
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    el.classList.add('pz-paso-hl');
+    setTimeout(() => { try { el.classList.remove('pz-paso-hl'); } catch (e) {} }, 3400);
+  } catch (e) {}
+}
 // Bindea las filas del checklist (se re-bindea tras cada refresh del checklist).
 function bindSetupRows() {
   const sg = $('#setupIgRow');
@@ -10200,6 +10260,7 @@ function bindSetupRows() {
     refreshSetupChecklist();
     try { sp.disabled = false; } catch (e) {}
   };
+  try { pzRecuerdaPasoHl(); } catch (e) {}
 }
 // Re-render del checklist en el lugar (tras activar notificaciones, etc.).
 // Conserva el título de la sección secundaria del chat ("Para que la magia siga").
@@ -29529,7 +29590,7 @@ function pzPostWowEmailHTML(o) {
     if (dismissed) return '';
     const en = !!(o && o.en);
     return `<div class="card pz-postwow-email" id="pzPostWowEmail">`
-      + `<p class="pz-postwow-q">${en ? 'Where should I tell you when tomorrow’s post is ready?' : '¿A dónde te aviso cuando el posteo de mañana esté listo?'}</p>`
+      + `<p class="pz-postwow-q">${en ? 'Want us to let you know when each post goes out? Leave your email.' : '¿Querés que te avisemos cuando salga cada posteo? Dejá tu email.'}</p>`
       + `<div class="field" style="margin-bottom:10px"><input type="email" inputmode="email" autocomplete="email" placeholder="tu@email.com" aria-label="Email"></div>`
       + `<button type="button" class="btn btn-primary btn-block" data-pz-postwow-send>${en ? 'Let me know' : 'Avisame'}</button>`
       + `<div class="pz-postwow-err" hidden></div>`
@@ -29558,7 +29619,7 @@ function pzPostWowEmailBind(root) {
       const r = await api.post('/api/trial/notify-email', { email });
       if (r && r.ok) {
         try { if (typeof PROFILE !== 'undefined' && PROFILE) PROFILE.trial_notify_email = email; } catch (e) {}
-        card.innerHTML = `<p class="pz-postwow-ok">✔ ${en ? 'Done — I’ll let you know when it’s ready.' : 'Listo — te aviso cuando esté listo.'}</p>`;
+        card.innerHTML = `<p class="pz-postwow-ok">✔ ${en ? 'Done — I’ll let you know on each post’s day, at 9:00.' : 'Listo — te aviso el día de cada posteo, a las 9:00.'}</p>`;
         return;
       }
       throw new Error((r && r.error) || 'fail');

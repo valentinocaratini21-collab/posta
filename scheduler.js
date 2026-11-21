@@ -725,6 +725,21 @@ function startScheduler(db) {
     });
     console.log('[posta] Email posteo-listo de prueba: barrido cada 15 min');
   } catch (e) { console.error('[post-ready] no se pudo programar:', e.message); }
+  // (LOTE PRUEBA-RECUERDA) Serie de recordatorios por email de la
+  // prueba PENDIENTE de conexión: por cada posteo del plan, el día de
+  // su revelación (9:00 en la zona de la cuenta), un email con la pieza
+  // y el botón firmado a su semana con el paso de conectar abierto. Se
+  // corta al conectar y con la baja de un toque. Barrido cada 15 min,
+  // require perezoso dentro del callback como los de arriba.
+  try {
+    cron.schedule('*/15 * * * *', () => {
+      try {
+        const rec = require('./recuerda');
+        if (rec && typeof rec.sendRecuerdaEmails === 'function') rec.sendRecuerdaEmails(db).catch((e) => console.error('[recuerda]', e.message));
+      } catch (e) { console.error('[recuerda]', e.message); }
+    });
+    console.log('[posta] Recuerda de prueba pendiente: barrido cada 15 min');
+  } catch (e) { console.error('[recuerda] no se pudo programar:', e.message); }
   // Push «tu posteo de hoy está listo» de la prueba (LOTE
   // PRUEBA-AVISO-DÍA-2-Y-3 · pedido Valentino 13/11 21:06): el canal
   // push del aviso de los días 2 y 3, gemelo del email de v929 — solo

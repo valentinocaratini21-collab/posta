@@ -5596,6 +5596,18 @@ app.get('/api/auth/me', (req, res) => {
   // (arranca al conectar Instagram) — no está vencida, le quedan los
   // días enteros, y el cliente muestra el paso de conexión pendiente.
   const trialPendingConnect = user.plan_status === 'trial' && user.trial_started_at !== undefined && user.trial_started_at !== null && Number(user.trial_started_at) === 0;
+  // (LOTE PRUEBA-RECUERDA) El email que el invitado dejó en el
+  // formulario de la prueba (trial_cache.email — obligatorio desde la
+  // enmienda del dueño 2026-11-20 23:00): pre-carga la creación de la
+  // cuenta, la hoja de cuenta nace con SU email ya puesto.
+  let notifyEmail = '';
+  if (user.is_guest && user.guest_ig) {
+    try {
+      const nKey = trialLock && trialLock.normalizeIg ? trialLock.normalizeIg(user.guest_ig) : String(user.guest_ig).toLowerCase();
+      const nRow = db.prepare('SELECT email FROM trial_cache WHERE ig = ?').get(nKey);
+      if (nRow && nRow.email) notifyEmail = nRow.email;
+    } catch (e) {}
+  }
   const trialDaysLeft = trialPendingConnect ? TRIAL_DAYS : ((!trialExpired && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0);
   res.json({
     user: {
@@ -5614,6 +5626,7 @@ app.get('/api/auth/me', (req, res) => {
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
       trial_pending_connect: trialPendingConnect,
+      notify_email: notifyEmail,
       billing_provider: user.stripe_subscription_id ? 'stripe' : (user.mp_preapproval_id ? 'mp' : null), // (v285) qué riel cobra esta cuenta
       founder_number: user.founder_number || 0, // (growth ola 2) Los Primeros 50: 0 = todavía no
       founder_public: !!user.founder_public, // permiso registrado para la página pública de fundadores
@@ -40962,6 +40975,24 @@ app.post('/api/guest/start', async (req, res) => {
         res.json({ ok: true, user_id: g0.userId, trial_ends_at: g0.trialEnds, posts: 0, needs_ig: true });
       });
     }
+    // (LOTE PRUEBA-RECUERDA · ENMIENDA DEL DUEÑO 2026-11-20 23:00 EST)
+    // El formulario de la prueba pide TRES datos — @, web y EMAIL — y
+    // la semana NO se arma sin un email con formato válido: ese email
+    // es la llave de la serie de recordatorios (la carta de Valentino
+    // cuando se revela el posteo del día, a las 9:00), pre-carga la
+    // creación de la cuenta y sirve de clave del reclamo. Validación:
+    // la regex de la casa (la misma de lead-email) + tope de 120
+    // caracteres. Exentos: el modo test y la allowlist (las cuentas de
+    // la casa no se bloquean a sí mismas). El camino SIN identidad
+    // (entrada directa + @ en el chat) no pasa por acá: no tiene
+    // formulario, y su captura es la línea post-valor dentro de la app.
+    const emailK = String(body.email || '').trim().toLowerCase();
+    const emailOkK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailK) && emailK.length <= 120;
+    if (!trialTestMode(req) && !trialLock.isAllowlisted(db, igK, domK) && !emailOkK) {
+      return res.status(400).json({ error: lang === 'en' ? 'Leave us a valid email — we let you know when each post goes out' : 'Dejanos un email válido — te avisamos cuando salga cada posteo', need_email: true });
+    }
+    const cacheKeyE = igK || ('web:' + domK);
+    const saveStartEmail = () => { if (!emailOkK) return; try { db.prepare('UPDATE trial_cache SET email = ? WHERE ig = ?').run(emailK, cacheKeyE); } catch (e) {} };
     // (LOTE L11 · CANDADO-INVITADO) Desde acá hasta la respuesta, la
     // sección es crítica POR NEGOCIO: chequeos de «ya entró / ya tiene
     // posteos» + creación/reuso del invitado + import de la semana +
@@ -41012,6 +41043,7 @@ app.post('/api/guest/start', async (req, res) => {
         try { const rN = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(entered.id); nPostsR = (rN && rN.n) || 0; } catch (e) {}
         let trialEndsR = 0;
         try { const rT = db.prepare('SELECT trial_ends_at FROM users WHERE id = ?').get(entered.id); trialEndsR = (rT && rT.trial_ends_at) || 0; } catch (e) {}
+        saveStartEmail();
         return req.session.regenerate((err) => {
           if (err) return res.status(500).json({ error: 'No se pudo abrir la sesión' });
           req.session.userId = entered.id;
@@ -41050,6 +41082,7 @@ app.post('/api/guest/start', async (req, res) => {
     if (!payload || !(payload.posts || []).length) {
       return res.status(404).json({ error: lang === 'en' ? 'Your week is not ready yet — tell me your @ in the chat and I will build it in a minute.' : 'Tu semana todavía no está lista — contame tu @ en el chat y la armo en un minuto.', no_week: true });
     }
+    saveStartEmail();
     // Fila invitada (email placeholder: nunca se le manda nada).
     // (LOTE PRUEBA-CHAT) Invitado del chat: se reusa su fila; si no hay,
     // se crea como siempre.
@@ -41406,6 +41439,71 @@ app.get('/api/guest/resume', (req, res) => {
   }
 });
 
+// (LOTE PRUEBA-RECUERDA) Aterrizaje de la serie de recordatorios: el
+// botón del email («Conectar y que salga hoy») trae un link FIRMADO
+// (HMAC, propósito 'ir', 96 h) que prueba que el receptor es el dueño
+// de la semana — por eso puede establecer la sesión de esa fila sin
+// contraseña, como el canje de /api/guest/resume pero con la prueba
+// DENTRO del link. Para el invitado, la sesión es la fila que el
+// registro reclama en el lugar (upgradeGuest): crear su cuenta desde
+// ahí queda pre-vinculado a esta semana. Aterriza en su semana con
+// ?paso=conectar: el front resalta el paso de conectar del checklist.
+app.get('/api/recuerda/ir', (req, res) => {
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
+  try {
+    if (!recuerdaMod) return res.redirect(302, `${base}/prueba`);
+    const v = recuerdaMod.verifyToken(req.query, 'ir');
+    if (!v) return res.redirect(302, `${base}/prueba`);
+    const u = db.prepare('SELECT id FROM users WHERE id = ?').get(v.userId);
+    if (!u) return res.redirect(302, `${base}/prueba`);
+    req.session.regenerate((err) => {
+      if (err) return res.redirect(302, `${base}/prueba`);
+      req.session.userId = v.userId;
+      res.redirect(302, '/#/app/inicio?paso=conectar');
+    });
+  } catch (e) {
+    console.error('[recuerda] aterrizaje falló:', e.message);
+    res.redirect(302, `${base}/prueba`);
+  }
+});
+
+// (LOTE PRUEBA-RECUERDA) Baja de un toque de la serie: link firmado
+// (propósito 'baja', 30 días) en cada email. Se honra en el acto y
+// queda registrada (recuerda_baja + email_opt_out global). Sin sesión:
+// la firma ES la autorización. La página confirma en su idioma.
+app.get('/api/recuerda/baja', (req, res) => {
+  let lang = 'es';
+  let okBaja = false;
+  try {
+    if (recuerdaMod) {
+      const v = recuerdaMod.verifyToken(req.query, 'baja');
+      if (v) {
+        const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(v.userId);
+        if (u) {
+          if (u.lang === 'en') lang = 'en';
+          recuerdaMod.markBaja(db, v.userId);
+          okBaja = true;
+        }
+      }
+    }
+  } catch (e) { console.error('[recuerda] baja falló:', e.message); }
+  const en = lang === 'en';
+  const title = okBaja ? (en ? 'Done.' : 'Listo.') : (en ? 'That link no longer works' : 'Ese link ya no vale');
+  const body = okBaja
+    ? (en ? "I won't write again. Your trial week stays saved in case you come back." : 'No te escribo más. Tu semana de prueba sigue guardada por si volvés.')
+    : (en ? 'Ask for your week again from Posty and we pick it right back up.' : 'Volvé a pedir tu semana desde Posty y la retomamos al toque.');
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty · ${title}</title></head>
+<body style="margin:0;background:#EDF3F7;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#0A1E33">
+  <div style="max-width:520px;margin:60px auto;background:#fff;border-radius:20px;padding:36px 32px;text-align:center;box-shadow:0 14px 40px rgba(10,30,51,.13)">
+    <img src="/ai-avatar.png" alt="Posty" width="54" height="54" style="border-radius:50%">
+    <h1 style="font-size:24px;margin:16px 0 10px">${title}</h1>
+    <p style="font-size:15.5px;line-height:1.6;color:#47617A;margin:0 0 22px">${body}</p>
+    <a href="/" style="display:inline-block;background:#2793C8;color:#fff;font-weight:700;font-size:15.5px;padding:13px 30px;border-radius:99px;text-decoration:none">${en ? 'Go to Posty' : 'Ir a Posty'}</a>
+  </div>
+</body></html>`);
+});
+
 // (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
 // POST /api/guest/set-ig { ig } — requireAuth, solo invitados.
 // Resuelve el cambio de identidad (guest-set-ig.js: fix del @ pegado),
@@ -41578,6 +41676,11 @@ try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] t
 // El esquema vive en el módulo y se asegura en el arranque (idempotente).
 let guestTrial = null;
 try { guestTrial = require('./guest-trial'); guestTrial.ensureSchema(db); } catch (e) { console.error('[init] guest-trial no disponible:', e.message); }
+// (LOTE PRUEBA-RECUERDA) La serie de recordatorios por email de la
+// prueba pendiente de conexión: tokens firmados de aterrizaje/baja y
+// el registro de bajas viven en el módulo (esquema idempotente).
+let recuerdaMod = null;
+try { recuerdaMod = require('./recuerda'); recuerdaMod.ensureSchema(db); } catch (e) { console.error('[init] recuerda no disponible:', e.message); }
 // (LOTE RETORNO DEL INVITADO) La puerta «Volver a mi semana»: tokens de
 // un solo uso (24 h) para que el invitado vuelva a su semana sin la
 // sesión original. El esquema vive en el módulo (idempotente).
@@ -48068,7 +48171,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1214';
+const BUILD_ID = '20261105-v1215';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

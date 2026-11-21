@@ -74,8 +74,15 @@ async function sendTrialPostReadyEmails(db, opts = {}) {
       const g = findGuest(igK);
       if (!g) { skipped++; continue; }
       let u = null;
-      try { u = db.prepare('SELECT is_guest, trial_ends_at FROM users WHERE id = ?').get(g.id); } catch (e) {}
+      try { u = db.prepare('SELECT is_guest, trial_ends_at, trial_started_at FROM users WHERE id = ?').get(g.id); } catch (e) {}
       if (!u || u.is_guest !== 1) { skipped++; continue; }
+      // (LOTE PRUEBA-RECUERDA) Las pruebas nacidas PENDIENTES de
+      // conexión (trial_started_at = 0, LOTE PRUEBA-CONECTA) las cubre
+      // la serie de recuerda.js — con la pieza y el botón de conectar
+      // — así que este aviso no las duplica: una sola serie por
+      // persona. Las invitadas con el reloj ya corriendo (generación
+      // anterior) siguen con este aviso, como siempre.
+      if (u.trial_started_at !== undefined && u.trial_started_at !== null && Number(u.trial_started_at) === 0) { skipped++; continue; }
       if (u.trial_ends_at && Number(u.trial_ends_at) <= now) { skipped++; continue; }
       const tz = guestTz(db, g.id);
       if (hourInTz(now, tz) < 9) { skipped++; continue; } // todavía no se reveló (ventana 9:00)

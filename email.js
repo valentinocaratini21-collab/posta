@@ -549,8 +549,7 @@ function trialPostReadyEmailEn(lead, baseUrl, bizName, link) {
 function trialPostReadyEmail(lead, baseUrl, bizName, link, lang) {
   if (lang === 'en') return trialPostReadyEmailEn(lead, baseUrl, bizName, link);
   const biz = String(bizName || 'tu negocio').replace(/</g, '&lt;').slice(0, 80);
-  const subject = 'Tu posteo de mañana está listo';
-  const html = `
+  const subject = 'Tu posteo de mañana está listo';  const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
   ${emailFounderHeader()}
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
@@ -573,6 +572,111 @@ function trialPostReadyEmail(lead, baseUrl, bizName, link, lang) {
 }
 
 // ---------------------------------------------------------------------------
+// Email de la SERIE PRUEBA-RECUERDA (lote PRUEBA-RECUERDA · TEMPLATE
+// FIRME v7 del dueño, 2026-11-20 22:58 EST — reemplaza a la referencia
+// v2): una CARTA PLANA de Valentino, no una plantilla. Sale de Valentino
+// Caratini (FOUNDER_FROM; reply-to hola@, la casilla que la operación
+// lee — las respuestas son el punto), abre con «hola! soy valentino
+// caratini, founder de posty», todo en minúscula de amigo que tipea,
+// sin kicker, sin cajas y sin titular: la honestidad va en el flujo
+// («todavía no salió eh») y el condicional queda SOLO para la
+// publicación. La pieza es el único elemento visual grande; un solo
+// botón en minúscula («conectar mi instagram»); cierre «abrazo,
+// valentino»; PD con el posteo que sigue y la baja en lenguaje llano.
+// La línea de equipo va textual: «yo estoy para que a [negocio] le vaya
+// bien, de verdad. me encantaría ser parte de tu equipo, como tu
+// community manager» (el nombre del negocio entra con su grafía
+// registrada — es un dato, no copia). Desvíos técnicos contra el mock
+// v7, declarados: layout en tablas con estilos inline (el <style> del
+// mock no sobrevive en los clientes de correo) y la foto del encabezado
+// servida por URL pública (/foto-valentino-posty.jpg, la foto dúo
+// aprobada por el dueño) en vez del file:// del mock.
+function trialRecuerdaEmail(data) {
+  const en = data.lang === 'en';
+  const base = (data.baseUrl || EMAIL_FACE_BASE()).replace(/\/$/, '');
+  const n = data.n || 1, total = data.total || 3;
+  const isFirst = n === 1, isLast = n >= total;
+  const biz = data.bizName || data.handle || '';
+  const capFirst = data.captionLine ? String(data.captionLine).slice(0, 140) : (data.caption ? String(data.caption).split('\n')[0].slice(0, 140) : '');
+  const arm = data.armWhen || (en ? 'the other day' : 'el otro día');
+  const P = (inner, first) => `<p style="margin:${first ? '20px' : '16px'} 0 0;font-size:16.5px;line-height:1.62;color:#22384C">${inner}</p>`;
+  let subject, pre, p2, p3, p5, p6, team, reply, signWord, ps, foot;
+  if (!en) {
+    subject = isFirst ? 'este es tu primer posteo' : 'este es tu posteo de hoy';
+    pre = `hola! soy valentino caratini, founder de posty. hoy a las 9 se reveló ${isFirst ? 'tu primer posteo' : 'tu posteo de hoy'}.`;
+    p2 = `${arm} te armaste la semana y te fuiste sin conectar el instagram. tranqui, quedó guardada tal cual la dejaste`;
+    p3 = `hoy a las 9 se reveló ${isFirst ? 'tu primer posteo' : 'el posteo de hoy'} y te lo quería mostrar, porque quedó buenísimo:`;
+    p5 = 'todavía no salió eh. para que salga necesito que conectes tu instagram — es un toque nomás, entrás con el login de meta y listo. tu contraseña no la veo ni la toco';
+    p6 = `si lo conectás ahora sale hoy a las 19, como estaba en el plan.${isLast ? '' : ' y mañana a las 9 se revela el que sigue'}`;
+    team = `yo estoy para que a ${biz} le vaya bien, de verdad. me encantaría ser parte de tu equipo, como tu community manager`;
+    reply = 'y si querés decirme algo, respondé este mail. me llega a mí y te contesto';
+    signWord = 'abrazo,';
+    ps = isLast
+      ? `pd: este es el último posteo de la semana. si no querés que te escriba más, <a href="${data.bajaUrl}" style="color:#2793C8">tocá acá</a> y listo`
+      : `pd: mañana se revela el posteo ${n + 1}${n + 1 >= total ? ', el último de la semana,' : ''} y te lo muestro también. si no querés que te escriba más, <a href="${data.bajaUrl}" style="color:#2793C8">tocá acá</a> y listo`;
+    foot = data.audience === 'account'
+      ? 'te escribo porque creaste tu cuenta y tu semana de prueba sigue esperando que conectes tu instagram · postycommunitymanager.com'
+      : 'te escribo porque dejaste tu mail cuando armaste tu semana de prueba · postycommunitymanager.com';
+  } else {
+    subject = isFirst ? 'this is your first post' : "this is today's post";
+    pre = `hi! i'm valentino caratini, founder of posty. ${isFirst ? 'your first post' : "today's post"} was revealed today at 9.`;
+    p2 = `${arm} you built your week and left without connecting your instagram. all good — it stayed saved just like you left it`;
+    p3 = `today at 9 ${isFirst ? 'your first post' : "today's post"} was revealed and i wanted to show it to you, because it turned out great:`;
+    p5 = "it hasn't gone out yet though. for it to go out i need you to connect your instagram — it's just one tap, you log in with meta and that's it. i never see or touch your password";
+    p6 = `if you connect it now it goes out today at 7 pm, just like the plan said.${isLast ? '' : ' and tomorrow at 9 the next one is revealed'}`;
+    team = `i'm here for ${biz} to do well, truly. i'd love to be part of your team, as your community manager`;
+    reply = "and if you want to tell me anything, just reply to this email. it comes straight to me and i'll answer you";
+    signWord = 'hugs,';
+    ps = isLast
+      ? `ps: this is the last post of the week. if you don't want me to write to you again, <a href="${data.bajaUrl}" style="color:#2793C8">tap here</a> and that's it`
+      : `ps: tomorrow post ${n + 1}${n + 1 >= total ? ', the last one of the week,' : ''} is revealed, and i'll show it to you too. if you don't want me to write to you again, <a href="${data.bajaUrl}" style="color:#2793C8">tap here</a> and that's it`;
+    foot = data.audience === 'account'
+      ? "i'm writing to you because you created your account and your trial week is still waiting for you to connect your instagram · postycommunitymanager.com"
+      : "i'm writing to you because you left your email when you built your trial week · postycommunitymanager.com";
+  }
+  const cta = en ? 'connect my instagram →' : 'conectar mi instagram →';
+  const pieceImg = data.imgUrl || data.imageUrl || '';
+  const piece = pieceImg ? `
+      <div style="margin:18px 0 0"><img src="${pieceImg}" alt="${en ? "today's post" : 'el posteo de hoy'}" style="width:100%;display:block;border-radius:12px"></div>
+      <div style="padding:10px 2px 0;font-size:14.5px;line-height:1.5;color:#22384C"><b style="color:#0A1E33">${data.handle || ''}</b>${capFirst ? '&nbsp;&nbsp;' + draftsNudgeEsc(capFirst) : ''}</div>` : '';
+  const html = `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#FAFBFC;font-family:-apple-system,'Segoe UI',Roboto,'Liberation Sans',Arial,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${draftsNudgeEsc(pre)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAFBFC"><tr><td align="center" style="padding:34px 12px 44px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;border:1px solid #E7EEF3;border-radius:14px"><tr><td style="padding:26px 34px 22px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+    <td width="44" valign="middle"><img src="${base}/foto-valentino-posty.jpg" alt="Valentino" width="34" height="34" style="width:34px;height:34px;border-radius:50%;object-fit:cover;display:block"></td>
+    <td valign="middle" style="font-size:16px;font-weight:800;color:#0A1E33">valentino</td>
+    <td align="right" valign="middle" style="font-size:12.5px;color:#7A8FA0">founder de posty</td>
+  </tr></table>
+  ${P(en ? "hi! i'm valentino caratini, founder of posty" : 'hola! soy valentino caratini, founder de posty', true)}
+  ${P(draftsNudgeEsc(p2))}
+  ${P(draftsNudgeEsc(p3))}
+  ${piece}
+  ${P(draftsNudgeEsc(p5))}
+  ${P(draftsNudgeEsc(p6))}
+  ${P(draftsNudgeEsc(team))}
+  <div style="margin:24px 0 2px"><a href="${data.irUrl}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-size:16px;font-weight:700;padding:13px 28px;border-radius:99px;text-decoration:none">${cta}</a></div>
+  ${P(draftsNudgeEsc(reply))}
+  <div style="margin-top:20px;font-size:16.5px;line-height:1.5;color:#22384C">${signWord}<br><b style="color:#0A1E33">valentino</b></div>
+  <div style="margin-top:20px;padding-top:15px;border-top:1px solid #E4EDF2;font-size:13.5px;line-height:1.6;color:#5B7183">${ps}</div>
+  <div style="margin-top:14px;font-size:12px;line-height:1.5;color:#8CA1B1">${draftsNudgeEsc(foot)}</div>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+  const textLines = [
+    en ? "hi! i'm valentino caratini, founder of posty" : 'hola! soy valentino caratini, founder de posty', '',
+    p2, '', p3, '',
+    capFirst ? `@${data.handle || ''} — ${capFirst}` : '', '',
+    p5, '', p6, '', team, '',
+    `${en ? 'connect my instagram' : 'conectar mi instagram'}: ${data.irUrl}`, '',
+    reply, '', signWord, 'valentino', '',
+    ps.replace(/<[^>]+>/g, ''), '', foot,
+  ];
+  const text = textLines.filter((l, i) => l !== '' || (i > 0 && textLines[i - 1] !== '')).join('\n');
+  return { subject, html, text };
+}
+
 // TOQUE DEL FUNDADOR a las 72 h de la Carta (rescate "founder-rescue").
 // Copy ES APROBADO por Valentino el 2026-10-22: asunto «Soy Valentino — te
 // escribo yo», cuerpo natural en primera persona, firma con nombre y
@@ -1121,4 +1225,4 @@ function trialClosedEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html: emailFounderShell(inner), from: FOUNDER_FROM });
 }
 
-module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, emailFounderHeader, emailFounderShell, founderSignLine, FOUNDER_FROM, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, returnLinkEmail, returnNoticeEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, emailFaceHeader, emailFounderHeader, emailFounderShell, founderSignLine, FOUNDER_FROM, weeklyReminderEmail, draftsNudgeEmail, buildDraftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialPostReadyEmail, trialRecuerdaEmail, founderTouchEmail, founderTouchEmailEn, trialExpiryEmail, trialClosedEmail, magicLinkEmail, returnLinkEmail, returnNoticeEmail, ventyCodeEmail, firstPublishNudgeEmail, photoRitualEmail };

@@ -101,7 +101,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Gochi+Hand&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261312">
+<link rel="stylesheet" href="/styles.css?v=20261313">
 <link rel="stylesheet" href="/gj.css?v=6">
 <script type="application/ld+json">
 {
@@ -322,9 +322,12 @@
     </script>
     
     
-    <form class="lp-igform" onsubmit="var f=this;var ig=f.querySelector('input').value.trim().replace('@','').toLowerCase();var w=f.querySelector('input[data-lp-web]');var q=[];if(ig)q.push('ig='+encodeURIComponent(ig));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
+    <form class="lp-igform" onsubmit="var f=this;var ig=f.querySelector('input').value.trim().replace('@','').toLowerCase();var w=f.querySelector('input[data-lp-web]');var e=f.querySelector('input[data-lp-email]');var em=e?e.value.trim().toLowerCase():'';if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)||em.length>120){var er=f.querySelector('.lp-email-err');if(er)er.hidden=false;if(e)e.focus();return false}var q=[];if(ig)q.push('ig='+encodeURIComponent(ig));if(w&&w.value.trim())q.push('web='+encodeURIComponent(w.value.trim()));q.push('email='+encodeURIComponent(em));location.href='/prueba'+(q.length?'?'+q.join('&'):'');return false">
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad0" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad0)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
+      <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
       <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     <script>
     /* Hero, una sola acción (lote website hero+quiz, mock aprobado 10/11). */
@@ -482,7 +485,7 @@ html.pz-appctx #posty-boot .pz-boot-spin,html.pz-appctx #posty-boot .pz-boot-txt
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=847"></script>
+<script src="/app.js?v=848"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */

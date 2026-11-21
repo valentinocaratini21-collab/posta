@@ -6855,3 +6855,6 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
   .vd-cols{margin-top:40px}
 }
 @media (prefers-reduced-motion: reduce){ .vd-wire path{animation:none} }
+
+/* (LOTE PRUEBA-RECUERDA) Resalte del paso de conectar al aterrizar desde el email de la serie */
+.setup-row.pz-paso-hl { box-shadow: 0 0 0 3px #2793C8, 0 12px 26px rgba(39,147,200,.35); }
