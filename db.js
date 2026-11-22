@@ -517,6 +517,7 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_hook_usage_user ON hook_usage(user_id, u
 try { require('./learning').initLearningTables(db); } catch (e) { console.error('[learning] init:', e.message); }
 // Stories automáticas + community + reactive (2026-10-01).
 try { require('./community').initCommunityTables(db); } catch (e) { console.error('[community] init:', e.message); }
+try { require('./bandeja').initBandejaTables(db); } catch (e) { console.error('[bandeja] init:', e.message); }
 try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_enabled INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_lat REAL DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_lon REAL DEFAULT 0`); } catch (e) { /* ya existe */ }

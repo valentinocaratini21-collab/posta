@@ -1293,11 +1293,15 @@ function startScheduler(db) {
   try {
     cron.schedule('0 9,18 * * *', () => {
       try {
-        require('./community').pollCommunity(db, proCommunityDeps(db))
-          .catch((e) => console.error('[community]', e.message));
-      } catch (e) { console.error('[community] no se pudo ejecutar:', e.message); }
+        // BANDEJA-RESPONDE (2026-11-22): la ingesta de comentarios/DMs
+        // alimenta la bandeja de borradores (tanda + un toque). El poll
+        // legacy de community.js queda exportado y sin uso programado:
+        // la cola vieja deja de llenarse; sus endpoints siguen vivos.
+        require('./bandeja').pollBandeja(db, proBandejaDeps(db))
+          .catch((e) => console.error('[bandeja]', e.message));
+      } catch (e) { console.error('[bandeja] no se pudo ejecutar:', e.message); }
     }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Community (comentarios): 9:00 y 18:00 (Buenos Aires)');
+    console.log('[posta] Bandeja (borradores): 9:00 y 18:00 (Buenos Aires)');
   } catch (e) { console.error('[community] no se pudo programar:', e.message); }
   try {
     cron.schedule('0 8 * * *', () => {
@@ -1421,6 +1425,45 @@ function proCommunityDeps(db) {
     planFilter: (uid) => {
       try { return require('./plan-gate').planGate(db, uid, 'atencion').ok; }
       catch (e) { return false; }
+    },
+  };
+}
+
+// BANDEJA-RESPONDE (2026-11-22): deps del poll de la bandeja. El
+// borrador nace del MISMO redactor con fundamento del cuidado
+// (careSuggestFn → generator.suggestReplyDetailed): si el dato no está
+// en el fundamento, el ítem entra marcado «falta el dato», jamás
+// inventado. El aviso es UNO por tanda (lo dispara bandeja.js vía
+// notify cuando la tanda gana su primer ítem pendiente).
+function proBandejaDeps(db) {
+  return {
+    credsOf: (uid) => {
+      try {
+        const s = db.prepare('SELECT ig_user_id, ig_access_token FROM settings WHERE user_id = ?').get(uid) || {};
+        const p = db.prepare('SELECT ig_username FROM profiles WHERE user_id = ?').get(uid) || {};
+        return { igUserId: s.ig_user_id || '', accessToken: s.ig_access_token || '', igUsername: p.ig_username || '' };
+      } catch (e) { return { igUserId: '', accessToken: '', igUsername: '' }; }
+    },
+    suggestFn: (uid) => careSuggestFn(db, uid),
+    apiKeyOf: (uid) => {
+      try {
+        const s = db.prepare('SELECT openai_key FROM settings WHERE user_id = ?').get(uid) || {};
+        return s.openai_key || process.env.OPENAI_API_KEY || '';
+      } catch (e) { return process.env.OPENAI_API_KEY || ''; }
+    },
+    planFilter: (uid) => {
+      try { return require('./plan-gate').planGate(db, uid, 'atencion').ok; }
+      catch (e) { return false; }
+    },
+    notify: (uid, info) => {
+      try {
+        require('./push').sendPush(uid, {
+          title: 'Posty',
+          body: info && info.n > 1 ? `Ya tenés ${info.n} respuestas listas para aprobar` : 'Ya tenés respuestas listas para aprobar',
+          url: '/#/app/notificaciones',
+          data: { bandeja_tanda: String((info && info.tandaId) || '') },
+        }).catch(() => {});
+      } catch (e) {}
     },
   };
 }

@@ -2731,7 +2731,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1221';
+const PZ_BUILD = '20261105-v1222';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -21958,6 +21958,266 @@ let pzAdsFilaAbierta = ''; // '', 'conexion', 'billetera', 'impulsos'
 // en una red móvil lenta, y corto frente a los 30 s por pedido de
 // antes — la cadena en serie llegaba a ~90 s con la pantalla anterior
 // congelada, sin señal y sin respuesta al tacto.
+// =====================================================================
+// (LOTE BANDEJA-RESPONDE · 22/11) NOTIFICACIONES — «borrador + tanda +
+// un toque» (variante 3 «Banda celeste», sin brillos: referencias
+// mock-notificaciones/variante-3-v4.png y variante-3-revisar-v4.png).
+// La pantalla consume /api/bandeja (bandeja.js): los borradores nacen
+// en silencio con el fundamento del negocio; UN toque aprueba la tanda
+// entera; las importantes van primero, marcadas. La campana de la barra
+// superior es del lote BARRA-VIVA: su puerta es esta ruta
+// (#/app/notificaciones) y su insignia lee GET /api/bandeja/count.
+// =====================================================================
+const PZB = { data: null, tandaId: 0, refrescoHecho: false };
+function pzBandejaT(es, en) { return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? en : es; }
+function pzBandejaHace(ts) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (!ts) return '';
+  const d = new Date(String(ts).replace(' ', 'T') + (String(ts).includes('T') ? '' : 'Z'));
+  if (isNaN(d.getTime())) return '';
+  const min = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+  if (min < 1) return en ? 'just now' : 'recién';
+  if (min < 60) return (en ? 'ago ' : 'hace ') + min + ' min';
+  const h = Math.floor(min / 60);
+  if (h < 24) return (en ? 'ago ' : 'hace ') + h + ' h';
+  const dd = Math.floor(h / 24);
+  return (en ? 'ago ' : 'hace ') + dd + (en ? ' d' : ' d');
+}
+const PZB_GRADS = [['#0A1E33', '#2793C8'], ['#2793C8', '#57B2E5'], ['#1E8A3C', '#2FBF5A'], ['#5C48AB', '#7260CC'], ['#5A6B7C', '#8CA3B8']];
+function pzBandejaGrad(seed) {
+  let h = 0; const s = String(seed || '?');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PZB_GRADS[h % PZB_GRADS.length];
+}
+function pzBandejaEstilos() {
+  return `<style>
+.pzb-wrap{max-width:560px;margin:0 auto;padding:0 14px 30px;font-family:inherit}
+.pzb-banda{margin:0 -14px;padding:26px 20px 44px;background:linear-gradient(180deg,#57B2E5 0%,#2793C8 100%);color:#fff;border-radius:0 0 26px 26px}
+.pzb-banda h1{margin:0;font-size:27px;font-weight:800;letter-spacing:-.02em}
+.pzb-banda p{margin:5px 0 0;font-size:14px;opacity:.92}
+.pzb-volver{display:inline-flex;align-items:center;gap:6px;color:#fff;font-size:14px;font-weight:600;background:rgba(255,255,255,.18);border:0;border-radius:999px;padding:6px 12px;margin-bottom:12px;cursor:pointer}
+.pzb-pill{display:inline-block;background:rgba(255,255,255,.22);border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:700;margin-top:10px}
+.pzb-seccion{margin:20px 2px 10px;font-size:12px;font-weight:800;letter-spacing:.14em;color:#7A8CA3}
+.pzb-sobre{margin-top:-30px;position:relative;z-index:2}
+.pzb-card{background:#fff;border-radius:22px;box-shadow:0 10px 28px rgba(10,30,51,.10);padding:16px;margin-bottom:14px}
+.pzb-tanda-cab{display:flex;gap:12px;align-items:flex-start}
+.pzb-thumb{width:52px;height:52px;border-radius:14px;object-fit:cover;border:3px solid #BFE3F5;flex:none;background:#EAF4FB}
+.pzb-thumb-dm{width:52px;height:52px;border-radius:14px;flex:none;background:linear-gradient(135deg,#57B2E5,#2793C8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;border:3px solid #BFE3F5}
+.pzb-tanda-tit{font-size:16.5px;font-weight:800;color:#0A1E33}
+.pzb-tanda-sub{font-size:13px;color:#5A6B7C;margin-top:2px}
+.pzb-chip-imp{display:inline-block;background:#FEC14D;color:#0A1E33;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800;margin-top:8px}
+.pzb-prev{margin-top:10px;font-size:14px;color:#33506B;background:#F2F8FC;border-radius:12px;padding:9px 11px}
+.pzb-firma{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:12.5px;color:#7A8CA3}
+.pzb-firma img{width:18px;height:18px;border-radius:50%}
+.pzb-acciones{display:flex;gap:10px;margin-top:14px}
+.pzb-btn{flex:1;border:0;border-radius:14px;padding:12px 10px;font-size:15px;font-weight:800;cursor:pointer}
+.pzb-btn-revisar{background:#EAF4FB;color:#1273AC}
+.pzb-btn-aprobar{background:linear-gradient(180deg,#4FB0E4,#2793C8);color:#fff;box-shadow:0 6px 16px rgba(39,147,200,.35)}
+.pzb-btn[disabled]{opacity:.55;cursor:default}
+.pzb-nov{display:flex;gap:12px;align-items:flex-start;padding:11px 2px}
+.pzb-nov + .pzb-nov{border-top:1px solid #EEF3F8}
+.pzb-nov-ic{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center}
+.pzb-nov-tit{font-size:14.5px;font-weight:700;color:#0A1E33}
+.pzb-nov-det{font-size:13px;color:#5A6B7C}
+.pzb-nov-cuando{margin-left:auto;font-size:12px;color:#9DB2C6;flex:none}
+.pzb-item{padding:13px 2px}
+.pzb-item + .pzb-item{border-top:1px solid #EEF3F8}
+.pzb-item-cab{display:flex;align-items:center;gap:10px}
+.pzb-ava{width:38px;height:38px;border-radius:50%;flex:none;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px}
+.pzb-user{font-size:14.5px;font-weight:800;color:#0A1E33}
+.pzb-cuando{margin-left:auto;font-size:12px;color:#9DB2C6;flex:none}
+.pzb-chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;letter-spacing:.04em}
+.pzb-chip-imp2{background:#FEC14D;color:#0A1E33}
+.pzb-chip-permiso{background:#FDE8E8;color:#B3261E}
+.pzb-chip-dato{background:#FFF3D6;color:#8A6D00}
+.pzb-comentario{margin-top:8px;font-size:15px;color:#0A1E33;line-height:1.35}
+.pzb-borrador{margin-top:9px;background:#EAF4FB;border-radius:14px;padding:10px 12px}
+.pzb-borrador-et{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.08em;color:#1273AC}
+.pzb-borrador-et img{width:16px;height:16px;border-radius:50%}
+.pzb-borrador-tx{margin-top:5px;font-size:14.5px;color:#0A1E33;line-height:1.4}
+.pzb-falta{margin-top:9px;background:#FFF7E0;border:1.5px dashed #FEC14D;border-radius:14px;padding:10px 12px;font-size:14px;color:#6B5A00}
+.pzb-item-acciones{display:flex;gap:16px;margin-top:9px}
+.pzb-link{border:0;background:none;padding:0;font-size:14px;font-weight:700;color:#1273AC;cursor:pointer}
+.pzb-link-rojo{color:#C24B4B}
+.pzb-descartado{opacity:.62}
+.pzb-descartado .pzb-comentario,.pzb-descartado .pzb-borrador-tx{text-decoration:line-through}
+.pzb-nota{margin-top:7px;font-size:12.5px;color:#7A8CA3}
+.pzb-respondida{margin-top:8px;font-size:13px;font-weight:700;color:#1E8A3C}
+.pzb-edit{width:100%;box-sizing:border-box;border:2px solid #2793C8;border-radius:12px;padding:10px;font-size:15px;font-family:inherit;min-height:74px;margin-top:8px}
+.pzb-edit-et{font-size:11px;font-weight:800;letter-spacing:.08em;color:#1273AC;margin-top:9px}
+.pzb-barra{position:sticky;bottom:12px;z-index:5;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-radius:18px;box-shadow:0 10px 28px rgba(10,30,51,.16);padding:13px 15px;margin-top:16px}
+.pzb-barra-n{font-size:15.5px;font-weight:800;color:#0A1E33}
+.pzb-barra-s{font-size:12.5px;color:#7A8CA3;margin-top:2px}
+.pzb-progreso{height:5px;border-radius:99px;background:#E3EDF5;margin:10px 0 12px;overflow:hidden}
+.pzb-progreso i{display:block;height:100%;background:linear-gradient(90deg,#57B2E5,#2793C8);border-radius:99px}
+.pzb-vacio{background:#fff;border-radius:22px;box-shadow:0 10px 28px rgba(10,30,51,.08);padding:26px 18px;text-align:center;color:#5A6B7C;font-size:15px}
+</style>`;
+}
+function pzBandejaIconoNov(tipo) {
+  if (tipo === 'impulso') return `<span class="pzb-nov-ic" style="background:linear-gradient(135deg,#57B2E5,#2793C8)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7-7 7 7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+  if (tipo === 'cambio') return `<span class="pzb-nov-ic" style="background:linear-gradient(135deg,#FEC14D,#F5A623)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" fill="#fff"/></svg></span>`;
+  return `<span class="pzb-nov-ic" style="background:linear-gradient(135deg,#2FBF5A,#1E8A3C)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5L20 6.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+}
+function pzBandejaTarjetaHTML(t) {
+  const c = t.conteo || {};
+  const imp = (t.items || []).find(i => i.clase === 'importante' && ['pendiente', 'sin_permiso', 'error'].includes(i.estado));
+  const esDm = t.kind === 'dm';
+  const tit = esDm ? (pzBandejaT('Mensajes directos', 'Direct messages')) : (pzBandejaT('Posteo de hoy', "Today's post"));
+  const sub = esDm ? esc(t.etiqueta || '') : esc(String(t.post_caption || '').slice(0, 90));
+  const temaImp = imp ? (/\b(cobr|devoluci|reembolso|plata|deben)/i.test(imp.text || '') ? pzBandejaT('un tema de plata', 'a money issue') : pzBandejaT('una queja', 'a complaint')) : '';
+  return `<div class="pzb-card">
+    <div class="pzb-tanda-cab">
+      ${esDm ? `<span class="pzb-thumb-dm">✉</span>` : (t.post_thumb ? `<img class="pzb-thumb" src="${esc(t.post_thumb)}" alt="">` : `<span class="pzb-thumb-dm">P</span>`)}
+      <div style="flex:1;min-width:0">
+        <div class="pzb-tanda-tit">${c.para_salir} ${c.para_salir === 1 ? pzBandejaT('respuesta lista', 'reply ready') : pzBandejaT('respuestas listas', 'replies ready')}</div>
+        <div class="pzb-tanda-sub">${tit}${sub ? ' · ' + sub : ''}</div>
+        ${c.importantes ? `<span class="pzb-chip-imp">${c.importantes} ${pzBandejaT('importante', 'important')} · ${esc(temaImp)}</span>` : ''}
+      </div>
+    </div>
+    ${imp && imp.draft ? `<div class="pzb-prev">«${esc(String(imp.draft).slice(0, 110))}»</div>` : ''}
+    <div class="pzb-firma"><img src="ai-avatar.png" alt="Posty"><span>${pzBandejaT('Preparadas por Posty', 'Prepared by Posty')} · ${pzBandejaHace(t.updated_at)}</span></div>
+    <div class="pzb-acciones">
+      <button type="button" class="pzb-btn pzb-btn-revisar" onclick="pzBandejaAbrir(${t.id})">${pzBandejaT('Revisar', 'Review')}</button>
+      <button type="button" class="pzb-btn pzb-btn-aprobar" id="pzbApr-${t.id}" onclick="pzBandejaAprobar(${t.id})">${pzBandejaT('Aprobar las', 'Approve all')} ${c.para_salir}</button>
+    </div>
+  </div>`;
+}
+function pzBandejaNotifsHTML(data) {
+  const tandas = (data.tandas || []).filter(t => (t.conteo || {}).pendientes > 0);
+  const novs = data.novedades || [];
+  return `${pzBandejaEstilos()}<div class="pzb-wrap">
+    <div class="pzb-banda"><h1>${pzBandejaT('Notificaciones', 'Notifications')}</h1><p>${pzBandejaT('Todo lo de tu negocio, en un solo lugar', 'Everything about your business, in one place')}</p></div>
+    <div class="pzb-sobre">
+    ${tandas.length ? `<div class="pzb-seccion" style="margin-top:0;color:#fff;opacity:.95">${pzBandejaT('ESPERA TU TOQUE', 'WAITING FOR YOUR TAP')}</div>` + tandas.map(pzBandejaTarjetaHTML).join('') : `<div class="pzb-vacio">${pzBandejaT('Todavía no hay respuestas para preparar.<br>Cuando alguien comente o te escriba, Posty las prepara acá.', 'No replies to prepare yet.<br>When someone comments or writes to you, Posty prepares them here.')}</div>`}
+    </div>
+    ${novs.length ? `<div class="pzb-seccion">${pzBandejaT('NOVEDADES', 'UPDATES')}</div><div class="pzb-card">${novs.map(n => `<div class="pzb-nov">${pzBandejaIconoNov(n.tipo)}<div><div class="pzb-nov-tit">${esc(n.titulo || '')}</div><div class="pzb-nov-det">${esc(n.detalle || '')}</div></div><span class="pzb-nov-cuando">${pzBandejaHace(n.cuando)}</span></div>`).join('')}</div>` : ''}
+  </div>`;
+}
+function pzBandejaItemHTML(it) {
+  const g = pzBandejaGrad(it.author_username || '?');
+  const inicial = esc(String(it.author_username || '?').replace(/^@/, '').charAt(0).toUpperCase() || '?');
+  const est = it.estado;
+  const esSalida = ['pendiente', 'sin_permiso', 'error'].includes(est);
+  let cuerpo = '';
+  if (est === 'descartado') {
+    cuerpo = `<div class="pzb-nota">${pzBandejaT('Descartada · no sale', 'Discarded · it will not go out')}</div>
+      <div class="pzb-item-acciones"><button type="button" class="pzb-link" onclick="pzBandejaDeshacer(${it.id})">${pzBandejaT('Deshacer', 'Undo')}</button></div>`;
+  } else if (est === 'ya_respondido') {
+    cuerpo = `<div class="pzb-respondida">✓ ${pzBandejaT('Ya respondida por vos', 'Already answered by you')}</div>`;
+  } else if (est === 'enviado') {
+    cuerpo = `<div class="pzb-respondida">✓ ${pzBandejaT('Enviada', 'Sent')}</div>`;
+  } else if (it.falta_dato && !String(it.draft || '').trim()) {
+    const dato = it.falta_dato === 'precio' ? pzBandejaT('el precio', 'the price') : (it.falta_dato === 'horario' ? pzBandejaT('el horario', 'the opening hours') : pzBandejaT('ese dato', 'that detail'));
+    cuerpo = `<div class="pzb-falta">${pzBandejaT('Posty no preparó esta respuesta: en tu fundamento no está', 'Posty did not prepare this reply: your business profile does not include')} ${dato}. ${pzBandejaT('Escribila vos tocando Editar.', 'Write it yourself by tapping Edit.')}</div>
+      <div class="pzb-item-acciones"><button type="button" class="pzb-link" onclick="pzBandejaEditar(${it.id})">${pzBandejaT('Editar', 'Edit')}</button><button type="button" class="pzb-link pzb-link-rojo" onclick="pzBandejaDescartar(${it.id})">${pzBandejaT('Descartar', 'Discard')}</button></div>`;
+  } else {
+    cuerpo = `<div class="pzb-borrador"><div class="pzb-borrador-et"><img src="ai-avatar.png" alt="Posty"><span>${pzBandejaT('RESPUESTA DE POSTY', "POSTY'S REPLY")}</span></div><div class="pzb-borrador-tx">${esc(it.draft || '')}</div></div>
+      <div id="pzbEdit-${it.id}"></div>
+      ${it.note ? `<div class="pzb-nota">${esc(it.note)}</div>` : ''}
+      <div class="pzb-item-acciones"><button type="button" class="pzb-link" onclick="pzBandejaEditar(${it.id})">${pzBandejaT('Editar', 'Edit')}</button><button type="button" class="pzb-link pzb-link-rojo" onclick="pzBandejaDescartar(${it.id})">${pzBandejaT('Descartar', 'Discard')}</button></div>`;
+  }
+  return `<div class="pzb-item${est === 'descartado' ? ' pzb-descartado' : ''}" id="pzbItem-${it.id}">
+    <div class="pzb-item-cab"><span class="pzb-ava" style="background:linear-gradient(135deg,${g[0]},${g[1]})">${inicial}</span>
+      <span class="pzb-user">@${esc(it.author_username || '')}</span>
+      ${it.clase === 'importante' && esSalida ? `<span class="pzb-chip pzb-chip-imp2">${pzBandejaT('IMPORTANTE', 'IMPORTANT')}</span>` : ''}
+      ${est === 'sin_permiso' ? `<span class="pzb-chip pzb-chip-permiso">${pzBandejaT('SIN PERMISO DE ENVÍO', 'NO SEND PERMISSION')}</span>` : ''}
+      ${it.actualizado ? `<span class="pzb-chip pzb-chip-dato">${pzBandejaT('ACTUALIZADA', 'UPDATED')}</span>` : ''}
+      <span class="pzb-cuando">${pzBandejaHace(it.created_at)}</span></div>
+    <div class="pzb-comentario">${esc(it.text || '')}</div>
+    ${cuerpo}
+  </div>`;
+}
+function pzBandejaRevisarHTML(data, tandaId) {
+  const t = (data.tandas || []).find(x => x.id === tandaId);
+  if (!t) return pzBandejaNotifsHTML(data);
+  const c = t.conteo || {};
+  const esDm = t.kind === 'dm';
+  const etiqueta = esDm ? (t.etiqueta || pzBandejaT('Mensaje directo', 'Direct message')) : (pzBandejaT('Posteo de hoy', "Today's post") + (t.post_caption ? ' · ' + String(t.post_caption).slice(0, 60) : ''));
+  const decididas = (c.descartadas || 0) + (c.enviadas || 0) + (c.ya_respondidas || 0);
+  const total = (t.items || []).length || 1;
+  const pct = Math.min(100, Math.round(100 * decididas / total));
+  return `${pzBandejaEstilos()}<div class="pzb-wrap">
+    <div class="pzb-banda"><button type="button" class="pzb-volver" onclick="pzBandejaVolver()">‹ ${pzBandejaT('Notificaciones', 'Notifications')}</button>
+      <h1>${pzBandejaT('Respuestas listas', 'Replies ready')}</h1><p>${esc(etiqueta)}</p>
+      <span class="pzb-pill">${(t.items || []).length} ${pzBandejaT('en total', 'in total')}</span></div>
+    <div class="pzb-sobre"><div class="pzb-card">
+      <div style="font-size:13.5px;color:#5A6B7C">${pzBandejaT('Las importantes van primero. Nada sale hasta que apruebes.', 'Important ones come first. Nothing goes out until you approve.')}</div>
+      ${(t.items || []).map(pzBandejaItemHTML).join('')}
+    </div>
+    <div class="pzb-barra">
+      <div class="pzb-barra-n">${pzBandejaT('Quedan', '')} ${c.para_salir} ${pzBandejaT('para salir', 'ready to go out')}</div>
+      <div class="pzb-barra-s">${c.descartadas || 0} ${pzBandejaT('descartadas por vos', 'discarded by you')} · ${c.editadas || 0} ${pzBandejaT('editadas', 'edited')}${c.esperando_dato ? ' · ' + c.esperando_dato + ' ' + pzBandejaT('espera un dato tuyo', 'waiting for a detail from you') : ''}${c.ya_respondidas ? ' · ' + c.ya_respondidas + ' ' + pzBandejaT('ya respondidas por vos', 'already answered by you') : ''}</div>
+      <div class="pzb-progreso"><i style="width:${pct}%"></i></div>
+      <button type="button" class="pzb-btn pzb-btn-aprobar" style="width:100%" id="pzbApr-${t.id}" ${c.para_salir ? '' : 'disabled'} onclick="pzBandejaAprobar(${t.id})">${pzBandejaT('Aprobar las', 'Approve all')} ${c.para_salir}</button>
+    </div></div>
+  </div>`;
+}
+async function pzBandejaCargar(tandaId) {
+  let r = await api.get('/api/bandeja' + (tandaId ? ('?tanda=' + tandaId) : '')).catch(() => null);
+  if (r && r.ok && !(r.tandas || []).length && !PZB.refrescoHecho) {
+    PZB.refrescoHecho = true;
+    await api.post('/api/bandeja/refresh', {}).catch(() => null);
+    r = await api.get('/api/bandeja' + (tandaId ? ('?tanda=' + tandaId) : '')).catch(() => r);
+  }
+  if (r && r.ok) PZB.data = r;
+  return PZB.data;
+}
+async function pzBandejaView() {
+  const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+  PZB.tandaId = Number(q.get('tanda') || 0);
+  const data = await pzBandejaCargar(PZB.tandaId);
+  if (!data) return `<div class="pzb-wrap"><div class="pzb-vacio">${pzBandejaT('No pude cargar tus notificaciones.', 'I could not load your notifications.')}</div></div>`;
+  return `<div id="pzbRoot">${PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data)}</div>`;
+}
+async function pzBandejaRepintar() {
+  const data = await pzBandejaCargar(PZB.tandaId);
+  const root = document.getElementById('pzbRoot');
+  if (root && data) root.innerHTML = PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data);
+}
+function pzBandejaAbrir(tandaId) { bbGo('#/app/notificaciones?tanda=' + tandaId); }
+function pzBandejaVolver() { bbGo('#/app/notificaciones'); }
+async function pzBandejaAprobar(tandaId) {
+  const btn = document.getElementById('pzbApr-' + tandaId);
+  if (btn) { btn.disabled = true; btn.textContent = pzBandejaT('Enviando…', 'Sending…'); }
+  const r = await api.post('/api/bandeja/tanda/' + tandaId + '/approve', {}).catch(() => null);
+  if (!r || !r.ok) { bbToast(pzBandejaT('No pude enviarlas. Probá de nuevo.', 'I could not send them. Try again.')); await pzBandejaRepintar(); return; }
+  if (r.permiso === false) bbToast(pzBandejaT('Todavía falta el permiso de Instagram para enviarlas: quedaron guardadas, no salieron.', 'The Instagram permission to send them is still missing: they were saved, they did not go out.'));
+  else if (r.enviadas > 0) bbToast(pzBandejaT('Salieron ' + r.enviadas + (r.enviadas === 1 ? ' respuesta ✓' : ' respuestas ✓'), r.enviadas + (r.enviadas === 1 ? ' reply sent ✓' : ' replies sent ✓')));
+  else if (r.ya_respondidas > 0) bbToast(pzBandejaT('Ya estaban respondidas por vos.', 'You had already answered them yourself.'));
+  else bbToast(pzBandejaT('No había respuestas para enviar.', 'There were no replies to send.'));
+  await pzBandejaRepintar();
+}
+function pzBandejaEditar(itemId) {
+  const it = ((PZB.data || {}).tandas || []).flatMap(t => t.items || []).find(i => i.id === itemId);
+  const zona = document.getElementById('pzbEdit-' + itemId);
+  const item = document.getElementById('pzbItem-' + itemId);
+  const host = zona || (item ? item.querySelector('.pzb-falta') : null);
+  if (!host) return;
+  const actual = it ? String(it.draft || '') : '';
+  host.outerHTML = `<div id="pzbEdit-${itemId}"><div class="pzb-edit-et">${pzBandejaT('EDITANDO TU RESPUESTA', 'EDITING YOUR REPLY')}</div>
+    <textarea class="pzb-edit" id="pzbEditTx-${itemId}">${esc(actual)}</textarea>
+    <div class="pzb-item-acciones"><button type="button" class="pzb-link" onclick="pzBandejaGuardar(${itemId})">${pzBandejaT('Guardar', 'Save')}</button><button type="button" class="pzb-link" onclick="pzBandejaRepintar()">${pzBandejaT('Cancelar', 'Cancel')}</button></div></div>`;
+  if (item) item.querySelectorAll('.pzb-item-acciones').forEach(a => { if (!a.closest('#pzbEdit-' + itemId)) a.style.display = 'none'; });
+  const tx = document.getElementById('pzbEditTx-' + itemId);
+  if (tx) tx.focus();
+}
+async function pzBandejaGuardar(itemId) {
+  const tx = document.getElementById('pzbEditTx-' + itemId);
+  const text = tx ? tx.value.trim() : '';
+  if (!text) { bbToast(pzBandejaT('La respuesta no puede quedar vacía.', 'The reply cannot be empty.')); return; }
+  const r = await api.post('/api/bandeja/item/' + itemId + '/edit', { text }).catch(() => null);
+  if (r && r.ok) bbToast(pzBandejaT('Respuesta guardada ✓', 'Reply saved ✓'));
+  await pzBandejaRepintar();
+}
+async function pzBandejaDescartar(itemId) {
+  await api.post('/api/bandeja/item/' + itemId + '/dismiss', {}).catch(() => null);
+  await pzBandejaRepintar();
+}
+async function pzBandejaDeshacer(itemId) {
+  await api.post('/api/bandeja/item/' + itemId + '/undismiss', {}).catch(() => null);
+  await pzBandejaRepintar();
+}
+
 const PZ_ADS_TIMEOUT = 8000;
 async function pzAdsCargarDatos() {
   const rs = await Promise.all([
@@ -25604,7 +25864,7 @@ function pzPrefetchKick() {
   else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo Nivel de Posty
   else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbNivelContent(); }
   else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque
-  else if (tab === 'notificaciones') { pzPaintSkeleton(tab); content = await pzNotificacionesView(); } // (LOTE BARRA-VIVA) La pantalla de la campana del cliente (banda celeste + NOVEDADES reales; la tanda de BANDEJA-RESPONDE se monta en su #pzNotifTanda).
+  else if (tab === 'notificaciones') { pzPaintSkeleton(tab); content = await pzBandejaView(); } // (LOTE BANDEJA-RESPONDE · 22/11) Notificaciones: la tanda de respuestas (borrador + un toque). La campana de la barra (lote BARRA-VIVA) abre esta ruta.
   else if (tab === 'ritual') { pzPaintSkeleton(tab); content = await ritualView(); } // (RITUAL · lote 5/8) El paquete de la mañana
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   } catch (e) { content = '<div class="bb-error"><p>No pude cargar esta pantalla.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>'; }

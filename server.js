@@ -37694,6 +37694,109 @@ app.post('/api/community/dismiss', requireAuth, planGateMiddleware(db, 'comentar
 });
 
 // =====================================================================
+// BANDEJA-RESPONDE (lote 2026-11-22) — «borrador + tanda + un toque»
+// El motor vive en bandeja.js. Nada sale sin el toque del dueño: la
+// ingesta prepara borradores EN SILENCIO, un solo aviso por tanda, y el
+// envío ocurre recién en POST /api/bandeja/tanda/:id/approve, con el
+// freno anti-duplicado y la compuerta de permiso de Meta declarados en
+// bandeja.js (jamás se marca enviado algo que no salió).
+// =====================================================================
+function bandejaDeps() {
+  return {
+    credsOf: (uid) => {
+      const s = getSettings(uid) || {};
+      const p = (typeof getProfile === 'function' ? getProfile(uid) : null) || {};
+      return { igUserId: s.ig_user_id || '', accessToken: s.ig_access_token || '', igUsername: p.ig_username || '' };
+    },
+    suggestFn: (uid) => suggestDetailedForUser(uid),
+    apiKeyOf: (uid) => (getSettings(uid) || {}).openai_key || '',
+    notify: (uid, info) => {
+      try {
+        push.sendPush(uid, {
+          title: 'Posty',
+          body: info && info.n > 1 ? `Ya tenés ${info.n} respuestas listas para aprobar` : 'Ya tenés respuestas listas para aprobar',
+          url: '/#/app/notificaciones',
+          data: { bandeja_tanda: String((info && info.tandaId) || '') },
+        }).catch(() => {});
+      } catch (e) {}
+    },
+  };
+}
+
+app.get('/api/bandeja', requireAuth, planGateMiddleware(db, 'comentarios'), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const B = require('./bandeja');
+    const tandaId = Number(req.query.tanda || 0);
+    // FRENO (1): al abrir la revisión de una tanda, lo que el negocio ya
+    // respondió desde Instagram sale solo de la tanda.
+    if (tandaId) { try { await B.refreshTanda(db, uid, tandaId, bandejaDeps()); } catch (e) {} }
+    const data = B.getBandeja(db, uid);
+    res.json({ ok: true, tandas: data.tandas, acciones: data.acciones, novedades: B.novedades(db, uid) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/bandeja/count', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const gate = planGate(db, uid, 'comentarios');
+    if (!gate.ok) return res.json({ ok: true, acciones: 0 });
+    res.json({ ok: true, acciones: require('./bandeja').countAcciones(db, uid) });
+  } catch (e) {
+    res.json({ ok: true, acciones: 0 });
+  }
+});
+
+app.post('/api/bandeja/refresh', requireAuth, planGateMiddleware(db, 'comentarios'), requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const r = await require('./bandeja').pollBandeja(db, bandejaDeps(), { onlyUser: uid });
+    res.json({ ok: true, ...r });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/bandeja/item/:id/edit', requireAuth, planGateMiddleware(db, 'comentarios'), express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const text = String((req.body || {}).text || '').trim();
+    if (!text) return res.status(400).json({ ok: false, error: 'La respuesta no puede quedar vacía' });
+    res.json(require('./bandeja').editItem(db, uid, Number(req.params.id), text));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/bandeja/item/:id/dismiss', requireAuth, planGateMiddleware(db, 'comentarios'), express.json(), async (req, res) => {
+  try {
+    res.json(require('./bandeja').dismissItem(db, req.session.userId, Number(req.params.id)));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/bandeja/item/:id/undismiss', requireAuth, planGateMiddleware(db, 'comentarios'), express.json(), async (req, res) => {
+  try {
+    res.json(require('./bandeja').undismissItem(db, req.session.userId, Number(req.params.id)));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/bandeja/tanda/:id/approve', requireAuth, planGateMiddleware(db, 'comentarios'), requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const r = await require('./bandeja').approveTanda(db, uid, Number(req.params.id), bandejaDeps());
+    res.json({ ok: true, ...r });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// =====================================================================
 // ATENCIÓN TOTAL — agenda, seguimiento y cierre (cableado 2026-10-21)
 // Los motores son booking.js / followups.js / payment-close.js (build
 // 2026-10-20). REGLA FIJA: ningún endpoint de esta sección envía
@@ -48248,7 +48351,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1221';
+const BUILD_ID = '20261105-v1222';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
