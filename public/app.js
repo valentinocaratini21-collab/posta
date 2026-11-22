@@ -972,14 +972,16 @@ function pzShellHeadHTML(tab) {
   // fijo «tu community manager» MUERE en la barra: la frase vive en el
   // encabezado del negocio, la apertura y el sitio. Los botones son
   // MÁS CHICOS que los círculos de antes y la campana entra en un solo
-  // lugar, a la izquierda de Compartir (su puerta depende de la
-  // sesión: cliente → Notificaciones · casa → el Conserje).
+  // lugar, a la izquierda de Compartir (su puerta es Notificaciones
+  // para todas las sesiones — LOTE CAMPANA-CASA; la casa encuentra
+  // ahí su tanda y su tarjeta de entrada al Conserje).
   const estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'working for you…' : 'trabajando para vos…');
   // (LOTE CAMPANA-BADGE) La insignia nace pintada desde la caché si
   // ya se conoce el conteo (mismo patrón que la línea de estado con
-  // __pzBarraEstadoTxt): ningún parpadeo al re-pintar el shell. Con
-  // sesión de la casa nunca se siembra (su campana es el Conserje).
-  const badgeIni = (typeof window !== 'undefined' && window.__pzCampanaBadgeN > 0 && pzBarraCasaCache() !== true)
+  // __pzBarraEstadoTxt): ningún parpadeo al re-pintar el shell. La
+  // casa también la siembra: su campana abre su bandeja y su conteo
+  // es el de su negocio (asentado por CAMPANA-CASA).
+  const badgeIni = (typeof window !== 'undefined' && window.__pzCampanaBadgeN > 0)
     ? '<span class="pz-shell-bell-badge" id="pzShellBellBadge">' + window.__pzCampanaBadgeN + '</span>' : '';
   return `<header class="pz-shell-head">
     <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
@@ -1103,14 +1105,17 @@ function pzBarraEstadoCarga(tab) {
   } catch (e) {}
 }
 // LA CAMPANA — un solo lugar, a la izquierda de Compartir. Su puerta
-// depende de la sesión: cliente → la pantalla de Notificaciones · la
-// casa → el Conserje. La sonda es la de PUERTA-CONSERJE
-// (GET /api/conserje/puerta: solo el sí/no de la propia sesión, jamás
-// el token). Se pregunta UNA vez por sesión de navegador y se cachea
-// en sessionStorage; el toque funciona igual sin la respuesta (la
-// pide y recién ahí enruta: ninguna puerta muerta). SIN badge en
-// este lote: el número cuenta ítems de ACCIÓN (las respuestas en
-// tanda) y nace con BANDEJA-RESPONDE, sobre esta misma pantalla.
+// es la pantalla de Notificaciones para TODAS las sesiones
+// (LOTE CAMPANA-CASA · 22/11: el dueño pidió ver SU bandeja como
+// cualquier cliente — «lo quiero ver yo asi tambien. porque no?»;
+// antes la casa iba directo al Conserje). La sonda es la de
+// PUERTA-CONSERJE (GET /api/conserje/puerta: solo el sí/no de la
+// propia sesión, jamás el token): ya no enruta la campana — le dice
+// a la pantalla de Notificaciones si pinta, al tope, la tarjeta de
+// entrada al Conserje (solo la casa). Se pregunta UNA vez por sesión
+// de navegador y se cachea en sessionStorage; el toque funciona
+// igual sin la respuesta (ninguna puerta muerta). La insignia es
+// del lote CAMPANA-BADGE, sobre esta misma campana.
 function pzBarraCasaCache() {
   try { const v = sessionStorage.getItem('pzBarraCasa'); if (v === '1') return true; if (v === '0') return false; } catch (e) {}
   return null;
@@ -1133,40 +1138,45 @@ function pzBarraPuertaKick() {
 }
 const PZ_CAMPANA_CLOCHE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2793C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18.5h16"/><path d="M5.5 18.5a6.5 6.5 0 0 1 13 0"/><path d="M12 12v-1.2"/><circle cx="12" cy="9.3" r="1.1"/></svg>';
 function pzBarraCampanaPintar() {
-  // Con sesión de la casa, la campana se vuelve la bandeja de plata
-  // del Conserje (la forma del mock de la casa): mismo botón, mismo
-  // lugar — cambia el glifo y el destino.
+  // (LOTE CAMPANA-CASA) La campana ya NO cambia de glifo con la
+  // sesión de la casa: es la misma campana para todos, porque su
+  // destino es el mismo (Notificaciones). La bandeja de plata
+  // (PZ_CAMPANA_CLOCHE) vive ahora en la tarjeta «Conserje» al tope
+  // de esa pantalla. La función queda — la llama la sonda de la
+  // puerta y el pintor de la insignia (CAMPANA-BADGE) se apoya en
+  // esta misma pintura — pero ya no pinta nada propio.
   try {
     const b = document.getElementById('pzShellBell');
     if (!b) return;
-    if (pzBarraCasaCache() === true) {
-      b.innerHTML = '<span class="pz-ic" style="display:inline-flex;line-height:0;vertical-align:-0.18em">' + PZ_CAMPANA_CLOCHE + '</span>';
-      b.setAttribute('aria-label', 'Conserje');
-      b.classList.add('es-casa');
+    if (b.classList.contains('es-casa')) {
+      // Defensa ante un DOM tibio pintado por un shell anterior:
+      // la campana vuelve a su forma única (campana, «Notificaciones»).
+      b.classList.remove('es-casa');
+      b.setAttribute('aria-label', pzBarraEn() ? 'Notifications' : 'Notificaciones');
+      b.innerHTML = pzIc('bell', 18);
+      // (COSTURA CAMPANA-BADGE) si su insignia estaba sembrada en el
+      // glifo viejo, su pintor la re-siembra en su refresco.
     }
     // (LOTE CAMPANA-BADGE) La misma pintura sincroniza la insignia:
-    // con la casa, el innerHTML de arriba ya la borró y el pintor lo
-    // confirma. Y como esta pintura es también el momento en que la
-    // puerta resuelve (la llama pzBarraPuertaKick al saber la
-    // sesión), acá se dispara además el refresco del conteo: sin
-    // este enganche, la primera pintura quedaría esperando un
-    // re-pintado del shell que puede no venir nunca.
+    // la casa incluida — su conteo es el de su negocio y su campana
+    // abre su bandeja (asentado por CAMPANA-CASA). Y como esta
+    // pintura es también el momento en que la puerta resuelve (la
+    // llama pzBarraPuertaKick al saber la sesión), acá se dispara
+    // además el refresco del conteo: sin este enganche, la primera
+    // pintura quedaría esperando un re-pintado del shell que puede
+    // no venir nunca.
     pzCampanaBadgePintar();
     pzCampanaBadgeRefrescar();
   } catch (e) {}
 }
 function pzBarraCampana() {
-  const casa = pzBarraCasaCache();
-  if (casa === true) { location.href = '/conserje'; return; }
-  if (casa === false) { bbGo('#/app/notificaciones'); return; }
-  // Todavía no sabemos: se pregunta y el MISMO toque enruta al volver.
-  try {
-    api.get('/api/conserje/puerta').then((r) => {
-      const esCasa = !!(r && r.casa);
-      try { sessionStorage.setItem('pzBarraCasa', esCasa ? '1' : '0'); } catch (e) {}
-      if (esCasa) location.href = '/conserje'; else bbGo('#/app/notificaciones');
-    }).catch(() => { bbGo('#/app/notificaciones'); });
-  } catch (e) { bbGo('#/app/notificaciones'); }
+  // (LOTE CAMPANA-CASA) TODAS las sesiones abren Notificaciones: la
+  // casa ve ahí la tanda de su propio negocio y su tarjeta Conserje.
+  // Si la sesión todavía no se conoce, la sonda sale igual (la
+  // pantalla la necesita para pintar la tarjeta) y el toque navega
+  // sin esperar la respuesta.
+  if (pzBarraCasaCache() === null) pzBarraPuertaKick();
+  bbGo('#/app/notificaciones');
 }
 // ===== LOTE CAMPANA-BADGE · la insignia de la campana =====
 // El número que BARRA-VIVA dejó declarado al nacer («SIN badge en
@@ -1179,16 +1189,17 @@ function pzBarraCampana() {
 // número exacto del endpoint. Se refresca con el MISMO ritmo de la
 // barra viva — tras cada pintura del shell, junto a
 // pzBarraEstadoRefrescar, en los dos shells — sin mecanismo nuevo.
-// LA CASA NO PINTA INSIGNIA: su campana es la puerta del Conserje y
-// el conteo de la bandeja no es su conteo — con sesión de la casa el
-// endpoint ni siquiera se consulta y ningún número se inventa.
+// LA CASA TAMBIÉN PINTA INSIGNIA (asentado por CAMPANA-CASA): su
+// campana abre su bandeja como la de cualquier cliente y el conteo
+// del endpoint es el de su propio negocio — se consulta y se pinta
+// igual que el de un cliente, sin ningún trato especial.
 function pzCampanaBadgePintar() {
   try {
     const b = document.getElementById('pzShellBell');
     if (!b) return;
     const n = (typeof window !== 'undefined' && window.__pzCampanaBadgeN) || 0;
     let el = document.getElementById('pzShellBellBadge');
-    if (pzBarraCasaCache() === true || !(n > 0)) {
+    if (!(n > 0)) {
       if (el) el.remove();
       return;
     }
@@ -1206,11 +1217,6 @@ function pzCampanaBadgeRefrescar() {
   try {
     if (typeof ME === 'undefined' || !ME) return;
     const casa = pzBarraCasaCache();
-    if (casa === true) {
-      if (typeof window !== 'undefined') window.__pzCampanaBadgeN = 0;
-      pzCampanaBadgePintar();
-      return;
-    }
     if (casa === null) { pzBarraPuertaKick(); return; }
     if (typeof window !== 'undefined' && window.__pzCampanaBadgeBuscando) return;
     if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = true;
@@ -2802,7 +2808,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1223';
+const PZ_BUILD = '20261105-v1224';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22038,8 +22044,13 @@ let pzAdsFilaAbierta = ''; // '', 'conexion', 'billetera', 'impulsos'
 // entera; las importantes van primero, marcadas. La campana de la barra
 // superior es del lote BARRA-VIVA: su puerta es esta ruta
 // (#/app/notificaciones) y su insignia lee GET /api/bandeja/count.
+// (LOTE CAMPANA-CASA · 22/11) La casa ve ESTA MISMA pantalla con la
+// tanda de su propio negocio — el motor y los endpoints ya la incluían
+// (ninguna exclusión del user 12 en bandeja.js/scheduler/server.js;
+// su plan fundador pasa los gates de plan-gate) — y al tope lleva la
+// tarjeta «Conserje», su puerta a la consola de siempre.
 // =====================================================================
-const PZB = { data: null, tandaId: 0, refrescoHecho: false };
+const PZB = { data: null, tandaId: 0, refrescoHecho: false, esCasa: false };
 function pzBandejaT(es, en) { return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? en : es; }
 function pzBandejaHace(ts) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
@@ -22122,6 +22133,12 @@ function pzBandejaEstilos() {
 .pzb-progreso{height:5px;border-radius:99px;background:#E3EDF5;margin:10px 0 12px;overflow:hidden}
 .pzb-progreso i{display:block;height:100%;background:linear-gradient(90deg,#57B2E5,#2793C8);border-radius:99px}
 .pzb-vacio{background:#fff;border-radius:22px;box-shadow:0 10px 28px rgba(10,30,51,.08);padding:26px 18px;text-align:center;color:#5A6B7C;font-size:15px}
+.pzb-conserje{display:flex;align-items:center;gap:12px;width:100%;border:0;text-align:left;cursor:pointer;font-family:inherit}
+.pzb-conserje-ic{width:42px;height:42px;border-radius:50%;flex:none;background:#EAF4FB;display:flex;align-items:center;justify-content:center}
+.pzb-conserje-tx{flex:1;min-width:0}
+.pzb-conserje-tx b{display:block;font-size:16px;font-weight:800;color:#0A1E33}
+.pzb-conserje-tx small{display:block;font-size:13px;color:#5A6B7C;margin-top:1px}
+.pzb-conserje-go{font-size:24px;color:#9DB2C6;flex:none;line-height:1}
 </style>`;
 }
 function pzBandejaIconoNov(tipo) {
@@ -22153,12 +22170,41 @@ function pzBandejaTarjetaHTML(t) {
     </div>
   </div>`;
 }
-function pzBandejaNotifsHTML(data) {
+// (LOTE CAMPANA-CASA · 22/11) ¿Esta sesión es la de la casa? La
+// sonda es la misma de la campana (GET /api/conserje/puerta, cacheada
+// en sessionStorage por el bloque BARRA-VIVA): acá solo se lee — si
+// la caché está fría se pregunta y se cachea. Sin sonda (error de
+// red), la pantalla se pinta como la de un cliente: la tarjeta no
+// aparece, jamás se inventa.
+async function pzBandejaEsCasa() {
+  const c = (typeof pzBarraCasaCache === 'function') ? pzBarraCasaCache() : null;
+  if (c !== null) return c;
+  try {
+    const r = await api.get('/api/conserje/puerta');
+    const casa = !!(r && r.casa);
+    try { sessionStorage.setItem('pzBarraCasa', casa ? '1' : '0'); } catch (e) {}
+    return casa;
+  } catch (e) { return false; }
+}
+// La tarjeta de entrada al Conserje: SOLO la casa, al tope de su
+// pantalla de notificaciones. La consola no cambia en nada — esto
+// es solo su puerta nueva (la de siempre, /conserje, que siembra el
+// acceso desde la propia sesión de la casa: PUERTA-CONSERJE).
+function pzBandejaConserjeCardHTML() {
+  return `<button type="button" class="pzb-card pzb-conserje" id="pzbConserjeCard" onclick="pzBandejaIrConserje()">
+    <span class="pzb-conserje-ic">${PZ_CAMPANA_CLOCHE}</span>
+    <span class="pzb-conserje-tx"><b>Conserje</b><small>${pzBandejaT('La consola de operación de Posty', "Posty's operations console")}</small></span>
+    <span class="pzb-conserje-go">›</span>
+  </button>`;
+}
+function pzBandejaIrConserje() { location.href = '/conserje'; }
+function pzBandejaNotifsHTML(data, esCasa) {
   const tandas = (data.tandas || []).filter(t => (t.conteo || {}).pendientes > 0);
   const novs = data.novedades || [];
   return `${pzBandejaEstilos()}<div class="pzb-wrap">
     <div class="pzb-banda"><h1>${pzBandejaT('Notificaciones', 'Notifications')}</h1><p>${pzBandejaT('Todo lo de tu negocio, en un solo lugar', 'Everything about your business, in one place')}</p></div>
     <div class="pzb-sobre">
+    ${esCasa ? pzBandejaConserjeCardHTML() : ''}
     ${tandas.length ? `<div class="pzb-seccion" style="margin-top:0;color:#fff;opacity:.95">${pzBandejaT('ESPERA TU TOQUE', 'WAITING FOR YOUR TAP')}</div>` + tandas.map(pzBandejaTarjetaHTML).join('') : `<div class="pzb-vacio">${pzBandejaT('Todavía no hay respuestas para preparar.<br>Cuando alguien comente o te escriba, Posty las prepara acá.', 'No replies to prepare yet.<br>When someone comments or writes to you, Posty prepares them here.')}</div>`}
     </div>
     ${novs.length ? `<div class="pzb-seccion">${pzBandejaT('NOVEDADES', 'UPDATES')}</div><div class="pzb-card">${novs.map(n => `<div class="pzb-nov">${pzBandejaIconoNov(n.tipo)}<div><div class="pzb-nov-tit">${esc(n.titulo || '')}</div><div class="pzb-nov-det">${esc(n.detalle || '')}</div></div><span class="pzb-nov-cuando">${pzBandejaHace(n.cuando)}</span></div>`).join('')}</div>` : ''}
@@ -22200,7 +22246,7 @@ function pzBandejaItemHTML(it) {
 }
 function pzBandejaRevisarHTML(data, tandaId) {
   const t = (data.tandas || []).find(x => x.id === tandaId);
-  if (!t) return pzBandejaNotifsHTML(data);
+  if (!t) return pzBandejaNotifsHTML(data, PZB.esCasa);
   const c = t.conteo || {};
   const esDm = t.kind === 'dm';
   const etiqueta = esDm ? (t.etiqueta || pzBandejaT('Mensaje directo', 'Direct message')) : (pzBandejaT('Posteo de hoy', "Today's post") + (t.post_caption ? ' · ' + String(t.post_caption).slice(0, 60) : ''));
@@ -22236,14 +22282,18 @@ async function pzBandejaCargar(tandaId) {
 async function pzBandejaView() {
   const q = new URLSearchParams((location.hash.split('?')[1] || ''));
   PZB.tandaId = Number(q.get('tanda') || 0);
+  // (LOTE CAMPANA-CASA) La sonda de la casa se resuelve UNA vez por
+  // pintura de la pantalla y viaja con el estado de la vista: los
+  // repintados (aprobar/descartar/editar) conservan la tarjeta.
+  PZB.esCasa = await pzBandejaEsCasa();
   const data = await pzBandejaCargar(PZB.tandaId);
   if (!data) return `<div class="pzb-wrap"><div class="pzb-vacio">${pzBandejaT('No pude cargar tus notificaciones.', 'I could not load your notifications.')}</div></div>`;
-  return `<div id="pzbRoot">${PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data)}</div>`;
+  return `<div id="pzbRoot">${PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data, PZB.esCasa)}</div>`;
 }
 async function pzBandejaRepintar() {
   const data = await pzBandejaCargar(PZB.tandaId);
   const root = document.getElementById('pzbRoot');
-  if (root && data) root.innerHTML = PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data);
+  if (root && data) root.innerHTML = PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data, PZB.esCasa);
 }
 function pzBandejaAbrir(tandaId) { bbGo('#/app/notificaciones?tanda=' + tandaId); }
 function pzBandejaVolver() { bbGo('#/app/notificaciones'); }
