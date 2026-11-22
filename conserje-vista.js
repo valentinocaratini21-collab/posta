@@ -28,6 +28,19 @@
 //                          nombre, formato y fecha) desde trial_cache.
 //   · image-styles       — las familias de dirección de arte: el
 //                          catálogo REAL de tratamientos.
+//
+// (LOTE CONSERJE-FORMA — la forma que dictó el dueño el 2026-11-22:
+// la consola muestra EL PRESENTE VIVO en sus tres columnas. A la
+// izquierda, la CARTERA VIVA: solo relaciones vivas — prueba
+// corriendo, cliente pago y la casa — computadas de los datos reales
+// (claseDeCuenta), no de la columna plan_status guardada. Al centro,
+// la PRODUCCIÓN DE MAÑANA (produccionManana): el día que se está
+// preparando, un día adelantado, con su semáforo arriba de todo. A la
+// derecha, HOY NECESITA UNA MANO (decisiones): pedidos, decisiones
+// del dueño, problemas y plata — todo de hoy, con la regla de
+// fósiles: lo que se resolvió solo no aparece nunca, y lo que sigue
+// real entra con fecha de hoy. La ficha del cliente sigue existiendo
+// como drill-in desde cualquier columna.)
 // Lo único nuevo que persiste esta vista es la tabla
 // conserje_tratamientos: el tratamiento (familia) que el equipo le
 // asigna a cada negocio, con su guarda — una familia la lleva UN solo
@@ -192,6 +205,79 @@ function planDePrueba(db, u) {
 }
 
 // ---------------------------------------------------------------------
+// LA CARTERA VIVA (LOTE CONSERJE-FORMA — la forma que dictó el dueño
+// el 2026-11-22): la lista del Conserje muestra RELACIONES VIVAS, no
+// el estado guardado en users.plan_status — esa columna queda en
+// 'trial' para siempre y hoy 42 de 43 cuentas figuran «prueba» aunque
+// su prueba terminó hace semanas. La clase de cada cuenta se computa
+// en el acto desde los datos reales:
+//   · casa              — la cuenta del dueño (user 12), su vidriera
+//                         de trabajo diario: siempre está.
+//   · pago              — plan_status 'active' (o 'past_due': cliente
+//                         pago en gracia, la suscripción sigue viva).
+//   · prueba_corriendo  — plan_status 'trial' con el reloj corriendo
+//                         (trial_started_at > 0, la conexión ya pasó) y
+//                         el fin efectivo de la prueba en el futuro.
+//   · prueba_pendiente  — plan_status 'trial' nacida pendiente de
+//                         conexión (trial_started_at = 0, el reloj de
+//                         PRUEBA-CONECTA no arrancó) CON la semana
+//                         armada (plan en trial_cache o posteos).
+//   · null              — no es relación viva: su prueba corrió y
+//                         terminó, canceló, o nunca se armó. NO entra
+//                         a la lista; su ficha e historia quedan en el
+//                         registro (cliente() la sigue leyendo) y si
+//                         vuelve, vuelve.
+// El fin efectivo replica trialEffectiveEnd de server.js (la política
+// vigente: TRIAL_DAYS = 3 desde el arranque real del reloj, con la
+// extensión manual vigente mandando si está en el futuro).
+// ---------------------------------------------------------------------
+const TRIAL_DAYS = 3; // server.js: const TRIAL_DAYS = 3 (la política)
+
+function finEfectivoPrueba(u, nowMs) {
+  if (!u) return 0;
+  if (u.trial_started_at !== undefined && u.trial_started_at !== null && Number(u.trial_started_at) === 0) return Infinity;
+  const ext = Number(u.trial_extended_until || 0);
+  if (ext > nowMs) return ext;
+  const tEnds = Number(u.trial_ends_at || 0);
+  if (!tEnds) return 0;
+  const startedMs = Number(u.trial_started_at) > 0 ? Number(u.trial_started_at) : 0;
+  const cMs = startedMs || Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+  const policyEnd = cMs ? cMs + TRIAL_DAYS * 86400000 : Infinity;
+  return Math.min(tEnds, policyEnd);
+}
+
+function claseDeCuenta(db, u, nowMs) {
+  const uid = Number(u && u.id) || 0;
+  if (!uid) return { clase: null };
+  if (uid === conserjeRevision.OWNER_USER_ID) return { clase: 'casa' };
+  const st = String((u && u.plan_status) || '');
+  if (st === 'active' || st === 'past_due') return { clase: 'pago' };
+  if (st !== 'trial') return { clase: null };
+  const started = (u.trial_started_at === undefined || u.trial_started_at === null)
+    ? null : Number(u.trial_started_at);
+  if (started === 0) {
+    // Pendiente de conexión: entra solo si su semana existe de verdad
+    // (el mismo criterio con que la puerta deja invitados a medio
+    // abrir fuera del roster: plan armado o posteos ya cargados).
+    const conPlan = !!planDePrueba(db, u);
+    const conPosts = conPlan ? true : safe(() => db.prepare(
+      'SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uid), { c: 0 }).c > 0;
+    return (conPlan || conPosts)
+      ? { clase: 'prueba_pendiente', pendiente_conexion: true }
+      : { clase: null };
+  }
+  const fin = finEfectivoPrueba(u, nowMs);
+  if (!(fin > nowMs)) return { clase: null };
+  const tz = conserjeRevision.accountTz(db, uid);
+  return {
+    clase: 'prueba_corriendo',
+    dias_restantes: Math.max(0, Math.ceil((fin - nowMs) / 86400000)),
+    termina_ms: fin,
+    termina_key: safe(() => dayKeyInTz(new Date(fin), tz), ''),
+  };
+}
+
+// ---------------------------------------------------------------------
 // RACHA — días seguidos con un posteo publicado, en la zona de la cuenta
 // ---------------------------------------------------------------------
 function rachaDe(db, uid, tz, nowMs) {
@@ -250,33 +336,24 @@ function pendientesDe(db, uid, nowMs) {
 // ---------------------------------------------------------------------
 const EXCLUYE_EMAIL = `u.email NOT LIKE '%postatest.com' AND u.email NOT LIKE 'qa-%' AND u.email NOT LIKE 'postyqa%'`;
 
-function usuariosAtendidos(db) {
+function usuariosAtendidos(db, nowMs) {
+  const now = Number(nowMs) || Date.now();
   const rows = safe(() => db.prepare(
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
-            u.concierge, u.publishing_stopped, u.trial_ends_at, u.created_at,
+            u.concierge, u.publishing_stopped, u.trial_ends_at, u.trial_extended_until,
+            u.trial_started_at, u.created_at,
             p.business_name, p.ig_username, p.category
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id
      WHERE (u.id = ${conserjeRevision.OWNER_USER_ID}
-        OR COALESCE(u.concierge, 0) = 1
-        OR (u.plan_status IN ('active', 'trial') AND COALESCE(u.plan, '') <> 'free' AND COALESCE(p.business_name, '') <> '')
-        OR EXISTS (SELECT 1 FROM support_cases c WHERE c.user_id = u.id AND c.estado <> 'cerrado')
-        OR COALESCE(u.is_guest, 0) = 1)
+        OR u.plan_status IN ('active', 'past_due', 'trial'))
        AND (${EXCLUYE_EMAIL} OR u.id = ${conserjeRevision.OWNER_USER_ID})
      ORDER BY u.id ASC`).all(), []);
-  // El invitado de la puerta entra solo si su prueba existe de verdad:
-  // semana en trial_cache, posteos o un caso abierto. La puerta deja
-  // cuentas a medio abrir que nadie atiende; no son roster.
-  return rows.filter((u) => {
-    if (!u.is_guest || u.id === conserjeRevision.OWNER_USER_ID) return true;
-    if (u.concierge || (u.plan_status === 'active')) return true;
-    const conCasos = safe(() => db.prepare(
-      `SELECT COUNT(*) AS c FROM support_cases WHERE user_id = ? AND estado <> 'cerrado'`).get(u.id), { c: 0 }).c > 0;
-    if (conCasos) return true;
-    const conPosts = safe(() => db.prepare(
-      `SELECT COUNT(*) AS c FROM posts WHERE user_id = ?`).get(u.id), { c: 0 }).c > 0;
-    if (conPosts) return true;
-    return !!planDePrueba(db, u);
-  });
+  // (LOTE CONSERJE-FORMA) La membresía ya no la decide la columna
+  // guardada ni un caso abierto: la decide la CLASE computada desde
+  // los datos reales (claseDeCuenta). Una prueba terminada, una cuenta
+  // cancelada o un invitado sin semana armada quedan fuera de la
+  // lista — su registro no se toca.
+  return rows.filter((u) => claseDeCuenta(db, u, now).clase !== null);
 }
 
 function filaRoster(db, u, opts, nowMs) {
@@ -296,9 +373,21 @@ function filaRoster(db, u, opts, nowMs) {
   const planInfo = (u.plan_status === 'trial' || u.is_guest) ? planDePrueba(db, u) : null;
   const plan = planInfo ? planInfo.plan : null;
   const listos = plan ? plan.slots.filter((s) => s.estado === 'listo').length : 0;
+  // (LOTE CONSERJE-FORMA) La clase viva de la cuenta, computada de los
+  // datos reales: es la que manda en los filtros y en las etiquetas —
+  // la columna plan_status guardada queda como dato crudo, nada más.
+  const claseInfo = claseDeCuenta(db, u, nowMs);
+  const claseLabel = claseInfo.clase === 'casa' ? 'La casa'
+    : claseInfo.clase === 'pago' ? 'Cliente'
+    : claseInfo.clase === 'prueba_corriendo' ? 'Prueba'
+    : claseInfo.clase === 'prueba_pendiente' ? 'Prueba · sin conectar' : '';
   // La línea de estado: el hecho más urgente, en palabras llanas.
   let dot = 'grey', estado = '';
   if (etapa && etapa.clave === 'en_rojo') { dot = 'yellow'; estado = etapa.motivo || 'Necesita atención'; }
+  else if (claseInfo.clase === 'prueba_pendiente') {
+    dot = 'grey';
+    estado = plan ? 'Semana armada · esperando la conexión' : 'Esperando la conexión de Instagram';
+  }
   else if (pend.revision) { dot = 'yellow'; estado = 'Pieza de mañana para decidir'; }
   else if (pend.voz) { dot = 'yellow'; estado = 'Nota de voz por resolver'; }
   else if (pend.chat) { dot = 'yellow'; estado = pend.chat === 1 ? '1 mensaje sin responder' : pend.chat + ' mensajes sin responder'; }
@@ -321,6 +410,13 @@ function filaRoster(db, u, opts, nowMs) {
     email: u.email || '',
     categoria: u.category || '',
     plan: u.plan || '', plan_status: u.plan_status || '',
+    clase: claseInfo.clase || '', clase_label: claseLabel,
+    prueba: (claseInfo.clase === 'prueba_corriendo' || claseInfo.clase === 'prueba_pendiente') ? {
+      dias_restantes: claseInfo.dias_restantes != null ? claseInfo.dias_restantes : null,
+      termina_key: claseInfo.termina_key || '',
+      pendiente_conexion: !!claseInfo.pendiente_conexion,
+    } : null,
+    publishing_stopped: !!u.publishing_stopped,
     es_invitado: !!u.is_guest, es_dueno: uid === conserjeRevision.OWNER_USER_ID,
     concierge: !!u.concierge,
     etapa, racha, pendientes: pend,
@@ -370,7 +466,10 @@ function resumenHoy(db, filas, decisionesList, opts, nowMs) {
     programados_hoy: programadosHoy,
     publicados_hoy: publicadosHoy,
     proxima_hora: proximaHora,
-    pruebas_activas: filas.filter((f) => f.plan_status === 'trial').length,
+    // (LOTE CONSERJE-FORMA) Pruebas activas = las que están CORRIENDO
+    // (reloj andando): la columna guardada contaba 42 «pruebas» con la
+    // mayoría terminadas hace semanas.
+    pruebas_activas: filas.filter((f) => f.clase === 'prueba_corriendo').length,
     decisiones_pendientes: decisionesList.length,
     suscriptores,
     meta_marzo: 30,
@@ -379,64 +478,300 @@ function resumenHoy(db, filas, decisionesList, opts, nowMs) {
 }
 
 // ---------------------------------------------------------------------
-// DECISIONES — todo lo que espera al equipo, de fuentes reales
+// PRODUCCIÓN DE MAÑANA (LOTE CONSERJE-FORMA) — el centro de la
+// consola trabaja UN DÍA ADELANTADO: muestra los posteos del día que
+// se está PREPARANDO (hoy domingo → los del lunes), porque lo de hoy
+// ya está en curso. El universo es la cartera viva que publica por el
+// régimen diario (cliente pago o prueba corriendo; la casa publica a
+// mano por el flujo del producto y la prueba pendiente todavía no
+// publica: ninguna de las dos entra). Una cuenta frenada
+// (publishing_stopped) tampoco entra — su mañana no lo cubre Posty,
+// el mismo criterio que ya usa la cola de revisión.
+// El estado de cada cuenta sale de los datos reales de producción de
+// mañana (la misma cola de revisión de la noche, filtrada a la
+// cartera viva — ningún estado se inventa ni se marca a mano):
+//   · listo          — el posteo de mañana está programado (sale
+//                      solo), o el dueño ya decidió «no sale» para
+//                      ese día (sin_posteo_decidido: mañana está
+//                      resuelto para esa cuenta, no falta nada).
+//   · en_preparacion — hay una propuesta (borrador) esperando
+//                      decisión, o el dueño ya pidió «Posty lo arma»,
+//                      o hay una orden de producción a mano abierta.
+//   · falta          — nada de lo anterior: mañana no tiene posteo.
 // ---------------------------------------------------------------------
+function produccionManana(db, filas, opts, nowMs) {
+  const o = opts || {};
+  const fecha = conserjeRevision.fechaRevision(db, nowMs);
+  const vacio = { fecha, fecha_label: '', resumen: { total: 0, listos: 0, en_preparacion: 0, faltan: 0 }, items: [] };
+  if (!fecha) return vacio;
+  const fechaLabel = (diaCortoDeKey(fecha) + ' ' + fechaCortaDeKey(fecha)).trim();
+  const cola = safe(() => conserjeRevision.colaRevision(db, {
+    fecha, absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor, nowMs,
+  }), null);
+  const porId = {};
+  if (cola) {
+    for (const it of (cola.items || [])) porId[it.user_id] = it;
+    for (const it of (cola.sin_posteo || [])) porId[it.user_id] = it;
+  }
+  const ordenes = new Set(safe(() => db.prepare(
+    `SELECT DISTINCT user_id FROM support_cases WHERE tipo = 'prueba_linea_mano' AND estado <> 'cerrado'`).all(), [])
+    .map((r) => Number(r.user_id)));
+  const items = [];
+  for (const f of filas) {
+    if (f.clase !== 'pago' && f.clase !== 'prueba_corriendo') continue;
+    if (f.publishing_stopped) continue;
+    // La prueba que termina hoy ya no corre mañana: su mañana no se
+    // le exige (su cierre vive en la derecha, clase plata).
+    if (f.clase === 'prueba_corriendo' && f.prueba && f.prueba.termina_key && f.prueba.termina_key < fecha) continue;
+    const uid = f.user_id;
+    const it = porId[uid] || null;
+    const post = it ? (it.post || null) : null;
+    const decision = it ? (it.decision || null) : null;
+    let estado = 'falta', sinPosteoDecidido = false;
+    if (post && post.status === 'scheduled') estado = 'listo';
+    else if (!post && decision && decision.decision === 'no_sale') { estado = 'listo'; sinPosteoDecidido = true; }
+    else if (post) estado = 'en_preparacion';
+    else if (decision && decision.decision === 'pedir') estado = 'en_preparacion';
+    else if (ordenes.has(uid)) estado = 'en_preparacion';
+    items.push({
+      user_id: uid,
+      business_name: f.business_name || '', ig_username: f.ig_username || '',
+      clase: f.clase, estado, sin_posteo_decidido: sinPosteoDecidido,
+      post: post ? {
+        id: post.id, titulo: post.titulo || 'Posteo de mañana',
+        caption: trunc(post.caption || '', 400),
+        image_url: post.image_url || '', poster_url: post.poster_url || '',
+        media_type: post.media_type || 'image', status: post.status || '',
+        origen: it ? (it.origen || '') : '', cuando: post.cuando || '',
+      } : null,
+      decision: decision ? { decision: decision.decision, etiqueta: decision.etiqueta || decision.decision } : null,
+      necesita_atencion: it ? !!it.necesita_atencion : false,
+      motivo_atencion: it ? (it.motivo_atencion || '') : '',
+    });
+  }
+  const orden = { falta: 0, en_preparacion: 1, listo: 2 };
+  items.sort((a, b) => (orden[a.estado] - orden[b.estado]) || String(a.business_name).localeCompare(String(b.business_name)));
+  return {
+    fecha, fecha_label: fechaLabel,
+    resumen: {
+      total: items.length,
+      listos: items.filter((i) => i.estado === 'listo').length,
+      en_preparacion: items.filter((i) => i.estado === 'en_preparacion').length,
+      faltan: items.filter((i) => i.estado === 'falta').length,
+    },
+    items,
+  };
+}
+
+// ---------------------------------------------------------------------
+// HOY NECESITA UNA MANO (LOTE CONSERJE-FORMA) — la columna derecha.
+// Cuatro clases, TODAS DE HOY, sobre la cartera viva:
+//   1 · pedido    — lo que los clientes están pidiendo: cambios y
+//                   posteos pedidos (la cola de pedidos escritos/voz),
+//                   el material subido esperando armado, y los casos
+//                   abiertos que son necesidades del cliente.
+//   2 · decision  — las decisiones del dueño de hoy: la pieza de
+//                   mañana que existe y espera su toque (sale /
+//                   arreglar / no sale, la decisión de la revisión).
+//   3 · problema  — mañana sin posteo (la falta del centro), un
+//                   posteo que no salió (status 'failed' de hoy o
+//                   ayer), la conexión de Instagram caída (el aviso
+//                   ig_token_warning que enciende el publicador y
+//                   apaga la reconexión), un impulso en error, el
+//                   disco bajo y el video publicado sin portada.
+//   4 · plata     — las pruebas que terminan HOY (el día de la venta)
+//                   y los pagos fallidos de hoy (el evento
+//                   payment_failed) o la suscripción en past_due.
+// LA REGLA DE FÓSILES (criterio #2 del dueño): el ítem cuyo objeto ya
+// se resolvió solo — el posteo del pedido ya salió o se descartó, el
+// caso es de un día que ya pasó, la cuenta ya no es relación viva —
+// NO aparece nunca. El que sigue real entra con fecha de HOY, aunque
+// haya nacido antes: hoy es cuando se resuelve. (La vista vieja
+// traía 75 «decisiones» con 43 sin fecha: esa pila es lo que esta
+// lista reemplaza.)
+// ---------------------------------------------------------------------
+const CASOS_DE_UN_DIA = ['sin_posteo_manana', 'post_no_publicado', 'sin_aprobar', 'semana_error', 'post_fallido', 'defecto_imagen'];
+const POST_RESUELTO = ['published', 'cancelled', 'dismissed'];
+
 function decisiones(db, filas, opts, nowMs) {
   const o = opts || {};
-  const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : null;
   const porId = {};
   for (const f of filas) porId[f.user_id] = f;
+  const tzD = safe(() => conserjeRevision.ownerTz(db), 'America/New_York');
+  const hoyKey = safe(() => dayKeyInTz(new Date(nowMs), tzD), '');
+  const manana = o.mananaProd || produccionManana(db, filas, o, nowMs);
   const out = [];
 
-  // 1 · Pedidos por voz sin revisión (la misma lista que lee la
-  // superficie de pedidos-voz: transcripción + lo que Posty entendió).
+  // 1 · PEDIDOS — la cola de pedidos escritos/voz sin revisión, con la
+  // regla de fósiles sobre su objeto: si el posteo del que habla el
+  // pedido ya salió o se descartó, el pedido se resolvió solo y no
+  // entra (queda en su registro, no en la lista de hoy).
   try {
     const vr = supportCases.voiceRequests(db, { limit: 60, absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor });
     for (const p of (vr.pedidos || [])) {
       if (!p.revision || p.revision.estado !== 'pendiente') continue;
       const f = porId[p.user_id];
+      if (!f) continue; // cuenta que ya no es relación viva: fuera de la consola
+      if (p.posteo && POST_RESUELTO.includes(String(p.posteo.status || ''))) continue;
       out.push({
+        clase: 'pedido',
         tipo: 'voz', id: 'voz-' + p.id, user_id: p.user_id,
-        business_name: (f && f.business_name) || p.business_name || '',
-        ig_username: (f && f.ig_username) || p.ig_username || '',
+        business_name: f.business_name || p.business_name || '',
+        ig_username: f.ig_username || p.ig_username || '',
         titulo: p.es_idea ? 'Idea escrita' : 'Nota de voz', ambito: p.ambito, cuando: p.cuando || '',
         es_idea: !!p.es_idea,
         pedido: p.pedido || '', respuesta: p.respuesta || '',
         message_id: p.id, posteo: p.posteo || null,
+        fecha: hoyKey,
       });
     }
-  } catch (e) { /* sin lista de voz: las demás decisiones igual salen */ }
+  } catch (e) { /* sin lista de voz: las demás clases igual salen */ }
 
-  // 2 · La cola de la noche: el posteo de mañana sin decidir, y el
-  // perfil que mañana no tiene posteo (decisión «Posty lo arma»).
+  // 1 · PEDIDOS — el material subido que espera armado
+  // (subir_pedidos_voz en 'pendiente_revision', su estado real manda).
   try {
-    const cola = conserjeRevision.colaRevision(db, { fecha: o.fechaRevision, absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor, nowMs });
-    for (const it of (cola.items || [])) {
-      if (!it.post || it.decision) continue;
+    const rows = safe(() => db.prepare(
+      `SELECT s.id, s.user_id, s.asset_id, s.kind, s.nota, s.post_id, s.created_at,
+              p.business_name, p.ig_username
+       FROM subir_pedidos_voz s LEFT JOIN profiles p ON p.user_id = s.user_id
+       WHERE s.estado = 'pendiente_revision' ORDER BY s.id DESC LIMIT 60`).all(), []);
+    for (const s of rows) {
+      const f = porId[s.user_id];
+      if (!f) continue;
+      if (s.post_id) {
+        const pst = safe(() => db.prepare('SELECT status FROM posts WHERE id = ?').get(Number(s.post_id)), null);
+        if (pst && POST_RESUELTO.includes(String(pst.status || ''))) continue;
+      }
       out.push({
-        tipo: 'pieza', id: 'pieza-' + it.user_id + '-' + cola.fecha,
-        user_id: it.user_id, business_name: it.business_name || '', ig_username: it.ig_username || '',
-        titulo: it.post.titulo || 'Posteo de mañana', texto: trunc(it.post.caption || '', 400),
-        image_url: it.post.image_url || '', poster_url: it.post.poster_url || '',
-        media_type: it.post.media_type || 'image',
-        necesita_atencion: !!it.necesita_atencion, motivo_atencion: it.motivo_atencion || '',
-        cuando: it.post.cuando || '', fecha: cola.fecha, post_id: it.post.id, origen: it.origen || '',
+        clase: 'pedido',
+        tipo: 'subir', id: 'subir-' + s.id, user_id: s.user_id,
+        business_name: f.business_name || s.business_name || '',
+        ig_username: f.ig_username || s.ig_username || '',
+        titulo: 'Material subido',
+        texto: trunc(s.nota || '', 300),
+        kind: s.kind || '', pedido_id: s.id, post_id: s.post_id || null,
+        cuando: s.created_at || '', fecha: hoyKey,
       });
     }
-    for (const it of (cola.sin_posteo || [])) {
-      if (it.decision) continue;
-      out.push({
-        tipo: 'pieza_falta', id: 'falta-' + it.user_id + '-' + cola.fecha,
-        user_id: it.user_id, business_name: it.business_name || '', ig_username: it.ig_username || '',
-        titulo: 'Mañana sin posteo', texto: 'Este perfil no tiene posteo para mañana. La decisión «Posty lo arma» lo deja registrado para producción.',
-        fecha: cola.fecha,
-      });
-    }
-  } catch (e) { /* sin cola legible: no se fabrican piezas */ }
+  } catch (e) { /* sin tabla de subir legible: nada que mostrar */ }
 
-  // 3 · Impulsos en error (ad_boosts): el hecho y su motivo, tal cual
-  // quedó guardado. Lo ya visto por el equipo (registro «impulso_visto»
-  // con el id del impulso en el detalle) no vuelve a pedir decisión.
+  // 1 · PEDIDOS — los casos abiertos que son necesidades del cliente
+  // (la producción a mano vive en la cola, no acá). Fósiles fuera: el
+  // caso atado a un posteo ya resuelto, y el caso DE UN DÍA (su tipo
+  // nombra el día: sin posteo mañana, post no publicado, sin aprobar,
+  // error de semana, post fallido, defecto de imagen) creado antes de
+  // hoy — su día ya pasó y su hecho de hoy, si existe, entra por su
+  // fuente directa (el centro y los problemas).
+  try {
+    const casos = supportCases.listCases(db, { estado: 'abierto', limit: 50 });
+    for (const c of casos) {
+      if (c.tipo === 'prueba_linea_mano') continue;
+      const f = porId[c.user_id];
+      if (!f) continue;
+      if (c.post_id) {
+        const pst = safe(() => db.prepare('SELECT status FROM posts WHERE id = ?').get(Number(c.post_id)), null);
+        if (pst && POST_RESUELTO.includes(String(pst.status || ''))) continue;
+      }
+      if (CASOS_DE_UN_DIA.includes(String(c.tipo || ''))) {
+        const tzC = conserjeRevision.accountTz(db, Number(c.user_id));
+        const creadoKey = c.created_at ? safe(() => dayKeyInTz(new Date(String(c.created_at).replace(' ', 'T') + 'Z'), tzC), '') : '';
+        const hoyC = safe(() => dayKeyInTz(new Date(nowMs), tzC), '');
+        if (creadoKey && hoyC && creadoKey < hoyC) continue;
+      }
+      out.push({
+        clase: 'pedido',
+        tipo: 'caso', id: 'caso-' + c.id, user_id: c.user_id,
+        business_name: f.business_name || c.business_name || '',
+        ig_username: f.ig_username || c.ig_username || '',
+        titulo: c.titulo || 'Caso abierto',
+        texto: trunc(c.detalle || '', 400),
+        siguiente_paso: c.siguiente_paso || '', dueno: c.dueno || '',
+        case_id: c.id, caso_tipo: c.tipo || '', created_at: c.created_at || '',
+        fecha: hoyKey,
+      });
+    }
+  } catch (e) { /* sin casos: la columna queda con lo demás */ }
+
+  // 2 · DECISIONES DEL DUEÑO — la pieza de mañana que existe y espera
+  // su toque. Su fecha es la del objeto (mañana): la acción de decidir
+  // la necesita; la pieza está en la lista de HOY porque hoy se
+  // decide. La que ya tiene decisión no entra (ya se decidió).
+  for (const it of (manana.items || [])) {
+    if (!it.post || it.decision) continue;
+    out.push({
+      clase: 'decision',
+      tipo: 'pieza', id: 'pieza-' + it.user_id + '-' + manana.fecha,
+      user_id: it.user_id, business_name: it.business_name || '', ig_username: it.ig_username || '',
+      titulo: it.post.titulo || 'Posteo de mañana', texto: it.post.caption || '',
+      image_url: it.post.image_url || '', poster_url: it.post.poster_url || '',
+      media_type: it.post.media_type || 'image',
+      necesita_atencion: !!it.necesita_atencion, motivo_atencion: it.motivo_atencion || '',
+      cuando: it.post.cuando || '', fecha: manana.fecha, post_id: it.post.id, origen: it.post.origen || '',
+    });
+  }
+
+  // 3 · PROBLEMAS — mañana sin posteo (la falta del centro, acá como
+  // problema accionable: «Posty lo arma» o ver la ficha).
+  for (const it of (manana.items || [])) {
+    if (it.estado !== 'falta') continue;
+    out.push({
+      clase: 'problema',
+      tipo: 'pieza_falta', id: 'falta-' + it.user_id + '-' + manana.fecha,
+      user_id: it.user_id, business_name: it.business_name || '', ig_username: it.ig_username || '',
+      titulo: 'Mañana sin posteo',
+      texto: 'Este perfil no tiene posteo para mañana. La decisión «Posty lo arma» lo deja registrado para producción.',
+      fecha: manana.fecha,
+    });
+  }
+
+  // 3 · PROBLEMAS — la conexión caída y el posteo que no salió. El
+  // aviso de token (settings.ig_token_warning) lo enciende el
+  // publicador cuando Meta rechaza por token y lo apaga la
+  // reconexión: mientras está prendido, la conexión ES el problema
+  // (y tapa los fallos sueltos de esa cuenta, que son su síntoma).
+  try {
+    for (const f of filas) {
+      const uid = f.user_id;
+      const tz = conserjeRevision.accountTz(db, uid);
+      const warn = safe(() => db.prepare(
+        'SELECT ig_token_warning FROM settings WHERE user_id = ?').get(uid), null);
+      if (warn && Number(warn.ig_token_warning) === 1) {
+        out.push({
+          clase: 'problema',
+          tipo: 'conexion', id: 'conexion-' + uid, user_id: uid,
+          business_name: f.business_name || '', ig_username: f.ig_username || '',
+          titulo: 'Conexión de Instagram caída',
+          texto: 'Meta rechazó el token de esta cuenta: hasta que se reconecte, sus posteos no salen.',
+          fecha: hoyKey,
+        });
+        continue;
+      }
+      const hoyC = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+      const desde = hoyC ? shiftDayKey(hoyC, -1) : '';
+      const fallidos = safe(() => db.prepare(
+        `SELECT id, caption, error, scheduled_at, created_at FROM posts
+         WHERE user_id = ? AND status = 'failed' ORDER BY id DESC LIMIT 10`).all(uid), []);
+      for (const p of fallidos) {
+        const t = toMs(p.scheduled_at || p.created_at);
+        const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
+        if (!k || (desde && k < desde)) continue; // su día ya pasó: fósil
+        out.push({
+          clase: 'problema',
+          tipo: 'post_fallido', id: 'fallido-' + p.id, user_id: uid,
+          business_name: f.business_name || '', ig_username: f.ig_username || '',
+          titulo: 'Un posteo no salió',
+          texto: trunc(p.error || 'La publicación falló.', 300),
+          post_id: p.id, fecha: hoyKey,
+        });
+      }
+    }
+  } catch (e) { /* sin lectura de fallos: el problema no se fabrica */ }
+
+  // 3 · PROBLEMAS — impulsos en error (ad_boosts): el hecho y su
+  // motivo, tal cual quedó guardado. Lo ya visto por el equipo
+  // (registro «impulso_visto» con el id del impulso en el detalle) no
+  // vuelve a pedir decisión — sigue real mientras nadie lo vio,
+  // porque el impulso sigue sin correr: entra con fecha de hoy.
   try {
     const vistos = new Set();
     const logs = safe(() => db.prepare(
@@ -451,29 +786,34 @@ function decisiones(db, filas, opts, nowMs) {
     for (const b of boosts) {
       if (vistos.has(b.id)) continue;
       const f = porId[b.user_id];
+      if (!f) continue;
       out.push({
+        clase: 'problema',
         tipo: 'impulso', id: 'impulso-' + b.id, user_id: b.user_id,
-        business_name: (f && f.business_name) || b.business_name || '',
-        ig_username: (f && f.ig_username) || b.ig_username || '',
+        business_name: f.business_name || b.business_name || '',
+        ig_username: f.ig_username || b.ig_username || '',
         titulo: 'Impulso en error', texto: String(b.error || 'Meta rechazó la creación del impulso.'),
         post_id: b.post_id || null, boost_id: b.id,
         budget_cents: b.budget_cents || 0, fee_cents: b.fee_cents || 0,
-        created_at: b.created_at || '',
+        created_at: b.created_at || '', fecha: hoyKey,
       });
     }
   } catch (e) { /* sin tabla de impulsos legible: nada que mostrar */ }
 
-  // 4 · Alertas de hecho: disco bajo y posteos de video publicados sin
-  // portada (la portada se lee de la columna guardada: esta vista no
-  // extrae frames ni toca los posteos). Lo de portada ya visto por el
-  // equipo (registro «portada_vista») no se repite.
+  // 3 · PROBLEMAS — alertas de hecho: disco bajo y posteos de video
+  // publicados sin portada (la portada se lee de la columna guardada:
+  // esta vista no extrae frames ni toca los posteos). Lo de portada
+  // ya visto por el equipo (registro «portada_vista») no se repite;
+  // mientras no se vio, el posteo sigue sin portada en su grilla:
+  // sigue real y entra con fecha de hoy.
   if (o.diskFreeMB != null && o.diskFreeMB < 1024) {
     out.push({
+      clase: 'problema',
       tipo: 'alerta', id: 'alerta-disco', user_id: null,
       business_name: '', ig_username: '',
       titulo: 'Disco del servidor bajo',
       texto: 'Quedan ' + o.diskFreeMB + ' MB libres. Si se llena, la app deja de guardar posteos.',
-      kind: 'disco', disco_mb: o.diskFreeMB,
+      kind: 'disco', disco_mb: o.diskFreeMB, fecha: hoyKey,
     });
   }
   try {
@@ -491,35 +831,78 @@ function decisiones(db, filas, opts, nowMs) {
         if (vistosP.has(r.id)) continue;
         const f = porId[r.user_id];
         out.push({
+          clase: 'problema',
           tipo: 'alerta', id: 'portada-' + r.id, user_id: r.user_id,
           business_name: (f && f.business_name) || '', ig_username: (f && f.ig_username) || '',
           titulo: 'Posteo de video sin portada',
           texto: 'El posteo #' + r.id + ' se publicó sin imagen de portada: en su grilla se ve un ícono genérico.',
-          kind: 'portada', post_id: r.id,
+          kind: 'portada', post_id: r.id, fecha: hoyKey,
         });
       }
     }
   } catch (e) { /* sin lectura de portadas: la alerta no se fabrica */ }
 
-  // 5 · Casos abiertos (las necesidades): todo caso que no sea la
-  // producción a mano (esa vive en la cola) espera una decisión.
-  try {
-    const casos = supportCases.listCases(db, { estado: 'abierto', limit: 50 });
-    for (const c of casos) {
-      if (c.tipo === 'prueba_linea_mano') continue;
-      const f = porId[c.user_id];
+  // 4 · PLATA — la prueba que termina HOY (su último día: el día de
+  // cerrar la venta) y el pago que falló hoy. El evento
+  // payment_failed lo escribe el riel de cobro en el acto; la cuenta
+  // en past_due es el estado parado del mismo hecho.
+  for (const f of filas) {
+    if (f.clase !== 'prueba_corriendo' || !f.prueba || !f.prueba.termina_key) continue;
+    const tz = conserjeRevision.accountTz(db, f.user_id);
+    const hoyC = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+    if (hoyC && f.prueba.termina_key === hoyC) {
       out.push({
-        tipo: 'caso', id: 'caso-' + c.id, user_id: c.user_id,
-        business_name: (f && f.business_name) || c.business_name || '',
-        ig_username: (f && f.ig_username) || c.ig_username || '',
-        titulo: c.titulo || 'Caso abierto',
-        texto: trunc(c.detalle || '', 400),
-        siguiente_paso: c.siguiente_paso || '', dueno: c.dueno || '',
-        case_id: c.id, caso_tipo: c.tipo || '', created_at: c.created_at || '',
+        clase: 'plata',
+        tipo: 'prueba_termina', id: 'termina-' + f.user_id, user_id: f.user_id,
+        business_name: f.business_name || '', ig_username: f.ig_username || '',
+        titulo: 'Hoy termina su prueba',
+        texto: 'Es el último día de la prueba de este negocio: el día de cerrar la venta.',
+        fecha: hoyKey,
       });
     }
-  } catch (e) { /* sin casos: la columna queda con lo demás */ }
+  }
+  try {
+    const evs = safe(() => db.prepare(
+      `SELECT user_id, created_at FROM events WHERE name = 'payment_failed'
+       ORDER BY id DESC LIMIT 100`).all(), []);
+    const porUsuario = {};
+    for (const e of evs) {
+      const f = porId[e.user_id];
+      if (!f) continue;
+      const k = e.created_at ? safe(() => dayKeyInTz(new Date(String(e.created_at).replace(' ', 'T') + 'Z'), tzD), '') : '';
+      if (!k || k !== hoyKey) continue;
+      porUsuario[e.user_id] = (porUsuario[e.user_id] || 0) + 1;
+    }
+    for (const uid of Object.keys(porUsuario)) {
+      const f = porId[uid];
+      out.push({
+        clase: 'plata',
+        tipo: 'pago_fallido', id: 'pago-' + uid + '-' + hoyKey, user_id: Number(uid),
+        business_name: f.business_name || '', ig_username: f.ig_username || '',
+        titulo: 'Un pago falló hoy',
+        texto: porUsuario[uid] === 1
+          ? 'El cobro de hoy falló: quedó registrado en el riel de pago. Nadie le cobró de más; hay que seguirlo.'
+          : 'Hoy fallaron ' + porUsuario[uid] + ' cobros de esta cuenta: quedaron registrados en el riel de pago.',
+        fecha: hoyKey,
+      });
+    }
+    for (const f of filas) {
+      if (f.clase !== 'pago') continue;
+      if (f.plan_status === 'past_due' && !porUsuario[f.user_id]) {
+        out.push({
+          clase: 'plata',
+          tipo: 'pago_fallido', id: 'pastdue-' + f.user_id, user_id: f.user_id,
+          business_name: f.business_name || '', ig_username: f.ig_username || '',
+          titulo: 'Suscripción vencida',
+          texto: 'La suscripción está en past_due: el último cobro no entró y la cuenta sigue en gracia.',
+          fecha: hoyKey,
+        });
+      }
+    }
+  } catch (e) { /* sin eventos legibles: la plata no se fabrica */ }
 
+  const ordenClase = { pedido: 0, decision: 1, problema: 2, plata: 3 };
+  out.sort((a, b) => (ordenClase[a.clase] - ordenClase[b.clase]));
   return out;
 }
 
@@ -552,6 +935,10 @@ function colaProduccion(db, filas) {
      ORDER BY c.id ASC`).all(), []);
   for (const c of casos) {
     const f = porId[c.user_id];
+    // (LOTE CONSERJE-FORMA) La cola también es de la cartera viva: la
+    // producción abierta de una cuenta que ya no es relación viva no
+    // se ofrece como trabajo de hoy (su caso queda en el registro).
+    if (!f) continue;
     out.push({
       user_id: c.user_id,
       business_name: (f && f.business_name) || c.business_name || '',
@@ -570,6 +957,7 @@ function colaProduccion(db, filas) {
      ORDER BY r.fecha_posteo ASC LIMIT 10`).all(), []);
   for (const r of pedidos) {
     const f = porId[r.user_id];
+    if (!f) continue; // (LOTE CONSERJE-FORMA) solo cartera viva
     out.push({
       user_id: r.user_id,
       business_name: (f && f.business_name) || r.business_name || '',
@@ -661,7 +1049,8 @@ function cliente(db, userId, opts) {
   if (!uid) return { ok: false, error: 'sin_usuario' };
   const u = safe(() => db.prepare(
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
-            u.concierge, u.publishing_stopped, u.trial_ends_at, u.created_at,
+            u.concierge, u.publishing_stopped, u.trial_ends_at, u.trial_extended_until,
+            u.trial_started_at, u.created_at,
             p.business_name, p.ig_username, p.category
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
   if (!u) return { ok: false, error: 'sin_usuario' };
@@ -756,15 +1145,21 @@ function cerrarCaso(db, caseId) {
 function vista(db, opts) {
   const o = opts || {};
   const nowMs = Number(o.nowMs) || Date.now();
-  const usuarios = usuariosAtendidos(db);
+  const usuarios = usuariosAtendidos(db, nowMs);
   const filas = usuarios.map((u) => filaRoster(db, u, o, nowMs));
-  const decs = decisiones(db, filas, o, nowMs);
+  // (LOTE CONSERJE-FORMA) La producción de mañana se computa una vez
+  // y alimenta dos superficies: el centro (el tablero de mañana) y la
+  // derecha (las decisiones del dueño y las faltas como problema).
+  const mananaProd = produccionManana(db, filas, o, nowMs);
+  const decs = decisiones(db, filas, { ...o, mananaProd }, nowMs);
   const cat = catalogoTratamientos(db);
   return {
     ok: true,
     generado_en: new Date(nowMs).toISOString(),
     hoy: resumenHoy(db, filas, decs, o, nowMs),
     clientes: filas,
+    manana: mananaProd,
+    mano: decs,
     decisiones: decs,
     ultimas: ultimasDecisiones(db, 15),
     cola: colaProduccion(db, filas),
@@ -777,6 +1172,9 @@ module.exports = {
   tratamientoDe,
   asignarTratamiento,
   planDePrueba,
+  finEfectivoPrueba,
+  claseDeCuenta,
+  produccionManana,
   rachaDe,
   pendientesDe,
   usuariosAtendidos,

@@ -6,7 +6,17 @@
    decisión de la revisión, el chat del cliente, el registro del
    equipo, la tabla de tratamientos). Después de actuar, la vista se
    relee entera — lo que se ve es lo que la base tiene, nunca una
-   copia local que pueda quedar vieja. */
+   copia local que pueda quedar vieja.
+
+   LOTE CONSERJE-FORMA (2026-11-22) — la forma que dictó el dueño:
+   arriba, el semáforo de mañana; a la izquierda, la cartera viva
+   (los filtros leen la clase viva del servidor; la lista NUNCA se
+   vacía al seleccionar — el vacío es solo de una búsqueda explícita,
+   con su texto y su botón para limpiarla); al centro, la producción
+   de mañana como vista de trabajo y la ficha como drill-in; a la
+   derecha, «Hoy necesita una mano» agrupada en pedidos · decisiones
+   · problemas · plata. Cada ítem de la derecha abre sobre la cosa
+   misma (data-goto: la ficha, con el posteo referido marcado). */
 (function () {
   'use strict';
 
@@ -63,6 +73,8 @@
   var cliente = null;
   var filtro = 'todos';
   var centroVista = 'semana';
+  var centroModo = 'manana'; // (CONSERJE-FORMA) el centro abre en la producción de mañana; la ficha es el drill-in
+  var highlightPostId = null; // el posteo referido por un ítem de la derecha, abierto en la ficha
   var feedPorUsuario = {};
 
   // ---------------- tira superior ----------------
@@ -101,10 +113,32 @@
     }).catch(function () { /* el gasto es una tira más: si falla, queda el guion */ });
   }
 
+  // ---------------- semáforo de mañana ----------------
+  // (LOTE CONSERJE-FORMA) La pregunta de la mañana del dueño, en una
+  // línea arriba de todo: ¿mañana está cubierto? Los conteos son los
+  // del tablero de producción de mañana (vista.manana), computados
+  // por el servidor desde los datos reales — nada se marca a mano.
+  function renderSemaforo() {
+    var m = vista && vista.manana;
+    var dot = $('semaforoDot'), txt = $('semaforoTxt');
+    if (!m || !m.resumen) { dot.className = 'sem-dot'; txt.textContent = 'Mañana: sin datos todavía.'; return; }
+    var r = m.resumen;
+    dot.className = 'sem-dot ' + (r.faltan > 0 ? 'bad' : (r.en_preparacion > 0 ? 'warn' : 'ok'));
+    txt.innerHTML = 'Mañana · ' + esc(m.fecha_label || '') + ' — '
+      + (r.faltan > 0
+        ? '<b>a ' + r.faltan + (r.faltan === 1 ? ' cliente le falta' : ' clientes les falta') + ' su posteo</b>'
+        : '<b>mañana está cubierto</b>')
+      + ' <span class="sem-sub">· ' + r.listos + ' listos · ' + r.en_preparacion + ' en preparación · ' + r.faltan + ' faltan (de ' + r.total + ')</span>';
+  }
+
   // ---------------- roster ----------------
+  // (LOTE CONSERJE-FORMA) Los filtros leen la CLASE VIVA que computa
+  // el servidor (cartera viva: prueba corriendo o pendiente, cliente
+  // pago, la casa) — no la columna plan_status guardada, que dejaba
+  // 42 «pruebas» eternas. Los conteos salen de la misma lista viva.
   function pasaFiltro(f) {
-    if (filtro === 'pruebas') return f.plan_status === 'trial';
-    if (filtro === 'clientes') return f.plan_status === 'active';
+    if (filtro === 'pruebas') return f.clase === 'prueba_corriendo' || f.clase === 'prueba_pendiente';
+    if (filtro === 'clientes') return f.clase === 'pago';
     if (filtro === 'pendientes') return f.pendientes && f.pendientes.total > 0;
     return true;
   }
@@ -112,8 +146,8 @@
     var cs = (vista && vista.clientes) || [];
     var defs = [
       ['todos', 'Todos', cs.length],
-      ['pruebas', 'Pruebas', cs.filter(function (f) { return f.plan_status === 'trial'; }).length],
-      ['clientes', 'Clientes', cs.filter(function (f) { return f.plan_status === 'active'; }).length],
+      ['pruebas', 'Pruebas', cs.filter(function (f) { return f.clase === 'prueba_corriendo' || f.clase === 'prueba_pendiente'; }).length],
+      ['clientes', 'Clientes', cs.filter(function (f) { return f.clase === 'pago'; }).length],
       ['pendientes', 'Con pendientes', cs.filter(function (f) { return f.pendientes && f.pendientes.total > 0; }).length],
     ];
     $('filtros').innerHTML = defs.map(function (d) {
@@ -128,20 +162,41 @@
     var nombres = cs.slice(0, 4).map(function (f) { return f.business_name || ('@' + (f.ig_username || '')); });
     var lista = nombres.join(', ') + (cs.length > 4 ? ' y ' + (cs.length - 4) + ' más' : '');
     $('rosterFoot').innerHTML = '<div class="roster-foot"><b>' + cs.length + (cs.length === 1 ? ' cuenta te necesita' : ' cuentas te necesitan')
-      + ' hoy:</b> ' + esc(lista) + '. Todo está en Decisiones →</div>';
+      + ' hoy:</b> ' + esc(lista) + '. Todo está a la derecha, en «Hoy necesita una mano» →</div>';
   }
   function renderRoster() {
     renderFiltros();
     renderRosterFoot();
     var q = ($('buscador').value || '').trim().toLowerCase();
-    var cs = ((vista && vista.clientes) || []).filter(pasaFiltro).filter(function (f) {
+    var base = ((vista && vista.clientes) || []).filter(pasaFiltro);
+    var cs = base.filter(function (f) {
       if (!q) return true;
       return (f.business_name || '').toLowerCase().indexOf(q) >= 0 || (f.ig_username || '').toLowerCase().indexOf(q) >= 0;
     });
-    if (!cs.length) { $('roster').innerHTML = '<div class="roster-empty">Ningún cliente coincide con ese filtro.</div>'; return; }
+    // (LOTE CONSERJE-FORMA · la falla #1) La lista NUNCA se vacía como
+    // efecto de seleccionar un cliente: el estado vacío existe SOLO
+    // para una búsqueda explícita, con el texto visible y borrable en
+    // el acto; sin búsqueda, una pestaña sin cuentas dice su verdad
+    // («todavía no hay…») y la lista de la pestaña sigue a un toque.
+    if (!cs.length) {
+      if (q) {
+        $('roster').innerHTML = '<div class="roster-empty">Ningún cliente coincide con tu búsqueda <b>«'
+          + esc(q) + '»</b>.<br><button class="btn small" data-act="limpiar-busqueda" type="button">Limpiar búsqueda</button></div>';
+      } else {
+        var vacioTxt = filtro === 'clientes' ? 'Todavía no hay clientes pagos en la cartera viva.'
+          : filtro === 'pruebas' ? 'No hay pruebas corriendo ni esperando conexión.'
+          : filtro === 'pendientes' ? 'Ninguna cuenta tiene pendientes hoy.'
+          : 'La cartera viva está vacía.';
+        $('roster').innerHTML = '<div class="roster-empty">' + vacioTxt + '</div>';
+      }
+      return;
+    }
     $('roster').innerHTML = cs.map(function (f) {
       var dot = f.dot === 'green' ? 'green' : (f.dot === 'yellow' ? 'yellow' : 'grey');
-      var meta = [f.categoria || '', f.plan_status === 'trial' ? 'Prueba' : (f.plan_status === 'active' ? 'Cliente' : '')].filter(Boolean).join(' · ');
+      var claseTxt = f.clase === 'prueba_corriendo' && f.prueba && f.prueba.dias_restantes != null
+        ? 'Prueba · ' + (f.prueba.dias_restantes === 0 ? 'último día' : 'quedan ' + f.prueba.dias_restantes + (f.prueba.dias_restantes === 1 ? ' día' : ' días'))
+        : (f.clase_label || '');
+      var meta = [f.categoria || '', claseTxt].filter(Boolean).join(' · ');
       return '<button class="client-row' + (selUser === f.user_id ? ' selected' : '') + '" data-sel="' + f.user_id + '" type="button">'
         + '<span class="' + avaClass(f.user_id) + '">' + esc(iniciales(f.business_name)) + '</span>'
         + '<span class="cr-main"><span class="cr-name">' + esc(f.business_name || 'Sin nombre') + '</span>'
@@ -169,7 +224,7 @@
         + '<button class="btn small" data-act="post-reprogramar" data-id="' + p.id + '" type="button">Reprogramar</button>'
         + '<button class="btn small ghost-danger" data-act="post-descartar" data-id="' + p.id + '" type="button">Descartar</button></div>';
     }
-    return '<article class="post"><div class="thumb">'
+    return '<article class="post' + (highlightPostId && Number(highlightPostId) === Number(p.id) ? ' destacado' : '') + '" id="post-' + p.id + '"><div class="thumb">'
       + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(inicial || 'P') + '</span></div>')
       + (esVideo ? '<span class="play">▶</span>' : '')
       + chipDePost(p)
@@ -188,7 +243,47 @@
       + (slot.formato ? '<div class="p-meta"><span class="fchip">' + esc(slot.formato) + '</span></div>' : '')
       + '</div></article>';
   }
+  // ---------------- centro: producción de mañana / la ficha ----------------
   function renderCentro() {
+    if (centroModo === 'ficha') { renderFicha(); return; }
+    renderManana();
+  }
+  function renderManana() {
+    var m = vista && vista.manana;
+    if (!m) { $('centro').innerHTML = '<div class="cargando">Cargando la producción de mañana…</div>'; return; }
+    var grupos = [
+      ['falta', 'Faltan — mañana sin posteo'],
+      ['en_preparacion', 'En preparación'],
+      ['listo', 'Listos — salen solos'],
+    ];
+    var html = '<div class="manana-head"><span class="m-title">Producción de mañana</span>'
+      + '<span class="m-fecha">' + esc(m.fecha_label || '') + '</span>'
+      + '<span class="m-sub">El trabajo de hoy es mañana: lo de hoy ya está en curso. Tocá una cuenta para abrir su ficha.</span></div>';
+    if (!m.items.length) {
+      html += '<div class="vacio">La cartera viva no tiene cuentas en régimen diario: no hay producción de mañana para preparar.</div>';
+    }
+    for (var g = 0; g < grupos.length; g++) {
+      var items = m.items.filter(function (i) { return i.estado === grupos[g][0]; });
+      if (!items.length) continue;
+      html += '<div class="m-group">' + grupos[g][1] + ' · ' + items.length + '</div>' + items.map(function (i) {
+        var img = i.post ? (i.post.poster_url || i.post.image_url || '') : '';
+        var esVid = i.post && /video|reel/.test(String(i.post.media_type || ''));
+        var estadoTxt = i.estado === 'listo'
+          ? (i.sin_posteo_decidido ? 'No sale · decidido' : 'Listo')
+          : (i.estado === 'en_preparacion' ? (i.post ? 'Propuesta por decidir' : 'Posty lo arma') : 'Falta');
+        return '<button class="m-row" data-goto="' + i.user_id + '" type="button">'
+          + '<span class="m-thumb">' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<span class="ph-initial">' + esc(iniciales(i.business_name)) + '</span>') + '</span>'
+          + '<span class="m-main"><span class="m-name">' + esc(i.business_name || 'Sin nombre') + '</span>'
+          + '<span class="m-post">' + (i.post ? esc(i.post.titulo || 'Posteo de mañana') : (i.sin_posteo_decidido ? 'El dueño decidió que mañana no sale' : 'Sin posteo para mañana')) + '</span>'
+          + (i.necesita_atencion ? '<span class="m-att">⚠ ' + esc(i.motivo_atencion || 'Necesita atención') + '</span>' : '')
+          + '</span>'
+          + (esVid ? '<span class="play">▶</span>' : '')
+          + '<span class="m-state ' + i.estado + '">' + estadoTxt + '</span></button>';
+      }).join('');
+    }
+    $('centro').innerHTML = html;
+  }
+  function renderFicha() {
     var c = cliente;
     if (!c || !c.ok) { $('centro').innerHTML = '<div class="cargando">Elegí una cuenta de la lista para ver su ficha.</div>'; return; }
     var ficha = c.ficha || {};
@@ -256,7 +351,8 @@
       ? '<div class="boost"><span class="b-ico">🚀</span><div class="b-main"><div class="b-title">Impulso ' + esc(c.boost.status || '') + '</div><div class="b-txt">Posteo #' + (c.boost.post_id || '—') + ' · US$ ' + (Number(c.boost.budget_cents || 0) / 100).toFixed(0) + ' de pauta' + (c.boost.fee_cents ? ' · US$ ' + (Number(c.boost.fee_cents) / 100).toFixed(2) + ' de gestión' : '') + '</div></div></div>'
       : '';
     $('centro').innerHTML =
-      '<div class="c-head"><div class="c-id"><span class="' + avaClass(c.user_id) + '">' + esc(ini) + '</span>'
+      '<div class="back-row"><button class="btn small" data-act="ir-manana" type="button">← Producción de mañana</button></div>'
+      + '<div class="c-head"><div class="c-id"><span class="' + avaClass(c.user_id) + '">' + esc(ini) + '</span>'
       + '<div><div class="c-name">' + esc(c.business_name || 'Sin nombre') + '</div>'
       + '<div class="c-sub"><span class="handle">@' + esc(c.ig_username || '—') + '</span>' + (c.categoria ? ' · ' + esc(c.categoria) : '') + (c.es_invitado ? ' · invitado de la puerta' : '') + '</div></div></div>'
       + '<div class="c-side">' + etapaTag + (c.racha >= 2 ? '<span class="tag warn">🔥 Racha de ' + c.racha + ' días</span>' : '')
@@ -273,6 +369,16 @@
     var sel = $('tratSel');
     if (sel) sel.addEventListener('change', onTratamiento);
     if (centroVista === 'feed') renderFeed();
+    // (LOTE CONSERJE-FORMA) El posteo referido por un ítem de la
+    // derecha queda abierto en la ficha: se lo trae a la vista y se
+    // lo marca, para decidir en el momento sin salir a buscarlo.
+    if (highlightPostId) {
+      var el = $('post-' + highlightPostId);
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        el.classList.add('flash');
+      }
+    }
   }
 
   function renderFeed() {
@@ -331,10 +437,15 @@
 
   // ---------------- decisiones ----------------
   function decTag(d) {
-    if (d.tipo === 'voz') return d.es_idea ? '<span class="d-tag">💡 Idea escrita</span>' : '<span class="d-tag">🎙 Nota de voz</span>';
+    if (d.tipo === 'voz') return d.es_idea ? '<span class="d-tag">💡 Idea escrita</span>' : '<span class="d-tag">✍ Pedido escrito</span>';
+    if (d.tipo === 'subir') return '<span class="d-tag subir">📦 Material subido</span>';
     if (d.tipo === 'pieza') return '<span class="d-tag">🖼 Pieza para aprobar</span>';
-    if (d.tipo === 'pieza_falta') return '<span class="d-tag">🗓 Mañana sin posteo</span>';
+    if (d.tipo === 'pieza_falta') return '<span class="d-tag problema">🗓 Mañana sin posteo</span>';
+    if (d.tipo === 'post_fallido') return '<span class="d-tag problema">⛔ Posteo que no salió</span>';
+    if (d.tipo === 'conexion') return '<span class="d-tag problema">🔌 Conexión caída</span>';
     if (d.tipo === 'impulso') return '<span class="d-tag">🚀 Impulso</span>';
+    if (d.tipo === 'prueba_termina') return '<span class="d-tag plata">💛 Termina su prueba hoy</span>';
+    if (d.tipo === 'pago_fallido') return '<span class="d-tag plata">💳 Pago fallido</span>';
     if (d.tipo === 'alerta') return '<span class="d-tag alert">⚠ Alerta</span>';
     return '<span class="d-tag">📋 Caso</span>';
   }
@@ -344,7 +455,12 @@
     if (d.tipo === 'alerta') {
       who = '<div class="d-who">' + esc(d.titulo || 'Alerta') + '</div>';
     } else if (d.business_name || d.ig_username) {
-      who = '<div class="d-who">' + esc(d.business_name || '') + (d.ig_username ? ' <span class="h">@' + esc(d.ig_username) + '</span>' : '') + '</div>';
+      // (LOTE CONSERJE-FORMA) El nombre abre LA COSA MISMA: la ficha
+      // del cliente — y si el ítem habla de un posteo, ese posteo
+      // abierto dentro de la ficha.
+      var postRef = (d.tipo === 'voz' && d.posteo) ? d.posteo.id : (d.post_id || '');
+      who = '<div class="d-who"><button class="who-link" data-goto="' + d.user_id + '"' + (postRef ? ' data-goto-post="' + postRef + '"' : '') + ' type="button">'
+        + esc(d.business_name || '') + (d.ig_username ? ' <span class="h">@' + esc(d.ig_username) + '</span>' : '') + '</button></div>';
     }
     var cuerpo = '';
     if (d.tipo === 'voz' && d.es_idea) {
@@ -358,7 +474,8 @@
           + '<div class="cap">Sobre el posteo #' + d.posteo.id + ' (' + esc(d.posteo.status || '') + ')<br>' + esc(trunc(d.posteo.caption || '', 110)) + '</div></div>' : '')
         + (d.respuesta ? '<div class="d-promise"><small>Posty entendió</small>' + esc(d.respuesta) + '</div>' : '')
         + '<div id="vozReply-' + d.message_id + '"></div>'
-        + '<div class="d-actions"><button class="btn primary small" data-act="voz-responder" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Responder</button>'
+        + '<div class="d-actions">' + (d.posteo ? '<button class="btn small" data-goto="' + d.user_id + '" data-goto-post="' + d.posteo.id + '" type="button">Ver el posteo</button>' : '')
+        + '<button class="btn primary small" data-act="voz-responder" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Responder</button>'
         + '<button class="btn small" data-act="voz-resuelto" data-mid="' + d.message_id + '" type="button">Resuelto a mano</button>'
         + '<button class="btn small ghost-danger" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';
     } else if (d.tipo === 'pieza') {
@@ -383,6 +500,24 @@
         + (d.kind === 'portada' ? '<div class="d-actions"><button class="btn primary small" data-act="portada-ok" data-uid="' + d.user_id + '" data-pid="' + d.post_id + '" type="button">Entendido</button>'
           + '<button class="btn small" data-act="ver-cliente" data-uid="' + d.user_id + '" type="button">Ver la ficha</button></div>'
           : '<div class="d-actions"><a class="btn small" href="/panel" target="_blank" rel="noopener" style="flex:1;justify-content:center">Ver el panel</a></div>');
+    } else if (d.tipo === 'subir') {
+      cuerpo = '<div class="d-txt">Subió material' + (d.kind ? ' (' + esc(d.kind) + ')' : '') + ' y espera que se lo armen como posteo.</div>'
+        + (d.texto ? '<div class="d-txt"><em>«' + esc(d.texto) + '»</em></div>' : '')
+        + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
+    } else if (d.tipo === 'post_fallido') {
+      cuerpo = '<div class="d-txt">El posteo #' + (d.post_id || '—') + ' no salió. El publicador dejó este motivo:</div>'
+        + '<div class="d-error">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" data-goto-post="' + (d.post_id || '') + '" type="button">Ver el posteo</button>'
+        + '<button class="btn small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
+    } else if (d.tipo === 'conexion') {
+      cuerpo = '<div class="d-txt">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
+    } else if (d.tipo === 'prueba_termina') {
+      cuerpo = '<div class="d-txt">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
+    } else if (d.tipo === 'pago_fallido') {
+      cuerpo = '<div class="d-txt">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
     } else if (d.tipo === 'caso') {
       cuerpo = '<div class="d-txt"><b style="color:var(--ink)">' + esc(d.titulo || 'Caso') + '</b></div>'
         + (d.texto ? '<div class="d-txt">' + esc(d.texto) + '</div>' : '')
@@ -392,10 +527,29 @@
     }
     return '<article class="decision">' + head + who + cuerpo + '</article>';
   }
+  // (LOTE CONSERJE-FORMA) La derecha se agrupa por las cuatro clases
+  // de «hoy necesita una mano»: pedidos · decisiones · problemas ·
+  // plata. La lista llega ya ordenada por clase desde el servidor.
+  var MANO_GRUPOS = [
+    ['pedido', 'Pedidos de clientes'],
+    ['decision', 'Decisiones de hoy'],
+    ['problema', 'Problemas'],
+    ['plata', 'Plata de hoy'],
+  ];
   function renderDecisiones() {
-    var ds = (vista && vista.decisiones) || [];
+    var ds = (vista && (vista.mano || vista.decisiones)) || [];
     setBadge('rightPending', ds.length);
-    $('decisiones').innerHTML = ds.length ? ds.map(decCard).join('') : '';
+    if (!ds.length) { $('decisiones').innerHTML = ''; }
+    else {
+      var html = '';
+      for (var g = 0; g < MANO_GRUPOS.length; g++) {
+        var items = ds.filter(function (d) { return (d.clase || 'pedido') === MANO_GRUPOS[g][0]; });
+        if (!items.length) continue;
+        html += '<div class="mano-group">' + MANO_GRUPOS[g][1] + '<span class="chip-n">' + items.length + '</span></div>'
+          + items.map(decCard).join('');
+      }
+      $('decisiones').innerHTML = html;
+    }
     $('allDone').classList.toggle('show', !ds.length);
   }
   var ETIQUETAS_VISTA = { tratamiento: 'Asignó tratamiento', voz_resuelta_mano: 'Resolvió un pedido de voz a mano' };
@@ -425,18 +579,29 @@
         return;
       }
       vista = j;
-      renderTop(); renderGasto(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola();
-      if (!selUser && vista.clientes.length) {
-        var conPend = vista.clientes.filter(function (f) { return f.pendientes && f.pendientes.total > 0; })[0];
-        selUser = (conPend || vista.clientes[0]).user_id;
-      }
-      if (selUser) return cargarCliente(selUser);
+      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola();
+      // (LOTE CONSERJE-FORMA) Al abrir, el centro es la producción de
+      // mañana — la vista de trabajo. La ficha se abre solo cuando el
+      // dueño toca una cuenta o un ítem (el drill-in); un recargar la
+      // conserva si ya estaba abierta, sin auto-abrir ninguna.
+      if (recargarCliente && selUser && centroModo === 'ficha') return cargarCliente(selUser);
+      renderCentro();
     }).catch(function () { toast('No se pudo cargar la consola.', 'err'); });
   }
   function cargarCliente(uid) {
+    centroModo = 'ficha';
     return api('/api/admin/conserje/vista/cliente?user_id=' + uid).then(function (j) {
       if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); }
     }).catch(function () { /* la ficha anterior queda: el próximo refresh reintenta */ });
+  }
+  // (LOTE CONSERJE-FORMA) Cada ítem abre sobre la cosa misma: la
+  // ficha del cliente, con el posteo referido marcado y a la vista.
+  function gotoFicha(uid, postId) {
+    highlightPostId = postId ? Number(postId) : null;
+    selUser = Number(uid);
+    cargarCliente(selUser);
+    var centro = $('centro');
+    if (centro) centro.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
   function despuesDeActuar(msg) {
     if (msg) toast(msg);
@@ -453,7 +618,9 @@
   }
   document.addEventListener('click', function (ev) {
     var sel = ev.target.closest('[data-sel]');
-    if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; cargarCliente(selUser); return; }
+    if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); return; }
+    var go = ev.target.closest('[data-goto]');
+    if (go) { gotoFicha(go.getAttribute('data-goto'), go.getAttribute('data-goto-post')); return; }
     var f = ev.target.closest('[data-filtro]');
     if (f) { filtro = f.getAttribute('data-filtro'); renderRoster(); return; }
     var v = ev.target.closest('[data-vista]');
@@ -463,7 +630,11 @@
     var act = b.getAttribute('data-act');
     b.disabled = true;
     var re = function () { b.disabled = false; };
-    if (act === 'idea-resolver') {
+    if (act === 'ir-manana') {
+      centroModo = 'manana'; highlightPostId = null; renderCentro(); re();
+    } else if (act === 'limpiar-busqueda') {
+      $('buscador').value = ''; renderRoster(); re();
+    } else if (act === 'idea-resolver') {
       var midI = b.getAttribute('data-mid'), uidI = b.getAttribute('data-uid');
       var boxI = $('ideaRes-' + midI);
       if (boxI) {
