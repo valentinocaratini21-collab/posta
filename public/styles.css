@@ -4870,6 +4870,9 @@ body.pz-postchat-open{overflow:hidden}
 .pz-shell-acts{display:flex;gap:6px;flex:none}
 .pz-shell-ic{width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.72);background:rgba(255,255,255,.52);-webkit-backdrop-filter:blur(16px) saturate(165%);backdrop-filter:blur(16px) saturate(165%);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 32px rgba(10,30,51,.14),inset 0 1px 0 rgba(255,255,255,.75)}
 .pz-shell-ic svg{width:18px;height:18px}
+/* (LOTE CAMPANA-BADGE) La insignia de la campana: el número de acciones que esperan en la bandeja. Misma lengua que las demás insignias de conteo de la app (.bb-badge/.mz-badge: píldora #C2452D, número blanco 10px peso 800, mínimo 17px), anclada a la esquina del botón redondo de vidrio con anillo blanco para leerse sobre el vidrio. No recibe toques: el toque es del botón. */
+.pz-shell-bell{position:relative}
+.pz-shell-bell-badge{position:absolute;top:-3px;right:-3px;background:#C2452D;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(10,30,51,.25);pointer-events:none;line-height:1}
 @media(min-width:761px){.app-shell .pz-shell-head{max-width:920px;padding:10px 24px}}
 /* Chat con dock visible: el chat termina sobre el dock (respaldo pre-JS;
    pzChatKbSync ajusta la altura con el dock real medido). */

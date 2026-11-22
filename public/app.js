@@ -975,13 +975,19 @@ function pzShellHeadHTML(tab) {
   // lugar, a la izquierda de Compartir (su puerta depende de la
   // sesión: cliente → Notificaciones · casa → el Conserje).
   const estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'working for you…' : 'trabajando para vos…');
+  // (LOTE CAMPANA-BADGE) La insignia nace pintada desde la caché si
+  // ya se conoce el conteo (mismo patrón que la línea de estado con
+  // __pzBarraEstadoTxt): ningún parpadeo al re-pintar el shell. Con
+  // sesión de la casa nunca se siembra (su campana es el Conserje).
+  const badgeIni = (typeof window !== 'undefined' && window.__pzCampanaBadgeN > 0 && pzBarraCasaCache() !== true)
+    ? '<span class="pz-shell-bell-badge" id="pzShellBellBadge">' + window.__pzCampanaBadgeN + '</span>' : '';
   return `<header class="pz-shell-head">
     <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
       <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
       <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
     </button>
     <span class="pz-shell-acts">
-      <button type="button" class="pz-shell-ic pz-shell-bell" id="pzShellBell" onclick="pzBarraCampana()" aria-label="${en ? 'Notifications' : 'Notificaciones'}">${pzIc('bell', 18)}</button>
+      <button type="button" class="pz-shell-ic pz-shell-bell" id="pzShellBell" onclick="pzBarraCampana()" aria-label="${en ? 'Notifications' : 'Notificaciones'}">${pzIc('bell', 18)}${badgeIni}</button>
       <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 18)}</button>
       <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 18)}</button>
     </span>
@@ -1138,6 +1144,15 @@ function pzBarraCampanaPintar() {
       b.setAttribute('aria-label', 'Conserje');
       b.classList.add('es-casa');
     }
+    // (LOTE CAMPANA-BADGE) La misma pintura sincroniza la insignia:
+    // con la casa, el innerHTML de arriba ya la borró y el pintor lo
+    // confirma. Y como esta pintura es también el momento en que la
+    // puerta resuelve (la llama pzBarraPuertaKick al saber la
+    // sesión), acá se dispara además el refresco del conteo: sin
+    // este enganche, la primera pintura quedaría esperando un
+    // re-pintado del shell que puede no venir nunca.
+    pzCampanaBadgePintar();
+    pzCampanaBadgeRefrescar();
   } catch (e) {}
 }
 function pzBarraCampana() {
@@ -1152,6 +1167,62 @@ function pzBarraCampana() {
       if (esCasa) location.href = '/conserje'; else bbGo('#/app/notificaciones');
     }).catch(() => { bbGo('#/app/notificaciones'); });
   } catch (e) { bbGo('#/app/notificaciones'); }
+}
+// ===== LOTE CAMPANA-BADGE · la insignia de la campana =====
+// El número que BARRA-VIVA dejó declarado al nacer («SIN badge en
+// este lote: el número cuenta ítems de ACCIÓN — las respuestas en
+// tanda — y nace con BANDEJA-RESPONDE») y que BANDEJA-RESPONDE dejó
+// servido en GET /api/bandeja/count ({acciones}: los ítems en
+// 'pendiente', 'sin_permiso' o 'error' — ítems de acción, NO
+// comentarios). Este pintor es exactamente ese número sobre la
+// campana del cliente, nada más: visible solo si es > 0, con el
+// número exacto del endpoint. Se refresca con el MISMO ritmo de la
+// barra viva — tras cada pintura del shell, junto a
+// pzBarraEstadoRefrescar, en los dos shells — sin mecanismo nuevo.
+// LA CASA NO PINTA INSIGNIA: su campana es la puerta del Conserje y
+// el conteo de la bandeja no es su conteo — con sesión de la casa el
+// endpoint ni siquiera se consulta y ningún número se inventa.
+function pzCampanaBadgePintar() {
+  try {
+    const b = document.getElementById('pzShellBell');
+    if (!b) return;
+    const n = (typeof window !== 'undefined' && window.__pzCampanaBadgeN) || 0;
+    let el = document.getElementById('pzShellBellBadge');
+    if (pzBarraCasaCache() === true || !(n > 0)) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('span');
+      el.className = 'pz-shell-bell-badge';
+      el.id = 'pzShellBellBadge';
+      b.appendChild(el);
+    }
+    const txt = String(n);
+    if (el.textContent !== txt) el.textContent = txt;
+  } catch (e) {}
+}
+function pzCampanaBadgeRefrescar() {
+  try {
+    if (typeof ME === 'undefined' || !ME) return;
+    const casa = pzBarraCasaCache();
+    if (casa === true) {
+      if (typeof window !== 'undefined') window.__pzCampanaBadgeN = 0;
+      pzCampanaBadgePintar();
+      return;
+    }
+    if (casa === null) { pzBarraPuertaKick(); return; }
+    if (typeof window !== 'undefined' && window.__pzCampanaBadgeBuscando) return;
+    if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = true;
+    api.get('/api/bandeja/count').then((r) => {
+      try {
+        const n = r && typeof r.acciones === 'number' ? r.acciones : 0;
+        if (typeof window !== 'undefined') window.__pzCampanaBadgeN = n;
+        pzCampanaBadgePintar();
+      } catch (e) {}
+      if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = false;
+    }).catch(() => { if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = false; });
+  } catch (e) { try { if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = false; } catch (e2) {} }
 }
 function pzBarraHace(ts) {
   const en = pzBarraEn();
@@ -2731,7 +2802,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1222';
+const PZ_BUILD = '20261105-v1223';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -25896,6 +25967,8 @@ function pzPrefetchKick() {
   // computa con los datos reales de la cuenta.
   setTimeout(() => { try { pzBarraPuertaKick(); } catch (e) {} }, 0);
   setTimeout(() => { try { pzBarraEstadoRefrescar(); } catch (e) {} }, 0);
+  // (LOTE CAMPANA-BADGE) La insignia se refresca con el mismo ritmo.
+  setTimeout(() => { try { pzCampanaBadgeRefrescar(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: precarga en idle (una vez por carga).
   try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }
@@ -31280,6 +31353,7 @@ function pzInicioRepaint(freshHtml, paintedHtml, key, fromV, freshV) {
     setTimeout(() => { try { pzShellDatosHoy(); } catch (e) {} }, 0);
     setTimeout(() => { try { pzBarraPuertaKick(); } catch (e) {} }, 0);
     setTimeout(() => { try { pzBarraEstadoRefrescar(); } catch (e) {} }, 0);
+    setTimeout(() => { try { pzCampanaBadgeRefrescar(); } catch (e) {} }, 0);
   } catch (e) {}
 }
 async function inicioView() {
