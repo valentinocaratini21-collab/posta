@@ -6886,7 +6886,18 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 /* El botón central de la navegación: la palabra sola, como botón,
    centrada a la altura de las demás pestañas (la forma «+» sola de
    ICONOS-BARRA quedó retirada por la enmienda del dueño, 21/11). */
-.bb-tab-subir{justify-content:center}
+/* (LOTE SUBIR-BOTON-FIX · 22/11) La caja del botón central: .bb-bar
+   alinea a flex-end (styles.css, .bb-bar) y la palabra sola mide
+   19.4px + padding = 27px contra los 49px de Inicio/Ads (ícono 24 +
+   gap + etiqueta): el botón quedaba una franja corta pegada al borde
+   inferior de la pantalla, con la columna de arriba muerta para el
+   toque — la evidencia del dueño en campo sobre v1221: «"subir" ya
+   no es clickeable... y esta de otro tamano». Con align-self:stretch
+   su caja llena el alto de la fila que definen sus hermanas, la
+   palabra queda centrada por el justify-content de esta misma regla
+   y toda la columna es botón. La palabra no cambia; Inicio, Ads y la
+   barra no se tocan. */
+.bb-tab-subir{justify-content:center;align-self:stretch}
 .bb-tab-subir-word{font-size:15.5px;font-weight:800;letter-spacing:.01em;line-height:1.25}
 .mz-tab-subir{justify-content:center}
 .mz-tab-subir-word{font-size:15px;font-weight:800;letter-spacing:.01em}
