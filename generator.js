@@ -10,7 +10,7 @@ const personalizacion = require('./personalizacion'); // LOTE PERSONALIZACIÓN D
 const rubroGarantias = require('./rubro-garantias'); // LOTE RUBRO-GARANTÍAS ×6 (3/11): puerta final de producto + genéricos fuera con fundamento
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
-const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK, HOOKS_EN: HOOK_BANK_EN, hookBankFor } = require('./hooks');
+const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, captionOpenIsLong, HOOKS: HOOK_BANK, HOOKS_EN: HOOK_BANK_EN, hookBankFor } = require('./hooks');
 
 // Tope duro de caracteres para bloques OPCIONALES del contexto (anti-quemado de
 // tokens). Lo esencial (productos, servicios, promos activas, diferencial, tono)
@@ -1052,6 +1052,15 @@ function captionPasses(caption, input) {
   if (captionOpenIsGarbled(c, (input && input.business) || '')) {
     return { ok: false, reason: 'apertura empalmada: la primera línea cose dos aperturas o deja un artículo colgando (tipo "El De escéptica a fan:…") — reescribí la apertura limpia, en una sola frase' };
   }
+  // APERTURA LARGA ≠ EMPALME (LINT v13, Juli, 2026-11-22 — M256; id 741
+  // real: oración limpia de 27 palabras que la puerta reportaba como
+  // «apertura empalmada»): el largo de la primera oración se frena con
+  // su propio motivo. Se sigue frenando igual que antes — lo que cambia
+  // es el diagnóstico: el reintento tiene que ACORTAR la apertura, no
+  // descoser una costura que no existe.
+  if (captionOpenIsLong(c)) {
+    return { ok: false, reason: 'apertura larga: la primera oración supera las 26 palabras — no es un empalme, es una frase que se lee de un tirón; acortala (sacá un detalle o partila en dos) sin cambiar la idea' };
+  }
   // EMPALME EN CUALQUIER BLOQUE (Parte 62, mediodía 2026-10-19): M79
   // midió que la brecha se movió del hook al cuerpo y la semana de
   // clientes de hoy lo confirmó (titulares con forma de empalme en los
@@ -1065,6 +1074,9 @@ function captionPasses(caption, input) {
       const blockFirst = (blocks[bi].split('\n')[0] || '').trim();
       if (blockFirst && captionOpenIsGarbled(blockFirst, (input && input.business) || '')) {
         return { ok: false, reason: 'empalme en el cuerpo: la apertura de un bloque cose dos fragmentos (un tema-título o una fórmula pegada, también tras el nombre del negocio) — reescribí ese bloque como una sola frase' };
+      }
+      if (blockFirst && captionOpenIsLong(blockFirst)) {
+        return { ok: false, reason: 'apertura larga en el cuerpo: la primera oración de un bloque supera las 26 palabras — acortala o partila en dos, sin cambiar la idea' };
       }
     }
   }

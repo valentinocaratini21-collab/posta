@@ -94,11 +94,12 @@ t('C2: caption-style EN trae el ítem 33 (CLASH-PARITY)', () => {
 });
 
 // ---------- el 741 de hoy sigue marcado por su motivo real ----------
-t('D1: id 741 real sigue frenado por apertura corrida/empalmada (27 palabras), no por dispositivo', () => {
+t('D1: id 741 real sigue frenado — desde LINT v13 (v1217) por apertura LARGA (27 palabras), no por empalme ni por dispositivo', () => {
   const cap741 = 'así queda un posteo de café cuando lo hace posty: el Classic Espresso de The Coffee Bar, con su foto, su vapor y su caption, todo listo. si tenés un café, esto lo hago por vos todos los días.';
   const r = gen.captionPasses(cap741, { business: 'Posty' });
   assert.strictEqual(r.ok, false);
-  assert.ok(/apertura empalmada/.test(r.reason), 'reason: ' + r.reason);
+  assert.ok(/apertura larga/.test(r.reason), 'reason: ' + r.reason);
+  assert.ok(!/empalmada/.test(r.reason), 'reason: ' + r.reason);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

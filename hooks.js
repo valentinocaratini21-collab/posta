@@ -303,7 +303,12 @@ function hookFits(hook, { tema, negocio, hasPrice, lang } = {}) {
 }
 
 // Detector determinista de empalmes en la primera línea: puntuación
-// huérfana ("Posty.:"), el negocio repetido, o una apertura desmesurada.
+// huérfana ("Posty.:"), el negocio repetido, o dos fragmentos cosidos.
+// LINT v13 (Juli, 2026-11-22): la apertura DESMESURADA ya no vive acá —
+// una primera oración de más de 26 palabras sin costura NO es un
+// empalme (id 741 real: oración limpia de 27 palabras que la v12
+// reportaba como «apertura empalmada», M256). El largo se mide aparte,
+// en captionOpenIsLong, y la puerta lo rechaza con su propio motivo.
 // LINT v2 (Juli, 2026-10-17 — auditoría de producción): la v1 dejaba pasar
 // 7 de las 12 aperturas empalmadas vivas en la cuenta 12 (semana 2026-10-12).
 // Tres firmas nuevas, todas con caso real y 0 falsos positivos sobre los
@@ -563,19 +568,29 @@ function captionOpenIsGarbled(caption, negocio) {
     const hits = first.toLowerCase().split(biz).length - 1;
     if (hits >= 2) return true;
   }
-  // (l) LINT v11 (Juli, 2026-11-11) — el tope de 26 palabras medía la
-  // PRIMERA LÍNEA entera: un caption de una sola línea (sin \n\n) con
-  // varias oraciones cortas — ids 592/570 reales (30/33 palabras en la
-  // línea, primera oración de 10/24) — se marcaba empalmado aunque su
-  // apertura es limpia. La apertura es la primera ORACIÓN, no la primera
-  // línea: se mide el segmento hasta el primer terminador (. ! ? …). Una
-  // primera oración de más de 26 palabras sigue siendo apertura corrida
-  // y se frena igual (la línea sin terminador cae entera, como antes).
-  {
-    const firstSent = first.split(/[.!?…]/)[0] || first;
-    if (firstSent.split(/\s+/).filter(Boolean).length > 26) return true;
-  }
+  // (l) LINT v11 → MOVIDA en v13 (Juli, 2026-11-22): el tope de 26
+  // palabras de la primera oración vivía acá y volvía «empalmada» a
+  // cualquier apertura corrida sin costura (id 741 real, 27 palabras,
+  // oración limpia — la corrida del 2026-11-21 lo bisecó firma por
+  // firma: ninguna disparaba; solo medía el largo). Desde v13 el largo
+  // NO es empalme: lo mide captionOpenIsLong (abajo) y captionPasses lo
+  // frena con el motivo «apertura larga», para que el diagnóstico (y el
+  // reintento que lo corrige) apunte a acortar, no a descoser.
   return false;
+}
+
+// Apertura LARGA, no empalmada (LINT v13, Juli, 2026-11-22 — M256):
+// la primera ORACIÓN (el segmento de la primera línea hasta el primer
+// terminador . ! ? …) supera las 26 palabras. La medición es la misma
+// que fijó la v11 (la apertura es la primera oración, no la primera
+// línea: ids 592/570 reales, líneas de 30/33 palabras con oraciones de
+// 10/24, NO son largas). Función AUTOCONTENIDA, como su hermana: el
+// harness la puede evaluar desde su fuente.
+function captionOpenIsLong(caption) {
+  const first = String(caption || '').split('\n')[0].trim();
+  if (!first) return false;
+  const firstSent = first.split(/[.!?…]/)[0] || first;
+  return firstSent.split(/\s+/).filter(Boolean).length > 26;
 }
 
 // Renderiza la fórmula reemplazando {tema} y {negocio}.
@@ -629,5 +644,6 @@ module.exports = {
   ensureCaptionOpensWithHook,
   hookFits,
   captionOpenIsGarbled,
+  captionOpenIsLong,
   hookIntentMap,
 };
