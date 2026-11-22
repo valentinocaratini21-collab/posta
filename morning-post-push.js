@@ -45,6 +45,16 @@
 // · Esto NO reemplaza el aviso de 30 min ni la carta: es solo el
 //   anuncio matutino del hero. No publica nada, no aprueba nada, no
 //   reprograma nada.
+// (LOTE PUSH-LISTO-FUERA · 22/11) LA PUSH MURIÓ: «Hoy sale este —
+// sale a las …» / «Today's post is ready» era la clase «posteo listo»
+// que la doctrina de pushes del dueño removió (push solo para tanda
+// esperando el toque, un problema o el resultado de un pedido). El
+// barrido SIGUE CORRIENDO con su ventana y sus reglas porque su otra
+// mitad es la garantía de las 9:00: ensureTodayPost hace que el
+// posteo del día EXISTA. Lo que se cortó es solo el envío: al elegir
+// el posteo del día ya no se construye payload, no se llama a pushFn
+// (el parámetro queda aceptado por compatibilidad, sin uso) y no se
+// marca el dedup — cada día queda «sin avisar», que es lo buscado.
 
 const MORNING_START_HOUR = 9;
 const MORNING_END_HOUR = 10;
@@ -160,8 +170,8 @@ function ensureMorningTable(db) {
 async function sendMorningPostPush(db, opts) {
   const o = opts || {};
   const now = o.now ? (o.now instanceof Date ? o.now : new Date(o.now)) : new Date();
-  const pushFn = o.pushFn || ((uid, payload) => require('./push').sendPush(uid, payload));
-  const res = { checked: 0, sent: 0, skipped: 0, errors: [] };
+  const pushFn = o.pushFn || null; // (PUSH-LISTO-FUERA) sin uso: el envío murió; queda el parámetro por compatibilidad.
+  const res = { checked: 0, sent: 0, skipped: 0, suppressed: 0, errors: [] };
   if (!db) { res.errors.push('no_db'); return res; }
   try { ensureMorningTable(db); } catch (e) { res.errors.push('table:' + e.message); return res; }
   let userIds = [];
@@ -209,19 +219,12 @@ async function sendMorningPostPush(db, opts) {
       } catch (e) { res.errors.push('posts:' + uid + ':' + e.message); continue; }
       const post = pickTodayPost(posts, tz, now);
       if (!post) { res.skipped++; continue; }
-      const t = morningText(lang, saleHourInTz(post.scheduled_at, tz, lang));
-      const image = postImageForPush(post);
-      const payload = { title: t.title, body: t.body, url: '/#/app/ritual', data: { postId: String(post.id) } };
-      if (image) payload.image = image;
-      let r = null;
-      try { r = await pushFn(uid, payload); }
-      catch (e) { r = { ok: false, reason: 'throw:' + e.message }; }
-      if (r && (r.ok || Number(r.sent) > 0)) {
-        try {
-          db.prepare('INSERT OR IGNORE INTO morning_post_push (user_id, day_key, post_id) VALUES (?, ?, ?)').run(uid, dayKey, post.id);
-          res.sent++;
-        } catch (e) { res.errors.push('mark:' + e.message); }
-      } else { res.skipped++; }
+      // (LOTE PUSH-LISTO-FUERA · 22/11) Acá salía la push matutina
+      // («Hoy sale este»): la clase «posteo listo» está removida y no
+      // se envía a ninguna hora. El posteo del día ya quedó
+      // garantizado arriba (ensureTodayPost); no se construye
+      // payload, no se llama a pushFn y no se marca el dedup.
+      res.suppressed++;
     } catch (e) { res.errors.push('user:' + uid + ':' + e.message); }
   }
   return res;

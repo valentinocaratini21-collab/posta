@@ -1,47 +1,22 @@
-// notify-push.js — "Posty te avisa": push de aprobación de posteos.
-// Provee sendApprovalPush(db, post) y sendMissedPush(db, post, reason),
-// llamados por approval.js (notifyApproval / notifyMissed).
+// notify-push.js — "Posty te avisa": pushes de aprobación de posteos.
+// Provee sendMissedPush(db, post, reason), llamado por approval.js
+// (notifyMissed): el aviso de que un posteo NO salió por falta de
+// aprobación — clase «problema», se queda.
+// (LOTE PUSH-LISTO-FUERA · 22/11) sendApprovalPush MURIÓ: era el push
+// «Tu posteo de las … está listo 👀 / Sale solo en 3 horas salvo que
+// me digas lo contrario.» que llegaba 3 horas antes de la publicación
+// — la clase «posteo listo» que la doctrina de pushes del dueño ya
+// había removido (push solo para tanda esperando el toque, un
+// problema o el resultado de un pedido). approval.notifyApproval lo
+// llamaba tras un guard typeof: sin la función, su cascada (FASE 3)
+// cubre el aviso con el email gemelo de notify-email.js, como ya
+// hacía para las cuentas sin push.
 // Nunca tira excepciones: si no hay suscripciones o no hay VAPID,
 // devuelve { ok:false } en silencio (el email cubre).
 'use strict';
 
 const { sendPush } = require('./push');
 const { absoluteMediaUrl, userHourLabel } = require('./approval');
-
-async function sendApprovalPush(db, post) {
-  try {
-    const userId = post && post.user_id;
-    if (!userId || !post || post.id == null) return { ok: false };
-    let imageBaseUrl = '';
-    try {
-      const s = db.prepare('SELECT image_base_url FROM settings WHERE user_id = ?').get(userId);
-      if (s && s.image_base_url) imageBaseUrl = String(s.image_base_url);
-    } catch (e) { /* default */ }
-    const hour = userHourLabel(db, userId, post.scheduled_at);
-    const title = `Tu posteo de las ${hour} está listo 👀`;
-    const body = 'Sale solo en 3 horas salvo que me digas lo contrario.';
-    const image = absoluteMediaUrl(post.image_path, imageBaseUrl);
-    const url = `/#/app/post/${post.id}`;
-    const r = await sendPush(userId, {
-      title,
-      body,
-      url,
-      image,
-      actions: [
-        { action: 'approve', title: '✅ Aceptar' },
-        { action: 'reject', title: '❌ Rechazar' },
-      ],
-      // badge viaja dentro de data: el payload webpush de push.js solo
-      // serializa campos fijos + data (un top-level "badge" se perdería).
-      data: { url, postId: post.id, badge: 1 },
-    });
-    if (!r || !r.ok) return { ok: false };
-    return { ok: true, sent: r.sent };
-  } catch (e) {
-    console.error('[notify-push] sendApprovalPush falló:', e && e.message);
-    return { ok: false };
-  }
-}
 
 // FASE 3 — "no publiqué tu posteo porque no lo aprobaste".
 // Lo llama approval.notifyMissed; antes no existía y el llamado moría en el
@@ -76,4 +51,4 @@ async function sendMissedPush(db, post, reason) {
   }
 }
 
-module.exports = { sendApprovalPush, sendMissedPush };
+module.exports = { sendMissedPush };
