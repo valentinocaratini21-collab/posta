@@ -14846,7 +14846,7 @@ app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
     const uid = req.session.userId;
     let rows = [];
     try {
-      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.ig_media_id NOT LIKE 'demo_%' AND p.media_type != 'story' AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext') ORDER BY p.published_at DESC`).all(uid);
+      rows = db.prepare(`SELECT p.id, p.image_path, p.caption, p.status, p.published_at, p.ig_media_id, p.media_type, p.cover_path FROM posts p WHERE p.user_id = ? AND p.status = 'published' AND p.ig_media_id IS NOT NULL AND p.ig_media_id != '' AND p.ig_media_id NOT LIKE 'demo_%' AND p.media_type != 'story' AND (p.ig_state IS NULL OR p.ig_state <> 'archived_ext') ORDER BY p.published_at DESC`).all(uid);
     } catch (e) { rows = []; }
     // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
     rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
@@ -14854,6 +14854,19 @@ app.get('/api/ads/billetera/feed', requireAuth, async (req, res) => {
     try {
       impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id));
     } catch (e) { impulsados = new Set(); }
+    // (LOTE VIDEO-VIVO) La miniatura del selector de Ads: un posteo de
+    // video se ofrece por su PORTADA, nunca por el .mp4 — la grilla del
+    // selector lo pinta con <img> y el .mp4 era una imagen rota (la
+    // familia del 695). La portada sale del mecanismo de siempre
+    // (asegurarCoverDeVideo: extrae el frame determinístico y lo
+    // persiste); feedParaAds sigue recibiendo image_path, ahora el del
+    // póster en las filas de video. La función del cliente no se toca:
+    // la costura es este dato.
+    try {
+      for (const r of rows) {
+        if (r && pzEsTipoVideo(r.media_type)) { const c = asegurarCoverDeVideo(r); if (c) r.image_path = c; }
+      }
+    } catch (e) { /* sin portada, la fila va como estaba */ }
     const feed = adsBilletera.feedParaAds(rows, impulsados);
     res.json({ ok: true, total: feed.length, posts: feed });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu feed' }); }
@@ -21846,6 +21859,28 @@ app.get('/api/posts', requireAuth, (req, res) => {
       if (p && pqaAnclaAjena(p)) p.strategy_why = '';
     }
   } catch (e) { /* el porqué nunca frena la agenda */ }
+  // (LOTE VIDEO-VIVO) La portada del video en la PROYECCIÓN del cliente:
+  // el mecanismo de CONSERJE-FOTO-VIDEO (asegurarCoverDeVideo: el frame
+  // determinístico <stem>-cover.jpg se extrae una sola vez y se persiste
+  // en cover_path) vivía solo en los payloads del conserje. El payload
+  // del cliente salía con el cover_path vacío de nacimiento (la sesión
+  // y la pieza a mano no cargan portada) y cada superficie caía al
+  // primer cuadro vía <video preload="metadata"> — en iOS eso pinta
+  // blanco (la celda del 742, captura del dueño 22/11) o el bloque
+  // oscuro con botón de play (la tarjeta del 695). Acá la fila de video
+  // sin portada sale CON su portada extraída y persistida: la grilla,
+  // la tarjeta de hoy, el detalle y el visor pintan la imagen real
+  // desde el dato. Fail-soft como todo en esta ruta: si el frame no se
+  // puede extraer (el archivo no está), la fila sale como estaba y la
+  // superficie rinde su respaldo de marca — nunca un blanco inventado.
+  try {
+    for (const p of rows) {
+      if (p && pzEsTipoVideo(p.media_type) && !String(p.cover_path || '')) {
+        const c = asegurarCoverDeVideo(p);
+        if (c) p.cover_path = c;
+      }
+    }
+  } catch (e) { /* la portada nunca frena la agenda */ }
   res.json(rows);
 });
 
@@ -21989,6 +22024,13 @@ app.post('/api/admin/posts/cargar-pieza', requireAdminToken, express.json(), (re
       'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review, script, source, cover_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(uid, imagePath, caption, hashtags, scheduledAt, 'scheduled', mt, '', '', cpaths, '', '', 0, '', 'pieza-mano', coverPath);
     const newId = Number(r.lastInsertRowid);
+    // (LOTE VIDEO-VIVO) La pieza a mano de video nace CON portada: el
+    // 742 nació sin ella porque la carga no la traía (cover_path vacío)
+    // y la grilla lo pintó en blanco. Si el operador no manda portada,
+    // la puerta la deriva del propio video en este acto, con el
+    // mecanismo de siempre (asegurarCoverDeVideo); la fila que se lee
+    // abajo ya la lleva.
+    if (mt === 'video' && !coverPath) { try { asegurarCoverDeVideo({ id: newId, media_type: 'video', image_path: imagePath, cover_path: '' }); } catch (e) {} }
     // (v198-A) El mismo lint que la creación por sesión al nacer
     // programado: si el caption no pasa el gate, marca needs_review
     // (el fundador es exento, como en todo el sistema). Nunca rompe.
@@ -22079,6 +22121,11 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
     'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review, script) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500), status === 'draft' && trainingWheelsActive(req.session.userId) ? 1 : 0, scriptJson);
   const newId = r.lastInsertRowid;
+  // (LOTE VIDEO-VIVO) El video que nace por sesión nace CON portada: el
+  // frame determinístico se extrae y se persiste en este acto (el mismo
+  // mecanismo de asegurarCoverDeVideo), para que ninguna superficie lo
+  // pinte sin imagen ni dependa del primer cuadro del navegador.
+  if (mt === 'video') { try { asegurarCoverDeVideo({ id: newId, media_type: 'video', image_path, cover_path: '' }); } catch (e) {} }
 
   // 🚀 Autopiloto (2026-10-02): si está activado y el borrador pasa el filtro
   // de calidad, se programa solo para mañana 10am. Si no pasa, queda en
@@ -48351,7 +48398,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1227';
+const BUILD_ID = '20261105-v1228';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

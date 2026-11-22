@@ -2808,7 +2808,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1227';
+const PZ_BUILD = '20261105-v1228';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -11389,7 +11389,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
             return `<div class="igmock-nodesign"><span>${pzIc('refresh', 12)} Republicado con texto fresco</span><button class="btn btn-primary" data-revregen="${d.id}">${pzIc('sparkle', 18)} Generar diseño</button></div>`;
           }
           return `${d.media_type === 'video'
-            ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1"></video>`
+            ? `<video src="${esc(d.image_path)}"${d.cover_path ? ` poster="${esc(d.cover_path)}"` : ''} muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1"></video>`
             : `<img class="vimg" src="${esc(mv(d.image_path, 640))}" style="background-image:url('${esc(mv(d.image_path, 24))}')" data-full="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" onerror="__imgFb(this)" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} alt="Diseño del borrador ${i + 1}">`}
           ${d.media_type === 'video' ? `<span class="igmock-badge">${pzIc('reel', 15)} Reel</span>` : ''}
           ${d.media_type === 'story' ? `<span class="igmock-badge">${pzIc('story', 12)} Historia</span>` : ''}`;
@@ -17388,7 +17388,7 @@ function weekCardHTML(d, o) {
   const isCar = !isV && !isPending && carSlides.length > 1;
   const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">' + pzIc('sparkle', 16) + '</span><b>Creando imagen…</b></span>'
     : !d.image_path ? '<span class="pcard-nothumb">' + pzIc('post', 20) + '</span>'
-    : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
+    : isV ? `<video src="${esc(d.image_path)}"${d.cover_path ? ` poster="${esc(d.cover_path)}"` : ''} muted playsinline preload="metadata"></video>`
     : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
   const capFull = String(d.caption || d.source_topic || '');
   // ⚡ Publicar ahora (v241, paridad con la tarjeta de revisión de v240):
@@ -18202,7 +18202,7 @@ function feedPreviewHTML(all, tz, prof) {
   const tileMedia = (p, isV) => !p.image_path
     ? '<span class="fp-tile-ph">' + pzIc('sparkle', 18) + '</span>'
     : isV
-      ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+      ? `<video src="${esc(p.image_path)}"${p.cover_path ? ` poster="${esc(p.cover_path)}"` : ''} muted playsinline preload="metadata"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const VIS = 15;
   // v223: glifo de reel blanco estilo IG (sin círculo de fondo) y la
@@ -19324,7 +19324,7 @@ function postCardHTML(p, opts) {
   const dayLabel = d ? pcFmtDayLong(d, tz) + ' a las ' + pcFmtHour(d, tz) : '';
   const isV = String(p.media_type || '') === 'video';
   const media = !p.image_path ? '<span class="pcard-nothumb">' + pzIc('post', 20) + '</span>'
-    : isV ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+    : isV ? `<video src="${esc(p.image_path)}"${p.cover_path ? ` poster="${esc(p.cover_path)}"` : ''} muted playsinline preload="metadata"></video>`
     : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`;
   const capFull = String(p.caption || p.source_topic || 'Posteo');
   // (LOTE APROBAR-AUTO) 'auto' (el estado honesto de C12) también es
@@ -26969,7 +26969,7 @@ function mzHeroChip(p) {
 }
 function mzMediaHTML(p, cls) {
   if (!p.image_path) return `<div class="${cls} mz-nomedia"><span>${pzIc('sparkle', 18)}</span></div>`;
-  if (String(p.media_type || '') === 'video') return `<video class="${cls}" src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`;
+  if (String(p.media_type || '') === 'video') return `<video class="${cls}" src="${esc(p.image_path)}"${p.cover_path ? ` poster="${esc(p.cover_path)}"` : ''} muted playsinline preload="metadata"></video>`;
   return `<img class="${cls}" src="${esc(p.image_path)}" alt="" loading="lazy">`;
 }
 
@@ -30173,15 +30173,31 @@ function pzHoyCardHTML(p, o) {
     // (REEL-HOY-SIN-POSTER v915 · 11/11 · un video SIN portada NUNCA queda
     // caption-only: si no hay cover_path, se rinde el <video
     // preload="metadata"> y el navegador muestra su primer cuadro.)
+    // (LOTE VIDEO-VIVO · 22/11 · SUPERSEDE a v915 en el héroe, por la
+    // captura del dueño sobre el 742) El primer cuadro por metadata NO
+    // alcanza: en iOS el <video> sin reproducir pinta el bloque oscuro
+    // con el botón de play, y el dueño tiene que VER el reel como sale
+    // publicado. Desde este lote el dato ya trae la portada (el servidor
+    // la extrae y la persiste: nacimiento y proyección), y el héroe
+    // rinde el video CORRIENDO SOLO — autoplay silenciado, en loop,
+    // inline, con la portada de poster (si el autoplay tarda un
+    // instante, la imagen ya está pintada). El autoplay es un atributo
+    // del elemento, sin JS ni temporizadores: la tarjeta se pinta una
+    // sola vez y nada re-renderiza por el video (guarda contra la
+    // familia del repintado en caliente). La compacta conserva la
+    // miniatura quieta, ahora con el mismo poster: nunca el bloque
+    // oscuro sin imagen.
     const isVid = String((p && p.media_type) || '') === 'video';
-    const imgSrc = isVid
-      ? String((p && p.cover_path) || '')
-      : String((p && p.image_path) || '');
+    const coverSrc = isVid ? String((p && p.cover_path) || '') : '';
+    const imgSrc = isVid ? '' : String((p && p.image_path) || '');
     const img = imgSrc
       ? `<img class="pz-hoy-thumb-img" src="${esc(mv(imgSrc, 640))}" data-full="${esc(imgSrc)}" onerror="__imgFb(this)" alt="" loading="lazy">` : '';
-    const vid = (!img && isVid && p && p.image_path)
-      ? `<video class="pz-hoy-thumb-video" src="${esc(String(p.image_path))}" preload="metadata" muted playsinline></video>` : '';
-    const media = img || vid;
+    const vid = (isVid && p && p.image_path)
+      ? ((o && o.hero)
+        ? `<video class="pz-hoy-thumb-video" src="${esc(String(p.image_path))}"${coverSrc ? ` poster="${esc(coverSrc)}"` : ''} autoplay muted loop playsinline preload="auto" data-pz-video-vivo="hero"></video>`
+        : `<video class="pz-hoy-thumb-video" src="${esc(String(p.image_path))}"${coverSrc ? ` poster="${esc(coverSrc)}"` : ''} preload="metadata" muted playsinline></video>`)
+      : '';
+    const media = isVid ? vid : img;
     const pill = cartita ? pzHoyPillSalida(p, tz, en) : '';
     // (LOTE HOY-SIN-DUPLICADO · 9/11) sinCuando: la tarjeta principal
     // ya lleva la hora en la cabecera («hoy · 19:00»); el badge «Hoy
@@ -30314,7 +30330,7 @@ function pzHoyCardHTML(p, o) {
       const esVideo = String((p && p.media_type) || '') === 'video';
       const heroImg = media ? media.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"').replace('class="pz-hoy-thumb-video"', 'class="pz-hoy-hero-video"') : '';
       const heroMedia = heroImg
-        ? `<div class="pz-hoy-hero-media" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${heroImg}${esVideo ? `<span class="pz-hoy-hero-reel">▶ Reel</span><span class="pz-hoy-hero-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.54.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg></span>` : ''}</div>`
+        ? `<div class="pz-hoy-hero-media" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${heroImg}${esVideo ? `<span class="pz-hoy-hero-reel">▶ Reel</span>` : ''}</div>`
         : '';
       return `<article class="card pz-hoy-card pz-hoy-hero" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
         + heroMedia
@@ -39538,7 +39554,7 @@ async function approvalPostView(id) {
   if (p.image_path) apvSlides = [String(p.image_path), ...apvSlides.filter((x) => x !== String(p.image_path))];
   const apvIsCar = !isVideo && apvSlides.length > 1;
   const apvMediaInner = isVideo
-    ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
+    ? `<video src="${esc(p.image_path)}"${p.cover_path ? ` poster="${esc(p.cover_path)}"` : ''} controls playsinline preload="metadata"></video>`
     : apvIsCar
       ? `<div class="hf-d-track">${apvSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="Posteo" loading="lazy" data-lightbox="${esc(s)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''} onerror="__imgFb(this)"></span>`).join('')}</div><button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${en ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${en ? 'Next photo' : 'Foto siguiente'}">›</button><span class="hf-d-count">1/${apvSlides.length}</span>`
       : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''}>`;
