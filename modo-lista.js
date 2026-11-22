@@ -33,9 +33,13 @@ function activo() {
 }
 
 function mensaje(lang) {
+  // (LOTE PUERTA-FILA-CUPOS) La confirmación dice también el sentido de
+  // la lista: el lugar en la fila quedó reservado y los cupos se
+  // asignan por orden de llegada. Sin fecha individual ni posición
+  // numérica: la promesa es el lugar y el orden, nada más.
   return lang === 'en'
-    ? 'Trials open on February 1 💛 You are on the list — we will email you as soon as you can start.'
-    : 'Las pruebas abren el 1° de febrero 💛 Ya estás en la lista — te avisamos por email apenas puedas entrar.';
+    ? 'Trials open on February 1 💛 You are on the list — we will email you as soon as you can start. Your place in line is reserved: spots are assigned in order of arrival.'
+    : 'Las pruebas abren el 1° de febrero 💛 Ya estás en la lista — te avisamos por email apenas puedas entrar. Tu lugar en la fila quedó reservado: los cupos se asignan por orden de llegada.';
 }
 
 function ensureSchema(db) {

@@ -212,6 +212,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">See my planned week</button>
     <p class="hint" id="fModoHint" style="text-align:center;margin-top:10px">No card needed 💙 Your 3-day trial starts only when you connect your Instagram — no day runs before that.</p>
+    <p class="hint" id="fFilaHint" hidden style="text-align:center;margin-top:6px"></p>
     <p class="tiny">Already have an account? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
   </form>
   <div class="card" id="fListaOk" hidden>
@@ -298,6 +299,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (starWrap) starWrap.hidden = true;
     var eh = $('fEmailHint'); if (eh) eh.textContent = "we'll let you know when trials open";
     var mh = $('fModoHint'); if (mh) mh.textContent = "No card needed 💙 Trials open on February 1 — leave us your details and we'll email you as soon as you can start.";
+    // (LOTE PUERTA-FILA-CUPOS) The waitlist is the trial queue: this line lives only in list mode.
+    var fh = $('fFilaHint'); if (fh) { fh.textContent = 'Joining reserves your place in line: trials open on February 1, and spots are assigned in order of arrival.'; fh.hidden = false; }
   }
   fetch('/api/puerta/modo' + (TEST_KEY_QS ? TEST_KEY_QS + '&' : '?') + 'lang=' + LANG).then(function (r) { return r.json(); }).then(function (d) {
     if (d && d.modo === 'lista') { MODO_LISTA = true; LISTA_MSG = d.mensaje || ''; aplicarModoLista(); }
@@ -887,7 +890,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // email es el tercer dato y es OBLIGATORIO: sin un email válido la
     // semana no se arma — es la llave de los recordatorios.
     var email = String(emailEl.value || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) { showErr('Leave a valid email — we'll let you know when each post goes out 🙂'); emailEl.focus(); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) { showErr('Leave a valid email — we’ll let you know when each post goes out 🙂'); emailEl.focus(); return; }
     // (LOTE MODO LISTA) In list mode nothing gets built: the capture
     // goes to guest/start, which puts the business on the waitlist
     // and answers with the honest message; this page shows it and
@@ -994,7 +997,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
           .then(function (d) {
             if (my !== seq) return;
             if (d && d.found && d.profile && d.profile.username) card(d.profile);
-            else if (d && d.error === 'not_found') note('We couldn't find that @ yet — it may be new or private. Double-check it: if it's right, keep typing it by hand and we'll build your week anyway.');
+            else if (d && d.error === 'not_found') note('We couldn’t find that @ yet — it may be new or private. Double-check it: if it’s right, keep typing it by hand and we’ll build your week anyway.');
             else hide();
           })
           .catch(function () { if (my === seq) hide(); });

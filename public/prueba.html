@@ -213,6 +213,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">Ver mi semana planeada</button>
     <p class="hint" id="fModoHint" style="text-align:center;margin-top:10px">Sin tarjeta 💙 Tu prueba de 3 días arranca recién cuando conectás tu Instagram — antes no corre ningún día.</p>
+    <p class="hint" id="fFilaHint" hidden style="text-align:center;margin-top:6px"></p>
     <p class="tiny">¿Ya tenés cuenta? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrá</a></p>
   </form>
   <div class="card" id="fListaOk" hidden>
@@ -298,6 +299,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     if (starWrap) starWrap.hidden = true;
     var eh = $('fEmailHint'); if (eh) eh.textContent = 'te avisamos cuando abran las pruebas';
     var mh = $('fModoHint'); if (mh) mh.textContent = 'Sin tarjeta 💙 Las pruebas abren el 1° de febrero — dejanos tus datos y te avisamos apenas puedas entrar.';
+    // (LOTE PUERTA-FILA-CUPOS) La lista es la fila de cupos: la línea vive solo en modo lista.
+    var fh = $('fFilaHint'); if (fh) { fh.textContent = 'Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.'; fh.hidden = false; }
   }
   fetch('/api/puerta/modo' + (TEST_KEY_QS ? TEST_KEY_QS + '&' : '?') + 'lang=' + LANG).then(function (r) { return r.json(); }).then(function (d) {
     if (d && d.modo === 'lista') { MODO_LISTA = true; LISTA_MSG = d.mensaje || ''; aplicarModoLista(); }

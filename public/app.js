@@ -2822,7 +2822,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1229';
+const PZ_BUILD = '20261105-v1230';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -9033,6 +9033,7 @@ function landingView(cfg) {
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
       <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
       <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
+      <p class="lp-fila" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.</p>
       <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-noweb-row"><button type="button" class="lp-noweb" onclick="lpNoWeb(this)">No tengo web</button></p>
@@ -9246,6 +9247,7 @@ function landingView(cfg) {
           <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
       <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
       <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
+      <p class="lp-fila" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.</p>
       <button class="btn btn-primary" type="submit">Quiero mi perfil así <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
@@ -9323,6 +9325,7 @@ function landingView(cfg) {
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
       <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
       <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
+      <p class="lp-fila" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.</p>
       <button class="btn btn-primary" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 Entrás con el login oficial de Meta: sin contraseña y sin tarjeta.</p>
