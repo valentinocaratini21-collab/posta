@@ -1035,8 +1035,16 @@ function pzShellDatosHoy() {
 //       GET /api/ritual/hoy, la MISMA promesa cacheada que ya pide
 //       pzShellDatosHoy: un solo fetch por carga, sin polling nuevo)
 //       → «armando el posteo de hoy…»
-//   3 · el posteo de hoy está listo (revelado) o ya salió →
-//       «todo al día»
+//   3 · el posteo de hoy ya salió (publicado_hoy) →
+//       «tu posteo de hoy ya salió»
+//   4 · el posteo de hoy está listo (revelado) → el hecho con su
+//       hora: «tu posteo de hoy sale a las 19:00» (la hora es la de
+//       la carta recomendada — hora_salida del ritual, la salida
+//       real en la zona de la cuenta, ya formateada por idioma en
+//       el servidor); sin ese dato, «tu posteo de hoy está listo»
+//       (LOTE BARRA-TEXTO · 22/11: la línea dice el hecho, nunca un
+//       eslogan — el estado vago anterior se fue por confuso,
+//       palabra del dueño: no se entendía qué estaba al día)
 // Sin datos todavía (la primera pintura, o si un fetch falló): el
 // estado honesto de arranque «trabajando para vos…».
 function pzBarraEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); }
@@ -1044,10 +1052,16 @@ function pzBarraEstadoComputar(ritual, idea) {
   const en = pzBarraEn();
   if (idea && idea.estado && idea.estado !== 'resuelta') return en ? 'working on your request…' : 'trabajando en tu pedido…';
   if (!ritual || ritual.ok === false) return en ? 'working for you…' : 'trabajando para vos…';
-  if (ritual.publicado_hoy) return en ? 'all up to date' : 'todo al día';
+  if (ritual.publicado_hoy) return en ? "today's post is out" : 'tu posteo de hoy ya salió';
   if (!ritual.hoy || !ritual.recomendada) return en ? "putting today's post together…" : 'armando el posteo de hoy…';
   if (ritual.abre_a && ritual.ahora && String(ritual.ahora) < String(ritual.abre_a)) return en ? "putting today's post together…" : 'armando el posteo de hoy…';
-  return en ? 'all up to date' : 'todo al día';
+  // (LOTE BARRA-TEXTO) Listo: el hecho con la hora que trae la carta
+  // recomendada (hora_salida: la salida real del posteo en la zona de
+  // la cuenta, formateada por idioma en el servidor — «19:00» ES,
+  // «7:00 PM» EN); sin ese dato, el hecho sin hora. Nunca un eslogan.
+  const horaSalida = (ritual.recomendada && ritual.recomendada.hora_salida) ? String(ritual.recomendada.hora_salida) : '';
+  if (horaSalida) return en ? "today's post goes out at " + horaSalida : 'tu posteo de hoy sale a las ' + horaSalida;
+  return en ? "today's post is ready" : 'tu posteo de hoy está listo';
 }
 function pzBarraEstadoPintar(txt) {
   try {
@@ -2808,7 +2822,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1228';
+const PZ_BUILD = '20261105-v1229';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
