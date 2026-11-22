@@ -185,7 +185,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div class="field">
       <label for="fEmail">Your email *</label>
       <input id="fEmail" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@email.com" aria-label="Your email *">
-      <p class="hint">We'll let you know when each post goes out</p>
+      <p class="hint" id="fEmailHint">We'll let you know when each post goes out</p>
     </div>
     <div class="field" id="fStarWrap" hidden>
       <label for="fStar">What do you sell the most? *</label>
@@ -211,9 +211,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="fWait" class="wait" hidden></div>
     <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">See my planned week</button>
-    <p class="hint" style="text-align:center;margin-top:10px">No card needed 💙 Your 3-day trial starts only when you connect your Instagram — no day runs before that.</p>
+    <p class="hint" id="fModoHint" style="text-align:center;margin-top:10px">No card needed 💙 Your 3-day trial starts only when you connect your Instagram — no day runs before that.</p>
     <p class="tiny">Already have an account? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">Log in</a></p>
   </form>
+  <div class="card" id="fListaOk" hidden>
+    <div class="field" style="margin-bottom:6px">
+      <label>You're on the list! 💛</label>
+      <p class="hint" id="fListaOkMsg" style="margin-top:2px"></p>
+    </div>
+  </div>
   <div class="card" id="returnDoor" style="margin-top:14px">
     <div class="field" style="margin-bottom:6px">
       <label>Back to my week</label>
@@ -280,6 +286,22 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // resubmits on this visit, like the star.
   var brandLangChoice = '';
   var errEl = $('fErr'), statusEl = $('fStatus'), previewEl = $('fPreview'), waitEl = $('fWait'), btn = $('btnGo'), form = $('fEntry');
+  // (LOTE MODO LISTA) The public door can be in list mode (until
+  // launch): the server says so at /api/puerta/modo and this page
+  // switches to capturing the same three details and putting the
+  // business on the waitlist, without building any week. If the
+  // server does not answer or the mode is the normal one, everything
+  // keeps working exactly as always.
+  var MODO_LISTA = false, LISTA_MSG = '';
+  function aplicarModoLista() {
+    btn.textContent = 'Join the waitlist';
+    if (starWrap) starWrap.hidden = true;
+    var eh = $('fEmailHint'); if (eh) eh.textContent = "we'll let you know when trials open";
+    var mh = $('fModoHint'); if (mh) mh.textContent = "No card needed 💙 Trials open on February 1 — leave us your details and we'll email you as soon as you can start.";
+  }
+  fetch('/api/puerta/modo' + (TEST_KEY_QS ? TEST_KEY_QS + '&' : '?') + 'lang=' + LANG).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && d.modo === 'lista') { MODO_LISTA = true; LISTA_MSG = d.mensaje || ''; aplicarModoLista(); }
+  }).catch(function () {});
   var qIg = (qs.get('ig') || '').trim().replace(/^@/, '');
   var qWeb = (qs.get('web') || '').trim();
   if (qIg) igEl.value = '@' + qIg;
@@ -857,7 +879,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var web = noWeb ? '' : cleanWeb(webEl.value);
     if (!ig) { showErr('Tell us your Instagram @ 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
-    if (!starWrap.hidden && !star && !askSkipStar) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
+    if (!MODO_LISTA && !starWrap.hidden && !star && !askSkipStar) { showErr('Tell us what you sell the most 🙂'); starEl.focus(); return; }
     // (LOTE REANUDAR-TRAS-RECARGA) The in-progress intent is persisted
     // BEFORE building: if this tab reloads or closes halfway, the next
     // load resumes by itself with this same data.
@@ -866,6 +888,35 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // semana no se arma — es la llave de los recordatorios.
     var email = String(emailEl.value || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) { showErr('Leave a valid email — we'll let you know when each post goes out 🙂'); emailEl.focus(); return; }
+    // (LOTE MODO LISTA) In list mode nothing gets built: the capture
+    // goes to guest/start, which puts the business on the waitlist
+    // and answers with the honest message; this page shows it and
+    // ends. If the answer does NOT come back in list mode (the mode
+    // was switched off between load and submit), the flow follows
+    // the normal path.
+    if (MODO_LISTA) {
+      btn.disabled = true; btn.textContent = 'Joining…';
+      try {
+        var gl = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, email: email, domain: web, sin_web: noWeb ? 1 : 0, device: deviceId(), lang: LANG, tz: browserTz() });
+        if (gl.ok && gl.j && gl.j.modo_lista) {
+          clearPending();
+          form.hidden = true;
+          var okMsg = $('fListaOkMsg'); if (okMsg) okMsg.textContent = gl.j.message || LISTA_MSG;
+          var okCard = $('fListaOk'); if (okCard) okCard.hidden = false;
+          return;
+        }
+        if (!gl.ok) {
+          showErr((gl.j && gl.j.error) || "We couldn't add you yet. Try again.");
+          btn.disabled = false; btn.textContent = 'Join the waitlist';
+          return;
+        }
+      } catch (e) {
+        showErr("We couldn't add you yet. Try again.");
+        btn.disabled = false; btn.textContent = 'Join the waitlist';
+        return;
+      }
+      btn.disabled = false; btn.textContent = 'Join the waitlist';
+    }
     savePending(ig, web, star);
     btn.disabled = true; btn.textContent = 'Building…';
     try {

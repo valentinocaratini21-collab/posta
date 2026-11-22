@@ -186,7 +186,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div class="field">
       <label for="fEmail">Tu email *</label>
       <input id="fEmail" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email *">
-      <p class="hint">te avisamos cuando salga cada posteo</p>
+      <p class="hint" id="fEmailHint">te avisamos cuando salga cada posteo</p>
     </div>
     <div class="field" id="fStarWrap" hidden>
       <label for="fStar">¿Qué es lo que más vendés? *</label>
@@ -212,9 +212,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div id="fWait" class="wait" hidden></div>
     <div id="fPreview" class="preview" hidden></div>
     <button id="btnGo" class="btn btn-primary" type="submit">Ver mi semana planeada</button>
-    <p class="hint" style="text-align:center;margin-top:10px">Sin tarjeta 💙 Tu prueba de 3 días arranca recién cuando conectás tu Instagram — antes no corre ningún día.</p>
+    <p class="hint" id="fModoHint" style="text-align:center;margin-top:10px">Sin tarjeta 💙 Tu prueba de 3 días arranca recién cuando conectás tu Instagram — antes no corre ningún día.</p>
     <p class="tiny">¿Ya tenés cuenta? <a href="/#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrá</a></p>
   </form>
+  <div class="card" id="fListaOk" hidden>
+    <div class="field" style="margin-bottom:6px">
+      <label>¡Ya estás en la lista! 💛</label>
+      <p class="hint" id="fListaOkMsg" style="margin-top:2px"></p>
+    </div>
+  </div>
   <div class="card" id="returnDoor" style="margin-top:14px">
     <div class="field" style="margin-bottom:6px">
       <label>Volver a mi semana</label>
@@ -281,6 +287,21 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   // para los reenvíos de esta visita, como la estrella.
   var brandLangChoice = '';
   var errEl = $('fErr'), statusEl = $('fStatus'), previewEl = $('fPreview'), waitEl = $('fWait'), btn = $('btnGo'), form = $('fEntry');
+  // (LOTE MODO LISTA) La puerta puede estar en modo lista (hasta el
+  // lanzamiento): el servidor lo dice por /api/puerta/modo y esta
+  // página pasa a capturar los tres datos y anotar al negocio en la
+  // lista, sin armar ninguna semana. Si el servidor no responde o el
+  // modo es el normal, todo sigue exactamente como siempre.
+  var MODO_LISTA = false, LISTA_MSG = '';
+  function aplicarModoLista() {
+    btn.textContent = 'Anotarme en la lista';
+    if (starWrap) starWrap.hidden = true;
+    var eh = $('fEmailHint'); if (eh) eh.textContent = 'te avisamos cuando abran las pruebas';
+    var mh = $('fModoHint'); if (mh) mh.textContent = 'Sin tarjeta 💙 Las pruebas abren el 1° de febrero — dejanos tus datos y te avisamos apenas puedas entrar.';
+  }
+  fetch('/api/puerta/modo' + (TEST_KEY_QS ? TEST_KEY_QS + '&' : '?') + 'lang=' + LANG).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && d.modo === 'lista') { MODO_LISTA = true; LISTA_MSG = d.mensaje || ''; aplicarModoLista(); }
+  }).catch(function () {});
   var qIg = (qs.get('ig') || '').trim().replace(/^@/, '');
   var qWeb = (qs.get('web') || '').trim();
   if (qIg) igEl.value = '@' + qIg;
@@ -859,7 +880,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     var web = noWeb ? '' : cleanWeb(webEl.value);
     if (!ig) { showErr('Contanos tu @ de Instagram 🙂'); igEl.focus(); return; }
     var star = String(starEl.value || '').trim();
-    if (!starWrap.hidden && !star && !askSkipStar) { showErr('Contame qué es lo que más vendés 🙂'); starEl.focus(); return; }
+    if (!MODO_LISTA && !starWrap.hidden && !star && !askSkipStar) { showErr('Contame qué es lo que más vendés 🙂'); starEl.focus(); return; }
     // (LOTE REANUDAR-TRAS-RECARGA) La intención en curso se persiste
     // ANTES de armar: si esta pestaña se recarga o se cierra a mitad de
     // camino, la próxima carga reanuda sola con estos mismos datos.
@@ -868,6 +889,34 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     // semana no se arma — es la llave de los recordatorios.
     var email = String(emailEl.value || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) { showErr('Dejanos un email válido — te avisamos cuando salga cada posteo 🙂'); emailEl.focus(); return; }
+    // (LOTE MODO LISTA) En modo lista no se arma nada: la captura va a
+    // guest/start, que anota al negocio en la lista de espera y
+    // responde el mensaje honesto; esta página lo muestra y termina.
+    // Si la respuesta NO viene en modo lista (el modo se apagó entre
+    // la carga y el envío), el flujo sigue el camino normal.
+    if (MODO_LISTA) {
+      btn.disabled = true; btn.textContent = 'Anotando…';
+      try {
+        var gl = await postJSON('/api/guest/start' + TEST_KEY_QS, { ig: ig, email: email, domain: web, sin_web: noWeb ? 1 : 0, device: deviceId(), lang: LANG, tz: browserTz() });
+        if (gl.ok && gl.j && gl.j.modo_lista) {
+          clearPending();
+          form.hidden = true;
+          var okMsg = $('fListaOkMsg'); if (okMsg) okMsg.textContent = gl.j.message || LISTA_MSG;
+          var okCard = $('fListaOk'); if (okCard) okCard.hidden = false;
+          return;
+        }
+        if (!gl.ok) {
+          showErr((gl.j && gl.j.error) || 'No pudimos anotarte todavía. Probá de nuevo.');
+          btn.disabled = false; btn.textContent = 'Anotarme en la lista';
+          return;
+        }
+      } catch (e) {
+        showErr('No pudimos anotarte todavía. Probá de nuevo.');
+        btn.disabled = false; btn.textContent = 'Anotarme en la lista';
+        return;
+      }
+      btn.disabled = false; btn.textContent = 'Anotarme en la lista';
+    }
     savePending(ig, web, star);
     btn.disabled = true; btn.textContent = 'Armando…';
     try {

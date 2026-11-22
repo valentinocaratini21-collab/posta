@@ -40780,6 +40780,13 @@ app.post('/api/trial/chat-onboarding', express.json({ limit: '16kb' }), async (r
     const ip = String(req.ip || '').slice(0, 64);
     const testMode = trialTestMode(req);
     const allowlisted = trialLock.isAllowlisted(db, igK, domK);
+    // (LOTE MODO LISTA) El chat de la puerta también es puerta pública:
+    // en modo lista no crea invitados ni abre pruebas — responde con
+    // el mensaje honesto de la lista. Exentos de siempre: el modo test
+    // y la allowlist (la puerta de operador, intacta).
+    if (modoLista && modoLista.activo() && !testMode && !allowlisted) {
+      return res.json({ ok: false, modo_lista: true, error: modoLista.mensaje(lang) });
+    }
     // Candados espejo de guest/start.
     if (!testMode && !allowlisted) {
       const consumed = trialLock.findConsumedUsed ? trialLock.findConsumedUsed(db, igK, domK) : null;
@@ -40905,6 +40912,20 @@ function isGuestSession(req) {
   } catch (e) { return false; }
 }
 
+// (LOTE MODO LISTA) El modo de la puerta pública, para que las
+// páginas de la puerta (/prueba y /en/prueba) respondan como
+// corresponde: en modo lista capturan los tres datos de siempre y
+// muestran el mensaje honesto, sin armar ninguna semana. Con la llave
+// de prueba del dueño, el modo se reporta normal (su puerta de
+// operador no se gobierna por el modo lista).
+app.get('/api/puerta/modo', (req, res) => {
+  const q = String((req.query && req.query.lang) || '').toLowerCase();
+  const lang = q === 'en' ? 'en' : q === 'es' ? 'es' : (req.headers['accept-language'] || '').toLowerCase().includes('en') ? 'en' : 'es';
+  let lista = !!(modoLista && modoLista.activo());
+  try { if (lista && trialTestMode(req)) lista = false; } catch (e) {}
+  res.json({ ok: true, modo: lista ? 'lista' : 'normal', lanzamiento: modoLista ? modoLista.LANZAMIENTO : '2027-02-01', mensaje: (lista && modoLista) ? modoLista.mensaje(lang) : '' });
+});
+
 app.post('/api/guest/start', async (req, res) => {
   let unlockGuestStart = null;
   try {
@@ -40923,6 +40944,28 @@ app.post('/api/guest/start', async (req, res) => {
     const domRaw = String(body.domain || body.web || '').trim();
     const igK = trialLock.normalizeIg(igRaw);
     const domK = trialLock.normalizeDomain(domRaw);
+    // (LOTE MODO LISTA) La puerta pública está en modo lista hasta el
+    // lanzamiento: esta entrada NO crea invitados, NO importa semanas
+    // y NO arranca relojes — captura los tres datos de siempre (@ +
+    // web + email, el email con la misma validación de hoy) y deja al
+    // negocio en la lista de espera, con el mensaje honesto. Exentos,
+    // como en todo el flujo: el modo test (la llave del dueño) y la
+    // allowlist (las cuentas de la casa) — la puerta de operador sigue
+    // el camino de siempre, intacto, más abajo.
+    if (modoLista && modoLista.activo() && !trialTestMode(req) && !trialLock.isAllowlisted(db, igK, domK)) {
+      if (!igK && !domK) {
+        // Sin identidad no hay captura posible: la página muestra el
+        // mensaje y pide los datos — no nace ninguna fila.
+        return res.json({ ok: true, modo_lista: true, needs_capture: true, message: modoLista.mensaje(lang) });
+      }
+      const emailML = String(body.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailML) || emailML.length > 120) {
+        return res.status(400).json({ error: lang === 'en' ? 'Leave us a valid email — we will let you know when trials open' : 'Dejanos un email válido — te avisamos cuando abran las pruebas', need_email: true });
+      }
+      try { modoLista.registrar(db, { ig: igK, domain: domK, email: emailML, lang, sinWeb: sinWebK }); } catch (e) { console.error('[modo-lista] registrar falló:', e.message); }
+      try { track(null, 'guest_start', 'modo-lista'); } catch (e) {}
+      return res.json({ ok: true, modo_lista: true, message: modoLista.mensaje(lang) });
+    }
     if (!igK && !domK) {
       // (ONBOARDING-SIMPLE · 11/11) Entrada SIN @ ni web: el botón de la
       // prueba entra DIRECTO al producto. Se crea (o se reusa por
@@ -41521,6 +41564,18 @@ app.post('/api/guest/set-ig', requireAuth, async (req, res) => {
     const igRaw = String(body.ig || '').trim();
     const device = String(body.device || '').trim().slice(0, 128);
     const ip = String(req.ip || '').slice(0, 64);
+    // (LOTE MODO LISTA) El @ que un invitado sin identidad da en el
+    // chat tampoco arma su semana mientras la puerta está en modo
+    // lista: las pruebas públicas no nacen hasta el lanzamiento.
+    // Exentos: el modo test y la allowlist (la puerta de operador), y
+    // toda cuenta que no sea invitada (esto solo cierra al invitado).
+    if (modoLista && modoLista.activo() && !trialTestMode(req)) {
+      let mlRow = null;
+      try { mlRow = db.prepare('SELECT is_guest, guest_ig, guest_domain FROM users WHERE id = ?').get(userId); } catch (e) {}
+      if (mlRow && mlRow.is_guest && !trialLock.isAllowlisted(db, mlRow.guest_ig || '', mlRow.guest_domain || '')) {
+        return res.json({ ok: false, modo_lista: true, error: modoLista.mensaje(lang) });
+      }
+    }
     const v = guestSetIgMod.resolveSetIg(db, { trialLock, guestTrial }, { userId, ig: igRaw, device, ip });
     if (!v.ok) {
       if (v.error === 'need_ig') return res.status(400).json({ ok: false, error: en ? 'Tell me your Instagram @ so I can build your week.' : 'Decime tu @ de Instagram así armo tu semana.', need_ig: true });
@@ -41691,6 +41746,14 @@ try { guestStartLock = require('./guest-start-lock'); } catch (e) { console.erro
 // (ONBOARDING-SIMPLE · 11/11) El @ del invitado, dado en el chat.
 let guestSetIgMod = null;
 try { guestSetIgMod = require('./guest-set-ig'); } catch (e) { console.error('[init] guest-set-ig no disponible:', e.message); }
+// (LOTE MODO LISTA) La puerta pública en modo lista hasta el
+// lanzamiento (1° de febrero de 2027): captura @ + web + email y deja
+// al negocio en lista de espera, sin armar la semana ni arrancar
+// ningún reloj de prueba. Interruptor: PUERTA_MODO=normal (la
+// reapertura del 1/2, ítem de la checklist de lanzamiento). Módulo:
+// modo-lista.js (la tabla lista_espera vive ahí, esquema idempotente).
+let modoLista = null;
+try { modoLista = require('./modo-lista'); modoLista.ensureSchema(db); } catch (e) { console.error('[init] modo-lista no disponible:', e.message); }
 // (LOTE REIMPORTACIÓN DEL INVITADO) El gancho que importa la semana a
 // mano cuando el invitado vuelve (puerta de regreso) o abre su app con
 // la semana todavía solo en el payload. La decisión vive en el módulo.
@@ -42873,6 +42936,12 @@ async function trialGenerateHandler(req, res) {
   // Con lang 'en' el país efectivo es US (hashtags y calendario US).
   const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
   const effCountry = lang === 'en' ? 'US' : country;
+  // (LOTE MODO LISTA) Con la puerta en modo lista, la generación
+  // pública no corre: ninguna semana se arma hasta el lanzamiento.
+  // Exentos de siempre: el modo test y la allowlist (operador).
+  if (modoLista && modoLista.activo() && !trialTestMode(req) && !trialLock.isAllowlisted(db, trialLock.normalizeIg(ig), trialLock.normalizeDomain(webRaw))) {
+    return res.status(409).json({ error: modoLista.mensaje(lang), modo_lista: true });
+  }
   // (v323 · pieza 8) CANDADO 90 DÍAS — chequeo TEMPRANO, antes de leer el
   // IG/web y de validar el form: si este negocio ya produjo su prueba, la
   // vuelta es su snapshot (o el 409 amable con la fecha exacta), sin
@@ -44327,6 +44396,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // (v274 · MODO EN) Mismo parseo de idioma que /api/trial/generate.
   const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
   const effCountry = lang === 'en' ? 'US' : country;
+  // (LOTE MODO LISTA) Con la puerta en modo lista, la generación
+  // pública no corre: ninguna semana se arma hasta el lanzamiento.
+  // Exentos de siempre: el modo test y la allowlist (operador). El
+  // corte sale por el evento de error del stream, con el mensaje
+  // honesto de la lista.
+  if (modoLista && modoLista.activo() && !trialTestMode(req) && !trialLock.isAllowlisted(db, trialLock.normalizeIg(ig), trialLock.normalizeDomain(webRaw))) {
+    return fail(modoLista.mensaje(lang), { modo_lista: true });
+  }
   // (v323 · pieza 8) CANDADO 90 DÍAS — chequeo TEMPRANO, igual que en
   // /api/trial/generate: con snapshot se emite 'done' directo (la semana
   // de siempre, sin gastar); sin snapshot, el evento 'locked' con el
@@ -48171,7 +48248,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1217';
+const BUILD_ID = '20261105-v1218';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
