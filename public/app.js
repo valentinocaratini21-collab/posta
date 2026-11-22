@@ -958,21 +958,32 @@ function pzShellHeadHTML(tab) {
   if (tab === 'chat') return '';
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   // (v846 · decisión Valentino 12:04: el encabezado es con quién
-  // hablás, no quién sos. Título fijo «Posty.» para TODAS las cuentas,
-  // subtítulo fijo «tu community manager» / «your community manager»,
-  // punto verde permanente sobre el avatar (Posty atiende día y noche).
+  // hablás, no quién sos. Título fijo «Posty.» para TODAS las cuentas.
   // SUPERSEDE simplificar-app Parte 5 (mostraba el nombre del negocio):
   // el nombre del negocio sigue en el perfil que encabeza la grilla
-  // del feed (homeHeadHTML). La máquina de escribir murió con el título
-  // fijo: el título ya no varía.)
+  // del feed (homeHeadHTML).)
+  // (LOTE BARRA-VIVA · forma cerrada por el dueño 20/11 04:56–04:58,
+  // con la pregunta del subtítulo cerrada por su palabra el 22/11
+  // 14:06 «ok. armalo asi») La barra es la presencia VIVA de Posty:
+  // avatar con su punto verde — el punto SIGNIFICA el estado —,
+  // «Posty.» y la segunda línea ES EL ESTADO, computado de datos
+  // reales por pzBarraEstadoRefrescar (el posteo de hoy y los pedidos
+  // de la cuenta; ver el bloque BARRA-VIVA más abajo). El subtítulo
+  // fijo «tu community manager» MUERE en la barra: la frase vive en el
+  // encabezado del negocio, la apertura y el sitio. Los botones son
+  // MÁS CHICOS que los círculos de antes y la campana entra en un solo
+  // lugar, a la izquierda de Compartir (su puerta depende de la
+  // sesión: cliente → Notificaciones · casa → el Conserje).
+  const estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'working for you…' : 'trabajando para vos…');
   return `<header class="pz-shell-head">
     <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
       <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
-      <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small>${en ? 'your community manager' : 'tu community manager'}</small></span>
+      <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
     </button>
     <span class="pz-shell-acts">
-      <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 20)}</button>
-      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button>
+      <button type="button" class="pz-shell-ic pz-shell-bell" id="pzShellBell" onclick="pzBarraCampana()" aria-label="${en ? 'Notifications' : 'Notificaciones'}">${pzIc('bell', 18)}</button>
+      <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 18)}</button>
+      <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 18)}</button>
     </span>
   </header>`;
 }
@@ -1004,6 +1015,241 @@ function pzShellDatosHoy() {
 }
 // ===== /LOTE REDISEÑO R0 =====
 
+// ===== LOTE BARRA-VIVA · el estado vivo y la campana =====
+// La segunda línea de la barra es el ESTADO VIVO de Posty trabajando,
+// computado de datos reales de la cuenta — nunca un texto decorativo:
+//   1 · hay un pedido del cliente en curso (la última idea escrita
+//       todavía sin resolver — GET /api/subir/idea, estado distinto de
+//       'resuelta') → «trabajando en tu pedido…», y ese estado manda
+//       hasta que el pedido cierra.
+//   2 · el posteo de hoy todavía no está listo (el ritual de hoy no
+//       trajo carta, o todavía no llegó la revelación de las 9:00 —
+//       GET /api/ritual/hoy, la MISMA promesa cacheada que ya pide
+//       pzShellDatosHoy: un solo fetch por carga, sin polling nuevo)
+//       → «armando el posteo de hoy…»
+//   3 · el posteo de hoy está listo (revelado) o ya salió →
+//       «todo al día»
+// Sin datos todavía (la primera pintura, o si un fetch falló): el
+// estado honesto de arranque «trabajando para vos…».
+function pzBarraEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); }
+function pzBarraEstadoComputar(ritual, idea) {
+  const en = pzBarraEn();
+  if (idea && idea.estado && idea.estado !== 'resuelta') return en ? 'working on your request…' : 'trabajando en tu pedido…';
+  if (!ritual || ritual.ok === false) return en ? 'working for you…' : 'trabajando para vos…';
+  if (ritual.publicado_hoy) return en ? 'all up to date' : 'todo al día';
+  if (!ritual.hoy || !ritual.recomendada) return en ? "putting today's post together…" : 'armando el posteo de hoy…';
+  if (ritual.abre_a && ritual.ahora && String(ritual.ahora) < String(ritual.abre_a)) return en ? "putting today's post together…" : 'armando el posteo de hoy…';
+  return en ? 'all up to date' : 'todo al día';
+}
+function pzBarraEstadoPintar(txt) {
+  try {
+    if (typeof window !== 'undefined') window.__pzBarraEstadoTxt = txt;
+    const el = document.getElementById('pzShellState');
+    if (el && el.textContent !== txt) el.textContent = txt;
+  } catch (e) {}
+}
+function pzBarraEstadoRefrescar() {
+  try {
+    if (typeof ME === 'undefined' || !ME) return;
+    if (typeof window !== 'undefined' && window.__pzBarraRefrescando) return;
+    if (typeof window !== 'undefined') window.__pzBarraRefrescando = true;
+    pzShellDatosHoy();
+    const prRitual = (typeof window !== 'undefined' && window.__pzShellHoyPromise) || Promise.resolve(null);
+    let prIdea;
+    if (typeof window !== 'undefined' && window.__pzBarraIdea !== undefined && (Date.now() - (window.__pzBarraIdeaMs || 0)) < 60000) {
+      prIdea = Promise.resolve(window.__pzBarraIdea);
+    } else {
+      prIdea = api.get('/api/subir/idea').then((r) => {
+        const idea = (r && r.idea) || null;
+        if (typeof window !== 'undefined') { window.__pzBarraIdea = idea; window.__pzBarraIdeaMs = Date.now(); }
+        return idea;
+      }).catch(() => null);
+    }
+    Promise.all([Promise.resolve(prRitual).catch(() => null), prIdea]).then((par) => {
+      try { pzBarraEstadoPintar(pzBarraEstadoComputar(par[0], par[1])); } catch (e) {}
+      if (typeof window !== 'undefined') window.__pzBarraRefrescando = false;
+    }).catch(() => { if (typeof window !== 'undefined') window.__pzBarraRefrescando = false; });
+  } catch (e) { try { if (typeof window !== 'undefined') window.__pzBarraRefrescando = false; } catch (e2) {} }
+}
+function pzBarraTextoCarga(tab) {
+  const en = pzBarraEn();
+  const t = {
+    inicio: ['cargando tu inicio…', 'loading your home…'],
+    ads: ['cargando tus impulsos…', 'loading your boosts…'],
+    subir: ['cargando tu material…', 'loading your material…'],
+    schedule: ['cargando tu semana…', 'loading your week…'],
+    ajustes: ['cargando tus ajustes…', 'loading your settings…'],
+    post: ['cargando tu posteo…', 'loading your post…'],
+    notificaciones: ['cargando tus novedades…', 'loading your updates…'],
+  };
+  const par = t[tab] || ['cargando…', 'loading…'];
+  return en ? par[1] : par[0];
+}
+function pzBarraEstadoCarga(tab) {
+  // La carga también se dice EN la barra: mientras la pantalla carga,
+  // la línea de estado cuenta qué está pasando (estándar de carga del
+  // dueño: el rayo girando arriba + la línea diciendo qué pasa —
+  // ninguna carga muda). No pisa el estado guardado: al terminar, el
+  // refresco pinta el estado real.
+  try {
+    const el = document.getElementById('pzShellState');
+    if (el) el.textContent = pzBarraTextoCarga(tab);
+  } catch (e) {}
+}
+// LA CAMPANA — un solo lugar, a la izquierda de Compartir. Su puerta
+// depende de la sesión: cliente → la pantalla de Notificaciones · la
+// casa → el Conserje. La sonda es la de PUERTA-CONSERJE
+// (GET /api/conserje/puerta: solo el sí/no de la propia sesión, jamás
+// el token). Se pregunta UNA vez por sesión de navegador y se cachea
+// en sessionStorage; el toque funciona igual sin la respuesta (la
+// pide y recién ahí enruta: ninguna puerta muerta). SIN badge en
+// este lote: el número cuenta ítems de ACCIÓN (las respuestas en
+// tanda) y nace con BANDEJA-RESPONDE, sobre esta misma pantalla.
+function pzBarraCasaCache() {
+  try { const v = sessionStorage.getItem('pzBarraCasa'); if (v === '1') return true; if (v === '0') return false; } catch (e) {}
+  return null;
+}
+function pzBarraPuertaKick() {
+  try {
+    if (typeof ME === 'undefined' || !ME) return;
+    if (pzBarraCasaCache() !== null) { pzBarraCampanaPintar(); return; }
+    if (typeof window !== 'undefined' && window.__pzBarraPuertaPendiente) return;
+    if (typeof window !== 'undefined') window.__pzBarraPuertaPendiente = true;
+    api.get('/api/conserje/puerta').then((r) => {
+      try {
+        const casa = !!(r && r.casa);
+        try { sessionStorage.setItem('pzBarraCasa', casa ? '1' : '0'); } catch (e) {}
+        pzBarraCampanaPintar();
+      } catch (e) {}
+      if (typeof window !== 'undefined') window.__pzBarraPuertaPendiente = false;
+    }).catch(() => { if (typeof window !== 'undefined') window.__pzBarraPuertaPendiente = false; });
+  } catch (e) {}
+}
+const PZ_CAMPANA_CLOCHE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2793C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18.5h16"/><path d="M5.5 18.5a6.5 6.5 0 0 1 13 0"/><path d="M12 12v-1.2"/><circle cx="12" cy="9.3" r="1.1"/></svg>';
+function pzBarraCampanaPintar() {
+  // Con sesión de la casa, la campana se vuelve la bandeja de plata
+  // del Conserje (la forma del mock de la casa): mismo botón, mismo
+  // lugar — cambia el glifo y el destino.
+  try {
+    const b = document.getElementById('pzShellBell');
+    if (!b) return;
+    if (pzBarraCasaCache() === true) {
+      b.innerHTML = '<span class="pz-ic" style="display:inline-flex;line-height:0;vertical-align:-0.18em">' + PZ_CAMPANA_CLOCHE + '</span>';
+      b.setAttribute('aria-label', 'Conserje');
+      b.classList.add('es-casa');
+    }
+  } catch (e) {}
+}
+function pzBarraCampana() {
+  const casa = pzBarraCasaCache();
+  if (casa === true) { location.href = '/conserje'; return; }
+  if (casa === false) { bbGo('#/app/notificaciones'); return; }
+  // Todavía no sabemos: se pregunta y el MISMO toque enruta al volver.
+  try {
+    api.get('/api/conserje/puerta').then((r) => {
+      const esCasa = !!(r && r.casa);
+      try { sessionStorage.setItem('pzBarraCasa', esCasa ? '1' : '0'); } catch (e) {}
+      if (esCasa) location.href = '/conserje'; else bbGo('#/app/notificaciones');
+    }).catch(() => { bbGo('#/app/notificaciones'); });
+  } catch (e) { bbGo('#/app/notificaciones'); }
+}
+function pzBarraHace(ts) {
+  const en = pzBarraEn();
+  const ms = typeof ts === 'number' ? ts : Date.parse(ts);
+  if (!ms || isNaN(ms)) return '';
+  const diff = Date.now() - ms;
+  if (diff < 0) return '';
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return en ? 'just now' : 'recién';
+  if (min < 60) return en ? (min + ' min ago') : ('hace ' + min + ' min');
+  const h = Math.floor(min / 60);
+  if (h < 24) return en ? (h + ' h ago') : ('hace ' + h + ' h');
+  const d = Math.floor(h / 24);
+  return en ? (d + (d === 1 ? ' day ago' : ' days ago')) : ('hace ' + d + (d === 1 ? ' día' : ' días'));
+}
+function pzBarraFechaMs(s) {
+  // Las fechas de la base vienen 'YYYY-MM-DD HH:MM:SS' en UTC (o ISO
+  // con zona): se parsean siempre como el instante que son.
+  if (!s) return NaN;
+  const str = String(s);
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(str)) return Date.parse(str);
+  return Date.parse(str.replace(' ', 'T') + 'Z');
+}
+async function pzNotificacionesView() {
+  // (LOTE BARRA-VIVA) La pantalla que abre la campana del cliente.
+  // Referencia: la variante 3 «banda celeste» de las notificaciones
+  // (aprobada por el dueño el 21/11, sin brillos): banda celeste con
+  // el título, y abajo la tarjeta blanca de NOVEDADES. Arriba de las
+  // novedades va el hueco de la tanda de respuestas (#pzNotifTanda):
+  // lo monta BANDEJA-RESPONDE en el lote siguiente, sobre ESTA misma
+  // pantalla — acá nace vacío y no ocupa lugar.
+  // NOVEDADES = solo hechos reales de la cuenta, últimos 7 días:
+  //   · el último posteo publicado (GET /api/posts)
+  //   · el impulso corriendo (GET /api/ads/boosts, status 'active')
+  //   · el último pedido/cambio ya hecho (GET /api/subir/idea,
+  //     estado 'resuelta'; su payload no trae fecha de cierre, así
+  //     que su fila no inventa un «hace X»)
+  // Sin hechos: el estado vacío honesto, en la voz de Posty.
+  const en = pzBarraEn();
+  const res = await Promise.all([
+    api.get('/api/posts').catch(() => null),
+    api.get('/api/ads/boosts').catch(() => null),
+    api.get('/api/subir/idea').catch(() => null),
+  ]);
+  const postsR = res[0], boostsR = res[1], ideaR = res[2];
+  const filas = [];
+  const SIETE_DIAS = 7 * 86400000;
+  const ahoraMs = Date.now();
+  const posts = Array.isArray(postsR) ? postsR : ((postsR && postsR.posts) || []);
+  let ultPub = null;
+  for (const p of posts) {
+    if (!p || p.status !== 'published') continue;
+    const t = pzBarraFechaMs(p.published_at || p.scheduled_at || p.created_at);
+    if (!isNaN(t) && (!ultPub || t > ultPub.t)) ultPub = { p: p, t: t };
+  }
+  if (ultPub && (ahoraMs - ultPub.t) < SIETE_DIAS) {
+    const cap = String(ultPub.p.caption || '').split('\n')[0].slice(0, 90);
+    const esHoy = new Date(ultPub.t).toDateString() === new Date().toDateString();
+    filas.push({ t: ultPub.t, ic: 'check', titulo: esHoy ? (en ? "Today's post is out" : 'Tu posteo de hoy salió') : (en ? 'Your post is out' : 'Tu posteo salió'), detalle: cap, cuando: pzBarraHace(ultPub.t) });
+  }
+  const boosts = Array.isArray(boostsR) ? boostsR : ((boostsR && boostsR.boosts) || []);
+  const activo = boosts.find((b) => b && b.status === 'active');
+  if (activo) {
+    const ini = pzBarraFechaMs(activo.started_at || activo.created_at);
+    const dias = Number(activo.duration_days || 7);
+    const monto = Math.round(Number(activo.budget_cents || 0) / 100);
+    let detalle = '';
+    if (!isNaN(ini)) {
+      const fechaFin = new Date(ini + dias * 86400000).toLocaleDateString(en ? 'en-US' : 'es', { day: 'numeric', month: 'long' });
+      detalle = (activo.currency === 'ARS' ? '$' : 'US$') + monto + (en ? ' · ends ' : ' · termina el ') + fechaFin;
+    }
+    filas.push({ t: isNaN(ini) ? 0 : ini, ic: 'impulso', titulo: en ? 'Your boost is running' : 'Tu impulso está corriendo', detalle: detalle, cuando: '' });
+  }
+  const idea = ideaR && ideaR.idea;
+  if (idea && idea.estado === 'resuelta') {
+    let detalle = '';
+    if (idea.posteo) detalle = (en ? 'It is a post now — goes out ' : 'Ya es un posteo — sale ') + (idea.posteo.dia_label || '') + ' ' + (idea.posteo.hora || '');
+    else if (idea.respuesta) detalle = String(idea.respuesta).slice(0, 90);
+    filas.push({ t: 0, ic: 'cambio', titulo: en ? 'Your change is done' : 'Tu cambio está hecho', detalle: detalle, cuando: '' });
+  }
+  filas.sort((a, b) => b.t - a.t);
+  const iconos = {
+    check: '<span class="pz-nov-ic es-check"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5 10 18 19.5 6.5"/></svg></span>',
+    impulso: '<span class="pz-nov-ic es-impulso"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5.5 11.5 12 5l6.5 6.5"/></svg></span>',
+    cambio: '<span class="pz-nov-ic es-cambio"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3.5 20.5 7 9 18.5l-4.2 1.2L6 15.5Z"/><path d="m14.5 6 3.5 3.5"/></svg></span>',
+  };
+  const filasHTML = filas.map((f) => '<div class="pz-nov-row">' + (iconos[f.ic] || '') + '<span class="pz-nov-tx"><b>' + esc(f.titulo) + '</b>' + (f.detalle ? '<small>' + esc(f.detalle) + '</small>' : '') + '</span>' + (f.cuando ? '<span class="pz-nov-cuando">' + esc(f.cuando) + '</span>' : '') + '</div>').join('');
+  const novedades = filas.length
+    ? '<section class="pz-nov-card"><h3>' + (en ? 'UPDATES' : 'NOVEDADES') + '</h3>' + filasHTML + '</section>'
+    : '<section class="pz-nov-card"><p class="pz-nov-vacio">' + (en ? 'Nothing new yet — when your post goes out, a boost runs or a change lands, it shows up here.' : 'Todavía no hay novedades: cuando salga tu posteo, corra un impulso o se haga un cambio, aparece acá.') + '</p></section>';
+  return '<div class="pz-notif">'
+    + '<div class="pz-notif-band"><h2>' + (en ? 'Notifications' : 'Notificaciones') + '</h2><p>' + (en ? 'Everything about your business, in one place' : 'Todo lo de tu negocio, en un solo lugar') + '</p></div>'
+    + '<div id="pzNotifTanda"></div>'
+    + novedades
+    + '</div>';
+}
+// ===== /LOTE BARRA-VIVA =====
+
 function bbShell(tab, content) {
   const key = mxTabKey(tab);
   const modo = mxModoActual(tab);
@@ -1024,7 +1270,15 @@ function bbShell(tab, content) {
     semana: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
-  const tabBtn = (k, hash, label) => `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
+  const tabBtn = (k, hash, label) => {
+    // (LOTE BARRA-VIVA · enmienda del dueño 21/11 13:36–13:37: «dale.
+    // queda "subir"») El botón central lleva la PALABRA «Subir»: el
+    // glifo «+» solo del set Hilo (ICONOS-BARRA, v1198) queda retirado
+    // de la barra. Inicio y Ads conservan su ícono de hilo (trazo 1.5)
+    // con su palabra, intactos.
+    if (k === 'subir') return `<button class="bb-tab bb-tab-subir${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-subir-word">${label}</span></button>`;
+    return `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
+  };
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'subir' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
@@ -2477,7 +2731,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1220';
+const PZ_BUILD = '20261105-v1221';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -10317,13 +10571,17 @@ function mzTabsHTML(tab) {
     : tab === 'ads' ? 'ads'
     : tab === 'subir' ? 'subir'
     : tab === 'ajustes' ? 'ajustes' : '';
-  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
+  const t = (key, route, ico, label) => key === 'subir'
+    ? `<button type="button" class="mz-tab mz-tab-subir${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-subir-word">${label}</span></button>`
+    : `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
   // (LOTE SIN-TAB-AJUSTES · 13/11) Ajustes sale de la barra inferior:
   // ya se entra desde la ruedita del encabezado (pzShellHeadHTML). La
   // vista y la ruta #/app/ajustes quedan intactas; en Ajustes ninguna
   // pestaña queda resaltada (el mapeo `on` ya no tiene botón que case).
   // (LOTE ICONOS-BARRA · 20/11) Set «Hilo» + orden Inicio · Subir · Ads:
   // Subir («+» solo) queda como acción central de la barra.
+  // (LOTE BARRA-VIVA) La enmienda del dueño (21/11 13:36) retira el «+»
+  // solo: el botón central lleva la PALABRA «Subir».
   return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIcHilo('navCasaHilo'), gzT('Inicio', 'Home'))}${t('subir', 'subir', pzIcHilo('masHilo'), gzT('Subir', 'Upload'))}${t('ads', 'ads', pzIcHilo('megaHilo'), gzT('Ads', 'Ads'))}</nav>`;
 }
 
@@ -24921,17 +25179,26 @@ function pzSkeletonHTML(tab) {
   // #2793C8 con su línea de estado, sobre el mismo degradado, sin
   // botones. No agrega espera: se pinta al entrar a la ruta y la pintura
   // final la reemplaza. Ninguna pantalla muda.
-  return '<div class="pz-load" aria-hidden="true"><span class="pz-spin"></span><span class="pz-load-txt">' + esc(gzT('Cargando…', 'Loading…')) + '</span></div>';
+  // (LOTE BARRA-VIVA · el estándar se completa) La ruedita genérica
+  // muere también acá: la pintura intermedia es el RAYO de marca
+  // girando en #2793C8 (el glifo bolt de pzIc), arriba, con la línea
+  // de estado de ESTA pantalla — la misma que la barra dice en voz
+  // alta vía pzBarraEstadoCarga. Ninguna carga muda, en ningún shell.
+  return '<div class="pz-load" aria-hidden="true"><span class="pz-spin">' + pzIc('bolt', 34) + '</span><span class="pz-load-txt">' + esc(pzBarraTextoCarga(tab)) + '</span></div>';
 }
 function pzPaintSkeleton(tab) {
   // Solo con sesión conocida (ME): sin sesión la ruta rebota a login y el
-  // esqueleto sería un flash de app para un visitante. Solo shell bbShell.
+  // esqueleto sería un flash de app para un visitante.
+  // (LOTE BARRA-VIVA) El estándar de carga corre en LOS DOS shells: la
+  // condición de shell Bambooty que lo dejaba solo en la app muere —
+  // en la web clásica las cargas quedaban mudas.
   try {
     if (typeof ME === 'undefined' || !ME) return;
-    if (!BB_SHELL_ON()) return;
     const root = document.getElementById('app');
     if (!root) return;
     root.innerHTML = appShell(tab, pzSkeletonHTML(tab));
+    pzBarraEstadoCarga(tab);
+    pzBarraCampanaPintar();
     // (LOTE ADS-SE-TRABA-AL-VOLVER) El splash de arranque (index.html)
     // se queda hasta pintar la app para que nunca se vea la landing que
     // vive debajo en el HTML servido; apenas el shell de la app está
@@ -25337,6 +25604,7 @@ function pzPrefetchKick() {
   else if (tab === 'jardin-combinado' || tab === 'jardin-gesty') { location.hash = '#/app/jardin-posty'; return; } // POSTY SOLO: solo Nivel de Posty
   else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbNivelContent(); }
   else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque
+  else if (tab === 'notificaciones') { pzPaintSkeleton(tab); content = await pzNotificacionesView(); } // (LOTE BARRA-VIVA) La pantalla de la campana del cliente (banda celeste + NOVEDADES reales; la tanda de BANDEJA-RESPONDE se monta en su #pzNotifTanda).
   else if (tab === 'ritual') { pzPaintSkeleton(tab); content = await ritualView(); } // (RITUAL · lote 5/8) El paquete de la mañana
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   } catch (e) { content = '<div class="bb-error"><p>No pude cargar esta pantalla.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>'; }
@@ -25363,6 +25631,11 @@ function pzPrefetchKick() {
   // igual. (v846: la máquina de escribir del encabezado murió con el
   // título fijo «Posty.».)
   setTimeout(() => { try { pzShellDatosHoy(); } catch (e) {} }, 0);
+  // (LOTE BARRA-VIVA) La barra viva tras cada pintura: la puerta de la
+  // campana se pregunta una vez por sesión y la línea de estado se
+  // computa con los datos reales de la cuenta.
+  setTimeout(() => { try { pzBarraPuertaKick(); } catch (e) {} }, 0);
+  setTimeout(() => { try { pzBarraEstadoRefrescar(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: precarga en idle (una vez por carga).
   try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }
@@ -30745,6 +31018,8 @@ function pzInicioRepaint(freshHtml, paintedHtml, key, fromV, freshV) {
     setTimeout(() => { try { pzFillRelacion(); } catch (e) {} }, 0);
     setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 0);
     setTimeout(() => { try { pzShellDatosHoy(); } catch (e) {} }, 0);
+    setTimeout(() => { try { pzBarraPuertaKick(); } catch (e) {} }, 0);
+    setTimeout(() => { try { pzBarraEstadoRefrescar(); } catch (e) {} }, 0);
   } catch (e) {}
 }
 async function inicioView() {
