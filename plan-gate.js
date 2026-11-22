@@ -55,10 +55,41 @@ function requiredPlanFor(feature) {
   return 'total';
 }
 
+// LA CASA (fundador) — su identidad es la MISMA que usa server.js en
+// esCuentaPropia: el id en la lista de la casa (env HOUSE_USER_IDS,
+// default '12') o el ig_username de la casa (cubre ES y EN). La regla
+// de este módulo desde su nacimiento es que la cuenta del fundador
+// pasa todos los gates — pero la fila REAL del fundador no dice plan
+// 'free': nació como trial (2026-09-26) y nunca cambió de forma, así
+// que la lectura literal de plan/plan_status lo dejaba afuera de su
+// propia bandeja (defecto de campo 22/11, HOTFIX BANDEJA-CASA: la
+// pantalla de notificaciones de la casa moría con «No pude cargar
+// tus notificaciones» porque GET /api/bandeja respondía 403). La
+// identidad manda sobre la forma de la fila. Ante cualquier error de
+// lectura NO es la casa: el gate sigue fail-closed para el resto.
+const HOUSE_IGS_GATE = new Set(['posty.communitymanager', 'postycommunitymanager']);
+function esCuentaDeLaCasa(db, userId) {
+  try {
+    const ids = String(process.env.HOUSE_USER_IDS || '12').split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0);
+    if (ids.includes(Number(userId))) return true;
+  } catch (e) { /* sin lista legible: se prueba por IG */ }
+  // Cada lectura con su propio try (como esCuentaPropia en server.js):
+  // la tabla users puede no tener ig_username según el esquema — si
+  // esa lectura explota, manda la de profiles, que es la canónica.
+  let ig = null;
+  try { const u = db.prepare('SELECT ig_username FROM users WHERE id = ?').get(userId); if (u) ig = u.ig_username; } catch (e) { /* sin columna: manda profiles */ }
+  if (!ig) { try { const p = db.prepare('SELECT ig_username FROM profiles WHERE user_id = ?').get(userId); if (p) ig = p.ig_username; } catch (e) { /* sin identidad legible: no es la casa */ } }
+  if (ig) return HOUSE_IGS_GATE.has(String(ig).trim().replace(/^@/, '').toLowerCase());
+  return false;
+}
+
 // Plan efectivo del usuario, con la MISMA semántica que planForUid de
 // server.js: solo un plan_status 'active' habilita el plan pago guardado;
 // cualquier otro estado (trial, vencido, nulo) cae al plan de trial.
+// Excepción fundadora: la casa resuelve 'free' por identidad (arriba),
+// no por la forma de su fila.
 function effectivePlanId(db, userId) {
+  try { if (esCuentaDeLaCasa(db, userId)) return 'free'; } catch (e) { /* sigue la lectura de la fila */ }
   try {
     const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(userId);
     if (u && u.plan_status === 'active' && KNOWN_PLANS.has(String(u.plan || ''))) {
@@ -108,5 +139,5 @@ function planGateMiddleware(db, feature) {
 module.exports = {
   FEATURE_PLANS, KNOWN_PLANS,
   effectivePlanId, canUse, requiredPlanFor, upsellMessage,
-  planGate, planGateMiddleware,
+  planGate, planGateMiddleware, esCuentaDeLaCasa,
 };
