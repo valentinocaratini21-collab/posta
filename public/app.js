@@ -2477,7 +2477,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1219';
+const PZ_BUILD = '20261105-v1220';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -21726,10 +21726,19 @@ async function adsView() {
   // (primera entrada), se espera solo la ventana paralela de datos.
   const warm = !!(pzBoostState && pzBoostState.billetera);
   if (warm) {
+    // (LOTE ADS-TRABA-BILLETERA · SECCIÓN A) El refresco en segundo
+    // plano pinta UNA sola vez y solo si el estado visible cambió
+    // desde la pintura tibia (pzAdsPintarSiCambio): antes pintaba dos
+    // veces siempre — al resolver y otra a los 400 ms — y esa doble
+    // reconstrucción garantizada en cada vuelta a la pestaña era la
+    // mitad de la tormenta de repintados en caliente. Si el refresco
+    // le gana la carrera a la pintura de render (#pzAdsRoot todavía
+    // no existe), queda un único reintento corto, con la misma guarda.
     pzAdsCargarDatos().then((boosts) => {
       if (boosts && boosts.ok && Array.isArray(boosts.boosts)) pzAdsBoosts = boosts.boosts;
-      try { pzAdsPintar(); } catch (e) {}
-      setTimeout(() => { try { pzAdsPintar(); } catch (e) {} }, 400);
+      if (!pzAdsPintarSiCambio()) {
+        setTimeout(() => { try { pzAdsPintarSiCambio(); } catch (e) {} }, 400);
+      }
     }).catch(() => {});
   } else {
     let boosts = null;
@@ -22028,37 +22037,28 @@ function pzAdsBilleteraHTML() {
 // los re-pintados. #pzAdsMsg queda al pie de la tarjeta, siempre en
 // el DOM como antes vivía en la sección de billetera: ahí siguen
 // cayendo los mensajes de carga y de tarjeta guardada.
+// (LOTE ADS-TRABA-BILLETERA · SECCIÓN B) La fila «Billetera» SALE de
+// esta tarjeta: la billetera vive solo en su bloque, primero en la
+// tarjeta de plata (pzAdsBilleteraBloqueHTML) — saldo, barra,
+// faltante y las herramientas de siempre tras la cabecera. Acá
+// quedan Conexión y Tus impulsos, y #pzAdsMsg al pie, como siempre.
 function pzAdsFilasHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-  const s = pzBoostState || {};
-  const moneda = pzBoostEsMP() ? 'ARS' : 'USD';
-  const saldo = pzBoostSaldo();
-  const amtTxt = moneda === 'USD' ? ('US$' + saldo) : ('$' + saldo.toLocaleString('es-AR'));
   const boosts = Array.isArray(pzAdsBoosts) ? pzAdsBoosts : [];
-  // Con el cartel de la diferencia en la tarjeta (misma condición
-  // que lo pinta ahí), el saldo ya se dijo en el cartel («Tenés US$X
-  // en tu billetera»): la fila no lo repite y ofrece la carga.
-  const montosF = pzBoostMontos();
-  const mSelF = montosF.includes(Number(s.selMonto)) ? Number(s.selMonto) : (montosF.length > 1 ? montosF[1] : montosF[0]);
-  const pSel = s.selPost || null;
-  const yaSel = !!pSel && (!!pSel.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(pSel)));
-  const difF = (moneda === 'USD' && pSel && !yaSel) ? pzAdsDiferencia() : null;
-  const cartelF = !!(difF && !difF.esMP && difF.pauta === mSelF);
   const fila = (cual, k, v, detHTML) => {
     const open = pzAdsFilaAbierta === cual;
     return `<button type="button" class="pz-ads-row" onclick="pzAdsFilaToggle('${cual}')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-row-k">${esc(k)}</span><span class="pz-ads-row-v">${esc(v)}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${open ? `<div class="pz-ads-row-det">${detHTML}</div>` : ''}`;
   };
   const cxFila = fila('conexion', en ? 'Connection' : 'Conexión', pzAdsConexionValor(), pzAdsConexionHTML());
-  const bilFila = fila('billetera', en ? 'Wallet' : 'Billetera', cartelF ? (en ? 'Top up' : 'Cargar') : amtTxt, pzAdsBilleteraHTML());
   const impFila = boosts.length
     ? fila('impulsos', en ? 'Your boosts' : 'Tus impulsos', String(boosts.length), `<div id="pzAdsHist">${pzAdsHistorialHTML(boosts)}</div>`)
     : `<div class="pz-ads-row pz-ads-row-flat"><span class="pz-ads-row-k">${esc(en ? 'Your boosts' : 'Tus impulsos')}</span><span class="pz-ads-row-v">${esc(en ? 'None yet' : 'Todavía ninguno')}</span></div>`;
-  return `<section class="pz-ads-rows">${cxFila}${bilFila}${impFila}<p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
+  return `<section class="pz-ads-rows">${cxFila}${impFila}<p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
 }
 
 function pzAdsFilaToggle(cual) {
   pzAdsFilaAbierta = (pzAdsFilaAbierta === cual) ? '' : cual;
-  pzAdsPintar();
+  pzAdsPintarGesto();
 }
 
 
@@ -22151,7 +22151,7 @@ function pzAdsFeedElegir(key) {
 
 function pzAdsElegirCerrar() {
   pzAdsModoElegir = false;
-  pzAdsPintar();
+  pzAdsPintarGesto();
 }
 
 // La vista del modo elegir: el encabezado del mock («Elegí el
@@ -22169,7 +22169,7 @@ function pzAdsElegirOtro(key) {
   if (!e) return;
   s.selId = key;
   s.selPost = e;
-  pzAdsPintar();
+  pzAdsPintarGesto();
 }
 
 // (LOTE TARJETA-IMPULSAR) Los montos de la tarjeta se ELIGEN: el toque
@@ -22181,7 +22181,7 @@ function pzAdsElegirMonto(m) {
   const monto = Number(m) || 0;
   if (!pzBoostMontos().includes(monto)) return;
   s.selMonto = monto;
-  pzAdsPintar();
+  pzAdsPintarGesto();
 }
 
 // (LOTE ADS-TARJETA-UNICA) La fila tranquila del selector, tal como
@@ -22229,6 +22229,51 @@ function pzAdsGuiaSinCuentaHTML() {
   </div>`;
 }
 
+// (LOTE ADS-TRABA-BILLETERA · SECCIÓN B) El bloque «TU BILLETERA» de
+// la tarjeta — el diseño 2 «La barra» que Valentino eligió el 21/11
+// sobre los 5 mocks: la billetera vive SOLO en este bloque, primero en
+// la tarjeta. Saldo grande, la barra viva contra el TOTAL del monto
+// elegido (pzBoostTotal, la regla de siempre), «US$saldo de US$total»
+// y el faltante de pzAdsDiferencia — la misma cuenta de la regla de la
+// diferencia, sin tocarla — y las herramientas de siempre
+// (pzAdsBilleteraHTML, con sus ids y sus onclicks) tras el toque en la
+// cabecera: la fila «Billetera» de la tarjeta de filas desaparece y
+// ninguna herramienta queda huérfana. El estado abierto vive en
+// pzAdsFilaAbierta ('billetera'), el mismo que abría la fila — la
+// vuelta de Stripe con ?tarjeta=ok lo sigue abriendo igual. Sin
+// posteo o sin autorización (conTotal=false) no hay total contra el
+// que medir: el bloque muestra el saldo y sus herramientas, sin barra
+// ni faltante inventados. Si la moneda de la billetera no es la del
+// riel, tampoco hay barra: comparar sería mentir (el mismo criterio
+// de pzAdsDiferencia).
+function pzAdsBilleteraBloqueHTML(conTotal) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const s = pzBoostState || {};
+  const moneda = pzBoostEsMP() ? 'ARS' : 'USD';
+  const sim = moneda === 'USD' ? 'US$' : '$';
+  const saldo = pzBoostSaldo();
+  const open = pzAdsFilaAbierta === 'billetera';
+  let barraHTML = '';
+  if (conTotal) {
+    const monedaWallet = String((s.billetera && s.billetera.currency) || 'USD');
+    const coincide = pzBoostEsMP() ? monedaWallet === 'ARS' : monedaWallet === 'USD';
+    if (coincide) {
+      const montos = pzBoostMontos();
+      const mSel = montos.includes(Number(s.selMonto)) ? Number(s.selMonto) : (montos.length > 1 ? montos[1] : montos[0]);
+      const d = pzAdsDiferencia();
+      const total = d ? d.total : pzBoostTotal(mSel);
+      const falta = d ? d.falta : 0;
+      const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((saldo / total) * 100))) : 0;
+      const der = falta > 0
+        ? `<span class="pz-ads-bill-falta">${esc(en ? 'you’re ' + sim + pzBoostFmtMonto(falta) + ' short' : 'te faltan ' + sim + pzBoostFmtMonto(falta))}</span>`
+        : `<span class="pz-ads-bill-ok">${esc(en ? 'you’re covered' : 'te alcanza')}</span>`;
+      barraHTML = `<div class="pz-ads-bill-bar"><i style="width:${pct}%"></i></div><div class="pz-ads-bill-sub"><span>${esc(sim + pzBoostFmtMonto(saldo) + (en ? ' of ' : ' de ') + sim + pzBoostFmtMonto(total))}</span>${der}</div>`;
+    }
+  }
+  const det = open ? `<div class="pz-ads-bill-det">${pzAdsBilleteraHTML()}</div>` : '';
+  return `<div class="pz-ads-bill"><button type="button" class="pz-ads-bill-head" onclick="pzAdsFilaToggle('billetera')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-bill-k">${esc(en ? 'YOUR WALLET' : 'TU BILLETERA')}</span><span class="pz-ads-bill-saldo">${esc(sim + pzBoostFmtMonto(saldo))}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${barraHTML}${det}</div>`;
+}
+
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
@@ -22259,6 +22304,12 @@ function pzAdsHTML() {
   // vivos (#pzAdsRecMsg, #pzAdsAudiencia, #pzAdsMsg, y los de los
   // detalles: #pzAdsConexionMsg, #pzAdsTarjeta, #pzAdsApplePay,
   // #pzAdsHist) y los mismos onclicks.
+  // (LOTE ADS-TRABA-BILLETERA · SECCIÓN B) Enmienda del diseño 2: el
+  // bloque «TU BILLETERA» (pzAdsBilleteraBloqueHTML) va primero en la
+  // tarjeta en los tres estados; la fila «Billetera» sale de la
+  // tarjeta de filas (quedan Conexión · Tus impulsos); con saldo
+  // corto el botón único es «Cargar los US$X que faltan» por el
+  // circuito de siempre y el desglose se dice siempre.
   const kickHTML = `<div class="pz-ads-kick">${esc(p && !p.recomendado ? (en ? 'YOUR PICK' : 'TU ELECCIÓN') : (en ? 'POSTY RECOMMENDS' : 'POSTY RECOMIENDA'))}</div>`;
   let recHTML = '';
   // (LOTE TARJETA-IMPULSAR + ADDENDUM 13/11 13:35 — modelo decidido
@@ -22273,7 +22324,7 @@ function pzAdsHTML() {
     ? 'If the ad isn’t created or doesn’t end up running, nothing is charged.'
     : 'Si el anuncio no se crea o no queda corriendo, no se cobra nada.';
   if (!p) {
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><p class="pz-ads-credito">${esc(garantiaTxt)}</p></div></section>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${pzAdsBilleteraBloqueHTML(false)}${kickHTML}<p class="pz-ads-note" style="margin:14px 0">${esc(en ? 'No post has real results to recommend yet. When a post this week picks up, Posty will point it out here.' : 'Todavía no hay un posteo con resultados reales para recomendar. Cuando un posteo de esta semana sume, Posty te lo señala acá.')}</p><p class="pz-ads-credito">${esc(garantiaTxt)}</p></div></section>`;
   } else if (pzAdsPaginaSinAutorizar()) {
     // (LOTE TARJETA-IMPULSAR) Página sin autorizar: la tarjeta ENTERA
     // se reduce a ese único paso — foto + una línea + el botón de
@@ -22291,7 +22342,7 @@ function pzAdsHTML() {
     const lineaAut = p.recomendado
       ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: connect your ad account.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.')
       : (en ? 'One tap is all it takes to boost it: connect your ad account.' : 'Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.');
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p>${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${pzAdsBilleteraBloqueHTML(false)}${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p>${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
     const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
@@ -22326,28 +22377,83 @@ function pzAdsHTML() {
       return `<button type="button" class="pz-ads-amount${sel ? ' sel' : ''}" onclick="pzAdsElegirMonto(${m})">${tag}<b>$${esc(pzBoostFmtMonto(m))}</b></button>`;
     };
     // (LOTE CIERRE-ADS · FIX 2) Con el saldo corto contra el TOTAL,
-    // el botón de impulsar queda REEMPLAZADO por el cartel de la
+    // el botón de impulsar queda REEMPLAZADO por la carga de la
     // diferencia (no solo deshabilitado): cargar el faltante exacto
     // en un toque es la única acción hasta cubrir el total.
+    // (LOTE ADS-TRABA-BILLETERA · SECCIÓN B) La forma de ese botón es
+    // la del diseño 2: el botón mismo dice «Cargar los US$X que
+    // faltan» y corre por el circuito de siempre
+    // (pzAdsTabCargarDiferencia, byte a byte), con su ranura de
+    // mensajes #pzAdsDifTabMsg en la tarjeta. El cartel
+    // pzAdsTabDiferenciaHTML queda intacto y sigue vivo en el
+    // bloqueo del toque (pzAdsImpulsarBloqueo).
     // (LOTE ADS-TARJETA-UNICA) Con el cartel puesto, el desglose NO
-    // se repite arriba: la plata se dice una sola vez por estado —
-    // el desglose cuando el botón es Impulsar; el cartel (que ya
-    // trae pauta + gestión + saldo + faltante) cuando no llega.
+    // se repetía arriba: la plata se decía una sola vez por estado.
+    // (LOTE ADS-TRABA-BILLETERA · SECCIÓN B) El diseño 2 manda otra
+    // cosa: el desglose va SIEMPRE, pegado al bloque de la billetera
+    // que ya trae saldo y faltante — el cartel sale de la tarjeta y
+    // la cuenta se lee de arriba abajo: saldo, barra, faltante,
+    // desglose, botón.
     const difTab = (!ya && moneda === 'USD') ? pzAdsDiferencia() : null;
     const cartelActivo = !!(difTab && !difTab.esMP && difTab.pauta === mSel);
     const montosHTML = ya
       ? `<div class="pz-ads-hecho"><div class="pz-boost-tick">✓</div><b>${esc(en ? 'This post is already boosted' : 'Este posteo ya está impulsado')}</b><p>${esc(en ? 'It has an active 7-day boost. Pick another post to boost.' : 'Tiene una pauta activa por 7 días. Elegí otro posteo para impulsar.')}</p></div>`
-      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p>${cartelActivo ? '' : `<p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`}`;
+      : `<div class="pz-ads-amounts" role="group" aria-label="${esc(en ? 'Boost amount' : 'Monto del impulso')}">${amountBtn(mA)}${amountBtn(mMain)}${amountBtn(mB)}</div><p style="text-align:center;font-size:12.5px;color:#7d93a7;font-weight:700;margin:0 2px 6px">${esc(en ? (moneda === 'USD' ? 'In dollars · lasts 7 days' : 'In pesos · lasts 7 days') : (moneda === 'USD' ? 'En dólares · dura 7 días' : 'En pesos · dura 7 días'))}</p><p style="text-align:center;font-size:13px;color:#33475b;font-weight:800;margin:0 2px 12px">${esc(desgloseTxt)}</p>`;
     const bigBtn = ya ? '' : (cartelActivo
-      ? pzAdsTabDiferenciaHTML()
+      ? `<button type="button" class="pz-ads-big" onclick="pzAdsTabCargarDiferencia(this)">${esc(en ? 'Top up the missing US$' + pzBoostFmtMonto(difTab.falta) : 'Cargar los US$' + pzBoostFmtMonto(difTab.falta) + ' que faltan')}</button><p id="pzAdsDifTabMsg" style="margin:8px 0 0;font-size:13px;line-height:1.45;color:#6B5200"></p>`
       : `<button type="button" class="pz-ads-big" onclick="pzAdsImpulsar(${mSel}, this)">${esc(en ? (moneda === 'USD' ? 'Boost for US$ ' : 'Boost for $') : (moneda === 'USD' ? 'Impulsar por US$ ' : 'Impulsar por $'))}${esc(pzBoostFmtMonto(totalSel))}</button>`);
-    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
+    recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${pzAdsBilleteraBloqueHTML(true)}${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(linea)}</p></div></div>${montosHTML}${bigBtn}<p class="pz-ads-credito">${esc(garantiaTxt)}</p>${warn}<div id="pzAdsAudiencia"></div><p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
   }
   // (LOTE ADS-TARJETA-UNICA) El modo elegir reemplaza el cuerpo por
   // el encabezado + la grilla + LA MISMA tarjeta rearmada.
   if (pzAdsModoElegir) return pzAdsElegirHTML(recHTML);
   return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${recHTML}${pzAdsPickRowHTML()}${pzAdsFilasHTML()}`;
 }
+// (LOTE ADS-TRABA-BILLETERA · SECCIÓN A) La firma del estado visible
+// de la pestaña: lo que de verdad cambia lo que se ve. Si no cambió,
+// una reconstrucción es puro costo — y en caliente, puro riesgo de
+// solape — así que las pinturas de datos la consultan antes de pintar.
+function pzAdsFirma() {
+  const s = pzBoostState || {};
+  const b = s.billetera || {};
+  const boosts = Array.isArray(pzAdsBoosts) ? pzAdsBoosts : [];
+  let suma = 0;
+  for (const x of boosts) suma += Number(x.id || 0);
+  return [pzBoostSaldo(), Number(s.selMonto) || 0, s.selId || '', boosts.length, suma,
+    s.adsReady === null ? 'n' : (s.adsReady ? 's' : 'x'), (s.elegibles || []).length,
+    pzAdsModoElegir ? 'e' : '-', pzAdsFilaAbierta || '-', b.currency || '', b.billing_provider || ''].join('|');
+}
+let pzAdsUltimaFirma = '';
+// Pinta solo si el root existe y la firma cambió. Devuelve false
+// únicamente cuando el root todavía no está en el DOM (la pintura
+// queda pendiente del render), para que el llamador reintente una vez.
+function pzAdsPintarSiCambio() {
+  const box = document.getElementById('pzAdsRoot');
+  if (!box) return false;
+  let f = '';
+  try { f = pzAdsFirma(); } catch (e) { f = ''; }
+  if (f && f === pzAdsUltimaFirma && box.innerHTML) return true;
+  pzAdsPintar();
+  return true;
+}
+// (LOTE ADS-TRABA-BILLETERA · SECCIÓN A) Las pinturas de GESTO (tocar
+// un monto, elegir otro posteo, abrir o cerrar una fila o el bloque de
+// la billetera) pasan por este coalescedor de frame: una ráfaga de
+// toques dentro del mismo frame produce UNA sola reconstrucción con
+// el estado final, no una reconstrucción entera por toque. Era el
+// espécimen del dueño (21/11): cambiar de monto en ciclos repintaba
+// la tarjeta completa por toque y los textos se pintaban dos veces,
+// solapados por un instante. Las pinturas de acciones y de datos
+// siguen por pzAdsPintar, síncronas como siempre.
+let pzAdsGestoPend = false;
+function pzAdsPintarGesto() {
+  if (pzAdsGestoPend) return;
+  pzAdsGestoPend = true;
+  const run = () => { pzAdsGestoPend = false; try { pzAdsPintar(); } catch (e) {} };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  else setTimeout(run, 16);
+}
+
 function pzAdsPintar() {
   const box = document.getElementById('pzAdsRoot');
   if (!box) return;
@@ -22355,10 +22461,15 @@ function pzAdsPintar() {
   // (LOTE BILLETERA-APPLE-PAY) Cada re-pintado destruye el botón de Apple
   // Pay: se re-monta acá (reusa el intent del mismo monto si sigue fresco).
   try { pzAdsApplePayMontar(); } catch (e) {}
-}
   // (LOTE ADS-ESTRATÉGICOS) El repintado también destruye la tarjeta
-  // de audiencia si estaba abierta: se re-pinta.
+  // de audiencia si estaba abierta: se re-pinta. (LOTE
+  // ADS-TRABA-BILLETERA: esta línea vivía FUERA del cuerpo desde su
+  // lote — se ejecutaba una sola vez al cargar el bundle y la tarjeta
+  // de audiencia abierta se perdía en cada repintado en caliente —;
+  // vuelve adentro, que es donde su propio comentario la puso.)
   try { pzAdsAudienciaRepintar(); } catch (e) {}
+  try { pzAdsUltimaFirma = pzAdsFirma(); } catch (e) {}
+}
 
 async function pzAdsRefrescar() {
   try {

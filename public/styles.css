@@ -6405,6 +6405,25 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-ads-row-v{font-weight:700;display:flex;align-items:center;gap:6px;text-align:right}
 .pz-ads-row-ch{color:#8CA1B5;font-weight:400}
 .pz-ads-row-det{padding:2px 0 12px}
+/* (LOTE ADS-TRABA-BILLETERA · SECCIÓN B) El bloque «TU BILLETERA» del
+   diseño 2 dentro de la tarjeta única: el saldo primero, la barra viva
+   que sigue al monto elegido (cuánto del total cubre el saldo), la
+   línea del faltante y el detalle de herramientas al tocar el
+   encabezado. Sin caja propia: vive dentro de la tarjeta y se separa
+   del resto con el filete del mock. (Las clases viejas .pz-ads-wallet*
+   son de la sección retirada en v1214; el bloque nuevo usa el prefijo
+   .pz-ads-bill para no heredarlas.) La tarjeta de filas de arriba
+   queda con Conexión · Tus impulsos: la fila Billetera salió. */
+.pz-ads-bill{border-bottom:1px solid rgba(16,42,67,.09);padding-bottom:12px;margin-bottom:12px}
+.pz-ads-bill-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;width:100%;box-sizing:border-box;background:none;border:0;padding:2px 0 0;font:inherit;cursor:pointer;text-align:left;color:#0A1E33}
+.pz-ads-bill-k{font-size:13px;font-weight:800;letter-spacing:.06em;color:#0A1E33}
+.pz-ads-bill-saldo{font-size:19px;font-weight:800;color:#0A1E33;display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.pz-ads-bill-bar{height:8px;border-radius:99px;background:#E8EDF1;overflow:hidden;margin-top:9px}
+.pz-ads-bill-bar i{display:block;height:100%;border-radius:99px;background:#2793C8;transition:width .35s ease}
+.pz-ads-bill-sub{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-size:12.5px;color:#7d93a7;font-weight:600}
+.pz-ads-bill-falta{color:#1B6E9E;font-weight:800;white-space:nowrap}
+.pz-ads-bill-ok{color:#1E7A46;font-weight:800;white-space:nowrap}
+.pz-ads-bill-det{margin-top:10px}
 .pz-ads-rows .pz-ads-msg:empty{margin:0}
 .pz-ads-pick-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .pz-ads-volver{background:none;border:0;color:#2793C8;font:inherit;font-weight:800;font-size:13.5px;cursor:pointer;padding:6px 2px}
