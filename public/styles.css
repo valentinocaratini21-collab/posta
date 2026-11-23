@@ -7086,3 +7086,78 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 #inicioView .hf-tab svg{width:22px;height:22px}
 }
 /* ===== /LOTE INICIO-ENTERO ===== */
+
+/* ===== LOTE VENTY-ETAPA-1 · conmutador de agentes + consola de Venty ===== */
+/* El chevron junto al nombre: solo lo pinta la casa (pzAgenteBarraAplicar);
+   en una cuenta cliente este elemento nunca existe. */
+.pz-shell-chev{display:inline-flex;vertical-align:middle;margin-left:5px;color:#7A8CA3}
+.pz-shell-chev svg{display:block}
+/* La hoja-filtro de agentes: sube desde abajo, como las demás hojas. */
+.pz-agente-ov{position:fixed;inset:0;background:rgba(10,30,51,.38);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+.pz-agente-sheet{background:#fff;border-radius:22px 22px 0 0;width:100%;max-width:560px;padding:8px 18px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(10,30,51,.25);box-sizing:border-box}
+.pz-agente-grab{width:40px;height:4px;border-radius:2px;background:#D8E2EC;margin:2px auto 10px}
+.pz-agente-tit{font-size:17px;font-weight:800;color:#0A1E33;padding:2px 0 4px}
+.pz-agente-row{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:none;border:0;border-top:1px solid #EDF1F5;padding:13px 2px;cursor:pointer;font:inherit}
+.pz-agente-med{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;flex:none}
+.pz-agente-info{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.pz-agente-nom{font-size:16.5px;font-weight:800;color:#0A1E33}
+.pz-agente-desc{font-size:13px;color:#5B7186;line-height:1.35}
+.pz-agente-aca{margin-left:auto;flex:none;font-size:11px;font-weight:800;color:#1E7FAE;background:#EAF4FA;border-radius:20px;padding:4px 9px}
+.pz-agente-pie{border-top:1px solid #EDF1F5;margin-top:4px;padding-top:12px;font-size:12.5px;color:#8CA1B5;line-height:1.45}
+/* La consola de Venty (M1 Listas + M3 Capacidad) y la tarjeta de Gesty. */
+.pzv-wrap{padding:16px 14px 28px;max-width:560px;margin:0 auto;box-sizing:border-box}
+.pzv-tit{font-size:22px;font-weight:800;color:#0A1E33}
+.pzv-sub{font-size:13.5px;color:#5B7186;line-height:1.45;margin:4px 0 14px}
+.pzv-card{background:#fff;border:1px solid #E3EBF2;border-radius:16px;padding:14px 16px;margin-bottom:12px;box-shadow:0 4px 16px rgba(10,30,51,.05)}
+.pzv-card-tit{font-size:12px;font-weight:800;letter-spacing:.08em;color:#8CA1B5;margin-bottom:6px}
+.pzv-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:7px 0;border-top:1px solid #F1F5F9;font-size:14px;color:#33475B}
+.pzv-row:first-of-type{border-top:0}
+.pzv-row b{font-size:14.5px;font-weight:800;color:#0A1E33;white-space:nowrap}
+.pzv-grupo{font-size:12px;font-weight:800;letter-spacing:.06em;color:#8CA1B5;margin:10px 0 2px}
+.pzv-pie{font-size:12.5px;color:#8CA1B5;line-height:1.45;padding:2px 2px 0}
+.pzv-vacio{text-align:center;color:#47617A;font-size:14.5px;line-height:1.6;padding:26px 16px}
+.pzv-vacio .bb-btn{margin-top:12px}
+.pzv-pronto{text-align:center;padding:28px 18px}
+.pzv-pronto-med{margin:0 auto}
+.pzv-pronto-nom{font-size:24px;font-weight:800;color:#0A1E33;margin-top:12px}
+.pzv-pronto p{font-size:14.5px;color:#47617A;line-height:1.55;margin:8px auto 0;max-width:340px}
+.pzv-pronto-fecha{margin-top:14px;display:inline-block;font-size:13px;font-weight:800;color:#1E7FAE;background:#EAF4FA;border-radius:20px;padding:6px 12px}
+/* --- Revisión de diseño (22/11): las pantallas propias de Venty ---
+   Verde = «Venty trabajando» (#1E9E5A / #14703C / tinte #E5F5EC).
+   El ÚNICO acento cálido por pantalla es el de «Necesita tu ojo»
+   (ámbar #E8862E), y solo en Hoy. La banda y el chip son neutros. */
+.pzv-que{font-size:12.5px;color:#8CA1B5;line-height:1.4;margin:0 0 8px}
+.pzv-card-tit.pzv-v{color:#14703C}
+.pzv-card-tit.pzv-o{color:#CE721F}
+.pzv-txt{font-size:14px;color:#47617A;line-height:1.5;margin:4px 0 0}
+.pzv-banda{background:#0A1E33;color:#fff;text-align:center;font-size:13px;font-weight:700;line-height:1.4;border-radius:999px;padding:8px 14px}
+.pzv-cara-zona{display:flex;flex-direction:column;align-items:center;margin:16px 0 2px}
+.pzv-cara{width:96px;height:96px;border-radius:50%;border:3px solid #1E9E5A;padding:0;background:#fff;overflow:hidden;cursor:pointer;box-shadow:0 10px 24px rgba(30,158,90,.30)}
+.pzv-cara img{width:100%;height:100%;object-fit:cover;display:block}
+.pzv-cara-pista{margin-top:9px;font-size:12.5px;color:#8CA1B5}
+.pzv-chip{margin-top:8px;background:#0A1E33;color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:6px 13px}
+.pzv-frase{text-align:center;font-size:16px;line-height:1.5;color:#0A1E33;margin:14px 6px 16px}
+.pzv-norte{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;padding-top:2px}
+.pzv-num{font-size:23px;font-weight:800;color:#0A1E33}
+.pzv-cel-etq{font-size:11px;color:#47617A;line-height:1.3;margin-top:2px}
+.pzv-cel-ctx{font-size:11px;color:#8CA1B5;margin-top:1px}
+.pzv-mov{font-size:11.5px;font-weight:800;color:#1E9E5A;line-height:1.35;margin-top:4px}
+.pzv-ojo{border-left:5px solid #E8862E}
+.pzv-ojo-tit{font-size:15.5px;font-weight:800;color:#0A1E33;margin-top:2px}
+.pzv-btn{margin-top:12px;background:#0A1E33;color:#fff;border:0;border-radius:999px;padding:9px 18px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.pzv-linea{display:flex;justify-content:space-between;align-items:center;width:100%;background:#fff;border:1px solid #E3EBF2;border-radius:16px;padding:14px 16px;font:inherit;font-size:14px;color:#33475B;cursor:pointer;box-shadow:0 4px 16px rgba(10,30,51,.05);text-align:left;box-sizing:border-box}
+.pzv-linea-f{color:#8CA1B5;font-size:18px}
+.pzv-vacio-tit{font-size:16.5px;font-weight:800;color:#0A1E33}
+.pzv-vacio p{font-size:14px;line-height:1.55;margin:8px 0 0}
+.pzv-canales{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 2px}
+.pzv-canales span{background:#E5F5EC;color:#14703C;font-size:12px;font-weight:700;border-radius:999px;padding:5px 11px}
+.pzv-pills{display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+.pzv-pill{font-size:13px;font-weight:700;border-radius:999px;padding:8px 16px}
+.pzv-pill-tomar{background:#0A1E33;color:#fff}
+.pzv-pill-sigue{background:#E5F5EC;color:#14703C}
+.bb-bar .pzv-tab.on,.mz-tabs .pzv-tab.on{color:#14703C;background:#E5F5EC;border-radius:14px}
+.pzv-float{position:fixed;right:14px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:30;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;cursor:pointer;font:inherit;padding:0}
+.pzv-float-cara{width:54px;height:54px;border-radius:50%;border:3px solid #1E9E5A;overflow:hidden;background:#fff;box-shadow:0 8px 18px rgba(30,158,90,.35);display:block}
+.pzv-float-cara img{width:100%;height:100%;object-fit:cover;display:block}
+.pzv-float-txt{font-size:10.5px;font-weight:700;color:#14703C;background:rgba(255,255,255,.88);border-radius:999px;padding:2px 8px}
+/* ===== /LOTE VENTY-ETAPA-1 ===== */

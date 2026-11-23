@@ -1251,7 +1251,16 @@ function pzShellHeadHTML(tab) {
   // lugar, a la izquierda de Compartir (su puerta es Notificaciones
   // para todas las sesiones — LOTE CAMPANA-CASA; la casa encuentra
   // ahí su tanda y su tarjeta de entrada al Conserje).
-  const estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'working for you…' : 'trabajando para vos…');
+  // (LOTE VENTY-ETAPA-1 · 22/11) En los modos de agente de la casa
+  // (Venty/Gesty), la identidad de la barra ES el agente elegido: su
+  // nombre y su punto de color. El cascarón es el mismo — barra,
+  // campana, Compartir, Ajustes, navegación —; solo cambia con quién
+  // estás trabajando (diseño VENTY-VENDE-POSTY §0: un solo cascarón,
+  // equilibrio total). Para cualquier otra pestaña, agHead es null y
+  // la barra sale byte a byte como siempre.
+  const agHead = (tab === 'venty' || tab === 'gesty') ? pzAgenteMeta(tab) : null;
+  let estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'working for you…' : 'trabajando para vos…');
+  if (agHead) estadoIni = (typeof window !== 'undefined' && window.__pzAgenteEstado && window.__pzAgenteEstado.tab === tab && window.__pzAgenteEstado.txt) || pzBarraTextoCarga(tab);
   // (LOTE CAMPANA-BADGE) La insignia nace pintada desde la caché si
   // ya se conoce el conteo (mismo patrón que la línea de estado con
   // __pzBarraEstadoTxt): ningún parpadeo al re-pintar el shell. La
@@ -1276,8 +1285,8 @@ function pzShellHeadHTML(tab) {
     : modoVolver === 'barra-desk' ? pzVolverBarraDeskHTML(tab) : '';
   return `<header class="pz-shell-head">
     ${volverBtn}<button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
-      <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
-      <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
+      <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="${agHead ? agHead.nombre : 'Posty'}" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
+      <span class="pz-shell-who"><b>${agHead ? (agHead.nombre + '<span class="pdot" style="color:' + agHead.punto + '">.</span>') : 'Posty<span class="pdot">.</span>'}</b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
     </button>
     <span class="pz-shell-acts">
       <button type="button" class="pz-shell-ic pz-shell-bell${bellVivaIni}" id="pzShellBell" onclick="pzBarraCampana()" aria-label="${en ? 'Notifications' : 'Notificaciones'}">${pzIc('bell', 18)}${badgeIni}</button>
@@ -1364,6 +1373,11 @@ function pzBarraEstadoPintar(txt) {
 function pzBarraEstadoRefrescar() {
   try {
     if (typeof ME === 'undefined' || !ME) return;
+    // (LOTE VENTY-ETAPA-1) En los modos Venty/Gesty la línea de estado
+    // es el hecho vivo de ESE agente y lo pinta su propia vista
+    // (pzAgenteEstadoPintar): el estado de Posty no lo pisa.
+    const tabAg = (typeof pzVGuardTab === 'function') ? pzVGuardTab() : '';
+    if (tabAg === 'venty' || tabAg === 'gesty') return;
     if (typeof window !== 'undefined' && window.__pzBarraRefrescando) return;
     if (typeof window !== 'undefined') window.__pzBarraRefrescando = true;
     pzShellDatosHoy();
@@ -1394,6 +1408,8 @@ function pzBarraTextoCarga(tab) {
     ajustes: ['cargando tus ajustes…', 'loading your settings…'],
     post: ['cargando tu posteo…', 'loading your post…'],
     notificaciones: ['cargando tus novedades…', 'loading your updates…'],
+    venty: ['cargando a venty…', 'loading venty…'],
+    gesty: ['cargando a Gesty…', 'loading Gesty…'],
   };
   const par = t[tab] || ['cargando…', 'loading…'];
   return en ? par[1] : par[0];
@@ -1573,6 +1589,403 @@ function pzCampanaBadgeRefrescar() {
     }).catch(() => { if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = false; });
   } catch (e) { try { if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = false; } catch (e2) {} }
 }
+// ===== LOTE VENTY-ETAPA-1 · el conmutador de agentes y la consola de Venty =====
+// (Diseño VENTY-VENDE-POSTY §0, aprobado por el dueño el 22/11: un
+// solo cascarón para todos los agentes; el conmutador vive donde la
+// barra dice el nombre del agente — un toque sobre «Posty.» abre la
+// hoja-filtro y cambia de agente sin reaprender nada.)
+//
+// LA PUERTA (palabra del dueño, 22/11 17:08: «el único que puede ver
+// Venty hasta el lanzamiento de Venty soy yo en mi cuenta; así vamos
+// probando todo»): el conmutador, la entrada de Venty en el filtro y
+// el modo Venty existen SOLO en la cuenta de la casa — identidad de
+// casa, la misma definición del servidor (esCuentaPropia:
+// HOUSE_USER_IDS o el ig_username de la casa), preguntada a
+// GET /api/venty/puerta y cacheada por sesión de navegador. En
+// cualquier otra cuenta (clientes, demos, vidrieras) no hay
+// conmutador: la identidad de la barra navega como siempre y las
+// rutas de agente rebotan a Inicio; el endpoint de la consola
+// responde 403 aunque se lo llame a mano. Así queda hasta el
+// lanzamiento de Venty para clientes (2/11/2027).
+//
+// COMPORTAMIENTO DECLARADO PARA CLIENTES (un solo poder): sin hoja
+// y sin cambios — con un solo poder no hay nada que conmutar, así
+// que el toque sobre el nombre sigue yendo a Inicio (o al chat del
+// invitado), byte a byte la app de siempre. La hoja-filtro solo
+// existe donde hay más de un poder: la casa.
+const PZ_AGENTES = [
+  { id: 'posty', nombre: 'Posty', punto: '#2FBF71', medallon: '#2793C8', letra: '#FFFFFF', ruta: '#/app/inicio', descEs: 'Tu community manager: postea por tu negocio todos los días.', descEn: 'Your community manager: posts for your business every day.' },
+  { id: 'gesty', nombre: 'Gesty', punto: '#2793C8', medallon: '#0A1E33', letra: '#FFFFFF', ruta: '#/app/gesty', descEs: 'Administra, atiende y ordena los papeles de tu negocio.', descEn: 'Runs your admin, messages and paperwork.' },
+  { id: 'venty', nombre: 'Venty', punto: '#1E9E5A', medallon: '#1E9E5A', letra: '#FFFFFF', ruta: '#/app/venty', descEs: 'Vende y consigue clientes para tu negocio.', descEn: 'Sells and brings in clients for your business.' },
+];
+function pzAgenteMeta(id) { return PZ_AGENTES.find(a => a.id === id) || null; }
+function pzAgenteActual() {
+  const t = (typeof pzVGuardTab === 'function') ? pzVGuardTab() : '';
+  return (t === 'venty' || t === 'gesty') ? t : 'posty';
+}
+function pzVentyCasaCache() {
+  try { const v = sessionStorage.getItem('pzVentyCasa'); if (v === '1') return true; if (v === '0') return false; } catch (e) {}
+  return null;
+}
+function pzVentyPuertaKick() {
+  // La sonda de la puerta de Venty: una vez por sesión de navegador.
+  // Al resolver «casa», la barra gana el conmutador; si la pantalla
+  // abierta es un modo de agente, se rehace (casa) o rebota (no casa).
+  try {
+    if (typeof ME === 'undefined' || !ME) return;
+    if (pzVentyCasaCache() !== null) { pzAgenteBarraAplicar(); return; }
+    if (typeof window !== 'undefined' && window.__pzVentyPuertaPendiente) return;
+    if (typeof window !== 'undefined') window.__pzVentyPuertaPendiente = true;
+    api.get('/api/venty/puerta').then((r) => {
+      try {
+        const casa = !!(r && r.casa);
+        try { sessionStorage.setItem('pzVentyCasa', casa ? '1' : '0'); } catch (e) {}
+        pzAgenteBarraAplicar();
+        const t = pzAgenteActual();
+        if (t === 'venty' || t === 'gesty') {
+          if (casa) { try { render(); } catch (e) {} }
+          else { try { location.hash = '#/app/inicio'; } catch (e) {} }
+        }
+      } catch (e) {}
+      if (typeof window !== 'undefined') window.__pzVentyPuertaPendiente = false;
+    }).catch(() => { if (typeof window !== 'undefined') window.__pzVentyPuertaPendiente = false; });
+  } catch (e) {}
+}
+function pzAgenteBarraAplicar() {
+  // Solo la casa: la identidad de la barra se vuelve el conmutador
+  // (chevron junto al nombre + el toque abre la hoja-filtro). Sin la
+  // casa confirmada, esta función no toca nada: la barra de un
+  // cliente queda byte a byte como siempre.
+  try {
+    if (pzVentyCasaCache() !== true) return;
+    const btn = document.querySelector('.pz-shell-ident');
+    if (!btn || btn.dataset.conmuta === '1') return;
+    btn.dataset.conmuta = '1';
+    btn.onclick = function () { pzAgenteFiltroAbrir(); };
+    btn.setAttribute('aria-label', pzBarraEn() ? 'Switch agent' : 'Cambiar de agente');
+    const b = btn.querySelector('.pz-shell-who b');
+    if (b && !b.querySelector('.pz-shell-chev')) {
+      const s = document.createElement('span');
+      s.className = 'pz-shell-chev';
+      s.setAttribute('aria-hidden', 'true');
+      s.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+      b.appendChild(s);
+    }
+  } catch (e) {}
+}
+function pzAgenteFiltroAbrir() {
+  pzAgenteFiltroCerrar();
+  const en = pzBarraEn();
+  const actual = pzAgenteActual();
+  const rows = PZ_AGENTES.map(a => `
+    <button type="button" class="pz-agente-row" onclick="pzAgenteElegir('${a.id}')">
+      <span class="pz-agente-med" style="background:${a.medallon};color:${a.letra}">${a.nombre.charAt(0)}</span>
+      <span class="pz-agente-info"><span class="pz-agente-nom">${a.nombre}<span class="pdot" style="color:${a.punto}">.</span></span><span class="pz-agente-desc">${esc(en ? a.descEn : a.descEs)}</span></span>
+      ${actual === a.id ? '<span class="pz-agente-aca">' + (en ? "You're here" : 'Estás acá') + '</span>' : ''}
+    </button>`).join('');
+  const ov = document.createElement('div');
+  ov.className = 'pz-agente-ov';
+  ov.id = 'pzAgenteOv';
+  ov.innerHTML = `<div class="pz-agente-sheet" role="dialog" aria-label="${en ? 'Switch agent' : 'Cambiar de agente'}">
+    <div class="pz-agente-grab"></div>
+    <div class="pz-agente-tit">${en ? 'Who do you want to work with?' : '¿Con quién querés trabajar?'}</div>
+    ${rows}
+    <div class="pz-agente-pie">${en ? 'One place: switch agents here. Everything else stays the same.' : 'Un solo lugar: acá cambiás de agente. Todo lo demás queda igual.'}</div>
+  </div>`;
+  ov.addEventListener('click', (e) => { if (e.target === ov) pzAgenteFiltroCerrar(); });
+  document.body.appendChild(ov);
+}
+function pzAgenteElegir(id) {
+  pzAgenteFiltroCerrar();
+  const a = pzAgenteMeta(id);
+  if (!a) return;
+  bbGo(a.ruta);
+}
+function pzAgenteFiltroCerrar() {
+  const ov = document.getElementById('pzAgenteOv');
+  if (ov) ov.remove();
+}
+function pzAgenteEstadoPintar() {
+  // La línea de estado en los modos de agente: el hecho vivo de ESE
+  // agente, que su vista guardó en window.__pzAgenteEstado. Fuera de
+  // esos modos, el estado es el de Posty y esta función no toca nada.
+  try {
+    const t = pzAgenteActual();
+    if (t === 'posty') return;
+    const st = (typeof window !== 'undefined' && window.__pzAgenteEstado) || null;
+    if (!st || st.tab !== t) return;
+    const el = document.getElementById('pzShellState');
+    if (el && el.textContent !== st.txt) el.textContent = st.txt;
+  } catch (e) {}
+}
+function pzVentyFmt(n) {
+  try { return Number(n).toLocaleString(pzBarraEn() ? 'en-US' : 'es-AR'); } catch (e) { return String(n); }
+}
+function pzVentySub() {
+  // La sub-pantalla del modo Venty: #/app/venty (Hoy) ·
+  // #/app/venty/partidas · #/app/venty/buscar · #/app/venty/estrategia
+  // — las cuatro pantallas de su diseño. Lo desconocido cae en Hoy.
+  try {
+    const s = (location.hash || '').split('?')[0].split('/')[3] || 'hoy';
+    return ['hoy', 'partidas', 'buscar', 'estrategia'].includes(s) ? s : 'hoy';
+  } catch (e) { return 'hoy'; }
+}
+function pzVentyDiasParaLaVenta() {
+  // Días de calendario (fecha local de quien mira) hasta el 1° de
+  // febrero de 2027, el día que abre la puerta de envío.
+  try {
+    const a = new Date();
+    const hoy = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+    return Math.round((Date.UTC(2027, 1, 1) - hoy) / 86400000);
+  } catch (e) { return null; }
+}
+function pzVentyNavHTML(sub, cls) {
+  // La barra inferior PROPIA del modo Venty (revisión de diseño
+  // 22/11): la misma barra del cascarón, con las pantallas de Venty —
+  // Hoy · Partidas · Buscar · Estrategia — y la activa en su verde
+  // («Venty trabajando»). El Chat NO es pestaña: es el botón flotante
+  // que es su cara (pzVentyFloatHTML), como en su diseño original.
+  const en = pzBarraEn();
+  const ic = {
+    hoy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 11.2 12 3.6l9.2 7.6"/><path d="M5.6 9.6V20h12.8V9.6"/><path d="M10.3 20v-5h3.4v5"/></svg>',
+    partidas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>',
+    buscar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>',
+    estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l4-5 3 3 5-7"/></svg>',
+  };
+  const items = [
+    ['hoy', '#/app/venty', en ? 'Today' : 'Hoy'],
+    ['partidas', '#/app/venty/partidas', en ? 'Matches' : 'Partidas'],
+    ['buscar', '#/app/venty/buscar', en ? 'Search' : 'Buscar'],
+    ['estrategia', '#/app/venty/estrategia', en ? 'Strategy' : 'Estrategia'],
+  ];
+  return items.map(it => cls === 'mz'
+    ? `<button type="button" class="mz-tab pzv-tab${sub === it[0] ? ' on' : ''}" onclick="bbGo('${it[1]}')"><span class="mz-tab-ic">${ic[it[0]]}</span>${it[2]}</button>`
+    : `<button type="button" class="bb-tab pzv-tab${sub === it[0] ? ' on' : ''}" onclick="bbGo('${it[1]}')"><span class="bb-tab-ic">${ic[it[0]]}</span><span>${it[2]}</span></button>`).join('');
+}
+function pzVentyFloatHTML(en) {
+  // El botón flotante que ES la cara de Venty: vive solo en Partidas,
+  // Buscar y Estrategia, apoyado sobre la barra. En Hoy la cara ya
+  // está — grande, en el centro — y es ella la que abre la
+  // conversación: la cara aparece UNA sola vez por pantalla
+  // (revisión 22/11). La conversación del registrado vive en Inicio
+  // (desde TAB-SUBIR, 13/11, la ruta de chat quedó solo para el
+  // invitado y el registrado vuelve a Inicio, donde habla con su
+  // agente): la cara lleva ahí, un toque. El chat propio DENTRO del
+  // modo Venty es una etapa posterior del programa, no de este lote.
+  return `<button type="button" class="pzv-float" onclick="bbGo('#/app/inicio')" aria-label="${en ? 'Talk to Venty' : 'Hablar con Venty'}"><span class="pzv-float-cara"><img src="ai-avatar.png" alt=""></span><span class="pzv-float-txt">${en ? 'talk to venty' : 'hablar con venty'}</span></button>`;
+}
+function pzVentyMovHTML(mov, en) {
+  // El movimiento semanal de un número del norte, en verde (Venty
+  // trabajando). Sin movimiento calculado en las fuentes, la celda
+  // no muestra NADA: nunca una flecha inventada.
+  if (!mov || typeof mov.delta !== 'number') return '';
+  if (mov.delta === 0) return `<div class="pzv-mov">${en ? 'no change this week' : 'sin cambios esta semana'}</div>`;
+  const txt = (mov.delta > 0 ? '↑ ' : '↓ ') + pzVentyFmt(Math.abs(mov.delta)) + (en ? ' this week' : ' esta semana')
+    + (mov.causa_es || mov.causa_en ? ' · ' + esc(en ? (mov.causa_en || '') : (mov.causa_es || '')) : '');
+  return `<div class="pzv-mov">${txt}</div>`;
+}
+async function pzVentyView(sub) {
+  // El modo Venty (SOLO la casa — la puerta se pregunta dos veces:
+  // esta vista y el servidor, 403 a cualquier otra cuenta). Cuatro
+  // pantallas con el diseño propio de Venty: la cara manda, el dueño
+  // solo decide, los números viven dentro de cada pantalla con su
+  // contexto — nunca un tablero frío (revisión de diseño 22/11 sobre
+  // la etapa 1, que había nacido como consola de listas/capacidad:
+  // esa consola es hoy la pantalla Buscar, la sala de máquinas).
+  // Nada envía nada en ninguna pantalla: la puerta del envío sigue
+  // cerrada hasta el 1/2/2027.
+  const en = pzBarraEn();
+  const casa = pzVentyCasaCache();
+  if (casa === false) { try { location.hash = '#/app/inicio'; } catch (e) {} return ''; }
+  if (casa === null) {
+    pzVentyPuertaKick();
+    return `<div class="pzv-wrap"><div class="pzv-card pzv-vacio">${en ? 'Loading Venty…' : 'Cargando a Venty…'}<br><button class="bb-btn" onclick="render()">${en ? 'Retry' : 'Reintentar'}</button></div></div>`;
+  }
+  let d = null;
+  try { d = await api.get('/api/venty/consola'); } catch (e) {}
+  if (!d || !d.ok || !d.listas || !d.capacidad) {
+    return `<div class="pzv-wrap"><div class="pzv-card pzv-vacio">${en ? 'I could not load Venty.' : 'No pude cargar a Venty.'}<br><button class="bb-btn" onclick="render()">${en ? 'Retry' : 'Reintentar'}</button></div></div>`;
+  }
+  // La línea de estado de la barra en modo Venty: su hecho vivo —
+  // la capacidad de envío de hoy, del tablero de capacidad.
+  try { window.__pzAgenteEstado = { tab: 'venty', txt: en ? ("today's sending capacity: " + pzVentyFmt(d.capacidad.capacidad_hoy) + ' per day') : ('capacidad de envío hoy: ' + pzVentyFmt(d.capacidad.capacidad_hoy) + ' por día') }; } catch (e) {}
+  const cuerpo = sub === 'buscar' ? pzVentyBuscarHTML(d, en)
+    : sub === 'partidas' ? pzVentyPartidasHTML(d, en)
+    : sub === 'estrategia' ? pzVentyEstrategiaHTML(d, en)
+    : pzVentyHoyHTML(d, en);
+  // La cara flotante acompaña en todas las pantallas menos en Hoy,
+  // donde la cara grande ya es la entrada a la conversación.
+  return cuerpo + (sub !== 'hoy' ? pzVentyFloatHTML(en) : '');
+}
+function pzVentyHoyHTML(d, en) {
+  // HOY — se lee en 3 segundos: el hecho de hoy · la cara con su
+  // frase del día · tu norte con sus movimientos · el próximo paso
+  // de Venty · lo único que necesita al dueño · Partidas en una línea.
+  const L = d.listas, C = d.capacidad, M = d.movimientos || {}, f = pzVentyFmt;
+  const rp = C.rampa_hoy || {};
+  const hayHecho = typeof rp.total === 'number' && typeof rp.dia === 'number';
+  const dias = pzVentyDiasParaLaVenta();
+  const chipTxt = dias === null ? '' : dias > 1 ? (en ? 'sales open in ' + dias + ' days' : 'la venta abre en ' + dias + ' días')
+    : dias === 1 ? (en ? 'sales open tomorrow' : 'la venta abre mañana')
+    : dias === 0 ? (en ? 'sales open today' : 'la venta abre hoy')
+    : (en ? 'the sending door is open' : 'la puerta de envío está abierta');
+  // La banda de arriba lleva el HECHO DE HOY leído de las fuentes
+  // (la rampa vigente). Sin hecho computable, la banda muestra solo
+  // la cuenta regresiva — nunca un hecho inventado.
+  const banda = hayHecho
+    ? `<div class="pzv-banda">${en ? 'today: ' + f(rp.total) + ' warm-up emails · ramp day ' + rp.dia : 'hoy: ' + f(rp.total) + ' correos de calentamiento · día ' + rp.dia + ' de rampa'}</div>`
+    : (chipTxt ? `<div class="pzv-banda">${chipTxt} · ${en ? 'February 1' : '1° de febrero'}</div>` : '');
+  // La cuenta regresiva vive en un chip chico junto a la cara (si la
+  // banda ya la trae — el caso sin hecho — no se duplica).
+  const chip = (hayHecho && chipTxt) ? `<div class="pzv-chip">${chipTxt}</div>` : '';
+  // La frase del día, en la voz de Venty (minúscula, de amigo por
+  // WhatsApp), compuesta por el generador desde los hechos reales.
+  // Sin frase en los datos, la cara no dice nada inventado.
+  const fd = d.frase_del_dia;
+  const frase = fd && (en ? fd.en : fd.es) ? `<p class="pzv-frase">${esc(en ? fd.en : fd.es)}</p>` : '';
+  const zonas = (L.tier_a_por_ciudad || []).reduce((a, c) => a + ((c.zonas || []).length), 0);
+  const cel = (num, etq, ctx, mov) => `<div class="pzv-cel"><div class="pzv-num">${num}</div><div class="pzv-cel-etq">${etq}</div><div class="pzv-cel-ctx">${ctx}</div>${pzVentyMovHTML(mov, en)}</div>`;
+  const norte = `<div class="pzv-card">
+      <div class="pzv-card-tit pzv-v">${en ? 'YOUR NORTH' : 'TU NORTE'}</div>
+      <div class="pzv-que">${en ? 'The three numbers that say how the selling is going.' : 'Los tres números que dicen cómo viene la venta.'}</div>
+      <div class="pzv-norte">
+        ${cel(f(C.capacidad_hoy), en ? 'emails a day of capacity' : 'correos por día de capacidad', (en ? 'goal ' : 'meta ') + f(C.meta_diaria) + (en ? '/day' : '/día'), M.capacidad)}
+        ${cel(f(L.tier_a_total), en ? 'top-tier businesses' : 'negocios de primera línea', (en ? 'in ' : 'en ') + zonas + (en ? ' zones' : ' zonas'), M.tier_a)}
+        ${cel(f(L.con_ig), en ? 'on Instagram' : 'con Instagram', (en ? 'of ' : 'de ') + f(L.registrados) + (en ? ' registered' : ' registrados'), M.con_ig)}
+      </div>
+    </div>`;
+  // El próximo paso DE VENTY: su frente de trabajo actual en la
+  // operación, declarado desde la fuente (diseño §3). Sin fuente, la
+  // tarjeta no se muestra.
+  const pp = d.proximo_paso;
+  const cap1 = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  const paso = pp ? `<div class="pzv-card">
+      <div class="pzv-card-tit pzv-v">${en ? "VENTY'S NEXT STEP" : 'PRÓXIMO PASO DE VENTY'}</div>
+      <p class="pzv-txt">${esc(cap1(en ? pp.frente_en : pp.frente_es))}: ${esc(en ? pp.meta_en : pp.meta_es)}.</p>
+    </div>` : '';
+  // Lo que necesita al dueño: el ÚNICO acento cálido de la pantalla
+  // (disciplina de color), y con salida — «Ver las opciones» abre
+  // Estrategia, donde la decisión vive.
+  const ojo = `<div class="pzv-card pzv-ojo">
+      <div class="pzv-card-tit pzv-o">${en ? 'NEEDS YOUR EYE' : 'NECESITA TU OJO'}</div>
+      <div class="pzv-que">${en ? 'The only thing that depends on you today.' : 'Lo único que hoy depende de vos.'}</div>
+      <div class="pzv-ojo-tit">${en ? 'The sending platform gets decided in January' : 'La plataforma de envío se decide en enero'}</div>
+      <p class="pzv-txt">${en ? "February's real capacity comes out of that decision. Everything else moves on its own." : 'De esa decisión sale la capacidad real de febrero. Todo lo demás avanza solo.'}</p>
+      <button type="button" class="pzv-btn" onclick="bbGo('#/app/venty/estrategia')">${en ? 'See the options' : 'Ver las opciones'}</button>
+    </div>`;
+  const linea = `<button type="button" class="pzv-linea" onclick="bbGo('#/app/venty/partidas')"><span><b>${en ? 'Matches' : 'Partidas'}</b> · ${en ? 'nothing waiting for your tap' : 'nada esperando tu toque'}</span><span class="pzv-linea-f">›</span></button>`;
+  return `<div class="pzv-wrap">
+    ${banda}
+    <div class="pzv-cara-zona">
+      <button type="button" class="pzv-cara" onclick="bbGo('#/app/inicio')" aria-label="${en ? 'Talk to Venty' : 'Hablar con Venty'}"><img src="ai-avatar.png" alt="Venty"></button>
+      <div class="pzv-cara-pista">${en ? "tap venty's face to talk to him" : 'tocá la cara para hablar con venty'}</div>
+      ${chip}
+    </div>
+    ${frase}
+    ${norte}
+    ${paso}
+    ${ojo}
+    ${linea}
+  </div>`;
+}
+function pzVentyBuscarHTML(d, en) {
+  // BUSCAR — la consola de la etapa 1 (M1 Listas + M3 Capacidad)
+  // rehecha con este lenguaje: cada bloque con su título en palabras
+  // llanas y su línea de qué es. Los números son los mismos de
+  // siempre, byte a byte: salen del generador, de las fuentes.
+  const L = d.listas, C = d.capacidad, f = pzVentyFmt;
+  const row = (k, v) => `<div class="pzv-row"><span>${k}</span><b>${v}</b></div>`;
+  const ciudades = (L.tier_a_por_ciudad || []).map(c => row(esc(c.ciudad), f(c.total))).join('');
+  const cal = C.calentamiento || {}, rp = C.rampa_hoy || {};
+  return `<div class="pzv-wrap">
+    <div class="pzv-tit">${en ? 'Search' : 'Buscar'}</div>
+    <div class="pzv-sub">${en ? 'Where Venty is looking and how much it can send: the business lists and the sending capacity, read from the operation records.' : 'Dónde está buscando Venty y cuánto puede enviar: las listas de negocios y la capacidad de envío, leídos de los registros de la operación.'}</div>
+    <div class="pzv-card">
+      <div class="pzv-card-tit pzv-v">${en ? 'BUSINESS LISTS' : 'LISTAS DE NEGOCIOS'}</div>
+      <div class="pzv-que">${en ? 'The businesses Venty will sell Posty to, counted from the operation records.' : 'Los negocios a los que Venty les va a vender Posty, contados desde los registros de la operación.'}</div>
+      ${row(en ? 'Registered universe' : 'Universo registrado', f(L.registrados))}
+      ${row(en ? 'With Instagram' : 'Con Instagram', f(L.con_ig))}
+      ${row(en ? 'Strict Tier A' : 'Tier A estricto', f(L.tier_a_total))}
+      <div class="pzv-grupo">${en ? 'Tier A by city' : 'Tier A por ciudad'}</div>
+      ${ciudades}
+      ${row(en ? 'Tier B counted' : 'Tier B contado', '~' + f(L.tier_b_contado))}
+      ${row(en ? 'Candidates in queue' : 'Candidatos en cola', f(L.cola.total) + ' · ' + f(L.cola.con_ig) + (en ? ' with IG' : ' con IG'))}
+      ${row(en ? 'Argentina grid' : 'Grilla Argentina', f(L.grilla_argentina.puestos) + (en ? ' roles' : ' puestos'))}
+      ${row(en ? 'Representative identities' : 'Identidades de representante', f(L.identidades_representante))}
+    </div>
+    <div class="pzv-card">
+      <div class="pzv-card-tit pzv-v">${en ? 'SENDING CAPACITY' : 'CAPACIDAD DE ENVÍO'}</div>
+      <div class="pzv-que">${en ? 'How many emails a day the house can send without burning the domain.' : 'Cuántos correos por día puede mandar la casa sin quemar el dominio.'}</div>
+      ${row(en ? 'Capacity today' : 'Capacidad hoy', f(C.capacidad_hoy) + (en ? '/day' : '/día'))}
+      ${row(en ? 'Goal from February 1' : 'Meta desde el 1° de febrero', f(C.meta_diaria) + (en ? '/day' : '/día'))}
+      ${row(en ? "Today's warm-up ramp" : 'Rampa de calentamiento de hoy', f(rp.total) + (en ? ' emails · day ' : ' correos · día ') + rp.dia)}
+      ${row(en ? 'Warm-up sends logged' : 'Envíos de calentamiento registrados', f(cal.envios) + ' · ' + f(cal.envios_ok) + ' OK')}
+      ${row(en ? 'Sending mailboxes so far' : 'Casillas emisoras hasta hoy', f(cal.emisoras))}
+      ${row(en ? 'Sending domain' : 'Dominio de envío', esc(cal.dominio || ''))}
+      ${row(en ? 'Sending door' : 'Puerta de envío', en ? 'closed until February 1, 2027' : 'cerrada hasta el 1° de febrero de 2027')}
+    </div>
+    <div class="pzv-pie">${en ? 'Numbers read from the representatives operation records.' : 'Números leídos de los registros de la operación de representantes.'}</div>
+  </div>`;
+}
+function pzVentyPartidasHTML(d, en) {
+  // PARTIDAS — su estado REAL de hoy: todavía no hay conversaciones,
+  // porque la puerta de envío abre el 1° de febrero y nada salió.
+  // La pantalla explica qué va a caer acá y cómo se decide (Tomar /
+  // Que siga Venty, como ilustración de la mecánica, no botones sin
+  // objeto). Ningún dato de muestra presentado como real.
+  return `<div class="pzv-wrap">
+    <div class="pzv-tit">${en ? 'Matches' : 'Partidas'}</div>
+    <div class="pzv-sub">${en ? 'Every sales conversation, live, with its draft ready. You take the match or let Venty keep going: nothing goes out without your tap.' : 'Cada conversación de venta, en vivo, con su borrador listo. Vos tomás la partida o dejás que siga Venty: nada sale sin tu toque.'}</div>
+    <div class="pzv-card pzv-vacio">
+      <div class="pzv-vacio-tit">${en ? 'There are no matches yet' : 'Todavía no hay partidas'}</div>
+      <p>${en ? 'The sending door opens on February 1: until then Venty prepares and nothing goes out, so no conversation has started.' : 'La puerta de envío abre el 1° de febrero: hasta ese día Venty prepara y no sale nada, así que todavía no arrancó ninguna conversación.'}</p>
+      <div class="pzv-canales"><span>WhatsApp</span><span>Instagram</span><span>Web</span><span>Email</span></div>
+      <p>${en ? 'When a match needs a decision, it lands here with two ways out:' : 'Cuando una partida necesite una decisión, cae acá con dos salidas:'}</p>
+      <div class="pzv-pills"><span class="pzv-pill pzv-pill-tomar">${en ? 'Take the match' : 'Tomar la partida'}</span><span class="pzv-pill pzv-pill-sigue">${en ? 'Let Venty keep going' : 'Que siga Venty'}</span></div>
+    </div>
+  </div>`;
+}
+function pzVentyEstrategiaHTML(d, en) {
+  // ESTRATEGIA — su estado REAL de hoy: el primer parte llega con la
+  // primera ola (no salió ningún correo; no hay nada que reportar).
+  // Y acá vive la decisión que viene: cuando la recomendación de
+  // Venty exista, cae en esta pantalla con su Aprobar / Pedir un
+  // cambio — por eso «Ver las opciones» de Hoy abre esta pantalla.
+  return `<div class="pzv-wrap">
+    <div class="pzv-tit">${en ? 'Strategy' : 'Estrategia'}</div>
+    <div class="pzv-sub">${en ? "Venty's weekly report: what is working, the objection that blocks the most, and its recommendation for you to approve or send back with a change." : 'El parte semanal de Venty: lo que funciona, la objeción que más frena y su recomendación para que la apruebes o la devuelvas con un cambio.'}</div>
+    <div class="pzv-card pzv-vacio">
+      <div class="pzv-vacio-tit">${en ? 'The first report arrives with the first wave' : 'El primer parte llega con la primera ola'}</div>
+      <p>${en ? 'There is nothing to report yet: no email has gone out. When the first wave lands, this screen fills with what Venty learned selling.' : 'Todavía no hay nada que reportar: no salió ningún correo. Cuando caiga la primera ola, esta pantalla se llena con lo que Venty aprendió vendiendo.'}</p>
+    </div>
+    <div class="pzv-card">
+      <div class="pzv-card-tit pzv-v">${en ? 'THE DECISION AHEAD' : 'LA DECISIÓN QUE VIENE'}</div>
+      <div class="pzv-ojo-tit">${en ? 'The sending platform gets decided in January' : 'La plataforma de envío se decide en enero'}</div>
+      <p class="pzv-txt">${en ? "It gets decided in January, with the numbers on the table: the platform under the machine and how many mailboxes join the ramp. When Venty's recommendation is ready, it lands here with its Approve / Ask for a change." : 'Se decide en enero, con los números sobre la mesa: la plataforma que va debajo de la máquina y cuántas casillas entran en rampa. Cuando la recomendación de Venty esté lista, cae acá con su Aprobar / Pedir un cambio.'}</p>
+    </div>
+  </div>`;
+}
+async function pzGestyView() {
+  // Gesty en el filtro de la casa: su modo es su tarjeta de llegada
+  // (su fecha es el 2/6/2027 — asentado en el censo del lote). La
+  // puerta es la misma que la de Venty: solo la casa la ve.
+  const en = pzBarraEn();
+  const casa = pzVentyCasaCache();
+  if (casa === false) { try { location.hash = '#/app/inicio'; } catch (e) {} return ''; }
+  if (casa === null) {
+    pzVentyPuertaKick();
+    return `<div class="pzv-wrap"><div class="pzv-card pzv-vacio">${en ? 'Loading Gesty…' : 'Cargando a Gesty…'}<br><button class="bb-btn" onclick="render()">${en ? 'Retry' : 'Reintentar'}</button></div></div>`;
+  }
+  try { window.__pzAgenteEstado = { tab: 'gesty', txt: en ? 'arrives June 2, 2027' : 'llega el 2 de junio de 2027' }; } catch (e) {}
+  return `<div class="pzv-wrap"><div class="pzv-card pzv-pronto">
+    <span class="pz-agente-med pzv-pronto-med" style="background:#0A1E33;color:#FFFFFF">G</span>
+    <div class="pzv-pronto-nom">Gesty<span class="pdot" style="color:#2793C8">.</span></div>
+    <p>${en ? 'Gesty runs your admin, answers your messages and keeps your paperwork in order.' : 'Gesty administra, atiende tus mensajes y ordena los papeles de tu negocio.'}</p>
+    <div class="pzv-pronto-fecha">${en ? 'Arrives June 2, 2027' : 'Llega el 2 de junio de 2027'}</div>
+  </div></div>`;
+}
+// ===== /LOTE VENTY-ETAPA-1 =====
+
 function pzBarraHace(ts) {
   const en = pzBarraEn();
   const ms = typeof ts === 'number' ? ts : Date.parse(ts);
@@ -1707,7 +2120,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'subir' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}</nav><!-- (LOTE ICONOS-BARRA · 20/11) orden Inicio · Subir · Ads: Subir queda como acción central, con el set «Hilo» --><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
+    <nav class="bb-bar">${tab === 'venty' ? pzVentyNavHTML(pzVentySub(), 'bb') : tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}</nav><!-- (LOTE ICONOS-BARRA · 20/11) orden Inicio · Subir · Ads: Subir queda como acción central, con el set «Hilo» --><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -3155,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1268';
+const PZ_BUILD = '20261105-v1269';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -11133,7 +11546,7 @@ function appShell(tab, content) {
     ${pzShellHeadHTML(tab)}
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
-  ${mzTabsHTML(tab)}
+  ${tab === 'venty' ? '<nav class="mz-tabs pzv-tabs" aria-label="Venty">' + pzVentyNavHTML(pzVentySub(), 'mz') + '</nav>' : mzTabsHTML(tab)}
   ${rsShareSheetHTML()}
 `;
 }
@@ -26221,6 +26634,10 @@ function pzPaintSkeleton(tab) {
     root.innerHTML = appShell(tab, pzSkeletonHTML(tab));
     pzBarraEstadoCarga(tab);
     pzBarraCampanaPintar();
+    // (LOTE VENTY-ETAPA-1) El conmutador también se aplica sobre el
+    // esqueleto: si la sesión es de la casa, el chevron y el toque ya
+    // están mientras la pantalla carga.
+    try { pzVentyPuertaKick(); } catch (e) {}
     // (LOTE ADS-SE-TRABA-AL-VOLVER) El splash de arranque (index.html)
     // se queda hasta pintar la app para que nunca se vea la landing que
     // vive debajo en el HTML servido; apenas el shell de la app está
@@ -26645,6 +27062,8 @@ function pzPrefetchKick() {
   else if (tab === 'jardin-posty') { pzPaintSkeleton(tab); content = await bbNivelContent(); }
   else if (tab === 'bandeja') { pzPaintSkeleton(tab); content = await bbBandejaContent(); } // (LOTE 10B · 2-1) La Bandeja: decidir en un toque
   else if (tab === 'notificaciones') { pzPaintSkeleton(tab); content = await pzBandejaView(); } // (LOTE BANDEJA-RESPONDE · 22/11) Notificaciones: la tanda de respuestas (borrador + un toque). La campana de la barra (lote BARRA-VIVA) abre esta ruta.
+  else if (tab === 'venty') { pzPaintSkeleton(tab); content = await pzVentyView(pzVentySub()); } // (LOTE VENTY-ETAPA-1 · 22/11 · revisión de diseño el mismo día) El modo Venty: SOLO la cuenta de la casa (la vista pregunta la puerta y el endpoint responde 403 a cualquier otra cuenta; para un cliente esta ruta rebota a Inicio). Cuatro pantallas con su diseño propio: Hoy · Partidas · Buscar (la consola de listas/capacidad) · Estrategia.
+  else if (tab === 'gesty') { pzPaintSkeleton(tab); content = await pzGestyView(); } // (LOTE VENTY-ETAPA-1 · 22/11) Gesty en el filtro de la casa: su tarjeta «llega en su fecha» (2/6/2027), con la misma puerta que Venty.
   else if (tab === 'ritual') { pzPaintSkeleton(tab); content = await ritualView(); } // (RITUAL · lote 5/8) El paquete de la mañana
   else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   } catch (e) { content = '<div class="bb-error"><p>No pude cargar esta pantalla.</p><button class="bb-btn" onclick="render()">Reintentar</button></div>'; }
@@ -26678,6 +27097,11 @@ function pzPrefetchKick() {
   setTimeout(() => { try { pzBarraEstadoRefrescar(); } catch (e) {} }, 0);
   // (LOTE CAMPANA-BADGE) La insignia se refresca con el mismo ritmo.
   setTimeout(() => { try { pzCampanaBadgeRefrescar(); } catch (e) {} }, 0);
+  // (LOTE VENTY-ETAPA-1) La sonda de la puerta de Venty con el mismo
+  // ritmo: si la sesión es de la casa, la barra gana el conmutador de
+  // agentes; en los modos de agente, su línea de estado se pinta.
+  setTimeout(() => { try { pzVentyPuertaKick(); } catch (e) {} }, 0);
+  setTimeout(() => { try { pzAgenteEstadoPintar(); } catch (e) {} }, 0);
   // LOTE VELOCIDAD: precarga en idle (una vez por carga).
   try { pzPrefetchKick(); } catch (e) {}
   if (BB_SHELL_ON() && tab === 'ajustes') { try { bbAvisosEnAjustes(); } catch (e) {} }

@@ -41053,6 +41053,42 @@ function puertaConserjeEsCasa(req) {
 app.get('/api/conserje/puerta', requireAuth, (req, res) => {
   res.json({ ok: true, casa: puertaConserjeEsCasa(req) });
 });
+// ---------- (LOTE VENTY-ETAPA-1 · 22/11) Consola interna de Venty ----------
+// La máquina interna de ventas vive SOLO en la cuenta de la casa
+// (palabra del dueño, 22/11 17:08: «el único que puede ver Venty
+// hasta el lanzamiento de Venty soy yo en mi cuenta; así vamos
+// probando todo»). La puerta es la identidad de casa de
+// esCuentaPropia — la definición de siempre: env HOUSE_USER_IDS
+// (default '12') o el ig_username de la casa (ES/EN, de
+// users/profiles). Para cualquier otra cuenta la consola no existe
+// (403): ni clientes, ni demos, ni vidrieras. Así queda hasta el
+// lanzamiento de Venty para clientes (2/11/2027).
+// La consola es SOLO LECTURA: no manda emails ni mensajes y no hay
+// ningún botón de envío cableado; la puerta del envío sigue cerrada
+// hasta el 1/2/2027. Los números salen de venty-data/consola.json,
+// generado por tools/venty-consola-sync.js desde los registros
+// reales de la operación de representantes (universo-total.md, las
+// grillas CSV y el log de calentamiento): ningún número está
+// copiado a mano en el código.
+const VENTY_CONSOLA_PATH = path.join(__dirname, 'venty-data', 'consola.json');
+let VENTY_CONSOLA_CACHE = null; // { mtimeMs, datos }
+function ventyConsolaDatos() {
+  const st = fs.statSync(VENTY_CONSOLA_PATH);
+  if (VENTY_CONSOLA_CACHE && VENTY_CONSOLA_CACHE.mtimeMs === st.mtimeMs) return VENTY_CONSOLA_CACHE.datos;
+  const datos = JSON.parse(fs.readFileSync(VENTY_CONSOLA_PATH, 'utf8'));
+  VENTY_CONSOLA_CACHE = { mtimeMs: st.mtimeMs, datos };
+  return datos;
+}
+// Sonda de la entrada: la app pregunta si ESTA sesión es de la casa
+// para mostrar el conmutador de agentes. Devuelve solo el sí/no.
+app.get('/api/venty/puerta', requireAuth, (req, res) => {
+  res.json({ ok: true, casa: esCuentaPropia(req.session && req.session.userId) });
+});
+app.get('/api/venty/consola', requireAuth, (req, res) => {
+  if (!esCuentaPropia(req.session && req.session.userId)) return res.status(403).json({ ok: false, error: 'solo_casa' });
+  try { return res.json(ventyConsolaDatos()); }
+  catch (e) { return res.status(500).json({ ok: false, error: 'consola_sin_datos' }); }
+});
 app.get('/conserje', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   const adminToken = process.env.ADMIN_TOKEN || '';
@@ -48696,7 +48732,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1268';
+const BUILD_ID = '20261105-v1269';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
