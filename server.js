@@ -21002,6 +21002,55 @@ app.post('/api/admin/support/conserje/pedidos-subir/:id/descartar', requireAdmin
   } catch (e) { res.status(500).json({ ok: false, error: 'no_se_pudo_descartar' }); }
 });
 
+// ---------- (LOTE LECTURA-ADMIN-MATERIAL) EL MATERIAL DE SUBIR, LEGIBLE POR EL OPERADOR ----------
+// Del incidente de la película (22/11): el material que un negocio
+// sube por Subir (assets) y el recibo de lo que confirmó
+// (subir_recibos) no se podían ver desde NINGUNA superficie admin —
+// pedidos-subir solo muestra el material que tiene un pedido de voz
+// encima (y solo su file_path), el journey de support solo las
+// últimas 10 fotos, y el recibo solo lo lee el propio cliente
+// (GET /api/subir/recibos). Un asset sin pedido de voz y que no es
+// foto (el video de la película) era invisible para el operador:
+// hubo que reconstruir su estado leyendo la base a mano. Esta
+// lectura cierra ese hueco y NADA más: SOLO LECTURA (ningún INSERT/
+// UPDATE/DELETE), detrás de la misma puerta admin que sus hermanas
+// (requireAdminToken), por negocio — cada asset con su recibo más
+// reciente (su estado y lo que el cliente confirmó), su pedido de
+// voz más reciente (su estado y su error) y el posteo enlazado si
+// lo hay. No se expone al cliente en ninguna forma.
+app.get('/api/admin/support/conserje/material', requireAdminToken, (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const uid = Number(req.query.user_id);
+    const u = db.prepare('SELECT id FROM users WHERE id = ?').get(uid);
+    if (!u) return res.status(404).json({ ok: false, error: 'sin_usuario' });
+    const limit = Math.min(Math.max(Number(req.query.limit || 60) || 60, 1), 200);
+    const kindQ = String(req.query.kind || '');
+    const kindOk = ['photo', 'video', 'design', 'logo'].includes(kindQ) ? kindQ : '';
+    let negocio = { business_name: '', ig_username: '' };
+    try { const prof = db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(uid); if (prof) negocio = { business_name: prof.business_name || '', ig_username: prof.ig_username || '' }; } catch (e) {}
+    const rows = db.prepare(`SELECT id, file_path, kind, thumb_path, created_at, COALESCE(producto,'') AS producto, COALESCE(album_tag,'') AS album_tag, COALESCE(upload_choice,'') AS upload_choice, COALESCE(content_hash,'') AS content_hash FROM assets WHERE user_id = ?${kindOk ? ' AND kind = ?' : ''} ORDER BY id DESC LIMIT ?`).all(...(kindOk ? [uid, kindOk, limit] : [uid, limit]));
+    const reciboDe = db.prepare('SELECT id, kind, modo, datos, post_id, pedido_id, estado, created_at, updated_at FROM subir_recibos WHERE user_id = ? AND asset_id = ? ORDER BY id DESC LIMIT 1');
+    const pedidoDe = db.prepare('SELECT id, kind, estado, post_id, error, created_at, decided_at FROM subir_pedidos_voz WHERE user_id = ? AND asset_id = ? ORDER BY id DESC LIMIT 1');
+    const postDe = db.prepare('SELECT id, status, scheduled_at FROM posts WHERE id = ? AND user_id = ?');
+    const material = rows.map((a) => {
+      const out = { id: a.id, file_path: a.file_path || '', kind: a.kind || '', thumb_path: a.thumb_path || '', created_at: a.created_at || '', producto: a.producto || '', album_tag: a.album_tag || '', upload_choice: a.upload_choice || '', content_hash: a.content_hash || '', recibo: null, pedido: null, post: null };
+      try {
+        const r = reciboDe.get(uid, a.id);
+        if (r) { let datos = {}; try { datos = JSON.parse(r.datos || '{}'); } catch (e) {} out.recibo = { id: r.id, kind: r.kind || '', modo: r.modo || '', datos, post_id: r.post_id || null, pedido_id: r.pedido_id || null, estado: r.estado || '', created_at: r.created_at || '', updated_at: r.updated_at || '' }; }
+      } catch (e) {}
+      try {
+        const p = pedidoDe.get(uid, a.id);
+        if (p) out.pedido = { id: p.id, kind: p.kind || '', estado: p.estado || '', post_id: p.post_id || null, error: p.error || '', created_at: p.created_at || '', decided_at: p.decided_at || null };
+      } catch (e) {}
+      const postId = (out.recibo && out.recibo.post_id) || (out.pedido && out.pedido.post_id) || 0;
+      if (postId) { try { const post = postDe.get(postId, uid); if (post) out.post = { id: post.id, status: post.status || '', scheduled_at: post.scheduled_at || null }; } catch (e) {} }
+      return out;
+    });
+    res.json({ ok: true, user_id: uid, business_name: negocio.business_name, ig_username: negocio.ig_username, total: material.length, material });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+
 
 // ================= LOTE EVENTO + PEDIDO DE CERO (extensión de Subir) =================
 // Decisión de Valentino 13/11 15:33 (hilo del bar con DJ), como
@@ -48758,7 +48807,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1270';
+const BUILD_ID = '20261105-v1271';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
