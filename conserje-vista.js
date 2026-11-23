@@ -1057,6 +1057,52 @@ function posteosDe(db, uid, tz, opts) {
   });
 }
 
+// ---------------------------------------------------------------------
+// (LOTE CONSERJE-VER-GRANDE) La media COMPLETA de un posteo, para el
+// visor en grande de la consola. Las superficies pintan miniaturas
+// con lo mínimo (portada o póster); al tocar la imagen, el visor pide
+// esto por la ruta posteo-media y muestra la pieza entera: las
+// láminas del carrusel en su orden, la URL reproducible del video con
+// su póster, y el caption SIN truncar. Fail-soft: sin posteo (o de
+// otro usuario) devuelve null y el visor cae a su respaldo.
+// ---------------------------------------------------------------------
+function mediaDePosteo(db, uid, postId, opts) {
+  const o = opts || {};
+  const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : null;
+  const p = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE id = ? AND user_id = ?`).get(Number(postId), Number(uid)), null);
+  if (!p) return null;
+  const absDe = (path) => {
+    const s = String(path || '');
+    if (!s || s.startsWith('data:')) return '';
+    return abs ? (safe(() => abs(Number(uid), s), '') || '') : s;
+  };
+  const mt = String(p.media_type || 'image');
+  const esVideo = ['video', 'reel', 'reels'].indexOf(mt.toLowerCase()) >= 0;
+  let poster = '';
+  if (esVideo && typeof o.posterUrlFor === 'function') { try { poster = o.posterUrlFor(Number(uid), p) || ''; } catch (e) { poster = ''; } }
+  let slides = [];
+  if (mt === 'carousel' && p.carousel_paths) {
+    try {
+      const arr = JSON.parse(p.carousel_paths);
+      if (Array.isArray(arr)) slides = arr.map(absDe).filter(Boolean);
+    } catch (e) { slides = []; }
+  }
+  const imageUrl = absDe(p.image_path);
+  if (!slides.length && imageUrl && !esVideo) slides = [imageUrl];
+  return {
+    ok: true,
+    post_id: p.id,
+    titulo: conserjeRevision.tituloDe(p),
+    caption: String(p.caption || ''),
+    status: p.status || '', media_type: mt, tipo: p.tipo || '',
+    image_url: imageUrl,
+    poster_url: poster,
+    video_url: esVideo ? imageUrl : '',
+    slides,
+  };
+}
+
 function cliente(db, userId, opts) {
   const o = opts || {};
   const uid = Number(userId) || 0;
@@ -1199,6 +1245,7 @@ module.exports = {
   colaProduccion,
   semanaDe,
   posteosDe,
+  mediaDePosteo,
   cliente,
   marcarVozResuelto,
   abrirOrdenProduccion,

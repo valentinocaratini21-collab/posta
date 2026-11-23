@@ -234,7 +234,9 @@
         + '<button class="btn small" data-act="post-reprogramar" data-id="' + p.id + '" type="button">Reprogramar</button>'
         + '<button class="btn small ghost-danger" data-act="post-descartar" data-id="' + p.id + '" type="button">Descartar</button></div>';
     }
-    return '<article class="post' + (highlightPostId && Number(highlightPostId) === Number(p.id) ? ' destacado' : '') + '" id="post-' + p.id + '"><div class="thumb">'
+    // (LOTE CONSERJE-VER-GRANDE) La foto se toca y se ve en grande:
+    // la miniatura lleva [data-ver] con su posteo y su respaldo.
+    return '<article class="post' + (highlightPostId && Number(highlightPostId) === Number(p.id) ? ' destacado' : '') + '" id="post-' + p.id + '"><div class="thumb"' + (img ? ' data-ver data-ver-post="' + p.id + '" data-ver-fb="' + regVisorFallback({ media_type: p.media_type, image_url: p.image_url, poster_url: p.poster_url, caption: p.caption || '' }) + '"' : '') + '>'
       + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(inicial || 'P') + '</span></div>')
       + (esVideo ? '<span class="play">▶</span>' : '')
       + chipDePost(p)
@@ -282,7 +284,7 @@
           ? (i.sin_posteo_decidido ? 'No sale · decidido' : 'Listo')
           : (i.estado === 'en_preparacion' ? (i.post ? 'Propuesta por decidir' : 'Posty lo arma') : 'Falta');
         return '<button class="m-row" data-goto="' + i.user_id + '" type="button">'
-          + '<span class="m-thumb">' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<span class="ph-initial">' + esc(iniciales(i.business_name)) + '</span>') + '</span>'
+          + '<span class="m-thumb"' + (img ? ' data-ver data-ver-post="' + i.post.id + '" data-ver-uid="' + i.user_id + '" data-ver-fb="' + regVisorFallback({ media_type: i.post.media_type, image_url: i.post.image_url, poster_url: i.post.poster_url, caption: i.post.caption || '' }) + '"' : '') + '>' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<span class="ph-initial">' + esc(iniciales(i.business_name)) + '</span>') + '</span>'
           + '<span class="m-main"><span class="m-name">' + esc(i.business_name || 'Sin nombre') + '</span>'
           + '<span class="m-post">' + (i.post ? esc(i.post.titulo || 'Posteo de mañana') : (i.sin_posteo_decidido ? 'El dueño decidió que mañana no sale' : 'Sin posteo para mañana')) + '</span>'
           + (i.necesita_atencion ? '<span class="m-att">⚠ ' + esc(i.motivo_atencion || 'Necesita atención') + '</span>' : '')
@@ -405,13 +407,23 @@
       ((cliente && cliente.posteos) || []).forEach(function (p) { porId[p.id] = p; });
       var ini = iniciales(cliente && cliente.business_name);
       cuerpo.innerHTML = '<div class="posts">' + (j.tiles || []).map(function (t) {
-        var img = t.poster_url || t.image_url || '';
         var esVideo = /video|reel/.test(String(t.media_type || ''));
+        // (LOTE CONSERJE-VER-GRANDE · cierra la F2 del censo 2) La
+        // ruta del feed emite la foto en «img», no en «image_url»:
+        // las fotos salían sin imagen y no había nada que tocar. El
+        // video de un posteo propio sigue yendo por su póster — jamás
+        // el .mp4 en un <img> (regla de CONSERJE-FOTO-VIDEO); la tile
+        // que viene del Instagram del cliente trae siempre en «img»
+        // una imagen real (su tapa), nunca el archivo de video.
+        var img = t.poster_url || (esVideo && t.kind === 'post' ? '' : (t.img || t.image_url || ''));
         var aprobable = (t.status === 'scheduled' || t.status === 'draft') && porId[t.post_id] && porId[t.post_id].dia_key;
         var chip = t.status === 'published' ? '<span class="state-chip green">En su Instagram</span>'
           : t.status === 'scheduled' ? '<span class="state-chip sky">Programado</span>'
           : '<span class="state-chip yellow">' + esc(t.status || '') + '</span>';
-        return '<article class="post"><div class="thumb">'
+        var verAttrs = '';
+        if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
+        else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
+        return '<article class="post"><div class="thumb"' + verAttrs + '>'
           + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(ini) + '</span></div>')
           + (esVideo ? '<span class="play">▶</span>' : '') + chip + '</div>'
           + '<div class="p-body"><div class="p-cap">' + esc(trunc(t.caption || '', 90)) + '</div>'
@@ -443,6 +455,100 @@
         toast('No se pudo asignar el tratamiento (' + (j && j.error || 'error') + ').', 'err');
       }
     }).catch(function () { sel.value = anterior || ''; toast('No se pudo asignar el tratamiento.', 'err'); });
+  }
+
+  // ---------------- visor en grande (LOTE CONSERJE-VER-GRANDE) ----------------
+  // Tocar la imagen de un posteo la abre ENTERA: sin recorte, con su
+  // caption; el carrusel se recorre lámina a lámina y el video se
+  // reproduce con su póster y sus controles. Un solo visor para todas
+  // las superficies que muestran la imagen de un posteo (la tarjeta de
+  // decisión, la ficha — su semana y su feed — y la producción de
+  // mañana). El visor SOLO mira: no decide nada, y al cerrarlo la
+  // consola queda exactamente como estaba — mismo scroll, mismo
+  // estado: el visor no re-renderiza nada ni recarga nada.
+  var visor = { items: [], idx: 0, caption: '', abierto: false };
+  var visorFallbacks = {};
+  var visorSeq = 0;
+  // El respaldo de una superficie: la media que la miniatura YA tiene.
+  // Si el pedido de la media completa falla, el visor abre igual con
+  // eso que el dueño ya estaba viendo — nunca un hueco en silencio.
+  function regVisorFallback(fb) {
+    visorSeq += 1;
+    var k = 'vf' + visorSeq;
+    visorFallbacks[k] = fb || {};
+    return k;
+  }
+  // La lista de piezas del visor desde un payload de media (el del
+  // endpoint posteo-media o el respaldo de una superficie): video →
+  // su URL reproducible con póster; carrusel → sus láminas en orden;
+  // foto → ella sola. Función pura: la suite la ejercita tal cual.
+  function visorItemsDe(m) {
+    m = m || {};
+    var mt = String(m.media_type || '').toLowerCase();
+    if (/video|reel/.test(mt)) {
+      var vsrc = m.video_url || m.image_url || m.img || '';
+      return vsrc ? [{ tipo: 'video', src: vsrc, poster: m.poster_url || '' }] : [];
+    }
+    var slides = (m.slides || []).filter(Boolean);
+    if (slides.length) return slides.map(function (s) { return { tipo: 'img', src: s }; });
+    var img = m.image_url || m.img || '';
+    return img ? [{ tipo: 'img', src: img }] : [];
+  }
+  function visorPintar() {
+    var media = $('visorMedia');
+    if (!media) return;
+    var it = visor.items[visor.idx] || null;
+    media.innerHTML = !it ? '<div class="v-cargando">Este posteo no tiene imagen para mostrar.</div>'
+      : it.tipo === 'video'
+        ? '<video src="' + esc(it.src) + '"' + (it.poster ? ' poster="' + esc(it.poster) + '"' : '') + ' controls autoplay muted playsinline></video>'
+        : '<img src="' + esc(it.src) + '" alt="">';
+    var multi = visor.items.length > 1;
+    $('visorDots').innerHTML = multi ? visor.items.map(function (_, i) { return '<i class="' + (i === visor.idx ? 'on' : '') + '"></i>'; }).join('') : '';
+    $('visorCount').textContent = multi ? (visor.idx + 1) + ' / ' + visor.items.length : '';
+    $('visorCap').textContent = visor.caption || '';
+    $('visorPrev').hidden = !multi;
+    $('visorNext').hidden = !multi;
+  }
+  function abrirVisor(items, caption) {
+    visor.items = items || [];
+    visor.idx = 0;
+    visor.caption = caption || '';
+    visor.abierto = true;
+    $('visor').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    visorPintar();
+  }
+  function cerrarVisor() {
+    if (!visor.abierto) return;
+    visor.abierto = false;
+    $('visor').classList.remove('open');
+    $('visorMedia').innerHTML = ''; // el video se detiene al salir del DOM
+    document.body.style.overflow = '';
+  }
+  function visorIrA(n) {
+    var total = visor.items.length;
+    if (!total) return;
+    visor.idx = ((n % total) + total) % total;
+    visorPintar();
+  }
+  // El toque en una miniatura ([data-ver]): con posteo propio pide la
+  // media completa al endpoint (láminas, video, caption entero) y la
+  // cambia en el acto cuando llega; con data-ver-img (las tiles del
+  // feed que vienen del Instagram del cliente, sin posteo propio)
+  // abre directo con esa imagen.
+  function onVerThumb(el) {
+    var fb = visorFallbacks[el.getAttribute('data-ver-fb')] || {};
+    var imgDirecta = el.getAttribute('data-ver-img');
+    if (imgDirecta) { abrirVisor([{ tipo: 'img', src: imgDirecta }], fb.caption || ''); return; }
+    var uid = Number(el.getAttribute('data-ver-uid')) || selUser;
+    var pid = Number(el.getAttribute('data-ver-post'));
+    if (!uid || !pid) { var its0 = visorItemsDe(fb); if (its0.length) abrirVisor(its0, fb.caption || ''); return; }
+    abrirVisor(visorItemsDe(fb), fb.caption || '');
+    api('/api/admin/support/conserje/posteo-media?user_id=' + uid + '&post_id=' + pid).then(function (j) {
+      if (!visor.abierto || !j || !j.ok) return;
+      var items = visorItemsDe(j);
+      if (items.length) { visor.items = items; visor.idx = 0; visor.caption = j.caption || visor.caption; visorPintar(); }
+    }).catch(function () { /* queda el respaldo ya abierto */ });
   }
 
   // ---------------- decisiones ----------------
@@ -480,7 +586,7 @@
         + '<button class="btn small ghost-danger" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';
     } else if (d.tipo === 'voz') {
       cuerpo = '<div class="d-txt">Transcripción: <em>«' + esc(d.pedido || '') + '»</em></div>'
-        + (d.posteo ? '<div class="thumbrow">' + (d.posteo.image_url || d.posteo.poster_url ? '<img src="' + esc(d.posteo.poster_url || d.posteo.image_url) + '" alt="">' : '')
+        + (d.posteo ? '<div class="thumbrow">' + (d.posteo.image_url || d.posteo.poster_url ? '<span data-ver data-ver-post="' + d.posteo.id + '" data-ver-uid="' + d.user_id + '" data-ver-fb="' + regVisorFallback({ media_type: d.posteo.media_type, image_url: d.posteo.image_url, poster_url: d.posteo.poster_url, caption: d.posteo.caption || '' }) + '"><img src="' + esc(d.posteo.poster_url || d.posteo.image_url) + '" alt=""></span>' : '')
           + '<div class="cap">Sobre el posteo #' + d.posteo.id + ' (' + esc(d.posteo.status || '') + ')<br>' + esc(trunc(d.posteo.caption || '', 110)) + '</div></div>' : '')
         + (d.respuesta ? '<div class="d-promise"><small>Posty entendió</small>' + esc(d.respuesta) + '</div>' : '')
         + '<div id="vozReply-' + d.message_id + '"></div>'
@@ -491,7 +597,7 @@
     } else if (d.tipo === 'pieza') {
       var esVid = /video|reel/.test(String(d.media_type || ''));
       cuerpo = (d.necesita_atencion ? '<div class="d-txt"><span class="att">⚠ ' + esc(d.motivo_atencion || 'Necesita atención') + '</span></div>' : '')
-        + (d.image_url || d.poster_url ? '<div class="d-thumb"><img src="' + esc(d.poster_url || d.image_url) + '" alt="">' + (esVid ? '<span class="play">▶</span>' : '') + '</div>' : '')
+        + (d.image_url || d.poster_url ? '<div class="d-thumb" data-ver data-ver-post="' + (d.post_id || '') + '" data-ver-uid="' + d.user_id + '" data-ver-fb="' + regVisorFallback({ media_type: d.media_type, image_url: d.image_url, poster_url: d.poster_url, caption: d.texto || '' }) + '"><img src="' + esc(d.poster_url || d.image_url) + '" alt="">' + (esVid ? '<span class="play">▶</span>' : '') + '</div>' : '')
         + '<div class="d-txt"><b style="color:var(--ink)">' + esc(d.titulo || '') + '</b><br>' + esc(trunc(d.texto || '', 160)) + '</div>'
         + '<div class="d-actions"><button class="btn primary small" data-act="pieza-sale" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">✓ Sale así</button>'
         + '<button class="btn small" data-act="pieza-arreglar" data-uid="' + d.user_id + '" data-fecha="' + esc(d.fecha || '') + '" data-pid="' + d.post_id + '" type="button">Pedir arreglo</button>'
@@ -649,6 +755,12 @@
     return api('/api/admin/support/conserje/revision/decidir', { method: 'POST', body: body });
   }
   document.addEventListener('click', function (ev) {
+    // (LOTE CONSERJE-VER-GRANDE) La imagen de un posteo se mira en
+    // grande ANTES que cualquier otra cosa: la miniatura puede vivir
+    // dentro de una fila que navega (data-goto) y el toque en la foto
+    // es para VERLA, no para ir a la ficha.
+    var ver = ev.target.closest('[data-ver]');
+    if (ver) { onVerThumb(ver); return; }
     var sel = ev.target.closest('[data-sel]');
     if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); return; }
     var go = ev.target.closest('[data-goto]');
@@ -776,6 +888,28 @@
         .catch(function () { toast('No se pudo guardar la nota.', 'err'); re(); });
     } else { re(); }
   });
+  // (LOTE CONSERJE-VER-GRANDE) Los controles del visor: la ✕, el
+  // toque fuera de la pieza y Esc cierran; las flechas, las teclas
+  // ←/→ y el swipe recorren el carrusel. Cerrar no toca el estado de
+  // la consola: se vuelve al mismo scroll y a la misma pantalla.
+  $('visorCerrar').addEventListener('click', cerrarVisor);
+  $('visorPrev').addEventListener('click', function () { visorIrA(visor.idx - 1); });
+  $('visorNext').addEventListener('click', function () { visorIrA(visor.idx + 1); });
+  $('visor').addEventListener('click', function (ev) { if (ev.target === $('visor')) cerrarVisor(); });
+  document.addEventListener('keydown', function (ev) {
+    if (!visor.abierto) return;
+    if (ev.key === 'Escape') cerrarVisor();
+    else if (ev.key === 'ArrowLeft') visorIrA(visor.idx - 1);
+    else if (ev.key === 'ArrowRight') visorIrA(visor.idx + 1);
+  });
+  var visorTouchX = null;
+  $('visor').addEventListener('touchstart', function (ev) { visorTouchX = ev.changedTouches[0].clientX; }, { passive: true });
+  $('visor').addEventListener('touchend', function (ev) {
+    if (visorTouchX == null) return;
+    var dx = ev.changedTouches[0].clientX - visorTouchX;
+    visorTouchX = null;
+    if (Math.abs(dx) > 42) visorIrA(visor.idx + (dx < 0 ? 1 : -1));
+  }, { passive: true });
   $('buscador').addEventListener('input', renderRoster);
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
 

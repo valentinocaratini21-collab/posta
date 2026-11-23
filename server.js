@@ -13577,6 +13577,21 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
+// (LOTE CONSERJE-VER-GRANDE) La media completa de UN posteo para el
+// visor en grande de la consola: al tocar la imagen de un posteo, el
+// visor pide acá las láminas del carrusel, el video reproducible con
+// su póster y el caption entero — las superficies pintan miniaturas
+// con lo mínimo y el visor muestra la pieza entera, sin recorte.
+app.get('/api/admin/support/conserje/posteo-media', requireAdminToken, (req, res) => {
+  try {
+    const uid = Number(req.query.user_id) || 0;
+    const postId = Number(req.query.post_id) || 0;
+    if (!uid || !postId) return res.status(400).json({ ok: false, error: 'falta user_id o post_id' });
+    const r = conserjeVista.mediaDePosteo(db, uid, postId, { absImageUrl, posterUrlFor: posterUrlDePosteo });
+    if (!r) return res.status(404).json({ ok: false, error: 'posteo_no_encontrado' });
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
 app.post('/api/admin/support/conserje/revision/decidir', requireAdminToken, (req, res) => {
   try {
     const b = req.body || {};
@@ -48481,7 +48496,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1254';
+const BUILD_ID = '20261105-v1255';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
