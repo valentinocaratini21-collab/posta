@@ -14333,8 +14333,17 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
         // ofrece reconectar, en vez del genérico sin salida.
         // (LOTE ADS-IG-RESOLUCION-VIVA) Ídem riel billetera: el
         // mensaje para el usuario de Meta viaja con anuncio_fallido.
+        // (LOTE ADS-META-MSG) Los frenos de resolución de la cuenta
+        // de Instagram (ig_no_resuelto / ig_conflicto) son errores
+        // PROPIOS, sin metaError de Meta: su mensaje ya es el motivo
+        // honesto redactado para el cliente (el mismo que guarda
+        // ad_boosts.error) — viaja como meta_msg para que la tarjeta
+        // lo pinte bajo el genérico, como ya sabe hacer con el
+        // user_msg de un rechazo genuino. Ningún otro freno cambia.
         const metaMsgD = (motivoFrenoD === 'anuncio_fallido' && crDError && crDError.metaError)
-          ? String(crDError.metaError.user_msg || crDError.metaError.user_title || '').slice(0, 300) : '';
+          ? String(crDError.metaError.user_msg || crDError.metaError.user_title || '').slice(0, 300)
+          : ((crDError && (crDError.code === 'ig_no_resuelto' || crDError.code === 'ig_conflicto'))
+            ? String(crDError.message || '').slice(0, 300) : '');
         return res.status(409).json({ ok: false, motivo: motivoFrenoD, ...(metaMsgD ? { meta_msg: metaMsgD } : {}), ...(crDError && crDError.code === 'ig_fuera_de_conexion' ? { ig_duena: crDError.igDuena || null, ig_conexion: Array.isArray(crDError.igConexion) ? crDError.igConexion : [] } : {}) });
       }
       db.prepare(`INSERT INTO ad_boosts
@@ -15844,8 +15853,16 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // mensaje PARA EL USUARIO que Meta mismo devolvió
         // (error_user_msg / error_user_title): la tarjeta lo muestra
         // bajo el genérico y un rechazo real deja de ser ciego.
+        // (LOTE ADS-META-MSG) Ídem destacado: los frenos de
+        // resolución (ig_no_resuelto / ig_conflicto) no traen
+        // metaError — su propio mensaje es el motivo honesto que el
+        // freno redactó para el cliente y que ad_boosts.error ya
+        // guarda; viaja como meta_msg y la tarjeta lo muestra bajo
+        // el genérico en vez de dejar el rechazo ciego.
         const metaMsg = (motivoFreno === 'anuncio_fallido' && crError && crError.metaError)
-          ? String(crError.metaError.user_msg || crError.metaError.user_title || '').slice(0, 300) : '';
+          ? String(crError.metaError.user_msg || crError.metaError.user_title || '').slice(0, 300)
+          : ((crError && (crError.code === 'ig_no_resuelto' || crError.code === 'ig_conflicto'))
+            ? String(crError.message || '').slice(0, 300) : '');
         return res.status(409).json({ ok: false, motivo: motivoFreno, ...(metaMsg ? { meta_msg: metaMsg } : {}), ...(crError && crError.code === 'ig_fuera_de_conexion' ? { ig_duena: crError.igDuena || null, ig_conexion: Array.isArray(crError.igConexion) ? crError.igConexion : [] } : {}) });
       }
       db.prepare(`INSERT INTO ad_boosts
@@ -48506,7 +48523,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1261';
+const BUILD_ID = '20261105-v1262';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
