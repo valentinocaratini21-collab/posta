@@ -2073,7 +2073,7 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-home{max-width:640px;margin:0 auto;overflow-x:clip}.hs-home .igmock{font-size:14px}
 .hs-top{display:flex;gap:12px;align-items:center;margin:4px 0 14px;max-width:100%}.hs-top>div{min-width:0}.hs-top .hs-sub{overflow-wrap:break-word}
 .hs-ava{width:52px;height:52px;border-radius:50%;flex:none;box-shadow:0 4px 14px rgba(39,147,200,.25)}
-.hs-top b{font-size:19px}
+.hs-top b{font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif;font-size:19px;font-weight:800;letter-spacing:-.02em}
 .hs-sub{font-size:13px;color:var(--mut);margin-top:2px}
 .hs-week{margin:0 0 6px}
 .hs-week-head{display:flex;align-items:baseline;justify-content:space-between;margin:0 2px 8px}
@@ -4769,7 +4769,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-chatfull-head{display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;margin:0;background:transparent;border:none;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;flex:none}
 .pz-chatfull-back{width:28px;height:36px;border:none;background:transparent;color:var(--cel);font-family:inherit;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
 .pz-chatfull-head .chat-face{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);object-fit:cover;flex:none}
-.pz-chatfull-tit b{font-size:17px;letter-spacing:-.2px;color:var(--txt)}
+.pz-chatfull-tit b{font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--txt)}
 .pz-chatfull #chatCard{flex:1;display:flex;flex-direction:column;min-height:0;margin:0;background:transparent;border:none;box-shadow:none;padding:10px 12px 0}
 .pz-chatfull .chat-box{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto}
 .pz-chatfull .chat-msg.ai{background:#fff;border:1px solid var(--line)}
@@ -4874,7 +4874,7 @@ body.pz-postchat-open{overflow:hidden}
 .pz-shell-ava-wrap .pz-shell-ava{display:block}
 .pz-shell-dot{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:#22C55E;border:2px solid #fff;box-shadow:0 1px 3px rgba(10,30,51,.25)}
 .pz-shell-who{display:flex;flex-direction:column;line-height:1.2;min-width:0}
-.pz-shell-who b{font-size:20px;color:#0A1E33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pz-shell-who b{font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif;font-size:20px;font-weight:800;letter-spacing:-.02em;color:#0A1E33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pz-shell-who small{font-size:13px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pz-shell-acts{display:flex;gap:6px;flex:none}
 .pz-shell-ic{width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.72);background:rgba(255,255,255,.52);-webkit-backdrop-filter:blur(16px) saturate(165%);backdrop-filter:blur(16px) saturate(165%);color:#0A1E33;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 32px rgba(10,30,51,.14),inset 0 1px 0 rgba(255,255,255,.75)}
