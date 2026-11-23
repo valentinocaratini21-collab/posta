@@ -760,6 +760,167 @@ function pzPullInit() {
   } catch (e) {}
 }
 
+/* ---------- DESLIZAR-PANTALLAS: pasar de pantalla deslizando ---------- */
+// (LOTE DESLIZAR-PANTALLAS · Valentino 22/11 15:11: «deslizando para
+// los costados se pueda pasar de la pantalla de inicio, a la pantalla
+// de subir y a la pantalla de ads, y viceversa») En las tres pantallas
+// de la barra inferior, un deslizamiento lateral FRANCO cambia a la
+// pantalla vecina EN EL ORDEN DE LA BARRA (Inicio · Subir · Ads), en
+// los dos sentidos y SIN envoltura circular: en Inicio no hay pantalla
+// a la izquierda y en Ads no hay a la derecha — ahí el gesto no va a
+// ningún lado. El cambio usa la navegación de siempre (bbGo: el hash,
+// el render y el pintado instantáneo de cada pantalla): no hay una
+// segunda vía ni transición — el cambio de pantalla es instantáneo
+// por decisión del dueño (6/11), así que este lote no toca styles.css.
+// Nunca dispara: fuera de las tres pantallas; con una hoja, un visor
+// o un modal abierto (la misma lista que respeta pzPullCanStart, más
+// la hoja de compartir, el visor de la semana y las hojas de impulso
+// .pubsheet-ov visibles); escribiendo o sobre un control de
+// formulario; sobre la barra inferior, el encabezado de la barra viva
+// o un slider; sobre los chips de monto de Ads (.pz-ads-amount) o las
+// píldoras con data-monto; ni dentro de un scroller horizontal
+// interno (carruseles, la tira de la semana, las destacadas, las
+// historias): ahí el gesto es de ese scroller, no de la pantalla.
+// Tampoco si el gesto es vertical: eso es del scroll y del
+// pull-to-refresh, que ya mata su propio estado cuando el gesto se
+// hace horizontal — las dos familias quedan disjuntas por dominancia.
+// Sin preventDefault sobre el gesto; solo al DISPARAR se suprime el
+// click sintético que cae sobre el punto final del deslizamiento
+// (mismo punto, dentro de los 400 ms), para que la tarjeta que quedó
+// bajo el dedo no se abra sobre la pantalla nueva.
+// Umbrales: 72 px de recorrido horizontal (el orden del umbral del
+// pull) con dominancia 2:1 sobre el vertical, y el gesto completo
+// dentro de 900 ms — un arrastre lento y apoyado no es un
+// deslizamiento. Si a mitad de camino el gesto se hace vertical
+// (más de 14 px dominando), el candidato muere: no revive al final.
+const PZ_SWIPE_TABS = ['inicio', 'subir', 'ads'];
+const PZ_SWIPE_MIN_DX = 72;
+const PZ_SWIPE_DOM = 2;
+const PZ_SWIPE_MAX_MS = 900;
+let PZ_SWIPE_ON = false;
+let PZ_SWIPE_S = null;
+let PZ_SWIPE_EAT = null;
+function pzSwipeTab() {
+  try { return ((location.hash || '').split('?')[0].split('/')[2] || ''); } catch (e) { return ''; }
+}
+function pzSwipeOverlayOpen() {
+  try {
+    const b = document.body;
+    if (b) {
+      if (b.classList.contains('mz-sheet-open')) return true;
+      if (b.classList.contains('hf-d-open') || b.classList.contains('hf-sv-open')) return true;
+      if (b.style && b.style.overflow === 'hidden') return true;
+    }
+    const sh = document.getElementById('mzSheet');
+    if (sh && !sh.hidden) return true;
+    const dov = document.getElementById('drawerOv');
+    if (dov && !dov.hidden) return true;
+    const rs = document.getElementById('rsShareSheet');
+    if (rs && !rs.hidden) return true;
+    const lp = document.getElementById('lpView');
+    if (lp && lp.classList.contains('open')) return true;
+    if (document.querySelector('.pz-exp-overlay')) return true;
+    const ovs = document.querySelectorAll('.pubsheet-ov');
+    for (let i = 0; i < ovs.length; i++) {
+      if (ovs[i].style.display !== 'none' && ovs[i].getClientRects().length) return true;
+    }
+    return false;
+  } catch (e) { return true; } // ante la duda, no navegar
+}
+function pzSwipeInHScroller(el) {
+  try {
+    let n = el;
+    while (n && n !== document.body && n !== document.documentElement) {
+      if (n.id === 'app') break;
+      try {
+        const cs = (window.getComputedStyle) ? window.getComputedStyle(n) : null;
+        const ox = cs ? cs.overflowX : '';
+        if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth > n.clientWidth + 1) return true;
+      } catch (e) {}
+      n = n.parentElement;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+function pzSwipeCanStart(ev) {
+  try {
+    if (PZ_SWIPE_TABS.indexOf(pzSwipeTab()) < 0) return false;
+    if (pzSwipeOverlayOpen()) return false;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return false;
+    const t = ev && ev.target;
+    if (!t || t === document || t === document.body || t === document.documentElement) return true;
+    if (pzPullIsFormControl(t)) return false;
+    if (t.closest && (t.closest('.bb-bar') || t.closest('.mz-tabs') || t.closest('.pz-shell-head') || t.closest('.mtop') || t.closest('.mx-slider') || t.closest('.pz-ads-amount') || t.closest('[data-monto]'))) return false;
+    if (pzSwipeInHScroller(t)) return false;
+    return true;
+  } catch (e) { return false; }
+}
+function pzSwipeNav(dx) {
+  try {
+    const i = PZ_SWIPE_TABS.indexOf(pzSwipeTab());
+    if (i < 0) return false;
+    const j = dx < 0 ? i + 1 : i - 1;
+    if (j < 0 || j >= PZ_SWIPE_TABS.length) return false; // sin envoltura circular
+    bbGo('#/app/' + PZ_SWIPE_TABS[j]);
+    return true;
+  } catch (e) { return false; }
+}
+function pzSwipeInit() {
+  try {
+    if (PZ_SWIPE_ON) return;
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    PZ_SWIPE_ON = true;
+    // El click sintético del final de un deslizamiento que DISPARÓ se
+    // come una sola vez, solo si cae sobre el punto final del gesto.
+    document.addEventListener('click', (e) => {
+      try {
+        const eat = PZ_SWIPE_EAT;
+        if (!eat) return;
+        PZ_SWIPE_EAT = null;
+        if (Date.now() > eat.until) return;
+        if (Math.abs((e.clientX || 0) - eat.x) <= 24 && Math.abs((e.clientY || 0) - eat.y) <= 24) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      } catch (err) {}
+    }, true);
+    window.addEventListener('touchstart', (ev) => {
+      try {
+        if (!ev.touches || ev.touches.length !== 1) { PZ_SWIPE_S = null; return; }
+        if (!pzSwipeCanStart(ev)) { PZ_SWIPE_S = null; return; }
+        const t = ev.touches[0];
+        PZ_SWIPE_S = { x: t.clientX, y: t.clientY, at: Date.now(), dead: false };
+      } catch (e) { PZ_SWIPE_S = null; }
+    }, { passive: true });
+    window.addEventListener('touchmove', (ev) => {
+      try {
+        const s = PZ_SWIPE_S; if (!s || s.dead) return;
+        if (ev.touches && ev.touches.length > 1) { s.dead = true; return; }
+        const t = ev.changedTouches && ev.changedTouches[0]; if (!t) return;
+        const dx = t.clientX - s.x, dy = t.clientY - s.y;
+        if (Math.abs(dy) > 14 && Math.abs(dy) >= Math.abs(dx)) { s.dead = true; return; }
+        if (pzSwipeOverlayOpen()) { s.dead = true; return; }
+      } catch (e) {}
+    }, { passive: true });
+    const pzSwipeEnd = (ev) => {
+      try {
+        const s = PZ_SWIPE_S; PZ_SWIPE_S = null;
+        if (!s || s.dead) return;
+        const t = ev.changedTouches && ev.changedTouches[0]; if (!t) return;
+        const dx = t.clientX - s.x, dy = t.clientY - s.y;
+        if (Date.now() - s.at > PZ_SWIPE_MAX_MS) return;
+        if (Math.abs(dx) < PZ_SWIPE_MIN_DX) return;
+        if (Math.abs(dx) < PZ_SWIPE_DOM * Math.abs(dy)) return;
+        if (pzSwipeOverlayOpen()) return;
+        if (pzSwipeNav(dx)) PZ_SWIPE_EAT = { until: Date.now() + 400, x: t.clientX, y: t.clientY };
+      } catch (e) {}
+    };
+    window.addEventListener('touchend', pzSwipeEnd, { passive: true });
+    window.addEventListener('touchcancel', () => { PZ_SWIPE_S = null; }, { passive: true });
+  } catch (e) {}
+}
+
 /* ---------- ZOOM-2: bloquear el zoom de viewport a nivel JS ---------- */
 // v615 puso maximum-scale=1 + user-scalable=no en el meta, pero iOS
 // ignora user-scalable=no desde iOS 10 (accesibilidad) y el video del
@@ -2904,7 +3065,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1232';
+const PZ_BUILD = '20261105-v1233';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -40382,6 +40543,7 @@ try { window.addEventListener('pageshow', () => { try { pzVersionGuard(); } catc
 setTimeout(() => { try { pzVersionGuard(); } catch (e) {} }, 2500);
 render();
 try { pzPullInit(); } catch (e) {}
+try { pzSwipeInit(); } catch (e) {}
 setTimeout(trackScreen, 800);
 
 // (LOTE ENCABEZADO-COLAPSABLE · Valentino 2/11: el encabezado del
