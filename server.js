@@ -17838,8 +17838,11 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
     // álbum (misma cuenta, mismo mensaje) — cuenta con la misma regla:
     // solo el material no incorporado a ningún posteo consume el techo,
     // con el predicado «incorporado» compartido (ASSET_INCORPORADO_SQL).
+    // TECHO 100 (TOPE-ALBUM-TECHO-100, 23/11): la evidencia en vivo falsó
+    // el número, no el modelo — 20 era menos que el material fuente
+    // legítimo que una cuenta que postea todos los días acumula.
     const nAlb = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND ${ASSET_INCORPORADO_SQL})`).get(req.session.userId).c;
-    if (nAlb >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
+    if (nAlb >= 100) return res.status(400).json({ error: 'tu álbum llegó a 100 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
   }
   // (Gap 10, 2026-10-25) La foto real del cliente se normaliza al entrar
   // (EXIF + JPEG, HEIC incluido); los diseños generados por la app quedan
@@ -19229,8 +19232,11 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     // en la biblioteca) ya cumplió su ciclo y no consume el techo: una
     // cuenta fiel que postea todos los días no se queda sin puerta de
     // subida por su propio historial.
+    // TECHO 100 (TOPE-ALBUM-TECHO-100, 23/11): la evidencia en vivo falsó
+    // el número, no el modelo — 20 era menos que el material fuente
+    // legítimo que una cuenta que postea todos los días acumula.
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND ${ASSET_INCORPORADO_SQL})`).get(uid).c;
-    if (n >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
+    if (n >= 100) return res.status(400).json({ error: 'tu álbum llegó a 100 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
     if (isVideo) {
       // (Gap 9, 2026-10-25) Ingesta ÚNICA de video (ingestClientVideo):
       // las mismas reglas que la tira de medios — probe, tope de 90 s,
@@ -48883,7 +48889,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1278';
+const BUILD_ID = '20261105-v1279';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

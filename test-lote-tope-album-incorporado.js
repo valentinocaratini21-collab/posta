@@ -24,6 +24,10 @@
    Y los controles: el techo sigue exacto sobre el material sin usar y
    las referencias muertas (posteo cancelado/fallido, recibo deshecho)
    NO incorporan.
+   TECHO 100 desde TOPE-ALBUM-TECHO-100 (23/11): el número 20 quedó
+   falsado por la operación real (la casa: 21 foto/video, solo 3
+   referenciables, 18 de material fuente contando) — las fixtures del
+   techo siembran 100 y el caso A6 reproduce el conteo real de la casa.
    Uso: node test-lote-tope-album-incorporado.js [árbol] — por defecto
    este dir. Boot real con DATA_DIR temporal + join trial (sin clave IA). */
 'use strict';
@@ -112,7 +116,7 @@ async function main() {
       .every((f) => fragDef.includes(f)));
   const pzBuild = (appSrc.match(/const PZ_BUILD = '([^']+)'/) || [])[1];
   check('B3 paridad BUILD/PZ_BUILD y app.js?v= del index',
-    buildTree === '20261105-v1278' && pzBuild === buildTree && idxSrc.includes('app.js?v=907'),
+    buildTree === '20261105-v1279' && pzBuild === buildTree && idxSrc.includes('app.js?v=908'),
     'BUILD=' + buildTree + ' PZ=' + pzBuild);
 
   console.log('== Parte A: servidor real ==');
@@ -159,24 +163,24 @@ async function main() {
 
     // A1: el techo sigue exacto sobre el material genuinamente sin usar.
     const uA = await joinUser('techo-intacto');
-    for (let i = 0; i < 20; i++) seedAsset(uA.userId, 'a' + i);
+    for (let i = 0; i < 100; i++) seedAsset(uA.userId, 'a' + i);
     const rA1 = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uA.cookie);
-    check('A1a 20 sin usar: Subir da 400 con el mensaje honesto del tope',
-      rA1.st === 400 && /llegó a 20 archivos/.test(rA1.txt), rA1.st + ' ' + rA1.txt.slice(0, 150));
+    check('A1a 100 sin usar: Subir da 400 con el mensaje honesto del tope',
+      rA1.st === 400 && /llegó a 100 archivos/.test(rA1.txt), rA1.st + ' ' + rA1.txt.slice(0, 150));
     const rA1b = await req('POST', '/api/media?from=chat', JPEG, 'image/jpeg', uA.cookie);
-    check('A1b 20 sin usar: la puerta del chat da el mismo 400',
-      rA1b.st === 400 && /llegó a 20 archivos/.test(rA1b.txt), rA1b.st + ' ' + rA1b.txt.slice(0, 150));
+    check('A1b 100 sin usar: la puerta del chat da el mismo 400',
+      rA1b.st === 400 && /llegó a 100 archivos/.test(rA1b.txt), rA1b.st + ' ' + rA1b.txt.slice(0, 150));
 
-    // A2: 20 incorporados SOLO por las formas que v1275 no miraba.
+    // A2: 100 incorporados SOLO por las formas que v1275 no miraba.
     const uB = await joinUser('formas-nuevas');
     const B = [];
-    for (let i = 0; i < 20; i++) B.push(seedAsset(uB.userId, 'b' + i, 'photo', i >= 18 ? 'huella-gemela' : ''));
-    for (let i = 0; i < 4; i++) seedPost(uB.userId, { status: 'published', media_type: 'video', cover_path: B[i].file_path }); // F4
-    for (let i = 4; i < 8; i++) seedPost(uB.userId, { status: 'draft', prev_image_path: B[i].file_path }); // F5
-    for (let i = 8; i < 12; i++) { const pid = seedPost(uB.userId, { status: 'scheduled' }); seedVersion(pid, B[i].file_path); } // F6
-    for (let i = 12; i < 15; i++) { const pid = seedPost(uB.userId, { status: 'published' }); seedRecibo(uB.userId, B[i].id, pid, 'activo'); } // F7
-    for (let i = 15; i < 18; i++) { const pid = seedPost(uB.userId, { status: 'scheduled' }); seedPedido(uB.userId, B[i].id, pid); } // F8
-    seedPost(uB.userId, { status: 'published', media_type: 'video', cover_path: B[18].file_path }); // F9: B[18] por portada; B[19] entra SOLO por la huella gemela
+    for (let i = 0; i < 100; i++) B.push(seedAsset(uB.userId, 'b' + i, 'photo', i >= 98 ? 'huella-gemela' : ''));
+    for (let i = 0; i < 25; i++) seedPost(uB.userId, { status: 'published', media_type: 'video', cover_path: B[i].file_path }); // F4
+    for (let i = 25; i < 50; i++) seedPost(uB.userId, { status: 'draft', prev_image_path: B[i].file_path }); // F5
+    for (let i = 50; i < 70; i++) { const pid = seedPost(uB.userId, { status: 'scheduled' }); seedVersion(pid, B[i].file_path); } // F6
+    for (let i = 70; i < 85; i++) { const pid = seedPost(uB.userId, { status: 'published' }); seedRecibo(uB.userId, B[i].id, pid, 'activo'); } // F7
+    for (let i = 85; i < 98; i++) { const pid = seedPost(uB.userId, { status: 'scheduled' }); seedPedido(uB.userId, B[i].id, pid); } // F8
+    seedPost(uB.userId, { status: 'published', media_type: 'video', cover_path: B[98].file_path }); // F9: B[98] por portada; B[99] entra SOLO por la huella gemela
     const rA2 = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uB.cookie);
     check('A2 incorporados por cover/prev/versiones/recibo/pedido/huella: Subir da 200',
       rA2.st === 200 && j(rA2.txt) && j(rA2.txt).ok === true, rA2.st + ' ' + rA2.txt.slice(0, 150));
@@ -187,7 +191,7 @@ async function main() {
     // A3: referencias muertas NO incorporan (el techo no se libera con humo).
     const uC = await joinUser('referencias-muertas');
     const C = [];
-    for (let i = 0; i < 20; i++) C.push(seedAsset(uC.userId, 'c' + i));
+    for (let i = 0; i < 100; i++) C.push(seedAsset(uC.userId, 'c' + i));
     seedPost(uC.userId, { status: 'cancelled', image_path: C[0].file_path, cover_path: C[1].file_path, prev_image_path: C[2].file_path, carousel_paths: JSON.stringify([C[3].file_path]) });
     const pidCanc = seedPost(uC.userId, { status: 'cancelled' });
     seedVersion(pidCanc, C[4].file_path);
@@ -198,7 +202,7 @@ async function main() {
     seedRecibo(uC.userId, C[7].id, pidCanc, 'activo'); // recibo activo pero a un cancelado: no vincula
     const rA3 = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uC.cookie);
     check('A3 referencias desde cancelados/fallidos y recibos deshechos no liberan: sigue 400',
-      rA3.st === 400 && /llegó a 20 archivos/.test(rA3.txt), rA3.st + ' ' + rA3.txt.slice(0, 150));
+      rA3.st === 400 && /llegó a 100 archivos/.test(rA3.txt), rA3.st + ' ' + rA3.txt.slice(0, 150));
 
     // A4: la forma de la casa — 21 foto/video, 20 incorporados por el
     // abanico real de formas, 1 solo de trabajo: la subida entra.
@@ -227,6 +231,30 @@ async function main() {
     const rDel2 = await req('DELETE', '/api/album/' + eFree.id, null, null, uE.cookie);
     check('A5b borrar un asset sin usar: 200, se borra',
       rDel2.st === 200, rDel2.st + ' ' + rDel2.txt.slice(0, 150));
+
+    // A6: el caso de aceptación de la casa con su conteo real de hoy
+    // (medido en producción el 23/11): 21 foto/video, solo 3
+    // referenciables por el abanico → 18 cuentan como material de
+    // trabajo; tras v1278 entraron ES-2 y ES-3 (2 más de trabajo = 20)
+    // y la ES-4 rebotó contra el techo viejo. La fixture reproduce ese
+    // instante exacto: 23 foto/video, 3 incorporados, 20 contando —
+    // la lámina siguiente (ES-4) entra con el techo 100 y rebotaba
+    // con el de 20. (Una sola subida real por puerta: el FIX ÁLBUM
+    // deduplica por huella las repetidas y no discriminarían.)
+    const uF = await joinUser('casa-real-18');
+    const F = [];
+    for (let i = 0; i < 21; i++) F.push(seedAsset(uF.userId, 'f' + i, i === 0 ? 'video' : 'photo'));
+    seedPost(uF.userId, { status: 'published', media_type: 'video', image_path: F[0].file_path }); // la película (image_path)
+    seedPost(uF.userId, { status: 'published', media_type: 'video', cover_path: F[1].file_path }); // una portada
+    { const pid = seedPost(uF.userId, { status: 'published' }); seedRecibo(uF.userId, F[2].id, pid, 'activo'); } // un recibo de Subir
+    // F[3..20] = 18 de material fuente sin referencia: cuentan.
+    seedAsset(uF.userId, 'es2'); seedAsset(uF.userId, 'es3'); // las dos láminas que v1278 dejó entrar: 20 contando
+    const rA6 = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uF.cookie);
+    check('A6a la cuenta con el conteo real de la casa (20 contando) sube la lámina siguiente (ES-4) sin topar',
+      rA6.st === 200 && j(rA6.txt) && j(rA6.txt).ok === true, rA6.st + ' ' + rA6.txt.slice(0, 150));
+    const rA6b = await req('POST', '/api/media?from=chat', JPEG, 'image/jpeg', uF.cookie);
+    check('A6b y la puerta del chat también: 200',
+      rA6b.st === 200, rA6b.st + ' ' + rA6b.txt.slice(0, 150));
   } catch (e) {
     check('sin excepción en la corrida', false, e.message + '\n' + serverLog.slice(-800));
   } finally {

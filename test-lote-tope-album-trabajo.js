@@ -9,6 +9,9 @@
        el predicado «usado» de la biblioteca) — en las DOS puertas que son
        el tope del álbum: POST /api/album/photo y POST /api/media?from=chat;
    (b) pzSubirUpload muestra el error real del servidor.
+   TECHO 100 desde TOPE-ALBUM-TECHO-100 (23/11): la evidencia en vivo
+   falsó el número (20 < material fuente legítimo acumulado), no el
+   modelo — las fixtures del techo siembran 100.
    Uso: node test-lote-tope-album-trabajo.js [árbol] — por defecto este dir.
    Boot real con DATA_DIR temporal + join trial (sin clave IA). */
 'use strict';
@@ -100,7 +103,7 @@ async function main() {
     /er\.fromServer = !!\(d && d\.error\)/.test(appSrc) && /pzSubirErr\(e && e\.fromServer/.test(appSrc));
   const pzBuild = (appSrc.match(/const PZ_BUILD = '([^']+)'/) || [])[1];
   check('B3 paridad BUILD/PZ_BUILD y app.js?v= del index',
-    buildTree === '20261105-v1278' && pzBuild === buildTree && idxSrc.includes('app.js?v=907'),
+    buildTree === '20261105-v1279' && pzBuild === buildTree && idxSrc.includes('app.js?v=908'),
     'BUILD=' + buildTree + ' PZ=' + pzBuild);
 
   console.log('== Parte A: servidor real ==');
@@ -129,54 +132,54 @@ async function main() {
     check('A0 boot: /api/version responde el BUILD del árbol', !!ver && ver.build === buildTree,
       ver ? JSON.stringify(ver.build) : 'sin respuesta');
 
-    // A1: 20 de trabajo sembrados → la subida real rebota con el mensaje
+    // A1: 100 de trabajo sembrados → la subida real rebota con el mensaje
     // honesto (la siembra es por DB porque el FIX ÁLBUM deduplica por
     // huella los bytes idénticos entre puertas; el conteo que se prueba
     // es SQL y las sondas de comportamiento son subidas reales).
     const uA = await joinUser('casa-tope');
     const A = [];
-    for (let i = 0; i < 20; i++) A.push(seedAsset(uA.userId, 'a' + i));
+    for (let i = 0; i < 100; i++) A.push(seedAsset(uA.userId, 'a' + i));
     const rowsA = await listAssets(uA.cookie);
-    check('A1a la cuenta llega a 20 filas foto/video de trabajo', rowsA.length === 20, 'rows=' + rowsA.length);
+    check('A1a la cuenta llega a 100 filas foto/video de trabajo', rowsA.length === 100, 'rows=' + rowsA.length);
     const r21 = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uA.cookie);
-    check('A1b con 20 de trabajo, Subir da 400 con el mensaje honesto del tope',
-      r21.st === 400 && /llegó a 20 archivos/.test(r21.txt), r21.st + ' ' + r21.txt.slice(0, 150));
+    check('A1b con 100 de trabajo, Subir da 400 con el mensaje honesto del tope',
+      r21.st === 400 && /llegó a 100 archivos/.test(r21.txt), r21.st + ' ' + r21.txt.slice(0, 150));
 
-    // A2: los 20 se incorporan (tres mecanismos) → la puerta se abre
-    for (let i = 0; i < 8; i++) seedPost(uA.userId, 'published', A[i].id, A[i].file_path, '');
-    for (let i = 8; i < 14; i++) seedPost(uA.userId, 'scheduled', null, A[i].file_path, '');
-    seedPost(uA.userId, 'draft', null, A[14].file_path, JSON.stringify(A.slice(14).map((a) => a.file_path)));
+    // A2: los 100 se incorporan (tres mecanismos) → la puerta se abre
+    for (let i = 0; i < 40; i++) seedPost(uA.userId, 'published', A[i].id, A[i].file_path, '');
+    for (let i = 40; i < 70; i++) seedPost(uA.userId, 'scheduled', null, A[i].file_path, '');
+    seedPost(uA.userId, 'draft', null, A[70].file_path, JSON.stringify(A.slice(70).map((a) => a.file_path)));
     const rOk = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uA.cookie);
-    check('A2 con los 20 incorporados (publicado/programado/borrador), Subir vuelve a dar 200',
+    check('A2 con los 100 incorporados (publicado/programado/borrador), Subir vuelve a dar 200',
       rOk.st === 200 && j(rOk.txt) && j(rOk.txt).ok === true, rOk.st + ' ' + rOk.txt.slice(0, 150));
 
-    // A3: el techo sigue exacto sobre el material de trabajo (1 nuevo + 19 sembrados = 20)
-    for (let i = 0; i < 19; i++) seedAsset(uA.userId, 'w' + i);
+    // A3: el techo sigue exacto sobre el material de trabajo (1 nuevo + 99 sembrados = 100)
+    for (let i = 0; i < 99; i++) seedAsset(uA.userId, 'w' + i);
     const rFull = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uA.cookie);
-    check('A3 con 20 de trabajo otra vez (los incorporados no cuentan), Subir da 400',
-      rFull.st === 400 && /llegó a 20 archivos/.test(rFull.txt), rFull.st + ' ' + rFull.txt.slice(0, 150));
+    check('A3 con 100 de trabajo otra vez (los incorporados no cuentan), Subir da 400',
+      rFull.st === 400 && /llegó a 100 archivos/.test(rFull.txt), rFull.st + ' ' + rFull.txt.slice(0, 150));
 
     // A4: la puerta del chat (?from=chat) aplica la misma regla
     const uB = await joinUser('chat-tope');
     const B = [];
-    for (let i = 0; i < 20; i++) B.push(seedAsset(uB.userId, 'b' + i));
+    for (let i = 0; i < 100; i++) B.push(seedAsset(uB.userId, 'b' + i));
     const rChat1 = await req('POST', '/api/media?from=chat', JPEG, 'image/jpeg', uB.cookie);
-    check('A4a chat con 20 de trabajo: 400 con el mensaje del tope',
-      rChat1.st === 400 && /llegó a 20 archivos/.test(rChat1.txt), rChat1.st + ' ' + rChat1.txt.slice(0, 150));
+    check('A4a chat con 100 de trabajo: 400 con el mensaje del tope',
+      rChat1.st === 400 && /llegó a 100 archivos/.test(rChat1.txt), rChat1.st + ' ' + rChat1.txt.slice(0, 150));
     seedPost(uB.userId, 'published', null, B[0].file_path, JSON.stringify(B.map((a) => a.file_path)));
     const rChat2 = await req('POST', '/api/media?from=chat', JPEG, 'image/jpeg', uB.cookie);
-    check('A4b chat con los 20 incorporados en un carrusel publicado: 200',
+    check('A4b chat con los 100 incorporados en un carrusel publicado: 200',
       rChat2.st === 200, rChat2.st + ' ' + rChat2.txt.slice(0, 150));
 
     // A5: un posteo cancelado o fallido NO incorpora (no libera el techo)
     const uC = await joinUser('cancel-tope');
     const C = [];
-    for (let i = 0; i < 20; i++) C.push(seedAsset(uC.userId, 'c' + i));
+    for (let i = 0; i < 100; i++) C.push(seedAsset(uC.userId, 'c' + i));
     seedPost(uC.userId, 'cancelled', null, C[0].file_path, JSON.stringify(C.map((a) => a.file_path)));
     seedPost(uC.userId, 'failed', C[1].id, C[1].file_path, '');
     const rC = await req('POST', '/api/album/photo', JPEG, 'image/jpeg', uC.cookie);
     check('A5 referencias desde posteos cancelados/fallidos no liberan: sigue 400',
-      rC.st === 400 && /llegó a 20 archivos/.test(rC.txt), rC.st + ' ' + rC.txt.slice(0, 150));
+      rC.st === 400 && /llegó a 100 archivos/.test(rC.txt), rC.st + ' ' + rC.txt.slice(0, 150));
   } catch (e) {
     check('sin excepción en la corrida', false, e.message + '\n' + serverLog.slice(-800));
   } finally {
