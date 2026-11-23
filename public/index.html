@@ -442,7 +442,7 @@ html.pz-appctx{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 
     </div>
   </div></div></div>
 <div id="posty-boot" aria-hidden="true">
-  <span class="pz-boot-ray"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#2793C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 9-13h-6Z"/></svg></span><span class="pz-boot-txt">Cargando…</span>
+  <span class="pz-boot-coin"><span class="pz-boot-star s1">✦</span><span class="pz-boot-star s2">✦</span><span class="pz-boot-star s3">✦</span><span class="pz-boot-star s4">✦</span><img class="pz-boot-coinimg" src="/bambooty-placa.webp" alt="" width="88" height="88"></span><span class="pz-boot-txt">Cargando…</span>
   <div class="pzsp-stage">
     <span class="pzsp-tiny" style="left:13.5%;top:20.1%"></span>
     <span class="pzsp-tiny" style="left:81.7%;top:15.5%;animation-delay:.3s"></span>
@@ -466,12 +466,30 @@ html.pz-appctx{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 
    cualquier otra hoja.
    (LOTE BARRA-VIVA) La ruedita se vuelve el RAYO de marca girando en
    #2793C8 — el mismo estándar que adentro de la app. La apertura
-   mágica (.pzsp-*) no se toca. */
+   mágica (.pzsp-*) no se toca.
+   (LOTE MONEDA-CARGA · 23/11) El rayo se retira: la espera es la
+   MONEDA de Bambooty — la dorada con el borde de colores,
+   /bambooty-placa.webp, NO el sello liso — meciéndose en su aro de
+   magia (diseño 5 del mock aprobado por el dueño el 23/11 02:44):
+   balanceo ±6° en 2,6 s, aro dorado que gira en 7 s, 4 estrellitas
+   que titilan en 1,8 s y «Cargando…» debajo. Es el MISMO elemento
+   del boot en sus dos contextos (la web sobre el degradé claro y el
+   modo espera sobre el degradé de la magia). Con
+   prefers-reduced-motion la moneda queda quieta. */
 #posty-boot{position:fixed;inset:0;background:linear-gradient(165deg,#dff1fa 0%,#eef9fd 35%,#f7fbfe 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9999;pointer-events:none}
-.pz-boot-ray{display:inline-flex;flex:none;line-height:0;animation:pz-boot-rot .9s linear infinite}
+.pz-boot-coin{position:relative;width:150px;height:150px;flex:none;display:flex;align-items:center;justify-content:center}
+.pz-boot-coin::before{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid rgba(254,193,77,.85);box-shadow:0 0 22px rgba(254,193,77,.35),inset 0 0 22px rgba(254,193,77,.18);border-top-color:transparent;border-bottom-color:transparent;animation:pz-boot-ring 7s linear infinite}
+.pz-boot-coinimg{width:88px;height:88px;border-radius:50%;display:block;animation:pz-boot-rock 2.6s ease-in-out infinite}
+.pz-boot-star{position:absolute;color:#FEC14D;font-size:15px;line-height:1;animation:pz-boot-tw 1.8s ease-in-out infinite}
+.pz-boot-star.s1{top:6px;left:22px}
+.pz-boot-star.s2{top:16px;right:14px;animation-delay:.5s}
+.pz-boot-star.s3{bottom:10px;left:12px;animation-delay:1s}
+.pz-boot-star.s4{bottom:20px;right:26px;animation-delay:1.4s}
+@keyframes pz-boot-ring{to{transform:rotate(360deg)}}
+@keyframes pz-boot-rock{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}
+@keyframes pz-boot-tw{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
 .pz-boot-txt{font-family:Inter,system-ui,-apple-system,sans-serif;font-size:14px;font-weight:700;color:#47617A;letter-spacing:.01em}
-@keyframes pz-boot-rot{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion: reduce){.pz-boot-ray{animation-duration:2.4s}}
+@media (prefers-reduced-motion: reduce){.pz-boot-coin::before,.pz-boot-coinimg,.pz-boot-star{animation:none}}
 /* (LOTE APERTURA-MAGIA · opción 1 «la magia», mock aprobado por el dueño
    20/11) Presentación de apertura de la APP: solo en contexto app
    (instalada/nativa o ruta #/app|#/login|…) y solo en el arranque de
@@ -495,23 +513,24 @@ html.pz-appctx{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 
    es la presentación y la etapa aparece sobre el mismo fondo, sin
    flash de la pantalla anterior. */
 html.pz-appctx #posty-boot{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%)}
-html.pz-appctx #posty-boot .pz-boot-ray,html.pz-appctx #posty-boot .pz-boot-txt{display:none}
+html.pz-appctx #posty-boot .pz-boot-coin,html.pz-appctx #posty-boot .pz-boot-txt{display:none}
 #posty-boot.pz-magic{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
 #posty-boot.pz-magic-out{opacity:0}
 /* (LOTE REGRESO-NEGRO) Modo espera del boot: si la app todavía no
    pintó cuando la magia terminó (o la magia no suena en este
    documento), el boot NO se retira ni queda mudo: queda sobre el
-   degradé de la magia con el estándar de carga del dueño (el rayo
-   girando + su línea de estado, en blanco sobre el degradé) y tapa la
-   landing que vive debajo hasta que la app pinta. Tapa también los
-   toques (pointer-events:auto): estando logueado, ningún toque puede
-   caer en el formulario público de abajo. */
+   degradé de la magia con el estándar de carga del dueño (la moneda
+   de Bambooty en su aro — LOTE MONEDA-CARGA — + su línea de estado,
+   en blanco sobre el degradé) y tapa la landing que vive debajo
+   hasta que la app pinta. Tapa también los toques
+   (pointer-events:auto): estando logueado, ningún toque puede caer
+   en el formulario público de abajo. */
 #posty-boot.pz-boot-wait{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
 #posty-boot.pz-boot-wait .pzsp-stage{display:none}
-html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-ray{display:inline-flex}
+html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-coin{display:flex}
 html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
 #posty-boot .pzsp-stage{display:none}
-#posty-boot.pz-magic .pz-boot-ray,#posty-boot.pz-magic .pz-boot-txt{display:none}
+#posty-boot.pz-magic .pz-boot-coin,#posty-boot.pz-magic .pz-boot-txt{display:none}
 #posty-boot.pz-magic .pzsp-stage{display:block;position:absolute;inset:0;container-type:size;overflow:hidden;font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif}
 .pzsp-tiny{position:absolute;border-radius:50%;background:rgba(255,255,255,.5);width:5px;height:5px;animation:pzspFloat 2.6s ease-in-out infinite}
 .pzsp-glow{position:absolute;left:50%;top:40%;width:136px;width:54cqw;height:136px;height:54cqw;margin:-68px 0 0 -68px;margin:-27cqw 0 0 -27cqw;border-radius:50%;background:radial-gradient(circle,rgba(254,193,77,.55) 0%,rgba(254,193,77,0) 68%);animation:pzspGlow 1.6s ease-in-out 1 both}
@@ -602,7 +621,7 @@ html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
        repetir. Una apertura de cero (la app se cerró y se volvió a
        abrir) es otra sesión: sessionStorage nace vacío y la magia
        suena como siempre. (LOTE REGRESO-NEGRO: esa espera ya no es el
-       degradé pelado y mudo — es el modo espera con el rayo y su
+       degradé pelado y mudo — es el modo espera con la moneda y su
        línea, para que un regreso con la API lenta nunca deje al dueño
        frente a una pantalla muerta.) */
     try {
@@ -637,7 +656,7 @@ html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=894"></script>
+<script src="/app.js?v=895"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
