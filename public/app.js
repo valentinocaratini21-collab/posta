@@ -1,4 +1,86 @@
 /* Posta — frontend */
+// (LOTE APERTURA-UNA-SOLA) La toma de control de la cáscara vieja corre
+// PRIMERO que todo el resto de app.js: en un documento guardado viejo
+// (DOM ajeno a esta versión) ningún código posterior puede ser
+// prerrequisito — si algo de la app fallara contra ese DOM, la cura
+// de la apertura ya quedó hecha. La función es autocontenida: solo
+// usa DOM, sessionStorage, location y fetch.
+// (LOTE APERTURA-UNA-SOLA) Toma de control de la cáscara vieja — FALLA A.
+// La PWA ya instalada puede abrir con el documento GUARDADO en el
+// dispositivo (una cáscara de antes de la magia): ese documento pinta
+// su boot viejo — la pantalla crema con la cara — ANTES de que
+// cualquier código nuevo pueda actuar, y ni la auto-cura de su head
+// (muerta hasta v1211: comparaba el literal '__POSTY_BUILD__') ni la
+// guarda de versión (que solo mira el build de app.js, no la cáscara)
+// lo sacan de ahí si app.js ya está al día. El único código nuevo que
+// ese documento viejo sí o sí ejecuta es ESTE app.js (su <script> de
+// siempre): por eso la cura vive acá, al parsear, antes de todo dato.
+// Detección: hay #posty-boot, hay contexto app y el head NO marcó
+// window.__pzAppCtx (la marca existe desde APERTURA-UNICA v1211: toda
+// cáscara actual la trae; una vieja, jamás). Dos ramas:
+//  · La magia YA sonó en este documento (cáscara de la era magia sin
+//    la marca del head): se deja puesta la guarda de un solo disparo
+//    para que el documento fresco que traiga la cura no la repita, y
+//    no se toca nada más (la cura la hacen la auto-cura/guarda).
+//  · La magia NO sonó (era crema): se cubre la pantalla YA con el
+//    degradé exacto de la magia y, con la confirmación de /api/version
+//    en mano, se recarga UNA vez al documento fresco — que sí trae la
+//    magia y la suena una sola vez, porque esta rama no pone la marca.
+// Sin confirmación del servidor no se recarga (la guarda reintenta en
+// su ritmo) y la cubierta nunca atrapa: es pointer-events:none y se
+// retira sola cuando la app pinta (el boot desaparece) o a los 6 s,
+// el mismo tope que el kill del boot. Una cura por sesión
+// (sessionStorage 'pz_stale_heal'): si el documento nuevo también
+// naciera viejo, se vive con él — jamás un bucle.
+function pzAperturaShellVieja() {
+  try {
+    const boot = document.getElementById('posty-boot');
+    if (!boot || !document.body) return;
+    if (window.__pzAppCtx === true) return; // cáscara actual: el head ya marcó el contexto app
+    let appCtx = false;
+    try {
+      const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+      let nativeApp = false;
+      try { nativeApp = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()); } catch (e) {}
+      const h = location.hash || '';
+      appCtx = standalone || nativeApp || h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0;
+      if (sessionStorage.getItem('posta_ver_web') === '1') appCtx = false;
+    } catch (e) {}
+    if (!appCtx) return;
+    if (window.__pzSplash || boot.classList.contains('pz-magic')) {
+      try { sessionStorage.setItem('pz_splash_played', '1'); } catch (e) {}
+      return;
+    }
+    let healed = false;
+    try { healed = sessionStorage.getItem('pz_stale_heal') === '1'; } catch (e) {}
+    if (healed) return;
+    if (document.getElementById('pz-stale-cover')) return;
+    const cover = document.createElement('div');
+    cover.id = 'pz-stale-cover';
+    cover.setAttribute('style', 'position:fixed;inset:0;z-index:99999;pointer-events:none;background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%)');
+    document.body.appendChild(cover);
+    const t0 = Date.now();
+    const watcher = setInterval(() => {
+      try {
+        if (!document.getElementById('posty-boot') || Date.now() - t0 > 6000) {
+          clearInterval(watcher);
+          if (cover.parentNode) cover.remove();
+        }
+      } catch (e) { clearInterval(watcher); }
+    }, 200);
+    fetch('/api/version?staleprobe=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+      .then((r) => (r && r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !d.build) return; // sin confirmación no se recarga: la guarda de versión reintenta a su ritmo
+        try { sessionStorage.setItem('pz_stale_heal', '1'); } catch (e) {}
+        const u = new URL(location.href);
+        u.searchParams.set('fresh', String(d.build));
+        location.replace(u.toString());
+      })
+      .catch(() => {});
+  } catch (e) {}
+}
+try { pzAperturaShellVieja(); } catch (e) {}
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2822,7 +2904,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1230';
+const PZ_BUILD = '20261105-v1231';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -2895,12 +2977,27 @@ function pzVGuardReload(build) {
   location.replace(u.toString());
   return true;
 }
+// (LOTE APERTURA-UNA-SOLA) ¿La presentación de apertura está sonando en
+// ESTE documento? La guarda de versión y la toma de control de cáscara
+// vieja la consultan: nadie recarga mientras la magia suena (la recarga
+// la cortaba a mitad de camino) y el documento que nace de la recarga
+// no la repite (la guarda de un solo disparo de la activación del
+// shell, sessionStorage 'pz_splash_played').
+function pzSplashEnCurso() {
+  try { return !!(window.__pzSplash && !window.__pzSplash.done); } catch (e) { return false; }
+}
 function pzVersionGuardApplyPending() {
   try {
     let pend = null;
     try { pend = sessionStorage.getItem('pz_vguard_pending'); } catch (e) {}
     if (!pend) return;
     if (pzVGuardTab() !== 'inicio') return;
+    // (LOTE APERTURA-UNA-SOLA) Si la magia está sonando (aterrizar en
+    // Inicio justo durante la apertura en frío), aplicar el pendiente
+    // espera a que termine y reintenta SIN consumir el pendiente: la
+    // recarga no corta la presentación y el documento nuevo no la
+    // repite (guarda de un solo disparo del shell).
+    if (pzSplashEnCurso()) { setTimeout(() => { try { pzVersionGuardApplyPending(); } catch (e) {} }, 250); return; }
     const pm = /-v(\d+)$/.exec(String(pend));
     const cli = /-v(\d+)$/.exec(PZ_BUILD);
     if (pm && cli && Number(pm[1]) <= Number(cli[1])) { try { sessionStorage.removeItem('pz_vguard_pending'); } catch (e) {} return; } // ya llego solo
@@ -2912,6 +3009,12 @@ async function pzVersionGuard() {
   try {
     const now = Date.now();
     if (now - PZ_VGUARD_LAST < 60000) return; // a lo sumo un chequeo por minuto
+    // (LOTE APERTURA-UNA-SOLA) Con la magia sonando no se chequea ni se
+    // recarga: la guarda espera a que la apertura termine y reintenta
+    // sin consumir el throttle. La recarga a mitad de la magia la
+    // cortaba; la guarda de un solo disparo del shell impide que el
+    // documento nuevo la repita, y esta espera impide el corte.
+    if (pzSplashEnCurso()) { setTimeout(() => { try { pzVersionGuard(); } catch (e) {} }, 250); return; }
     PZ_VGUARD_LAST = now;
     const r = await fetch('/api/version?vg=' + now, { cache: 'no-store', credentials: 'same-origin' });
     if (!r || !r.ok) return;

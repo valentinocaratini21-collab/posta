@@ -62,9 +62,39 @@
         if (!d || !d.build || d.build === served) return;
         var key = 'posty_shell_heal_' + d.build;
         try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) {}
-        var u = new URL(location.href);
-        u.searchParams.set('fresh', d.build);
-        location.replace(u.toString());
+        var go = function () {
+          var u = new URL(location.href);
+          u.searchParams.set('fresh', d.build);
+          location.replace(u.toString());
+        };
+        /* (LOTE APERTURA-UNA-SOLA) En contexto app, la cura espera a
+           que la magia termine antes de recargar: recargar a mitad de
+           la apertura la cortaba, y el documento nuevo la repetía
+           entera sobre el Inicio ya pintado (la doble apertura de la
+           grabación del dueño, 21/11). La guarda de un solo disparo de
+           la activación (pz_splash_played) impide la repetición en el
+           documento nuevo; esta espera impide el corte en el viejo.
+           La espera cubre también la carrera inversa: si esta
+           respuesta llegó antes de que la activación (al final del
+           body) creara __pzSplash — el parseo del documento va por
+           detrás de la red — se espera a que aparezca (hasta 2 s) y
+           recién entonces a que termine. Si la magia ya sonó en
+           esta sesión, la activación no crea __pzSplash y la espera
+           corta a los 2 s: la cura sigue, sin magia que cortar, y el
+           documento mientras tanto anda igual. Topes: 4 s en total
+           — la cura nunca queda colgada por la presentación. En web
+           (sin __pzAppCtx) no hay magia que esperar: la cura va
+           como siempre. */
+        if (window.__pzAppCtx === true) {
+          var t0 = Date.now();
+          var iv = setInterval(function () {
+            var sp = window.__pzSplash;
+            var settled = sp ? !!sp.done : (Date.now() - t0 > 2000);
+            if (settled || Date.now() - t0 > 4000) { clearInterval(iv); go(); }
+          }, 120);
+          return;
+        }
+        go();
       })
       .catch(function () {});
   } catch (e) {}
@@ -475,6 +505,21 @@ html.pz-appctx #posty-boot .pz-boot-ray,html.pz-appctx #posty-boot .pz-boot-txt{
     var appCtx = standalone || nativeApp || h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0;
     try { if (sessionStorage.getItem('posta_ver_web') === '1') appCtx = false; } catch (e) {}
     if (!appCtx) return;
+    /* (LOTE APERTURA-UNA-SOLA) Un solo disparo por apertura en frío:
+       la magia suena UNA vez por sesión de la app. Si este documento
+       nació de una recarga de cura dentro de la MISMA apertura (la
+       auto-cura de cáscara del head o la guarda de versión de app.js),
+       la marca ya está puesta y la presentación NO se repite: el boot
+       queda como degradé pelado hasta que la app pinta y lo retira
+       (bootSplashOff), sin cara, sin estrellitas y sin espera. La
+       marca se escribe ANTES de arrancar la animación, así ni una
+       recarga a mitad de la magia la puede repetir. Una apertura de
+       cero (la app se cerró y se volvió a abrir) es otra sesión:
+       sessionStorage nace vacío y la magia suena como siempre. */
+    try {
+      if (sessionStorage.getItem('pz_splash_played') === '1') return;
+      sessionStorage.setItem('pz_splash_played', '1');
+    } catch (e) {}
     boot.classList.add('pz-magic');
     var sp = window.__pzSplash = { t0: performance.now(), done: false, appReady: false, finish: null };
     sp.finish = function (fadeMs) {
@@ -490,7 +535,7 @@ html.pz-appctx #posty-boot .pz-boot-ray,html.pz-appctx #posty-boot .pz-boot-txt{
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=861"></script>
+<script src="/app.js?v=862"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
