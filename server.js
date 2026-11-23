@@ -17782,6 +17782,33 @@ function assetContentHash(absPath) {
   } catch (e) { return ''; }
 }
 
+// TOPE-ALBUM-20 · MATERIAL DE TRABAJO — predicado «incorporado»
+// (23/11, corrección del mismo día): un asset está incorporado si un
+// posteo VIVO (borrador, programado o publicado) lo guarda como media
+// en CUALQUIER campo donde un posteo guarda media de verdad: la actual
+// (image_path, carousel_paths, foto_asset_id), la portada (cover_path),
+// la anterior restaurable (prev_image_path y el historial de
+// post_versions), el vínculo durable de Subir (el recibo activo o el
+// pedido que ese material produjo, con su posteo) y la equivalencia por
+// huella (la misma foto subida dos veces con distinto path). La primera
+// versión del arreglo (v1275) miraba solo los tres primeros campos y en
+// producción los posteos reales casi no vinculan su material por ahí:
+// la cuenta de la casa quedó topada igual con su historial publicado
+// (la película publicada no contaba como incorporada y la lámina 2 del
+// carrusel del día rebotó). Este fragmento ES el predicado, compartido
+// por las dos puertas del tope y por la guarda de borrado del álbum.
+const ASSET_INCORPORADO_SQL = `(
+  p.image_path = a.file_path
+  OR p.carousel_paths LIKE '%' || a.file_path || '%'
+  OR p.cover_path = a.file_path
+  OR p.prev_image_path = a.file_path
+  OR p.foto_asset_id = a.id
+  OR p.foto_asset_id IN (SELECT id FROM assets WHERE user_id = a.user_id AND file_path = a.file_path)
+  OR EXISTS (SELECT 1 FROM post_versions v WHERE v.post_id = p.id AND v.image_path = a.file_path)
+  OR EXISTS (SELECT 1 FROM subir_recibos r WHERE r.user_id = a.user_id AND r.asset_id = a.id AND r.post_id = p.id AND r.estado = 'activo')
+  OR EXISTS (SELECT 1 FROM subir_pedidos_voz pv WHERE pv.user_id = a.user_id AND pv.asset_id = a.id AND pv.post_id = p.id)
+  OR (a.content_hash <> '' AND EXISTS (SELECT 1 FROM assets a2 WHERE a2.user_id = a.user_id AND a2.id <> a.id AND a2.content_hash = a.content_hash AND (p.image_path = a2.file_path OR p.carousel_paths LIKE '%' || a2.file_path || '%' OR p.cover_path = a2.file_path OR p.prev_image_path = a2.file_path OR p.foto_asset_id = a2.id)))
+)`;
 app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
   const ct = req.get('Content-Type') || '';
@@ -17809,8 +17836,9 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   if (req.query.from === 'chat' && kind === 'photo') {
     // TOPE-ALBUM-20 · MATERIAL DE TRABAJO (23/11): este tope ES el del
     // álbum (misma cuenta, mismo mensaje) — cuenta con la misma regla:
-    // solo el material no incorporado a ningún posteo consume el techo.
-    const nAlb = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND (p.image_path = a.file_path OR p.carousel_paths LIKE '%' || a.file_path || '%' OR p.foto_asset_id IN (SELECT id FROM assets WHERE user_id = a.user_id AND file_path = a.file_path)))`).get(req.session.userId).c;
+    // solo el material no incorporado a ningún posteo consume el techo,
+    // con el predicado «incorporado» compartido (ASSET_INCORPORADO_SQL).
+    const nAlb = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND ${ASSET_INCORPORADO_SQL})`).get(req.session.userId).c;
     if (nAlb >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
   }
   // (Gap 10, 2026-10-25) La foto real del cliente se normaliza al entrar
@@ -19196,11 +19224,12 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     const isVideo = ct.startsWith('video/');
     // TOPE-ALBUM-20 · MATERIAL DE TRABAJO (23/11): el tope cuenta SOLO el
     // material todavía no incorporado a ningún posteo. El incorporado
-    // (publicado, programado o en borrador — el mismo predicado «usado»
-    // que protege el borrado en la biblioteca) ya cumplió su ciclo y no
-    // consume el techo: una cuenta fiel que postea todos los días no se
-    // queda sin puerta de subida por su propio historial.
-    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND (p.image_path = a.file_path OR p.carousel_paths LIKE '%' || a.file_path || '%' OR p.foto_asset_id IN (SELECT id FROM assets WHERE user_id = a.user_id AND file_path = a.file_path)))`).get(uid).c;
+    // (publicado, programado o en borrador — el predicado «incorporado»
+    // compartido, ASSET_INCORPORADO_SQL, el mismo que protege el borrado
+    // en la biblioteca) ya cumplió su ciclo y no consume el techo: una
+    // cuenta fiel que postea todos los días no se queda sin puerta de
+    // subida por su propio historial.
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND ${ASSET_INCORPORADO_SQL})`).get(uid).c;
     if (n >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
     if (isVideo) {
       // (Gap 9, 2026-10-25) Ingesta ÚNICA de video (ingestClientVideo):
@@ -19304,8 +19333,10 @@ app.post('/api/album/carrusel', requireAuth, express.json(), async (req, res) =>
 });
 // (LOTE CHAT-MEJORA) DELETE: borrar una foto del álbum desde la
 // tarjeta de Hoy. Guard honesto: si la foto ya está en un posteo
-// (draft/scheduled/published, por foto_asset_id, image_path o
-// carousel_paths), NO se borra — nunca romper un posteo programado.
+// (draft/scheduled/published, por el predicado «incorporado»
+// compartido ASSET_INCORPORADO_SQL — todos los campos donde un posteo
+// guarda media, no solo la actual), NO se borra — nunca romper un
+// posteo programado ni su portada ni su versión restaurable.
 // Borra la FOTO, no solo la fila clickeada: el álbum puede tener la
 // misma foto duplicada (el fix 5 la muestra una sola vez) y «borrar
 // esta foto» tiene que sacarla del todo — si queda una fila, Posty la
@@ -19318,7 +19349,7 @@ app.delete('/api/album/:id', requireAuth, (req, res) => {
     if (!asset) return res.status(404).json({ ok: false, error: 'Foto no encontrada' });
     let usado = null;
     try {
-      usado = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status IN ('draft','scheduled','published') AND (foto_asset_id IN (SELECT id FROM assets WHERE user_id = ? AND file_path = ?) OR image_path = ? OR carousel_paths LIKE ?)`).get(uid, uid, asset.file_path, asset.file_path, `%${asset.file_path}%`);
+      usado = db.prepare(`SELECT p.id FROM posts p WHERE p.user_id = ? AND p.status IN ('draft','scheduled','published') AND EXISTS (SELECT 1 FROM assets a WHERE a.user_id = p.user_id AND a.file_path = ? AND ${ASSET_INCORPORADO_SQL})`).get(uid, asset.file_path);
     } catch (e) {}
     if (usado) return res.status(409).json({ ok: false, error: 'Esa foto ya está en un posteo' });
     // (LOTE A · ítem 4) Borrar por huella: si la foto existe dos veces
@@ -48852,7 +48883,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1277';
+const BUILD_ID = '20261105-v1278';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

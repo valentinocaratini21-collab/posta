@@ -100,7 +100,7 @@ async function main() {
     /er\.fromServer = !!\(d && d\.error\)/.test(appSrc) && /pzSubirErr\(e && e\.fromServer/.test(appSrc));
   const pzBuild = (appSrc.match(/const PZ_BUILD = '([^']+)'/) || [])[1];
   check('B3 paridad BUILD/PZ_BUILD y app.js?v= del index',
-    buildTree === '20261105-v1275' && pzBuild === buildTree && idxSrc.includes('app.js?v=904'),
+    buildTree === '20261105-v1278' && pzBuild === buildTree && idxSrc.includes('app.js?v=907'),
     'BUILD=' + buildTree + ' PZ=' + pzBuild);
 
   console.log('== Parte A: servidor real ==');
