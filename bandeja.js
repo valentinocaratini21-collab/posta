@@ -69,6 +69,7 @@
 // Exporta: { initBandejaTables, clasificar, esErrorPermiso,
 //   pollBandeja, getBandeja, refreshTanda, editItem, dismissItem,
 //   undismissItem, approveTanda, countAcciones, novedades,
+//   conteoCampana, marcarNovedadesVistas,
 //   purgarBorradoresFormula, censoBandeja, mapearErrorEnvio,
 //   esErrorVentana, dmFueraDeVentana, defaultFetchers }
 'use strict';
@@ -132,6 +133,15 @@ function initBandejaTables(db) {
     const cols = db.prepare(`PRAGMA table_info(bandeja_items)`).all().map(c => c.name);
     if (!cols.includes('last_in_at')) db.exec(`ALTER TABLE bandeja_items ADD COLUMN last_in_at TEXT DEFAULT ''`);
   } catch (e) {}
+  // (CAMPANA-LIMPIABLE) La marca de lectura de las NOVEDADES: una
+  // fila por usuario con el instante hasta el que las novedades ya
+  // se vieron. Antes de este lote las novedades no tenían estado de
+  // lectura en ningún lado: la pantalla las recomponía en cada
+  // visita y no existía forma de «limpiarlas» (defecto del 23/11).
+  db.exec(`CREATE TABLE IF NOT EXISTS bandeja_novedades_vistas (
+    user_id INTEGER PRIMARY KEY,
+    hasta TEXT NOT NULL DEFAULT ''
+  )`);
 }
 
 // ---------------------------------------------------------------------------
@@ -619,6 +629,12 @@ function tandaConItems(db, tanda) {
       // para_salir = lo que approveTanda realmente puede enviar:
       // con borrador Y sin bloqueo terminal. Ni uno más.
       para_salir: pend.filter(i => String(i.draft || '').trim() && !i.bloqueo_motivo).length,
+      // (CAMPANA-LIMPIABLE) accionables = lo que espera un toque del
+      // dueño DE VERDAD: en estado de salida y sin bloqueo terminal
+      // (con o sin borrador: el que espera un dato también se actúa,
+      // escribiéndolo). Es el número que decide si la tarjeta se
+      // pinta bajo «ESPERA TU TOQUE» y el que alimenta la campana.
+      accionables: pend.filter(i => !i.bloqueo_motivo).length,
       bloqueadas: pend.filter(i => i.bloqueo_motivo).length,
       esperando_dato: pend.filter(i => !String(i.draft || '').trim() && i.falta_dato).length,
       pendientes: pend.length,
@@ -739,25 +755,65 @@ function censoBandeja(db, deps) {
 }
 
 function countAcciones(db, uid) {
-  const r = db.prepare(`SELECT COUNT(*) AS n FROM bandeja_items WHERE user_id = ? AND estado IN ('pendiente','sin_permiso','error')`).get(uid);
-  return Number(r.n || 0);
+  // (CAMPANA-LIMPIABLE) El número cuenta SOLO lo accionable: ítems
+  // en estado de salida SIN causa terminal. La versión anterior
+  // contaba el estado crudo y un DM fuera de la ventana de 24 h —
+  // que approveTanda excluye para siempre — clavaba la campana en 1
+  // sin ninguna acción del dueño que pudiera limpiarla (defecto del
+  // 23/11 en la cuenta de la casa). Es la misma exclusión que
+  // para_salir en tandaConItems, sin exigir borrador: el ítem que
+  // espera un dato SÍ es accionable (el dueño lo escribe).
+  const now = Date.now();
+  const items = db.prepare(`SELECT source, estado, note, last_in_at, created_at FROM bandeja_items
+    WHERE user_id = ? AND estado IN ('pendiente','sin_permiso','error')`).all(uid);
+  return items.filter(it => !motivoBloqueo(it, now)).length;
+}
+
+// (CAMPANA-LIMPIABLE) La marca de lectura de las novedades: el
+// instante hasta el que este usuario ya las vio (0 = nunca).
+function novedadesVistasHastaMs(db, uid) {
+  try {
+    const r = db.prepare('SELECT hasta FROM bandeja_novedades_vistas WHERE user_id = ?').get(uid);
+    return r ? parseFechaMs(r.hasta) : 0;
+  } catch (e) { return 0; }
+}
+
+// (CAMPANA-LIMPIABLE) Abrir la pantalla de Notificaciones marca las
+// novedades como vistas: la marca sube a «ahora» y el conteo de la
+// campana cae en el acto. Lo que se publica DESPUÉS vuelve a contar.
+function marcarNovedadesVistas(db, uid) {
+  db.prepare(`INSERT INTO bandeja_novedades_vistas (user_id, hasta) VALUES (?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET hasta = datetime('now')`).run(uid);
+  return conteoCampana(db, uid);
+}
+
+// (CAMPANA-LIMPIABLE) EL número de la campana, con una sola verdad:
+// ítems accionables esperando el toque + novedades sin ver. Nada más.
+function conteoCampana(db, uid) {
+  const acciones = countAcciones(db, uid);
+  const sinVer = novedades(db, uid).filter(n => !n.vista).length;
+  return { acciones, novedades: sinVer, total: acciones + sinVer };
 }
 
 // NOVEDADES con datos reales de hoy: el posteo publicado y el impulso
 // corriendo (las dos fuentes que existen en la base; nada inventado).
+// (CAMPANA-LIMPIABLE) Cada novedad lleva su estado de lectura
+// (`vista`): es vista si su instante no supera la marca del usuario
+// (bandeja_novedades_vistas). Sin marca, todo es sin ver.
 function novedades(db, uid) {
   const out = [];
+  const hastaMs = novedadesVistasHastaMs(db, uid);
   try {
     const post = db.prepare(`SELECT caption, published_at FROM posts WHERE user_id = ? AND status = 'published'
       AND published_at IS NOT NULL AND date(published_at) = date('now') ORDER BY published_at DESC LIMIT 1`).get(uid);
-    if (post) out.push({ tipo: 'posteo', titulo: 'Tu posteo de hoy salió', detalle: String(post.caption || '').slice(0, 80), cuando: post.published_at });
+    if (post) out.push({ tipo: 'posteo', titulo: 'Tu posteo de hoy salió', detalle: String(post.caption || '').slice(0, 80), cuando: post.published_at, vista: parseFechaMs(post.published_at) <= hastaMs });
   } catch (e) {}
   try {
     const boost = db.prepare(`SELECT budget_cents, currency, duration_days, created_at FROM ad_boosts
       WHERE user_id = ? AND status IN ('active','pending') ORDER BY created_at DESC LIMIT 1`).get(uid);
     if (boost) {
       const monto = boost.currency === 'USD' ? 'US$' + Math.round((boost.budget_cents || 0) / 100) : '$' + Math.round((boost.budget_cents || 0) / 100);
-      out.push({ tipo: 'impulso', titulo: 'Tu impulso está corriendo', detalle: `${monto} · ${boost.duration_days || 7} días`, cuando: boost.created_at });
+      out.push({ tipo: 'impulso', titulo: 'Tu impulso está corriendo', detalle: `${monto} · ${boost.duration_days || 7} días`, cuando: boost.created_at, vista: parseFechaMs(boost.created_at) <= hastaMs });
     }
   } catch (e) {}
   return out;
@@ -873,6 +929,7 @@ module.exports = {
   initBandejaTables, clasificar, esErrorPermiso, esErrorToken,
   pollBandeja, getBandeja, refreshTanda, editItem, dismissItem, undismissItem,
   approveTanda, countAcciones, novedades, defaultFetchers,
+  conteoCampana, marcarNovedadesVistas,
   purgarBorradoresFormula, censoBandeja, mapearErrorEnvio, esErrorVentana,
   dmFueraDeVentana, causaTerminal, motivoBloqueo, NOTA_VENTANA, NOTA_PERMISO,
 };

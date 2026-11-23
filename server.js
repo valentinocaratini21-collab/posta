@@ -37825,10 +37825,29 @@ app.get('/api/bandeja/count', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
     const gate = planGate(db, uid, 'comentarios');
-    if (!gate.ok) return res.json({ ok: true, acciones: 0 });
-    res.json({ ok: true, acciones: require('./bandeja').countAcciones(db, uid) });
+    if (!gate.ok) return res.json({ ok: true, acciones: 0, novedades: 0, total: 0 });
+    // (CAMPANA-LIMPIABLE) El conteo de la campana es el total con una
+    // sola verdad (bandeja.conteoCampana): acciones accionables +
+    // novedades sin ver. `acciones` se sigue sirviendo por compat.
+    const c = require('./bandeja').conteoCampana(db, uid);
+    res.json({ ok: true, acciones: c.acciones, novedades: c.novedades, total: c.total });
   } catch (e) {
-    res.json({ ok: true, acciones: 0 });
+    res.json({ ok: true, acciones: 0, novedades: 0, total: 0 });
+  }
+});
+
+// (CAMPANA-LIMPIABLE) Abrir Notificaciones marca las novedades como
+// vistas: la campana se limpia con la mano del dueño, en el acto.
+// Devuelve el conteo fresco para repintar la insignia sin esperar
+// al próximo refresco.
+app.post('/api/bandeja/novedades/vistas', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const B = require('./bandeja');
+    const c = B.marcarNovedadesVistas(db, uid);
+    res.json({ ok: true, acciones: c.acciones, novedades: c.novedades, total: c.total });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -48460,7 +48479,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1246';
+const BUILD_ID = '20261105-v1247';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

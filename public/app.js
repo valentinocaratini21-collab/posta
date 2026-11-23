@@ -1493,6 +1493,13 @@ function pzBarraCampana() {
 // campana abre su bandeja como la de cualquier cliente y el conteo
 // del endpoint es el de su propio negocio — se consulta y se pinta
 // igual que el de un cliente, sin ningún trato especial.
+// (CAMPANA-LIMPIABLE · 23/11) El número cambió de verdad: el
+// endpoint ahora devuelve el TOTAL de bandeja.conteoCampana —
+// ítems ACCIONABLES (sin causa terminal: un DM fuera de la ventana
+// de 24 h ya no cuenta, porque el dueño no puede hacer nada con
+// él) + novedades sin ver. Abrir Notificaciones marca las
+// novedades como vistas (pzBandejaMarcarVistas) y la insignia cae
+// en el acto: ninguna notificación queda clavada sin salida.
 function pzCampanaBadgePintar() {
   try {
     const b = document.getElementById('pzShellBell');
@@ -1522,7 +1529,11 @@ function pzCampanaBadgeRefrescar() {
     if (typeof window !== 'undefined') window.__pzCampanaBadgeBuscando = true;
     api.get('/api/bandeja/count').then((r) => {
       try {
-        const n = r && typeof r.acciones === 'number' ? r.acciones : 0;
+        // (CAMPANA-LIMPIABLE) La insignia pinta el TOTAL del endpoint:
+        // ítems accionables + novedades sin ver, con una sola verdad
+        // (bandeja.conteoCampana). `acciones` queda de respaldo si un
+        // servidor viejo no trajera el total.
+        const n = r && typeof r.total === 'number' ? r.total : (r && typeof r.acciones === 'number' ? r.acciones : 0);
         if (typeof window !== 'undefined') window.__pzCampanaBadgeN = n;
         pzCampanaBadgePintar();
       } catch (e) {}
@@ -3111,7 +3122,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1246';
+const PZ_BUILD = '20261105-v1247';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22431,6 +22442,7 @@ function pzBandejaEstilos() {
 .pzb-seccion{margin:20px 2px 10px;font-size:12px;font-weight:800;letter-spacing:.14em;color:#7A8CA3}
 .pzb-sobre{margin-top:-30px;position:relative;z-index:2}
 .pzb-card{background:#fff;border-radius:22px;box-shadow:0 10px 28px rgba(10,30,51,.10);padding:16px;margin-bottom:14px}
+.pzb-card-bloqueada{opacity:.72;box-shadow:0 6px 18px rgba(10,30,51,.07)}
 .pzb-tanda-cab{display:flex;gap:12px;align-items:flex-start}
 .pzb-thumb{width:52px;height:52px;border-radius:14px;object-fit:cover;border:3px solid #BFE3F5;flex:none;background:#EAF4FB}
 .pzb-thumb-dm{width:52px;height:52px;border-radius:14px;flex:none;background:linear-gradient(135deg,#57B2E5,#2793C8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;border:3px solid #BFE3F5}
@@ -22500,7 +22512,7 @@ function pzBandejaTarjetaHTML(t) {
     <div class="pzb-tanda-cab">
       ${esDm ? `<span class="pzb-thumb-dm">✉</span>` : (t.post_thumb ? `<img class="pzb-thumb" src="${esc(t.post_thumb)}" alt="">` : `<span class="pzb-thumb-dm">P</span>`)}
       <div style="flex:1;min-width:0">
-        <div class="pzb-tanda-tit">${c.para_salir} ${c.para_salir === 1 ? pzBandejaT('respuesta lista', 'reply ready') : pzBandejaT('respuestas listas', 'replies ready')}</div>
+        <div class="pzb-tanda-tit">${c.para_salir ? `${c.para_salir} ${c.para_salir === 1 ? pzBandejaT('respuesta lista', 'reply ready') : pzBandejaT('respuestas listas', 'replies ready')}` : `${c.accionables || 0} ${(c.accionables || 0) === 1 ? pzBandejaT('respuesta para completar', 'reply to complete') : pzBandejaT('respuestas para completar', 'replies to complete')}`}</div>
         <div class="pzb-tanda-sub">${tit}${sub ? ' · ' + sub : ''}</div>
         ${c.importantes ? `<span class="pzb-chip-imp">${c.importantes} ${pzBandejaT('importante', 'important')} · ${esc(temaImp)}</span>` : ''}
       </div>
@@ -22513,11 +22525,49 @@ function pzBandejaTarjetaHTML(t) {
     </div>
   </div>`;
 }
+function pzBandejaTarjetaBloqueadaHTML(t) {
+  // (CAMPANA-LIMPIABLE) La tanda sin NADA accionable (todo su stock
+  // quedó bloqueado por una causa terminal: la ventana de 24 h o el
+  // permiso) NO se pinta bajo «ESPERA TU TOQUE» ni anuncia «0
+  // respuestas listas»: va tranquila en su propia sección, dice la
+  // verdad («sin poder salir»), muestra el motivo del primer ítem
+  // bloqueado y conserva su puerta de Revisar — donde el ítem se ve
+  // con su motivo, como dejó BANDEJA-VERDAD. No cuenta en la
+  // campana: no hay nada que el dueño pueda hacer con ella.
+  const c = t.conteo || {};
+  const bloq = (t.items || []).find(i => i.bloqueo_motivo);
+  const esDm = t.kind === 'dm';
+  const tit = esDm ? pzBandejaT('Mensajes directos', 'Direct messages') : pzBandejaT('Posteo de hoy', "Today's post");
+  const sub = esDm ? esc(t.etiqueta || '') : esc(String(t.post_caption || '').slice(0, 90));
+  const n = c.bloqueadas || 0;
+  return `<div class="pzb-card pzb-card-bloqueada">
+    <div class="pzb-tanda-cab">
+      ${esDm ? `<span class="pzb-thumb-dm">✉</span>` : (t.post_thumb ? `<img class="pzb-thumb" src="${esc(t.post_thumb)}" alt="">` : `<span class="pzb-thumb-dm">P</span>`)}
+      <div style="flex:1;min-width:0">
+        <div class="pzb-tanda-tit">${n} ${n === 1 ? pzBandejaT('respuesta sin poder salir', 'reply that cannot go out') : pzBandejaT('respuestas sin poder salir', 'replies that cannot go out')}</div>
+        <div class="pzb-tanda-sub">${tit}${sub ? ' · ' + sub : ''}</div>
+      </div>
+    </div>
+    ${bloq ? `<div class="pzb-nota">${esc(bloq.bloqueo_motivo)}</div>` : ''}
+    <div class="pzb-firma"><img src="ai-avatar.png" alt="Posty"><span>${pzBandejaT('Preparadas por Posty', 'Prepared by Posty')} · ${pzBandejaHace(t.updated_at)}</span></div>
+    <div class="pzb-acciones">
+      <button type="button" class="pzb-btn pzb-btn-revisar" onclick="pzBandejaAbrir(${t.id})">${pzBandejaT('Revisar', 'Review')}</button>
+    </div>
+  </div>`;
+}
 // (LOTE CONSERJE-SOLO-WEB) La tarjeta de entrada al Conserje que iba
 // al tope de esta pantalla (solo la casa) salió: el Conserje vive
 // solamente en el website. La pantalla del cliente queda como está.
 function pzBandejaNotifsHTML(data) {
-  const tandas = (data.tandas || []).filter(t => (t.conteo || {}).pendientes > 0);
+  // (CAMPANA-LIMPIABLE) «ESPERA TU TOQUE» pinta SOLO tandas con al
+  // menos un ítem accionable de verdad (conteo.accionables del
+  // servidor; respaldo para payloads viejos: para_salir +
+  // esperando_dato). La tanda cuyo único stock está bloqueado por
+  // una causa terminal va a su sección tranquila, nunca como si
+  // esperara un toque que no puede resolver nada.
+  const accionablesDe = (t) => { const c = t.conteo || {}; return typeof c.accionables === 'number' ? c.accionables : (c.para_salir || 0) + (c.esperando_dato || 0); };
+  const tandas = (data.tandas || []).filter(t => accionablesDe(t) > 0);
+  const bloqueadas = (data.tandas || []).filter(t => accionablesDe(t) === 0 && ((t.conteo || {}).bloqueadas || 0) > 0);
   const novs = data.novedades || [];
   return `${pzBandejaEstilos()}<div class="pzb-wrap">
     <div class="pzb-banda"><h1>${pzBandejaT('Notificaciones', 'Notifications')}</h1><p>${pzBandejaT('Todo lo de tu negocio, en un solo lugar', 'Everything about your business, in one place')}</p></div>
@@ -22525,6 +22575,7 @@ function pzBandejaNotifsHTML(data) {
     ${tandas.length ? `<div class="pzb-seccion" style="margin-top:0;color:#fff;opacity:.95">${pzBandejaT('ESPERA TU TOQUE', 'WAITING FOR YOUR TAP')}</div>` + tandas.map(pzBandejaTarjetaHTML).join('') : `<div class="pzb-vacio">${pzBandejaT('Todavía no hay respuestas para preparar.<br>Cuando alguien comente o te escriba, Posty las prepara acá.', 'No replies to prepare yet.<br>When someone comments or writes to you, Posty prepares them here.')}</div>`}
     </div>
     ${novs.length ? `<div class="pzb-seccion">${pzBandejaT('NOVEDADES', 'UPDATES')}</div><div class="pzb-card">${novs.map(n => `<div class="pzb-nov">${pzBandejaIconoNov(n.tipo)}<div><div class="pzb-nov-tit">${esc(n.titulo || '')}</div><div class="pzb-nov-det">${esc(n.detalle || '')}</div></div><span class="pzb-nov-cuando">${pzBandejaHace(n.cuando)}</span></div>`).join('')}</div>` : ''}
+    ${bloqueadas.length ? `<div class="pzb-seccion">${pzBandejaT('NO PUEDEN SALIR', 'CANNOT GO OUT')}</div>` + bloqueadas.map(pzBandejaTarjetaBloqueadaHTML).join('') : ''}
   </div>`;
 }
 function pzBandejaItemHTML(it) {
@@ -22596,6 +22647,27 @@ async function pzBandejaCargar(tandaId) {
   if (r && r.ok) PZB.data = r;
   return PZB.data;
 }
+function pzBandejaMarcarVistas() {
+  // (CAMPANA-LIMPIABLE) La mano del dueño limpia la campana: abrir
+  // Notificaciones marca las novedades como vistas en el servidor y
+  // la insignia se repinta EN EL ACTO con el total fresco que
+  // devuelve el mismo llamado — sin recargar la app a ciegas. Si el
+  // llamado falla, la insignia queda como está (ninguna puerta
+  // muerta) y el próximo refresco la corrige.
+  try {
+    if (typeof window !== 'undefined' && window.__pzBandejaVistasBuscando) return;
+    if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = true;
+    api.post('/api/bandeja/novedades/vistas', {}).then((r) => {
+      try {
+        if (r && typeof r.total === 'number') {
+          if (typeof window !== 'undefined') window.__pzCampanaBadgeN = r.total;
+          pzCampanaBadgePintar();
+        }
+      } catch (e) {}
+      if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = false;
+    }).catch(() => { if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = false; });
+  } catch (e) { try { if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = false; } catch (e2) {} }
+}
 async function pzBandejaView() {
   const q = new URLSearchParams((location.hash.split('?')[1] || ''));
   PZB.tandaId = Number(q.get('tanda') || 0);
@@ -22603,6 +22675,9 @@ async function pzBandejaView() {
   // del cliente para todas las sesiones, sin tarjeta del operador.
   const data = await pzBandejaCargar(PZB.tandaId);
   if (!data) return `<div class="pzb-wrap"><div class="pzb-vacio">${pzBandejaT('No pude cargar tus notificaciones.', 'I could not load your notifications.')}</div></div>`;
+  // (CAMPANA-LIMPIABLE) Abrir la pantalla marca las novedades como
+  // vistas: la campana baja en el acto.
+  pzBandejaMarcarVistas();
   return `<div id="pzbRoot">${PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data)}</div>`;
 }
 async function pzBandejaRepintar() {
