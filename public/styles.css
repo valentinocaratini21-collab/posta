@@ -6961,3 +6961,121 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-nov-cuando{font-size:12px;font-weight:600;color:#8CA1B5;flex:none}
 .pz-nov-vacio{margin:4px 0 10px;font-size:14px;line-height:1.5;color:#47617A}
 /* ===== /LOTE BARRA-VIVA ===== */
+/* ===== LOTE INICIO-ENTERO (23/11 · pedido del dueño con captura de su
+   iPhone 01:16: «que esta pantalla entre todo asi, para que se vea el
+   post entero y no se recorte abajo, sin tener que deslizar» + 01:18:
+   «si deslizamos para abajo, eso de Posty no aparezca mas») =====
+   Dos movimientos, SOLO en Inicio (la raíz .bb-app lleva la clase
+   bb-glass-inicio únicamente cuando el tab es Inicio, y las reglas del
+   feed van acotadas a #inicioView):
+   1) EL ENCABEZADO SE VA CON EL SCROLL: .pz-shell-head era sticky
+      (HOY-AVATAR-FEED, 8/11) y quedaba fijo arriba en toda la app. En
+      Inicio pasa a position:relative: sube con el contenido al deslizar
+      y vuelve solo al volver arriba. Sin JS, sin saltos de layout (el
+      sticky y el relative ocupan el mismo lugar en reposo). Las demás
+      pantallas de la cáscara conservan el encabezado fijo, sin tocar.
+   2) INICIO ENTRA ENTERO: compresión medida (censo del lote) en el
+      orden del brief — primero espaciados y alturas de tarjetas,
+      después la tarjeta del perfil (bio completa, jamás truncada:
+      solo interlineado y aire), la celda de la grilla NO se achica.
+      A 390×844 la primera tile queda entera sobre la barra y el
+      documento deja de scrollear; en las alturas chicas (375×667 y
+      390×664) la compresión es la misma y el faltante queda medido y
+      declarado en el censo (no se recorta contenido en silencio).
+   3) VARIANTE COMPACTA EN PANTALLAS BAJAS (decisión del dueño 23/11
+      01:49: «variante compacta solo en pantallas bajas»): bajo
+      @media (max-height:720px) and (max-width:760px) — pantallas
+      bajas de teléfono; una ventana de escritorio baja no cuenta —
+      la misma pantalla comprime una vuelta
+      más — encabezado, tira, tarjeta del día y perfil más bajos,
+      bio completa con fuente menor (jamás truncada), celda intacta —
+      y Inicio entra entero también a 375×667 y 390×664. Fuera de ese
+      media query el render es idéntico al de los movimientos 1 y 2.
+   4) EXTENSIÓN — LA PROMESA ENTRA EN EL PRESUPUESTO: TARJETA-PROMESA-9AM
+      aterrizó después que este lote y su tarjeta del día renderizaba
+      193.5px a 390×844 y 168.4px en pantallas bajas (presupuestos:
+      ≤165px y ~117px): rompía el cierre. La compresión de los
+      movimientos 2 y 3 la alcanza también, acotada a su clase
+      .promesa y solo en Inicio: reloj, titular, línea y link con el
+      aire y los tamaños de la pantalla que la contiene — su copia y
+      su diseño (tarjeta blanca, reloj azul, la hora en azul) quedan
+      intactos. Resultado medido: 159.5px a 390×844 y 110.3px en la
+      variante, idéntico en sus dos estados de hoy (la línea lleva
+      line-height fijo en px: antes de las 9:00 y «está en armado.»
+      miden lo mismo), y los tres viewports cierran sin scroll. */
+.bb-app.bb-glass-inicio .pz-shell-head{position:relative;padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:8px}
+.bb-app.bb-glass-inicio .bb-main{padding-top:2px;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+#inicioView.hf-wrap{padding-top:2px;padding-bottom:12px}
+#inicioView .pz-semana-mini{padding:6px 10px 7px}
+#inicioView .pz-semana-dia{gap:6px}
+#inicioView .pz-hoy-tira-detalle{margin-bottom:10px}
+#inicioView .pz-hoy-tira-detalle.vacia{padding:10px 18px}
+#inicioView .pz-hoy-tira-detalle.vacia .pz-hoy-glass-btn{margin-top:9px}
+#inicioView .pz-hoy-tira-detalle.vacia .pz-hoy-subir-link{margin-top:8px}
+/* La promesa de las 9:00 (TARJETA-PROMESA-9AM aterrizó DESPUÉS que
+   este lote y su tarjeta renderizaba 193.5px: rompía el cierre por
+   28.5px). La compresión de Inicio la alcanza también — sin tocar
+   su copia ni su diseño (mismo reloj azul, mismo titular navy, la
+   hora en azul de marca, mismo link): solo aire y tamaños, como el
+   resto de la pantalla. La línea de la promesa lleva line-height
+   fijo en px para que sus dos estados de hoy (antes de las 9:00,
+   con la hora; después, «está en armado.») midan lo mismo. */
+#inicioView .pz-hoy-tira-detalle.promesa .t b{font-size:19px;line-height:1.25}
+#inicioView .pz-hoy-promesa-reloj{width:24px;height:24px;margin:8px auto 5px}
+#inicioView .pz-hoy-promesa-grande{font-size:23px;line-height:1.12}
+#inicioView .pz-hoy-promesa-linea{font-size:15px;line-height:22px;margin-top:3px}
+#inicioView .pz-hoy-promesa-hora{font-size:17px}
+#inicioView .pz-hoy-tira-detalle.promesa .pz-hoy-subir-link{margin-top:6px}
+#inicioView .hf-head{padding:10px 12px}
+#inicioView .hf-ava-in{width:54px;height:54px}
+@media(max-width:380px){#inicioView .hf-ava-in{width:48px;height:48px}}
+#inicioView .hf-stats{margin-top:8px;padding-top:8px}
+#inicioView .hf-bio{line-height:1.32}
+#inicioView .hf-racha{margin-top:6px}
+#inicioView .hf-tabs{margin-top:10px}
+#inicioView .hf-tab{padding:7px 0 5px}
+/* --- Variante compacta en pantallas bajas (movimiento 3) --- */
+@media (max-height:720px) and (max-width:760px){
+.bb-app.bb-glass-inicio .pz-shell-head{padding-top:calc(3px + env(safe-area-inset-top));padding-bottom:3px}
+.bb-app.bb-glass-inicio .pz-shell-ava{width:34px;height:34px}
+.bb-app.bb-glass-inicio .pz-shell-who b{font-size:17px}
+.bb-app.bb-glass-inicio .pz-shell-who small{font-size:11.5px}
+.bb-app.bb-glass-inicio .bb-main{padding-top:1px;padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+#inicioView.hf-wrap{padding-top:1px;padding-bottom:0}
+#inicioView .pz-semana-mini{padding:3px 10px 3px}
+#inicioView .pz-semana-dia{gap:3px;font-size:10.5px}
+#inicioView .pz-semana-bola{margin-top:2px}
+#inicioView .pz-semana-dia.today .pz-semana-bola{width:15px;height:15px;margin-top:0}
+#inicioView .pz-hoy-tira-detalle{margin-bottom:6px}
+#inicioView .pz-hoy-tira-detalle.vacia{padding:6px 18px}
+#inicioView .pz-hoy-tira-detalle .t b{font-size:13.5px;line-height:1.22}
+#inicioView .pz-hoy-tira-detalle .t small{font-size:11.5px}
+#inicioView .pz-hoy-tira-detalle.vacia .pz-hoy-glass-btn{height:28px;margin-top:6px;font-size:13px}
+#inicioView .pz-hoy-tira-detalle.vacia .pz-hoy-subir-link{margin-top:5px;font-size:12px}
+/* La promesa en pantallas bajas: la misma vuelta más de compresión
+   que el resto de la variante (su forma sin comprimir medía 168.4px
+   contra el ~117px que el cierre admite a 390px de ancho). */
+#inicioView .pz-hoy-tira-detalle.vacia.promesa{padding:4px 18px}
+#inicioView .pz-hoy-tira-detalle.promesa .t b{font-size:12.5px;line-height:1.2}
+#inicioView .pz-hoy-promesa-reloj{width:18px;height:18px;margin:4px auto 3px}
+#inicioView .pz-hoy-promesa-grande{font-size:18.5px;line-height:1.1}
+#inicioView .pz-hoy-promesa-linea{font-size:13.5px;line-height:19px;margin-top:1px}
+#inicioView .pz-hoy-promesa-hora{font-size:15px}
+#inicioView .pz-hoy-tira-detalle.promesa .pz-hoy-subir-link{margin-top:4px}
+#inicioView .hf-head{padding:6px 12px}
+#inicioView .hf-ava-in{width:38px;height:38px}
+#inicioView .hf-ava-letter{font-size:22px}
+#inicioView .hf-user{font-size:15px}
+#inicioView .hf-name{font-size:12px}
+#inicioView .hf-stats{margin-top:3px;padding-top:3px}
+#inicioView .hf-stat b{font-size:13.5px}
+#inicioView .hf-stat span{font-size:10px}
+#inicioView .hf-bio{font-size:12.25px;line-height:1.22}
+#inicioView .hf-link{font-size:12.5px;margin-top:0}
+#inicioView .hf-racha{margin-top:3px;font-size:11.5px}
+#inicioView .hf-racha .hf-info-btn{width:20px;height:20px;font-size:12px}
+#inicioView .hf-tabs{margin-top:6px}
+#inicioView .hf-tab{padding:4px 0 3px}
+#inicioView .hf-tab svg{width:22px;height:22px}
+}
+/* ===== /LOTE INICIO-ENTERO ===== */
