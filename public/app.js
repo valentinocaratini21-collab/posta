@@ -3111,7 +3111,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1244';
+const PZ_BUILD = '20261105-v1245';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -14468,7 +14468,15 @@ function pzSemanaAprobadaHTML(en) {
   const invSinIg = (typeof pzIsGuest === 'function' && pzIsGuest())
     && (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected);
   if (invSinIg) return `<p class="hf-semana-ok" id="hfSemanaOk">${pzIc('checkCircle', 14)} ${en ? 'Your week is approved. To have it go out, connect your Instagram: without a connection, nothing gets published.' : 'Tu semana está aprobada. Para que salga, conectá tu Instagram: sin conexión no se publica.'}</p>`;
-  return `<p class="hf-semana-ok" id="hfSemanaOk">${pzIc('checkCircle', 14)} ${en ? 'Your week is approved. Posty will take care of publishing it.' : 'Tu semana está aprobada. Posty se ocupa de publicarla.'}</p>`;
+  // (LOTE INICIO-SIN-RELLENO · orden del dueño 22/11 22:24: «Eliminar
+  // esto. Completamente de mas.») La línea «Tu semana está aprobada.
+  // Posty se ocupa de publicarla.» salió: es el mismo relleno que la
+  // burbuja de Hoy — narra lo que la pantalla ya muestra, sin hecho
+  // nuevo ni acción posible. Con la semana aprobada y nada para hacer
+  // no se rinde nada ('' = el sync no inserta nada y sigue quitando la
+  // línea si un estado anterior la dejó). Solo queda la variante del
+  // invitado sin conexión: la suya es un problema accionable.
+  return '';
 }
 // (LOTE SEMANA-APROBADA) Sync en su lugar, sin render(): crea el mensaje
 // si el estado lo pide y no esta, lo quita si ya no corresponde. Se llama
@@ -31412,9 +31420,18 @@ function pzHoySpeechHTML(o) {
         : `Tu semana ya está armada — los posteos salen solos a su hora, los ves en tu feed. Te aviso 30 min antes de cada uno por si querés frenarlo.`;
     }
   } else if (haySemana) {
+    // (LOTE INICIO-SIN-RELLENO · orden del dueño 22/11 22:24, con
+    // captura de esta tarjeta: «Eliminar esto. Completamente de mas.»)
+    // Con la semana aprobada y nada para hacer, la burbuja NO se
+    // rinde: el texto («Tu semana ya está aprobada. Posty se ocupa de
+    // publicarla.») narraba lo que la pantalla ya muestra, sin hecho
+    // nuevo ni acción posible. Sin cuerpo no hay burbuja (la misma
+    // regla de v879/v901 para borrador, manual pendiente y sale-solo).
+    // El invitado sin Instagram conectado conserva su texto: el suyo
+    // es un problema accionable (sin conexión no se publica nada).
     cuerpo = invSinIg
       ? (en ? `Your week is approved. To have it go out on your Instagram, connect it: without a connection, Posty can't publish it.` : `Tu semana ya está aprobada. Para que salga en tu Instagram, conectalo: sin conexión, Posty no puede publicarla.`)
-      : (en ? `Your week is approved. Posty takes care of publishing it.` : `Tu semana ya está aprobada. Posty se ocupa de publicarla.`);
+      : '';
   } else {
     destArmar = true;
     // (LOTE VERDAD-INVITADO · Blind Barber P8) Sin semana, el
