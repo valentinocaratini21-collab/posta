@@ -22739,7 +22739,15 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     // (saltaba el modal de tope) porque quotaFor miraba la semana de hoy.
     // Si el posteo ya estaba programado/publicado, no se descuenta de nuevo.
     const whenMonday = mondayKeyOf(String(finalWhen).slice(0, 10));
-    if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
+    // (LOTE FRENO-REINTENTO-CUPO) Un posteo FALLIDO que se reprograma a
+    // SU MISMA semana hereda el cupo que ya se le descontó al programarse
+    // la primera vez: el mismo posteo no se cobra dos veces (el mismo
+    // principio que la rama de mover de esta ruta: misma semana, sin
+    // chequeo). Reprogramarlo a OTRA semana se cobra contra esa semana,
+    // como siempre.
+    const heredaCupoPatch = post.status === 'failed' && !!post.scheduled_at
+      && mondayKeyOf(String(post.scheduled_at).slice(0, 10)) === whenMonday;
+    if (!heredaCupoPatch && !['scheduled', 'publishing', 'published'].includes(post.status)) {
       const q = quotaForWeek(req.session.userId, post.media_type, whenMonday);
       if (q.left <= 0) {
         return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: whenMonday,
@@ -23988,7 +23996,25 @@ app.post('/api/posts/:id/publish-now', requireAuth, requireTrialValid, (req, res
   // (CARRIL EXPRÉS) El posteo exprés no consume cupo: sale hoy sin mirar la semana.
   if (post.source !== 'express' && !['scheduled', 'publishing', 'published'].includes(post.status)) {
     const q = quotaFor(req.session.userId, post.media_type);
-    if (q.left <= 0) {
+    // (LOTE FRENO-REINTENTO-CUPO) El reintento de un posteo FALLIDO cuyo
+    // horario original cae en ESTA misma semana no se cobra de nuevo: su
+    // cupo ya se descontó cuando se programó (mientras estuvo programado
+    // contó en quotaCounts) y al fallar dejó de contar — sin la herencia,
+    // el reintento rebota por plan_limit contra el lugar que ocupó otro
+    // posteo (incidente 22/11: el reel 742 fallido no se pudo reintentar
+    // porque el 695 publicado llenaba el único reel semanal del plan).
+    // La herencia es de LA MISMA semana que mide este quotaFor: un
+    // fallido de una semana vieja que se reintenta hoy ocupa un lugar de
+    // hoy y se cobra como siempre. El horario original es el que
+    // sobrevive en scheduled_at (ningún camino de fallo lo borra).
+    let heredaCupo = false;
+    if (post.status === 'failed' && post.scheduled_at) {
+      try {
+        const ymdOrig = ymdInTz(post.scheduled_at, userTz(req.session.userId));
+        heredaCupo = !!ymdOrig && mondayKeyOf(ymdOrig) === q.week_key;
+      } catch (e) { heredaCupo = false; }
+    }
+    if (!heredaCupo && q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
         message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
     }
@@ -48732,7 +48758,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1269';
+const BUILD_ID = '20261105-v1270';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
