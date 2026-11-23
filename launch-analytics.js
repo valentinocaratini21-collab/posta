@@ -206,7 +206,7 @@ const AI_COST_ALERT_PCT = 8;   // alerta: gasto IA del mes ≥ 8% del precio del
 const AI_COST_CAP_PCT = 10;    // el tope duro del producto (costs.js) es 10%
 const PLAYS = {
   comercial: { play: 'aviso_pago_amable', label: 'Aviso amable temprano con link de pago de un toque; si cancela igual: pregunta de salida de un toque y puerta abierta 30 días con todo guardado.' },
-  culpa_nuestra: { play: 'compensacion', label: 'Prioridad de regeneración + compensación visible automática: una pieza extra esta semana (la de mejor rendimiento histórico de la cuenta; si no hay dato, un reel extra).' },
+  culpa_nuestra: { play: 'compensacion', label: 'Prioridad de regeneración + compensación visible: la pieza extra nace solo de la generación guardada del producto (nunca un clon de una pieza ya publicada); en la cuenta propia no se crea — queda propuesta para la mano humana.' },
   calidad: { play: 'revision_reforzada', label: 'Su semana entra en revisión reforzada (doble QA) antes de mostrarse, el fundamento se re-lee de su IG/web, y su próxima Carta abre reconociendo el ajuste con el cambio concreto.' },
   sin_material: { play: 'semana_ia_total', label: 'Esta semana Posty genera todo con IA sin pedirle nada y se lo comunica en una línea: "esta semana sale igual, no necesito nada de vos".' },
   desconexion: { play: 'toque_valor', label: 'UN toque extra con valor real vía el sistema de relación (una idea concreta de su rubro/zona o una pieza sorpresa). Techo duro: 1 toque extra por semana.' },

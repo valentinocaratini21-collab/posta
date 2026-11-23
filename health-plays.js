@@ -22,8 +22,15 @@
 //                     el cliente recibe UNA línea avisándolo.
 //  · culpa nuestra  → prioridad de regeneración (los reintentos pendientes
 //                     de sweep_failures quedan para ya) + pieza extra de
-//                     compensación sin costo: clon borrador de su pieza de
-//                     mejor rendimiento histórico (la definición de v322).
+//                     compensación sin costo, SOLO por la generación
+//                     guardada del producto (deps.generateExtraPiece):
+//                     JAMÁS un clon de una pieza ya publicada (clase
+//                     cerrada por el LOTE FRENO-COMPENSACION). En las
+//                     cuentas cubiertas por el FRENO de la cuenta propia
+//                     la jugada no crea nada: la pieza extra queda como
+//                     PROPUESTA para la mano humana (efecto
+//                     pieza_extra_propuesta) y la compensación corre
+//                     solo en su parte no generadora (prioridad + aviso).
 //  · comercial      → aviso amable con link de pago de un toque (email si
 //                     el canal está configurado; si no, chat). Si cancela:
 //                     pregunta de salida de un toque (link firmado, sin
@@ -40,6 +47,13 @@
 //    motivo — JAMÁS marcada ejecutada.
 //  · PROHIBIDO: descuentos automáticos por estar en rojo (ninguna jugada
 //    toca precios ni planes) y romper el techo de proactive_log.
+//  · FRENO DE LA CUENTA PROPIA (LOTE FRENO-COMPENSACION): ninguna
+//    jugada automática de este módulo crea, clona ni regenera piezas
+//    sobre una cuenta cubierta por el freno — la misma guarda que
+//    frena la generación automática del producto (server.js la
+//    inyecta como deps.cuentaFrenada; sin inyección manda la
+//    identidad de la casa de plan-gate). La compensación sobre esas
+//    cuentas propone la pieza extra; no la crea.
 'use strict';
 
 const crypto = require('crypto');
@@ -307,57 +321,89 @@ function aiOnlyWeekActive(db, userId, weekKey) {
   try { return !!getEffect(db, userId, 'ai_only_week', weekKey || LA.currentWeekKey()); } catch (e) { return false; }
 }
 
+/* ---------------- el FRENO: cuentas cubiertas --------------------------- */
+// (LOTE FRENO-COMPENSACION) La misma guarda que frena la generación
+// automática del producto, consultada por este motor antes de crear
+// nada. En producción server.js inyecta su esCuentaPropia como
+// deps.cuentaFrenada (una sola fuente de verdad); sin inyección (la
+// corrida admin, las suites) manda la identidad de la casa de
+// plan-gate — HOUSE_USER_IDS o el ig de la casa, ES y EN — con el
+// match por id del env como último respaldo.
+function cuentaFrenada(db, userId, ctx) {
+  const deps = (ctx && ctx.deps) || {};
+  if (typeof deps.cuentaFrenada === 'function') {
+    try { return !!deps.cuentaFrenada(db, userId); } catch (e) { /* cae a la identidad local */ }
+  }
+  try { return !!require('./plan-gate').esCuentaDeLaCasa(db, userId); } catch (e) { /* último respaldo: el id del env */ }
+  try {
+    const ids = String(process.env.HOUSE_USER_IDS || '12').split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0);
+    return ids.includes(Number(userId));
+  } catch (e) { return false; }
+}
+
 /* ---------------- jugada: CULPA NUESTRA --------------------------------- */
 async function playCulpaNuestra(db, user, ctx) {
   const uid = user.id;
   const wk = LA.currentWeekKey();
-  // Pieza extra de compensación, sin costo de IA: clon borrador de su
-  // pieza de mejor rendimiento histórico (definición textual de v322).
-  // Se resuelve PRIMERO: si no hay pieza fuente ni generador inyectado,
-  // la jugada queda pendiente SIN efectos parciales (fail-closed limpio).
+  const lang = user.lang === 'en' ? 'en' : 'es';
+  // La mejor pieza histórica se lee SOLO como referencia (para la
+  // propuesta de la cuenta frenada y como insumo del generador
+  // inyectado): desde el LOTE FRENO-COMPENSACION nadie la copia a un
+  // posteo nuevo — el clon directo de una pieza ya publicada quedó
+  // cerrado para TODAS las cuentas.
   let src = null;
   try {
     src = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'published'
       ORDER BY (COALESCE(ig_likes, 0) + COALESCE(ig_comments, 0) * 3) DESC, published_at DESC LIMIT 1`).get(uid);
   } catch (e) {}
-  if (!src && !(ctx.deps && typeof ctx.deps.generateExtraPiece === 'function')) {
-    return { executed: false, reason: 'sin_pieza_fuente_para_compensar' };
-  }
   // Prioridad de regeneración: los reintentos que el sistema ya tiene
   // agendados para esta cuenta quedan para YA (el barrido de reintentos
-  // de scheduler/server los levanta en su próxima pasada).
+  // de scheduler/server los levanta en su próxima pasada). Es la parte
+  // NO generadora de la compensación: corre también en las cuentas
+  // frenadas, antes de cualquier decisión sobre la pieza extra.
   let prioritized = 0;
   try {
     const r = db.prepare(`UPDATE sweep_failures SET next_retry_at = datetime('now') WHERE user_id = ?`).run(uid);
     prioritized = (r && r.changes) || 0;
   } catch (e) { /* sin tabla de reintentos: la prioridad queda como efecto */ }
   setEffect(db, uid, 'regen_prioridad', wk, { cause: 'culpa_nuestra', sweep_failures_priorizadas: prioritized });
-  let extraId = null;
-  if (ctx.deps && typeof ctx.deps.generateExtraPiece === 'function') {
-    const r = await ctx.deps.generateExtraPiece(db, user, src);
-    if (!r || !r.ok) return { executed: false, reason: 'pieza_extra_no_generada: ' + ((r && r.reason) || 'sin_motivo') };
-    extraId = r.post_id || null;
-  } else {
+  // (LOTE FRENO-COMPENSACION) Cuenta cubierta por el FRENO de la
+  // cuenta propia: la jugada NO crea, clona ni regenera piezas — ni
+  // por la vía histórica ni por el generador inyectado. La pieza
+  // extra queda como PROPUESTA para la mano humana (efecto
+  // pieza_extra_propuesta, visible en el estado de salud) y la
+  // compensación se cumple en su parte no generadora: prioridad
+  // (arriba) + este aviso, que dice la verdad — ninguna pieza se sumó.
+  if (cuentaFrenada(db, uid, ctx)) {
+    setEffect(db, uid, 'pieza_extra_propuesta', wk, {
+      cause: 'culpa_nuestra', via: 'compensacion', estado: 'propuesta_mano_humana',
+      source_post_id: src ? src.id : null,
+      referencia: src ? String(src.caption || '').slice(0, 120) : '',
+    });
     try {
-      const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, tipo, week_key, source)
-        VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, 'health_compensation')`)
-        .run(uid, src.image_path || '', src.caption || '', src.hashtags || '', src.media_type || 'image', src.carousel_paths || '', src.tipo || '', wk);
-      extraId = Number(r.lastInsertRowid);
-    } catch (e) {
-      try {
-        const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, week_key)
-          VALUES (?, ?, ?, ?, 'draft', ?, ?)`).run(uid, src.image_path || '', src.caption || '', src.hashtags || '', src.media_type || 'image', wk);
-        extraId = Number(r.lastInsertRowid);
-      } catch (e2) { return { executed: false, reason: 'pieza_extra_fallo: ' + e2.message }; }
-    }
+      chatInsert(db, uid, lang === 'en'
+        ? 'this one is on me: your regeneration goes first in line. The extra compensation piece is not created on its own on this account: it stays proposed, to be made by hand 💙'
+        : 'esta es culpa mía: tu regeneración pasa primera en la fila. La pieza extra de compensación no se crea sola en esta cuenta: queda propuesta, para armarla a mano 💙');
+    } catch (e) {}
+    return { executed: true, detail: `prioridad de regeneración (${prioritized} reintento(s) adelantados) · cuenta frenada por el FRENO de la cuenta propia: pieza extra NO creada — queda propuesta para la mano humana (efecto pieza_extra_propuesta${src ? `, referencia: su mejor pieza #${src.id}` : ''})` };
   }
-  const lang = user.lang === 'en' ? 'en' : 'es';
+  // Cuenta no frenada: la pieza extra nace SOLO de la generación
+  // guardada del producto (deps.generateExtraPiece, la vía que pasa
+  // por las guardas de generación). Sin generador inyectado la jugada
+  // queda pendiente con motivo — fail-closed, jamás ejecutada a medias
+  // con un clon.
+  if (!(ctx.deps && typeof ctx.deps.generateExtraPiece === 'function')) {
+    return { executed: false, reason: 'pieza_extra_sin_generador' };
+  }
+  const r = await ctx.deps.generateExtraPiece(db, user, src);
+  if (!r || !r.ok) return { executed: false, reason: 'pieza_extra_no_generada: ' + ((r && r.reason) || 'sin_motivo') };
+  const extraId = r.post_id || null;
   try {
     chatInsert(db, uid, lang === 'en'
       ? 'this one is on me: I added an extra piece to your week, free, and your regeneration goes first in line 💙'
       : 'esta es culpa mía: te sumé una pieza extra a tu semana, sin costo, y tu regeneración pasa primera en la fila 💙');
   } catch (e) {}
-  return { executed: true, detail: `prioridad de regeneración (${prioritized} reintento(s) adelantados) + pieza extra de compensación #${extraId} (clon de su mejor pieza, sin costo)` };
+  return { executed: true, detail: `prioridad de regeneración (${prioritized} reintento(s) adelantados) + pieza extra de compensación #${extraId} (generada por la vía guardada, sin costo)` };
 }
 
 /* ---------------- jugada: COMERCIAL ------------------------------------- */
@@ -602,6 +648,7 @@ module.exports = {
   _internal: {
     ensureIntervention, openIntervention, markExecuted, markPending,
     extraTouchesThisWeek, markDigestStale, touchContent, setEffect, getEffect,
+    cuentaFrenada,
     PLAY_RUNNERS, EXIT_REASONS, CARTA_OPENER,
   },
 };

@@ -48427,7 +48427,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1239';
+const BUILD_ID = '20261105-v1240';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -48650,6 +48650,10 @@ try {
       try { await refreshDigestsSweep(); } catch (e) { /* el barrido reintenta el lunes 06:30 */ }
       return { ok: true, via: 'relectura_barrido_fundamento' };
     },
+    // (LOTE FRENO-COMPENSACION) La salud consulta la MISMA guarda que
+    // frena la generación automática: sobre la cuenta propia ninguna
+    // jugada crea piezas (la compensación propone, no crea).
+    cuentaFrenada: (db2, uid) => esCuentaPropia(uid),
   });
 } catch (e) { console.error('[health-plays] no se pudo montar:', e && e.message); }
 

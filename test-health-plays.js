@@ -1,4 +1,11 @@
 // test-health-plays.js — tests de las JUGADAS ROJO→VERDE (health-plays.js).
+// (LOTE FRENO-COMPENSACION) El bloque de culpa nuestra refleja el
+// contrato nuevo: el clon directo de una pieza ya publicada quedó
+// cerrado para TODAS las cuentas — la pieza extra nace solo del
+// generador inyectado (deps.generateExtraPiece) y sin generador la
+// jugada queda pendiente con motivo; sobre la cuenta propia la
+// jugada no crea nada y la pieza queda propuesta (la cobertura del
+// escenario fundante vive en test-lote-freno-compensacion.js).
 // Reconstrucción de la suite original (47/47): cubre las 5 jugadas contra
 // los sistemas reales (posts.needs_review, client_digest, relacion +
 // proactive_log, ritual de fotos, sweep_failures, email/chat comercial),
@@ -91,7 +98,7 @@ db.prepare('INSERT INTO photo_missions (user_id, week_key, shots) VALUES (4, ?, 
 insE.run(4, '', 'prueba_view', '{}', sqlAgo(6)); // amarillo por inactividad, sin llegar a desconexión dominante
 
 /* ---------- 5 · CULPA NUESTRA ------------------------------------------- */
-console.log('— culpa nuestra: prioridad + pieza extra sin costo —');
+console.log('— culpa nuestra: prioridad + pieza extra solo por la generación guardada —');
 insU.run(5, 'culpa@test.dev', 'pro', 'active', sqlAgo(40));
 insP.run(501, 5, 'published', 'La pieza que más rindió', '/media/i.jpg', PREV_WK, sqlAgo(9), sqlAgo(9), 42, sqlAgo(9));
 insP.run(502, 5, 'draft', 'Borrador de esta semana', '/media/j.jpg', WK, null, sqlAgo(1), 0, null);
@@ -143,15 +150,14 @@ insS.run(11, 1101, 'rejected', sqlAgo(1)); insS.run(11, 1101, 'rejected', sqlAgo
   ok(chatN(4, '%no necesito nada de vos%') === 1, 'sin material: mensaje de una línea en el chat');
 
   const iv5 = ivOf(5, 'culpa_nuestra');
-  ok(!!iv5 && iv5.execution_status === 'ejecutada', 'culpa nuestra: intervención ejecutada');
-  const extra = db.prepare("SELECT * FROM posts WHERE user_id = 5 AND status = 'draft' AND week_key = ? AND id != 502").get(WK);
-  ok(!!extra && extra.caption === 'La pieza que más rindió' && extra.source === 'health_compensation', 'culpa nuestra: pieza extra de compensación creada (su mejor pieza, sin costo)');
+  ok(!!iv5 && iv5.execution_status === 'pendiente' && iv5.reason === 'pieza_extra_sin_generador', 'culpa nuestra: sin generador inyectado la jugada queda PENDIENTE (el clon de una publicada quedó cerrado)');
+  ok(db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = 5').get().n === 2, 'culpa nuestra: NINGÚN clon creado (sus posteos son solo los sembrados)');
   const sf = db.prepare('SELECT next_retry_at FROM sweep_failures WHERE user_id = 5').get();
   ok(sf.next_retry_at <= new Date().toISOString().slice(0, 19).replace('T', ' '), 'culpa nuestra: la regeneración quedó con prioridad (reintento para ya)');
-  ok(chatN(5, '%pieza extra%') === 1, 'culpa nuestra: el cliente se entera de la compensación');
+  ok(chatN(5, '%pieza extra%') === 0, 'culpa nuestra: sin pieza creada no se anuncia ninguna pieza extra');
 
   const iv55 = ivOf(55, 'culpa_nuestra');
-  ok(!!iv55 && iv55.execution_status === 'pendiente' && iv55.reason === 'sin_pieza_fuente_para_compensar', 'fail-closed: sin pieza fuente, la jugada queda pendiente con motivo (jamás ejecutada)');
+  ok(!!iv55 && iv55.execution_status === 'pendiente' && iv55.reason === 'pieza_extra_sin_generador', 'fail-closed: sin generador inyectado, la jugada queda pendiente con motivo (jamás ejecutada)');
   ok(db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id = 55 AND status = 'draft'").get().n === 1, 'fail-closed: no se inventó ninguna pieza');
 
   const iv6 = ivOf(6, 'comercial');
@@ -197,6 +203,21 @@ insS.run(11, 1101, 'rejected', sqlAgo(1)); insS.run(11, 1101, 'rejected', sqlAgo
   ok(out61.executed === false && db.prepare('SELECT execution_status FROM health_interventions WHERE user_id = 61').get().execution_status === 'pendiente', 'comercial: si el aviso no se entrega, queda pendiente (no se finge)');
   const out61b = await HP.runPlayForIntervention(db, db.prepare('SELECT * FROM health_interventions WHERE user_id = 61').get(), { sendNotice: async () => ({ ok: true, channel: 'email' }) });
   ok(out61b.executed === true, 'comercial: con el canal de vuelta, la misma intervención pendiente se ejecuta');
+
+  /* ===== culpa nuestra CON generador inyectado: pieza nueva, no clon ===== */
+  console.log('— culpa nuestra con generador: la pieza extra nace de la generación guardada —');
+  insU.run(56, 'culpagen@test.dev', 'pro', 'active', sqlAgo(40));
+  insP.run(561, 56, 'published', 'La pieza que más rindió', '/media/m.jpg', PREV_WK, sqlAgo(9), sqlAgo(9), 42, sqlAgo(9));
+  db.prepare(`INSERT INTO health_interventions (user_id, cause, play, status, execution_status, week_key) VALUES (56, 'culpa_nuestra', 'compensacion', 'abierta', 'pendiente', ?)`).run(WK);
+  const iv56 = db.prepare('SELECT * FROM health_interventions WHERE user_id = 56').get();
+  const out56 = await HP.runPlayForIntervention(db, iv56, { generateExtraPiece: async (db2, user2) => {
+    const rr = db2.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, week_key, source) VALUES (?, '/media/nueva.jpg', 'Una pieza nueva de compensación', '', 'draft', 'image', ?, 'health_compensation')`).run(user2.id, WK);
+    return { ok: true, post_id: Number(rr.lastInsertRowid) };
+  } });
+  ok(out56.executed === true, 'con generador: la compensación se ejecuta');
+  const extra56 = db.prepare("SELECT * FROM posts WHERE user_id = 56 AND status = 'draft'").get();
+  ok(!!extra56 && extra56.caption !== 'La pieza que más rindió' && extra56.image_path !== '/media/m.jpg', 'con generador: la pieza extra es NUEVA — no es un clon de la publicada');
+  ok(chatN(56, '%pieza extra%') === 1, 'con generador: el cliente se entera de la compensación');
 
   /* ===== cancelación: salida de un toque + 30 días ===== */
   console.log('— cancelación: pregunta de salida + cuenta guardada —');
