@@ -124,6 +124,11 @@ async function processUpcomingNotices(db, opts) {
     // (v856) La historia se nombra historia, no posteo: el aviso de
     // 30 min decía «este posteo» también para las stories (media_type
     // 'story') y se leía como que el posteo del feed salía de nuevo.
+    // (LOTE PUSH-SIN-ESTE-POSTEO · 22/11) En el posteo, el cuerpo del
+    // push abre directo con la cita: el rótulo «este posteo:» delante
+    // no agregaba nada (palabra del dueño al verlo en su teléfono).
+    // La historia conserva su rótulo: es el arreglo v856 de arriba,
+    // ahí el nombre del medio sí dice algo.
     const isStory = String(p.media_type || '') === 'story';
     try {
       // (LOTE PRUEBA-ENTRADA-DIRECTA) Aviso 30 min: NOTIFICACIÓN + EMAIL
@@ -141,8 +146,8 @@ async function processUpcomingNotices(db, opts) {
         pr = await pushFn(p.user_id, {
           title: mode === 'manual' ? '⏰ Sale en 30 minutos' : '🚀 Publico en 30 min',
           body: mode === 'manual'
-            ? (isStory ? `esta historia: "${cap}..." — tocá para aprobarla o frenarla` : `este posteo: "${cap}..." — tocá para aprobarlo o frenarlo`)
-            : (isStory ? `esta historia: "${cap}..." — tocá para verla o frenarla` : `este posteo: "${cap}..." — tocá para verlo o frenarlo`),
+            ? (isStory ? `esta historia: "${cap}..." — tocá para aprobarla o frenarla` : `"${cap}..." — tocá para aprobarlo o frenarlo`)
+            : (isStory ? `esta historia: "${cap}..." — tocá para verla o frenarla` : `"${cap}..." — tocá para verlo o frenarlo`),
           url: `/#/app/semana?post=${p.id}`,
         });
       } catch (e) { pr = { ok: false, reason: 'push_throw: ' + e.message }; }
