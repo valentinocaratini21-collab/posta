@@ -36,7 +36,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .logo .dot{color:var(--cel)}
 .nav-entrar{color:var(--cel);font-weight:700;text-decoration:none;font-size:15px}
 .hero{text-align:center;padding:40px 0 8px}
-.hero img{width:96px;height:96px;border-radius:50%;box-shadow:0 8px 28px rgba(39,147,200,.35)}
+/* (PRUEBA-MUESTRA-MEDIA LOT) The avatar is a direct child of the hero: with ".hero img" the rule leaked into the sample photos (.ej) and squeezed them into 96px-tall ovals. */
+.hero>img{width:96px;height:96px;border-radius:50%;box-shadow:0 8px 28px rgba(39,147,200,.35)}
 .hero h1{font-size:clamp(26px,5vw,40px);font-weight:900;line-height:1.15;margin:18px 0 12px}
 .hero h1 .hl{color:var(--cel)}
 .hero .sub{color:var(--mut);font-size:17px;max-width:560px;margin:0 auto;line-height:1.6}
@@ -111,7 +112,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .hero-note{text-align:center;font-size:14px;color:var(--mut);margin:20px 0 40px}
 /* (PUERTA-NUEVA LOT · AMENDMENT 21:49) The format trio + the real
    example strip: the door SAYS what the 3 posts are (a photo, a
-   carousel and a video) and SHOWS it with Big Top Candy Shop's real
+   carousel and a video) and SHOWS it with De Otro Tiempo's real
    trial — its day 1, its day-2 carousel (swipeable) and its day-3
    video (muted, looping). Glass chips, yellow only as a detail. */
 .trio{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:20px}
@@ -145,25 +146,25 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <span><i></i>Day 3: a video</span>
     </div>
     <div class="ej">
-      <p class="ej-title">Big Top Candy Shop's real trial</p>
+      <p class="ej-title">De Otro Tiempo's real trial</p>
       <div class="ej-row">
         <div class="ej-card">
-          <img class="ph" src="/puerta-ej-bigtop-dia1.jpg" alt="Day 1 of the trial: a photo" loading="lazy">
+          <img class="ph" src="/puerta-ej-deotrotiempo-dia1.jpg" alt="Day 1 of the trial: a photo" loading="lazy">
           <span class="daychip">Day 1</span>
         </div>
         <div class="ej-card">
           <div class="ej-car" id="ejCar">
-            <img src="/puerta-ej-bigtop-dia2-1.jpg" alt="Day 2 of the trial: a carousel, photo 1 of 5" loading="lazy">
-            <img src="/puerta-ej-bigtop-dia2-2.jpg" alt="Day 2 of the trial: a carousel, photo 2 of 5" loading="lazy">
-            <img src="/puerta-ej-bigtop-dia2-3.jpg" alt="Day 2 of the trial: a carousel, photo 3 of 5" loading="lazy">
-            <img src="/puerta-ej-bigtop-dia2-4.jpg" alt="Day 2 of the trial: a carousel, photo 4 of 5" loading="lazy">
-            <img src="/puerta-ej-bigtop-dia2-5.jpg" alt="Day 2 of the trial: a carousel, photo 5 of 5" loading="lazy">
+            <img src="/puerta-ej-deotrotiempo-dia2-1.jpg" alt="Day 2 of the trial: a carousel, photo 1 of 5" loading="lazy">
+            <img src="/puerta-ej-deotrotiempo-dia2-2.jpg" alt="Day 2 of the trial: a carousel, photo 2 of 5" loading="lazy">
+            <img src="/puerta-ej-deotrotiempo-dia2-3.jpg" alt="Day 2 of the trial: a carousel, photo 3 of 5" loading="lazy">
+            <img src="/puerta-ej-deotrotiempo-dia2-4.jpg" alt="Day 2 of the trial: a carousel, photo 4 of 5" loading="lazy">
+            <img src="/puerta-ej-deotrotiempo-dia2-5.jpg" alt="Day 2 of the trial: a carousel, photo 5 of 5" loading="lazy">
           </div>
           <span class="daychip">Day 2</span>
           <span class="ej-count" id="ejCount">1 / 5</span>
         </div>
         <div class="ej-card">
-          <video src="/puerta-ej-bigtop-dia3.mp4" poster="/puerta-ej-bigtop-dia3-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Day 3 of the trial: a video"></video>
+          <video src="/puerta-ej-deotrotiempo-dia3.mp4" poster="/puerta-ej-deotrotiempo-dia3-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Day 3 of the trial: a video"></video>
           <span class="daychip">Day 3</span>
         </div>
       </div>
