@@ -5,7 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:,">
+<!-- (LOTE CONSERJE-INSTALABLE) La consola se guarda en la pantalla de
+     inicio como su propia web app: manifest propio (scope /conserje,
+     no el de la app del cliente), la moneda como ícono y las metas de
+     iOS para que abra standalone, sin la interfaz de Safari. -->
+<link rel="manifest" href="/conserje.webmanifest">
+<meta name="theme-color" content="#0A1E33">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Conserje">
+<link rel="apple-touch-icon" href="/icon-conserje-180.png">
+<link rel="icon" type="image/png" href="/icon-conserje-192.png">
 <title>Conserje — Posty</title>
 <style>
   /* LOTE CONSERJE-V1 — la consola del operador reconstruida sobre el
@@ -489,6 +500,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=8"></script>
+<script src="/conserje.js?v=9"></script>
 </body>
 </html>

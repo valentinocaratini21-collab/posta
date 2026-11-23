@@ -28,6 +28,16 @@
   } catch (e) { /* sin storage: el gate pide el token */ }
   if (qs.get('token')) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
 
+  // (LOTE CONSERJE-INSTALABLE) La consola instalada registra el mismo
+  // /sw.js de la casa. Su política ya es la que la consola necesita:
+  // SOLO cachea la lista de íconos de la app del cliente; el HTML, el
+  // JS, el CSS y la API van siempre por red — ningún asset de la
+  // consola se sirve desde caché y la frescura la sigue mandando el
+  // sello ?v= de esta hoja. Registrarlo no cambia esa política.
+  if ('serviceWorker' in navigator) {
+    try { navigator.serviceWorker.register('/sw.js').catch(function () { /* sin SW la consola anda igual, por red */ }); } catch (e) { /* idem */ }
+  }
+
   // (LOTE PUSH-DESTINO · 22/11) Deep link de la push «pidió un cambio»:
   // ?user=<uid> (&post=<id>) — al terminar la primera carga, la consola
   // abre la ficha de ese cliente con el posteo marcado (gotoFicha, el
