@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1272';
+const PZ_BUILD = '20261105-v1273';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27032,7 +27032,7 @@ function pzPrefetchKick() {
     return;
   }
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
-  else if (tab === 'analisis') { location.hash = '#/app/ads'; return; } // (LOTE A · 8/11: Estrategia eliminada — la recomendación del mejor posteo vive en Impulsar como una línea. analisisView() queda como código muerto sin llamadores.)
+  else if (tab === 'analisis') { pzPaintSkeleton(tab); let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 (LOTE CARTA-DESTINO-PERFIL · 23/11) La carta vuelve a tener superficie: la push de la carta (push.js → /#/app/analisis) aterriza EN la carta. La pestaña Estrategia NO vuelve a la navegación (LOTE A · 8/11 sigue firme); esto repone solo el destino del deep link — analisisView() y bindAnalisis() nunca se borraron (chunk-analisis) y bindApp ya los invoca para este tab. Antes esta rama redirigía a #/app/ads y el toque de la push caía en Impulsar (censo de PUSH-DESTINO v1237).
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule

@@ -28542,6 +28542,42 @@ function homeDisplayOverlay(uid, prof, payload) {
     if (pn) out.name = pn;
     if (pb.trim()) { out.bio = pb; out.bio_unread = false; }
     if (pl) out.link = pl;
+    // (LOTE CARTA-DESTINO-PERFIL · 23/11) El payload mismo también se
+    // sanea al servir: la guarda de RS-3 cubría solo la bio guardada
+    // por el dueño, y un snapshot viejo puede traer la bio-título de
+    // IG, el pic en null y el link-residuo (la URL del propio
+    // Instagram de la cuenta) — la tarjeta de Inicio salía como
+    // placeholder aunque la cuenta tenga cara y bio en su fundamento
+    // (captura del dueño 23/11 08:08).
+    // · Bio: si la del payload es el título de IG (y no vino de la bio
+    //   guardada del dueño, que ya pasó su propia guarda), manda la
+    //   bio del kit de la cuenta — la misma degradación honesta del
+    //   nacimiento, armada de su fundamento; sin kit, queda vacía:
+    //   el scrape crudo nunca es texto visible.
+    if (!pb.trim() && isIgTitleJunkBio(out.bio)) {
+      let kitBio = '';
+      try { const kitP = homeProfileKit(uid, prof); if (kitP && kitP.bio) kitBio = String(kitP.bio); } catch (e) {}
+      out.bio = kitBio;
+      out.bio_unread = false;
+    }
+    // · Foto: un pic vacío se completa con el logo del fundamento
+    //   (digest.logo_url — la foto de perfil de IG que el kit ya usa
+    //   como fuente): la cara real de la cuenta, nunca un invento;
+    //   sin logo guardado, queda null y el front muestra su inicial.
+    if (!out.pic) {
+      try { const dgPic = clientDigest.getDigest(db, uid); if (dgPic && dgPic.logo_url) out.pic = String(dgPic.logo_url); } catch (e) {}
+    }
+    // · Link: la URL del PROPIO Instagram de la cuenta es residuo de
+    //   scrape, no el link del negocio: se descarta (el front cae a
+    //   su @). El link que el dueño guardó (pl) ya mandó arriba y no
+    //   se toca.
+    if (!pl && out.link) {
+      try {
+        const handleLk = String((prof && prof.ig_username) || out.username || '').replace(/^@+/, '').trim().toLowerCase();
+        const lk = String(out.link).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+        if (handleLk && lk === 'instagram.com/' + handleLk) out.link = '';
+      } catch (e) {}
+    }
     let pal = [];
     try { const dg = clientDigest.getDigest(db, uid); if (dg && Array.isArray(dg.paleta)) pal = dg.paleta.map((x) => x && x.hex).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')); } catch (e) {}
     if (!pal.length && typeof parseBrandHexes === 'function') { try { pal = parseBrandHexes((getSettings(uid) || {}).brand_colors); } catch (e) {} }
@@ -48807,7 +48843,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1272';
+const BUILD_ID = '20261105-v1273';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
