@@ -70,6 +70,7 @@ const CASE_TYPES = {
   prueba_trabada: { label: 'Prueba trabada', severidad: 'ambar' },
   prueba_linea_mano: { label: 'Prueba a mano (línea bamboo)', severidad: 'ambar' },
   prueba_retorno_dm: { label: 'Retorno: mandar el link por DM', severidad: 'ambar' },
+  preflight_casa: { label: 'Preflight 19:00: posteo de la casa en riesgo', severidad: 'rojo' },
   integridad_prepublicacion: { label: 'Integridad pre-publicación', severidad: 'rojo' },
   sin_aprobar: { label: 'Sin aprobar', severidad: 'ambar' },
   ayuda: { label: 'Ayuda pedida', severidad: 'ambar' },
@@ -1350,6 +1351,11 @@ function pendingConcierge(db, opts) {
   // prueba_retorno_dm: el DM del link de regreso lo manda la línea a
   // mano (la API no abre conversaciones frías) y el operador tiene que
   // verlo en esta misma superficie desde el acto, no descubrirlo.
+  // (LOTE PREFLIGHT-1830) La misma suma levanta los casos
+  // preflight_casa: el chequeo de las 18:30 (Nueva York) sobre los
+  // posteos de la casa programados para las 19:00 abre el caso con la
+  // causa literal ANTES de la publicación, y el operador tiene que
+  // verlo en esta misma superficie — es su media hora para corregir.
   const casosMano = safe(() => db.prepare(
     `SELECT c.id, c.user_id, c.titulo, c.created_at,
             u.email AS u_email, u.guest_ig AS u_guest_ig,
@@ -1357,7 +1363,7 @@ function pendingConcierge(db, opts) {
      FROM support_cases c
      LEFT JOIN users u ON u.id = c.user_id
      LEFT JOIN profiles p ON p.user_id = c.user_id
-     WHERE c.tipo IN ('prueba_linea_mano', 'prueba_retorno_dm') AND c.estado <> 'cerrado'
+     WHERE c.tipo IN ('prueba_linea_mano', 'prueba_retorno_dm', 'preflight_casa') AND c.estado <> 'cerrado'
      ORDER BY c.id ASC`).all(), []);
   for (const c of casosMano) {
     pendientes.push({

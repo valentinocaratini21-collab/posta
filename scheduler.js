@@ -1303,6 +1303,21 @@ function startScheduler(db) {
       .then((r) => { if (r && (r.regenerados || r.vaciados)) console.log('[bandeja-verdad] purga al desplegar:', JSON.stringify(r)); })
       .catch((e) => console.error('[bandeja-verdad]', e.message));
   } catch (e) { console.error('[bandeja-verdad] no se pudo purgar al desplegar:', e.message); }
+  // (PREFLIGHT-1830) Chequeo silencioso de las 18:30 (Nueva York),
+  // media hora antes de la publicación de las 19:00 de las cuentas de
+  // la casa: video procesable por Meta (faststart/H.264/≤30 fps/color),
+  // cupo de reels con red para el reintento y portada presente. Si
+  // todo está bien, silencio; si algo falla, caso al operador con la
+  // causa literal ANTES de las 19:00 (preflight-casa.js).
+  try {
+    cron.schedule('30 18 * * *', () => {
+      try {
+        require('./preflight-casa').runPreflightCasa(db, { mediaDir: PRO_MEDIA_DIR })
+          .catch((e) => console.error('[preflight-casa]', e.message));
+      } catch (e) { console.error('[preflight-casa] no se pudo ejecutar:', e.message); }
+    }, { timezone: 'America/New_York' });
+    console.log('[posta] Preflight de la casa: 18:30 (Nueva York)');
+  } catch (e) { console.error('[preflight-casa] no se pudo programar:', e.message); }
   try {
     cron.schedule('0 9,18 * * *', () => {
       try {
