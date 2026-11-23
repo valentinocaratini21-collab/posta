@@ -498,6 +498,18 @@ html.pz-appctx #posty-boot{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 
 html.pz-appctx #posty-boot .pz-boot-ray,html.pz-appctx #posty-boot .pz-boot-txt{display:none}
 #posty-boot.pz-magic{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
 #posty-boot.pz-magic-out{opacity:0}
+/* (LOTE REGRESO-NEGRO) Modo espera del boot: si la app todavía no
+   pintó cuando la magia terminó (o la magia no suena en este
+   documento), el boot NO se retira ni queda mudo: queda sobre el
+   degradé de la magia con el estándar de carga del dueño (el rayo
+   girando + su línea de estado, en blanco sobre el degradé) y tapa la
+   landing que vive debajo hasta que la app pinta. Tapa también los
+   toques (pointer-events:auto): estando logueado, ningún toque puede
+   caer en el formulario público de abajo. */
+#posty-boot.pz-boot-wait{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
+#posty-boot.pz-boot-wait .pzsp-stage{display:none}
+html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-ray{display:inline-flex}
+html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
 #posty-boot .pzsp-stage{display:none}
 #posty-boot.pz-magic .pz-boot-ray,#posty-boot.pz-magic .pz-boot-txt{display:none}
 #posty-boot.pz-magic .pzsp-stage{display:block;position:absolute;inset:0;container-type:size;overflow:hidden;font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif}
@@ -527,46 +539,105 @@ html.pz-appctx #posty-boot .pz-boot-ray,html.pz-appctx #posty-boot .pz-boot-txt{
 (function () {
   var boot = document.getElementById('posty-boot');
   if (!boot) return;
-  var kill = setTimeout(function () { var b = document.getElementById('posty-boot'); if (b) b.remove(); }, 6000);
+  var appCtx = false;
   try {
     var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
     var nativeApp = false;
     try { nativeApp = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()); } catch (e) {}
     var h = location.hash || '';
-    var appCtx = standalone || nativeApp || h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0;
+    appCtx = standalone || nativeApp || h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0 || h.indexOf('#/auth/callback') === 0;
     try { if (sessionStorage.getItem('posta_ver_web') === '1') appCtx = false; } catch (e) {}
+  } catch (e) {}
+  /* (LOTE REGRESO-NEGRO · 22/11) El regreso por descarte del webview
+     (iOS mata el proceso en segundo plano y al volver recarga el
+     documento) caía acá con la API lenta y el dueño quedaba frente a
+     una pantalla muerta: la magia se retiraba a los 1,6 s aunque la
+     app no hubiera pintado (debajo quedaba la landing pública, con el
+     dueño logueado) y, con la sesión preservada, el degradé quedaba
+     MUDO — sin rayo, sin línea, sin cara — hasta que el timer ciego
+     de 6 s lo sacaba sobre la misma landing. Desde este lote el boot
+     tiene MODO ESPERA y un vigilante: el boot nunca se retira antes
+     de que la app pinte (bootSplashOff marca window.__pzAppPainted),
+     mientras espera muestra el estándar de carga sobre el degradé, y
+     si a los 30 s la app sigue sin pintar, la espera ofrece la
+     salida: tocar para reintentar. La apertura rápida no cambia: la
+     magia suena 1,6 s y se funde como siempre. */
+  var painted = function () {
+    if (window.__pzAppPainted) return true;
+    return !document.getElementById('posty-boot');
+  };
+  var waitMode = function () {
     if (!appCtx) return;
+    var b = document.getElementById('posty-boot');
+    if (!b) return;
+    b.classList.remove('pz-magic');
+    b.classList.add('pz-boot-wait');
+  };
+  var slowMode = function () {
+    var b = document.getElementById('posty-boot');
+    if (!b) return;
+    b.classList.add('pz-boot-lento');
+    var t = b.querySelector('.pz-boot-txt');
+    if (t) t.textContent = 'Está tardando… tocá para reintentar';
+  };
+  boot.addEventListener('pointerdown', function () {
+    if (boot.classList.contains('pz-boot-lento')) location.reload();
+  });
+  var kill = setTimeout(function () {
+    if (!appCtx) { var b0 = document.getElementById('posty-boot'); if (b0) b0.remove(); return; }
+    if (painted()) return;
+    waitMode();
+    setTimeout(function () { if (!painted()) slowMode(); }, 24000);
+  }, 6000);
+  if (!appCtx) return;
+  try {
     /* (LOTE APERTURA-UNA-SOLA) Un solo disparo por apertura en frío:
        la magia suena UNA vez por sesión de la app. Si este documento
        nació de una recarga de cura dentro de la MISMA apertura (la
        auto-cura de cáscara del head o la guarda de versión de app.js),
        la marca ya está puesta y la presentación NO se repite: el boot
-       queda como degradé pelado hasta que la app pinta y lo retira
-       (bootSplashOff), sin cara, sin estrellitas y sin espera. La
-       marca se escribe ANTES de arrancar la animación, así ni una
-       recarga a mitad de la magia la puede repetir. Una apertura de
-       cero (la app se cerró y se volvió a abrir) es otra sesión:
-       sessionStorage nace vacío y la magia suena como siempre. */
+       espera a que la app pinte y lo retire (bootSplashOff), sin cara
+       y sin estrellitas. La marca se escribe ANTES de arrancar la
+       animación, así ni una recarga a mitad de la magia la puede
+       repetir. Una apertura de cero (la app se cerró y se volvió a
+       abrir) es otra sesión: sessionStorage nace vacío y la magia
+       suena como siempre. (LOTE REGRESO-NEGRO: esa espera ya no es el
+       degradé pelado y mudo — es el modo espera con el rayo y su
+       línea, para que un regreso con la API lenta nunca deje al dueño
+       frente a una pantalla muerta.) */
     try {
-      if (sessionStorage.getItem('pz_splash_played') === '1') return;
+      if (sessionStorage.getItem('pz_splash_played') === '1') { waitMode(); return; }
       sessionStorage.setItem('pz_splash_played', '1');
     } catch (e) {}
     boot.classList.add('pz-magic');
-    var sp = window.__pzSplash = { t0: performance.now(), done: false, appReady: false, finish: null };
+    var sp = window.__pzSplash = { t0: performance.now(), done: false, appReady: false, waiting: false, finish: null };
     sp.finish = function (fadeMs) {
       if (sp.done) return; sp.done = true;
       clearTimeout(kill);
       boot.classList.add('pz-magic-out');
       setTimeout(function () { if (boot.parentNode) boot.remove(); }, fadeMs || 300);
     };
-    boot.addEventListener('pointerdown', function () { sp.finish(200); });
+    /* Tocar la magia la salta SOLO si la app ya pintó detrás; si
+       todavía no pintó, el toque pasa el boot a modo espera — nunca
+       deja la landing al descubierto (LOTE REGRESO-NEGRO). */
+    boot.addEventListener('pointerdown', function () {
+      if (sp.appReady || window.__pzAppPainted) sp.finish(200);
+      else { sp.waiting = true; waitMode(); }
+    });
     var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setTimeout(function () { sp.finish(300); }, reduced ? 500 : 1600);
+    /* Al cumplir la magia, el boot se retira SOLO si la app ya pintó;
+       si no, pasa a modo espera y lo retira bootSplashOff cuando la
+       app pinte (LOTE REGRESO-NEGRO). */
+    setTimeout(function () {
+      if (sp.done) return;
+      if (sp.appReady || window.__pzAppPainted) sp.finish(300);
+      else { sp.waiting = true; waitMode(); }
+    }, reduced ? 500 : 1600);
   } catch (e) {}
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=879"></script>
+<script src="/app.js?v=880"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
