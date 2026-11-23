@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1252';
+const PZ_BUILD = '20261105-v1253';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -3984,7 +3984,7 @@ function planCardsHTML(plans) {
       ${pzPerDayHTML(p)}
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
+      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Reservá tu lugar</a>
       <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px 0 0">🔒 <b>Nunca vemos tu contraseña.</b></p>
     </div>`).join('');
 }
@@ -6361,7 +6361,7 @@ function lpAdsHTML() {
           <li><b>El público ya viene estudiado: nada que llenar.</b></li>
           <li><b>Sale y lo gestionamos nosotros.</b></li>
         </ul>
-        <a class="cap-cta" href="/prueba">Probalo 3 días gratis →</a>
+        <a class="cap-cta" href="/prueba">Reservá tu lugar →</a>
       </div>
       <div class="av-stage" data-av-stage aria-label="Cómo funciona impulsar un posteo, en tres tiempos">
         <svg class="av-thread" viewBox="0 0 720 792" preserveAspectRatio="none" aria-hidden="true"><path d="M 452 706 C 545 682, 566 736, 636 704 S 692 656, 668 628"/></svg>
@@ -6442,7 +6442,7 @@ function lpIdeasHTML() {
       <h2>Constancia de <span class="hl">verdad</span>.</h2>
       <p class="cap-exp">Y a fin de mes, te llega esto: la prueba de que valió la pena.</p>
       <div class="cv-sum"><div class="cv-sum-head"><img class="cv-sum-ava" src="ai-avatar.png" alt="Posty"><div><b>Tu mes en números</b><span>El resumen que te manda Posty</span></div></div><div class="cv-stat"><span class="cv-n">30</span><span class="cv-t"><b>posteos</b>, sin faltar un día</span></div><div class="cv-stat"><span class="cv-n">214</span><span class="cv-t"><b>comentarios respondidos</b> por nosotros</span></div><div class="cv-stat"><span class="cv-mix"><i class="cv-mi">▦</i> 18 fotos · <i class="cv-mi cv-mi-rl">▶</i> 7 reels · <i class="cv-mi cv-mi-cr">▤</i> 5 carruseles</span></div><div class="cv-star-row"><img src="lp-tomoko-berry.jpg" alt="Berry Mille Crepe de Patisserie Tomoko"><div class="cv-sr-t"><small>Tu pieza estrella del mes</small><b>Berry Mille Crepe</b></div><span class="cv-sr-star">★</span></div></div>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+      <a class="cap-cta" href="/prueba">Reservá tu lugar →</a>
     </div>
   </div></div></div>
 `; }
@@ -6452,7 +6452,7 @@ function lpCrecimientoHTML() {
       <div class="cap-kick">Estrategia</div>
       <h2>Una estrategia <span class="hl">hecha para tu negocio</span>.</h2>
       <p class="cap-exp">Estudiamos tu negocio de punta a punta y de ese estudio sale tu estrategia. Sin plantillas.</p>
-      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+      <a class="cap-cta" href="/prueba">Reservá tu lugar →</a>
     </div>
     <div class="cap-side">
       <div class="es-invite"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.5a5.5 5.5 0 1 1 6 .5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Tocá un negocio y mirá la suya.</div>
@@ -6623,7 +6623,7 @@ function lpAtiendeHTML() {
       <div class="at-esc on" data-at-step="esc" role="group" aria-label="Esto necesita tu criterio"><div class="at-esc-top"><div class="at-bell-disc" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5a5.5 5.5 0 0 0-5.5 5.5c0 4-1.3 5.4-2.2 6.2-.3.3-.1.8.3.8h14.8c.4 0 .6-.5.3-.8-.9-.8-2.2-2.2-2.2-6.2A5.5 5.5 0 0 0 12 3.5Z" fill="#fff"/><path d="M9.8 19a2.3 2.3 0 0 0 4.4 0" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg><span class="at-bell-dot"></span></div><p class="at-esc-title">Esto necesita tu criterio</p><span class="at-tag-para">PARA VOS</span></div><div class="at-quote"><span class="at-sender">Mensaje directo · recién</span><p>Quiero encargar 30 tortas para el cumpleaños de mi empresa, ¿me pasás precio?</p></div><div class="at-esc-actions"><a class="at-glass-btn at-esc-btn" href="/prueba">Ver y responder</a><p class="at-esc-note">Posty no lo respondió solo: te lo pasó a vos.</p></div></div>
       <div class="at-warm on" data-at-step="warm"><div class="at-bubble-v"><p>¡Genial, gracias!</p></div><svg class="at-heart" width="19" height="17" viewBox="0 0 24 22" aria-hidden="true"><path d="M12 20.5C6 16.4 2 13.1 2 8.9 2 5.9 4.3 3.6 7.2 3.6c1.9 0 3.7 1 4.8 2.7 1.1-1.7 2.9-2.7 4.8-2.7 2.9 0 5.2 2.3 5.2 5.3 0 4.2-4 7.5-10 11.6Z" fill="#2793C8"/></svg></div>
     </div></div>
-    <div class="at-cta-wrap"><a class="at-glass-btn" href="/prueba">Empezar mi prueba gratis</a></div>
+    <div class="at-cta-wrap"><a class="at-glass-btn" href="/prueba">Reservá tu lugar</a></div>
   </div></div>`;
 }
 function lpSubirHTML() {
@@ -6943,7 +6943,7 @@ function lpSubirHTML() {
         </div>
 
         <footer class="sb-card-foot">
-          <a class="sb-cta" href="/prueba"><span class="sb-cta-dot"></span>Probá gratis 3 días</a>
+          <a class="sb-cta" href="/prueba"><span class="sb-cta-dot"></span>Reservá tu lugar</a>
           <button class="sb-replay-btn sb-glass" type="button" id="sbReplay">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3L3 8"/><path d="M3 3v5h5"/></svg>
             Ver el viaje de nuevo
@@ -9317,7 +9317,7 @@ function landingView(cfg) {
       <a href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
     </div>
     <a class="lp-entrar" href="#/login" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Entrar</a>
-    <a class="nav-cta" href="/prueba">Probá 3 días gratis</a>
+    <a class="nav-cta" href="/prueba">Sumate a la lista</a>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
@@ -9385,10 +9385,10 @@ function landingView(cfg) {
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad1)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu web o tu link" aria-label="Tu web o tu link"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
-      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando abran las pruebas</p>
       <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
       <p class="lp-fila" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.</p>
-      <button class="btn btn-primary lp-hero-glass" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+      <button class="btn btn-primary lp-hero-glass" type="submit">Reservá mi lugar <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
     </form>
     <p class="lp-noweb-row"><button type="button" class="lp-noweb" onclick="lpNoWeb(this)">No tengo web</button></p>
     
@@ -9546,17 +9546,17 @@ function landingView(cfg) {
         <p class="vd-cap">Una pregunta por semana, como máximo.</p>
       </div></div>
     </div>
-    <div class="vd-ctarow"><a class="vd-btnglass" href="/prueba">Empezar mi prueba gratis</a></div>
+    <div class="vd-ctarow"><a class="vd-btnglass" href="/prueba">Reservá tu lugar</a></div>
   </div></div>
   <div class="lp-prueba"><div class="wrap">
 <div class=\"ej ej2\">
-      <p class=\"ej-title\">Esto le hicimos a Tomoko. <span class=\"ej2-free\">Gratis.</span></p>
-      <p class=\"ej2-sub\">Tres días de posteos con sus productos reales, diseñados uno por uno. Tu negocio se puede ver así esta misma semana.</p>
+      <p class=\"ej-title\">Esto le hicimos a Tomoko.</p>
+      <p class=\"ej2-sub\">Tres días de posteos con sus productos reales, diseñados uno por uno. Así se va a ver tu negocio cuando abran las pruebas, el 1° de febrero.</p>
       <div class=\"ej2-feed\">
         <div class=\"ej2-head\">
           <img src=\"/lp-tomoko-avatar.jpg\" alt=\"Patisserie Tomoko\">
           <div class=\"ej2-hid\"><b>patisserie.tomoko</b><span>Patisserie Tomoko · Brooklyn</span></div>
-          <span class=\"ej2-tag\">Prueba gratis</span>
+          <span class=\"ej2-tag\">Prueba de Tomoko</span>
         </div>
         <div class=\"ej2-grid\">
           <div class=\"ej-card ej2-big\">
@@ -9580,8 +9580,8 @@ function landingView(cfg) {
           </div>
         </div>
         <div class=\"ej2-foot\">
-          <a class=\"ej2-cta\" href=\"/prueba\">Quiero mi prueba así</a>
-          <p>3 días gratis · sin tarjeta · cancelás cuando querás</p>
+          <a class=\"ej2-cta\" href=\"/prueba\">Quiero mi lugar en la fila</a>
+          <p>Las pruebas abren el 1° de febrero · sumate a la lista</p>
         </div>
       </div>
     </div>
@@ -9599,12 +9599,12 @@ function landingView(cfg) {
           <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad2)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
           <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
-      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando abran las pruebas</p>
       <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
       <p class="lp-fila" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.</p>
       <button class="btn btn-primary" type="submit">Quiero mi perfil así <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
         </form>
-        <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
+        <p class="lp-show-cert">Las pruebas abren el 1° de febrero · sumate a la lista</p>
       </div>
 <div class="mk-arrive">
   <div class="mk-notif">
@@ -9645,8 +9645,8 @@ function landingView(cfg) {
     </div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Precio único y claro.</h2>
-    <p class="lede">Probá gratis 3 días. Si te gusta tu semana, este es tu plan.</p>
-    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
+    <p class="lede">Las pruebas abren el 1° de febrero. Si te gusta tu semana, este es tu plan.</p>
+    <div class="lp-offer"><b>La oferta es simple:</b> el 1° de febrero abren las pruebas y probás 3 días gratis: ves tu semana armada antes de pagar nada y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
     <div class="wd-price"><p>Un solo plan · todo incluido · sin letra chica</p></div>
     <div class="country-toggle">
       ${PZ_PAISES.map(c => `<button type="button" class="${country === c ? 'on' : ''}" data-country="${c}" onclick="switchPlansCountry('${c}')" title="${PZ_PAIS_META[c].nombre}" aria-label="${PZ_PAIS_META[c].nombre}" aria-pressed="${country === c ? 'true' : 'false'}">${PZ_PAIS_META[c].flag}</button>`).join('')}
@@ -9677,10 +9677,10 @@ function landingView(cfg) {
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="lpIgGrad3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#962FBF"/></linearGradient></defs><rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#lpIgGrad3)"/><circle cx="12" cy="12" r="4.4" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.4" fill="#fff"/></svg><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram"></span>
       <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.4 2.5 3.7 5.4 3.7 8.6s-1.3 6.1-3.7 8.6c-2.4-2.5-3.7-5.4-3.7-8.6S9.6 5.9 12 3.4z"/></svg><input type="text" data-lp-web autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tu-negocio.com" aria-label="Tu website"></span>
         <span class="lp-ig-wrap"><svg class="lp-ig-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#2793C8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg><input type="email" data-lp-email autocomplete="email" spellcheck="false" placeholder="tu@email.com" aria-label="Tu email"></span>
-      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando salga cada posteo</p>
+      <p class="lp-email-why" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">te avisamos cuando abran las pruebas</p>
       <p class="lp-email-err" hidden style="width:100%;text-align:left;font-size:13.5px;font-weight:700;color:#C0392B;margin:2px 0 0 4px">Dejanos un email válido para armar tu semana 🙂</p>
       <p class="lp-fila" style="width:100%;text-align:left;font-size:13.5px;font-weight:600;color:#41657F;margin:2px 0 0 4px">Sumarte es reservar tu lugar en la fila: las pruebas abren el 1° de febrero y los cupos se asignan por orden de llegada.</p>
-      <button class="btn btn-primary" type="submit">Ver mi semana · 3 días gratis <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
+      <button class="btn btn-primary" type="submit">Reservá mi lugar <svg class="wb-ic wb-ic-t" aria-hidden="true"><use href="#wb-go"/></svg></button>
       </form>
 <p class="lp-pass" style="text-align:center;font-size:15px;font-weight:800;color:#0A1E33;margin:14px auto 0;max-width:560px">🔒 Entrás con el login oficial de Meta: sin contraseña y sin tarjeta.</p>
     </div>
@@ -9702,11 +9702,11 @@ function landingView(cfg) {
       <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta.</p></details>
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí: trabajamos con tus fotos reales y tus colores, desde tu Instagram o tu web. No hace falta que subas nada.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
-      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>¿Algo no te cierra? Nos mandás un audio y te lo corregimos — otra foto, otro texto u otra idea — antes de que salga. Y aprendemos de lo que te gusta para que cada semana salga mejor.</p></details>
+      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>¿Algo no te cierra? Nos escribís un mensaje y te lo corregimos — otra foto, otro texto u otra idea — antes de que salga. Y aprendemos de lo que te gusta para que cada semana salga mejor.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos tu contraseña: ni la pedimos ni la guardamos.</p></details>
-      <details><summary>¿Los posteos se publican solos?</summary><p>Sí: cada mañana ves el posteo del día y sale solo si no decís nada; si algo no te cierra, nos mandás un audio y te lo corregimos.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: ves tu semana armada antes de pagar, y si no te sirve, no pagás nada.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis ves tu semana armada en unos toques, antes de registrarte.</p></details>
+      <details><summary>¿Los posteos se publican solos?</summary><p>Sí: cada mañana ves el posteo del día y sale solo si no decís nada; si algo no te cierra, nos escribís un mensaje y te lo corregimos.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba va a ser gratis y sin tarjeta: cuando abran, el 1° de febrero, ves tu semana armada antes de pagar, y si no te sirve, no pagás nada. Hoy te sumás a la lista y tu lugar queda reservado.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>El 1° de febrero, cuando abran las pruebas: en unos toques ves tu semana armada, antes de pagar. Sumate hoy a la lista y entrá entre los primeros.</p></details>
       <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar — con tu aprobación en un toque cuando hace falta criterio humano. La producción presencial de fotos o video y las campañas a medida siguen siendo trabajo de un equipo humano.</p></details>
       <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí: cuando un posteo anda muy bien te lo marcamos y te proponemos potenciarlo, siempre con tu OK en un toque; la pauta va por tu cuenta de Meta, aparte de la suscripción.</p></details>       <details><summary>¿Posty funciona solo, o necesito contratar algo más?</summary><p>Funciona solo: las ideas, el diseño y la publicación están dentro de tu plan, sin contratar a nadie más. Con nosotros alcanza para que tu Instagram esté atendido de punta a punta.</p></details>
     </div>
@@ -9714,9 +9714,9 @@ function landingView(cfg) {
   </div></div>
   <div class="lp-final"><div class="wrap">
     <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
-    <h2>Probás 3 días gratis antes de pagar.</h2>
-    <p>Conectá tu Instagram y mirá tu semana ya armada. Gratis, sin tarjeta.</p>
-    <a class="btn lp-cta-glass" href="/prueba" style="font-size:16px;padding:18px 44px">Empezar mis 3 días gratis</a>
+    <h2>El 1° de febrero, probás 3 días gratis.</h2>
+    <p>Sumate a la lista y reservá tu lugar: cuando abran las pruebas, ves tu semana armada gratis y sin tarjeta.</p>
+    <a class="btn lp-cta-glass" href="/prueba" style="font-size:16px;padding:18px 44px">Reservá mi lugar</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin contraseña · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
@@ -9724,7 +9724,7 @@ function landingView(cfg) {
     <span>Posty, tu community manager con IA · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a> · <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);cursor:pointer">Soporte</a></span>
   </div></div>
-  <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">Probá gratis 3 días</a></div></div>`;
+  <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">Sumate a la lista</a></div></div>`;
 }
 
 /* ---------- AUTH ---------- */
@@ -9772,8 +9772,8 @@ const AUTH_STR = {
   es: {
     navCreate: 'Crear cuenta', navLogin: 'Entrar',
     loginH2: 'Bienvenido de vuelta', loginSub: 'Entrá para seguir automatizando.',
-    trialCta: 'Probar 3 días gratis', trialOr: 'o entrá con tu cuenta',
-    regH2: 'Creá tu cuenta', regSub: 'Probalo gratis, sin tarjeta.',
+    trialCta: 'Sumate a la lista', trialOr: 'o entrá con tu cuenta',
+    regH2: 'Creá tu cuenta', regSub: 'Las pruebas abren el 1° de febrero: sumate a la lista.',
     emailPh: 'vos@tunegocio.com', passLabel: 'Contraseña', passPh: 'Mínimo 6 caracteres',
     btnLogin: 'Entrar', btnReg: 'Crear cuenta',
     rememberLabel: 'Guardar contraseña en este dispositivo',
@@ -9799,8 +9799,8 @@ const AUTH_STR = {
   en: {
     navCreate: 'Create account', navLogin: 'Log in',
     loginH2: 'Welcome back', loginSub: 'Log in to keep automating.',
-    trialCta: 'Try 3 days free', trialOr: 'or log in to your account',
-    regH2: 'Create your account', regSub: 'Try it free, no card needed.',
+    trialCta: 'Join the waitlist', trialOr: 'or log in to your account',
+    regH2: 'Create your account', regSub: 'Trials open on February 1: join the waitlist.',
     emailPh: 'you@yourbusiness.com', passLabel: 'Password', passPh: 'At least 6 characters',
     btnLogin: 'Log in', btnReg: 'Create account',
     rememberLabel: 'Save password on this device',
