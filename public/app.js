@@ -3111,7 +3111,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1243';
+const PZ_BUILD = '20261105-v1244';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24316,6 +24316,17 @@ function pzBoostPintarBoost() {
   const m3A = montos3d3[0];
   const m3B = montos3d3.length > 2 ? montos3d3[2] : montos3d3[0];
   const cargar = falta ? `<button type="button" class="btn btn-block pz-boost-load" onclick="pzBoostCargar(this)">${esc(gzT('Cargar $' + pzBoostFmtMonto(montoCarga) + ' ahora', 'Top up $' + pzBoostFmtMonto(montoCarga) + ' now'))}</button>` : '';
+  // (LOTE ADS-BILLETERA-VISIBLE) El saldo, siempre a la vista en la
+  // hoja, junto a las opciones: el dueño veía el faltante («Te faltan
+  // $28») sin que en ningún lado dijera cuánto tiene — tenía que
+  // adivinarlo restando. La cifra es pzBoostSaldo(): la MISMA que
+  // alimenta el cálculo del faltante de esta misma hoja (una sola
+  // verdad, nunca un segundo número que pueda divergir). Sin la
+  // billetera cargada todavía no se afirma ningún número: la hoja se
+  // repinta con el dato real cuando pzBoostLoad lo trae.
+  const saldoLinea = s.billetera
+    ? `<div class="pz-boost-3d3-saldo">${esc(gzT('Tenés $' + pzBoostFmtMonto(saldo) + ' en tu billetera', 'You have $' + pzBoostFmtMonto(saldo) + ' in your wallet'))}</div>`
+    : '';
   const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
   const nums = pzBoostNumerosComa(p);
   const linea = (p.recomendado && nums)
@@ -24335,7 +24346,7 @@ function pzBoostPintarBoost() {
       <div class="pz-boost-3d3-linea">${linea}</div>
       <button type="button" class="pz-boost-3d3-otro" onclick="pzBoostPickOpen()">↻ ${esc(gzT('Elegir otro posteo', 'Choose another post'))}</button>
     </div>
-    ${warn}${notaConv}${cargar}
+    ${saldoLinea}${warn}${notaConv}${cargar}
     <div id="pzAdsAudienciaSheet"></div>
     <p class="pz-boost-msg" id="pzBoostMsg"></p>
   </div>`;
