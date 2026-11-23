@@ -504,6 +504,7 @@ const adsBilletera = require('./ads-billetera');
 // costura es adsFee.cobrarFeeCampanaCorriendo (ver ads-fee.js).
 const adsFee = require('./ads-fee');
 const adsAudiencia = require('./ads-audiencia'); // (LOTE ADS-ESTRATÉGICOS) objetivo + audiencia desde el fundamento
+const adsStats = require('./ads-stats'); // (LOTE ADS-STATS-TARJETA) la carga de la tarjeta del impulso activo, pura desde la fila
 // === FEE-IMPULSAR require (fin) ===
 const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
 
@@ -16539,28 +16540,70 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
 app.get('/api/ads/boosts', requireAuth, async (req, res) => {
   let boosts = [];
   try { boosts = db.prepare(`SELECT * FROM ad_boosts WHERE user_id = ? AND NOT (status = 'error' AND COALESCE(meta_campaign_id, '') = '') ORDER BY id DESC LIMIT 20`).all(req.session.userId); } catch (e) {}
-  if (metaAds.adsConfigured()) {
-    for (const b of boosts) {
-      if (b.status !== 'active' || !b.meta_campaign_id) continue;
-      const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
-      if (!stale) continue;
-      try {
-        const s = await metaAds.getBoostStats(b.meta_campaign_id);
-        if (s) {
-          db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, last_visitas_perfil=?, stats_updated_at=datetime('now') WHERE id=?`)
-            .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0), Number(s.visitas_perfil || 0), b.id);
-          b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
-          b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0); b.last_visitas_perfil = Number(s.visitas_perfil || 0);
-          b.stats_updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        }
-      } catch (e) { /* no bloquea el historial */ }
-    }
+  // (LOTE ADS-STATS-TARJETA) El refresco lee en la cuenta donde vive
+  // la campaña: primero con la conexión de Ads DEL CLIENTE (su SUAT,
+  // su cuenta — el riel con el que se crean hoy los impulsos) y, si
+  // esa lectura no devuelve fila, con la cuenta de Posty (el riel
+  // histórico). Los ids de campaña son únicos entre cuentas: leer en
+  // la cuenta equivocada devuelve vacío, nunca números ajenos. La
+  // caché es la de siempre: lo persistido manda y se refresca a lo
+  // sumo 1 vez por hora por impulso, al leer — la pantalla no
+  // martilla a Meta en cada apertura. El UPDATE suma las dos stats
+  // por objetivo que faltaban (visitas al perfil e interacciones).
+  // Interacciones nace nullable en este lote: null = Meta no devolvió
+  // esa acción y la tarjeta la omite. Visitas al perfil ya existía
+  // NOT NULL DEFAULT 0 (ADS-PREGUNTAS, en producción): se persiste
+  // su 0 real cuando la acción no vino — persistir null rompería el
+  // UPDATE entero contra esa columna y no se guardaría ninguna stat.
+  const connStats = getAdsConnection(req.session.userId);
+  const ctxStats = (connStats && connStats.suat && connStats.primary_ad_account_id)
+    ? { token: connStats.suat, adAccountId: connStats.primary_ad_account_id } : null;
+  for (const b of boosts) {
+    if (b.status !== 'active' || !b.meta_campaign_id) continue;
+    const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+    if (!stale) continue;
+    try {
+      let s = null;
+      if (ctxStats) { try { s = await metaAds.getBoostStatsConCtx(b.meta_campaign_id, ctxStats); } catch (e) { s = null; } }
+      if (!s && metaAds.adsConfigured()) { try { s = await metaAds.getBoostStats(b.meta_campaign_id); } catch (e) { s = null; } }
+      if (s) {
+        db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, last_visitas_perfil=?, last_interacciones=?, stats_updated_at=datetime('now') WHERE id=?`)
+          .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0),
+            Number(s.visitas_perfil || 0), (s.interacciones == null ? null : Number(s.interacciones)), b.id);
+        b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
+        b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0);
+        b.last_visitas_perfil = Number(s.visitas_perfil || 0);
+        b.last_interacciones = (s.interacciones == null ? null : Number(s.interacciones));
+        b.stats_updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      }
+    } catch (e) { /* no bloquea el historial */ }
   }
   // (LOTE ADS-ESTRATÉGICOS) El resultado que se le muestra al cliente
   // es el de SU objetivo (conversaciones si el objetivo es de mensajes,
   // clics en los demás), leído de lo persistido — nunca una conversión
   // inventada. Sin stats leídas todavía, resultado = null.
-  res.json({ ok: true, boosts: boosts.map(b => ({ ...b, resultado: adsAudiencia.resultadoDe(b) })) });
+  // (LOTE ADS-STATS-TARJETA) Cada impulso viaja además con su
+  // tarjeta armada (ads-stats.js: stats reales persistidos, gasto y
+  // día — sin lectura real, tiene_datos=false y la pantalla lo dice,
+  // nunca un cero de relleno) y con su posteo (la miniatura real y
+  // el caption, para pintar la tarjeta sin inventar nada).
+  res.json({ ok: true, boosts: boosts.map(b => {
+    let posteo = null;
+    if (b.post_id) {
+      try {
+        const p = db.prepare('SELECT id, media_type, image_path, caption FROM posts WHERE id = ? AND user_id = ?').get(b.post_id, req.session.userId);
+        if (p) {
+          const esVideo = /video|reel/i.test(String(p.media_type || ''));
+          posteo = {
+            media_type: p.media_type || '',
+            caption: String(p.caption || '').slice(0, 140),
+            thumb_url: esVideo ? (posterUrlDePosteo(req.session.userId, p) || '') : absImageUrl(req.session.userId, p.image_path),
+          };
+        }
+      } catch (e) { posteo = null; }
+    }
+    return { ...b, resultado: adsAudiencia.resultadoDe(b), tarjeta: adsStats.tarjetaDe(b), posteo };
+  }) });
 });
 
 // Admin: pautas pendientes de activación manual (equipo Posta)
@@ -48580,7 +48623,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1266';
+const BUILD_ID = '20261105-v1267';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -703,6 +703,13 @@ try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN objetivo TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN audiencia_json TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_clicks INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_conversaciones INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (LOTE ADS-STATS-TARJETA) Las dos stats por objetivo que faltaban
+// (visitas al perfil e interacciones), NULLABLES a propósito y sin
+// DEFAULT: null = Meta todavía no devolvió esa acción para este
+// impulso (la tarjeta la omite); un número = lo que Meta reportó,
+// con su 0 real incluido. La ausencia se conserva como ausencia.
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_visitas_perfil INTEGER`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_interacciones INTEGER`); } catch (e) { /* ya existe */ }
 // (LOTE ADS-PREGUNTAS) Visitas al perfil contadas por Meta (la
 // métrica del objetivo 'perfil'): mismo patrón que
 // last_conversaciones — la escribe el barrido de resultados y la

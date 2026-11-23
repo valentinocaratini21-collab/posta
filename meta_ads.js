@@ -1008,6 +1008,39 @@ async function resolvePageIdWithToken(igUserId, token) {
   return hit.id;
 }
 
+// (LOTE ADS-STATS-TARJETA) La fila de insights → las stats del
+// impulso, en UNA sola extracción compartida por los dos rieles (la
+// cuenta de Posty por el fetch histórico de getBoostStats y la del
+// cliente por g() con su ctx en getBoostStatsConCtx). Los campos de
+// siempre conservan su semántica exacta: gasto/alcance/impresiones/
+// clics como números de la fila y conversaciones con la convención
+// de ADS-ESTRATÉGICOS (la acción
+// onsite_conversion.messaging_conversation_started_*; 0 si no vino —
+// el dato que ya leen el barrido y resultadoDe). Las dos stats
+// nuevas nacen con semántica de ausencia: visitas_perfil (la acción
+// ~ profile_visit, la medición del objetivo «perfil») e
+// interacciones (la acción exacta post_engagement, la del camino
+// POST_ENGAGEMENT) son null cuando Meta no devolvió esa acción en
+// la respuesta — la tarjeta las omite, nunca las rellena con un 0.
+function statsDesdeRow(row) {
+  if (!row) return null;
+  const accion = (re) => {
+    if (!Array.isArray(row.actions)) return null;
+    const a = row.actions.find((x) => x && re.test(String(x.action_type || '')));
+    return a ? (Number(a.value || 0) || 0) : null;
+  };
+  const conversaciones = accion(/^onsite_conversion\.messaging_conversation_started/);
+  return {
+    spend_cents: Math.round(Number(row.spend || 0) * 100),
+    reach: Number(row.reach || 0),
+    impressions: Number(row.impressions || 0),
+    clicks: Number(row.clicks || 0),
+    conversaciones: conversaciones == null ? 0 : conversaciones,
+    visitas_perfil: accion(/(^|\.)profile_visit/),
+    interacciones: accion(/^post_engagement$/),
+  };
+}
+
 // Métricas de una campaña: gasto, alcance, impresiones, clics y
 // (LOTE ADS-ESTRATÉGICOS) conversaciones iniciadas — la acción real
 // que Meta cuenta para los objetivos de mensajes
@@ -1015,8 +1048,10 @@ async function resolvePageIdWithToken(igUserId, token) {
 // acción en la respuesta, conversaciones = 0 (dato real, no estimado).
 // (LOTE ADS-PREGUNTAS) visitas_perfil: la acción que respalda la
 // métrica «Instagram Profile Visits» (onsite_conversion.profile_visit)
-// — el barrido por regex cubre las formas del action_type; sin esa
-// acción, visitas_perfil = 0 real, nunca estimado ni seguidores.
+// — el barrido por regex cubre las formas del action_type. La
+// extracción vive en statsDesdeRow (LOTE ADS-STATS-TARJETA): sin
+// esa acción en la respuesta, visitas_perfil = null (la tarjeta la
+// omite), nunca un estimado ni seguidores.
 async function getBoostStats(campaignId) {
   if (!adsConfigured() || !campaignId) return null;
   // El endpoint de insights usa query params; se arma manual:
@@ -1031,22 +1066,34 @@ async function getBoostStats(campaignId) {
   const data = await res.json().catch(() => ({}));
   const row = data && data.data && data.data[0];
   if (!row) return null;
-  let conversaciones = 0;
-  let visitasPerfil = 0;
-  if (Array.isArray(row.actions)) {
-    const conv = row.actions.find((a) => a && /^onsite_conversion\.messaging_conversation_started/.test(String(a.action_type || '')));
-    if (conv) conversaciones = Number(conv.value || 0) || 0;
-    const vis = row.actions.find((a) => a && /(^|\.)profile_visit/.test(String(a.action_type || '')));
-    if (vis) visitasPerfil = Number(vis.value || 0) || 0;
-  }
-  return {
-    spend_cents: Math.round(Number(row.spend || 0) * 100),
-    reach: Number(row.reach || 0),
-    impressions: Number(row.impressions || 0),
-    clicks: Number(row.clicks || 0),
-    conversaciones,
-    visitas_perfil: visitasPerfil,
-  };
+  return statsDesdeRow(row);
+}
+
+// (LOTE ADS-STATS-TARJETA) La MISMA lectura de métricas pero en la
+// cuenta del CLIENTE, con el ctx de su conexión guardada (su SUAT,
+// su cuenta publicitaria): los impulsos del riel del cliente viven
+// en esa cuenta y el token de Posty no los ve (getBoostStats
+// devuelve null para esas campañas y sus stats nunca se
+// refrescaban). Los ids de campaña son únicos entre cuentas: pedir
+// una campaña en la cuenta equivocada devuelve la lista vacía
+// (null), nunca números ajenos. Ante un error de Meta, null: el
+// llamador conserva lo persistido.
+async function getBoostStatsConCtx(campaignId, ctx) {
+  if (!campaignId || !ctx || !ctx.token || !ctx.adAccountId) return null;
+  let data;
+  try {
+    data = await g(`${act(ctx)}/insights`, {
+      ctx,
+      params: {
+        fields: 'spend,reach,impressions,clicks,actions',
+        'filtering[0][field]': 'campaign.id',
+        'filtering[0][operator]': 'IN',
+        'filtering[0][value]': JSON.stringify([String(campaignId)]),
+      },
+    });
+  } catch (e) { return null; }
+  const row = data && data.data && data.data[0];
+  return statsDesdeRow(row || null);
 }
 
 // ¿El token de Meta trae ads_management? (permiso de App Review).
@@ -1203,4 +1250,4 @@ async function findOrCreateEngagementAudienceId(ctx, igUserId) {
   }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, getBoostStatsConCtx, statsDesdeRow, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta };

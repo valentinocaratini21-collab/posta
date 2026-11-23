@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1266';
+const PZ_BUILD = '20261105-v1267';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22915,6 +22915,70 @@ function pzAdsHistorialHTML(boosts) {
   }).join('') + (list.length > 5 ? `<p class="pz-ads-note">${esc(en ? 'Showing the 5 most recent.' : 'Mostramos los 5 más recientes.')}</p>` : '');
 }
 
+// ---------- LOTE ADS-STATS-TARJETA · la tarjeta del impulso activo ----------
+// (Opción 1 del dueño, 23/11/2026) Cada impulso ACTIVO se muestra en
+// su propia tarjeta: el posteo (miniatura real + su caption), el
+// chip IMPULSANDO, las stats que Meta reportó para SU objetivo y la
+// barra de presupuesto (gastado de total · día X de Y). Todo sale
+// de b.tarjeta, que el servidor arma desde lo persistido de Meta
+// (ads-stats.js): sin lectura real, la tarjeta dice que Meta
+// todavía no reporta — jamás un cero de relleno; la stat que Meta
+// no devolvió para ese objetivo no viene en la lista y no se
+// pinta. La tarjeta NO es un botón ni un enlace: tocarla no abre
+// nada (el panel completo era otra opción del mock, no elegida).
+function pzAdsImpulsoTarjetaHTML(b) {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const t = (b && b.tarjeta) || null;
+  if (!t) return '';
+  const loc = en ? 'en-US' : 'es-AR';
+  const p = (b && b.posteo) || {};
+  const cap = String(p.caption || '').trim();
+  const mt = String(p.media_type || '');
+  const titulo = cap
+    ? (cap.length > 64 ? cap.slice(0, 64).trimEnd() + '…' : cap)
+    : (/reel/i.test(mt) ? (en ? 'Your reel' : 'Tu reel')
+      : /video/i.test(mt) ? (en ? 'Your video' : 'Tu video')
+      : /carousel|carrusel/i.test(mt) ? (en ? 'Your carousel' : 'Tu carrusel')
+      : (en ? 'Your post' : 'Tu posteo'));
+  const thumb = p.thumb_url
+    ? `<img src="${esc(p.thumb_url)}" alt="" style="width:46px;height:58px;object-fit:cover;border-radius:9px;display:block">`
+    : `<div style="width:46px;height:58px;border-radius:9px;background:linear-gradient(160deg,#2793C8,#0A1E33);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px">▶</div>`;
+  const etiquetas = {
+    alcance: en ? 'REACH' : 'ALCANCE',
+    visitas_perfil: en ? 'PROFILE VISITS' : 'VISITAS AL PERFIL',
+    conversaciones: en ? 'MESSAGES' : 'MENSAJES',
+    interacciones: en ? 'INTERACTIONS' : 'INTERACCIONES',
+    clics: en ? 'CLICKS' : 'CLICS',
+  };
+  let cuerpo = '';
+  if (t.tiene_datos && Array.isArray(t.stats) && t.stats.length) {
+    const stats = t.stats.map((s) => `<div style="flex:1;background:#fbf7ee;border-radius:12px;padding:8px 4px;text-align:center"><b style="display:block;font-size:16px">${esc(Number(s.valor || 0).toLocaleString(loc))}</b><span style="font-size:10px;color:#7c8fa3;font-weight:600">${esc(etiquetas[s.clave] || s.clave)}</span></div>`).join('');
+    const total = Number(t.total_cents || 0);
+    const gast = Number(t.gastado_cents || 0);
+    const pct = total > 0 ? Math.min(100, Math.round((gast / total) * 100)) : 0;
+    const fmtD = (c) => (t.currency === 'USD' ? 'US$' : '$') + Math.floor(Math.max(0, c) / 100).toLocaleString(loc) + ((t.currency && t.currency !== 'USD') ? ' ' + t.currency : '');
+    cuerpo = `<div style="display:flex;gap:8px;margin-top:12px">${stats}</div>`
+      + `<div style="height:7px;background:#f0e7d2;border-radius:6px;margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#FEC14D;border-radius:6px"></i></div>`
+      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:#7c8fa3;margin-top:5px"><span>${esc(fmtD(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`;
+  } else {
+    cuerpo = `<p style="margin:12px 0 0;font-size:12.5px;color:#7c8fa3">${esc(en ? "Meta hasn't reported numbers for this boost yet." : 'Meta todavía no reporta números de este impulso.')}</p>`
+      + (t.dia ? `<p style="margin:4px 0 0;font-size:10.5px;color:#7c8fa3">${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</p>` : '');
+  }
+  return `<div style="background:#fff;border:1.5px solid #f3c969;border-radius:18px;padding:13px 14px;box-shadow:0 2px 10px rgba(90,70,20,.07);margin-top:12px">`
+    + `<div style="display:flex;align-items:center;gap:10px">${thumb}<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.3">${esc(titulo)}</div><div style="font-size:11.5px;color:#7c8fa3">${esc(en ? 'Post' : 'Posteo')} #${esc(String(b.post_id || '?'))}</div></div>`
+    + `<span style="display:inline-block;background:#e8f6ee;color:#14703C;font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;flex:none">${esc(en ? 'BOOSTING' : 'IMPULSANDO')}</span></div>`
+    + cuerpo + `</div>`;
+}
+
+// La sección de tarjetas: una por impulso activo con su tarjeta
+// armada. Sin activos (o sin datos cargados), no pinta nada — la
+// pantalla queda como siempre.
+function pzAdsImpulsosActivosHTML() {
+  const list = (Array.isArray(pzAdsBoosts) ? pzAdsBoosts : []).filter((b) => b && b.status === 'active' && b.tarjeta);
+  if (!list.length) return '';
+  return `<section>${list.map(pzAdsImpulsoTarjetaHTML).join('')}</section>`;
+}
+
 // ---------- LOTE TARJETA-IMPULSAR · 13/11 ----------
 // Rediseño de la tarjeta de Impulsar del tab Ads (mock-impulsar-v3
 // aprobado por Valentino 13/11 13:15): la tarjeta grande habla en UNA
@@ -23164,9 +23228,18 @@ function pzAdsFilasHTML() {
     return `<button type="button" class="pz-ads-row" onclick="pzAdsFilaToggle('${cual}')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-row-k">${esc(k)}</span><span class="pz-ads-row-v">${esc(v)}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${open ? `<div class="pz-ads-row-det">${detHTML}</div>` : ''}`;
   };
   const cxFila = fila('conexion', en ? 'Connection' : 'Conexión', pzAdsConexionValor(), pzAdsConexionHTML());
-  const impFila = boosts.length
-    ? fila('impulsos', en ? 'Your boosts' : 'Tus impulsos', String(boosts.length), `<div id="pzAdsHist">${pzAdsHistorialHTML(boosts)}</div>`)
-    : `<div class="pz-ads-row pz-ads-row-flat"><span class="pz-ads-row-k">${esc(en ? 'Your boosts' : 'Tus impulsos')}</span><span class="pz-ads-row-v">${esc(en ? 'None yet' : 'Todavía ninguno')}</span></div>`;
+  // (LOTE ADS-STATS-TARJETA) Los ACTIVOS viven en su propia tarjeta
+  // (pzAdsImpulsosActivosHTML, arriba de esta tarjeta de filas): la
+  // fila «Tus impulsos» queda para el RESTO del historial
+  // (terminados, pendientes, a revisar) con su conteo. Si todos los
+  // impulsos son activos, la fila no se pinta — la tarjeta los
+  // muestra —; si no hay ninguno, la línea de siempre.
+  const otrosImp = boosts.filter((b) => b && b.status !== 'active');
+  const impFila = !boosts.length
+    ? `<div class="pz-ads-row pz-ads-row-flat"><span class="pz-ads-row-k">${esc(en ? 'Your boosts' : 'Tus impulsos')}</span><span class="pz-ads-row-v">${esc(en ? 'None yet' : 'Todavía ninguno')}</span></div>`
+    : (otrosImp.length
+      ? fila('impulsos', en ? 'Your boosts' : 'Tus impulsos', String(otrosImp.length), `<div id="pzAdsHist">${pzAdsHistorialHTML(otrosImp)}</div>`)
+      : '');
   return `<section class="pz-ads-rows">${cxFila}${impFila}<p class="pz-ads-msg" id="pzAdsMsg"></p></section>`;
 }
 
@@ -23531,7 +23604,7 @@ function pzAdsHTML() {
   // (LOTE ADS-TARJETA-UNICA) El modo elegir reemplaza el cuerpo por
   // el encabezado + la grilla + LA MISMA tarjeta rearmada.
   if (pzAdsModoElegir) return pzAdsElegirHTML(recHTML);
-  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${recHTML}${pzAdsPickRowHTML()}${pzAdsFilasHTML()}`;
+  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${recHTML}${pzAdsPickRowHTML()}${pzAdsImpulsosActivosHTML()}${pzAdsFilasHTML()}`;
 }
 // (LOTE ADS-TRABA-BILLETERA · SECCIÓN A) La firma del estado visible
 // de la pestaña: lo que de verdad cambia lo que se ve. Si no cambió,
@@ -23543,7 +23616,18 @@ function pzAdsFirma() {
   const boosts = Array.isArray(pzAdsBoosts) ? pzAdsBoosts : [];
   let suma = 0;
   for (const x of boosts) suma += Number(x.id || 0);
-  return [pzBoostSaldo(), Number(s.selMonto) || 0, s.selId || '', boosts.length, suma,
+  // (LOTE ADS-STATS-TARJETA) La firma suma también las stats de los
+  // impulsos y su última lectura: si Meta reportó números nuevos,
+  // la pantalla en caliente repinta y la tarjeta del activo se
+  // actualiza (sin esto, el refresco de fondo no cambiaba la firma
+  // y los números quedaban viejos hasta salir y volver).
+  let sumaStats = 0;
+  let ultStats = '';
+  for (const x of boosts) {
+    sumaStats += Number(x.last_spend_cents || 0) + Number(x.last_reach || 0) + Number(x.last_clicks || 0);
+    if (String(x.stats_updated_at || '') > ultStats) ultStats = String(x.stats_updated_at || '');
+  }
+  return [pzBoostSaldo(), Number(s.selMonto) || 0, s.selId || '', boosts.length, suma, sumaStats, ultStats,
     s.adsReady === null ? 'n' : (s.adsReady ? 's' : 'x'), (s.elegibles || []).length,
     pzAdsModoElegir ? 'e' : '-', pzAdsFilaAbierta || '-', b.currency || '', b.billing_provider || ''].join('|');
 }
