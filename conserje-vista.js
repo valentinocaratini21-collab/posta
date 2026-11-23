@@ -1022,8 +1022,12 @@ function semanaDe(db, uid, tz, nowMs, planStatus) {
 function posteosDe(db, uid, tz, opts) {
   const o = opts || {};
   const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : null;
+  // (LOTE BOTONES-CONSERJE) El posteo FALLIDO también es parte de la
+  // ficha: la tarjeta «Un posteo no salió» promete «Ver el posteo» y el
+  // posteo tiene que estar en esta lista para que la consola lo pueda
+  // mostrar (su tarjeta se pinta sin acciones, con su chip de estado).
   const rows = safe(() => db.prepare(
-    `SELECT * FROM posts WHERE user_id = ? AND status IN ('published', 'scheduled', 'draft')
+    `SELECT * FROM posts WHERE user_id = ? AND status IN ('published', 'scheduled', 'draft', 'failed')
      ORDER BY COALESCE(scheduled_at, published_at, created_at) DESC LIMIT 12`).all(Number(uid)), []);
   return rows.map((p) => {
     const t = toMs(p.scheduled_at || p.published_at || p.created_at);

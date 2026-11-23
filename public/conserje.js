@@ -574,7 +574,11 @@
   function cargar(recargarCliente) {
     return api('/api/admin/conserje/vista').then(function (j) {
       if (!j || !j.ok) {
-        if (j && (j.__status === 401 || j.__status === 403)) { abrirGate(); return; }
+        if (j && (j.__status === 401 || j.__status === 403)) {
+          var gm = $('gateMsg');
+          if (gm) gm.textContent = 'Ese token no abrió la consola. Revisalo y probá de nuevo.';
+          abrirGate(); return;
+        }
         toast('No se pudo cargar la consola.', 'err');
         return;
       }
@@ -596,12 +600,24 @@
   }
   // (LOTE CONSERJE-FORMA) Cada ítem abre sobre la cosa misma: la
   // ficha del cliente, con el posteo referido marcado y a la vista.
+  // (LOTE BOTONES-CONSERJE) Traer el centro a la vista: en el teléfono
+  // (una sola columna) la ficha queda fuera de pantalla si nadie la
+  // trae, y el toque parece no hacer nada. Las tres vías de entrada a
+  // la ficha (la fila y el chip, «Ver…» y «Ver la ficha») usan ESTE
+  // mismo gesto, sin segundas vías.
+  function irAlCentro() {
+    var centro = $('centro');
+    if (centro) centro.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
   function gotoFicha(uid, postId) {
     highlightPostId = postId ? Number(postId) : null;
     selUser = Number(uid);
+    // (LOTE BOTONES-CONSERJE) La ficha abre SIEMPRE en la semana, como
+    // en las otras dos vías: si quedaba en «Su feed», el posteo
+    // referido no existe en esa vista y el toque no mostraba nada.
+    centroVista = 'semana';
     cargarCliente(selUser);
-    var centro = $('centro');
-    if (centro) centro.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    irAlCentro();
   }
   function despuesDeActuar(msg) {
     if (msg) toast(msg);
@@ -618,7 +634,7 @@
   }
   document.addEventListener('click', function (ev) {
     var sel = ev.target.closest('[data-sel]');
-    if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); return; }
+    if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); return; }
     var go = ev.target.closest('[data-goto]');
     if (go) { gotoFicha(go.getAttribute('data-goto'), go.getAttribute('data-goto-post')); return; }
     var f = ev.target.closest('[data-filtro]');
@@ -690,8 +706,9 @@
         .then(function (j) { if (j && j.ok) despuesDeActuar('Sale así: quedó aprobado y programado.'); else { toast('No se pudo aprobar (' + (j && (j.error || j.motivo) || 'error') + ').', 'err'); re(); } })
         .catch(function () { toast('No se pudo aprobar.', 'err'); re(); });
     } else if (act === 'pieza-arreglar') {
-      var notaA = prompt('¿Qué hay que arreglar? (queda en la decisión)') || '';
-      decidir(b.getAttribute('data-uid'), b.getAttribute('data-fecha'), b.getAttribute('data-pid'), 'arreglar', notaA)
+      var notaA = prompt('¿Qué hay que arreglar? (queda en la decisión)');
+      if (notaA === null) { re(); return; }
+      decidir(b.getAttribute('data-uid'), b.getAttribute('data-fecha'), b.getAttribute('data-pid'), 'arreglar', notaA || '')
         .then(function (j) { if (j && j.ok) despuesDeActuar('Arreglo pedido: el posteo no sale hasta rehacerlo.'); else { toast('No se pudo registrar.', 'err'); re(); } })
         .catch(function () { toast('No se pudo registrar.', 'err'); re(); });
     } else if (act === 'pieza-nosale') {
@@ -720,7 +737,7 @@
         .then(function (j) { if (j && j.ok) despuesDeActuar('Caso cerrado.'); else { toast('No se pudo cerrar (' + (j && j.error || 'error') + ').', 'err'); re(); } })
         .catch(function () { toast('No se pudo cerrar.', 'err'); re(); });
     } else if (act === 'ver-cliente') {
-      selUser = Number(b.getAttribute('data-uid')); centroVista = 'semana'; cargarCliente(selUser); re();
+      selUser = Number(b.getAttribute('data-uid')); centroVista = 'semana'; cargarCliente(selUser); irAlCentro(); re();
     } else if (act === 'post-reprogramar') {
       var nueva = prompt('Nueva fecha y hora del posteo (ej. 2026-11-21 19:00):', '');
       if (!nueva) { re(); return; }
@@ -753,6 +770,8 @@
     if (!v) return;
     token = v;
     try { localStorage.setItem('posta_admin_token', v); } catch (e) {}
+    var gmB = $('gateMsg');
+    if (gmB) gmB.textContent = '';
     $('gate').classList.remove('open');
     cargar(true);
   });
