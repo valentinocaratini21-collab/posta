@@ -3111,7 +3111,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1238';
+const PZ_BUILD = '20261105-v1239';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29684,11 +29684,16 @@ let HF_CUR_PROF = null;
 let HF_PROPS = {};
 // (LOTE BORRADO-IG-SYNC · Valentino 4/11) Si el dueño borra un posteo
 // en Instagram, tiene que desaparecer del feed apenas se abre la app,
-// sin esperar el TTL de 24 h del snapshot. El feed pinta al instante
-// desde la caché (nunca espera a Instagram) y en paralelo se pide la
-// ventana viva a /api/home/live-grid; cuando llega, las tiles
-// publicadas cuyo shortcode YA NO está en la grilla real se quitan del
-// DOM y de HF_TILES. Solo vista: jamás se borra ni se marca ninguna
+// sin esperar el TTL de 24 h del snapshot. (LOTE INICIO-GRILLA-REAL ·
+// 22/11 SUPERSEDE la pintura de este bloque: pintar al instante desde
+// la caché presentaba la grilla vencida como el perfil — el dueño
+// archivó todo a la mañana y a las 19:02 su Inicio seguía mostrando
+// la grilla archivada entera. Desde este lote la grilla de Inicio se
+// pinta SOLO con el veredicto vivo resuelto, o queda en su estado de
+// carga hasta que el veredicto llega: ver la puerta en inicioView y
+// hfLiveGridVerdict/hfLiveGridLatePaint. La revalidación de fondo de
+// este bloque sigue viva para lo que cambie con la pantalla abierta.)
+// Solo vista: jamás se borra ni se marca ninguna
 // fila de la DB desde acá (eso lo decide otro lote; la reconciliación
 // del servidor, que ya corría en cada refresh, sigue su propio camino).
 // FAIL-CLOSED: sin respuesta, incompleta, con error o con timeout, no
@@ -29726,6 +29731,92 @@ function hfLiveDropTile(t, liveSet, cutoffMs) {
   } catch (e) {}
   return false;
 }
+// (LOTE INICIO-GRILLA-REAL · 22/11) EL VEREDICTO VIVO, compartido:
+// UNA sola lectura a /api/home/live-grid por ventana (45 s) sirve a
+// los tres consumidores — la puerta de pintura de inicioView, la
+// revalidación de fondo y la pintura tardía — en vez de un fetch por
+// consumidor. El veredicto COMPLETO queda guardado (HF_VERDICT.v)
+// para consultarlo en sincrono; el INCOMPLETO no se cachea: la
+// próxima llamada vuelve a leer (la lectura del servidor sigue en
+// segundo plano y puede completar). fetch crudo a propósito (no
+// api.get): un 401 acá NO debe rebotar al login como hace api.req;
+// solo significa «sin revalidación».
+let HF_VERDICT = null; // { at, promise, v }
+function hfLiveGridVerdict() {
+  const now = Date.now();
+  if (HF_VERDICT && (now - HF_VERDICT.at) < 45000) return HF_VERDICT.promise;
+  const entry = { at: now, v: null, promise: null };
+  entry.promise = (async () => {
+    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const to = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) {} }, 12000);
+    let r = null;
+    try {
+      const res = await fetch('/api/home/live-grid', { credentials: 'same-origin', signal: ctl ? ctl.signal : undefined });
+      if (res && res.ok) r = await res.json().catch(() => null);
+    } catch (e) { r = null; }
+    try { clearTimeout(to); } catch (e) {}
+    let v = { complete: false };
+    if (r && r.complete && Array.isArray(r.shortcodes) && r.window_oldest) {
+      const cutoffMs = Date.parse(r.window_oldest);
+      if (Number.isFinite(cutoffMs)) v = { complete: true, live: new Set(r.shortcodes.map((x) => String(x))), cutoffMs };
+    }
+    entry.v = v;
+    if (!v.complete && HF_VERDICT === entry) HF_VERDICT = null; // incompleto no se cachea: re-leer
+    return v;
+  })();
+  HF_VERDICT = entry;
+  return entry.promise;
+}
+// ¿Hay tiles que un veredicto completo podría bajar? (publicadas con
+// shortcode y fecha dentro de cualquier ventana: el predicado de
+// caída con conjunto vacío y piso 0 las reconoce sin bajar ninguna
+// acá.) Sin tiles en juego, Inicio no espera ni disfraza nada.
+function hfLiveAtStake(tiles) {
+  try {
+    if (!Array.isArray(tiles)) return false;
+    const vacio = new Set();
+    for (const t of tiles) { if (hfLiveDropTile(t, vacio, 0)) return true; }
+  } catch (e) {}
+  return false;
+}
+// El filtro puro: con veredicto completo, las tiles que la ventana
+// viva prueba muertas salen; con cualquier otro veredicto, nada se
+// toca (fail-closed, como siempre).
+function hfLiveFilterTiles(tiles, verdict) {
+  const kept = [];
+  let dropped = 0;
+  for (const t of (tiles || [])) {
+    if (verdict && verdict.complete && hfLiveDropTile(t, verdict.live, verdict.cutoffMs)) { dropped++; continue; }
+    kept.push(t);
+  }
+  return { kept, dropped };
+}
+// (LOTE INICIO-GRILLA-REAL) PINTURA TARDÍA: la grilla quedó en su
+// estado de carga porque el veredicto no estaba cuando Inicio pintó.
+// Esta corrida re-pregunta (el incompleto no se cachea: cada intento
+// lee de nuevo) y, cuando el veredicto completa, re-rinde Inicio por
+// el camino de siempre — la corrida nueva lo encuentra resuelto y
+// pinta la grilla real, con su cofre y sus marcas. Si el veredicto
+// nunca llega, la grilla queda en carga honesta: jamás se planta la
+// grilla vencida como si fuera el perfil.
+let HF_GRID_LATE = { busy: false, tries: 0 };
+async function hfLiveGridLatePaint() {
+  if (HF_GRID_LATE.busy) return;
+  try { if (!document.getElementById('hfGridSlot')) return; } catch (e) { return; }
+  HF_GRID_LATE.busy = true;
+  try {
+    const verdict = await hfLiveGridVerdict();
+    try { if (!document.getElementById('hfGridSlot')) return; } catch (e) { return; }
+    if (!verdict.complete) {
+      HF_GRID_LATE.tries++;
+      if (HF_GRID_LATE.tries <= 10) setTimeout(() => { try { hfLiveGridLatePaint(); } catch (e) {} }, 8000);
+      return;
+    }
+    HF_GRID_LATE.tries = 0;
+    try { if (typeof render === 'function') render(); } catch (e) {}
+  } catch (e) {}
+  finally { HF_GRID_LATE.busy = false; }
+}
 async function hfLiveRevalidateFeed() {
   if (HF_LIVE_BUSY) return;
   // (LOTE REDISENO-R2 · FEED · v846: la revalidación cubre Inicio — el
@@ -29735,28 +29826,18 @@ async function hfLiveRevalidateFeed() {
   try { const _h = location.hash || ''; if (!(_h.startsWith('#/app/inicio'))) return; } catch (e) { return; }
   HF_LIVE_BUSY = true;
   try {
-    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const to = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) {} }, 12000);
-    let r = null;
-    try {
-      // fetch crudo a propósito (no api.get): un 401 acá NO debe
-      // rebotar al login como hace api.req; solo significa «sin
-      // revalidación» y el feed queda como está.
-      const res = await fetch('/api/home/live-grid', { credentials: 'same-origin', signal: ctl ? ctl.signal : undefined });
-      if (res && res.ok) r = await res.json().catch(() => null);
-    } catch (e) { r = null; }
-    try { clearTimeout(to); } catch (e) {}
-    if (!r || !r.complete || !Array.isArray(r.shortcodes) || !r.window_oldest) return;
-    const cutoffMs = Date.parse(r.window_oldest);
-    if (!Number.isFinite(cutoffMs)) return;
+    // (LOTE INICIO-GRILLA-REAL) El veredicto sale del pozo compartido:
+    // si la puerta de pintura ya leyó en esta ventana, esta corrida no
+    // vuelve a leer — encuentra las tiles ya filtradas y no toca nada.
+    const verdict = await hfLiveGridVerdict();
+    if (!verdict.complete) return;
     try { const _h2 = location.hash || ''; if (!(_h2.startsWith('#/app/inicio'))) return; } catch (e) { return; }
-    const live = new Set(r.shortcodes.map((x) => String(x)));
     const tiles = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES : [];
     const dropPostIds = new Set();
     const dropIg = new Set();
     const kept = [];
     for (const t of tiles) {
-      if (hfLiveDropTile(t, live, cutoffMs)) {
+      if (hfLiveDropTile(t, verdict.live, verdict.cutoffMs)) {
         if (t.kind === 'post' && t.post) dropPostIds.add(String(t.post.id));
         if (t.kind === 'ig' && t.shortcode) dropIg.add(String(t.shortcode));
         continue;
@@ -31861,6 +31942,11 @@ async function inicioView() {
       pzScheduleRender(8000); // (LOTE L7) por el guardian: un solo timer pendiente a la vez
     }
   } catch (e) {}
+  // (LOTE INICIO-GRILLA-REAL) La lectura viva de la grilla arranca EN
+  // PARALELO con el resto de los datos (con el @ del perfil guardado):
+  // cuando la composición llega, su veredicto ya suele estar resuelto
+  // y la grilla pinta real sin espera agregada.
+  try { const prof0 = pzHomeProfGet(); if (!HF_VISITOR && prof0 && prof0.username) hfLiveGridVerdict(); } catch (e) {}
   // LOTE VELOCIDAD: cuota, perfil y nivel son independientes: un solo
   // viaje en paralelo en vez de tres en serie.
   const [quotaRes, hpRes, nvRes, mejorRes, mnRes] = await Promise.all([
@@ -31912,6 +31998,42 @@ async function inicioView() {
   // la semana recién generada para su animación de entrada ÚNICA (la
   // composición de homeGridCompose no se toca; esto solo anota tiles).
   try { hfFallMark(tiles); } catch (e) {}
+  // (LOTE INICIO-GRILLA-REAL · 22/11) LA PUERTA DE LA GRILLA: lo que
+  // Inicio muestra como el perfil del negocio es el perfil REAL o un
+  // estado honesto de carga — nunca una grilla vencida presentada
+  // como actual (la clase prohibida del 15/11: la app contradiciendo
+  // la realidad a la vista; caso fundante: el dueño archivó todos sus
+  // posteos a la mañana y a las 19:02 su Inicio seguía mostrando la
+  // grilla archivada entera, porque la reconciliación corría DESPUÉS
+  // de pintar y su aborto dejaba la grilla plantada). Si hay tiles
+  // que la ventana viva puede bajar y la cuenta tiene @: con el
+  // veredicto ya resuelto, las tiles muertas salen de la composición
+  // ANTES del primer paint; sin veredicto todavía (la lectura va en
+  // vuelo, abortó o vino incompleta), la sección de la grilla pinta
+  // su estado de carga de siempre y la pintura tardía la trae cuando
+  // el veredicto llega. Sin tiles en juego o sin @, la pintura es la
+  // de siempre, sin esperas nuevas.
+  let hfGridPending = false;
+  try {
+    if (!HF_VISITOR && prof && prof.username && hfLiveAtStake(tiles)) {
+      hfLiveGridVerdict(); // en vuelo desde el arranque de la vista
+      let v = (HF_VERDICT && HF_VERDICT.v) ? HF_VERDICT.v : null;
+      if (!v) {
+        // Gracia corta: la lectura lleva en vuelo desde el arranque de
+        // la vista, en paralelo con los demás datos — si está por
+        // llegar, la grilla nace real en la primera pintura, sin
+        // espera nueva en el caso común. Si no llega, manda el estado
+        // de carga y la pintura tardía.
+        await Promise.race([hfLiveGridVerdict(), new Promise((r) => setTimeout(r, 2500))]);
+        v = (HF_VERDICT && HF_VERDICT.v) ? HF_VERDICT.v : null;
+      }
+      if (v && v.complete) {
+        const keptG = hfLiveFilterTiles(tiles, v).kept;
+        if (keptG.length !== tiles.length) { tiles.length = 0; for (const t of keptG) tiles.push(t); }
+      } else hfGridPending = true;
+    }
+  } catch (e) { hfGridPending = true; }
+  if (hfGridPending) { try { setTimeout(() => { try { hfLiveGridLatePaint(); } catch (e) {} }, 600); } catch (e) {} }
   // (Tanda feed 5 · ítem 4) El anillo del avatar nace de las historias
   // de LA SEMANA (hfStoriesOfWeek, abajo): degradé si hay alguna viva
   // o por salir; gris si todas ya pasaron o si el dueño ya las vio en
@@ -32001,7 +32123,9 @@ async function inicioView() {
   // (LOTE MODELO-NUEVO) La sección del plan, justo arriba de la
   // grilla: los slots planeados viven en la casa desde el día 0.
   const mnPlanStr = (!HF_VISITOR && mnRes && mnRes.ok && mnRes.plan) ? mnPlanHTML(mnRes, enHome) : '';
-  const gridHTML = tiles.length
+  const gridHTML = hfGridPending
+    ? `<div class="hf-grid-pending" id="hfGridSlot">${pzSkeletonHTML('inicio')}</div>`
+    : tiles.length
     ? (displayTiles.length
       ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
       : `${tabEmptyHTML}<div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`)
@@ -37026,6 +37150,13 @@ function hfLiveCompose(allPosts, prof) {
   const upcoming = hfFeedUpcoming(allPosts, tz);
   const published = allPosts.filter((p) => p.status === 'published');
   const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [], ritual: ((typeof PZ_RITUAL_ESTADO !== 'undefined') ? PZ_RITUAL_ESTADO : null), all: allPosts, guest: (typeof pzIsGuest === 'function' && pzIsGuest()) });
+  // (LOTE INICIO-GRILLA-REAL) El espejo vivo recompone desde la
+  // lectura guardada: si el veredicto vivo vigente ya probó tiles
+  // muertas, el parcheo no las resucita — la vista final es la real.
+  try {
+    const v = (typeof HF_VERDICT !== 'undefined' && HF_VERDICT && HF_VERDICT.v && HF_VERDICT.v.complete) ? HF_VERDICT.v : null;
+    if (v) { const keptM = hfLiveFilterTiles(tiles, v).kept; if (keptM.length !== tiles.length) { tiles.length = 0; for (const t of keptM) tiles.push(t); } }
+  } catch (e) {}
   const props = {};
   for (const t of tiles) {
     if (t.kind !== 'post' || !t.post) continue;
