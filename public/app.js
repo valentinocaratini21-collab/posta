@@ -1259,6 +1259,11 @@ function pzShellHeadHTML(tab) {
   // es el de su negocio (asentado por CAMPANA-CASA).
   const badgeIni = (typeof window !== 'undefined' && window.__pzCampanaBadgeN > 0)
     ? '<span class="pz-shell-bell-badge" id="pzShellBellBadge">' + window.__pzCampanaBadgeN + '</span>' : '';
+  // (LOTE CAMPANITA-VIVA) Si la caché ya conoce sin-leer, el botón
+  // nace con su clase de estado: el tinte amarillo y el ciclo de la
+  // campana corren desde el primer paint, sin un parpadeo de campana
+  // «apagada» con la insignia ya puesta.
+  const bellVivaIni = (typeof window !== 'undefined' && window.__pzCampanaBadgeN > 0) ? ' tiene-nuevas' : '';
   // (LOTE VOLVER-AVATAR) El volver, cuando la pantalla lo tiene, es el
   // primer elemento de la barra — en flujo, antes de la identidad. El
   // modo lo avisa la cáscara que compone (bbShell: 'barra' · appShell:
@@ -1275,7 +1280,7 @@ function pzShellHeadHTML(tab) {
       <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
     </button>
     <span class="pz-shell-acts">
-      <button type="button" class="pz-shell-ic pz-shell-bell" id="pzShellBell" onclick="pzBarraCampana()" aria-label="${en ? 'Notifications' : 'Notificaciones'}">${pzIc('bell', 18)}${badgeIni}</button>
+      <button type="button" class="pz-shell-ic pz-shell-bell${bellVivaIni}" id="pzShellBell" onclick="pzBarraCampana()" aria-label="${en ? 'Notifications' : 'Notificaciones'}">${pzIc('bell', 18)}${badgeIni}</button>
       <button type="button" class="pz-shell-ic" onclick="rsShareOpen()" aria-label="${en ? 'Share Posty' : 'Compartir Posty'}">${pzIc('shareUp', 18)}</button>
       <button type="button" class="pz-shell-ic" onclick="bbGo('#/app/ajustes')" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 18)}</button>
     </span>
@@ -1505,11 +1510,22 @@ function pzCampanaBadgePintar() {
     const b = document.getElementById('pzShellBell');
     if (!b) return;
     const n = (typeof window !== 'undefined' && window.__pzCampanaBadgeN) || 0;
+    // (LOTE CAMPANITA-VIVA) El conteo que quedó pintado la vez
+    // anterior: contra él se decide si la campana SUENA (subió el
+    // conteo) y si el numerito SALTA (cambió). Qué cuenta como
+    // sin-leer no cambia: sigue siendo el número de
+    // GET /api/bandeja/count, como lo sirve CAMPANA-BADGE.
+    const antes = (typeof window !== 'undefined' && typeof window.__pzCampanaBadgePintado === 'number')
+      ? window.__pzCampanaBadgePintado : 0;
     let el = document.getElementById('pzShellBellBadge');
     if (!(n > 0)) {
       if (el) el.remove();
+      // En cero todo se apaga: sin tinte, sin brillo, sin ciclo.
+      b.classList.remove('tiene-nuevas');
+      if (typeof window !== 'undefined') window.__pzCampanaBadgePintado = 0;
       return;
     }
+    const nace = !el;
     if (!el) {
       el = document.createElement('span');
       el.className = 'pz-shell-bell-badge';
@@ -1517,7 +1533,23 @@ function pzCampanaBadgePintar() {
       b.appendChild(el);
     }
     const txt = String(n);
-    if (el.textContent !== txt) el.textContent = txt;
+    const cambio = el.textContent !== txt;
+    if (cambio) el.textContent = txt;
+    if (!b.classList.contains('tiene-nuevas') || n > antes) {
+      // Suena ahora: si subió el conteo, el ciclo se reinicia desde
+      // su meneíto (sacar la clase, forzar el reflow, reponerla); si
+      // la clase faltaba en un DOM tibio, simplemente se enciende.
+      b.classList.remove('tiene-nuevas');
+      void b.offsetWidth;
+      b.classList.add('tiene-nuevas');
+    }
+    if (nace || cambio) {
+      // El numerito entra con su saltito al aparecer y al cambiar.
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      el.classList.add('pop');
+    }
+    if (typeof window !== 'undefined') window.__pzCampanaBadgePintado = n;
   } catch (e) {}
 }
 function pzCampanaBadgeRefrescar() {
@@ -3123,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1249';
+const PZ_BUILD = '20261105-v1250';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un

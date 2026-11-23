@@ -4882,6 +4882,21 @@ body.pz-postchat-open{overflow:hidden}
 /* (LOTE CAMPANA-BADGE) La insignia de la campana: el número de acciones que esperan en la bandeja. Misma lengua que las demás insignias de conteo de la app (.bb-badge/.mz-badge: píldora #C2452D, número blanco 10px peso 800, mínimo 17px), anclada a la esquina del botón redondo de vidrio con anillo blanco para leerse sobre el vidrio. No recibe toques: el toque es del botón. */
 .pz-shell-bell{position:relative}
 .pz-shell-bell-badge{position:absolute;top:-3px;right:-3px;background:#C2452D;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(10,30,51,.25);pointer-events:none;line-height:1}
+/* (LOTE CAMPANITA-VIVA · 22/11) La campana viva: con notificaciones sin
+   leer, el círculo de vidrio se tiñe apenas del amarillo de marca con un
+   brillo suave, la campana suena en un ciclo de 5 s (el meneíto ocupa el
+   primer ~20% — 1 s — y el resto del ciclo descansa: nada de movimiento
+   constante) y el numerito entra con un saltito cuando cambia. En cero
+   todo se apaga: la animación significa «hay algo nuevo», no decora. La
+   clase de estado (.tiene-nuevas) la maneja pzCampanaBadgePintar; el
+   ciclo se reinicia al subir el conteo quitando y reponiendo la clase
+   (la campana suena en el momento en que llega la nueva). */
+.pz-shell-bell.tiene-nuevas{background:rgba(254,193,77,.30);border-color:rgba(254,193,77,.72);box-shadow:0 8px 32px rgba(10,30,51,.14),0 0 16px rgba(254,193,77,.50),inset 0 1px 0 rgba(255,255,255,.75)}
+.pz-shell-bell.tiene-nuevas svg{transform-origin:50% 0;animation:pzCampanaSuena 5s ease-in-out infinite}
+@keyframes pzCampanaSuena{0%{transform:rotate(0deg)}3%{transform:rotate(15deg)}7%{transform:rotate(-11deg)}11%{transform:rotate(7deg)}15%{transform:rotate(-4deg)}19%{transform:rotate(1.5deg)}22%,100%{transform:rotate(0deg)}}
+.pz-shell-bell-badge.pop{animation:pzCampanaPop .45s cubic-bezier(.2,2.2,.4,1)}
+@keyframes pzCampanaPop{0%{transform:scale(.3)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){.pz-shell-bell.tiene-nuevas svg{animation:none}.pz-shell-bell-badge.pop{animation:none}}
 @media(min-width:761px){.app-shell .pz-shell-head{max-width:920px;padding:10px 24px}}
 /* Chat con dock visible: el chat termina sobre el dock (respaldo pre-JS;
    pzChatKbSync ajusta la altura con el dock real medido). */
