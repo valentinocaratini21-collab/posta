@@ -3111,7 +3111,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1240';
+const PZ_BUILD = '20261105-v1241';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22474,12 +22474,6 @@ function pzBandejaEstilos() {
 .pzb-progreso{height:5px;border-radius:99px;background:#E3EDF5;margin:10px 0 12px;overflow:hidden}
 .pzb-progreso i{display:block;height:100%;background:linear-gradient(90deg,#57B2E5,#2793C8);border-radius:99px}
 .pzb-vacio{background:#fff;border-radius:22px;box-shadow:0 10px 28px rgba(10,30,51,.08);padding:26px 18px;text-align:center;color:#5A6B7C;font-size:15px}
-.pzb-conserje{display:flex;align-items:center;gap:12px;width:100%;border:0;text-align:left;cursor:pointer;font-family:inherit}
-.pzb-conserje-ic{width:42px;height:42px;border-radius:50%;flex:none;background:#EAF4FB;display:flex;align-items:center;justify-content:center}
-.pzb-conserje-tx{flex:1;min-width:0}
-.pzb-conserje-tx b{display:block;font-size:16px;font-weight:800;color:#0A1E33}
-.pzb-conserje-tx small{display:block;font-size:13px;color:#5A6B7C;margin-top:1px}
-.pzb-conserje-go{font-size:24px;color:#9DB2C6;flex:none;line-height:1}
 </style>`;
 }
 function pzBandejaIconoNov(tipo) {
@@ -22511,41 +22505,15 @@ function pzBandejaTarjetaHTML(t) {
     </div>
   </div>`;
 }
-// (LOTE CAMPANA-CASA · 22/11) ¿Esta sesión es la de la casa? La
-// sonda es la misma de la campana (GET /api/conserje/puerta, cacheada
-// en sessionStorage por el bloque BARRA-VIVA): acá solo se lee — si
-// la caché está fría se pregunta y se cachea. Sin sonda (error de
-// red), la pantalla se pinta como la de un cliente: la tarjeta no
-// aparece, jamás se inventa.
-async function pzBandejaEsCasa() {
-  const c = (typeof pzBarraCasaCache === 'function') ? pzBarraCasaCache() : null;
-  if (c !== null) return c;
-  try {
-    const r = await api.get('/api/conserje/puerta');
-    const casa = !!(r && r.casa);
-    try { sessionStorage.setItem('pzBarraCasa', casa ? '1' : '0'); } catch (e) {}
-    return casa;
-  } catch (e) { return false; }
-}
-// La tarjeta de entrada al Conserje: SOLO la casa, al tope de su
-// pantalla de notificaciones. La consola no cambia en nada — esto
-// es solo su puerta nueva (la de siempre, /conserje, que siembra el
-// acceso desde la propia sesión de la casa: PUERTA-CONSERJE).
-function pzBandejaConserjeCardHTML() {
-  return `<button type="button" class="pzb-card pzb-conserje" id="pzbConserjeCard" onclick="pzBandejaIrConserje()">
-    <span class="pzb-conserje-ic">${PZ_CAMPANA_CLOCHE}</span>
-    <span class="pzb-conserje-tx"><b>Conserje</b><small>${pzBandejaT('La consola de operación de Posty', "Posty's operations console")}</small></span>
-    <span class="pzb-conserje-go">›</span>
-  </button>`;
-}
-function pzBandejaIrConserje() { location.href = '/conserje'; }
-function pzBandejaNotifsHTML(data, esCasa) {
+// (LOTE CONSERJE-SOLO-WEB) La tarjeta de entrada al Conserje que iba
+// al tope de esta pantalla (solo la casa) salió: el Conserje vive
+// solamente en el website. La pantalla del cliente queda como está.
+function pzBandejaNotifsHTML(data) {
   const tandas = (data.tandas || []).filter(t => (t.conteo || {}).pendientes > 0);
   const novs = data.novedades || [];
   return `${pzBandejaEstilos()}<div class="pzb-wrap">
     <div class="pzb-banda"><h1>${pzBandejaT('Notificaciones', 'Notifications')}</h1><p>${pzBandejaT('Todo lo de tu negocio, en un solo lugar', 'Everything about your business, in one place')}</p></div>
     <div class="pzb-sobre">
-    ${esCasa ? pzBandejaConserjeCardHTML() : ''}
     ${tandas.length ? `<div class="pzb-seccion" style="margin-top:0;color:#fff;opacity:.95">${pzBandejaT('ESPERA TU TOQUE', 'WAITING FOR YOUR TAP')}</div>` + tandas.map(pzBandejaTarjetaHTML).join('') : `<div class="pzb-vacio">${pzBandejaT('Todavía no hay respuestas para preparar.<br>Cuando alguien comente o te escriba, Posty las prepara acá.', 'No replies to prepare yet.<br>When someone comments or writes to you, Posty prepares them here.')}</div>`}
     </div>
     ${novs.length ? `<div class="pzb-seccion">${pzBandejaT('NOVEDADES', 'UPDATES')}</div><div class="pzb-card">${novs.map(n => `<div class="pzb-nov">${pzBandejaIconoNov(n.tipo)}<div><div class="pzb-nov-tit">${esc(n.titulo || '')}</div><div class="pzb-nov-det">${esc(n.detalle || '')}</div></div><span class="pzb-nov-cuando">${pzBandejaHace(n.cuando)}</span></div>`).join('')}</div>` : ''}
@@ -22587,7 +22555,7 @@ function pzBandejaItemHTML(it) {
 }
 function pzBandejaRevisarHTML(data, tandaId) {
   const t = (data.tandas || []).find(x => x.id === tandaId);
-  if (!t) return pzBandejaNotifsHTML(data, PZB.esCasa);
+  if (!t) return pzBandejaNotifsHTML(data);
   const c = t.conteo || {};
   const esDm = t.kind === 'dm';
   const etiqueta = esDm ? (t.etiqueta || pzBandejaT('Mensaje directo', 'Direct message')) : (pzBandejaT('Posteo de hoy', "Today's post") + (t.post_caption ? ' · ' + String(t.post_caption).slice(0, 60) : ''));
@@ -22623,18 +22591,16 @@ async function pzBandejaCargar(tandaId) {
 async function pzBandejaView() {
   const q = new URLSearchParams((location.hash.split('?')[1] || ''));
   PZB.tandaId = Number(q.get('tanda') || 0);
-  // (LOTE CAMPANA-CASA) La sonda de la casa se resuelve UNA vez por
-  // pintura de la pantalla y viaja con el estado de la vista: los
-  // repintados (aprobar/descartar/editar) conservan la tarjeta.
-  PZB.esCasa = await pzBandejaEsCasa();
+  // (LOTE CONSERJE-SOLO-WEB) Sin sonda de la casa: la pantalla es la
+  // del cliente para todas las sesiones, sin tarjeta del operador.
   const data = await pzBandejaCargar(PZB.tandaId);
   if (!data) return `<div class="pzb-wrap"><div class="pzb-vacio">${pzBandejaT('No pude cargar tus notificaciones.', 'I could not load your notifications.')}</div></div>`;
-  return `<div id="pzbRoot">${PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data, PZB.esCasa)}</div>`;
+  return `<div id="pzbRoot">${PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data)}</div>`;
 }
 async function pzBandejaRepintar() {
   const data = await pzBandejaCargar(PZB.tandaId);
   const root = document.getElementById('pzbRoot');
-  if (root && data) root.innerHTML = PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data, PZB.esCasa);
+  if (root && data) root.innerHTML = PZB.tandaId ? pzBandejaRevisarHTML(data, PZB.tandaId) : pzBandejaNotifsHTML(data);
 }
 function pzBandejaAbrir(tandaId) { bbGo('#/app/notificaciones?tanda=' + tandaId); }
 function pzBandejaVolver() { bbGo('#/app/notificaciones'); }
@@ -31471,14 +31437,8 @@ function pzHoySpeechHTML(o) {
   return `<div class="pz-hoy-speech-row"><button type="button" class="pz-hoy-speech" ${destAttr}><span>${cuerpo}</span>${insight ? `<span class="pz-hoy-insight">${esc(insight)}</span>` : ''}</button></div>`;
 }
 
-// Entrada al conserje (nace oculta; pzHoyConserjeFill la llena con el
-// contador real «X de N revisados» o la quita si no hay revisión).
-function pzHoyConserjeHTML(decididos, total, en) {
-  const txt = (decididos === null || decididos === undefined || total === null || total === undefined)
-    ? '…'
-    : `${esc(String(decididos))} ${en ? 'of' : 'de'} ${esc(String(total))} ${en ? 'reviewed' : 'revisados'}`;
-  return `<button type="button" class="card pz-hoy-conserje" id="pzHoyConserje" data-pz-hoy-conserje="1" hidden><span class="pz-hoy-conserje-ico">🧑‍💼</span><span class="pz-hoy-conserje-tx"><b>${en ? 'Concierge · nightly review' : 'Conserje · revisión de la noche'}</b><small data-pz-hoy-conserje-n>${txt}</small></span><span class="pz-hoy-conserje-go">→</span></button>`;
-}
+// (LOTE CONSERJE-SOLO-WEB) La entrada al Conserje con el contador de
+// la revisión de la noche salió de Hoy: el Conserje es solo del website.
 
 // Cambiar la vista de Hoy (segmentador «Por aprobar / Mi feed»).
 // (RE-BASE R1 SOBRE v794 · R2: «Mi feed» es pantalla propia #/app/feed —
@@ -31578,38 +31538,6 @@ async function pzHoyEliminar(id, btn) {
 // conteo es el del conserje (conserjeConteo: TODOS cuentan, también
 // los sin posteo). Un 401/403 quita la entrada sin recargar la página
 // (a diferencia de adminApi, que recarga).
-async function pzHoyConserjeFill() {
-  const slot = document.getElementById('pzHoyConserje');
-  if (!slot) return;
-  let t = '';
-  try { t = localStorage.getItem('posta_admin_token') || ''; } catch (e) {}
-  if (!t) {
-    // (LOTE PUERTA-CONSERJE) Este dispositivo nunca guardó el token:
-    // la puerta del servidor dice si ESTA sesión es de la casa. Si lo
-    // es, la entrada se muestra igual — al tocarla, /conserje siembra
-    // el token desde la sesión y la consola abre sin pedir nada. La
-    // sonda devuelve solo el sí/no de la propia sesión, jamás el token.
-    let casa = false;
-    try {
-      const rp = await fetch('/api/conserje/puerta', { credentials: 'same-origin' });
-      if (rp && rp.ok) { const dp = await rp.json().catch(() => null); casa = !!(dp && dp.casa); }
-    } catch (e) {}
-    if (!casa) { try { slot.remove(); } catch (e) {} return; }
-    slot.hidden = false;
-    return;
-  }
-  try {
-    const d = await api.get('/api/admin/support/conserje/revision?token=' + encodeURIComponent(t));
-    if (!d || !d.ok) throw new Error('sin revision');
-    const todos = (d.items || []).concat(d.sin_posteo || []);
-    if (!todos.length) { try { slot.remove(); } catch (e) {} return; }
-    const dec = todos.filter((i) => i && i.decision).length;
-    const small = slot.querySelector('[data-pz-hoy-conserje-n]');
-    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    if (small) small.textContent = dec + (en ? ' of ' : ' de ') + todos.length + (en ? ' reviewed' : ' revisados');
-    slot.hidden = false;
-  } catch (e) { try { slot.remove(); } catch (e2) {} }
-}
 
 // (LOTE SIN-CHAT-REUBICACIÓN · 13/11) «Que Posty lo arme»: el día vacío
 // es responsabilidad de Posty, no del cliente. Un toque → POST
@@ -31702,38 +31630,15 @@ function pzHoyBind(root) {
     el.onclick = go;
     el.onkeydown = (ev) => { if (ev && (ev.key === 'Enter' || ev.key === ' ')) { try { ev.preventDefault(); } catch (e) {} go(); } };
   });
-  root.querySelectorAll('[data-pz-hoy-conserje]').forEach((b) => { b.onclick = () => { try { if (typeof bbGo === 'function') bbGo('#/app/conserje'); else location.hash = '#/app/conserje'; } catch (e) {} }; });
   try { pzHoyTiraBind(root); } catch (e) {}
-  try { pzHoyConserjeFill(); } catch (e) {}
   try { pzPostWowEmailBind(root); } catch (e) {}
   try { pzTrialAvisoBind(root); } catch (e) {}
   try { pzWowConnectBind(root); } catch (e) {}
   try { mnPlanBind(root); } catch (e) {}
 }
 
-// (LOTE REDISENO-R6) Entrada al conserje desde Hoy, solo en ventana
-// 19:00–00:00 y solo si el token de admin ya está en este dispositivo.
-// La primera vez el gate pide el token DENTRO de la ruta #/app/conserje
-// (v778); sin token guardado la entrada no se muestra, para no llevar
-// a ningún cliente a un callejón sin salida. La ventana es una guía,
-// no un candado (conserje-revision.js): fuera de hora no hay entrada,
-// pero la ruta directa sigue funcionando. La hora es la del dispositivo.
-function pzConserjeHoyHTML() {
-  try {
-    if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return '';
-    let tok = '';
-    try { tok = localStorage.getItem('posta_admin_token') || ''; } catch (e) {}
-    if (!tok) return '';
-    const h = new Date().getHours();
-    if (h < 19) return '';
-    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    return '<a class="card pz-conserje-hoy" href="#/app/conserje">'
-      + '<span class="pz-conserje-hoy-ico">🧑‍💼</span>'
-      + '<span class="pz-conserje-hoy-txt"><b>' + esc(en ? 'Night review' : 'Revisión de la noche') + '</b>'
-      + '<small>' + esc(en ? 'Open now · 7:00–12:00 PM' : 'Abierta ahora · 19:00–00:00') + '</small></span>'
-      + '<span class="pz-conserje-hoy-ir">' + esc(en ? 'Review →' : 'Revisar →') + '</span></a>';
-  } catch (e) { return ''; }
-}
+// (LOTE CONSERJE-SOLO-WEB) La tarjeta «Revisión de la noche» de Hoy
+// salió de la app: la revisión vive en la consola web del Conserje.
 /* ===== LOTE INICIO-AL-INSTANTE · 20/11 · cierre del caso Inicio del
    arreglo de las 3 pantallas (v1199) =====
    Residual del dueño (20/11 08:30, sobre v1199 vivo): «siempre que
@@ -32254,12 +32159,9 @@ async function inicioView() {
     PZ_HOY_TIRA_DIAS = tiraDiasR1;
     PZ_HOY_POST_ID = hoyPostR1 ? String(hoyPostR1.id) : '';
     if (!PZ_HOY_TIRA_SEL) { try { const h = tiraDiasR1.find((d) => d && d.esHoy); if (h) PZ_HOY_TIRA_SEL = h.key; } catch (e) {} }
-    // (LOTE PUERTA-CONSERJE) La tarjeta nace oculta y la decide
-    // pzHoyConserjeFill: se emite con token guardado O con sesión real
-    // (el fill le pregunta a la puerta si esta sesión es de la casa y
-    // la muestra sin que el dueño haya tipeado el token jamás). Sin
-    // prueba de acceso, el fill la quita: nunca visible para un cliente.
-    const hayAdminR1 = (() => { try { if (localStorage.getItem('posta_admin_token')) return true; } catch (e) {} try { return !!(typeof ME !== 'undefined' && ME && ME.id && !ME.is_guest); } catch (e) { return false; } })();
+    // (LOTE CONSERJE-SOLO-WEB) La tarjeta de entrada al Conserje que
+    // nacía en Hoy salió de la app: el Conserje vive solamente en el
+    // website (su consola web), nunca en la app del cliente.
     // (LOTE TIRA-SEMANA-V4 · v874 · 10/11 · decisión Valentino: la tira
     // sube a primera en Hoy, justo debajo del encabezado fijo — indicador
     // de semana, no bloque de contenido. El saludo y el posteo de hoy
@@ -32273,7 +32175,6 @@ async function inicioView() {
       + pzWowConnectHTML({ post: wowPostR1, posts: allPosts, tz, en: enHome, justConnected: wowJustConnectedR1 })
       + pzTrialAvisoHTML({ hoyPost: hoyPostR1, posts: allPosts, hoyKey: hoyKeyR1, tz, en: enHome })
       + pzPostWowEmailHTML({ hoyPost: hoyPostR1, en: enHome })
-      + (hayAdminR1 ? pzHoyConserjeHTML(null, null, enHome) : '')
       + `</div>`;
   })() : '';
   // (LOTE HOY-SEGMENTER-Y-BOTON · decisión Valentino: el segmentador «Por aprobar / Mi feed»
@@ -32338,7 +32239,6 @@ async function inicioView() {
   ${hoySegHTML}
   <div id="pzTemaInicio"></div>
   ${hoyAprobarHTML}
-  ${pzConserjeHoyHTML()}
   <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
   ${hfTabsHTML(HF_TAB, enHome)}
@@ -39658,7 +39558,6 @@ function bindApp(tab) {
   try { pzPhStart(); } catch (e) {}
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
-  if (tab === 'conserje' && typeof bindConserje === 'function') bindConserje(); // el chunk ya lo cargó render()
   if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk
   if (tab === 'chat') bindChatFull(); // (LOTE CHATPANTALLA) El chat principal es pantalla completa
   if (tab === 'schedule') bindSchedule();

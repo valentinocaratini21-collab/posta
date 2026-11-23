@@ -59,7 +59,6 @@ async function bindAdmin() {
   card.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn btn-soft btn-sm" data-atab="support">${pzIc('heart', 15)} Soporte</button>
-      <button class="btn btn-soft btn-sm" data-atab="conserje">${pzIc('heart', 15)} Conserje</button>
       <button class="btn btn-soft btn-sm" data-atab="launch">${pzIc('rocket', 15)} Lanzamiento</button>
       <button class="btn btn-soft btn-sm" data-atab="home">${pzIc('home', 15)} Panel</button>
       <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
@@ -1175,7 +1174,7 @@ async function bindAdmin() {
     clearCjTimer();
     $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
     b.classList.add('btn-primary');
-    ({ launch: showLaunch, support: showSupport, conserje: showConcierge, home: showHome, funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
+    ({ launch: showLaunch, support: showSupport, home: showHome, funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
   });
   // Banner de alertas: la info tiene que buscar al dueño
   try {
