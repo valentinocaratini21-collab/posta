@@ -1,14 +1,19 @@
 // test-lote-preflight-1830.js — Suite del lote PREFLIGHT-1830
 // (2026-11-23): el chequeo silencioso de las 18:30 (Nueva York) sobre
 // los posteos de la casa programados para las 19:00.
+// Actualizada por PREFLIGHT-REINTENTO-HEREDA (2026-11-23): la sección
+// B pina la simulación del reintento con la herencia de
+// FRENO-REINTENTO-CUPO — repin de B9/B10 y casos nuevos B15/B16.
 //   A · Estática: el módulo existe, el scheduler lo registra a las
 //       18:30 en America/New_York, la vía de avisos (support_cases →
 //       pendientes del operador) conoce el tipo, y el gate de
 //       funciones llamadas está completo.
 //   B · Módulo con la noche del 22/11 sembrada: video sin faststart a
 //       60 fps y sin metadata de color → aviso con las causas; cupo de
-//       reels consumido por un publicado + un fallido en la semana →
-//       el aviso de plan_limit; portada ausente → aviso; cuenta sana
+//       reels completo con un fallido de la MISMA semana → silencio de
+//       cupo (el reintento hereda desde FRENO-REINTENTO-CUPO, v1270);
+//       el fallido de OTRA semana y el fallido sin horario → el aviso
+//       de plan_limit sigue; portada ausente → aviso; cuenta sana
 //       (espejo EN) → silencio; cliente que no es la casa → ni se
 //       mira; posteo fuera de la ventana de las 19:00 → ni se mira;
 //       doble corrida → un solo aviso por posteo; el aviso llega a la
@@ -105,6 +110,13 @@ function seedPost(userId, over) {
   seedUser(12, 'casa@posty.test', 'posty.communitymanager', 'trial', 'esencial');
   const pub695 = seedPost(12, { at: '2026-11-23T15:00:00.000Z', status: 'published', pub: '2026-11-23T15:00:00.000Z' });
   const fallido = seedPost(12, { at: '2026-11-23T16:00:00.000Z', status: 'failed' });
+  // (PREFLIGHT-REINTENTO-HEREDA) El fallido de OTRA semana (miércoles
+  // 18/11, semana del lunes 16/11): su reintento por publish-now se
+  // cobra contra ESTA semana — si está completa, rebota de verdad.
+  const fallidoOtraSemana = seedPost(12, { at: '2026-11-18T16:00:00.000Z', status: 'failed' });
+  // Y el fallido SIN horario guardado: publish-now lo cobra como nuevo
+  // (la herencia exige scheduled_at) — también rebota con la semana llena.
+  const fallidoSinHorario = seedPost(12, { at: null, status: 'failed' });
   const malo19 = seedPost(12, { at: H19, image: '/media/malo.mp4', cover: '' });
   const bueno19 = seedPost(12, { at: '2026-11-24T00:30:00.000Z' });
   // La casa EN (espejo, sana): plan Total, semana vacía, pieza limpia.
@@ -123,8 +135,10 @@ function seedPost(userId, over) {
   const casoBueno = casos.find(c => c.post_id === bueno19);
   ok('B7 el posteo malo tiene su caso con las causas del video', !!casoMalo && casoMalo.detalle.includes('faststart') && casoMalo.detalle.includes('60 fps') && casoMalo.detalle.includes('metadata de color'), casoMalo ? casoMalo.detalle : 'sin caso');
   ok('B8 el posteo malo también avisa la portada ausente', !!casoMalo && casoMalo.detalle.includes('no tiene portada'), casoMalo ? casoMalo.detalle : 'sin caso');
-  ok('B9 el posteo bueno avisa SOLO el cupo: el reintento rebota (plan_limit)', !!casoBueno && casoBueno.detalle.includes('plan_limit') && !casoBueno.detalle.includes('faststart'), casoBueno ? casoBueno.detalle : 'sin caso');
-  ok('B10 el aviso nombra al fallido de la semana y al publicado que ocupó el cupo', !!casoBueno && casoBueno.detalle.includes(`El posteo ${fallido} quedó fallido`) && casoBueno.detalle.includes(String(pub695)), casoBueno ? casoBueno.detalle : 'sin caso');
+  ok('B9 (repin PREFLIGHT-REINTENTO-HEREDA) el posteo bueno avisa SOLO el cupo: rebota el reintento del fallido que NO hereda (plan_limit)', !!casoBueno && casoBueno.detalle.includes('plan_limit') && !casoBueno.detalle.includes('faststart'), casoBueno ? casoBueno.detalle : 'sin caso');
+  ok('B10 (repin) el aviso nombra al fallido de OTRA semana y NO al de la misma semana: el de la misma semana hereda y su reintento ya no rebota', !!casoBueno && casoBueno.detalle.includes(`El posteo ${fallidoOtraSemana} quedó fallido`) && casoBueno.detalle.includes('no hereda') && !casoBueno.detalle.includes(`El posteo ${fallido} quedó fallido`), casoBueno ? casoBueno.detalle : 'sin caso');
+  ok('B15 el fallido sin horario tampoco hereda: su reintento se cobra como nuevo y el aviso lo nombra', !!casoBueno && casoBueno.detalle.includes(`El posteo ${fallidoSinHorario} quedó fallido`) && casoBueno.detalle.includes('se cobra como nuevo'), casoBueno ? casoBueno.detalle : 'sin caso');
+  ok('B16 el posteo de esta noche ya no se avisa a sí mismo: si falla, su reintento hereda dentro de su semana', !!casoBueno && !casoBueno.detalle.includes('falla esta noche'), casoBueno ? casoBueno.detalle : 'sin caso');
   ok('B11 la cuenta sana (EN) no generó ningún caso: silencio', !casos.some(c => c.post_id === sano19));
   ok('B12 el posteo fuera de la ventana (20:30) no se revisó', !casos.some(c => c.post_id === fuera19));
   ok('B13 el cliente que no es la casa no generó ningún caso', !casos.some(c => c.post_id === cliente19));

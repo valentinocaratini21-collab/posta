@@ -8,8 +8,12 @@
 // metadata de color) fue rechazado por Meta a las 19:01 y el reintento
 // rebotó en silencio contra el cupo semanal de reels (el 695 ya
 // publicado había consumido el único reel del plan de prueba, y un
-// posteo FALLIDO pierde la exención de programado: publish-now lo cobra
-// como nuevo — server.js, /api/posts/:id/publish-now).
+// posteo FALLIDO perdía la exención de programado: publish-now lo
+// cobraba como nuevo — server.js, /api/posts/:id/publish-now). Esa
+// segunda mitad la cerró FRENO-REINTENTO-CUPO (v1270, 23/11): el
+// reintento de un fallido HEREDA el lugar de su misma semana, y la
+// simulación del cupo de abajo modela esa herencia desde
+// PREFLIGHT-REINTENTO-HEREDA.
 //
 // Qué verifica, por posteo de la casa programado en la ventana de las
 // 19:00 (hora de Nueva York) de hoy:
@@ -18,12 +22,14 @@
 //       H.264, hasta 30 fps y metadata de color presente (los tres
 //       defectos del master del 22/11), medidos con ffprobe + lectura
 //       de cajas del propio archivo.
-//   (b) el cupo de reels de la semana no deja al posteo sin red: si el
-//       cupo ya está cubierto por OTROS posteos (programados o
-//       publicados), el posteo de las 19:00 solo sale por la vía
-//       programada — si falla, su reintento rebota por plan_limit.
-//       También avisa si ya hay un video fallido esta semana cuyo
-//       reintento rebota hoy por cupo.
+//   (b) el cupo de reels, simulando el reintento TAL CUAL producción
+//       desde FRENO-REINTENTO-CUPO: el posteo de las 19:00, si falla,
+//       hereda su propio lugar al reintentar dentro de su semana — eso
+//       ya no se avisa. Lo que sí se avisa: un video que ya quedó
+//       fallido y NO hereda (su horario original es de otra semana, o
+//       no tiene horario guardado: publish-now lo cobra como nuevo)
+//       cuando el cupo de esta semana ya está completo — su reintento
+//       de esta noche rebota por plan_limit.
 //   (c) la portada existe: cover_path cargado y su archivo en disco.
 //       Para posteos que no son video, el archivo de la pieza misma.
 //
@@ -238,30 +244,44 @@ function defectosDeCupo(db, post) {
   const monday = streaks.mondayKeyOf(dayKeyEnTz(msDePost(post.scheduled_at), tz));
   const counts = conteoSemana(db, userId, monday);
   const usados = counts.video || 0;
-  // El posteo de esta noche ya cuenta como programado; la pregunta del
-  // preflight es qué pasa si FALLA: en 'failed' deja de contar y su
-  // reintento por publish-now se cobra como nuevo contra lo que quede.
-  const otros = Math.max(0, usados - 1);
-  if (limit > 0 && otros >= limit) {
+  // (PREFLIGHT-REINTENTO-HEREDA) La simulación del reintento modela la
+  // herencia de FRENO-REINTENTO-CUPO (v1270), tal cual las dos puertas
+  // de producción:
+  //  - publish-now: un 'failed' cuyo horario original (el scheduled_at
+  //    que sobrevive al fallo) cae en la semana que mide quotaFor — la
+  //    vigente — NO se cobra de nuevo; el de otra semana, o sin
+  //    horario guardado, se cobra como nuevo contra la semana vigente.
+  //  - PATCH (reprogramar): un 'failed' reprogramado a SU misma semana
+  //    tampoco se cobra; a otra semana se cobra contra esa semana.
+  // El posteo de esta noche, si falla, reintenta dentro de su propia
+  // semana por cualquiera de las dos puertas: hereda siempre y ya NO
+  // genera el aviso que la simulación vieja le ponía (quedó falso).
+  // Lo que sigue siendo defecto de verdad: un video que YA quedó
+  // fallido y no hereda, con el cupo vigente completo — su reintento
+  // de esta noche por publish-now rebota por plan_limit.
+  if (limit > 0 && usados >= limit) {
     const ids = db.prepare(`SELECT id FROM posts
-      WHERE user_id = ? AND media_type = 'video' AND id != ?
+      WHERE user_id = ? AND media_type = 'video'
       AND status IN ('scheduled','publishing','published')
       AND COALESCE(source,'') != 'express'
       AND date(COALESCE(scheduled_at, published_at, created_at)) >= date(?)
       AND date(COALESCE(scheduled_at, published_at, created_at)) < date(?, '+7 days')
-      ORDER BY id ASC`).all(userId, post.id, monday, monday).map((r) => r.id);
-    defectos.push(`El cupo de reels de esta semana ya está completo sin este posteo (${otros} de ${limit} usados por los posteos ${ids.join(', ')}): si el posteo ${post.id} falla esta noche, su reintento va a rebotar por plan_limit — un posteo fallido pierde la exención de programado y el reintento se cobra como nuevo (es lo que pasó el 22/11 con el reel 695 ya publicado).`);
-  }
-  // Un video que YA quedó fallido esta semana: su reintento rebota hoy
-  // si el cupo vigente no tiene lugar.
-  if (limit > 0 && usados >= limit) {
-    const fallidos = db.prepare(`SELECT id FROM posts
+      ORDER BY id ASC`).all(userId, monday, monday).map((r) => r.id);
+    // Los fallidos se barren enteros (no solo los de esta semana): la
+    // herencia se decide por posteo, con su horario original. Los
+    // express quedan fuera: publish-now no les cobra cupo nunca.
+    const fallidos = db.prepare(`SELECT id, scheduled_at FROM posts
       WHERE user_id = ? AND media_type = 'video' AND status = 'failed'
-      AND date(COALESCE(scheduled_at, published_at, created_at)) >= date(?)
-      AND date(COALESCE(scheduled_at, published_at, created_at)) < date(?, '+7 days')
-      ORDER BY id ASC`).all(userId, monday, monday);
+      AND COALESCE(source,'') != 'express'
+      ORDER BY id ASC`).all(userId);
     for (const f of fallidos) {
-      defectos.push(`El posteo ${f.id} quedó fallido esta semana y su reintento rebota por cupo (plan ${plan.name || plan.id}: ${usados} de ${limit} reels usados): un fallido pierde la exención de programado y al reintentar se cobra como nuevo.`);
+      const semanaOriginal = f.scheduled_at
+        ? streaks.mondayKeyOf(dayKeyEnTz(msDePost(f.scheduled_at), tz)) : null;
+      if (semanaOriginal === monday) continue; // hereda: su reintento no rebota
+      const motivo = !f.scheduled_at
+        ? 'quedó fallido sin horario programado guardado, así que su reintento se cobra como nuevo'
+        : 'su horario original cae en otra semana, así que no hereda el lugar de esta';
+      defectos.push(`El posteo ${f.id} quedó fallido y su reintento rebota por cupo (plan ${plan.name || plan.id}: ${usados} de ${limit} reels de esta semana ya usados por los posteos ${ids.join(', ')}): ${motivo} y la semana vigente está completa (plan_limit).`);
     }
   }
   return defectos;
