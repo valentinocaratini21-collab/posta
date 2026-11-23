@@ -41212,6 +41212,11 @@ app.post('/api/guest/start', async (req, res) => {
       }
       try { modoLista.registrar(db, { ig: igK, domain: domK, email: emailML, lang, sinWeb: sinWebK }); } catch (e) { console.error('[modo-lista] registrar falló:', e.message); }
       try { track(null, 'guest_start', 'modo-lista'); } catch (e) {}
+      // (LOTE RECIBO-LISTA) El recibo sale EN EL MOMENTO del alta: la
+      // fila nueva nace 'pendiente' y el disparo despacha sin frenar la
+      // respuesta (la fila que se re-anota conserva su estado: no hay
+      // recibo duplicado). El barrido del scheduler es la red.
+      try { if (reciboLista) reciboLista.dispararRecibos(db); } catch (e) { /* el recibo jamás frena el alta */ }
       return res.json({ ok: true, modo_lista: true, message: modoLista.mensaje(lang) });
     }
     if (!igK && !domK) {
@@ -42002,6 +42007,11 @@ try { guestSetIgMod = require('./guest-set-ig'); } catch (e) { console.error('[i
 // modo-lista.js (la tabla lista_espera vive ahí, esquema idempotente).
 let modoLista = null;
 try { modoLista = require('./modo-lista'); modoLista.ensureSchema(db); } catch (e) { console.error('[init] modo-lista no disponible:', e.message); }
+// (LOTE RECIBO-LISTA) El recibo de la fila (email en el momento del
+// alta, con el lugar) y el único toque de enero («tu lugar sigue
+// reservado»): la mecánica y la copia viven en recibo-lista.js.
+let reciboLista = null;
+try { reciboLista = require('./recibo-lista'); reciboLista.ensureSchema(db); } catch (e) { console.error('[init] recibo-lista no disponible:', e.message); }
 // (LOTE REIMPORTACIÓN DEL INVITADO) El gancho que importa la semana a
 // mano cuando el invitado vuelve (puerta de regreso) o abre su app con
 // la semana todavía solo en el payload. La decisión vive en el módulo.
@@ -48496,7 +48506,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1256';
+const BUILD_ID = '20261105-v1257';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

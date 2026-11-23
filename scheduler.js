@@ -901,6 +901,33 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[nudge-activacion] no se pudo programar:', e.message);
   }
+  // (LOTE RECIBO-LISTA) La red del recibo de la fila: cada 10 minutos
+  // despacha los recibos que el disparo del alta no alcanzó a sacar (el
+  // disparo en el momento es el camino normal; esto es la red).
+  try {
+    cron.schedule('*/10 * * * *', () => {
+      try { require('./recibo-lista').dispararRecibos(db); } catch (e) { console.error('[recibo-lista] barrido:', e.message); }
+    });
+    console.log('[posta] Recibo de la fila (red): cada 10 minutos');
+  } catch (e) {
+    console.error('[recibo-lista] no se pudo programar la red:', e.message);
+  }
+  // (LOTE RECIBO-LISTA) El toque de enero («tu lugar sigue reservado»):
+  // una corrida diaria a las 11:20 (Buenos Aires); el propio barrido se
+  // auto-frena fuera de la ventana de enero de 2027, con la puerta ya
+  // normal o con la fila ya tocada (una sola vez por fila, con reclamo).
+  try {
+    cron.schedule('20 11 * * *', () => {
+      try {
+        require('./recibo-lista').barridoToqueEnero(db)
+          .then((r) => { if (r && r.activo && (r.enviados || r.rechazados)) console.log('[recibo-lista] toque de enero:', JSON.stringify(r)); })
+          .catch((e) => console.error('[recibo-lista] toque:', e.message));
+      } catch (e) { console.error('[recibo-lista] toque:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Toque de enero de la fila: todos los días 11:20 (Buenos Aires), ventana enero 2027');
+  } catch (e) {
+    console.error('[recibo-lista] no se pudo programar el toque:', e.message);
+  }
   // Nudge "¿publicamos tu primero?": todos los días 12:00 (Buenos Aires).
   // Solo a usuarios con trial activo y 0 posteos publicados, 24h+ de creados
   // (saltea la ventana 36-60h del nudge de activación: no dos mensajes el
