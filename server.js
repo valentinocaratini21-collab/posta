@@ -13640,7 +13640,9 @@ app.get('/api/admin/conserje/vista', requireAdminToken, (req, res) => {
 app.get('/api/admin/conserje/vista/cliente', requireAdminToken, (req, res) => {
   try {
     if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
-    const r = conserjeVista.cliente(db, Number(req.query.user_id), { absImageUrl, posterUrlFor: posterUrlDePosteo });
+    // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido del deep link
+    // viaja a la vista: la ficha lo incluye aunque no sea de los 12.
+    const r = conserjeVista.cliente(db, Number(req.query.user_id), { absImageUrl, posterUrlFor: posterUrlDePosteo, postId: Number(req.query.post_id) || 0 });
     if (!r.ok) return res.status(404).json(r);
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
@@ -48479,7 +48481,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1251';
+const BUILD_ID = '20261105-v1252';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

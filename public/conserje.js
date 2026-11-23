@@ -219,6 +219,9 @@
     if (p.status === 'published') return '<span class="state-chip green">Publicado ✓</span>';
     if (p.status === 'scheduled') return '<span class="state-chip sky">Programado · ' + esc(fechaCorta(p.dia_key)) + '</span>';
     if (p.status === 'draft') return '<span class="state-chip yellow">Borrador</span>';
+    // (LOTE CENSO-CONSERJE-2 · F6) El fallido se dice en español, como
+    // los demás estados — nunca el status crudo de la base («failed»).
+    if (p.status === 'failed') return '<span class="state-chip red">No salió ✗</span>';
     return '<span class="state-chip">' + esc(p.status || '') + '</span>';
   }
   function postCard(p, conAcciones, inicial) {
@@ -512,8 +515,12 @@
         + (d.texto ? '<div class="d-txt"><em>«' + esc(d.texto) + '»</em></div>' : '')
         + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
     } else if (d.tipo === 'post_fallido') {
+      // (LOTE CENSO-CONSERJE-2 · F1) El motivo va ABIERTO: la tarjeta
+      // lo anuncia («dejó este motivo:») y .d-error sin .open queda en
+      // display:none para siempre — esta tarjeta no tiene botón que lo
+      // abra, a diferencia de la de impulso, que sí tiene «Ver error».
       cuerpo = '<div class="d-txt">El posteo #' + (d.post_id || '—') + ' no salió. El publicador dejó este motivo:</div>'
-        + '<div class="d-error">' + esc(d.texto || '') + '</div>'
+        + '<div class="d-error open">' + esc(d.texto || '') + '</div>'
         + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" data-goto-post="' + (d.post_id || '') + '" type="button">Ver el posteo</button>'
         + '<button class="btn small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
     } else if (d.tipo === 'conexion') {
@@ -599,9 +606,11 @@
       renderCentro();
     }).catch(function () { toast('No se pudo cargar la consola.', 'err'); });
   }
-  function cargarCliente(uid) {
+  function cargarCliente(uid, postId) {
     centroModo = 'ficha';
-    return api('/api/admin/conserje/vista/cliente?user_id=' + uid).then(function (j) {
+    // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido viaja en el
+    // pedido: la ficha lo incluye aunque no esté entre los 12 últimos.
+    return api('/api/admin/conserje/vista/cliente?user_id=' + uid + (postId ? '&post_id=' + Number(postId) : '')).then(function (j) {
       if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); }
     }).catch(function () { /* la ficha anterior queda: el próximo refresh reintenta */ });
   }
@@ -623,7 +632,7 @@
     // en las otras dos vías: si quedaba en «Su feed», el posteo
     // referido no existe en esa vista y el toque no mostraba nada.
     centroVista = 'semana';
-    cargarCliente(selUser);
+    cargarCliente(selUser, highlightPostId);
     irAlCentro();
   }
   function despuesDeActuar(msg) {

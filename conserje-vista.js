@@ -1029,6 +1029,16 @@ function posteosDe(db, uid, tz, opts) {
   const rows = safe(() => db.prepare(
     `SELECT * FROM posts WHERE user_id = ? AND status IN ('published', 'scheduled', 'draft', 'failed')
      ORDER BY COALESCE(scheduled_at, published_at, created_at) DESC LIMIT 12`).all(Number(uid)), []);
+  // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido (el deep link de
+  // la push, «Ver el posteo») entra SIEMPRE en la ficha, aunque no
+  // esté entre los 12 últimos: sin esto, la consola abría la ficha
+  // sin el posteo y sin decir nada.
+  const incluirId = Number(o.postId) || 0;
+  if (incluirId && !rows.some((p) => Number(p.id) === incluirId)) {
+    const extra = safe(() => db.prepare(
+      `SELECT * FROM posts WHERE user_id = ? AND id = ? AND status IN ('published', 'scheduled', 'draft', 'failed')`).get(Number(uid), incluirId), null);
+    if (extra) rows.push(extra);
+  }
   return rows.map((p) => {
     const t = toMs(p.scheduled_at || p.published_at || p.created_at);
     let poster = '';
