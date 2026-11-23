@@ -1013,6 +1013,10 @@ async function resolvePageIdWithToken(igUserId, token) {
 // que Meta cuenta para los objetivos de mensajes
 // (onsite_conversion.messaging_conversation_started_*). Sin esa
 // acción en la respuesta, conversaciones = 0 (dato real, no estimado).
+// (LOTE ADS-PREGUNTAS) visitas_perfil: la acción que respalda la
+// métrica «Instagram Profile Visits» (onsite_conversion.profile_visit)
+// — el barrido por regex cubre las formas del action_type; sin esa
+// acción, visitas_perfil = 0 real, nunca estimado ni seguidores.
 async function getBoostStats(campaignId) {
   if (!adsConfigured() || !campaignId) return null;
   // El endpoint de insights usa query params; se arma manual:
@@ -1028,9 +1032,12 @@ async function getBoostStats(campaignId) {
   const row = data && data.data && data.data[0];
   if (!row) return null;
   let conversaciones = 0;
+  let visitasPerfil = 0;
   if (Array.isArray(row.actions)) {
     const conv = row.actions.find((a) => a && /^onsite_conversion\.messaging_conversation_started/.test(String(a.action_type || '')));
     if (conv) conversaciones = Number(conv.value || 0) || 0;
+    const vis = row.actions.find((a) => a && /(^|\.)profile_visit/.test(String(a.action_type || '')));
+    if (vis) visitasPerfil = Number(vis.value || 0) || 0;
   }
   return {
     spend_cents: Math.round(Number(row.spend || 0) * 100),
@@ -1038,6 +1045,7 @@ async function getBoostStats(campaignId) {
     impressions: Number(row.impressions || 0),
     clicks: Number(row.clicks || 0),
     conversaciones,
+    visitas_perfil: visitasPerfil,
   };
 }
 
@@ -1135,4 +1143,64 @@ async function findLookalikeAudienceId(ctx) {
   } catch (e) { return null; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, detalleErrorMeta };
+// (LOTE ADS-PREGUNTAS) «Los que ya te vieron»: la audiencia de
+// interacción de Instagram del negocio — gente que ya interactuó
+// con su perfil (regla ig_business_profile_all, retención 365
+// días, el máximo que Meta da por esta vía). Find-or-create en la
+// cuenta de quien pauta (ctx del cliente o la de Posty sin ctx),
+// espejo de findLookalikeAudienceId: se busca por el nombre estable
+// y solo se crea si no existe. Devuelve el id o null (sin ctx/sin
+// ig/sin configuración, o si la lectura falla: el llamador corre
+// sin la audiencia y lo declara — jamás un id inventado).
+// FRENO HONESTO: crear la audiencia exige que la cuenta haya
+// aceptado los Términos de Audiencias Personalizadas de Meta; si
+// Meta rechaza la creación por eso (o por permiso), el error se
+// propaga marcado (code 'audiencia_terminos', con el detalle de
+// Meta adjunto) para que el endpoint frene el impulso con el
+// motivo real — sin crear la campaña ni cobrar nada. Cualquier
+// otro error de creación devuelve null (degradación declarada).
+const ENGAGEMENT_AUDIENCE_RETENTION = 31536000; // 365 días, en segundos
+function engagementAudienceName(igUserId) {
+  return `Posty · Ya te vieron · IG ${String(igUserId)}`;
+}
+async function findOrCreateEngagementAudienceId(ctx, igUserId) {
+  const ig = String(igUserId || '').trim();
+  if (!ig) return null;
+  if (ctx ? !(ctx.token && ctx.adAccountId) : !adsConfigured()) return null;
+  const nombre = engagementAudienceName(ig);
+  try {
+    const d = await g(`${act(ctx || null)}/customaudiences`, { params: { fields: 'id,name,subtype', limit: '100' }, ctx: ctx || null });
+    const rows = Array.isArray(d && d.data) ? d.data : [];
+    const hit = rows.find((r) => r && r.id && String(r.name || '') === nombre);
+    if (hit) return String(hit.id);
+  } catch (e) { return null; }
+  const rule = {
+    inclusions: {
+      operator: 'or',
+      rules: [{
+        event_sources: [{ id: ig, type: 'ig_business_profile' }],
+        retention_seconds: ENGAGEMENT_AUDIENCE_RETENTION,
+        filter: { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: 'ig_business_profile_all' }] },
+      }],
+    },
+  };
+  try {
+    const creada = await g(`${act(ctx || null)}/customaudiences`, {
+      method: 'POST', ctx: ctx || null,
+      params: { name: nombre, subtype: 'ENGAGEMENT', description: 'Posty: personas que ya interactuaron con tu Instagram (365 días)', rule },
+    });
+    return creada && creada.id ? String(creada.id) : null;
+  } catch (e) {
+    const m = (e && e.metaError) || null;
+    const texto = `${(m && m.message) || ''} ${(m && m.user_msg) || ''} ${(e && e.message) || ''}`;
+    if ((m && Number(m.code) === 200) || /custom audience terms|términos de audiencias|accept the terms|debes aceptar/i.test(texto)) {
+      const err = new Error(`Meta pide aceptar los Términos de Audiencias Personalizadas antes de crear la audiencia de «los que ya te vieron»: ${detalleErrorMeta(e)}`.slice(0, 600));
+      err.code = 'audiencia_terminos';
+      err.metaError = m;
+      throw err;
+    }
+    return null;
+  }
+}
+
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta };

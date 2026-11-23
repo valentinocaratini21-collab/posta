@@ -15677,6 +15677,14 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       objetivoElegido = val.objetivo;
     }
     const audienciaFinal = audienciaElegida || propuestaAds.audiencia;
+    // (LOTE ADS-PREGUNTAS) Días del impulso: el cliente los elige en
+    // la tarjeta (3/7/14). Sin días en el pedido manda 7 (el
+    // histórico); un valor fuera de los tres frena acá con 400,
+    // antes de cualquier gate, llamada externa, creación o cobro
+    // de cualquier riel.
+    const diasReq = (req.body && req.body.dias != null && req.body.dias !== '') ? Number(req.body.dias) : 7;
+    if (![3, 7, 14].includes(diasReq)) return res.status(400).json({ ok: false, motivo: 'dias_invalido' });
+    const diasFinal = diasReq;
     // (LOTE ADS-PÚBLICO) El objetivo que MANDA es el elegido en la
     // tarjeta (validarAudiencia lo cierra contra la lista) o, sin
     // elección, el de la propuesta. Antes el mapeo salía siempre de
@@ -15785,7 +15793,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       let previo = null;
       try { previo = db.prepare(`SELECT id, meta_campaign_id FROM ad_boosts WHERE user_id = ? AND post_id = ? AND budget_cents = ? AND currency = 'USD' AND status IN ('active','pending') AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid, posteoId, pautaCents); } catch (e) { previo = null; }
       if (previo) {
-        return res.json({ ok: true, ya_creado: true, anuncioId: previo.meta_campaign_id || null, posteoId, montoUSD, dias: 7, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
+        return res.json({ ok: true, ya_creado: true, anuncioId: previo.meta_campaign_id || null, posteoId, montoUSD, dias: diasFinal, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
       }
       // (LOTE ADS-ESTRATÉGICOS · composición sobre el riel del cliente
       // de v1048) La misma traducción a targeting real que el camino de
@@ -15800,16 +15808,34 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // activo de una cuenta y buscarla en la de Posty inyectaba un
         // id ajeno en su conjunto — Meta lo rechaza. Lo que no
         // resuelve en SU cuenta degrada declarado en el registro.
-        const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds, { token: gate.suat, adAccountId: gate.adAccountId });
+        const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds, { token: gate.suat, adAccountId: gate.adAccountId }, gate.igUserId);
         targetingAds = rt.targeting; resueltoAds = rt.resuelto;
-      } catch (e) { targetingAds = null; resueltoAds = null; }
+      } catch (e) {
+        // (LOTE ADS-PREGUNTAS) El freno de los Términos de Audiencias
+        // Personalizadas NO degrada en silencio: el impulso frena con
+        // el motivo real de Meta, sin crear la campaña ni cobrar, y
+        // queda la fila 'error' para el equipo, como en los demás
+        // frenos de este riel.
+        if (e && e.code === 'audiencia_terminos') {
+          try {
+            db.prepare(`INSERT INTO ad_boosts
+              (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
+              VALUES (?,?,?,?,0,0,'USD','error','','','','engagement',?,?,?,?)`)
+              .run(uid, posteoId, cand.ig_media_id, pautaCents, diasFinal,
+                `audiencia de interacción frenada por Meta (riel cliente): ${metaAds.detalleErrorMeta(e)}`, objetivoFinal || '', audienciaJsonDe());
+          } catch (e2) {}
+          const metaMsgTos = e.metaError ? String(e.metaError.user_msg || e.metaError.user_title || '').slice(0, 300) : '';
+          return res.status(409).json({ ok: false, motivo: 'anuncio_fallido', ...(metaMsgTos ? { meta_msg: metaMsgTos } : {}) });
+        }
+        targetingAds = null; resueltoAds = null;
+      }
       let cr = null;
       let crError = null;
       try {
         cr = await metaAds.createBoost({
           name: `Posty · Impulso u${uid} · p${posteoId}`,
           pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
-          spendCents: pautaCents, days: 7, country: adCountry(uid),
+          spendCents: pautaCents, days: diasFinal, country: adCountry(uid),
           objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
           destinationType: mapeoAds.destinationType, targeting: targetingAds,
           ctx: { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' },
@@ -15835,8 +15861,8 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           const esAct = crError && (crError.code === 'activacion_fallida' || crError.code === 'activacion_sin_dato');
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
-            VALUES (?,?,?,?,0,0,'USD','error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, posteoId, cand.ig_media_id, pautaCents, (crError && crError.campaignId) || '', (crError && crError.adsetId) || '', (crError && crError.adId) || '',
+            VALUES (?,?,?,?,0,0,'USD','error',?,?,?,'engagement',?,?,?,?)`)
+            .run(uid, posteoId, cand.ig_media_id, pautaCents, (crError && crError.campaignId) || '', (crError && crError.adsetId) || '', (crError && crError.adId) || '', diasFinal,
               `${esAct ? (crError.code === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta') + ': ' : 'creación fallida en la cuenta del cliente (riel cliente): '}${metaAds.detalleErrorMeta(crError)}`, objetivoFinal || '', audienciaJsonDe());
         } catch (e) {}
         // (LOTE ADS-CREACIÓN-5) Los frenos de identidad de la
@@ -15867,8 +15893,8 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       }
       db.prepare(`INSERT INTO ad_boosts
         (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
-        VALUES (?,?,?,?,0,?,'USD','active',?,?,?,'engagement',7,?,?)`)
-        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '', objetivoFinal || '', audienciaJsonDe());
+        VALUES (?,?,?,?,0,?,'USD','active',?,?,?,'engagement',?,?,?)`)
+        .run(uid, posteoId, cand.ig_media_id, pautaCents, pautaCents, cr.campaignId, cr.adsetId || '', cr.adId || '', diasFinal, objetivoFinal || '', audienciaJsonDe());
       try { track(uid, 'ad_boost_usd', String(pautaCents)); } catch (e) {}
       try { track(uid, 'ad_boost_riel_cliente', String(pautaCents)); } catch (e) {}
       // La costura del fee: 10% del presupuesto ÍNTEGRO de la campaña
@@ -15877,7 +15903,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         postId: posteoId, campaignId: cr.campaignId, adsetId: cr.adsetId || '',
         pautaCents, moneda: 'USD', metaToken: gate.suat,
       });
-      return res.json({ ok: true, anuncioId: cr.campaignId, posteoId, montoUSD, dias: 7, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
+      return res.json({ ok: true, anuncioId: cr.campaignId, posteoId, montoUSD, dias: diasFinal, balance_cents: getAdWallet(uid).balance_cents, currency: 'USD', riel: 'cliente' });
     }
     const w = getAdWallet(uid);
     // (LOTE v888 · decisión Valentino 10/11 14:17) El saldo en pesos NO
@@ -15913,15 +15939,29 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         // nunca es un nuevo punto de fallo del gasto.
         let targetingAds = null;
         try {
-          const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds);
+          const rt = await adsAudiencia.resolverTargeting(audienciaFinal, propuestaAds, metaAds, gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null, gate.igUserId);
           targetingAds = rt.targeting; resueltoAds = rt.resuelto;
-        } catch (e) { targetingAds = null; resueltoAds = null; }
+        } catch (e) {
+          // (LOTE ADS-PREGUNTAS) El freno de los Términos de
+          // Audiencias se propaga como los rechazos de creación
+          // (detalle entero de Meta + metaError adjunto):
+          // impulsarConSaldo lo asienta como 'error' y el endpoint
+          // responde anuncio_fallido, sin débito ni cobro. El resto
+          // de los fallos de resolución degrada como siempre.
+          if (e && e.code === 'audiencia_terminos') {
+            const det = new Error(metaAds.detalleErrorMeta(e));
+            det.metaError = (e && e.metaError) || null;
+            det.paso = (e && e.paso) || null;
+            throw det;
+          }
+          targetingAds = null; resueltoAds = null;
+        }
         let cr;
         try {
           cr = await metaAds.createBoost({
             name: `Posty · Billetera u${uid} · p${a.posteoId}`,
             pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: cand.ig_media_id,
-            spendCents: a.spendCents, days: 7, country: adCountry(uid),
+            spendCents: a.spendCents, days: diasFinal, country: adCountry(uid),
             objective: mapeoAds.campaignObjective, optimizationGoal: mapeoAds.optimizationGoal,
             destinationType: mapeoAds.destinationType, targeting: targetingAds,
             ctx: gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId, igAccountIds: gate.igAccountIds || [], igAccounts: gate.igAccounts || [], publicadaUsername: gate.publicadaUsername || '', businessId: gate.businessId || '' } : null,
@@ -15952,7 +15992,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       debitar: async (d) => {
         try {
           const cents = esARS ? d.montoARS * 100 : d.montoUSD * 100;
-          const after = adWalletMove(uid, -cents, esARS ? 'boost_ars' : 'boost_usd', d.ref, esARS ? `Impulso posteo ${d.posteoId} ${fmtARS(d.montoARS * 100)} x 7 días` : `Impulso posteo ${d.posteoId} $${d.montoUSD} x 7 días`);
+          const after = adWalletMove(uid, -cents, esARS ? 'boost_ars' : 'boost_usd', d.ref, esARS ? `Impulso posteo ${d.posteoId} ${fmtARS(d.montoARS * 100)} x ${diasFinal} días` : `Impulso posteo ${d.posteoId} $${d.montoUSD} x ${diasFinal} días`);
           return { ok: true, saldoNuevo: after };
         } catch (e) { return { ok: false, motivo: 'saldo_insuficiente' }; }
       },
@@ -15963,7 +16003,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           try {
             const cob = await destacadoCobro.cobrarImpulso({
               client: stripeBilling.stripeClient(), customerId: stripeCustomerImp,
-              montoUSD: d.montoUSD, posteoId: d.posteoId, weekKey: mondayKeyOf(tzToday(userTz(uid))), dias: 7,
+              montoUSD: d.montoUSD, posteoId: d.posteoId, weekKey: mondayKeyOf(tzToday(userTz(uid))), dias: diasFinal,
             });
             if (!cob || !cob.ok) return { ok: false, motivo: (cob && cob.motivo) || 'cobro_fallido' };
             return { ok: true, cobroId: cob.cobroId, saldoNuevo: null };
@@ -15977,8 +16017,8 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
         if (rec.tipo === 'exito') {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
-            VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',7,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', objetivoFinal || '', audienciaJsonDe());
+            VALUES (?,?,?,?,?,?,?,'active',?,?,?,'engagement',?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', diasFinal, objetivoFinal || '', audienciaJsonDe());
           try { track(uid, esARS ? 'ad_boost_ars' : 'ad_boost_usd', String(budgetRec)); } catch (e) {}
           // (LOTE FEE-IMPULSAR) La costura del fee de gestión, en el
           // punto exacto: la campaña ya quedó registrada activa con
@@ -16001,15 +16041,15 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           // del texto es la que el barrido de reparación busca.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
-            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `${rec.tipo === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta'} (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',?,?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', diasFinal, `${rec.tipo === 'activacion_sin_dato' ? 'activación sin dato en Meta' : 'activación fallida en Meta'} (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
         } else if (rec.tipo === 'debito_fallido') {
           // El ad SÍ se creó en Meta pero el saldo no se pudo debitar: queda
           // asentado como error con el campaign id para revisión manual.
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
-            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `ad creado sin débito (ref ${rec.ref || ''})`, objetivoFinal || '', audienciaJsonDe());
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',?,?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, rec.spendCents, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', diasFinal, `ad creado sin débito (ref ${rec.ref || ''})`, objetivoFinal || '', audienciaJsonDe());
         } else if (rec.tipo === 'error') {
           // (LOTE ADS-PÚBLICO) El anuncio falló ANTES de existir
           // (Meta rechazó la creación): hasta hoy este registro se
@@ -16019,8 +16059,8 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           // demás rieles (sin débito: el módulo no debitó).
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
-            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',7,?,?,?)`)
-            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, Number(rec.spendCents) || 0, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', `anuncio fallido en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
+            VALUES (?,?,?,?,?,?,?,'error',?,?,?,'engagement',?,?,?,?)`)
+            .run(uid, rec.posteoId, cand.ig_media_id, budgetRec, feeRec, Number(rec.spendCents) || 0, monedaRec, rec.campaignId || '', rec.adsetId || '', rec.adId || '', diasFinal, `anuncio fallido en Meta (ref ${rec.ref || ''}): ${rec.error || ''}`, objetivoFinal || '', audienciaJsonDe());
         }
       },
     });
@@ -16029,7 +16069,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       return res.status(status).json({ ok: false, motivo: r.motivo, ...(r.anuncioId ? { anuncioId: r.anuncioId } : {}) });
     }
     const w2 = getAdWallet(uid);
-    res.json({ ok: true, anuncioId: r.anuncioId, posteoId: r.posteoId, ...(esARS ? { montoARS: r.montoARS } : { montoUSD: r.montoUSD }), dias: r.dias, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w2.balance_cents, currency: esARS ? 'ARS' : 'USD', ...(r.ya_creado ? { ya_creado: true } : {}) });
+    res.json({ ok: true, anuncioId: r.anuncioId, posteoId: r.posteoId, ...(esARS ? { montoARS: r.montoARS } : { montoUSD: r.montoUSD }), dias: diasFinal, balance_cents: r.saldoNuevo != null ? r.saldoNuevo : w2.balance_cents, currency: esARS ? 'ARS' : 'USD', ...(r.ya_creado ? { ya_creado: true } : {}) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo impulsar con saldo' }); }
 });
 
@@ -16507,10 +16547,10 @@ app.get('/api/ads/boosts', requireAuth, async (req, res) => {
       try {
         const s = await metaAds.getBoostStats(b.meta_campaign_id);
         if (s) {
-          db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, stats_updated_at=datetime('now') WHERE id=?`)
-            .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0), b.id);
+          db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, last_visitas_perfil=?, stats_updated_at=datetime('now') WHERE id=?`)
+            .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0), Number(s.visitas_perfil || 0), b.id);
           b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
-          b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0);
+          b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0); b.last_visitas_perfil = Number(s.visitas_perfil || 0);
           b.stats_updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
         }
       } catch (e) { /* no bloquea el historial */ }
@@ -48523,7 +48563,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1262';
+const BUILD_ID = '20261105-v1263';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

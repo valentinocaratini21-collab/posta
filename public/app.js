@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1262';
+const PZ_BUILD = '20261105-v1263';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -23301,16 +23301,26 @@ function pzAdsPickRowHTML() {
 // dos superficies reducidas del flujo de impulso (la tarjeta del tab
 // Ads y la hoja de Impulsar); con cualquier otro motivo — o con la
 // compuerta abierta — ninguna de las dos pantallas cambia.
+// (LOTE ADS-PREGUNTAS) La guía de «sin cuenta en Meta» es UNA sola
+// fuente de texto: la usa la hoja de impulso (gate
+// sin_cuenta_publicitaria) y el botón de info de Ajustes →
+// Conexiones → Publicidad en Meta (pzAdsGuiaToggle, en el chunk de
+// ajustes). Los 6 pasos del dueño: entrar con Facebook · crear el
+// negocio · vincular Página e Instagram · crear la cuenta
+// publicitaria · cargar el medio de pago · volver y Conectar.
 function pzAdsGuiaSinCuentaHTML() {
   const urlCrear = 'https://business.facebook.com/latest/settings/ad_accounts';
   return `<div class="pz-ads-guia" style="margin-top:14px;padding-top:13px;border-top:1px solid #e3edf5;text-align:left">
-    <b style="font-size:14.5px">${esc(gzT('¿Todavía no tenés una cuenta publicitaria?', 'No ad account yet?'))}</b>
-    <p style="margin:6px 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(gzT('Si ya tenés una, no crees otra: al reconectar, elegila en el paso de Facebook. Si no tenés, creala en Meta — tarda un minuto:', 'If you already have one, don’t create another: when you reconnect, pick it in the Facebook step. If you don’t, create it in Meta — it takes a minute:'))}</p>
-    <a class="btn btn-ghost btn-block" href="${urlCrear}" target="_blank" rel="noopener">${esc(gzT('Crear mi cuenta publicitaria en Meta', 'Create my ad account in Meta'))}</a>
+    <b style="font-size:14.5px">${esc(gzT('¿No tenés cuenta en Meta? Te guío paso a paso', 'No Meta account yet? Step-by-step guide'))}</b>
+    <p style="margin:6px 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(gzT('Si ya tenés una, no crees otra: al conectar, elegila en el paso de Facebook. Si no tenés ninguna, armala en Meta siguiendo estos pasos — tarda unos minutos:', 'If you already have one, don’t create another: when you connect, pick it in the Facebook step. If you don’t have one yet, set it up in Meta following these steps — it takes a few minutes:'))}</p>
+    <a class="btn btn-ghost btn-block" href="${urlCrear}" target="_blank" rel="noopener">${esc(gzT('Abrir Meta para armarla', 'Open Meta to set it up'))}</a>
     <ol style="margin:11px 0 0;padding-left:19px;font-size:13.5px;line-height:1.55;color:#33475b">
-      <li>${esc(gzT('En Meta, tocá «+ Agregar» y elegí «Crear una cuenta publicitaria nueva»: nombre, zona horaria y moneda.', 'In Meta, tap “+ Add” and choose “Create a new ad account”: name, time zone and currency.'))}</li>
-      <li>${esc(gzT('Volvé acá y tocá «Conectar mi cuenta publicitaria»: Posty la detecta sola.', 'Come back here and tap “Connect my ad account”: Posty detects it on its own.'))}</li>
-      <li>${esc(gzT('Y en Meta cargá un medio de pago en tu cuenta: sin medio de pago, la pauta no puede correr.', 'And in Meta, add a payment method to your account: without one, ads can’t run.'))}</li>
+      <li>${esc(gzT('Entrá con tu cuenta de Facebook: la misma con la que vas a conectar acá.', 'Sign in with your Facebook account: the same one you’ll connect here.'))}</li>
+      <li>${esc(gzT('Creá tu negocio (el portafolio) en Meta Business: es la casa de tu marca dentro de Meta.', 'Create your business (the portfolio) in Meta Business: it’s your brand’s home inside Meta.'))}</li>
+      <li>${esc(gzT('Vinculá tu Página de Facebook y tu Instagram a ese negocio.', 'Link your Facebook Page and your Instagram to that business.'))}</li>
+      <li>${esc(gzT('Creá la cuenta publicitaria: nombre, zona horaria y moneda.', 'Create the ad account: name, time zone and currency.'))}</li>
+      <li>${esc(gzT('Cargá un medio de pago en la cuenta: sin medio de pago, la pauta no puede correr.', 'Add a payment method to the account: without one, ads can’t run.'))}</li>
+      <li>${esc(gzT('Volvé acá y tocá «Conectar»: Posty detecta tu cuenta sola.', 'Come back here and tap “Connect”: Posty detects your account on its own.'))}</li>
     </ol>
   </div>`;
 }
@@ -23954,7 +23964,7 @@ let pzBoostState = null; // { elegibles, billetera, adsReady, motivoGate, boostH
 let pzBoostImpulsados = new Set(); // claves pzBoostKey impulsadas en esta sesión (además de ya_impulsado del servidor)
 
 function pzBoostNewState() {
-  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', conexion: null, rielAds: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selPost: null, montosAbierto: false };
+  return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', conexion: null, rielAds: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selDias: 7, selPost: null, montosAbierto: false };
 }
 
 function pzBoostSaldoUSD() {
@@ -24728,6 +24738,13 @@ function pzAdsAudienciaTexto(sel) {
   else if (alcance === 'ciudad' && geo.ciudad) partes.push(en ? `in ${geo.ciudad}` : `en ${geo.ciudad}`);
   else if (alcance === 'todos') partes.push(en ? 'everywhere' : 'en todos lados');
   else partes.push(en ? 'all over the country' : 'en todo el país');
+  // (LOTE ADS-PREGUNTAS) Espejo de textoHumano del servidor: con
+  // modo 'conocidos' el resumen nombra a la gente que ya interactuó
+  // con el Instagram del negocio y los parecidos no participan.
+  if (a.modo === 'conocidos') {
+    partes.push(en ? 'people who already interacted with your Instagram' : 'personas que ya interactuaron con tu Instagram');
+    return partes.join(' · ');
+  }
   // (LOTE TARJETA-SIMPLE) El resumen ya no nombra intereses: la
   // tarjeta no los muestra — los aplica la propuesta, por debajo.
   if (a.parecidos) partes.push(en ? 'similar to your followers' : 'parecido a tus seguidores');
@@ -24768,6 +24785,11 @@ function pzAdsAudienciaDineroHTML() {
   } else {
     txt = en ? 'The ad spend comes out of your Posty wallet.' : 'La pauta sale de tu billetera de Posty.';
   }
+  // (LOTE ADS-PREGUNTAS) La duración elegida también va en la línea
+  // de dinero, en los dos rieles: el resumen pauta + gestión + total
+  // se lee junto con los días que corre.
+  const diasTxt = Number(s.selDias) || 7;
+  txt += en ? ` It runs for ${diasTxt} days.` : ` Corre por ${diasTxt} días.`;
   return `<p style="margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#47617A">${esc(txt)}</p>`;
 }
 
@@ -24973,6 +24995,22 @@ async function pzAdsPagarFee(btn) {
   }
 }
 
+// (LOTE ADS-PREGUNTAS) Espejo canónico de los objetivos del
+// servidor (ads-audiencia.ETIQUETA_OBJETIVO): si la propuesta llega
+// sin la lista de objetivos, los chips se pintan desde acá — el
+// objetivo SIEMPRE es elegible, nunca un texto fijo. El servidor
+// valida la elección contra su propia lista al impulsar.
+// Los días elegibles del impulso (espejo del servidor: {3,7,14}).
+const PZ_ADS_OBJETIVOS_FALLBACK = [
+  { valor: 'reservar', es: 'Que reserven', en: 'Get bookings' },
+  { valor: 'escribirte', es: 'Que te escriban', en: 'Get messages' },
+  { valor: 'local', es: 'Que vengan al local', en: 'Get store visits' },
+  { valor: 'comprar', es: 'Que compren', en: 'Get purchases' },
+  { valor: 'seguir', es: 'Que me sigan', en: 'Get followers' },
+  { valor: 'perfil', es: 'Que visiten tu perfil', en: 'Get profile visits' },
+];
+const PZ_ADS_DIAS = [3, 7, 14];
+
 function pzAdsAudienciaHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
@@ -25000,7 +25038,19 @@ function pzAdsAudienciaHTML() {
   const alcLbl = { cerca: en ? 'Near my business' : 'Cerca de mi negocio', ciudad: en ? 'In my city' : 'En mi ciudad', pais: en ? 'All over the country' : 'En todo el país', todos: en ? 'Everywhere' : 'En todos lados' };
   const alcances = (op.alcances || []).map((v) => chip(alcanceSel === v, `pzAdsAudienciaAlcance('${v}')`, alcLbl[v] || v)).join('');
   const objetivoSel = (s.audienciaObjetivo !== undefined) ? s.audienciaObjetivo : (prop.objetivo || null);
-  const objetivos = (op.objetivos || []).map((o) => chip(objetivoSel === o.valor, `pzAdsAudienciaObjetivo('${o.valor}')`, o.etiqueta || o.valor)).join('');
+  // (LOTE ADS-PREGUNTAS) Sin lista en la propuesta, los chips salen
+  // del espejo canónico (PZ_ADS_OBJETIVOS_FALLBACK): el objetivo es
+  // siempre elegible. El que nació del fundamento lleva la marca
+  // «sugerido» — nace seleccionado, pero se puede cambiar.
+  const listaObjetivos = (op.objetivos && op.objetivos.length) ? op.objetivos : PZ_ADS_OBJETIVOS_FALLBACK.map((o) => ({ valor: o.valor, etiqueta: en ? o.en : o.es }));
+  const objetivos = listaObjetivos.map((o) => chip(objetivoSel === o.valor, `pzAdsAudienciaObjetivo('${o.valor}')`, (o.etiqueta || o.valor) + ((prop.objetivo && o.valor === prop.objetivo) ? (en ? ' · suggested' : ' · sugerido') : ''))).join('');
+  // (LOTE ADS-PREGUNTAS) ¿Gente nueva o la que ya te vio?: el modo
+  // de audiencia — 'nuevos' (parecidos a tus clientes) o
+  // 'conocidos' (los que ya interactuaron con tu Instagram).
+  const modoSel = String(sel.modo || 'nuevos');
+  const modos = chip(modoSel === 'nuevos', `pzAdsAudienciaModo('nuevos')`, en ? 'New people · similar to your customers' : 'Nuevos · parecidos a tus clientes')
+    + chip(modoSel === 'conocidos', `pzAdsAudienciaModo('conocidos')`, en ? 'People who already saw you' : 'Los que ya te vieron');
+  const dias = PZ_ADS_DIAS.map((d) => chip(Number(s.selDias || 7) === d, `pzAdsAudienciaDias(${d})`, d + (en ? ' days' : ' días'))).join('');
   const radios = (op.radios || []).map((r) => chip(Number(sel.radio_km) === Number(r), `pzAdsAudienciaRadio(${Number(r)})`, (en ? 'Within ' : 'A ') + r + ' km')).join('');
   const edades = (op.edades || []).map((e, i) => chip(Number(sel.edad_min) === Number(e[0]) && Number(sel.edad_max) === Number(e[1]), `pzAdsAudienciaEdad(${i})`, `${e[0]}–${e[1]}`)).join('');
   const genLbl = { todos: en ? 'Everyone' : 'Todos', mujeres: en ? 'Women' : 'Mujeres', hombres: en ? 'Men' : 'Hombres' };
@@ -25014,10 +25064,12 @@ function pzAdsAudienciaHTML() {
     ${grupo(en ? 'WHERE ARE THEY?' : '¿DÓNDE ESTÁN?', alcances)}
     ${alcanceSel === 'cerca' ? grupo(en ? 'DISTANCE FROM YOUR SPOT' : 'DISTANCIA A TU LOCAL', radios) : ''}
     ${(alcanceSel === 'cerca' && sinCiudad) ? `<p style="margin:2px 0 0;font-size:12.5px;color:#8A6D00">${esc(en ? 'We don’t have your city yet: until Posty knows it, the ad runs nationwide.' : 'Todavía no tenemos tu ciudad: mientras tanto el anuncio sale en todo el país.')}</p>` : ''}
-    ${objetivos ? grupo(en ? 'WHAT SHOULD THEY DO?' : '¿QUÉ QUERÉS QUE HAGAN?', objetivos) : `<p style="margin:2px 0 0;font-size:13px;color:#47617A">${esc((en ? 'Goal: ' : 'Objetivo: ') + (prop.objetivo_label || ''))}</p>`}
+    ${grupo(en ? 'WHAT SHOULD THEY DO?' : '¿QUÉ QUERÉS QUE HAGAN?', objetivos)}
+    ${grupo(en ? 'NEW PEOPLE OR PEOPLE WHO ALREADY SAW YOU?' : '¿GENTE NUEVA O LA QUE YA TE VIO?', modos)}
     ${grupo(en ? 'AGES' : 'EDADES', edades)}
     ${grupo(en ? 'WHO' : 'QUIÉNES', generos)}
-    ${grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
+    ${modoSel === 'conocidos' ? '' : grupo(en ? 'SIMILAR TO YOUR FOLLOWERS' : 'PARECIDO A TUS SEGUIDORES', parecidos)}
+    ${grupo(en ? 'HOW MANY DAYS?' : '¿CUÁNTOS DÍAS?', dias)}
     ${pzAdsAudienciaDineroHTML()}
     ${pzAdsAudienciaDiferenciaHTML()}
     <div id="pzAdsAudienciaError">${(s.boostError ? pzBoostErrorHTML(s.boostError.motivo, s.boostError.monto, s.boostError.cobroId) : '')}</div>
@@ -25092,6 +25144,15 @@ function pzAdsAudienciaAlcance(v) { pzAdsAudienciaMutar((a) => { a.alcance = Str
 function pzAdsAudienciaObjetivo(v) {
   const s = pzBoostState || (pzBoostState = pzBoostNewState());
   s.audienciaObjetivo = String(v);
+  pzAdsAudienciaPintar();
+}
+// (LOTE ADS-PREGUNTAS) El modo viaja DENTRO de la audiencia (el
+// servidor lo valida contra sus dos valores cerrados); los días
+// son estado propio de la tarjeta y viajan como body.dias.
+function pzAdsAudienciaModo(v) { pzAdsAudienciaMutar((a) => { a.modo = String(v); }); }
+function pzAdsAudienciaDias(d) {
+  const s = pzBoostState || (pzBoostState = pzBoostNewState());
+  s.selDias = Number(d) || 7;
   pzAdsAudienciaPintar();
 }
 
@@ -25227,6 +25288,9 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     const objAud = (s.audienciaObjetivo !== undefined) ? s.audienciaObjetivo : ((s.audienciaProp || {}).objetivo || null);
     if (objAud) body.audiencia = { ...audSinIntereses, objetivo: objAud };
   }
+  // (LOTE ADS-PREGUNTAS) Los días elegidos viajan en el POST: el
+  // servidor los valida contra {3,7,14} antes de crear o cobrar.
+  body.dias = Number(s.selDias) || 7;
   try { j = await api.post('/api/ads/billetera/impulsar', body); } catch (e) { j = (e && e.data) || null; }
   if (btn) btn.disabled = false;
   if (j && j.ok) {
@@ -25244,7 +25308,7 @@ async function pzBoostConfirmar(btn, enTarjeta) {
     }
     pzBoostMarcarImpulsado((p.solo_ig && j.posteoId) ? Number(j.posteoId) : Number(p.post_id));
     if (!enTarjeta) pzBoostPintarExito(p, monto);
-    try { toast(gzT('✓ Posteo impulsado por 7 días', '✓ Post boosted for 7 days')); } catch (e) {}
+    try { const diasOk = Number(j.dias) || Number(s.selDias) || 7; toast(gzT('✓ Posteo impulsado por ' + diasOk + ' días', '✓ Post boosted for ' + diasOk + ' days')); } catch (e) {}
   } else {
     const motivo = (j && j.motivo) || '';
     // (LOTE ADS-CREACIÓN-2) El error se VE: queda guardado en el

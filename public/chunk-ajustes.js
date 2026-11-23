@@ -546,8 +546,26 @@ async function adsZoneLoad() {
       <div class="hint" style="margin-top:6px">${pzIc('lock', 15)} Entrás con el login oficial de Meta. Nunca vemos ni guardamos tu contraseña.</div></div>
       <button class="btn btn-primary btn-sm" id="btnAdsConn" style="flex:none">Conectar mi cuenta publicitaria</button></div>`;
   }
+  // (LOTE ADS-PREGUNTAS) El botón de info de la guía «sin cuenta»,
+  // en los dos estados de la conexión (conectada o no): la MISMA
+  // guía de la hoja de impulso — pzAdsGuiaSinCuentaHTML, una sola
+  // fuente de texto — desplegada acá mismo con pzAdsGuiaToggle.
+  const enAds = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  zone.insertAdjacentHTML('beforeend', `<div style="margin-top:10px"><button type="button" class="btn btn-ghost btn-sm" onclick="pzAdsGuiaToggle(this)">${enAds ? 'No Meta account yet? Step-by-step guide' : '¿No tenés cuenta en Meta? Te guío paso a paso'}</button><div class="ads-guia-slot" style="display:none"></div></div>`);
   const bc = $('#btnAdsConn');
   if (bc) bc.onclick = abrir;
+}
+
+// (LOTE ADS-PREGUNTAS) Despliega la guía «sin cuenta en Meta» en
+// Ajustes → Conexiones → Publicidad en Meta: el contenido sale de
+// pzAdsGuiaSinCuentaHTML (app.js — la misma guía de la hoja de
+// impulso, una sola fuente de texto).
+function pzAdsGuiaToggle(btn) {
+  const slot = btn && btn.parentElement ? btn.parentElement.querySelector('.ads-guia-slot') : null;
+  if (!slot) return;
+  if (slot.style.display !== 'none' && slot.innerHTML) { slot.style.display = 'none'; return; }
+  slot.innerHTML = (typeof pzAdsGuiaSinCuentaHTML === 'function') ? pzAdsGuiaSinCuentaHTML() : '';
+  slot.style.display = slot.innerHTML ? 'block' : 'none';
 }
 
 // v186: galería "${pzIc('palette', 16)} Estilos de tus posteos" — muestras fieles (mismo motor

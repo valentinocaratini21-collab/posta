@@ -46,6 +46,12 @@
 // - local → OUTCOME_ENGAGEMENT + POST_ENGAGEMENT (el comportamiento
 //   histórico) pero con la audiencia geográfica fina de este lote:
 //   la palanca de «que vengan al local» es el radio, no el goal.
+// - perfil → OUTCOME_TRAFFIC + optimization VISIT_INSTAGRAM_PROFILE
+//   + destination INSTAGRAM_PROFILE (LOTE ADS-PREGUNTAS; verificado
+//   contra la doc oficial de la Marketing API, Graph v25.0): la
+//   optimización de visitas al perfil de Instagram existe tal cual;
+//   la medición son las visitas al perfil que cuentan los insights
+//   (la acción profile_visit), jamás seguidores.
 // - sin objetivo → histórico exacto (POST_ENGAGEMENT, país, 18-65).
 'use strict';
 
@@ -54,7 +60,12 @@
 // tarjeta: su mapeo honesto es el camino de engagement (mapeoMeta),
 // sin prometer una optimización de seguidores que Meta no ofrece
 // por esta vía.
-const OBJETIVOS = ['reservar', 'escribirte', 'local', 'comprar', 'seguir'];
+// (LOTE ADS-PREGUNTAS) 'perfil' se suma: «Que visiten tu perfil» —
+// el pedido del dueño (23/11). Es elegible en la tarjeta como los
+// demás; del fundamento no nace (ninguna señal de onboarding lo
+// produce: OBJETIVO_DESDE_CTA no lo mapea), así que llega solo por
+// elección del cliente en la tarjeta, validada acá.
+const OBJETIVOS = ['reservar', 'escribirte', 'local', 'comprar', 'seguir', 'perfil'];
 
 // Valores crudos del fundamento → objetivo canónico. Las claves son
 // las de OC_CTA (onboarding un clic) y las de dueno.meta (onboarding
@@ -75,6 +86,7 @@ const ETIQUETA_OBJETIVO = {
   local: { es: 'Que vengan a tu local', en: 'Get store visits' },
   comprar: { es: 'Que te compren', en: 'Get purchases' },
   seguir: { es: 'Que me sigan', en: 'Get followers' },
+  perfil: { es: 'Que visiten tu perfil', en: 'Get profile visits' },
 };
 
 // Objetivo canónico desde cualquier señal del fundamento.
@@ -107,6 +119,21 @@ function mapeoMeta(objetivo) {
       medicion: 'conversaciones',
     };
   }
+  if (objetivo === 'perfil') {
+    // (LOTE ADS-PREGUNTAS) «Que visiten tu perfil»: el mapeo REAL
+    // de Meta para visitas al perfil de Instagram (doc oficial de
+    // la Marketing API, referencia de Ad Set Graph v25.0):
+    // objetivo OUTCOME_TRAFFIC + optimization_goal
+    // VISIT_INSTAGRAM_PROFILE + destination_type INSTAGRAM_PROFILE.
+    // La medición son las visitas al perfil (insights), nunca
+    // seguidores: Meta no entrega «seguidores nuevos» por esta vía.
+    return {
+      campaignObjective: 'OUTCOME_TRAFFIC',
+      optimizationGoal: 'VISIT_INSTAGRAM_PROFILE',
+      destinationType: 'INSTAGRAM_PROFILE',
+      medicion: 'visitas_perfil',
+    };
+  }
   // local, seguir y sin_dato: el camino histórico de engagement.
   // 'seguir' cae acá con honestidad: por esta vía Meta optimiza
   // engagement sobre el posteo, no «conseguir seguidores».
@@ -124,6 +151,15 @@ const RADIOS_KM = [2, 5, 10];
 const EDADES = [[18, 24], [25, 34], [25, 44], [35, 44], [35, 54], [45, 54], [55, 65], [18, 65]];
 const GENEROS = ['todos', 'mujeres', 'hombres'];
 const GENERO_META = { todos: [], mujeres: [2], hombres: [1] };
+// (LOTE ADS-PREGUNTAS) Modo de audiencia: 'nuevos' = la gente nueva
+// de siempre (intereses del rubro + parecidos a los seguidores);
+// 'conocidos' = «los que ya te vieron»: la audiencia de interacción
+// de Instagram del propio negocio (gente que ya interactuó con su
+// perfil, retención 365 días), resuelta find-or-create en SU cuenta
+// al crear el impulso. Es la respuesta honesta a «que le llegue a
+// los que buscaron mi producto»: en Meta no hay búsqueda literal —
+// lo que existe es la gente que ya mostró interés real.
+const MODOS = ['nuevos', 'conocidos'];
 
 // ── Alcance geográfico (LOTE ADS-PÚBLICO) ──────────────────────────
 // La pregunta «¿Dónde están?» reemplaza a la distancia fija al local
@@ -247,6 +283,7 @@ function propuestaDesdeFundamento(f) {
     genero,
     intereses,
     parecidos: true,
+    modo: 'nuevos',
   };
   // (LOTE ADS-PÚBLICO) Pregunta 1 «¿Quién te compra?»: la frase del
   // comprador en palabras, del fundamento (cliente ideal o audiencia
@@ -267,6 +304,7 @@ function propuestaDesdeFundamento(f) {
       generos: GENEROS.slice(),
       alcances: ALCANCES.slice(),
       objetivos: OBJETIVOS.map((v) => ({ valor: v, etiqueta: ETIQUETA_OBJETIVO[v][lang] })),
+      modos: MODOS.slice(),
     },
     geo: { ciudad, pais },
     lang,
@@ -298,6 +336,13 @@ function textoHumano(propuesta, lang) {
   else if (alcanceTxt === 'ciudad' && geo.ciudad) partes.push(en ? `in ${geo.ciudad}` : `en ${geo.ciudad}`);
   else if (alcanceTxt === 'todos') partes.push(en ? 'everywhere' : 'en todos lados');
   else partes.push(en ? 'all over the country' : 'en todo el país');
+  // (LOTE ADS-PREGUNTAS) Con modo 'conocidos' la audiencia es la
+  // gente que ya interactuó con el Instagram del negocio: los
+  // intereses y los parecidos no participan y la frase lo dice.
+  if (a.modo === 'conocidos') {
+    partes.push(en ? 'people who already interacted with your Instagram' : 'personas que ya interactuaron con tu Instagram');
+    return partes.join(' · ');
+  }
   const activos = (a.intereses || []).filter((i) => i && i.activo).map((i) => i.nombre);
   if (activos.length) {
     const lista = activos.slice(0, 3).join(', ') + (activos.length > 3 ? '…' : '');
@@ -333,6 +378,13 @@ function validarAudiencia(input, propuesta) {
     if (!OBJETIVOS.includes(ob)) return no('objetivo_fuera_de_opciones');
     objetivo = ob;
   }
+  // (LOTE ADS-PREGUNTAS) Modo de audiencia: valida contra los dos
+  // valores cerrados; sin modo en el payload manda el de la
+  // propuesta ('nuevos', compatibilidad con payloads viejos). Un
+  // tercer valor es audiencia_invalida, como todo lo demás.
+  const modo = (input.modo == null || input.modo === '')
+    ? String(propuesta.audiencia.modo || 'nuevos') : String(input.modo);
+  if (!MODOS.includes(modo)) return no('modo_fuera_de_opciones');
   // El radio solo es obligatorio-válido con alcance 'cerca': con
   // cualquier otro alcance un radio fuera de lista NO invalida (se
   // normaliza al de la propuesta) — el radio no participa del geo.
@@ -368,7 +420,7 @@ function validarAudiencia(input, propuesta) {
   }
   return {
     ok: true,
-    audiencia: { radio_km: radio, alcance, edad_min: emin, edad_max: emax, genero, intereses, parecidos: input.parecidos },
+    audiencia: { radio_km: radio, alcance, edad_min: emin, edad_max: emax, genero, intereses, parecidos: input.parecidos, modo },
     objetivo,
   };
 }
@@ -388,10 +440,19 @@ function validarAudiencia(input, propuesta) {
 // Posty, como siempre.
 // Sin ciudad en el fundamento, el geo cae al país (el comportamiento
 // histórico) y queda declarado en resuelto.geo_modo = 'pais'.
-async function resolverTargeting(audiencia, propuesta, meta, ctx) {
+// (LOTE ADS-PREGUNTAS) igUserId opcional (5º parámetro): la cuenta
+// de Instagram del negocio, que la propuesta no trae — la conoce el
+// endpoint por la conexión/sesión y la pasa para resolver la
+// audiencia de interacción del modo 'conocidos'.
+async function resolverTargeting(audiencia, propuesta, meta, ctx, igUserId) {
   const a = audiencia || {};
   const geo = (propuesta && propuesta.geo) || {};
-  const resuelto = { intereses: [], intereses_omitidos: [], geo_modo: 'pais', parecidos_estado: a.parecidos ? 'sin_audiencia_disponible' : 'apagado' };
+  const resuelto = {
+    intereses: [], intereses_omitidos: [], geo_modo: 'pais',
+    parecidos_estado: (a.modo === 'conocidos' || !a.parecidos) ? 'apagado' : 'sin_audiencia_disponible',
+    modo: a.modo === 'conocidos' ? 'conocidos' : 'nuevos',
+    modo_estado: a.modo === 'conocidos' ? 'sin_audiencia_disponible' : 'no_participa',
+  };
   const targeting = {
     age_min: Number(a.edad_min) || 18,
     age_max: Number(a.edad_max) || 65,
@@ -400,8 +461,10 @@ async function resolverTargeting(audiencia, propuesta, meta, ctx) {
   if (genders.length) targeting.genders = genders.slice();
 
   // Intereses activos → ids reales por Targeting Search.
+  // (LOTE ADS-PREGUNTAS) Con modo 'conocidos' los intereses no
+  // participan: la audiencia es la de interacción, no la de gustos.
   const specs = [];
-  for (const it of (a.intereses || [])) {
+  for (const it of (a.modo === 'conocidos' ? [] : (a.intereses || []))) {
     if (!it || !it.activo) continue;
     let hit = null;
     try { hit = meta && typeof meta.searchInterestId === 'function' ? await meta.searchInterestId(it.nombre, ctx) : null; } catch (e) { hit = null; }
@@ -483,10 +546,32 @@ async function resolverTargeting(audiencia, propuesta, meta, ctx) {
   // (crear una exige una audiencia origen y tiempo de población: no
   // se fabrica en el momento del impulso). Si no hay, se omite y el
   // impulso lo declara (persistido en audiencia_json).
-  if (a.parecidos && meta && typeof meta.findLookalikeAudienceId === 'function') {
+  if (a.modo !== 'conocidos' && a.parecidos && meta && typeof meta.findLookalikeAudienceId === 'function') {
     let lid = null;
     try { lid = await meta.findLookalikeAudienceId(ctx); } catch (e) { lid = null; }
     if (lid) { targeting.custom_audiences = [{ id: String(lid) }]; resuelto.parecidos_estado = 'aplicado'; }
+  }
+
+  // (LOTE ADS-PREGUNTAS) Modo 'conocidos': la audiencia de
+  // interacción de Instagram del negocio, find-or-create en SU
+  // cuenta (helper inyectado de meta_ads, con su ctx y su ig id).
+  // Si resuelve, es LA audiencia del conjunto (sin intereses ni
+  // parecidos). Si no resuelve, el impulso corre sin ella y queda
+  // declarado en resuelto.modo_estado = 'sin_audiencia_disponible'
+  // — jamás un id inventado. El freno de los Términos de Audiencias
+  // de Meta NO degrada en silencio: el error marcado
+  // 'audiencia_terminos' del helper se propaga y el endpoint frena
+  // el impulso con el motivo real, sin crear ni cobrar.
+  if (a.modo === 'conocidos') {
+    let audId = null;
+    if (meta && typeof meta.findOrCreateEngagementAudienceId === 'function') {
+      audId = await meta.findOrCreateEngagementAudienceId(ctx, igUserId);
+    }
+    if (audId) {
+      targeting.custom_audiences = [{ id: String(audId) }];
+      resuelto.modo_estado = 'aplicado';
+      resuelto.audiencia_id = String(audId);
+    }
   }
   return { targeting, resuelto };
 }
@@ -611,11 +696,18 @@ function resultadoDe(boost) {
   if (mapeo.medicion === 'conversaciones') {
     return { tipo: 'conversaciones', valor: Number(boost.last_conversaciones || 0), objetivo: objetivo || null };
   }
+  // (LOTE ADS-PREGUNTAS) Objetivo 'perfil': el resultado son las
+  // visitas al perfil que Meta contó (last_visitas_perfil, del
+  // barrido de insights) — nunca seguidores.
+  if (mapeo.medicion === 'visitas_perfil') {
+    return { tipo: 'visitas_perfil', valor: Number(boost.last_visitas_perfil || 0), objetivo: objetivo || null };
+  }
   return { tipo: 'clics', valor: Number(boost.last_clicks || 0), objetivo: objetivo || null };
 }
 
 module.exports = {
   OBJETIVOS,
+  MODOS,
   RADIOS_KM,
   EDADES,
   GENEROS,

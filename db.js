@@ -703,6 +703,11 @@ try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN objetivo TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN audiencia_json TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_clicks INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_conversaciones INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (LOTE ADS-PREGUNTAS) Visitas al perfil contadas por Meta (la
+// métrica del objetivo 'perfil'): mismo patrón que
+// last_conversaciones — la escribe el barrido de resultados y la
+// lee ads-audiencia.resultadoDe. Nunca seguidores.
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_visitas_perfil INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 // (LOTE CIERRE-ADS) refund_id: el id del reembolso a la fuente cuando
 // el riel destacado cobró y el anuncio nunca salió (FIX 3a — la plata
 // vuelve a la tarjeta, no queda como crédito). repair_intentos /
