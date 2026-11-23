@@ -2001,6 +2001,30 @@ function captionPassesEn(caption, input) {
   const emojiTotal = (c.match(/\p{Extended_Pictographic}/gu) || []).length;
   if (emojiTotal > 4) return { ok: false, reason: `${emojiTotal} emojis (max 4)` };
   if (captionOpenIsGarbledEn(c)) return { ok: false, reason: 'spliced opening: a block opening stitches two fragments or leaves a dangling article — rewrite it as one clean sentence' };
+  // LONG OPENING ≠ SPLICE — EN PARITY (Juli, 2026-11-23 — candidate (h)
+  // of the 2026-11-22 run; real case id 710, account 113, PUBLISHED:
+  // its opening is a whole menu read as one sentence — exactly 26
+  // words, AT the Spanish door's limit). The checklist (EN item 34)
+  // has taught since 2026-11-22 that "the gate rejects it under its
+  // own reason (long opening)" — that was only true of the Spanish
+  // door: this door never measured length, so a 27+ word English
+  // opening passed the length dimension whole. Same measure as ES
+  // (captionOpenIsLong, hooks.js): first sentence of the first line,
+  // >26 words, plus the per-block body mirror of the ES loop. The
+  // brake is unchanged in strength — what lands is the missing
+  // diagnosis on this door: the retry must SHORTEN, not unstitch.
+  if (captionOpenIsLong(c)) {
+    return { ok: false, reason: 'long opening: the first sentence runs past 26 words — not a splice, just one breath; shorten it (drop a detail or split it in two) without changing the idea' };
+  }
+  {
+    const blocksEn = c.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+    for (let bi = 1; bi < blocksEn.length; bi++) {
+      const blockFirst = (blocksEn[bi].split('\n')[0] || '').trim();
+      if (blockFirst && captionOpenIsLong(blockFirst)) {
+        return { ok: false, reason: 'long opening in the body: the first sentence of a block runs past 26 words — shorten it or split it in two, without changing the idea' };
+      }
+    }
+  }
   // (LOTE LÉXICO-INGLÉS · L7 del diagnóstico de la corrida Veja #6,
   // posteos 654–656) El anti-empalme de aperturas (v1007) mira la
   // primera línea de cada bloque; el mismo empalme ADENTRO del cuerpo
