@@ -66,12 +66,39 @@
 //       reporta en bloqueadas con su motivo en español; ningún error
 //       de Meta se guarda ni se muestra crudo (mapearErrorEnvio).
 //
+// MEDIDA-TANDA (lote 2026-11-23): la tanda se mide por negocio.
+//   (a) REGISTRO DE RESOLUCIÓN: hasta este lote el resultado de un
+//       ítem era derivable a medias (estado + flag edited) y el hecho
+//       «cayó en falta-dato» se PERDÍA: falta_dato guarda el dato que
+//       faltó (precio/horario/fundamento/dato) solo mientras el ítem
+//       está frenado — al editarlo o al conseguir texto, la marca se
+//       borra. Desde este lote: bandeja_items.resolucion registra en
+//       el acto de resolver 'tal_cual' | 'editado' | 'descartado', y
+//       bandeja_falta_dato_log guarda UN hecho por ítem y dato (con
+//       la fecha de su primera caída) en cada punto donde un ítem
+//       queda con falta_dato. Sin reescribir historia: las filas
+//       viejas quedan resolucion='' y sin hechos — los números
+//       cuentan desde que el lote vive.
+//   (b) EL PARTE: censoBandeja suma por negocio los tres números
+//       (tal cual / editados / descartados) + cuántos ítems cayeron
+//       en falta-dato y por qué dato; tandaConItems trae la medida
+//       de SU tanda. Es la misma vía del parte del operador
+//       (GET /api/admin/bandeja/censo y /api/admin/users/:id/bandeja).
+//   (c) LA PREGUNTA DE LA SEMANA: el dato más repetido en falta-dato
+//       del negocio (ítems únicos por dato, últimos 7 días) se
+//       convierte en UNA pregunta que abre la próxima tanda NUEVA de
+//       ese negocio (bandeja_tandas.pregunta_dato, asignada al nacer
+//       la tanda en getOrCreateTanda; una sola por negocio cada
+//       7 días; sin faltas no hay pregunta — no se inventa).
+//
 // Exporta: { initBandejaTables, clasificar, esErrorPermiso,
 //   pollBandeja, getBandeja, refreshTanda, editItem, dismissItem,
 //   undismissItem, approveTanda, countAcciones, novedades,
 //   conteoCampana, marcarNovedadesVistas,
 //   purgarBorradoresFormula, censoBandeja, mapearErrorEnvio,
-//   esErrorVentana, dmFueraDeVentana, defaultFetchers }
+//   esErrorVentana, dmFueraDeVentana, defaultFetchers,
+//   registrarFaltaDato, medidaTanda, medidaUsuario, datoTopFalta,
+//   asegurarPreguntaTanda, preguntaParaDato }
 'use strict';
 
 const IG_HOST = 'https://graph.instagram.com';
@@ -94,6 +121,8 @@ function initBandejaTables(db) {
     post_caption TEXT DEFAULT '',
     post_thumb TEXT DEFAULT '',
     etiqueta TEXT DEFAULT '',
+    pregunta_dato TEXT DEFAULT '',
+    pregunta_at TEXT DEFAULT '',
     notified_at TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -114,6 +143,7 @@ function initBandejaTables(db) {
     clase TEXT NOT NULL DEFAULT 'normal',
     estado TEXT NOT NULL DEFAULT 'pendiente',
     falta_dato TEXT DEFAULT '',
+    resolucion TEXT DEFAULT '',
     edited INTEGER NOT NULL DEFAULT 0,
     actualizado INTEGER NOT NULL DEFAULT 0,
     note TEXT DEFAULT '',
@@ -132,7 +162,31 @@ function initBandejaTables(db) {
   try {
     const cols = db.prepare(`PRAGMA table_info(bandeja_items)`).all().map(c => c.name);
     if (!cols.includes('last_in_at')) db.exec(`ALTER TABLE bandeja_items ADD COLUMN last_in_at TEXT DEFAULT ''`);
+    // (MEDIDA-TANDA) resolucion: el resultado del ítem registrado en
+    // el acto de resolver ('' = todavía no resuelto, o resuelto antes
+    // de este lote: la historia vieja no se reescribe).
+    if (!cols.includes('resolucion')) db.exec(`ALTER TABLE bandeja_items ADD COLUMN resolucion TEXT DEFAULT ''`);
   } catch (e) {}
+  // (MEDIDA-TANDA) La pregunta de la semana vive en la tanda.
+  try {
+    const colsT = db.prepare(`PRAGMA table_info(bandeja_tandas)`).all().map(c => c.name);
+    if (!colsT.includes('pregunta_dato')) db.exec(`ALTER TABLE bandeja_tandas ADD COLUMN pregunta_dato TEXT DEFAULT ''`);
+    if (!colsT.includes('pregunta_at')) db.exec(`ALTER TABLE bandeja_tandas ADD COLUMN pregunta_at TEXT DEFAULT ''`);
+  } catch (e) {}
+  // (MEDIDA-TANDA) Hechos de falta-dato: UN registro por ítem y dato,
+  // con la fecha de su primera caída. Es la memoria que falta_dato no
+  // tiene (la marca del ítem se borra al editarlo o al conseguir
+  // texto): de acá salen el conteo por negocio y la pregunta.
+  db.exec(`CREATE TABLE IF NOT EXISTS bandeja_falta_dato_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    tanda_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    dato TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_bandeja_falta_user ON bandeja_falta_dato_log(user_id, created_at)`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_bandeja_falta_item_dato ON bandeja_falta_dato_log(item_id, dato)`);
   // (CAMPANA-LIMPIABLE) La marca de lectura de las NOVEDADES: una
   // fila por usuario con el instante hasta el que las novedades ya
   // se vieron. Antes de este lote las novedades no tenían estado de
@@ -330,11 +384,17 @@ const defaultFetchers = {
 // Helpers de tanda / ítem
 // ---------------------------------------------------------------------------
 function getOrCreateTanda(db, uid, t) {
-  db.prepare(`INSERT OR IGNORE INTO bandeja_tandas (user_id, group_key, kind, post_ig_id, post_caption, post_thumb, etiqueta)
+  const ins = db.prepare(`INSERT OR IGNORE INTO bandeja_tandas (user_id, group_key, kind, post_ig_id, post_caption, post_thumb, etiqueta)
     VALUES (?,?,?,?,?,?,?)`).run(uid, t.groupKey, t.kind || 'post', t.postIgId || '', String(t.postCaption || '').slice(0, 300), t.postThumb || '', t.etiqueta || '');
   const row = db.prepare('SELECT * FROM bandeja_tandas WHERE user_id = ? AND group_key = ?').get(uid, t.groupKey);
   if (t.postCaption && row.post_caption !== String(t.postCaption).slice(0, 300)) {
     db.prepare('UPDATE bandeja_tandas SET post_caption = ? WHERE id = ?').run(String(t.postCaption).slice(0, 300), row.id);
+  }
+  // (MEDIDA-TANDA) Una tanda que NACE puede abrir con la pregunta de
+  // la semana de ese negocio (el dato que más faltó). Las que ya
+  // existían no se tocan: la pregunta es de la tanda siguiente.
+  if (Number(ins.changes) > 0) {
+    try { asegurarPreguntaTanda(db, row); } catch (e) {}
   }
   return row;
 }
@@ -362,6 +422,93 @@ async function prepararBorrador(deps, uid, args) {
     return { draft: '', faltaDato: falta };
   }
   return { draft: String(o.reply || '').slice(0, 300), faltaDato: '' };
+}
+
+// ---------------------------------------------------------------------------
+// (MEDIDA-TANDA) Registro de falta-dato y medida por negocio.
+// ---------------------------------------------------------------------------
+// Anota el hecho «este ítem cayó en falta de ESTE dato» — una sola
+// vez por ítem y dato (índice único), con la fecha de la primera
+// caída. Se llama desde cada punto donde un ítem QUEDA con
+// falta_dato puesto (ingesta, re-preparación y purga). Sin dato o
+// sin ítem, no anota. Nunca lanza: medir no puede romper la bandeja.
+function registrarFaltaDato(db, item) {
+  const dato = String((item && item.falta_dato) || '').trim();
+  if (!dato || !item || !item.id) return;
+  try {
+    db.prepare(`INSERT OR IGNORE INTO bandeja_falta_dato_log (user_id, tanda_id, item_id, dato) VALUES (?,?,?,?)`)
+      .run(item.user_id, item.tanda_id, item.id, dato);
+  } catch (e) {}
+}
+
+// La medida de un conjunto (una tanda o un negocio entero): los tres
+// números de resolución + las faltas (ítems únicos y por dato).
+// whereSql trae UN solo placeholder posicional ('tanda_id = ?' o
+// 'user_id = ?') y vale para bandeja_items y para el log.
+function medidaDesde(db, whereSql, arg) {
+  const out = { tal_cual: 0, editados: 0, descartados: 0, falta_dato: { items: 0, por_dato: {}, dato_top: '' } };
+  try {
+    const rows = db.prepare(`SELECT resolucion, COUNT(*) AS n FROM bandeja_items WHERE ${whereSql} AND resolucion != '' GROUP BY resolucion`).all(arg);
+    for (const r of rows) {
+      if (r.resolucion === 'tal_cual') out.tal_cual = Number(r.n || 0);
+      else if (r.resolucion === 'editado') out.editados = Number(r.n || 0);
+      else if (r.resolucion === 'descartado') out.descartados = Number(r.n || 0);
+    }
+  } catch (e) {}
+  try {
+    const porDato = db.prepare(`SELECT dato, COUNT(DISTINCT item_id) AS items FROM bandeja_falta_dato_log WHERE ${whereSql} GROUP BY dato ORDER BY items DESC, dato ASC`).all(arg);
+    for (const r of porDato) out.falta_dato.por_dato[r.dato] = Number(r.items || 0);
+    if (porDato.length) out.falta_dato.dato_top = porDato[0].dato;
+    const tot = db.prepare(`SELECT COUNT(DISTINCT item_id) AS n FROM bandeja_falta_dato_log WHERE ${whereSql}`).get(arg);
+    out.falta_dato.items = Number((tot && tot.n) || 0);
+  } catch (e) {}
+  return out;
+}
+
+function medidaTanda(db, tandaId) { return medidaDesde(db, 'tanda_id = ?', tandaId); }
+function medidaUsuario(db, uid) { return medidaDesde(db, 'user_id = ?', uid); }
+
+// El dato que más faltó en el negocio en los últimos `dias` días:
+// ítems únicos por dato; desempate por la caída más reciente y por
+// nombre (determinístico). Excluye la tanda dada (la que va a abrir
+// con la pregunta: sus propias faltas son de la semana que viene).
+function datoTopFalta(db, uid, excluirTandaId, dias) {
+  const d = Math.max(1, Math.min(30, Number(dias) || 7));
+  try {
+    const rows = db.prepare(`SELECT dato, COUNT(DISTINCT item_id) AS items, MAX(created_at) AS ultimo
+      FROM bandeja_falta_dato_log
+      WHERE user_id = ? AND tanda_id != ? AND created_at >= datetime('now', '-${d} days')
+      GROUP BY dato ORDER BY items DESC, ultimo DESC, dato ASC`).all(uid, excluirTandaId || 0);
+    return rows.length ? { dato: rows[0].dato, items: Number(rows[0].items || 0) } : null;
+  } catch (e) { return null; }
+}
+
+// La pregunta de la semana, por dato. UNA sola pregunta, en español
+// (la superficie del cliente la espeja en inglés por el mismo dato).
+const PREGUNTAS_DATO = {
+  precio: 'Para no frenar la próxima respuesta: ¿cuál es el precio que querés que usemos cuando alguien pregunta cuánto sale?',
+  horario: 'Para no frenar la próxima respuesta: ¿cuáles son los horarios del negocio?',
+  fundamento: 'Para no frenar la próxima respuesta: ¿qué más tenemos que saber del negocio para responder bien sin preguntarte?',
+  dato: 'Para no frenar la próxima respuesta: ¿nos completás el dato que más nos faltó esta semana?',
+};
+function preguntaParaDato(dato) { return PREGUNTAS_DATO[dato] || PREGUNTAS_DATO.dato; }
+
+// Asigna a ESTA tanda la pregunta de la semana de su negocio, si
+// corresponde: la tanda todavía no tiene pregunta, el negocio no
+// recibió otra en los últimos 7 días (una por semana) y hay un dato
+// que faltó de verdad (sin faltas, no hay pregunta). Devuelve el
+// dato asignado o ''.
+function asegurarPreguntaTanda(db, tanda) {
+  if (!tanda || !tanda.id || tanda.pregunta_dato) return '';
+  try {
+    const reciente = db.prepare(`SELECT id FROM bandeja_tandas WHERE user_id = ? AND id != ? AND pregunta_at != '' AND pregunta_at >= datetime('now', '-7 days') LIMIT 1`).get(tanda.user_id, tanda.id);
+    if (reciente) return '';
+    const top = datoTopFalta(db, tanda.user_id, tanda.id, 7);
+    if (!top || !top.dato) return '';
+    db.prepare(`UPDATE bandeja_tandas SET pregunta_dato = ?, pregunta_at = datetime('now') WHERE id = ?`).run(top.dato, tanda.id);
+    tanda.pregunta_dato = top.dato;
+    return top.dato;
+  } catch (e) { return ''; }
 }
 
 // ¿La tanda tiene que avisar? Un solo aviso por tanda: cuando aparece su
@@ -460,6 +607,7 @@ async function pollBandeja(db, deps, opts) {
                 const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: contexto, postCaption: m.caption || '' });
                 db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
                   .run(ultimo.id, String(ultimo.text).slice(0, 500), String(ultimo.timestamp || c.timestamp || ''), prep.draft, prep.faltaDato, existing.id);
+                registrarFaltaDato(db, { id: existing.id, user_id: uid, tanda_id: tanda.id, falta_dato: prep.faltaDato });
               }
               out.repreparados++; tandasTocadas.add(tanda.id);
             }
@@ -480,6 +628,10 @@ async function pollBandeja(db, deps, opts) {
           db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, text, draft, clase, estado, falta_dato, last_in_at)
             VALUES (?,?, 'comment', ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`)
             .run(tanda.id, uid, c.id, c.id, ultimo.id, c.username, String(c.text).slice(0, 500), prep.draft, clase, prep.faltaDato, String(ultimo.timestamp || c.timestamp || ''));
+          if (prep.faltaDato) {
+            const ni = db.prepare(`SELECT id FROM bandeja_items WHERE user_id = ? AND source = 'comment' AND thread_key = ?`).get(uid, c.id);
+            if (ni) registrarFaltaDato(db, { id: ni.id, user_id: uid, tanda_id: tanda.id, falta_dato: prep.faltaDato });
+          }
           out.nuevos++; tandasTocadas.add(tanda.id);
         }
         if (tandasTocadas.has(tanda.id)) touchTanda(db, tanda.id);
@@ -521,6 +673,7 @@ async function pollBandeja(db, deps, opts) {
               const prep = await prepararBorrador(d, uid, { ...argsBase, username, text: contexto });
               db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, author_id = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
                 .run(last.id, String(last.text).slice(0, 500), String(last.created_time || ''), String(last.fromId || ''), prep.draft, prep.faltaDato, existing.id);
+              registrarFaltaDato(db, { id: existing.id, user_id: uid, tanda_id: tanda.id, falta_dato: prep.faltaDato });
             }
             out.repreparados++; touchTanda(db, tanda.id);
           }
@@ -540,6 +693,10 @@ async function pollBandeja(db, deps, opts) {
         db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, author_id, text, draft, clase, estado, falta_dato, last_in_at)
           VALUES (?,?, 'dm', ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`)
           .run(tanda.id, uid, cv.id, last.id, last.id, username, String(last.fromId || ''), String(last.text).slice(0, 500), prep.draft, clase, prep.faltaDato, String(last.created_time || ''));
+        if (prep.faltaDato) {
+          const ni = db.prepare(`SELECT id FROM bandeja_items WHERE user_id = ? AND source = 'dm' AND thread_key = ?`).get(uid, cv.id);
+          if (ni) registrarFaltaDato(db, { id: ni.id, user_id: uid, tanda_id: tanda.id, falta_dato: prep.faltaDato });
+        }
         out.nuevos++; touchTanda(db, tanda.id);
         quizasAvisar(db, d, uid, tanda);
       }
@@ -625,6 +782,11 @@ function tandaConItems(db, tanda) {
   return {
     ...tanda,
     items,
+    // (MEDIDA-TANDA) La medida de ESTA tanda y, si le tocó, la
+    // pregunta de la semana (el dato que más faltó en el negocio):
+    // la tanda abre pidiéndolo, en el mismo flujo.
+    medida: medidaTanda(db, tanda.id),
+    pregunta_dato: tanda.pregunta_dato ? { dato: tanda.pregunta_dato, texto: preguntaParaDato(tanda.pregunta_dato) } : null,
     conteo: {
       // para_salir = lo que approveTanda realmente puede enviar:
       // con borrador Y sin bloqueo terminal. Ni uno más.
@@ -692,6 +854,7 @@ async function purgarBorradoresFormula(db, deps, opts) {
         out.regenerados++;
       } else {
         db.prepare(`UPDATE bandeja_items SET draft = '', falta_dato = ?, updated_at = datetime('now') WHERE id = ?`).run(prep.faltaDato || 'dato', it.id);
+        registrarFaltaDato(db, { id: it.id, user_id: it.user_id, tanda_id: it.tanda_id, falta_dato: prep.faltaDato || 'dato' });
         out.vaciados++;
       }
     } catch (e) {
@@ -699,6 +862,7 @@ async function purgarBorradoresFormula(db, deps, opts) {
       // queda vacío con su marca, y el dueño lo completa al editar.
       try {
         db.prepare(`UPDATE bandeja_items SET draft = '', falta_dato = 'dato', updated_at = datetime('now') WHERE id = ?`).run(it.id);
+        registrarFaltaDato(db, { id: it.id, user_id: it.user_id, tanda_id: it.tanda_id, falta_dato: 'dato' });
         out.vaciados++;
       } catch (e2) {}
     }
@@ -722,6 +886,7 @@ function censoBandeja(db, deps) {
         user_id: uid, por_estado: {}, en_error: [],
         formula: { cantidad: 0, mas_viejo: '', antiguedad_horas: 0 },
         bloqueadas_ventana: 0,
+        medida: null,
       });
     }
     return porUsuario.get(uid);
@@ -749,8 +914,14 @@ function censoBandeja(db, deps) {
       const ms = parseFechaMs(f.formula.mas_viejo);
       f.formula.antiguedad_horas = ms ? Math.max(0, Math.round((ahora - ms) / 360000) / 10) : 0;
     }
+    // (MEDIDA-TANDA) El parte suma por negocio los tres números y
+    // las faltas — cuentan desde que el lote vive (sin historia
+    // reescrita: lo viejo no tiene resolucion ni hechos).
+    f.medida = medidaUsuario(db, f.user_id);
   }
   const totales = { usuarios: usuarios.length, items: items.length, formula: usuarios.reduce((a, f) => a + f.formula.cantidad, 0), bloqueadas_ventana: usuarios.reduce((a, f) => a + f.bloqueadas_ventana, 0) };
+  // (MEDIDA-TANDA) La medida global del parte, por la misma vía.
+  totales.medida = medidaDesde(db, 'user_id != ?', 0);
   return { usuarios, totales };
 }
 
@@ -833,13 +1004,15 @@ function editItem(db, uid, itemId, text) {
 }
 
 function dismissItem(db, uid, itemId) {
-  const r = db.prepare(`UPDATE bandeja_items SET estado = 'descartado', updated_at = datetime('now')
+  // (MEDIDA-TANDA) El descarte ES la resolución: queda registrada.
+  const r = db.prepare(`UPDATE bandeja_items SET estado = 'descartado', resolucion = 'descartado', updated_at = datetime('now')
     WHERE id = ? AND user_id = ? AND estado IN ('pendiente','sin_permiso','error')`).run(itemId, uid);
   return { ok: Number(r.changes) > 0 };
 }
 
 function undismissItem(db, uid, itemId) {
-  const r = db.prepare(`UPDATE bandeja_items SET estado = 'pendiente', updated_at = datetime('now')
+  // Deshacer el descarte des-resuelve: la medida lo deja de contar.
+  const r = db.prepare(`UPDATE bandeja_items SET estado = 'pendiente', resolucion = '', updated_at = datetime('now')
     WHERE id = ? AND user_id = ? AND estado = 'descartado'`).run(itemId, uid);
   return { ok: Number(r.changes) > 0 };
 }
@@ -905,7 +1078,9 @@ async function approveTanda(db, uid, tandaId, deps) {
     try {
       if (it.source === 'dm') await F.sendDm(creds, it.author_id, it.draft);
       else await F.sendCommentReply(creds, it.comment_id, it.draft);
-      db.prepare(`UPDATE bandeja_items SET estado = 'enviado', decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(it.id);
+      // (MEDIDA-TANDA) Lo que salió queda medido en el acto: salió
+      // tal cual si el dueño nunca tocó el borrador; editado si sí.
+      db.prepare(`UPDATE bandeja_items SET estado = 'enviado', resolucion = ?, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(it.edited ? 'editado' : 'tal_cual', it.id);
       out.enviadas++;
     } catch (e) {
       if (esErrorPermiso(e.message)) {
@@ -932,4 +1107,6 @@ module.exports = {
   conteoCampana, marcarNovedadesVistas,
   purgarBorradoresFormula, censoBandeja, mapearErrorEnvio, esErrorVentana,
   dmFueraDeVentana, causaTerminal, motivoBloqueo, NOTA_VENTANA, NOTA_PERMISO,
+  registrarFaltaDato, medidaTanda, medidaUsuario, datoTopFalta,
+  asegurarPreguntaTanda, preguntaParaDato,
 };

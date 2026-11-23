@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1257';
+const PZ_BUILD = '20261105-v1258';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22481,7 +22481,7 @@ function pzBandejaEstilos() {
 .pzb-tanda-tit{font-size:16.5px;font-weight:800;color:#0A1E33}
 .pzb-tanda-sub{font-size:13px;color:#5A6B7C;margin-top:2px}
 .pzb-chip-imp{display:inline-block;background:#FEC14D;color:#0A1E33;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800;margin-top:8px}
-.pzb-prev{margin-top:10px;font-size:14px;color:#33506B;background:#F2F8FC;border-radius:12px;padding:9px 11px}
+.pzb-prev{margin-top:10px;font-size:14px;color:#33506B;background:#F2F8FC;border-radius:12px;padding:9px 11px}.pzb-pregunta{margin:12px 0 2px;font-size:14.5px;line-height:1.45;color:#0A1E33;background:#FFF6DE;border:1px solid #FEC14D;border-radius:12px;padding:11px 12px}.pzb-pregunta-et{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;color:#9A7B12;margin-bottom:4px}
 .pzb-firma{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:12.5px;color:#7A8CA3}
 .pzb-firma img{width:18px;height:18px;border-radius:50%}
 .pzb-acciones{display:flex;gap:10px;margin-top:14px}
@@ -22644,6 +22644,22 @@ function pzBandejaItemHTML(it) {
     ${cuerpo}
   </div>`;
 }
+// (MEDIDA-TANDA) La pregunta de la semana: si a esta tanda le tocó
+// (el dato que más faltó en el negocio), abre pidiéndolo — una sola
+// pregunta, arriba de la revisión, en el mismo flujo. El texto se
+// elige por el DATO que manda el servidor, en el idioma del cliente.
+function pzBandejaPreguntaHTML(t) {
+  const p = t && t.pregunta_dato;
+  if (!p || !p.dato) return '';
+  const txt = p.dato === 'precio'
+    ? pzBandejaT('Para no frenar la próxima respuesta: ¿cuál es el precio que querés que usemos cuando alguien pregunta cuánto sale?', 'So the next reply does not stall: what price should we use when someone asks how much it costs?')
+    : p.dato === 'horario'
+      ? pzBandejaT('Para no frenar la próxima respuesta: ¿cuáles son los horarios del negocio?', 'So the next reply does not stall: what are the business opening hours?')
+      : p.dato === 'fundamento'
+        ? pzBandejaT('Para no frenar la próxima respuesta: ¿qué más tenemos que saber del negocio para responder bien sin preguntarte?', 'So the next reply does not stall: what else do we need to know about your business to reply well without asking you?')
+        : pzBandejaT('Para no frenar la próxima respuesta: ¿nos completás el dato que más nos faltó esta semana?', 'So the next reply does not stall: can you fill in the detail we missed most this week?');
+  return `<div class="pzb-pregunta"><span class="pzb-pregunta-et">${pzBandejaT('UNA PREGUNTA DE POSTY', 'ONE QUESTION FROM POSTY')}</span>${txt}</div>`;
+}
 function pzBandejaRevisarHTML(data, tandaId) {
   const t = (data.tandas || []).find(x => x.id === tandaId);
   if (!t) return pzBandejaNotifsHTML(data);
@@ -22659,6 +22675,7 @@ function pzBandejaRevisarHTML(data, tandaId) {
       <span class="pzb-pill">${(t.items || []).length} ${pzBandejaT('en total', 'in total')}</span></div>
     <div class="pzb-sobre"><div class="pzb-card">
       <div style="font-size:13.5px;color:#5A6B7C">${pzBandejaT('Las importantes van primero. Nada sale hasta que apruebes.', 'Important ones come first. Nothing goes out until you approve.')}</div>
+      ${pzBandejaPreguntaHTML(t)}
       ${(t.items || []).map(pzBandejaItemHTML).join('')}
     </div>
     <div class="pzb-barra">
