@@ -4216,6 +4216,15 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .pz-back-mtop{flex:none;margin-left:-8px}
 .pz-back-desktop{display:none}
 @media(min-width:761px){ .pz-back-desktop{display:flex} }
+/* (LOTE VOLVER-AVATAR · 22/11) El volver dentro de la barra: el mismo
+   círculo de 44px de .pz-back, en flujo como primer elemento del
+   encabezado — el avatar y su punto quedan libres, sin nada encima.
+   La variante de escritorio de la cáscara web se ve solo desde 761px
+   (como el círculo fijo que reemplaza) y en ese rango la fila
+   superior web ya no duplica su propio atrás: manda el de la barra. */
+.pz-back-inbar{flex:none}
+.pz-back.pz-back-inbar-desk{display:none}
+@media(min-width:761px){ .pz-back.pz-back-inbar-desk{display:flex} .pz-back-mtop{display:none} }
 .fp-tile.fp-tile-draft{outline:2px dashed #2793C8;outline-offset:-2px}
 .ana-next{font-size:12px;font-weight:700;color:var(--cel);margin:2px 0 0}
 .apv-more{margin-top:10px}

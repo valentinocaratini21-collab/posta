@@ -1135,6 +1135,39 @@ function pzBackDesktopHTML(tab) {
   if (tab === 'subir' || tab === 'ajustes') return '';
   return `<button type="button" class="pz-back pz-back-fixed pz-back-desktop" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
 }
+// (LOTE VOLVER-AVATAR · 22/11 · defecto de campo del dueño con captura
+// de la bandeja: «Corregi que el boton de ir para atras no tape el
+// avatar de posty») Las cáscaras ya NO pintan el círculo fijo de
+// pzBackHTML/pzBackDesktopHTML: .pz-back-fixed vive en top:10px /
+// left:10px, exactamente donde la barra (.pz-shell-head, padding
+// 10px 14px) pone su avatar de 44×44 — el círculo caía SOBRE el
+// medallón y le robaba el toque a la identidad, con el punto verde
+// asomando por el borde. El volver vive ahora DENTRO de la barra,
+// como primer elemento en flujo (mismo círculo de 44×44, mismo
+// pzGoBack): cada uno con su lugar y la identidad completa a la
+// vista. Las listas de pantallas son las mismas de siempre — las de
+// pzBackHTML para la app y las de pzBackDesktopHTML para la web —;
+// esos dos helpers quedan definidos e intactos porque las suites
+// vecinas los ejercitan por VM.
+function pzVolverBarraHTML(tab) {
+  if (tab === 'inicio') return '';
+  if (tab === 'chat') return '';
+  if (tab === 'jardin-posty') return '';
+  if (tab === 'post' || tab === 'dogfood') return '';
+  if (tab === 'ads') return '';
+  if (tab === 'subir' || tab === 'ajustes') return '';
+  if (tab === 'numeros' || tab === 'analisis') return '';
+  return `<button type="button" class="pz-back pz-back-inbar" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
+}
+function pzVolverBarraDeskHTML(tab) {
+  if (tab === 'inicio') return '';
+  if (tab === 'chat') return '';
+  if (tab === 'jardin-posty') return '';
+  if (tab === 'post' || tab === 'dogfood') return '';
+  if (tab === 'ads') return '';
+  if (tab === 'subir' || tab === 'ajustes') return '';
+  return `<button type="button" class="pz-back pz-back-inbar pz-back-inbar-desk" onclick="pzGoBack()" aria-label="Volver">${pzIc('arrowLeft', 20)}</button>`;
+}
 function bbHace(ts) {
   const s = Math.max(0, (Date.now() - ts) / 1000);
   if (s < 90) return 'recién';
@@ -1226,8 +1259,18 @@ function pzShellHeadHTML(tab) {
   // es el de su negocio (asentado por CAMPANA-CASA).
   const badgeIni = (typeof window !== 'undefined' && window.__pzCampanaBadgeN > 0)
     ? '<span class="pz-shell-bell-badge" id="pzShellBellBadge">' + window.__pzCampanaBadgeN + '</span>' : '';
+  // (LOTE VOLVER-AVATAR) El volver, cuando la pantalla lo tiene, es el
+  // primer elemento de la barra — en flujo, antes de la identidad. El
+  // modo lo avisa la cáscara que compone (bbShell: 'barra' · appShell:
+  // 'barra-desk', visible solo en escritorio) en pzShellHeadHTML
+  // .modoVolver, y acá se consume y se limpia: la firma y las llamadas
+  // de siempre no cambian, y sin aviso el encabezado sale como antes.
+  const modoVolver = pzShellHeadHTML.modoVolver || '';
+  pzShellHeadHTML.modoVolver = '';
+  const volverBtn = modoVolver === 'barra' ? pzVolverBarraHTML(tab)
+    : modoVolver === 'barra-desk' ? pzVolverBarraDeskHTML(tab) : '';
   return `<header class="pz-shell-head">
-    <button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
+    ${volverBtn}<button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
       <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="Posty" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
       <span class="pz-shell-who"><b>Posty<span class="pdot">.</span></b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
     </button>
@@ -1613,8 +1656,11 @@ function bbShell(tab, content) {
     if (k === 'subir') return `<button class="bb-tab bb-tab-subir${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-subir-word">${label}</span></button>`;
     return `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   };
+  // (LOTE VOLVER-AVATAR) El volver va dentro de la barra: se avisa el
+  // modo y el encabezado lo consume al componerse en esta misma
+  // evaluación. El círculo fijo de pzBackHTML ya no se pinta.
+  pzShellHeadHTML.modoVolver = 'barra';
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'subir' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
-    ${pzBackHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
     <nav class="bb-bar">${tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home'))}${tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload'))}${tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}</nav><!-- (LOTE ICONOS-BARRA · 20/11) orden Inicio · Subir · Ads: Subir queda como acción central, con el set «Hilo» --><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
@@ -3065,7 +3111,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1237';
+const PZ_BUILD = '20261105-v1238';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -11017,6 +11063,11 @@ function appShell(tab, content) {
   // PRIMER elemento de su pantalla (corrección de Valentino, 01:48: «esto
   // hay que ponerlo arriba de todo. no abajo»). En chat no va; en las
   // demás tabs el comportamiento es el de siempre.
+  // (LOTE VOLVER-AVATAR) El volver va dentro de la barra (variante de
+  // escritorio): se avisa el modo y el encabezado lo consume al
+  // componerse en esta misma evaluación. El círculo fijo de
+  // pzBackDesktopHTML ya no se pinta.
+  pzShellHeadHTML.modoVolver = 'barra-desk';
   return `
   <div class="mtop">
     ${pzBackMtopHTML(tab)}
@@ -11036,7 +11087,6 @@ function appShell(tab, content) {
   <!-- R2 · Feed abre con su cabecera como el mock: sin checklist arriba (vive en Hoy). -->
   ${(tab === 'chat' || tab === 'inicio' || tab === 'schedule') ? '' : setupChecklistHtml(undefined)}
   <div class="app-shell">
-    ${pzBackDesktopHTML(tab)}
     ${pzShellHeadHTML(tab)}
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
