@@ -6895,25 +6895,14 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 /* (LOTE PRUEBA-RECUERDA) Resalte del paso de conectar al aterrizar desde el email de la serie */
 .setup-row.pz-paso-hl { box-shadow: 0 0 0 3px #2793C8, 0 12px 26px rgba(39,147,200,.35); }
 
-/* ===== LOTE BARRA-VIVA · la palabra «Subir» + la pantalla de Notificaciones ===== */
-/* El botón central de la navegación: la palabra sola, como botón,
-   centrada a la altura de las demás pestañas (la forma «+» sola de
-   ICONOS-BARRA quedó retirada por la enmienda del dueño, 21/11). */
-/* (LOTE SUBIR-BOTON-FIX · 22/11) La caja del botón central: .bb-bar
-   alinea a flex-end (styles.css, .bb-bar) y la palabra sola mide
-   19.4px + padding = 27px contra los 49px de Inicio/Ads (ícono 24 +
-   gap + etiqueta): el botón quedaba una franja corta pegada al borde
-   inferior de la pantalla, con la columna de arriba muerta para el
-   toque — la evidencia del dueño en campo sobre v1221: «"subir" ya
-   no es clickeable... y esta de otro tamano». Con align-self:stretch
-   su caja llena el alto de la fila que definen sus hermanas, la
-   palabra queda centrada por el justify-content de esta misma regla
-   y toda la columna es botón. La palabra no cambia; Inicio, Ads y la
-   barra no se tocan. */
-.bb-tab-subir{justify-content:center;align-self:stretch}
-.bb-tab-subir-word{font-size:15.5px;font-weight:800;letter-spacing:.01em;line-height:1.25}
-.mz-tab-subir{justify-content:center}
-.mz-tab-subir-word{font-size:15px;font-weight:800;letter-spacing:.01em}
+/* ===== LOTE BARRA-VIVA · la pantalla de Notificaciones ===== */
+/* (LOTE SUBIR-BOTON-IGUAL · palabra del dueño 22/11 23:55) Las reglas
+   del botón central de palabra sola (la de centrado con
+   align-self:stretch de SUBIR-BOTON-FIX y las de la palabra a
+   15.5px/800 en bb y 15px/800 en mz, de BARRA-VIVA) se retiran:
+   Subir vuelve a ser una pestaña común en las dos cáscaras — mismo
+   ícono, misma palabra a 11px, mismos estados que Inicio y Ads — y
+   esas clases ya no se rinden en ningún markup. */
 /* Notificaciones (la pantalla de la campana del cliente): banda
    celeste con el título, la tarjeta blanca de NOVEDADES montada sobre
    la banda, y el hueco de la tanda (#pzNotifTanda) entre las dos —

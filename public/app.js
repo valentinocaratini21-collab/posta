@@ -1659,12 +1659,13 @@ function bbShell(tab, content) {
     analisis: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>',
   };
   const tabBtn = (k, hash, label) => {
-    // (LOTE BARRA-VIVA · enmienda del dueño 21/11 13:36–13:37: «dale.
-    // queda "subir"») El botón central lleva la PALABRA «Subir»: el
-    // glifo «+» solo del set Hilo (ICONOS-BARRA, v1198) queda retirado
-    // de la barra. Inicio y Ads conservan su ícono de hilo (trazo 1.5)
-    // con su palabra, intactos.
-    if (k === 'subir') return `<button class="bb-tab bb-tab-subir${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-subir-word">${label}</span></button>`;
+    // (LOTE SUBIR-BOTON-IGUAL · palabra del dueño 22/11 23:55: «el
+    // boton de subir no esta como los otros botones de inicio y ads.
+    // esta sin el icono, y la palabra esta mas grande») Subir vuelve a
+    // ser una pestaña común: el mismo render que Inicio y Ads, con su
+    // ícono del mapa (el «+» de trazo 1.5, ic.subir), la palabra a
+    // 11px y los mismos estados. La enmienda de BARRA-VIVA (21/11,
+    // la palabra sola) queda reemplazada por esta palabra posterior.
     return `<button class="bb-tab${key === k ? ' on' : ''}" onclick="bbGo('${hash}')"><span class="bb-tab-ic">${ic[k] || ''}</span><span>${label}</span>${k === 'bandeja' && n ? `<span class="bb-badge">${n}</span>` : ''}</button>`;
   };
   // (LOTE VOLVER-AVATAR) El volver va dentro de la barra: se avisa el
@@ -3122,7 +3123,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1248';
+const PZ_BUILD = '20261105-v1249';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -10993,17 +10994,16 @@ function mzTabsHTML(tab) {
     : tab === 'ads' ? 'ads'
     : tab === 'subir' ? 'subir'
     : tab === 'ajustes' ? 'ajustes' : '';
-  const t = (key, route, ico, label) => key === 'subir'
-    ? `<button type="button" class="mz-tab mz-tab-subir${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-subir-word">${label}</span></button>`
-    : `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
+  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
   // (LOTE SIN-TAB-AJUSTES · 13/11) Ajustes sale de la barra inferior:
   // ya se entra desde la ruedita del encabezado (pzShellHeadHTML). La
   // vista y la ruta #/app/ajustes quedan intactas; en Ajustes ninguna
   // pestaña queda resaltada (el mapeo `on` ya no tiene botón que case).
-  // (LOTE ICONOS-BARRA · 20/11) Set «Hilo» + orden Inicio · Subir · Ads:
-  // Subir («+» solo) queda como acción central de la barra.
-  // (LOTE BARRA-VIVA) La enmienda del dueño (21/11 13:36) retira el «+»
-  // solo: el botón central lleva la PALABRA «Subir».
+  // (LOTE ICONOS-BARRA · 20/11) Set «Hilo» + orden Inicio · Subir · Ads.
+  // (LOTE SUBIR-BOTON-IGUAL · palabra del dueño 22/11 23:55) Subir es
+  // una pestaña común, como Inicio y Ads: su glifo «+» de Hilo
+  // (masHilo), la palabra a 11px y los mismos estados. La enmienda de
+  // BARRA-VIVA (21/11, la palabra sola a 15px) queda reemplazada.
   return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', pzIcHilo('navCasaHilo'), gzT('Inicio', 'Home'))}${t('subir', 'subir', pzIcHilo('masHilo'), gzT('Subir', 'Upload'))}${t('ads', 'ads', pzIcHilo('megaHilo'), gzT('Ads', 'Ads'))}</nav>`;
 }
 
