@@ -6625,6 +6625,13 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-subir .pz-idea-link{background:none;border:none;color:#2793C8;font-weight:700;font-size:13px;padding:8px 0 0;cursor:pointer}
 .pz-subir .pz-idea-resp{display:flex;gap:8px;align-items:flex-start;background:#EFF7FC;border:1px solid #CFE6F5;border-radius:14px;padding:9px 11px;margin-top:8px;font-size:13.5px;color:#0A1E33;line-height:1.5}
 .pz-subir .pz-idea-resp img{width:22px;height:22px;border-radius:50%;flex:none}
+/* (LOTE RESPUESTA-HILO-IDEA) El hilo de la idea como conversación y
+   su campo «Responder…»: los mensajes se apilan con aire propio y
+   el compositor respira debajo de la última respuesta. */
+.pz-subir .pz-idea-hilo{display:flex;flex-direction:column;gap:8px}
+.pz-subir .pz-idea-hilo .pz-idea-resp{margin-top:0}
+.pz-subir .pz-idea #pzIdeaRespTexto{margin-top:10px}
+.pz-subir .pz-idea #pzIdeaRespEnviar{margin-top:8px}
 .pz-subir .pz-idea-post{margin-top:10px;border:1px solid #E1EAF1;border-radius:14px;overflow:hidden}
 .pz-subir .pz-idea-post img{width:100%;display:block}
 .pz-subir .pz-idea-post-cap{font-size:13px;color:#33475C;padding:8px 11px 0;line-height:1.45}

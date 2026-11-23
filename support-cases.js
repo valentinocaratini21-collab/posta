@@ -1536,7 +1536,7 @@ function voiceRequests(db, opts) {
   const uidFilter = Number(o.userId) > 0 ? Math.floor(Number(o.userId)) : 0;
   const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : (uid, p) => String(p || '');
   const rows = safe(() => db.prepare(
-    `SELECT id, user_id, text, created_at, hilo, post_id FROM chat_messages
+    `SELECT id, user_id, text, created_at, hilo, post_id, idea_id FROM chat_messages
       WHERE role = 'user' AND hilo IN ('post', 'semana', 'general')${uidFilter ? ' AND user_id = ?' : ''}
       ORDER BY id DESC LIMIT ?`).all(...(uidFilter ? [uidFilter, limit] : [limit])), []);
   const pedidos = rows.map((r) => {
@@ -1572,8 +1572,31 @@ function voiceRequests(db, opts) {
     // marca para que la consola lo distinga de una nota de voz y lo
     // resuelva por su puerta (resolver-idea: push + resultado en la
     // tarjeta). Sin fila, no es idea: es_idea queda en false.
-    const ideaRow = safe(() => db.prepare(
+    let ideaRow = safe(() => db.prepare(
       'SELECT id, estado FROM subir_ideas WHERE message_id = ?').get(Number(r.id)), null);
+    if (!ideaRow && Number(r.idea_id)) {
+      // (LOTE RESPUESTA-HILO-IDEA) El pedido es un SEGUIMIENTO del
+      // hilo de una idea (el cliente respondió tras la resolución y
+      // la idea se reabrió): la idea se encuentra por el idea_id que
+      // el mensaje lleva estampado, no por message_id.
+      ideaRow = safe(() => db.prepare(
+        'SELECT id, estado FROM subir_ideas WHERE id = ?').get(Number(r.idea_id)), null);
+    }
+    // El hilo COMPLETO de la idea (el mensaje que la abrió + los
+    // enlazados por idea_id, en orden): quien responde desde la cola
+    // ve toda la conversación, no solo el último mensaje suelto.
+    let ideaHilo = null;
+    if (ideaRow) {
+      const apertura = safe(() => db.prepare(
+        'SELECT message_id FROM subir_ideas WHERE id = ?').get(Number(ideaRow.id)), null);
+      const msgsHilo = safe(() => db.prepare(
+        `SELECT role, text FROM chat_messages
+          WHERE user_id = ? AND (id = ? OR idea_id = ?) ORDER BY id ASC`)
+        .all(uid, Number(apertura && apertura.message_id), Number(ideaRow.id)), []);
+      if (msgsHilo && msgsHilo.length) {
+        ideaHilo = msgsHilo.map((mm) => ({ rol: mm.role === 'assistant' ? 'posty' : 'cliente', texto: String(mm.text || '') }));
+      }
+    }
     let posteo = null;
     if (hilo === 'post' && pid > 0) {
       const p = safe(() => db.prepare(
@@ -1626,6 +1649,8 @@ function voiceRequests(db, opts) {
       },
       es_idea: !!ideaRow,
       idea_estado: ideaRow ? String(ideaRow.estado) : '',
+      idea_id: ideaRow ? Number(ideaRow.id) : 0,
+      idea_hilo: ideaHilo,
       posteo,
     };
   });

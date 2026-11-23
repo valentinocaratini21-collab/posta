@@ -620,6 +620,10 @@ function decisiones(db, filas, opts, nowMs) {
         ig_username: f.ig_username || p.ig_username || '',
         titulo: p.es_idea ? 'Idea escrita' : 'Nota de voz', ambito: p.ambito, cuando: p.cuando || '',
         es_idea: !!p.es_idea,
+        // (LOTE RESPUESTA-HILO-IDEA) El hilo completo de la idea viaja
+        // a la tarjeta: si el cliente siguió respondiendo, quien
+        // resuelve ve la conversación entera antes de contestar.
+        idea_hilo: p.idea_hilo || null,
         pedido: p.pedido || '', respuesta: p.respuesta || '',
         message_id: p.id, posteo: p.posteo || null,
         fecha: hoyKey,

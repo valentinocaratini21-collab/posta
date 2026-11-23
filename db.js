@@ -1662,6 +1662,17 @@ try { db.exec(`ALTER TABLE chat_messages ADD COLUMN reply_text TEXT DEFAULT ''`)
 // la semana (post_id = 0). Sin esto, las notas de la tira se mezclarían
 // con el historial general y no vivirían bajo su posteo.
 try { db.exec(`ALTER TABLE chat_messages ADD COLUMN hilo TEXT NOT NULL DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE RESPUESTA-HILO-IDEA · 23/11) El vínculo mensaje↔idea de la
+// tarjeta «¿Tenés una idea?» de Subir: la idea deja de ser un ticket
+// suelto y pasa a ser un HILO que se sigue en el mismo lugar. Cada
+// seguimiento del cliente y cada respuesta del operador dentro de la
+// conversación de UNA idea lleva su idea_id (subir_ideas.id); el
+// mensaje que abre la idea se enlaza por subir_ideas.message_id, como
+// siempre. NULL = mensaje ajeno a las ideas (todo el resto del chat,
+// intacto). El ALTER vive ACÁ, después del CREATE TABLE, como los
+// demás de esta tabla.
+try { db.exec(`ALTER TABLE chat_messages ADD COLUMN idea_id INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_chatmsg_idea ON chat_messages (idea_id, id)`); } catch (e) { /* índice opcional */ }
 // (LOTE CHAT-MUSE) Limpieza única: filas de assistant con texto «…»
 // (artefacto del tipeo viejo). Idempotente: tras la primera pasada no
 // queda ninguna; la guarda pzChatSaveReply impide que vuelvan a nacer.

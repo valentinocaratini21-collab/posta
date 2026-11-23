@@ -583,7 +583,20 @@
     }
     var cuerpo = '';
     if (d.tipo === 'voz' && d.es_idea) {
-      cuerpo = '<div class="d-txt">Idea: <em>«' + esc(d.pedido || '') + '»</em></div>'
+      // (LOTE RESPUESTA-HILO-IDEA) Si la idea ya es un hilo (el
+      // cliente siguió la conversación desde su tarjeta), la tarjeta
+      // muestra la conversación ENTERA en orden: quien resuelve
+      // tiene todo el contexto antes de contestar. Con un solo
+      // mensaje queda la línea «Idea:» de siempre.
+      var ideaHead = '';
+      if (d.idea_hilo && d.idea_hilo.length > 1) {
+        ideaHead = '<div class="d-hilo">' + d.idea_hilo.map(function (mm) {
+          return '<div class="d-hilo-m ' + (mm.rol === 'posty' ? 'posty' : 'cliente') + '"><small>' + (mm.rol === 'posty' ? 'Posty' : 'Cliente') + '</small>' + esc(mm.texto || '') + '</div>';
+        }).join('') + '</div>';
+      } else {
+        ideaHead = '<div class="d-txt">Idea: <em>«' + esc(d.pedido || '') + '»</em></div>';
+      }
+      cuerpo = ideaHead
         + '<div id="ideaRes-' + d.message_id + '"></div>'
         + '<div class="d-actions"><button class="btn primary small" data-act="idea-resolver" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Resolver y avisar</button>'
         + '<button class="btn small ghost-danger" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';

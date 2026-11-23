@@ -20774,6 +20774,33 @@ function subirIdeaEjemplos(uid) {
       : 'para nuestro aniversario quiero un posteo especial — avisalo desde unos días antes, con lo que hacemos ese día');
   return { producto, fecha };
 }
+// (LOTE RESPUESTA-HILO-IDEA) El hilo de UNA idea, en orden de
+// conversación: el mensaje que la abrió (subir_ideas.message_id) +
+// todo mensaje enlazado por idea_id (los seguimientos del cliente
+// desde el «Responder…» de su tarjeta y las respuestas del operador
+// por resolver-idea). Para ideas viejas sin mensajes enlazados más
+// allá del primero, el hilo se completa con la respuesta guardada en
+// la fila (su texto, si lo hubo): la tarjeta pinta la misma historia
+// de siempre, ahora como conversación.
+function subirIdeaHilo(uid, row, lang, tz) {
+  const msgs = db.prepare(
+    `SELECT id, role, text, created_at FROM chat_messages
+      WHERE user_id = ? AND (id = ? OR idea_id = ?)
+      ORDER BY id ASC`).all(uid, Number(row.message_id), Number(row.id));
+  const hilo = msgs.map((m) => ({
+    rol: m.role === 'assistant' ? 'posty' : 'cliente',
+    texto: m.text || '',
+    hora: subirIdeaHoraCorta(m.created_at, tz, lang),
+  }));
+  if (!hilo.length) {
+    hilo.push({ rol: 'cliente', texto: row.texto || '', hora: subirIdeaHoraCorta(row.created_at, tz, lang) });
+  }
+  const respGuardada = String(row.respuesta || '');
+  if (respGuardada && !hilo.some((m) => m.rol === 'posty' && m.texto === respGuardada)) {
+    hilo.push({ rol: 'posty', texto: respGuardada, hora: subirIdeaHoraCorta(row.resuelta_at || row.created_at, tz, lang) });
+  }
+  return hilo;
+}
 function subirIdeaPayload(uid, row) {
   if (!row) return null;
   const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
@@ -20791,6 +20818,7 @@ function subirIdeaPayload(uid, row) {
     id: Number(row.id), texto: row.texto || '', estado: row.estado || 'recibida',
     hora: subirIdeaHoraCorta(row.created_at, tz, lang),
     respuesta: row.respuesta || '', posteo,
+    hilo: subirIdeaHilo(uid, row, lang, tz),
   };
 }
 app.post('/api/subir/idea', requireAuth, (req, res) => {
@@ -20801,6 +20829,9 @@ app.post('/api/subir/idea', requireAuth, (req, res) => {
     const m = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', texto, 0, 'general');
     const ins = db.prepare('INSERT INTO subir_ideas (user_id, message_id, texto) VALUES (?,?,?)').run(uid, Number(m.lastInsertRowid), texto);
     const row = db.prepare('SELECT * FROM subir_ideas WHERE id = ?').get(Number(ins.lastInsertRowid));
+    // (LOTE RESPUESTA-HILO-IDEA) El mensaje que abre la idea queda
+    // también enlazado por idea_id: el hilo se lee por un solo camino.
+    db.prepare('UPDATE chat_messages SET idea_id = ? WHERE id = ?').run(Number(row.id), Number(m.lastInsertRowid));
     return res.json({ ok: true, idea: subirIdeaPayload(uid, row) });
   } catch (e) { console.error('[subir-idea]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu idea' }); }
 });
@@ -20810,6 +20841,38 @@ app.get('/api/subir/idea', requireAuth, (req, res) => {
     const row = db.prepare('SELECT * FROM subir_ideas WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(uid);
     return res.json({ ok: true, idea: subirIdeaPayload(uid, row), ejemplos: subirIdeaEjemplos(uid) });
   } catch (e) { console.error('[subir-idea-get]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo leer tu idea' }); }
+});
+// (LOTE RESPUESTA-HILO-IDEA · decisión del dueño 23/11 04:03) La
+// respuesta del cliente DENTRO del hilo de su idea — el «Responder…»
+// bajo la última respuesta de Posty, en la misma tarjeta. El mensaje
+// cae en el MISMO hilo (chat_messages 'general' con idea_id, la cola
+// de siempre) y, si la idea estaba resuelta, la REABRE: su estado
+// vuelve a 'recibida' y el mensaje nace pendiente en la cola del
+// conserje (pedidos-voz lo levanta como pedido nuevo, con el hilo
+// completo a la vista), para que ninguna respuesta de un cliente se
+// pierda en una idea cerrada. Sin idea_id en el cuerpo, la respuesta
+// va sobre la última idea del usuario. Nada genera, agenda ni
+// publica desde acá: lectura + registro (FRENO-CUENTA-PROPIA intacto).
+app.post('/api/subir/idea/responder', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const texto = String(b.text || '').trim().slice(0, 2000);
+    if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    const ideaId = Number(b.idea_id) || 0;
+    const row = ideaId
+      ? db.prepare('SELECT * FROM subir_ideas WHERE id = ? AND user_id = ?').get(ideaId, uid)
+      : db.prepare('SELECT * FROM subir_ideas WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(uid);
+    if (!row) return res.status(404).json({ ok: false, error: 'idea_inexistente' });
+    db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo, idea_id) VALUES (?,?,?,?,?,?)')
+      .run(uid, 'user', texto, 0, 'general', Number(row.id));
+    const reabierta = String(row.estado) === 'resuelta';
+    if (reabierta) {
+      db.prepare("UPDATE subir_ideas SET estado = 'recibida', resuelta_at = NULL WHERE id = ?").run(Number(row.id));
+    }
+    const fresh = db.prepare('SELECT * FROM subir_ideas WHERE id = ?').get(Number(row.id));
+    return res.json({ ok: true, reabierta, idea: subirIdeaPayload(uid, fresh) });
+  } catch (e) { console.error('[subir-idea-responder]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo enviar tu respuesta' }); }
 });
 // La resolución del operador, desde la cola del conserje: con un
 // posteo hecho y/o con una respuesta/pregunta en palabras. Escribe la
@@ -20822,7 +20885,14 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver-idea', requireAdminTo
   try {
     const b = req.body || {};
     const mid = Number(b.message_id) || 0;
-    const idea = mid ? db.prepare('SELECT * FROM subir_ideas WHERE message_id = ?').get(mid) : null;
+    let idea = mid ? db.prepare('SELECT * FROM subir_ideas WHERE message_id = ?').get(mid) : null;
+    if (!idea && mid) {
+      // (LOTE RESPUESTA-HILO-IDEA) El ítem de la cola puede ser un
+      // SEGUIMIENTO del hilo (la reapertura del cliente): su idea se
+      // encuentra por el idea_id que ese mensaje lleva estampado.
+      const cm = db.prepare('SELECT idea_id FROM chat_messages WHERE id = ?').get(mid);
+      if (cm && cm.idea_id) idea = db.prepare('SELECT * FROM subir_ideas WHERE id = ?').get(Number(cm.idea_id));
+    }
     if (!idea) return res.status(404).json({ ok: false, error: 'idea_inexistente' });
     const uid = Number(idea.user_id);
     const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
@@ -20842,7 +20912,10 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver-idea', requireAdminTo
         ? `Done! Your idea is now a post${sl.dia_label ? ' — it goes out ' + sl.dia_label : ''}${sl.hora ? ' at ' + sl.hora : ''}.`
         : `¡Listo! Tu idea ya es un posteo${sl.dia_label ? ' — sale ' + sl.dia_label : ''}${sl.hora ? ' a las ' + sl.hora : ''}.`;
     }
-    db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', respuesta, 0, 'general');
+    // (LOTE RESPUESTA-HILO-IDEA) La respuesta del operador queda
+    // estampada con el idea_id: es un mensaje más del MISMO hilo y la
+    // tarjeta del cliente la pinta en la conversación.
+    db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo, idea_id) VALUES (?,?,?,?,?,?)').run(uid, 'assistant', respuesta, 0, 'general', Number(idea.id));
     db.prepare(`UPDATE subir_ideas SET estado = 'resuelta', respuesta = ?, post_id = ?, resuelta_at = datetime('now') WHERE id = ?`)
       .run(texto, post ? Number(post.id) : null, Number(idea.id));
     try { conserjeVista.marcarVozResuelto(db, mid, 'equipo'); } catch (e) {}
@@ -48623,7 +48696,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1267';
+const BUILD_ID = '20261105-v1268';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

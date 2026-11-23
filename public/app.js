@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1267';
+const PZ_BUILD = '20261105-v1268';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -34863,6 +34863,26 @@ function pzVpBind() {
    la línea a mano lo resuelve — posteo hecho o respuesta/pregunta —
    llega la push y el resultado se pinta ACÁ MISMO: el posteo es el
    de su semana (se muestra y se enlaza; no se duplica). */
+// (LOTE RESPUESTA-HILO-IDEA) El hilo de la idea como conversación:
+// los mensajes del cliente y las respuestas de Posty, en orden. Si
+// el payload no trae hilo (una versión vieja en caché), se compone
+// de la propia idea: su texto y su respuesta guardada.
+function pzIdeaHiloHTML(idea) {
+  const hilo = (idea.hilo && idea.hilo.length) ? idea.hilo.slice() : [{ rol: 'cliente', texto: idea.texto || '' }];
+  if (idea.respuesta && !hilo.some((m) => m.rol === 'posty' && m.texto === idea.respuesta)) {
+    hilo.push({ rol: 'posty', texto: idea.respuesta });
+  }
+  return '<div class="pz-idea-hilo">' + hilo.map((m) => m.rol === 'posty'
+    ? `<div class="pz-idea-resp"><img src="/ai-avatar.png" alt=""><span>${esc(m.texto || '')}</span></div>`
+    : `<div class="pz-idea-sent">«${esc(m.texto || '')}»</div>`).join('') + '</div>';
+}
+// El campo «Responder…» con su botón, en el mismo lugar de la
+// tarjeta: la conversación sigue acá, sin navegar a otra pantalla.
+function pzIdeaResponderHTML(en) {
+  return `<textarea id="pzIdeaRespTexto" rows="2" placeholder="${en ? 'Reply…' : 'Responder…'}"></textarea>
+      <div class="pz-idea-err" id="pzIdeaRespErr" hidden></div>
+      <button type="button" class="listo pz-idea-enviar" id="pzIdeaRespEnviar">${en ? 'Reply' : 'Responder'}</button>`;
+}
 function pzIdeaPintar() {
   const en = pzVozEn();
   const card = document.getElementById('pzIdeaCard');
@@ -34870,9 +34890,10 @@ function pzIdeaPintar() {
   const idea = PZ_IDEA.idea;
   if (idea && idea.estado === 'recibida') {
     card.innerHTML = `<div class="pz-idea-t">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div>
-      <div class="pz-idea-sent">«${esc(idea.texto)}»</div>
+      ${pzIdeaHiloHTML(idea)}
       <div class="pz-idea-ok">✓ ${en ? 'Received' : 'Recibida'} · ${esc(idea.hora || '')}</div>
       <div class="pz-idea-sub">${en ? "We're on it. Estimated reply: <b>30 min</b> — we'll let you know with a push." : 'La estamos viendo. Respuesta estimada: <b>30 min</b> — te avisamos con una push.'}</div>
+      ${pzIdeaResponderHTML(en)}
       <button type="button" class="pz-idea-link" id="pzIdeaOtra">${en ? 'Write another idea' : 'Escribir otra idea'}</button>`;
   } else if (idea && idea.estado === 'resuelta') {
     const p = idea.posteo;
@@ -34881,13 +34902,13 @@ function pzIdeaPintar() {
         ${p.caption ? `<div class="pz-idea-post-cap">${esc(String(p.caption).slice(0, 140))}</div>` : ''}
         <div class="pz-idea-post-when">${p.published ? (en ? 'Already out' : 'Ya salió') : (en ? 'Goes out ' : 'Sale ') + esc(p.dia_label || '')}${p.hora ? ' · ' + esc(p.hora) : ''}</div>
         <button type="button" class="pz-idea-link" id="pzIdeaVer">${en ? 'See it in your week' : 'Verlo en tu semana'}</button></div>` : '';
-    const respHtml = idea.respuesta ? `<div class="pz-idea-resp"><img src="/ai-avatar.png" alt=""><span>${esc(idea.respuesta)}</span></div>` : '';
     const listoHtml = (p && !idea.respuesta)
       ? `<div class="pz-idea-ok">✓ ${en ? 'Done! Your idea is now a post' : '¡Listo! Tu idea ya es un posteo'}</div>`
       : `<div class="pz-idea-ok">✓ ${en ? 'Done' : 'Listo'}</div>`;
     card.innerHTML = `<div class="pz-idea-t">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div>
-      <div class="pz-idea-sent">«${esc(idea.texto)}»</div>
-      ${listoHtml}${respHtml}${postHtml}
+      ${pzIdeaHiloHTML(idea)}
+      ${listoHtml}${postHtml}
+      ${pzIdeaResponderHTML(en)}
       <button type="button" class="pz-idea-link" id="pzIdeaOtra">${en ? 'Write another idea' : 'Escribir otra idea'}</button>`;
   } else {
     const ej = PZ_IDEA.ejemplos || {};
@@ -34906,6 +34927,8 @@ function pzIdeaPintar() {
   if (ver && idea && idea.posteo) ver.onclick = () => { try { sessionStorage.setItem('pz_ver_grilla', String(idea.posteo.id)); } catch (e) {} location.hash = '#/app/inicio'; };
   const env = document.getElementById('pzIdeaEnviar');
   if (env) env.onclick = () => pzIdeaEnviar();
+  const renv = document.getElementById('pzIdeaRespEnviar');
+  if (renv) renv.onclick = () => pzIdeaResponder();
 }
 async function pzIdeaEnviar() {
   const en = pzVozEn();
@@ -34923,6 +34946,33 @@ async function pzIdeaEnviar() {
     pzIdeaPintar();
   } catch (e) {
     if (err) { err.hidden = false; err.textContent = en ? "It couldn't be sent just now — your idea stays written here; try again." : 'No se pudo enviar ahora — tu idea queda escrita acá; probá de nuevo.'; }
+  }
+  PZ_IDEA.busy = false;
+}
+// (LOTE RESPUESTA-HILO-IDEA) El «Responder» de la tarjeta: la
+// respuesta sigue en el MISMO hilo (POST /api/subir/idea/responder)
+// — si la idea estaba resuelta, el servidor la reabre y el pedido
+// vuelve a la cola del conserje con el hilo completo. La tarjeta se
+// repinta con el hilo que devuelve el servidor: una sola fuente de
+// verdad, nada se inserta a mano acá (nada se duplica).
+async function pzIdeaResponder() {
+  const en = pzVozEn();
+  if (PZ_IDEA.busy) return;
+  const idea = PZ_IDEA.idea;
+  if (!idea) return;
+  const ta = document.getElementById('pzIdeaRespTexto');
+  const text = String((ta && ta.value) || '').trim();
+  const err = document.getElementById('pzIdeaRespErr');
+  if (!text) { if (err) { err.hidden = false; err.textContent = en ? 'Write your reply first.' : 'Escribí tu respuesta primero.'; } return; }
+  if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzIdeaResponder()); return; }
+  PZ_IDEA.busy = true;
+  try {
+    const r = await api.post('/api/subir/idea/responder', { idea_id: idea.id, text });
+    if (!r || !r.ok || !r.idea) throw new Error((r && r.error) || 'responder');
+    PZ_IDEA.idea = r.idea;
+    pzIdeaPintar();
+  } catch (e) {
+    if (err) { err.hidden = false; err.textContent = en ? "It couldn't be sent just now — your reply stays written here; try again." : 'No se pudo enviar ahora — tu respuesta queda escrita acá; probá de nuevo.'; }
   }
   PZ_IDEA.busy = false;
 }
