@@ -37785,6 +37785,9 @@ function bandejaDeps() {
       return { igUserId: s.ig_user_id || '', accessToken: s.ig_access_token || '', igUsername: p.ig_username || '' };
     },
     suggestFn: (uid) => suggestDetailedForUser(uid),
+    // (BANDEJA-VERDAD) El patrón de la fórmula retirada, para la purga
+    // y el censo (la misma regex del candado de generación de v1236).
+    formulaRe: require('./generator').REPLY_FORMULA_RE,
     apiKeyOf: (uid) => (getSettings(uid) || {}).openai_key || '',
     notify: (uid, info) => {
       try {
@@ -37807,6 +37810,10 @@ app.get('/api/bandeja', requireAuth, planGateMiddleware(db, 'comentarios'), asyn
     // FRENO (1): al abrir la revisión de una tanda, lo que el negocio ya
     // respondió desde Instagram sale solo de la tanda.
     if (tandaId) { try { await B.refreshTanda(db, uid, tandaId, bandejaDeps()); } catch (e) {} }
+    // (BANDEJA-VERDAD) Guarda en la lectura: ningún borrador guardado
+    // con la fórmula retirada llega a la pantalla — se regenera (o se
+    // vacía con su marca) antes de servir la bandeja de este usuario.
+    try { await B.purgarBorradoresFormula(db, bandejaDeps(), { onlyUser: uid }); } catch (e) {}
     const data = B.getBandeja(db, uid);
     res.json({ ok: true, tandas: data.tandas, acciones: data.acciones, novedades: B.novedades(db, uid) });
   } catch (e) {
@@ -37870,6 +37877,32 @@ app.post('/api/bandeja/tanda/:id/approve', requireAuth, planGateMiddleware(db, '
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// (BANDEJA-VERDAD) Lectura admin de la bandeja — la que faltaba para
+// verificar sin entrar a la sesión del dueño: la bandeja completa de
+// una cuenta y el censo agregado (ítems por estado, los que están en
+// error con su nota, y el stock de borradores con la fórmula retirada
+// por usuario y antigüedad). Solo lectura. Gate: ADMIN_TOKEN.
+app.get('/api/admin/users/:id/bandeja', requireAdminToken, (req, res) => {
+  const uid = Number(req.params.id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta id' });
+  try {
+    const B = require('./bandeja');
+    const user = db.prepare('SELECT id, email, plan, plan_status FROM users WHERE id = ?').get(uid) || null;
+    if (!user) return res.status(404).json({ error: 'usuario no encontrado' });
+    const data = B.getBandeja(db, uid);
+    const censo = B.censoBandeja(db, bandejaDeps());
+    const resumen = censo.usuarios.find(u => u.user_id === uid) || null;
+    res.json({ ok: true, user, tandas: data.tandas, acciones: data.acciones, resumen });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/bandeja/censo', requireAdminToken, (req, res) => {
+  try {
+    const B = require('./bandeja');
+    res.json({ ok: true, ...B.censoBandeja(db, bandejaDeps()) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // =====================================================================
@@ -48427,7 +48460,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1241';
+const BUILD_ID = '20261105-v1243';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -3111,7 +3111,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1241';
+const PZ_BUILD = '20261105-v1243';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22501,7 +22501,7 @@ function pzBandejaTarjetaHTML(t) {
     <div class="pzb-firma"><img src="ai-avatar.png" alt="Posty"><span>${pzBandejaT('Preparadas por Posty', 'Prepared by Posty')} · ${pzBandejaHace(t.updated_at)}</span></div>
     <div class="pzb-acciones">
       <button type="button" class="pzb-btn pzb-btn-revisar" onclick="pzBandejaAbrir(${t.id})">${pzBandejaT('Revisar', 'Review')}</button>
-      <button type="button" class="pzb-btn pzb-btn-aprobar" id="pzbApr-${t.id}" onclick="pzBandejaAprobar(${t.id})">${pzBandejaT('Aprobar las', 'Approve all')} ${c.para_salir}</button>
+      ${c.para_salir ? `<button type="button" class="pzb-btn pzb-btn-aprobar" id="pzbApr-${t.id}" onclick="pzBandejaAprobar(${t.id})">${pzBandejaT('Aprobar las', 'Approve all')} ${c.para_salir}</button>` : ''}
     </div>
   </div>`;
 }
@@ -22609,8 +22609,16 @@ async function pzBandejaAprobar(tandaId) {
   if (btn) { btn.disabled = true; btn.textContent = pzBandejaT('Enviando…', 'Sending…'); }
   const r = await api.post('/api/bandeja/tanda/' + tandaId + '/approve', {}).catch(() => null);
   if (!r || !r.ok) { bbToast(pzBandejaT('No pude enviarlas. Probá de nuevo.', 'I could not send them. Try again.')); await pzBandejaRepintar(); return; }
+  // (BANDEJA-VERDAD) El toast dice lo que pasó, con los números del
+  // servidor: las bloqueadas/errores se nombran con su motivo en
+  // español; «No había respuestas para enviar» queda SOLO para
+  // cuando de verdad no había nada enviable (para_salir era 0).
+  const noSalieron = (r.bloqueadas || 0) + (r.errores || 0);
+  const motivo0 = (r.motivos && r.motivos[0]) || '';
   if (r.permiso === false) bbToast(pzBandejaT('Todavía falta el permiso de Instagram para enviarlas: quedaron guardadas, no salieron.', 'The Instagram permission to send them is still missing: they were saved, they did not go out.'));
+  else if (r.enviadas > 0 && noSalieron > 0) bbToast(pzBandejaT('Salieron ' + r.enviadas + ' ✓ · ' + (noSalieron === 1 ? '1 no pudo salir' : noSalieron + ' no pudieron salir') + (motivo0 ? ': ' + motivo0 : ''), r.enviadas + ' sent ✓ · ' + (noSalieron === 1 ? '1 could not be sent' : noSalieron + ' could not be sent') + (motivo0 ? ': ' + motivo0 : '')));
   else if (r.enviadas > 0) bbToast(pzBandejaT('Salieron ' + r.enviadas + (r.enviadas === 1 ? ' respuesta ✓' : ' respuestas ✓'), r.enviadas + (r.enviadas === 1 ? ' reply sent ✓' : ' replies sent ✓')));
+  else if (noSalieron > 0) bbToast(pzBandejaT((noSalieron === 1 ? '1 no pudo salir' : noSalieron + ' no pudieron salir') + (motivo0 ? ': ' + motivo0 : ''), (noSalieron === 1 ? '1 could not be sent' : noSalieron + ' could not be sent') + (motivo0 ? ': ' + motivo0 : '')));
   else if (r.ya_respondidas > 0) bbToast(pzBandejaT('Ya estaban respondidas por vos.', 'You had already answered them yourself.'));
   else bbToast(pzBandejaT('No había respuestas para enviar.', 'There were no replies to send.'));
   await pzBandejaRepintar();

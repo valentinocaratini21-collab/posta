@@ -45,10 +45,32 @@
 // tanda lo dice con honestidad: JAMÁS se marca enviado algo que no
 // salió.
 //
+// BANDEJA-VERDAD (lote 2026-11-22): la bandeja dice la verdad.
+//   (a) La fórmula retirada («¡Gracias por escribirnos!») era el fallback
+//       pre-v1236 y quedó ALMACENADA en bandeja_items.draft: v1236
+//       cambió la generación pero nunca migró el stock guardado, y el
+//       poll solo re-prepara si llega un mensaje nuevo. Desde este
+//       lote, purgarBorradoresFormula barre el stock (al desplegar y
+//       como guarda en la lectura): todo borrador que matchea la
+//       fórmula se regenera con el redactor actual; si la regeneración
+//       no da texto, queda '' con su marca de falta-dato. La fórmula
+//       guardada nunca se sirve.
+//   (b) ENVIABILIDAD de primera clase: la ingesta acepta DMs de hasta
+//       7 días, pero Meta solo deja responderlos dentro de las 24 h
+//       del último mensaje entrante. Se guarda ese instante
+//       (last_in_at) al ingerir; un DM fuera de ventana NO cuenta
+//       como para_salir, NO se ofrece para aprobar y su tarjeta dice
+//       la verdad en español. Los comentarios no tienen ventana.
+//   (c) approveTanda ya no reintenta a ciegas un ítem en 'error' con
+//       causa terminal (ventana/permiso): lo excluye del envío y lo
+//       reporta en bloqueadas con su motivo en español; ningún error
+//       de Meta se guarda ni se muestra crudo (mapearErrorEnvio).
+//
 // Exporta: { initBandejaTables, clasificar, esErrorPermiso,
 //   pollBandeja, getBandeja, refreshTanda, editItem, dismissItem,
 //   undismissItem, approveTanda, countAcciones, novedades,
-//   defaultFetchers }
+//   purgarBorradoresFormula, censoBandeja, mapearErrorEnvio,
+//   esErrorVentana, dmFueraDeVentana, defaultFetchers }
 'use strict';
 
 const IG_HOST = 'https://graph.instagram.com';
@@ -94,6 +116,7 @@ function initBandejaTables(db) {
     edited INTEGER NOT NULL DEFAULT 0,
     actualizado INTEGER NOT NULL DEFAULT 0,
     note TEXT DEFAULT '',
+    last_in_at TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     decided_at TEXT DEFAULT '',
@@ -101,6 +124,14 @@ function initBandejaTables(db) {
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_bandeja_items_user ON bandeja_items(user_id, estado)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_bandeja_items_tanda ON bandeja_items(tanda_id, estado)`);
+  // (BANDEJA-VERDAD) Migración: last_in_at guarda el instante del
+  // último mensaje ENTRANTE del hilo (la ventana de 24 h de los DMs
+  // se mide desde ahí). Las filas viejas quedan '' y la enviabilidad
+  // cae a created_at como aproximación.
+  try {
+    const cols = db.prepare(`PRAGMA table_info(bandeja_items)`).all().map(c => c.name);
+    if (!cols.includes('last_in_at')) db.exec(`ALTER TABLE bandeja_items ADD COLUMN last_in_at TEXT DEFAULT ''`);
+  } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +161,84 @@ function esErrorPermiso(msg) {
 }
 function esErrorToken(msg) {
   return /\(#190\)|session has expired|access token/i.test(String(msg || ''));
+}
+
+// ---------------------------------------------------------------------------
+// (BANDEJA-VERDAD) Enviabilidad y errores con nombre propio.
+// Ningún error crudo de Meta se guarda en note ni llega a la pantalla:
+// mapearErrorEnvio es la ÚNICA puerta de salida de un e.message.
+// ---------------------------------------------------------------------------
+const VENTANA_DM_MS = 24 * 3600 * 1000;
+const NOTA_VENTANA = 'Este mensaje llegó hace más de 24 horas: Instagram ya no deja responderlo por acá';
+const NOTA_PERMISO = 'Falta el permiso de Instagram para enviar: quedó guardada, no salió.';
+const NOTA_ENVIO_GENERICA = 'Instagram no lo dejó salir';
+
+function esErrorVentana(msg) {
+  return /allowed window|outside.{0,30}window|24[ -]?hour/i.test(String(msg || ''));
+}
+
+function mapearErrorEnvio(msg) {
+  const m = String(msg || '');
+  if (esErrorVentana(m)) return NOTA_VENTANA;
+  if (esErrorPermiso(m)) return NOTA_PERMISO;
+  return NOTA_ENVIO_GENERICA;
+}
+
+// Acepta el ISO de la Graph API y el 'YYYY-MM-DD HH:MM:SS' (UTC) de
+// datetime('now'). Sin fecha parseable → 0 (no se puede probar viejo).
+function parseFechaMs(s) {
+  const t = String(s || '').trim();
+  if (!t) return 0;
+  let ms = Date.parse(t);
+  if (isNaN(ms)) ms = Date.parse(t.replace(' ', 'T') + 'Z');
+  return isNaN(ms) ? 0 : ms;
+}
+
+// El instante desde el que corre la ventana: el último mensaje
+// entrante guardado; en filas viejas sin ese dato, la creación del
+// ítem (la ingesta corre cerca del mensaje: es la mejor aproximación
+// que existe y jamás bloquea algo que no se puede probar viejo).
+function refEntranteMs(item) {
+  return parseFechaMs(item && item.last_in_at) || parseFechaMs(item && item.created_at);
+}
+
+function dmFueraDeVentana(item, nowMs) {
+  if (!item || item.source !== 'dm') return false;
+  const ref = refEntranteMs(item);
+  if (!ref) return false;
+  return (Number(nowMs) || Date.now()) - ref > VENTANA_DM_MS;
+}
+
+// Causa terminal de un ítem: la que ningún reintento puede curar.
+// 'ventana' — el DM quedó fuera de las 24 h (por su reloj o porque
+// Meta ya lo rechazó con ese error, guardado crudo o ya mapeado).
+// 'permiso' — Meta cortó por permiso (ídem, en cualquiera de sus
+// formas guardadas). Todo lo demás es reintentable.
+function causaTerminal(item, nowMs) {
+  if (!item) return null;
+  if (dmFueraDeVentana(item, nowMs)) return 'ventana';
+  if (item.estado === 'error') {
+    const note = String(item.note || '');
+    if (item.source === 'dm' && (esErrorVentana(note) || note === NOTA_VENTANA)) return 'ventana';
+    if (esErrorPermiso(note) || note === NOTA_PERMISO || /permiso/i.test(note)) return 'permiso';
+  }
+  return null;
+}
+
+function motivoBloqueo(item, nowMs) {
+  const c = causaTerminal(item, nowMs);
+  if (c === 'ventana') return NOTA_VENTANA;
+  if (c === 'permiso') return NOTA_PERMISO;
+  return '';
+}
+
+// La fórmula retirada, para purgar el stock guardado. Vive en
+// generator.js (REPLY_FORMULA_RE, la misma del candado de generación
+// de v1236): se resuelve por deps o por require perezoso para no
+// crear un segundo patrón que pueda derivar.
+function formulaReDe(deps) {
+  if (deps && deps.formulaRe && typeof deps.formulaRe.test === 'function') return deps.formulaRe;
+  try { return require('./generator').REPLY_FORMULA_RE || null; } catch (e) { return null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,9 +431,9 @@ async function pollBandeja(db, deps, opts) {
               db.prepare(`UPDATE bandeja_items SET estado = 'ya_respondido', decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(existing.id);
               out.yaRespondidos++; tandasTocadas.add(tanda.id);
             } else if (!existing) {
-              db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, text, draft, clase, estado, decided_at)
-                VALUES (?,?, 'comment', ?, ?, ?, ?, ?, '', 'normal', 'ya_respondido', datetime('now'))`)
-                .run(tanda.id, uid, c.id, c.id, ultimo.id, c.username, String(ultimo.text).slice(0, 500));
+              db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, text, draft, clase, estado, decided_at, last_in_at)
+                VALUES (?,?, 'comment', ?, ?, ?, ?, ?, '', 'normal', 'ya_respondido', datetime('now'), ?)`)
+                .run(tanda.id, uid, c.id, c.id, ultimo.id, c.username, String(ultimo.text).slice(0, 500), String(ultimo.timestamp || c.timestamp || ''));
               out.yaRespondidos++; tandasTocadas.add(tanda.id);
             }
             continue;
@@ -335,12 +444,12 @@ async function pollBandeja(db, deps, opts) {
             if (['pendiente', 'sin_permiso', 'error'].includes(existing.estado) && ultimo.id !== existing.last_msg_id) {
               const contexto = entrantes.map(r => `@${r.username}: ${r.text}`).join('\n').slice(0, 600);
               if (existing.edited) {
-                db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, actualizado = 1, note = 'La persona escribió de nuevo en el hilo: revisá tu respuesta.', updated_at = datetime('now') WHERE id = ?`)
-                  .run(ultimo.id, String(ultimo.text).slice(0, 500), existing.id);
+                db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, actualizado = 1, note = 'La persona escribió de nuevo en el hilo: revisá tu respuesta.', updated_at = datetime('now') WHERE id = ?`)
+                  .run(ultimo.id, String(ultimo.text).slice(0, 500), String(ultimo.timestamp || c.timestamp || ''), existing.id);
               } else {
                 const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: contexto, postCaption: m.caption || '' });
-                db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
-                  .run(ultimo.id, String(ultimo.text).slice(0, 500), prep.draft, prep.faltaDato, existing.id);
+                db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
+                  .run(ultimo.id, String(ultimo.text).slice(0, 500), String(ultimo.timestamp || c.timestamp || ''), prep.draft, prep.faltaDato, existing.id);
               }
               out.repreparados++; tandasTocadas.add(tanda.id);
             }
@@ -358,9 +467,9 @@ async function pollBandeja(db, deps, opts) {
             continue;
           }
           const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: c.text, postCaption: m.caption || '' });
-          db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, text, draft, clase, estado, falta_dato)
-            VALUES (?,?, 'comment', ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?)`)
-            .run(tanda.id, uid, c.id, c.id, ultimo.id, c.username, String(c.text).slice(0, 500), prep.draft, clase, prep.faltaDato);
+          db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, text, draft, clase, estado, falta_dato, last_in_at)
+            VALUES (?,?, 'comment', ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`)
+            .run(tanda.id, uid, c.id, c.id, ultimo.id, c.username, String(c.text).slice(0, 500), prep.draft, clase, prep.faltaDato, String(ultimo.timestamp || c.timestamp || ''));
           out.nuevos++; tandasTocadas.add(tanda.id);
         }
         if (tandasTocadas.has(tanda.id)) touchTanda(db, tanda.id);
@@ -396,12 +505,12 @@ async function pollBandeja(db, deps, opts) {
           if (['pendiente', 'sin_permiso', 'error'].includes(existing.estado) && last.id !== existing.last_msg_id) {
             const contexto = msgs.filter(m => String(m.fromId) !== String(creds.igUserId)).slice(0, 4).reverse().map(m => `@${m.fromUsername || username}: ${m.text}`).join('\n').slice(0, 600);
             if (existing.edited) {
-              db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, author_id = ?, actualizado = 1, note = 'La persona escribió de nuevo: revisá tu respuesta.', updated_at = datetime('now') WHERE id = ?`)
-                .run(last.id, String(last.text).slice(0, 500), String(last.fromId || ''), existing.id);
+              db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, author_id = ?, actualizado = 1, note = 'La persona escribió de nuevo: revisá tu respuesta.', updated_at = datetime('now') WHERE id = ?`)
+                .run(last.id, String(last.text).slice(0, 500), String(last.created_time || ''), String(last.fromId || ''), existing.id);
             } else {
               const prep = await prepararBorrador(d, uid, { ...argsBase, username, text: contexto });
-              db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, author_id = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
-                .run(last.id, String(last.text).slice(0, 500), String(last.fromId || ''), prep.draft, prep.faltaDato, existing.id);
+              db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, author_id = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
+                .run(last.id, String(last.text).slice(0, 500), String(last.created_time || ''), String(last.fromId || ''), prep.draft, prep.faltaDato, existing.id);
             }
             out.repreparados++; touchTanda(db, tanda.id);
           }
@@ -411,16 +520,16 @@ async function pollBandeja(db, deps, opts) {
         if (clase === 'spam') {
           // En DMs el spam no se oculta en silencio (doctrina de la casa):
           // entra sin borrador, marcado, y lo decide el dueño.
-          db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, author_id, text, draft, clase, estado, note)
-            VALUES (?,?, 'dm', ?, ?, ?, ?, ?, ?, '', 'spam', 'pendiente', 'Posible spam: sin borrador preparado.')`)
-            .run(tanda.id, uid, cv.id, last.id, last.id, username, String(last.fromId || ''), String(last.text).slice(0, 500));
+          db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, author_id, text, draft, clase, estado, note, last_in_at)
+            VALUES (?,?, 'dm', ?, ?, ?, ?, ?, ?, '', 'spam', 'pendiente', 'Posible spam: sin borrador preparado.', ?)`)
+            .run(tanda.id, uid, cv.id, last.id, last.id, username, String(last.fromId || ''), String(last.text).slice(0, 500), String(last.created_time || ''));
           out.nuevos++; touchTanda(db, tanda.id);
           continue;
         }
         const prep = await prepararBorrador(d, uid, { ...argsBase, username, text: last.text });
-        db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, author_id, text, draft, clase, estado, falta_dato)
-          VALUES (?,?, 'dm', ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?)`)
-          .run(tanda.id, uid, cv.id, last.id, last.id, username, String(last.fromId || ''), String(last.text).slice(0, 500), prep.draft, clase, prep.faltaDato);
+        db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, author_id, text, draft, clase, estado, falta_dato, last_in_at)
+          VALUES (?,?, 'dm', ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`)
+          .run(tanda.id, uid, cv.id, last.id, last.id, username, String(last.fromId || ''), String(last.text).slice(0, 500), prep.draft, clase, prep.faltaDato, String(last.created_time || ''));
         out.nuevos++; touchTanda(db, tanda.id);
         quizasAvisar(db, d, uid, tanda);
       }
@@ -482,16 +591,35 @@ async function refreshTanda(db, uid, tandaId, deps) {
 // Lectura para la pantalla
 // ---------------------------------------------------------------------------
 function tandaConItems(db, tanda) {
+  const now = Date.now();
   const items = db.prepare(`SELECT * FROM bandeja_items WHERE tanda_id = ? AND estado != 'oculto'
     ORDER BY (clase = 'importante') DESC,
              (estado IN ('pendiente','sin_permiso','error')) DESC,
              created_at ASC, id ASC`).all(tanda.id);
+  // (BANDEJA-VERDAD) Lo que se sirve ya viene con la verdad puesta:
+  // cada ítem pendiente lleva su bloqueo (si lo tiene) y su nota
+  // visible — un error crudo de Meta guardado antes de este lote se
+  // mapea a español ACÁ, en la lectura, y un DM fuera de ventana dice
+  // su verdad aunque su nota guardada diga otra cosa.
+  for (const it of items) {
+    const esPend = ['pendiente', 'sin_permiso', 'error'].includes(it.estado);
+    it.bloqueo_motivo = esPend ? motivoBloqueo(it, now) : '';
+    it.enviable = esPend && !it.bloqueo_motivo;
+    if (esPend && it.bloqueo_motivo === NOTA_VENTANA) {
+      it.note = NOTA_VENTANA;
+    } else if (it.note && (esErrorVentana(it.note) || esErrorPermiso(it.note))) {
+      it.note = mapearErrorEnvio(it.note);
+    }
+  }
   const pend = items.filter(i => ['pendiente', 'sin_permiso', 'error'].includes(i.estado));
   return {
     ...tanda,
     items,
     conteo: {
-      para_salir: pend.filter(i => String(i.draft || '').trim()).length,
+      // para_salir = lo que approveTanda realmente puede enviar:
+      // con borrador Y sin bloqueo terminal. Ni uno más.
+      para_salir: pend.filter(i => String(i.draft || '').trim() && !i.bloqueo_motivo).length,
+      bloqueadas: pend.filter(i => i.bloqueo_motivo).length,
       esperando_dato: pend.filter(i => !String(i.draft || '').trim() && i.falta_dato).length,
       pendientes: pend.length,
       importantes: pend.filter(i => i.clase === 'importante').length,
@@ -508,6 +636,106 @@ function getBandeja(db, uid) {
     .map(t => tandaConItems(db, t))
     .filter(t => t.items.length > 0);
   return { tandas, acciones: countAcciones(db, uid) };
+}
+
+// ---------------------------------------------------------------------------
+// (BANDEJA-VERDAD) Purga de la fórmula guardada. Barre los borradores
+// pendientes cuyo texto matchea REPLY_FORMULA_RE y los regenera con el
+// redactor actual (prepararBorrador, con fundamento): si la
+// regeneración da texto limpio, el borrador se reemplaza; si da
+// vacío/needs-human, el borrador queda '' con su marca de falta-dato.
+// Un borrador EDITADO por el dueño es suyo: no se toca. Corre al
+// desplegar (scheduler) y como guarda en la lectura (GET /api/bandeja,
+// por usuario). Nunca lanza: un ítem fallido no rompe el barrido.
+// ---------------------------------------------------------------------------
+async function purgarBorradoresFormula(db, deps, opts) {
+  const d = deps || {};
+  const re = formulaReDe(d);
+  const out = { revisados: 0, regenerados: 0, vaciados: 0, sin_patron: 0 };
+  if (!re) { out.sin_patron = 1; return out; }
+  const onlyUser = opts && opts.onlyUser ? Number(opts.onlyUser) : 0;
+  let items = [];
+  try {
+    items = db.prepare(`SELECT * FROM bandeja_items
+      WHERE estado IN ('pendiente','sin_permiso','error') AND edited = 0 AND draft != ''
+      ${onlyUser ? 'AND user_id = ?' : ''} ORDER BY id ASC`).all(...(onlyUser ? [onlyUser] : []));
+  } catch (e) { return out; }
+  for (const it of items) {
+    if (!re.test(String(it.draft || ''))) continue;
+    out.revisados++;
+    try {
+      const prof = db.prepare('SELECT business_name, category, tone FROM profiles WHERE user_id = ?').get(it.user_id) || {};
+      const tanda = db.prepare('SELECT post_caption FROM bandeja_tandas WHERE id = ?').get(it.tanda_id) || {};
+      const prep = await prepararBorrador(d, it.user_id, {
+        business: prof.business_name || '', category: prof.category || '', tone: prof.tone || '',
+        username: it.author_username || '', text: it.text || '',
+        postCaption: it.source === 'comment' ? (tanda.post_caption || '') : '',
+      });
+      if (prep.draft && !re.test(prep.draft)) {
+        db.prepare(`UPDATE bandeja_items SET draft = ?, falta_dato = '', updated_at = datetime('now') WHERE id = ?`).run(prep.draft, it.id);
+        out.regenerados++;
+      } else {
+        db.prepare(`UPDATE bandeja_items SET draft = '', falta_dato = ?, updated_at = datetime('now') WHERE id = ?`).run(prep.faltaDato || 'dato', it.id);
+        out.vaciados++;
+      }
+    } catch (e) {
+      // Sin redactor disponible: el borrador-fórmula NO se sirve —
+      // queda vacío con su marca, y el dueño lo completa al editar.
+      try {
+        db.prepare(`UPDATE bandeja_items SET draft = '', falta_dato = 'dato', updated_at = datetime('now') WHERE id = ?`).run(it.id);
+        out.vaciados++;
+      } catch (e2) {}
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// (BANDEJA-VERDAD) Censo agregado de la bandeja para la lectura admin:
+// ítems por estado, los que están en error con su nota, y el stock de
+// borradores que todavía matchean la fórmula (por usuario y por
+// antigüedad). Solo lectura: no escribe ni regenera nada.
+// ---------------------------------------------------------------------------
+function censoBandeja(db, deps) {
+  const re = formulaReDe(deps || {});
+  const ahora = Date.now();
+  const porUsuario = new Map();
+  const fila = (uid) => {
+    if (!porUsuario.has(uid)) {
+      porUsuario.set(uid, {
+        user_id: uid, por_estado: {}, en_error: [],
+        formula: { cantidad: 0, mas_viejo: '', antiguedad_horas: 0 },
+        bloqueadas_ventana: 0,
+      });
+    }
+    return porUsuario.get(uid);
+  };
+  let items = [];
+  try {
+    items = db.prepare(`SELECT id, user_id, source, estado, note, draft, created_at, last_in_at
+      FROM bandeja_items WHERE estado != 'oculto' ORDER BY user_id ASC, id ASC`).all();
+  } catch (e) { items = []; }
+  for (const it of items) {
+    const f = fila(it.user_id);
+    f.por_estado[it.estado] = (f.por_estado[it.estado] || 0) + 1;
+    if (it.estado === 'error') {
+      f.en_error.push({ id: it.id, source: it.source, note: String(it.note || ''), note_visible: mapearErrorEnvio(it.note), created_at: it.created_at });
+    }
+    if (['pendiente', 'sin_permiso', 'error'].includes(it.estado) && causaTerminal(it, ahora) === 'ventana') f.bloqueadas_ventana++;
+    if (re && it.draft && re.test(String(it.draft))) {
+      f.formula.cantidad++;
+      if (!f.formula.mas_viejo || String(it.created_at) < f.formula.mas_viejo) f.formula.mas_viejo = String(it.created_at);
+    }
+  }
+  const usuarios = [...porUsuario.values()];
+  for (const f of usuarios) {
+    if (f.formula.mas_viejo) {
+      const ms = parseFechaMs(f.formula.mas_viejo);
+      f.formula.antiguedad_horas = ms ? Math.max(0, Math.round((ahora - ms) / 360000) / 10) : 0;
+    }
+  }
+  const totales = { usuarios: usuarios.length, items: items.length, formula: usuarios.reduce((a, f) => a + f.formula.cantidad, 0), bloqueadas_ventana: usuarios.reduce((a, f) => a + f.bloqueadas_ventana, 0) };
+  return { usuarios, totales };
 }
 
 function countAcciones(db, uid) {
@@ -576,7 +804,8 @@ async function approveTanda(db, uid, tandaId, deps) {
 
   const items = db.prepare(`SELECT * FROM bandeja_items WHERE tanda_id = ? AND estado IN ('pendiente','sin_permiso','error')
     ORDER BY (clase = 'importante') DESC, created_at ASC, id ASC`).all(tandaId);
-  const out = { enviadas: 0, ya_respondidas: 0, sin_permiso: 0, esperando_dato: 0, errores: 0, permiso: true };
+  const out = { enviadas: 0, ya_respondidas: 0, sin_permiso: 0, esperando_dato: 0, errores: 0, bloqueadas: 0, motivos: [], permiso: true };
+  const anotaMotivo = (m) => { if (m && !out.motivos.includes(m)) out.motivos.push(m); };
 
   // FRENO (2): estado fresco de los hilos, UNA lectura por tanda.
   const respondidos = new Set();
@@ -599,12 +828,23 @@ async function approveTanda(db, uid, tandaId, deps) {
   for (const it of items) {
     if (!String(it.draft || '').trim()) { out.esperando_dato++; continue; }
     if (cortoPorPermiso) {
-      db.prepare(`UPDATE bandeja_items SET estado = 'sin_permiso', note = 'Falta el permiso de Instagram para enviar: quedó guardada, no salió.', updated_at = datetime('now') WHERE id = ?`).run(it.id);
+      db.prepare(`UPDATE bandeja_items SET estado = 'sin_permiso', note = ?, updated_at = datetime('now') WHERE id = ?`).run(NOTA_PERMISO, it.id);
       out.sin_permiso++; continue;
     }
     if (respondidos.has(it.thread_key) || (tanda.kind === 'dm' && convNegocioUltimo)) {
       db.prepare(`UPDATE bandeja_items SET estado = 'ya_respondido', decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(it.id);
       out.ya_respondidas++; continue;
+    }
+    // (BANDEJA-VERDAD) Causa terminal: NO se reintenta a ciegas. El
+    // ítem queda fuera del envío, su nota queda en español y el
+    // resultado lo reporta como bloqueado con su motivo — la
+    // pantalla nunca más promete lo que Meta ya dijo que no sale.
+    const motivo = motivoBloqueo(it);
+    if (motivo) {
+      if (String(it.note || '') !== motivo) {
+        db.prepare(`UPDATE bandeja_items SET note = ?, updated_at = datetime('now') WHERE id = ?`).run(motivo, it.id);
+      }
+      out.bloqueadas++; anotaMotivo(motivo); continue;
     }
     try {
       if (it.source === 'dm') await F.sendDm(creds, it.author_id, it.draft);
@@ -614,11 +854,14 @@ async function approveTanda(db, uid, tandaId, deps) {
     } catch (e) {
       if (esErrorPermiso(e.message)) {
         cortoPorPermiso = true; out.permiso = false;
-        db.prepare(`UPDATE bandeja_items SET estado = 'sin_permiso', note = 'Falta el permiso de Instagram para enviar: quedó guardada, no salió.', updated_at = datetime('now') WHERE id = ?`).run(it.id);
+        db.prepare(`UPDATE bandeja_items SET estado = 'sin_permiso', note = ?, updated_at = datetime('now') WHERE id = ?`).run(NOTA_PERMISO, it.id);
         out.sin_permiso++;
       } else {
-        db.prepare(`UPDATE bandeja_items SET estado = 'error', note = ?, updated_at = datetime('now') WHERE id = ?`).run(String(e.message || 'error de envío').slice(0, 160), it.id);
-        out.errores++;
+        // (BANDEJA-VERDAD) La nota que queda guardada es la verdad
+        // en español, nunca el e.message crudo de Meta.
+        const notaEs = mapearErrorEnvio(e.message);
+        db.prepare(`UPDATE bandeja_items SET estado = 'error', note = ?, updated_at = datetime('now') WHERE id = ?`).run(notaEs, it.id);
+        out.errores++; anotaMotivo(notaEs);
       }
     }
   }
@@ -630,4 +873,6 @@ module.exports = {
   initBandejaTables, clasificar, esErrorPermiso, esErrorToken,
   pollBandeja, getBandeja, refreshTanda, editItem, dismissItem, undismissItem,
   approveTanda, countAcciones, novedades, defaultFetchers,
+  purgarBorradoresFormula, censoBandeja, mapearErrorEnvio, esErrorVentana,
+  dmFueraDeVentana, causaTerminal, motivoBloqueo, NOTA_VENTANA, NOTA_PERMISO,
 };

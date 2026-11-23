@@ -1293,6 +1293,16 @@ function startScheduler(db) {
     }, { timezone: 'America/Argentina/Buenos_Aires' });
     console.log('[posta] Stories automáticas: 12:00 (Buenos Aires)');
   } catch (e) { console.error('[stories] no se pudo programar:', e.message); }
+  // (BANDEJA-VERDAD) Barrido único al desplegar: el stock de
+  // borradores guardados con la fórmula retirada se regenera (o se
+  // vacía con su marca) una vez por arranque del proceso — ningún
+  // borrador viejo con la fórmula llega a servirse. Guardado entero:
+  // si falla, la guarda en la lectura (GET /api/bandeja) cubre igual.
+  try {
+    require('./bandeja').purgarBorradoresFormula(db, proBandejaDeps(db))
+      .then((r) => { if (r && (r.regenerados || r.vaciados)) console.log('[bandeja-verdad] purga al desplegar:', JSON.stringify(r)); })
+      .catch((e) => console.error('[bandeja-verdad]', e.message));
+  } catch (e) { console.error('[bandeja-verdad] no se pudo purgar al desplegar:', e.message); }
   try {
     cron.schedule('0 9,18 * * *', () => {
       try {
