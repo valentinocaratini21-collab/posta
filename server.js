@@ -37925,6 +37925,23 @@ app.post('/api/bandeja/novedades/vistas', requireAuth, express.json(), async (re
   }
 });
 
+// (NOVEDADES-ORDEN-BORRAR) «Borrar todo» de la sección NOVEDADES:
+// la marca de borrado sube a «ahora» y la proyección deja de
+// mostrar (y la campana de contar) todo lo anterior a la marca.
+// Los hechos no se borran. Devuelve el conteo fresco para
+// repintar la insignia sin esperar al próximo refresco, como el
+// de vistas.
+app.post('/api/bandeja/novedades/borrar', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const B = require('./bandeja');
+    const c = B.borrarNovedades(db, uid);
+    res.json({ ok: true, acciones: c.acciones, novedades: c.novedades, total: c.total });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/bandeja/refresh', requireAuth, planGateMiddleware(db, 'comentarios'), requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -48563,7 +48580,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1263';
+const BUILD_ID = '20261105-v1264';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

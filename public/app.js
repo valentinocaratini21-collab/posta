@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1263';
+const PZ_BUILD = '20261105-v1264';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22526,6 +22526,8 @@ function pzBandejaEstilos() {
 .pzb-progreso{height:5px;border-radius:99px;background:#E3EDF5;margin:10px 0 12px;overflow:hidden}
 .pzb-progreso i{display:block;height:100%;background:linear-gradient(90deg,#57B2E5,#2793C8);border-radius:99px}
 .pzb-vacio{background:#fff;border-radius:22px;box-shadow:0 10px 28px rgba(10,30,51,.08);padding:26px 18px;text-align:center;color:#5A6B7C;font-size:15px}
+.pzb-seccion-flex{display:flex;align-items:center;justify-content:space-between}
+.pzb-borrar-todo{border:0;background:none;padding:2px 0;font-family:inherit;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:#1273AC;cursor:pointer}
 </style>`;
 }
 function pzBandejaIconoNov(tipo) {
@@ -22606,7 +22608,7 @@ function pzBandejaNotifsHTML(data) {
     <div class="pzb-sobre">
     ${tandas.length ? `<div class="pzb-seccion" style="margin-top:0;color:#fff;opacity:.95">${pzBandejaT('ESPERA TU TOQUE', 'WAITING FOR YOUR TAP')}</div>` + tandas.map(pzBandejaTarjetaHTML).join('') : `<div class="pzb-vacio">${pzBandejaT('Todavía no hay respuestas para preparar.<br>Cuando alguien comente o te escriba, Posty las prepara acá.', 'No replies to prepare yet.<br>When someone comments or writes to you, Posty prepares them here.')}</div>`}
     </div>
-    ${novs.length ? `<div class="pzb-seccion">${pzBandejaT('NOVEDADES', 'UPDATES')}</div><div class="pzb-card">${novs.map(n => `<div class="pzb-nov">${pzBandejaIconoNov(n.tipo)}<div><div class="pzb-nov-tit">${esc(n.titulo || '')}</div><div class="pzb-nov-det">${esc(n.detalle || '')}</div></div><span class="pzb-nov-cuando">${pzBandejaHace(n.cuando)}</span></div>`).join('')}</div>` : ''}
+    ${novs.length ? `<div class="pzb-seccion pzb-seccion-flex"><span>${pzBandejaT('NOVEDADES', 'UPDATES')}</span><button type="button" class="pzb-borrar-todo" onclick="pzBandejaBorrarNovedades()">${pzBandejaT('Borrar todo', 'Clear all')}</button></div><div class="pzb-card">${novs.map(n => `<div class="pzb-nov">${pzBandejaIconoNov(n.tipo)}<div><div class="pzb-nov-tit">${esc(n.titulo || '')}</div><div class="pzb-nov-det">${esc(n.detalle || '')}</div></div><span class="pzb-nov-cuando">${pzBandejaHace(n.cuando)}</span></div>`).join('')}</div>` : ''}
     ${bloqueadas.length ? `<div class="pzb-seccion">${pzBandejaT('NO PUEDEN SALIR', 'CANNOT GO OUT')}</div>` + bloqueadas.map(pzBandejaTarjetaBloqueadaHTML).join('') : ''}
   </div>`;
 }
@@ -22716,6 +22718,32 @@ function pzBandejaMarcarVistas() {
       if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = false;
     }).catch(() => { if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = false; });
   } catch (e) { try { if (typeof window !== 'undefined') window.__pzBandejaVistasBuscando = false; } catch (e2) {} }
+}
+function pzBandejaBorrarNovedades() {
+  // (NOVEDADES-ORDEN-BORRAR) «Borrar todo» de la sección NOVEDADES:
+  // el servidor sube la marca de borrado a «ahora»; la proyección
+  // deja de mostrar las novedades anteriores y la campana las deja
+  // de contar EN EL ACTO, con el total fresco que devuelve el mismo
+  // llamado — el mismo patrón que pzBandejaMarcarVistas. Después se
+  // repinta la pantalla: con cero novedades la sección queda como
+  // queda hoy (no se pinta). Las tandas que esperan el toque del
+  // dueño y las que no pueden salir NO se tocan: necesitan su
+  // acción, no se barren. Si el llamado falla, la pantalla queda
+  // como está (ninguna puerta muerta).
+  try {
+    if (typeof window !== 'undefined' && window.__pzBandejaBorrando) return;
+    if (typeof window !== 'undefined') window.__pzBandejaBorrando = true;
+    api.post('/api/bandeja/novedades/borrar', {}).then(async (r) => {
+      try {
+        if (r && typeof r.total === 'number') {
+          if (typeof window !== 'undefined') window.__pzCampanaBadgeN = r.total;
+          pzCampanaBadgePintar();
+        }
+        await pzBandejaRepintar();
+      } catch (e) {}
+      if (typeof window !== 'undefined') window.__pzBandejaBorrando = false;
+    }).catch(() => { if (typeof window !== 'undefined') window.__pzBandejaBorrando = false; });
+  } catch (e) { try { if (typeof window !== 'undefined') window.__pzBandejaBorrando = false; } catch (e2) {} }
 }
 async function pzBandejaView() {
   const q = new URLSearchParams((location.hash.split('?')[1] || ''));

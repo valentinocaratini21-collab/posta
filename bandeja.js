@@ -196,6 +196,17 @@ function initBandejaTables(db) {
     user_id INTEGER PRIMARY KEY,
     hasta TEXT NOT NULL DEFAULT ''
   )`);
+  // (NOVEDADES-ORDEN-BORRAR) La marca de BORRADO de las novedades:
+  // otra fila por usuario, con el instante hasta el que el dueño
+  // barrió la sección con «Borrar todo». Es una marca distinta de
+  // la de lectura a propósito: lo VISTO sigue en pantalla (solo deja
+  // de contar); lo BORRADO sale de la proyección misma (no se ve ni
+  // cuenta). No se borra ningún hecho ni fila de origen: la
+  // proyección compara instantes, igual que con la lectura.
+  db.exec(`CREATE TABLE IF NOT EXISTS bandeja_novedades_borradas (
+    user_id INTEGER PRIMARY KEY,
+    hasta TEXT NOT NULL DEFAULT ''
+  )`);
 }
 
 // ---------------------------------------------------------------------------
@@ -958,6 +969,28 @@ function marcarNovedadesVistas(db, uid) {
   return conteoCampana(db, uid);
 }
 
+// (NOVEDADES-ORDEN-BORRAR) La marca de borrado de las novedades: el
+// instante hasta el que este usuario barrió la sección (0 = nunca).
+function novedadesBorradasHastaMs(db, uid) {
+  try {
+    const r = db.prepare('SELECT hasta FROM bandeja_novedades_borradas WHERE user_id = ?').get(uid);
+    return r ? parseFechaMs(r.hasta) : 0;
+  } catch (e) { return 0; }
+}
+
+// (NOVEDADES-ORDEN-BORRAR) «Borrar todo» de la sección NOVEDADES: la
+// marca de borrado sube a «ahora» y la proyección (novedades) deja
+// de servir todo lo anterior — en la pantalla y en el conteo de la
+// campana, que sale de esa misma lista (una sola fuente de verdad).
+// Los hechos NO se tocan: lo que llegue después de la marca aparece
+// y cuenta normal. Devuelve el conteo fresco, como
+// marcarNovedadesVistas, para repintar la insignia en el acto.
+function borrarNovedades(db, uid) {
+  db.prepare(`INSERT INTO bandeja_novedades_borradas (user_id, hasta) VALUES (?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET hasta = datetime('now')`).run(uid);
+  return conteoCampana(db, uid);
+}
+
 // (CAMPANA-LIMPIABLE) EL número de la campana, con una sola verdad:
 // ítems accionables esperando el toque + novedades sin ver. Nada más.
 function conteoCampana(db, uid) {
@@ -971,9 +1004,21 @@ function conteoCampana(db, uid) {
 // (CAMPANA-LIMPIABLE) Cada novedad lleva su estado de lectura
 // (`vista`): es vista si su instante no supera la marca del usuario
 // (bandeja_novedades_vistas). Sin marca, todo es sin ver.
+// (NOVEDADES-ORDEN-BORRAR) La proyección sale ORDENADA por el momento
+// del hecho, la más nueva ARRIBA — salía en el orden en que se
+// consultan las fuentes y el dueño veía el posteo de hace 4 h arriba
+// del impulso de hace 7 min (captura del 23/11) — y EXCLUYE lo que
+// el dueño ya barrió con «Borrar todo»: toda novedad cuyo instante
+// no supere la marca de borrado (bandeja_novedades_borradas) no se
+// sirve, así lo borrado no reaparece jamás al recomputar y el
+// conteo de la campana, que sale de esta misma lista, cae en el
+// acto. Una novedad posterior a la marca aparece y cuenta normal.
+// El criterio de la marca es el mismo de la lectura: un instante
+// sin fecha parseable vale 0 y queda bajo cualquier marca.
 function novedades(db, uid) {
   const out = [];
   const hastaMs = novedadesVistasHastaMs(db, uid);
+  const borradasMs = novedadesBorradasHastaMs(db, uid);
   try {
     const post = db.prepare(`SELECT caption, published_at FROM posts WHERE user_id = ? AND status = 'published'
       AND published_at IS NOT NULL AND date(published_at) = date('now') ORDER BY published_at DESC LIMIT 1`).get(uid);
@@ -987,7 +1032,9 @@ function novedades(db, uid) {
       out.push({ tipo: 'impulso', titulo: 'Tu impulso está corriendo', detalle: `${monto} · ${boost.duration_days || 7} días`, cuando: boost.created_at, vista: parseFechaMs(boost.created_at) <= hastaMs });
     }
   } catch (e) {}
-  return out;
+  return out
+    .filter(n => !(borradasMs > 0 && parseFechaMs(n.cuando) <= borradasMs))
+    .sort((a, b) => parseFechaMs(b.cuando) - parseFechaMs(a.cuando));
 }
 
 // ---------------------------------------------------------------------------
@@ -1104,7 +1151,7 @@ module.exports = {
   initBandejaTables, clasificar, esErrorPermiso, esErrorToken,
   pollBandeja, getBandeja, refreshTanda, editItem, dismissItem, undismissItem,
   approveTanda, countAcciones, novedades, defaultFetchers,
-  conteoCampana, marcarNovedadesVistas,
+  conteoCampana, marcarNovedadesVistas, borrarNovedades,
   purgarBorradoresFormula, censoBandeja, mapearErrorEnvio, esErrorVentana,
   dmFueraDeVentana, causaTerminal, motivoBloqueo, NOTA_VENTANA, NOTA_PERMISO,
   registrarFaltaDato, medidaTanda, medidaUsuario, datoTopFalta,
