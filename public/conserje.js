@@ -417,9 +417,12 @@
         // una imagen real (su tapa), nunca el archivo de video.
         var img = t.poster_url || (esVideo && t.kind === 'post' ? '' : (t.img || t.image_url || ''));
         var aprobable = (t.status === 'scheduled' || t.status === 'draft') && porId[t.post_id] && porId[t.post_id].dia_key;
+        // (LOTE CONSERJE-BOTONES · F2) El borrador se dice en
+        // español, como en el resto de la consola — nunca el
+        // status crudo («draft») que esta rama imprimía tal cual.
         var chip = t.status === 'published' ? '<span class="state-chip green">En su Instagram</span>'
           : t.status === 'scheduled' ? '<span class="state-chip sky">Programado</span>'
-          : '<span class="state-chip yellow">' + esc(t.status || '') + '</span>';
+          : '<span class="state-chip yellow">Borrador</span>';
         var verAttrs = '';
         if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
         else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
@@ -717,8 +720,20 @@
     // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido viaja en el
     // pedido: la ficha lo incluye aunque no esté entre los 12 últimos.
     return api('/api/admin/conserje/vista/cliente?user_id=' + uid + (postId ? '&post_id=' + Number(postId) : '')).then(function (j) {
-      if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); }
-    }).catch(function () { /* la ficha anterior queda: el próximo refresh reintenta */ });
+      if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); return; }
+      // (LOTE CONSERJE-BOTONES · F5) La ficha que no carga AVISA —
+      // nunca más el silencio que dejaba la ficha vieja (o ninguna)
+      // como si el toque no hubiera hecho nada: con el token vencido
+      // se reabre la puerta con su mensaje (espejo de cargar) y con
+      // cualquier otro error sale el toast.
+      if (j && (j.__status === 401 || j.__status === 403)) {
+        var gm = $('gateMsg');
+        if (gm) gm.textContent = 'Ese token no abrió la consola. Revisalo y probá de nuevo.';
+        abrirGate();
+        return;
+      }
+      toast('No se pudo cargar la ficha.', 'err');
+    }).catch(function () { toast('No se pudo cargar la ficha.', 'err'); });
   }
   // (LOTE CONSERJE-FORMA) Cada ítem abre sobre la cosa misma: la
   // ficha del cliente, con el posteo referido marcado y a la vista.
@@ -917,13 +932,21 @@
   function abrirGate() { $('gate').classList.add('open'); var i = $('gateToken'); if (i) i.focus(); }
   $('gateBtn').addEventListener('click', function () {
     var v = ($('gateToken').value || '').trim();
-    if (!v) return;
+    // (LOTE CONSERJE-BOTONES) «Entrar» sin token no es un clic
+    // mudo: la puerta dice qué falta, en la puerta misma.
+    if (!v) { var gmE = $('gateMsg'); if (gmE) gmE.textContent = 'Pegá el token de administración para entrar.'; return; }
     token = v;
     try { localStorage.setItem('posta_admin_token', v); } catch (e) {}
     var gmB = $('gateMsg');
     if (gmB) gmB.textContent = '';
     $('gate').classList.remove('open');
-    cargar(true);
+    // (LOTE CONSERJE-BOTONES · F4) El deep link de la push también
+    // se sigue tras entrar por la puerta, igual que en el arranque
+    // con token guardado: sin esto, el enlace ?user=&post= se perdía
+    // al tipear el token — y también al re-entrar tras un 401.
+    cargar(true).then(function () {
+      if (deepUser) { try { gotoFicha(deepUser, deepPost || null); } catch (e) {} }
+    });
   });
   $('gateToken').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') $('gateBtn').click(); });
 
