@@ -138,7 +138,7 @@ async function syncComments(db, userId, suggestFn, apiKey) {
           ));
           suggested = r.reply;
           if (r.needsHuman) status = 'needs_human';
-        } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+        } catch (e) { suggested = ''; } // (BANDEJA-VOZ) sin borrador antes que la fórmula: la gratitud calcada no se escribe ni como red
       }
       db.prepare(
         `INSERT INTO comment_queue (user_id, ig_comment_id, ig_media_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,?)`
@@ -213,7 +213,7 @@ async function syncDMs(db, userId, suggestFn, apiKey) {
         ));
         suggested = r.reply;
         if (r.needsHuman) status = 'needs_human';
-      } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+      } catch (e) { suggested = ''; } // (BANDEJA-VOZ) sin borrador antes que la fórmula: la gratitud calcada no se escribe ni como red
     }
     db.prepare(
       `INSERT INTO dm_queue (user_id, ig_conversation_id, ig_message_id, ig_sender_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,?, ?)`

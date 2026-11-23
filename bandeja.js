@@ -230,7 +230,9 @@ async function prepararBorrador(deps, uid, args) {
   const fn = deps.suggestFn ? deps.suggestFn(uid) : null;
   const apiKey = deps.apiKeyOf ? deps.apiKeyOf(uid) : '';
   if (!fn) return { draft: '', faltaDato: 'fundamento' };
-  const r = await fn({ business: args.business, category: args.category, tone: args.tone, username: args.username, commentText: args.text }, apiKey);
+  // (BANDEJA-VOZ) El caption del posteo comentado viaja al redactor como
+  // ancla: estaba guardado en la tanda y nunca llegaba al prompt.
+  const r = await fn({ business: args.business, category: args.category, tone: args.tone, username: args.username, commentText: args.text, postCaption: args.postCaption || '' }, apiKey);
   const o = (r && typeof r === 'object') ? r : { reply: String(r || ''), needsHuman: false, reason: '' };
   if (o.needsHuman) {
     const reason = String(o.reason || '');
@@ -336,7 +338,7 @@ async function pollBandeja(db, deps, opts) {
                 db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, actualizado = 1, note = 'La persona escribió de nuevo en el hilo: revisá tu respuesta.', updated_at = datetime('now') WHERE id = ?`)
                   .run(ultimo.id, String(ultimo.text).slice(0, 500), existing.id);
               } else {
-                const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: contexto });
+                const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: contexto, postCaption: m.caption || '' });
                 db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, draft = ?, falta_dato = ?, actualizado = 1, estado = 'pendiente', updated_at = datetime('now') WHERE id = ?`)
                   .run(ultimo.id, String(ultimo.text).slice(0, 500), prep.draft, prep.faltaDato, existing.id);
               }
@@ -355,7 +357,7 @@ async function pollBandeja(db, deps, opts) {
             out.spam++; tandasTocadas.add(tanda.id);
             continue;
           }
-          const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: c.text });
+          const prep = await prepararBorrador(d, uid, { ...argsBase, username: c.username, text: c.text, postCaption: m.caption || '' });
           db.prepare(`INSERT OR IGNORE INTO bandeja_items (tanda_id, user_id, source, thread_key, comment_id, last_msg_id, author_username, text, draft, clase, estado, falta_dato)
             VALUES (?,?, 'comment', ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?)`)
             .run(tanda.id, uid, c.id, c.id, ultimo.id, c.username, String(c.text).slice(0, 500), prep.draft, clase, prep.faltaDato);

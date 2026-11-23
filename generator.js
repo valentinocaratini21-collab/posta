@@ -6167,6 +6167,149 @@ function replyIntent(text) {
   return { price, hours, booking, factual: price || hours };
 }
 
+// ---------------------------------------------------------------------------
+// (LOTE BANDEJA-VOZ · 22/11 · palabra del dueño con captura: al comentario
+// «🔥» la bandeja redactó el «¡Gracias por escribirnos!» con su 🙌 — «La respuesta no
+// se ve como una persona, se ve como ia») La voz del redactor: hasta este
+// lote el prompt solo tenía reglas de DATOS y el fallback determinístico
+// ERA la fórmula de gratitud — cada camino degradado (sin key, error,
+// respuesta vacía) producía la marca de agua del bot, en ES y en EN.
+// Las reglas nuevas viven acá, en el criterio del redactor:
+//   · se responde lo que el comentario ES (su clase manda la forma);
+//   · la fórmula de gratitud queda prohibida, también al abrir un mensaje
+//     real (nada de fórmula calcada);
+//   · se espeja el largo y la energía del comentario;
+//   · se ancla: el posteo (su caption viaja desde la bandeja) y el
+//     producto se nombran cuando el comentario se refiere a ellos;
+//   · la voz sale del fundamento: su tono declarado y sus frases reales
+//     (voz_marcadores del digest, que foundationFacts ahora sí extrae);
+//   · emoji solo en espejo o de la voz del negocio, nunca decorativo.
+// Y un candado post-generación, hermano del de precios: si el modelo
+// igual escribe la fórmula, no sale a la bandeja.
+// ---------------------------------------------------------------------------
+
+const REPLY_QUEJA_RE = /(horrible|p[eé]simo|mal[ií]simo|una verg[uü]enza|verg[uü]enza|estafa|decepci[oó]n|mal servicio|me cobraron|no me (respond|atiend)|nunca m[aá]s|terrible|awful|worst|scam|disappoint|bad service|very bad)/i;
+const REPLY_ELOGIO_RE = /(hermoso|hermosa|lindo|linda|genio|genia|crack|excelente|espectacular|incre[ií]ble|me encanta|me encant[oó]|amo\b|amé|riqu[ií]simo|delicioso|qué bueno|que bueno|felicitaciones|bravo|amazing|beautiful|love it|love this|delicious|awesome|great (post|job|work)|so good|the best)/i;
+
+// La familia de la fórmula de gratitud: la marca de agua del bot.
+const REPLY_FORMULA_RE = /(¡?\s*gracias por (escribirnos|tu mensaje|su mensaje|contactarnos|comunicarte|comunicarse|escribir|el mensaje)|¡?\s*thank(s| you) for (reaching out|your message|contacting us|getting in touch|messaging us))/i;
+
+function replyEmojis(text) {
+  return String(text || '').match(/\p{Extended_Pictographic}/gu) || [];
+}
+
+// Clase del comentario: reacción (solo emoji) · queja · dato (pregunta un
+// precio/horario/reserva: la intención factual de siempre) · pregunta ·
+// elogio · mensaje (escrito de verdad). Determinística, sin modelo.
+function replyClass(text, intent) {
+  const t = String(text || '').trim();
+  const it = intent || replyIntent(t);
+  const sinEmoji = t.replace(/\p{Extended_Pictographic}/gu, '').replace(/[\s\p{P}\p{S}]/gu, '');
+  if (t && sinEmoji.length === 0 && replyEmojis(t).length) return 'reaccion';
+  if (REPLY_QUEJA_RE.test(t)) return 'queja';
+  if (it.factual || it.booking) return 'dato';
+  if (/[?¿]/.test(t) || /^(c[oó]mo|cu[aá]ndo|d[oó]nde|qu[eé]|qui[eé]n|cu[aá]l|how|when|where|what|which|do you|does|can you|is there|are you)\b/i.test(t)) return 'pregunta';
+  if (REPLY_ELOGIO_RE.test(t)) return 'elogio';
+  if (t.length >= 2 && /\p{L}/u.test(t)) return 'mensaje';
+  if (replyEmojis(t).length) return 'reaccion';
+  return 'mensaje';
+}
+
+// La red de seguridad determinística, por clase: lo que una persona
+// escribiría sin pensar. La reacción se responde en espejo con el emoji
+// del propio comentario («se viene 🔥» para el 🔥, en cualquier cuenta).
+function replyVoiceFallback(args, cls) {
+  const a = args || {};
+  const en = a.lang === 'en';
+  const clase = cls || replyClass(a.commentText);
+  if (clase === 'reaccion') {
+    const e = replyEmojis(a.commentText)[0] || '';
+    if (e === '🔥' || !e) return en ? "it's coming 🔥" : 'se viene 🔥';
+    return e;
+  }
+  if (clase === 'elogio') return en ? 'thank you!' : '¡gracias!';
+  if (clase === 'queja') return en ? "sorry about that — tell me what happened and we'll sort it out" : 'perdón por eso — contame qué pasó y lo resolvemos';
+  if (clase === 'dato' || clase === 'pregunta') {
+    return (a.fundamento || a.horarios)
+      ? (en ? "I'll confirm that for you right away here" : 'te lo confirmo enseguida por acá')
+      : (en ? "hi! send me a DM and I'll help you right away" : '¡hola! escribime por privado y te ayudo enseguida');
+  }
+  return en ? 'hi! answering you right here' : '¡hola! ya te respondo por acá';
+}
+
+// Saca la(s) oración(es) que son la fórmula, conservando el contenido
+// real que el modelo haya puesto después. '' si no queda nada.
+function stripReplyFormula(reply) {
+  let t = String(reply || '').trim();
+  if (!REPLY_FORMULA_RE.test(t)) return t;
+  const partes = t.split(/(?<=[.!?…])\s+/);
+  t = partes.filter((p) => !REPLY_FORMULA_RE.test(p)).join(' ').trim();
+  return REPLY_FORMULA_RE.test(t) ? '' : t;
+}
+
+// Candado de voz post-generación: la fórmula no sale a la bandeja ni
+// aunque el modelo la escriba; en la clase reacción se exige el espejo
+// (corta y con el emoji del comentario) o se cae al espejo determinístico.
+function replyVoiceGuard(reply, args, cls) {
+  const clase = cls || replyClass(args && args.commentText);
+  const t = String(reply || '').trim();
+  if (clase === 'reaccion') {
+    const emojis = replyEmojis(args && args.commentText);
+    const espejoOk = t.length > 0 && t.length <= 42 && (!emojis.length || t.includes(emojis[0]));
+    if (!espejoOk || REPLY_FORMULA_RE.test(t)) return replyVoiceFallback(args, clase);
+    return t;
+  }
+  if (REPLY_FORMULA_RE.test(t)) {
+    const limpia = stripReplyFormula(t);
+    if (!limpia || REPLY_FORMULA_RE.test(limpia)) return replyVoiceFallback(args, clase);
+    return limpia;
+  }
+  return t;
+}
+
+// Las reglas de voz que viajan en el prompt del redactor, según la clase.
+// La voz del negocio entra por sus frases reales (voz) y el ancla por el
+// caption del posteo comentado (postCaption, lo pasa la bandeja).
+function replyVoicePrompt({ en, cls, voz, postCaption }) {
+  const claseES = {
+    reaccion: 'El comentario es SOLO una reacción (un emoji): respondé en espejo — una línea cortísima con ese mismo emoji (ej.: «se viene 🔥»). Nada de frases completas ni de agradecer: nadie escribió nada.',
+    elogio: 'El comentario es un elogio breve: respondé breve y concreto, como una persona; si nombra el posteo o un producto, devolvé algo de eso.',
+    dato: 'El comentario pregunta un dato (precio, horario o reserva): respondé con el dato real de arriba, directo y corto, sin abrir con ninguna fórmula.',
+    pregunta: 'El comentario es una pregunta: respondé a ESO que pregunta, corto y concreto; si el dato no está en los datos de arriba, decí que se lo confirmás enseguida por acá.',
+    queja: 'El comentario es una queja: reconocé el problema sin fórmulas ni agradecimientos vacíos, pedí el dato que falta y ofrecé el paso concreto para resolverlo.',
+    mensaje: 'La persona escribió un mensaje de verdad: respondé a lo que dice, en su mismo registro; si agradecés, que sea corto y pegado a lo que dijo — jamás la fórmula calcada al abrir.',
+  };
+  const claseEN = {
+    reaccion: 'The comment is ONLY a reaction (an emoji): mirror it — one very short line with that same emoji (e.g. "it\'s coming 🔥"). No full sentences and no thanking: nobody wrote anything.',
+    elogio: 'The comment is short praise: reply briefly and concretely, like a person; if it names the post or a product, give something of that back.',
+    dato: 'The comment asks for a fact (price, hours or booking): answer with the real data above, direct and short, with no formula opener.',
+    pregunta: 'The comment is a question: answer THAT question, short and concrete; if the fact is not in the data above, say you will confirm it right away here.',
+    queja: 'The comment is a complaint: acknowledge the problem with no formulas and no empty thanks, ask for the missing detail and offer the concrete step to fix it.',
+    mensaje: 'The person wrote a real message: answer what they say, in their own register; if you thank them, keep it short and tied to what they said — never the canned formula as an opener.',
+  };
+  const lines = [];
+  if (en) {
+    lines.push('VOICE (as hard as the data rules): the gratitude formula is BANNED — "thanks for reaching out", "thank you for your message", "thanks for contacting us" and any variant: it sounds like a bot and nobody talks like that. Mirror the length and energy of the comment: short comment, short reply. Emojis: none decorative by default — only one that mirrors the comment or belongs to this business\'s own voice. Sound like THIS business, not a generic community manager.');
+    lines.push(claseEN[cls] || claseEN.mensaje);
+  } else {
+    lines.push('VOZ (tan dura como las reglas de datos): PROHIBIDA la fórmula de gratitud — «gracias por escribirnos», «gracias por tu mensaje», «gracias por contactarnos» y cualquier variante: suena a bot y nadie habla así. Espejá el largo y la energía del comentario: comentario corto, respuesta corta. Emojis: ninguno decorativo por defecto — solo el que espeja al comentario o es de la voz de este negocio. Soná a ESTE negocio, no a un community manager genérico.');
+    lines.push(claseES[cls] || claseES.mensaje);
+  }
+  const frases = (Array.isArray(voz) ? voz : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 5);
+  if (frases.length) {
+    lines.push(en
+      ? `Real phrases from this business's own voice (match their tone; use one only if it fits): ${frases.join(' · ')}`
+      : `Frases reales de la voz de este negocio (imitalas en tono; usá una solo si encaja): ${frases.join(' · ')}`);
+  }
+  const cap = String(postCaption || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+  if (cap) {
+    lines.push(en
+      ? `The comment is on this post: "${cap}" — if the comment refers to the post or to what it sells, name it by its name.`
+      : `El comentario es sobre este posteo: «${cap}» — si el comentario se refiere al posteo o a lo que vende, nombralo por su nombre.`);
+  }
+  return lines.join('\n');
+}
+
 // Hechos vendibles del fundamento: servicios/productos/promos con su
 // precio real (si existe), horarios, ciudad y si toma reservas/señas.
 function foundationFacts(fundamento, horarios) {
@@ -6191,6 +6334,9 @@ function foundationFacts(fundamento, horarios) {
     promos: items(d && d.promos),
     hours: String(horarios || (d && d.horarios) || '').trim(),
     city: String((d && d.ciudad) || '').trim(),
+    // (BANDEJA-VOZ) Las frases reales de la voz del negocio viven en el
+    // digest (voz_marcadores) y el redactor nunca las leía: ahora viajan.
+    voz: (d && Array.isArray(d.voz_marcadores)) ? d.voz_marcadores.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 5) : [],
     booking: !!(d && d.has_booking),
     hasFoundation: !!(d && clientDigest.hasFoundation(d)),
   };
@@ -6242,8 +6388,11 @@ async function suggestReplyDetailed(args, apiKey) {
   // Espejo EN (cableado Atención Total, 2026-10-21): la cuenta manda el
   // idioma (users.lang). Sin lang o 'es' → comportamiento histórico.
   const en = a.lang === 'en';
-  const fallback = en ? 'Thanks for reaching out! 🙌' : '¡Gracias por escribirnos! 🙌';
   const intent = replyIntent(a.commentText);
+  // (BANDEJA-VOZ) La red de seguridad también habla como una persona: el
+  // fallback sale de la clase del comentario, nunca de una fórmula.
+  const cls = replyClass(a.commentText, intent);
+  const fallback = replyVoiceFallback(a, cls);
   const hasFund = !!(a.fundamento || a.horarios);
   const facts = hasFund ? foundationFacts(a.fundamento, a.horarios) : null;
   if (hasFund) {
@@ -6255,13 +6404,16 @@ async function suggestReplyDetailed(args, apiKey) {
   if (!apiKey) return { reply: fallback, needsHuman: false, reason: 'sin_api_key', intent, factsUsed: [] };
   try {
     const block = facts ? foundationBlock(facts) : '';
-    const system = en
+    let system = en
       ? (hasFund
         ? `You are Posty, the community manager and salesperson for "${a.business || 'a business'}" (${a.category || 'general business'}). Reply to @${a.username || 'a customer'} warmly, in at most 1-2 short lines. Tone: ${a.tone || 'friendly'}.\nREAL BUSINESS DATA (the only allowed source for prices, services and hours):\n${block || '(no data loaded)'}\nHARD RULES: if they ask about price, service or hours, answer ONLY with the data above, verbatim. Never invent a price, a discount, stock or hours that are not in the list. If what they ask is not in the list, say you will confirm it right away here, without inventing the data. If they want to book or buy, offer the concrete next step using the real data. Reply ONLY with the reply, no quotes.`
         : `You are the community manager for "${a.business || 'a business'}" (${a.category || 'general business'}). Reply to the Instagram comment from @${a.username || 'a follower'} warmly, in at most 1-2 short lines. Tone: ${a.tone || 'friendly'}. If they ask about price/stock/hours and you do not know, invite them to DM without inventing data. Reply ONLY with the reply, no quotes.`)
       : (hasFund
       ? `Sos Posty, el community manager y vendedor de "${a.business || 'un negocio'}" (${a.category || 'rubro general'}). Respondé el mensaje de @${a.username || 'un cliente'} con calidez argentina (voseo), en 1-2 líneas como mucho. Tono ${a.tone || 'canchero'}.\nDATOS REALES DEL NEGOCIO (única fuente permitida para precios, servicios y horarios):\n${block || '(sin datos cargados)'}\nREGLAS DURAS: si pregunta precio, servicio u horario, respondé SOLO con los datos de arriba, textuales. Jamás inventes un precio, un descuento, stock ni un horario que no esté en la lista. Si justo lo que pregunta no está en la lista, decí que se lo confirmás enseguida por acá, sin inventar el dato. Si quiere reservar o comprar, ofrecé el siguiente paso concreto usando los datos reales. Respondé SOLO con la respuesta, sin comillas.`
       : `Sos el community manager de "${a.business || 'un negocio'}" (${a.category || 'rubro general'}). Respondé el comentario de Instagram de @${a.username || 'un seguidor'} con calidez argentina (voseo), en 1-2 líneas como mucho. Tono ${a.tone || 'canchero'}. Si pregunta precio/stock/horario y no lo sabés, invitalo a escribir por DM sin inventar datos. Respondé SOLO con la respuesta, sin comillas.`);
+    // (BANDEJA-VOZ) Las reglas de voz se suman a TODAS las variantes del
+    // prompt: la clase del comentario, su voz real y el ancla del posteo.
+    system += '\n' + replyVoicePrompt({ en, cls, voz: facts ? facts.voz : [], postCaption: a.postCaption });
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -6281,7 +6433,10 @@ async function suggestReplyDetailed(args, apiKey) {
     trackUsage({ feature: 'comment-reply', model: 'gpt-4o-mini', json: data });
     const t = String((data.choices && data.choices[0] && data.choices[0].message.content) || '').trim().replace(/^["“”]+|["“”]+$/g, '');
     if (!t) return { reply: fallback, needsHuman: false, reason: 'respuesta_vacia', intent, factsUsed: [] };
-    const reply = t.slice(0, 300);
+    // (BANDEJA-VOZ) Candado de voz, hermano del de precios de abajo: la
+    // fórmula de gratitud no sale a la bandeja ni aunque el modelo la
+    // escriba, y la reacción exige su espejo.
+    const reply = replyVoiceGuard(t.slice(0, 300), a, cls);
     if (hasFund && a.fundamento) {
       // Candado de verdad: un precio que no está en el fundamento = la
       // respuesta se descarta y la conversación escala a humano.
@@ -6367,4 +6522,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, hashtagsPass, orphanPriceToken, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, parseChatActionBlocks, parseCreateBlock, parseRedoBlock, chatReceiptLines, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, replyClass, replyVoiceFallback, replyVoiceGuard, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, hashtagsPass, orphanPriceToken, detectTextLang, langCheck, captionBodyKey, captionWeekClash, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
