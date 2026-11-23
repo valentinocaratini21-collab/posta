@@ -716,6 +716,182 @@
     }).join('') : '<span class="vacio">La cola está vacía: no hay producción a mano en curso.</span>';
   }
 
+  // ---------------- LOTE CONSERJE-BANDEJA · la capa móvil ----------------
+  // El rediseño phone-first del mock 1 «La bandeja»: la MISMA vista y
+  // las MISMAS acciones de la consola, re-presentadas en el teléfono.
+  // Hoy reusa decCard — las tarjetas de siempre, con su compositor de
+  // respuesta en la tarjeta (resolver-idea / responder por el chat) y
+  // sus botones ya cableados por el handler delegado. Negocios
+  // compone el tablero semáforo desde vista.clientes + vista.mano y
+  // abre la ficha actual (la misma que pinta el escritorio, con su
+  // semana y sus posteos). Posteos es la cola de revisión de mañana
+  // con las decisiones POR PIEZA de revision/* — «Aprobar todo» no
+  // existe del lado operador: la tanda la aprueba el dueño del
+  // negocio, es su puerta (fork del CENSO-CONSERJE-3 §5.1). Más trae
+  // vista.ultimas y los accesos. La capa solo pinta: cada acción va
+  // por los handlers de siempre y la vista se relee entera.
+  var mTab = 'hoy';
+  var mFichaUid = null;
+  function mProblemaDe(uid) {
+    return ((vista && vista.mano) || []).filter(function (d) { return d.user_id === uid && (d.clase || '') === 'problema'; });
+  }
+  function renderMovil() {
+    var body = $('mBody');
+    if (!body) return;
+    var navBtns = document.querySelectorAll('#movil [data-mtab]');
+    for (var i = 0; i < navBtns.length; i++) navBtns[i].classList.toggle('on', navBtns[i].getAttribute('data-mtab') === mTab);
+    if (!vista) { body.innerHTML = '<div class="m-cargando">Cargando…</div>'; return; }
+    var h = vista.hoy || {};
+    $('mSub').textContent = (h.fecha_label ? h.fecha_label + ' · ' : '') + 'todo lo que te necesita, acá';
+    var n = (vista.mano || []).length;
+    var chip = $('mChip');
+    chip.hidden = false;
+    if (n > 0) { chip.className = 'm-chip'; chip.textContent = n + (n === 1 ? ' te necesita' : ' te necesitan'); }
+    else { chip.className = 'm-chip ok'; chip.textContent = '✓ Todo al día'; }
+    if (mTab === 'negocios') body.innerHTML = (mFichaUid && cliente && Number(cliente.user_id) === Number(mFichaUid)) ? mFichaHtml() : mTableroHtml();
+    else if (mTab === 'posteos') body.innerHTML = mPosteosHtml();
+    else if (mTab === 'mas') body.innerHTML = mMasHtml();
+    else body.innerHTML = mHoyHtml();
+    if (mTab === 'negocios' && highlightPostId) {
+      var el = $('post-' + highlightPostId);
+      if (el) el.scrollIntoView({ block: 'center' });
+    }
+  }
+  function mHoyHtml() {
+    var ds = (vista && (vista.mano || vista.decisiones)) || [];
+    if (!ds.length) return '<div class="m-done">✓ Todo resuelto — nada necesita una mano hoy.</div>';
+    var html = '';
+    for (var g = 0; g < MANO_GRUPOS.length; g++) {
+      var items = ds.filter(function (d) { return (d.clase || 'pedido') === MANO_GRUPOS[g][0]; });
+      if (!items.length) continue;
+      html += '<div class="mano-group">' + MANO_GRUPOS[g][1] + '<span class="chip-n">' + items.length + '</span></div>' + items.map(decCard).join('');
+    }
+    return html;
+  }
+  function mTableroHtml() {
+    var cs = (vista && vista.clientes) || [];
+    var conPend = cs.filter(function (f) { return f.pendientes && f.pendientes.total > 0; }).length;
+    var probUids = {};
+    ((vista && vista.mano) || []).forEach(function (d) { if ((d.clase || '') === 'problema' && d.user_id) probUids[d.user_id] = true; });
+    var nProb = Object.keys(probUids).length;
+    var orden = cs.slice().sort(function (a, b) {
+      var pa = probUids[a.user_id] ? 0 : (a.pendientes && a.pendientes.total > 0 ? 1 : 2);
+      var pb = probUids[b.user_id] ? 0 : (b.pendientes && b.pendientes.total > 0 ? 1 : 2);
+      return pa - pb;
+    });
+    var html = '<div class="m-sums"><div class="m-sum"><div class="n">' + cs.length + '</div><div class="l">Negocios</div></div>'
+      + '<div class="m-sum oro"><div class="n">' + conPend + '</div><div class="l">Para vos</div></div>'
+      + '<div class="m-sum rojo"><div class="n">' + nProb + '</div><div class="l">Problema</div></div></div>';
+    if (!orden.length) html += '<div class="m-cargando">La cartera viva está vacía.</div>';
+    html += orden.map(function (f) {
+      var probs = mProblemaDe(f.user_id);
+      var dot = probs.length ? 'red' : (f.pendientes && f.pendientes.total > 0 ? 'yellow' : (f.dot === 'green' ? 'green' : (f.dot === 'yellow' ? 'yellow' : 'grey')));
+      var ds = probs.length ? trunc(probs[0].texto || probs[0].titulo || 'Tiene un problema', 70)
+        : (f.pendientes && f.pendientes.total > 0 ? f.pendientes.total + (f.pendientes.total === 1 ? ' pendiente' : ' pendientes') + (f.estado ? ' · ' + f.estado : '')
+          : (f.estado || 'Todo al día'));
+      return '<button class="m-biz" data-mbiz="' + f.user_id + '" type="button"><span class="dot ' + dot + '"></span>'
+        + '<span><span class="nm">' + esc(f.business_name || 'Sin nombre') + '</span>'
+        + '<span class="ds" style="display:block">' + esc(ds) + '</span></span><span class="go">›</span></button>';
+    }).join('');
+    html += '<p class="m-note">Los que necesitan algo suben solos arriba.</p>';
+    return html;
+  }
+  function mFichaHtml() {
+    var c = cliente;
+    var ini = iniciales(c.business_name);
+    var fila = ((vista && vista.clientes) || []).filter(function (f) { return Number(f.user_id) === Number(c.user_id); })[0] || {};
+    var dot = fila.dot === 'green' ? 'green' : (fila.dot === 'yellow' ? 'yellow' : 'grey');
+    var week = '<div class="week">' + (c.semana || []).map(function (d) {
+      var cls = '', sym = '—', note = '';
+      if (d.estado === 'publicado') { cls = 'done'; sym = '✓'; note = 'Publicó'; }
+      else if (d.estado === 'programado') { sym = '◷'; note = 'Sale ' + (d.hora || ''); }
+      else if (d.estado === 'borrador') { sym = '✎'; note = 'Borrador'; }
+      else if (d.estado === 'frenado') { cls = 'frenado'; sym = '⛔'; note = 'Frenado por el cliente'; }
+      else if (d.estado === 'falta') { cls = 'missing'; sym = '⚠'; note = 'Falta'; }
+      if (d.es_hoy) cls += ' today';
+      return '<div class="day ' + cls + '"><div class="d-name">' + esc(d.dia) + ' ' + esc(d.fecha) + '</div><div class="d-state">' + sym + '</div><div class="d-note">' + esc(note) + '</div>'
+        + (d.estado === 'falta' ? '<div class="d-mini"><button class="btn small" data-act="producir" data-fecha="' + esc(d.key) + '" type="button">Producir ahora</button></div>' : '')
+        + '</div>';
+    }).join('') + '</div>';
+    var enPosteos = {};
+    (c.posteos || []).forEach(function (p) { enPosteos[p.id] = true; });
+    var plan = c.plan_prueba_detalle || null;
+    var planCards = plan ? plan.slots.filter(function (s) { return s.estado !== 'listo' || !s.post_id || !enPosteos[s.post_id]; })
+      .filter(function (s) { return s.estado !== 'listo'; }).map(function (s) { return planCard(s, ini); }).join('') : '';
+    var grid = (c.posteos || []).length || planCards
+      ? '<div class="posts">' + (c.posteos || []).map(function (p) { return postCard(p, true, ini); }).join('') + planCards + '</div>'
+      : '<div class="m-cargando">Esta cuenta todavía no tiene posteos.</div>';
+    return '<button class="m-back" data-mback type="button">← Negocios</button>'
+      + '<div class="m-ficha-head"><div class="nm">' + esc(c.business_name || 'Sin nombre') + '</div>'
+      + '<div class="hd">@' + esc(c.ig_username || '—') + (c.categoria ? ' · ' + esc(c.categoria) : '') + '</div>'
+      + '<div class="st"><span class="dot ' + dot + '"></span>' + esc(fila.estado || '') + '</div></div>'
+      + '<div class="sec-t">Su semana</div>' + week
+      + '<div class="sec-t">Sus posteos</div>' + grid;
+  }
+  function mPosteosHtml() {
+    var m = vista && vista.manana;
+    if (!m || !m.items || !m.items.length) return '<div class="m-cargando">No hay producción de mañana para revisar.</div>';
+    var fecha = m.fecha || '';
+    var html = '<div class="sec-t" style="margin-top:2px">Cola de revisión · ' + esc(m.fecha_label || 'mañana') + '</div>';
+    html += m.items.map(function (i) {
+      var estadoTxt = i.estado === 'listo' ? (i.sin_posteo_decidido ? 'No sale · decidido' : 'Listo') : (i.estado === 'en_preparacion' ? (i.post ? 'Propuesta por decidir' : 'Posty lo arma') : 'Falta');
+      var head = '<div class="mp-in"><div class="mp-biz">' + esc(i.business_name || 'Sin nombre') + '</div>';
+      if (!i.post) {
+        return '<div class="m-post">' + head + '<div class="mp-title">' + (i.sin_posteo_decidido ? 'El dueño decidió que mañana no sale' : 'Sin posteo para mañana') + '</div>'
+          + '<span class="m-state ' + i.estado + '">' + estadoTxt + '</span>'
+          + (i.sin_posteo_decidido ? '' : '<div class="mp-acts"><button class="btn primary" data-act="falta-pedir" data-uid="' + i.user_id + '" data-fecha="' + esc(fecha) + '" type="button">Posty lo arma</button></div>')
+          + '</div></div>';
+      }
+      var img = i.post.poster_url || i.post.image_url || '';
+      var esVid = /video|reel/.test(String(i.post.media_type || ''));
+      var decidable = i.estado === 'en_preparacion' && !i.sin_posteo_decidido;
+      return '<div class="m-post">'
+        + (img ? '<button class="mp-thumb" data-ver data-ver-post="' + i.post.id + '" data-ver-uid="' + i.user_id + '" data-ver-fb="' + regVisorFallback({ media_type: i.post.media_type, image_url: i.post.image_url, poster_url: i.post.poster_url, caption: i.post.caption || '' }) + '" type="button"><img src="' + esc(img) + '" alt="" loading="lazy">' + (esVid ? '<span class="play">▶</span>' : '') + '</button>' : '')
+        + head + '<div class="mp-title">' + esc(i.post.titulo || 'Posteo de mañana') + '</div>'
+        + (i.necesita_atencion ? '<div class="mp-att">⚠ ' + esc(i.motivo_atencion || 'Necesita atención') + '</div>' : '')
+        + '<span class="m-state ' + i.estado + '">' + estadoTxt + '</span>'
+        + (decidable ? '<div class="mp-acts"><button class="btn primary" data-act="pieza-sale" data-uid="' + i.user_id + '" data-fecha="' + esc(fecha) + '" data-pid="' + i.post.id + '" type="button">✓ Sale</button>'
+          + '<button class="btn" data-act="pieza-arreglar" data-uid="' + i.user_id + '" data-fecha="' + esc(fecha) + '" data-pid="' + i.post.id + '" type="button">Arreglar</button>'
+          + '<button class="btn" data-act="pieza-nosale" data-uid="' + i.user_id + '" data-fecha="' + esc(fecha) + '" data-pid="' + i.post.id + '" type="button">No sale</button></div>' : '')
+        + '</div></div>';
+    }).join('');
+    return html;
+  }
+  function mMasHtml() {
+    var us = (vista && vista.ultimas) || [];
+    return '<div class="sec-t" style="margin-top:2px">Accesos</div>'
+      + '<button class="m-link" data-mact="escritorio" type="button">🖥️ Consola completa<span class="go">›</span></button>'
+      + '<a class="m-link" href="/panel">🧭 Panel de soporte<span class="go">›</span></a>'
+      + '<button class="m-link" data-mact="recargar" type="button">↻ Actualizar la vista<span class="go">›</span></button>'
+      + '<div class="sec-t">Últimas decisiones</div>'
+      + (us.length ? us.map(function (u) {
+          return '<div class="m-log"><b>' + esc(ETIQUETAS_VISTA[u.action] || u.etiqueta || u.action || '') + '</b>'
+            + (u.business_name ? ' · ' + esc(u.business_name) : '') + ' <span class="w">' + esc(u.cuando || '') + '</span>'
+            + (u.detalle ? '<span class="d">' + esc(u.detalle) + '</span>' : '') + '</div>';
+        }).join('') : '<div class="m-cargando">Todavía no hay decisiones registradas.</div>');
+  }
+  // La delegación de la capa móvil: convive con la de siempre (que
+  // sigue atendiendo los data-act / data-goto / data-ver de las
+  // tarjetas). Un toque en un nombre con data-goto dentro de una
+  // tarjeta de Hoy también deja la capa en la ficha de ese negocio,
+  // para que el drill-in se vea en la piel del teléfono.
+  document.addEventListener('click', function (ev) {
+    var tb = ev.target.closest('[data-mtab]');
+    if (tb) { mTab = tb.getAttribute('data-mtab'); if (mTab !== 'negocios') mFichaUid = null; renderMovil(); window.scrollTo(0, 0); return; }
+    var bz = ev.target.closest('[data-mbiz]');
+    if (bz) { mFichaUid = Number(bz.getAttribute('data-mbiz')); selUser = mFichaUid; centroVista = 'semana'; highlightPostId = null; cargarCliente(mFichaUid); window.scrollTo(0, 0); return; }
+    if (ev.target.closest('[data-mback]')) { mFichaUid = null; renderMovil(); return; }
+    var ac = ev.target.closest('[data-mact]');
+    if (ac) {
+      var a = ac.getAttribute('data-mact');
+      if (a === 'escritorio') { document.body.classList.add('ver-escritorio'); window.scrollTo(0, 0); }
+      else if (a === 'recargar') { cargar(true); }
+      return;
+    }
+    var go = ev.target.closest('[data-goto]');
+    if (go) { mTab = 'negocios'; mFichaUid = Number(go.getAttribute('data-goto')); }
+  });
+
   // ---------------- carga ----------------
   function cargar(recargarCliente) {
     return api('/api/admin/conserje/vista').then(function (j) {
@@ -729,7 +905,7 @@
         return;
       }
       vista = j;
-      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola();
+      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola(); renderMovil();
       // (LOTE CONSERJE-FORMA) Al abrir, el centro es la producción de
       // mañana — la vista de trabajo. La ficha se abre solo cuando el
       // dueño toca una cuenta o un ítem (el drill-in); un recargar la
@@ -743,7 +919,7 @@
     // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido viaja en el
     // pedido: la ficha lo incluye aunque no esté entre los 12 últimos.
     return api('/api/admin/conserje/vista/cliente?user_id=' + uid + (postId ? '&post_id=' + Number(postId) : '')).then(function (j) {
-      if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); return; }
+      if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); renderMovil(); return; }
       // (LOTE CONSERJE-BOTONES · F5) La ficha que no carga AVISA —
       // nunca más el silencio que dejaba la ficha vieja (o ninguna)
       // como si el toque no hubiera hecho nada: con el token vencido
@@ -948,6 +1124,7 @@
     visorTouchX = null;
     if (Math.abs(dx) > 42) visorIrA(visor.idx + (dx < 0 ? 1 : -1));
   }, { passive: true });
+  $('volverBandeja').addEventListener('click', function () { document.body.classList.remove('ver-escritorio'); window.scrollTo(0, 0); });
   $('buscador').addEventListener('input', renderRoster);
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
 

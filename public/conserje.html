@@ -412,6 +412,111 @@
     .decisions{max-height:none}
     .d-actions .btn{flex:1;justify-content:center}
   }
+  /* ---------- LOTE CONSERJE-BANDEJA ---------- */
+  /* El rediseño móvil del mock 1 «La bandeja» (aprobado por el dueño):
+     fondo crema, tarjetas blancas, navegación inferior Hoy /
+     Negocios / Posteos / Más. Gobierna SOLO el ancho de teléfono
+     (≤760px, el corte de CONSERJE-FORMA): la consola de escritorio
+     queda intacta detrás de su media query y se vuelve a ella desde
+     Más («Consola completa» suma la clase ver-escritorio al body).
+     La capa móvil consume la MISMA vista y las MISMAS acciones: Hoy
+     pinta las tarjetas de siempre (decCard) con la piel crema;
+     Negocios compone el tablero semáforo desde clientes + mano y
+     abre la ficha actual; Posteos es la cola de revisión de mañana
+     con las decisiones por pieza; Más trae ultimas + accesos. */
+  #movil{display:none}
+  #volverBandeja{display:none}
+  @media (max-width:760px){
+    body{background:#FFF9F0}
+    .bg{display:none}
+    .app{display:none}
+    .toast-wrap{bottom:92px}
+    #movil{display:flex;flex-direction:column;min-height:100vh;color:#0A1E33;
+      --ink:#0A1E33;--ink-2:#54493A;--ink-3:#7A7264;--sky-soft:#1C6F9E;
+      --stroke:#EFE3CB;--stroke-top:#F7ECD9;--glass:#FFFFFF;--glass-2:#F3F8FB;
+      --shadow:0 3px 10px rgba(120,90,30,.06)}
+    body.ver-escritorio{background:var(--navy)}
+    body.ver-escritorio .bg{display:block}
+    body.ver-escritorio .app{display:block}
+    body.ver-escritorio #movil{display:none}
+    body.ver-escritorio #volverBandeja{display:block;position:fixed;right:14px;bottom:18px;z-index:70;background:var(--yellow);color:var(--yellow-ink);font-weight:800;border-radius:999px;padding:12px 18px;box-shadow:0 10px 26px rgba(0,0,0,.35);min-height:48px}
+    .m-head{display:flex;align-items:center;gap:12px;padding:16px 16px 8px}
+    .m-ava{width:46px;height:46px;border-radius:50%;flex:none;box-shadow:0 4px 12px rgba(120,90,30,.25)}
+    .m-head h1{font-size:23px;font-weight:900;letter-spacing:-.5px;margin:0;color:#0A1E33}
+    .m-sub{font-size:12.5px;color:#7A7264;font-weight:600}
+    .m-chip{margin-left:auto;background:#FEC14D;color:#0A1E33;font-weight:900;font-size:13px;padding:7px 12px;border-radius:999px;box-shadow:0 3px 8px rgba(254,193,77,.5);white-space:nowrap}
+    .m-chip.ok{background:#DFF3DF;color:#2C6E31;box-shadow:none}
+    .m-body{flex:1;padding:6px 16px 96px;width:100%}
+    .m-cargando{color:#A2937D;font-size:13.5px;padding:22px 4px}
+    .m-nav{position:fixed;left:0;right:0;bottom:0;z-index:65;display:flex;background:rgba(255,255,255,.94);border-top:1.5px solid #F0E4D2;padding:8px 8px calc(10px + env(safe-area-inset-bottom))}
+    .m-nav button{flex:1;background:none;border:none;font:inherit;font-size:11px;font-weight:700;color:#A2937D;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
+    .m-nav button .m-ic{font-size:21px;line-height:1}
+    .m-nav button.on{color:#2793C8}
+    /* las tarjetas de siempre, con la piel de la bandeja */
+    #movil .decision{background:#fff;border:1.5px solid #F3E8D5;border-radius:20px;box-shadow:0 3px 10px rgba(120,90,30,.06);padding:14px 15px;margin-bottom:11px}
+    #movil .decision .d-tag{color:#B8860B}
+    #movil .decision .d-tag.problema{background:rgba(192,57,43,.10);color:#C0392B}
+    #movil .decision .d-tag.subir{background:rgba(58,166,85,.12);color:#2C6E31}
+    #movil .decision textarea{background:#FBF6EC;color:#0A1E33}
+    #movil .decision .d-error{background:#FFF5F5}
+    #movil .decision .d-hilo-m.cliente{background:#FBF6EC}
+    #movil .btn{background:#EEF6FB;color:#1C6F9E;border-color:#D8EAF4;min-height:44px}
+    #movil .btn.primary{background:#FEC14D;color:#0A1E33;border-color:transparent}
+    #movil .btn.small{min-height:44px}
+    #movil .mano-group{color:#A2937D;margin:14px 2px 8px}
+    #movil .mano-group .chip-n{background:#F3E8D5;color:#7A7264}
+    .m-done{background:#EEF7EE;border:1.5px solid #D7ECD4;border-radius:16px;padding:13px 15px;font-size:14px;font-weight:700;color:#2C6E31}
+    .m-sums{display:flex;gap:8px;margin-bottom:12px}
+    .m-sum{flex:1;background:#0A1E33;border-radius:16px;padding:11px 6px;text-align:center}
+    .m-sum .n{font-size:20px;font-weight:900;color:#fff}
+    .m-sum .l{font-size:10px;font-weight:700;color:#9FC6DE;text-transform:uppercase;letter-spacing:.5px;margin-top:1px}
+    .m-sum.oro{background:#B8860B}
+    .m-sum.oro .l{color:#F5E3B8}
+    .m-sum.rojo{background:#C0392B}
+    .m-sum.rojo .l{color:#F6CFCF}
+    .m-biz{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:1.5px solid #F3E8D5;border-radius:18px;padding:12px 14px;margin-bottom:9px;min-height:62px;cursor:pointer;color:#0A1E33;font:inherit}
+    .m-biz .dot.green{background:#3AA655;box-shadow:none}
+    .m-biz .dot.yellow{background:#FEC14D;box-shadow:none}
+    .m-biz .dot.red{background:#C0392B;box-shadow:none}
+    .m-biz .dot.grey{background:#B9AC97;box-shadow:none}
+    .m-biz .nm{font-size:15px;font-weight:800}
+    .m-biz .ds{font-size:12.5px;color:#7A7264;font-weight:600;margin-top:1px}
+    .m-biz .go{margin-left:auto;color:#C9BDA6;font-size:20px;font-weight:900}
+    .m-note{text-align:center;font-size:12px;color:#A2937D;font-weight:700;margin-top:6px}
+    .m-post{background:#fff;border:1.5px solid #F3E8D5;border-radius:20px;overflow:hidden;margin-bottom:11px;box-shadow:0 3px 10px rgba(120,90,30,.06)}
+    .m-post .mp-thumb{position:relative;display:block;width:100%;border:none;background:#F3EDE2;cursor:zoom-in;padding:0;min-height:0}
+    .m-post .mp-thumb img{width:100%;height:200px;object-fit:cover;display:block}
+    .m-post .mp-thumb .play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:rgba(6,20,36,.6);border:1px solid rgba(255,255,255,.4);display:grid;place-items:center;font-size:15px;color:#fff}
+    .m-post .mp-in{padding:12px 14px 13px}
+    .m-post .mp-biz{font-size:11px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:#2793C8}
+    .m-post .mp-title{font-size:15.5px;font-weight:800;line-height:1.25;margin-top:2px}
+    .m-post .mp-att{color:#B8860B;font-size:12.5px;font-weight:700;margin-top:4px}
+    .m-post .mp-acts{display:flex;gap:8px;margin-top:10px}
+    .m-post .mp-acts .btn{flex:1;justify-content:center}
+    .m-state{display:inline-block;font-size:12px;font-weight:750;padding:5px 11px;border-radius:999px;margin-top:7px}
+    .m-state.listo{background:#E4F4E6;color:#2C6E31}
+    .m-state.en_preparacion{background:#FBF0D3;color:#8A6408}
+    .m-state.falta{background:#FBE3E3;color:#C0392B}
+    .m-back{background:none;border:none;color:#1C6F9E;font:inherit;font-weight:800;font-size:14px;padding:8px 2px;min-height:44px;cursor:pointer}
+    .m-ficha-head{background:#fff;border:1.5px solid #F3E8D5;border-radius:20px;padding:14px 15px;margin-bottom:11px}
+    .m-ficha-head .nm{font-size:19px;font-weight:900}
+    .m-ficha-head .hd{color:#2793C8;font-weight:600;font-size:13px}
+    .m-ficha-head .st{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:13px;color:#54493A}
+    #movil .week{grid-template-columns:repeat(4,1fr);margin-bottom:11px}
+    #movil .day{background:#fff;border-color:#F3E8D5;color:#0A1E33}
+    #movil .day .d-name{color:#7A7264}
+    #movil .day .d-note{color:#7A7264}
+    #movil .posts{grid-template-columns:1fr;margin-top:0}
+    #movil .post{background:#fff;border-color:#F3E8D5;color:#0A1E33}
+    #movil .post .p-title{color:#0A1E33}
+    #movil .post .p-cap{color:#6D6353}
+    #movil .sec-t{font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#A2937D;margin:16px 2px 9px}
+    .m-link{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1.5px solid #F3E8D5;border-radius:16px;padding:13px 15px;margin-bottom:9px;font:inherit;font-size:14.5px;font-weight:750;color:#0A1E33;min-height:52px;cursor:pointer;text-decoration:none}
+    .m-link .go{margin-left:auto;color:#C9BDA6;font-weight:900}
+    .m-log{padding:9px 2px;border-bottom:1px dashed #EFE3CB;font-size:13px;color:#54493A}
+    .m-log .w{color:#A2937D;font-size:12px}
+    .m-log .d{display:block;margin-top:2px;line-height:1.45}
+  }
   @media (prefers-reduced-motion:reduce){
     .pulse{animation:none}
     .fade-swap{animation:none}
@@ -477,6 +582,23 @@
   </section>
 </div>
 
+<!-- ======= LOTE CONSERJE-BANDEJA · LA CAPA MÓVIL (solo ≤760px) ======= -->
+<div id="movil" aria-label="Conserje móvil">
+  <header class="m-head">
+    <img class="m-ava" src="/bambooty-placa.webp" alt="">
+    <div><h1>Conserje</h1><div class="m-sub" id="mSub">todo lo que te necesita, acá</div></div>
+    <span class="m-chip" id="mChip" hidden></span>
+  </header>
+  <main class="m-body" id="mBody"><div class="m-cargando">Cargando…</div></main>
+  <nav class="m-nav" aria-label="Secciones">
+    <button type="button" data-mtab="hoy" class="on"><span class="m-ic">🏠</span>Hoy</button>
+    <button type="button" data-mtab="negocios"><span class="m-ic">🏪</span>Negocios</button>
+    <button type="button" data-mtab="posteos"><span class="m-ic">🖼️</span>Posteos</button>
+    <button type="button" data-mtab="mas"><span class="m-ic">⚙️</span>Más</button>
+  </nav>
+</div>
+<button id="volverBandeja" type="button">← Volver a la bandeja</button>
+
 <div class="gate" id="gate">
   <div class="box glass">
     <h2>Consola del conserje</h2>
@@ -500,6 +622,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=9"></script>
+<script src="/conserje.js?v=10"></script>
 </body>
 </html>
