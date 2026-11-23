@@ -352,12 +352,13 @@ async function publishSinglePost(db, post, opts = {}) {
       }
     } catch (e) { console.error('[email ya-salió]', e.message); }
     // Push "¡tu posteo ya salió!": CADA DÍA, en cada publicación real
-    // (antes: solo primer posteo o automática). El toque abre /#/app/semana,
-    // donde el detalle muestra «Ver en Instagram» con el permalink — un
-    // toque más y está viendo el posteo. Abrir el permalink directo desde
-    // la push NO anda en la app nativa: pzNativeRoute (public/app.js) solo
-    // acepta rutas #/app/... y manda cualquier URL externa a #/app/oficina.
-    // Cambiar eso es un lote aparte (app.js + handler nativo + TestFlight).
+    // (antes: solo primer posteo o automática).
+    // (LOTE PUSH-DESTINO · 22/11) El toque abre EL posteo
+    // (#/app/post/<id>): su detalle trae la píldora «Ver en Instagram»
+    // con el permalink — el posteo anunciado, en un toque, en web y en
+    // nativo. Antes abría la semana y había que buscarlo; y abrir el
+    // permalink directo sigue sin andar en la app nativa (pzNativeRoute
+    // solo acepta rutas #/app/...), por eso el destino es el detalle.
     try {
       if (notifyPushPublished) {
         const { sendPush } = require('./push');
@@ -366,11 +367,11 @@ async function publishSinglePost(db, post, opts = {}) {
           await sendPush(post.user_id, isFirstPost ? {
             title: '🎉 ¡Tu primer posteo ya salió!',
             body: 'Posty lo publicó en tu Instagram. El primero de muchísimos 😍',
-            url: '/#/app/semana',
+            url: `/#/app/post/${post.id}`,
           } : {
             title: '\u00A1Tu posteo ya sali\u00F3! \uD83D\uDCF2',
             body: 'Posty lo public\u00F3 en tu Instagram \uD83D\uDC4F',
-            url: '/#/app/semana',
+            url: `/#/app/post/${post.id}`,
           });
         }
       }

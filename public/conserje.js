@@ -28,6 +28,13 @@
   } catch (e) { /* sin storage: el gate pide el token */ }
   if (qs.get('token')) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
 
+  // (LOTE PUSH-DESTINO · 22/11) Deep link de la push «pidió un cambio»:
+  // ?user=<uid> (&post=<id>) — al terminar la primera carga, la consola
+  // abre la ficha de ese cliente con el posteo marcado (gotoFicha, el
+  // mismo camino que un toque en la cartera o en la cola).
+  var deepUser = Number(qs.get('user') || 0) || 0;
+  var deepPost = Number(qs.get('post') || 0) || 0;
+
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -778,5 +785,7 @@
   $('gateToken').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') $('gateBtn').click(); });
 
   if (!token) abrirGate();
-  else cargar(true);
+  else cargar(true).then(function () {
+    if (deepUser) { try { gotoFicha(deepUser, deepPost || null); } catch (e) {} }
+  });
 })();

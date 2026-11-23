@@ -115,7 +115,13 @@ function celebrateFirstPaidPost(db, post) {
     if (m && m.first_paid_celebrated) return { celebrated: false, reason: 'already' };
     db.prepare('UPDATE postpay_milestones SET first_paid_celebrated = 1 WHERE user_id = ?').run(post.user_id);
     const lang = userLang(db, post.user_id);
-    const link = (post.ig_permalink && String(post.ig_permalink)) || '/#/app/schedule';
+    // (LOTE PUSH-DESTINO · 22/11) La push va al posteo DENTRO de la
+    // app (#/app/post/<id>, cuya píldora trae «Ver en Instagram»): el
+    // permalink externo como destino dejaba a la app nativa en Inicio
+    // (pzNativeRoute solo acepta rutas #/app/...). El permalink queda
+    // para el texto del mensaje de chat gemelo (igLink).
+    const link = `/#/app/post/${post.id}`;
+    const igLink = (post.ig_permalink && String(post.ig_permalink)) || link;
     const title = lang === 'en' ? '🎉 Your first post as a client is live!' : '🎉 ¡Tu primer posteo como cliente ya está en tu Instagram!';
     const body = lang === 'en'
       ? 'Posty just published your first paid post — tap to see it on your Instagram.'
@@ -132,8 +138,8 @@ function celebrateFirstPaidPost(db, post) {
     }
     // Sin push: el canal es la app — mensaje en el chat único de Posty.
     const text = lang === 'en'
-      ? `🎉 your first post as a client is already on your instagram! here it is: ${link}`
-      : `🎉 ¡tu primer posteo como cliente ya está en tu instagram! acá está: ${link}`;
+      ? `🎉 your first post as a client is already on your instagram! here it is: ${igLink}`
+      : `🎉 ¡tu primer posteo como cliente ya está en tu instagram! acá está: ${igLink}`;
     try {
       db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(post.user_id, 'assistant', text);
     } catch (e) {}

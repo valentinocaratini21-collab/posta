@@ -148,7 +148,12 @@ async function processUpcomingNotices(db, opts) {
           body: mode === 'manual'
             ? (isStory ? `esta historia: "${cap}..." — tocá para aprobarla o frenarla` : `"${cap}..." — tocá para aprobarlo o frenarlo`)
             : (isStory ? `esta historia: "${cap}..." — tocá para verla o frenarla` : `"${cap}..." — tocá para verlo o frenarlo`),
-          url: `/#/app/semana?post=${p.id}`,
+          // (LOTE PUSH-DESTINO · 22/11) El destino es el posteo mismo
+          // (su detalle, con Aceptar/Frenar operables): la URL vieja
+          // (#/app/semana?post=) caía en la semana sin abrir nada en
+          // web y en Inicio en la app nativa — captura del dueño
+          // 22/11 19:02 apretando esta misma push.
+          url: `/#/app/post/${p.id}`,
         });
       } catch (e) { pr = { ok: false, reason: 'push_throw: ' + e.message }; }
       const pushOk = !!(pr && pr.ok);

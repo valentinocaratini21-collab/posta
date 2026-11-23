@@ -8240,7 +8240,10 @@ async function notifyOwnerPostChange({ uid, post, pedido, sendFn }) {
       : `${nombre} pidió un cambio en el posteo`;
     const linea = ownerPostChangePedidoLinea(pedido);
     const body = linea || 'Te pidió un cambio en un posteo.';
-    const url = `/#/app/conserje?user=${Number(uid)}`;
+    // (LOTE PUSH-DESTINO · 22/11) El destino lleva también el posteo:
+    // la consola abre la ficha del cliente con ESE posteo marcado
+    // (gotoFicha), que es lo que la push anuncia.
+    const url = `/#/app/conserje?user=${Number(uid)}${post && post.id ? `&post=${Number(post.id)}` : ''}`;
     const r = await send(OWNER_USER_ID, { title, body, url, data: { kind: 'cambio_posteo', user_id: Number(uid), post_id: post && post.id ? Number(post.id) : null, url } });
     console.log(`[owner-notify] cambio posteo user=${uid} post=${post && post.id} -> owner ${OWNER_USER_ID}: ${r && r.ok ? 'ok sent=' + r.sent : 'fail ' + (r && r.reason)} | ${title} | ${body} | ${url}`);
     return r || { ok: false, reason: 'no_result' };
@@ -48424,7 +48427,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1236';
+const BUILD_ID = '20261105-v1237';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

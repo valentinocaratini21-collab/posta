@@ -3065,7 +3065,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1236';
+const PZ_BUILD = '20261105-v1237';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -10372,7 +10372,14 @@ function pzNativeRoute(url, isShell) {
   try {
     let u = String(url || '').trim();
     if (u.indexOf('/#/') === 0) u = u.slice(1);
-    if (!/^#\/app\/[A-Za-z0-9/_-]*$/.test(u)) return dflt;
+    // (LOTE PUSH-DESTINO · 22/11) La ruta puede traer su query
+    // (?post=, ?plan=1, ?user=, ?item=, ?fotos=, ?msg=): la regex vieja
+    // no admitía «?» y TODA push con query caía al default en nativo —
+    // el freno de los 30 minutos mandaba a su dueño a Inicio en vez de
+    // al posteo anunciado (captura del dueño 22/11 19:02). La ruta se
+    // sigue validando igual de estricta (#/app/... y nada externo); la
+    // query admite solo caracteres de parámetro.
+    if (!/^#\/app\/[A-Za-z0-9/_-]*(\?[A-Za-z0-9&=%._~+-]*)?$/.test(u)) return dflt;
     return u;
   } catch (e) { return dflt; }
 }
@@ -14204,7 +14211,10 @@ function pzChatIrAlMensaje(msgId) {
 function pzChatAplicarAncla() {
   try {
     if (!document.getElementById('chatBox')) return;
-    if (!((location.hash || '').split('?')[0] === '#/app/chat')) return;
+    // (LOTE PUSH-DESTINO · 22/11) La conversación del registrado vive en
+    // Inicio (el rebote de chat la trae con el ?msg= conservado): el
+    // ancla corre en las dos rutas; el #chatBox de abajo es el juez.
+    if (!['#/app/chat', '#/app/inicio'].includes((location.hash || '').split('?')[0])) return;
     const q = new URLSearchParams((location.hash.split('?')[1] || ''));
     const msg = Number(q.get('msg') || 0);
     if (msg) pzChatIrAlMensaje(msg);
@@ -26214,7 +26224,10 @@ function pzPrefetchKick() {
   try {
   if (tab === 'oficina' || tab === 'negocio') { location.hash = '#/app/inicio'; return; } // POSTY SOLO: sin pantallas Gesty (la Bandeja vive: ahí se decide)
   else if (tab === 'subir') { pzPaintSkeleton(tab); content = await subirView(); } // (LOTE TAB-SUBIR · 13/11) El tab Subir: subir tocando, Posty resuelve
-  else if (tab === 'chat') { if (!(typeof pzIsGuest === 'function' && pzIsGuest())) { location.hash = '#/app/inicio'; return; } pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE TAB-SUBIR · 13/11) Sale el tab de Chat: la ruta queda SOLO para el invitado (su conversación de onboarding vive ahí, verificado) y como compat de deep-links; el cliente registrado vuelve a Inicio
+  else if (tab === 'chat') { if (!(typeof pzIsGuest === 'function' && pzIsGuest())) { // (LOTE PUSH-DESTINO · 22/11) El rebote conserva el ?msg=<id> del deep link (la push del trabajo listo): descartarlo dejaba al dueño en la conversación pero sin bajar al mensaje anunciado; el ancla lo consume en Inicio (pzChatAplicarAncla).
+      const _chatMsg = new URLSearchParams((location.hash.split('?')[1] || '')).get('msg');
+      location.hash = '#/app/inicio' + ((_chatMsg && /^\d+$/.test(_chatMsg)) ? '?msg=' + _chatMsg : '');
+      return; } pzPaintSkeleton(tab); content = await chatFullView(); } // (LOTE TAB-SUBIR · 13/11) Sale el tab de Chat: la ruta queda SOLO para el invitado (su conversación de onboarding vive ahí, verificado) y como compat de deep-links; el cliente registrado vuelve a Inicio
   else if (tab === 'inicio') { // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
     // (LOTE INICIO-AL-INSTANTE) Con foto guardada de esta cuenta, la
     // pantalla ESTÁ: se pinta el último estado conocido al instante y
@@ -26242,7 +26255,15 @@ function pzPrefetchKick() {
     }
   }
   else if (tab === 'feed') { location.hash = '#/app/inicio'; return; } // (v846) La pestaña Feed salió: el feed ya vive en Hoy. #/app/feed redirige a Hoy.
-  else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
+  else if (tab === 'semana') { // Mi semana se fusionó en Schedule
+    // (LOTE PUSH-DESTINO · 22/11) Una push vieja del freno trae
+    // ?post=<id> (la URL que el emisor usaba): su destino anunciado es
+    // EL posteo, no la semana — se honra acá y va a su detalle. Sin
+    // ?post=, la redirección de siempre a Schedule.
+    const _semPost = new URLSearchParams((location.hash.split('?')[1] || '')).get('post');
+    location.hash = (_semPost && /^\d+$/.test(_semPost)) ? '#/app/post/' + _semPost : '#/app/schedule';
+    return;
+  }
   else if (tab === 'schedule') { pzPaintSkeleton(tab); content = await scheduleView(); }
   else if (tab === 'analisis') { location.hash = '#/app/ads'; return; } // (LOTE A · 8/11: Estrategia eliminada — la recomendación del mejor posteo vive en Impulsar como una línea. analisisView() queda como código muerto sin llamadores.)
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
@@ -26256,7 +26277,14 @@ function pzPrefetchKick() {
   else if (tab === 'ads') { pzPaintSkeleton(tab); content = await adsView(); } // 🚀 Potenciar: billetera + boost (web y nativa: la recarga es cobro por API a la tarjeta guardada, sin checkout web) · (LOTE ADS-SE-TRABA-AL-VOLVER) Ads pinta su esqueleto como todas: era la única pestaña principal cuyo primer pintado esperaba la cadena entera de datos — la pantalla anterior quedaba congelada hasta ~90 s.
   else if (tab === 'admin') { pzPaintSkeleton(tab); let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
   else if (tab === 'conserje') { // 🧑‍💼 (LOTE PUERTA-CONSERJE) La casa del Conserje es la consola /conserje (la navy del mock v1): la ruta sale de la app hacia la consola. El servidor siembra el token desde la sesión de la casa — un toque, sin tipear nada; sin esa sesión, la consola abre su propio gate. El panel viejo (chunk-conserje) deja de ser la casa; no se borra en este lote.
-    try { location.replace('/conserje'); } catch (e) {}
+    // (LOTE PUSH-DESTINO · 22/11) La push de «pidió un cambio» trae
+    // ?user=<uid>: el traspaso a la consola lo conserva (la consola lo
+    // consume y abre la ficha de ese cliente). Sin ?user=, como siempre.
+    const _consQ = new URLSearchParams((location.hash.split('?')[1] || ''));
+    const _consUser = _consQ.get('user');
+    const _consPost = _consQ.get('post');
+    const _consQS = ((_consUser && /^\d+$/.test(_consUser)) ? '?user=' + _consUser + ((_consPost && /^\d+$/.test(_consPost)) ? '&post=' + _consPost : '') : '');
+    try { location.replace('/conserje' + _consQS); } catch (e) {}
     content = `<div class="card" style="text-align:center;padding:28px 18px"><div style="font-size:34px">🧑‍💼</div><p class="d" style="margin:8px 0 0">Abriendo tu consola…</p></div>`;
   }
   else if (tab === 'post') { pzPaintSkeleton(tab); content = await approvalPostView(postId); } // 🔔 Posty te avisa: aprobar por notificación
