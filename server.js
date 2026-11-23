@@ -12015,13 +12015,39 @@ app.get('/api/trial/mi-plan', requireAuth, (req, res) => {
     // La imagen del slot listo sale de la fila del posteo ya creado
     // (la importación o el rescate tardío): ruta /media, jamás el
     // data URI guardado en el payload.
+    // (LOTE PRUEBA-TARJETAS-DIA) El enlace a mano (post_id) es la vía
+    // histórica, pero la semana que importa el software crea los
+    // posteos SIN estamparlo: el slot quedaba «listo» sin imagen y su
+    // tarjeta mostraba el orbe sobre el vidrio en vez de la pieza
+    // (defecto P-0 del dueño, 22/11). Respaldo: los posteos de la
+    // prueba del usuario, en el orden de la semana (su agenda, y la
+    // creación como desempate), se reparten a los slots listos sin
+    // posteo enlazado — el mismo orden en que la importación los
+    // creó y scheduleAllDrafts los programó. Si la pieza es video,
+    // la tarjeta muestra su tapa (cover_path), nunca el .mp4.
+    let poolTarjetas = null;
     for (const s of plan.slots) {
       s.media = null;
-      if (s.estado === 'listo' && s.post_id) {
-        try {
-          const pr = db.prepare('SELECT image_path, media_type FROM posts WHERE id = ? AND user_id = ?').get(s.post_id, uid);
-          if (pr && pr.image_path && !String(pr.image_path).startsWith('data:')) { s.media = pr.image_path; s.media_tipo = pr.media_type || s.tipo; }
-        } catch (e) {}
+      if (s.estado !== 'listo') continue;
+      let pr = null;
+      if (s.post_id) {
+        try { pr = db.prepare('SELECT id, image_path, media_type, cover_path FROM posts WHERE id = ? AND user_id = ?').get(s.post_id, uid); } catch (e) {}
+      }
+      if (!pr) {
+        if (!poolTarjetas) {
+          try {
+            const enlazados = new Set(plan.slots.map((x) => Number(x.post_id) || 0).filter(Boolean));
+            poolTarjetas = db.prepare("SELECT id, image_path, media_type, cover_path FROM posts WHERE user_id = ? AND source = 'trial' AND status NOT IN ('cancelled', 'discarded') ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC").all(uid)
+              .filter((r) => !enlazados.has(Number(r.id)));
+          } catch (e) { poolTarjetas = []; }
+        }
+        pr = poolTarjetas.shift() || null;
+        if (pr) s.post_id = pr.id;
+      }
+      if (pr && pr.image_path && !String(pr.image_path).startsWith('data:')) {
+        s.media = pr.image_path;
+        s.media_tipo = pr.media_type || s.tipo;
+        if ((pr.media_type === 'video' || s.tipo === 'video') && pr.cover_path && !String(pr.cover_path).startsWith('data:')) s.media = pr.cover_path;
       }
     }
     let aprobadaAt = 0;
@@ -48398,7 +48424,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1233';
+const BUILD_ID = '20261105-v1234';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

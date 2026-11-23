@@ -3065,7 +3065,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1233';
+const PZ_BUILD = '20261105-v1234';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -30993,6 +30993,7 @@ function mnPlanHTML(res, en) {
       return `<div class="mn-slot mn-slot-${esc(String(s.estado || 'plan'))}" data-mn-dia="${Number(s.dia) || ''}">`
         + (s.media ? `<img class="mn-slot-img" src="${esc(String(s.media))}" alt="">` : `<div class="mn-slot-glass"><span class="mn-spark mn-spark-a"></span><span class="mn-spark mn-spark-b"></span><span class="mn-spark mn-spark-c"></span><span class="mn-slot-orb">${pzIc('sparkle', 20)}</span><span class="mn-slot-dia">${en ? 'Day' : 'Día'} ${Number(s.dia) || ''}</span></div>`)
         + `<div class="mn-slot-body">`
+        + (s.media ? `<div class="mn-slot-dia">${en ? 'Day' : 'Día'} ${Number(s.dia) || ''}</div>` : '')
         + (titulo ? `<div class="mn-slot-name">${esc(titulo)}</div>` : '')
         + ((formato && nombre) ? `<div class="mn-slot-fmt">${esc(formato)}</div>` : '')
         + `<div class="mn-slot-when">${esc(mnSlotWhen(s, en))}</div>`
