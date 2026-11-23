@@ -3155,7 +3155,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1260';
+const PZ_BUILD = '20261105-v1261';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -30233,6 +30233,57 @@ function pzHoyMotivoTxt(reason, en) {
   return en ? "Posty couldn't build it this time: try again in a bit." : 'Posty no pudo armarlo esta vez: probá de nuevo en un rato.';
 }
 
+// (LOTE TARJETA-PROMESA-9AM · 23/11 · diseño 1 «La promesa» del
+// mock de 5 opciones, elegido por el dueño: «me gustaa el 1.
+// vamos con eso. armalo»; corrección final del mismo día: el
+// aviso vive SOLO en esta tarjeta — en el feed no va nada) El día
+// revelado sin posteo y SIN motivo de freno ya no dice «Todavía
+// no hay posteo.» ni ofrece «Que Posty lo arme» (el botón
+// contradecía la promesa en la misma pantalla): la tarjeta
+// promete lo que el producto cumple — el posteo de hoy está
+// listo a las 9:00, hora del negocio — con el diseño del mock:
+// relojito azul, titular grande en navy y la hora en azul de
+// marca. La promesa es verdadera en cada momento: antes de las
+// 9:00 va con la hora; pasadas las 9:00 sin posteo, el estado
+// honesto es «está en armado.» (sin hora); un día futuro
+// revelado (mañana) anuncia su posteo a las 9:00 de ese día.
+// «subir algo mío» se queda tal cual (mismo botón, mismo
+// data-*): es la acción real del dueño. El ensure («Que Posty
+// lo arme») sigue vivo por sus otros caminos: la mini de la
+// semana (pzHoySemanaMiniHTML), la burbuja sin semana
+// (pzHoySpeechHTML con destArmar) y el reintento del estado con
+// motivo, en la rama de arriba de pzHoyTiraDetalleHTML.
+function pzHoyVaciaPromesaHTML(d, o) {
+  const en = !!(o && o.en);
+  const tz = (o && o.tz) || undefined;
+  const nombre = (o && o.nombre) || '';
+  const labelsFull = en ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const reloj = '<svg class="pz-hoy-promesa-reloj" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.6V12l3.1 2"/></svg>';
+  const subir = `<button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button>`;
+  let grande = '', linea = '';
+  if (d && d.esHoy) {
+    // La hora de AHORA en la zona del negocio (h23: 0–23
+    // siempre; el patrón Intl de la casa para «hora actual en
+    // tz»). Si la zona viniera inválida, cae a la hora local,
+    // la misma degradación del resto de la app.
+    let hh = -1;
+    try { hh = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date()), 10); } catch (e) {}
+    if (!(hh >= 0 && hh <= 23)) hh = new Date().getHours();
+    if (hh < 9) {
+      grande = en ? 'Your next post' : 'Tu próximo posteo';
+      linea = en ? 'available at <span class="pz-hoy-promesa-hora">9:00 AM</span>' : 'disponible a las <span class="pz-hoy-promesa-hora">9:00</span>';
+    } else {
+      grande = en ? "Today's post" : 'Tu posteo de hoy';
+      linea = en ? 'is being built.' : 'está en armado.';
+    }
+  } else {
+    const diaNom = labelsFull[(d && d.idx) || 0] || '';
+    grande = en ? (diaNom + "'s post") : ('El posteo del ' + diaNom.toLowerCase());
+    linea = en ? 'arrives at <span class="pz-hoy-promesa-hora">9:00 AM</span>' : 'llega a las <span class="pz-hoy-promesa-hora">9:00</span>';
+  }
+  return `<div class="pz-hoy-tira-detalle vacia promesa"><div class="t"><b>${esc(nombre)}</b></div>${reloj}<div class="pz-hoy-promesa-grande">${esc(grande)}</div><div class="pz-hoy-promesa-linea">${linea}</div>${subir}</div>`;
+}
+
 function pzHoyTiraDetalleHTML(d, o) {
   try {
     if (!d) return '';
@@ -30289,6 +30340,15 @@ function pzHoyTiraDetalleHTML(d, o) {
         return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div><p class="pz-hoy-freno-txt">${en ? "This account's posts are made by the team by hand, day by day — the software doesn't generate here." : 'Los posteos de esta cuenta los arma el equipo a mano, día a día — el software no genera acá.'}</p><button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button></div>`;
       }
       const motivoTxt = (motivoHoy && d.esHoy) ? pzHoyMotivoTxt(motivoHoy, en) : '';
+      // (LOTE TARJETA-PROMESA-9AM · 23/11) Sin motivo de freno, el
+      // día vacío es la promesa de las 9:00 (pzHoyVaciaPromesaHTML):
+      // sin «Todavía no hay posteo.» y sin el botón de armar. Con
+      // motivo, esta tarjeta sigue como estaba: es el estado
+      // honesto del freno (TARJETA-HOY-MINIMA) y su botón es el
+      // reintento vivo que el propio motivo invita a tocar — la
+      // promesa de las 9:00 sería falsa bajo un freno (un día
+      // cerrado o frenado por el dueño no tiene posteo a las 9:00).
+      if (!motivoTxt) return pzHoyVaciaPromesaHTML(d, { en, tz, nombre });
       return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div>${motivoTxt ? `<p class="pz-hoy-motivo-txt">${esc(motivoTxt)}</p>` : ''}<button type="button" class="pz-hoy-glass-btn" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button></div>`;
     }
     // (LOTE INTEGRIDAD-PRE-PUBLICACIÓN) Fila frenada por el chequeo de
