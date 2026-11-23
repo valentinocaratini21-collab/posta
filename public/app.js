@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1274';
+const PZ_BUILD = '20261105-v1275';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -34859,7 +34859,7 @@ async function pzSubirUpload(file) {
   try {
     const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
     const d = await r.json().catch(() => null);
-    if (!r.ok || !d || !d.ok || !d.id) throw new Error((d && d.error) || 'upload');
+    if (!r.ok || !d || !d.ok || !d.id) { const er = new Error((d && d.error) || 'upload'); er.fromServer = !!(d && d.error); throw er; }
     PZ_SUBIR.asset = d.id;
     PZ_SUBIR.kind = d.kind === 'video' ? 'video' : 'foto';
     PZ_SUBIR.thumb = d.thumb || d.path || '';
@@ -34870,7 +34870,10 @@ async function pzSubirUpload(file) {
     pzVpPintarLote();
     pzVpMostrarPregunta();
   } catch (e) {
-    pzSubirErr(en ? "It couldn't be uploaded — try again" : 'No se pudo subir — probá de nuevo');
+    // TOPE-ALBUM-20 · ERROR HONESTO (23/11): si el servidor explicó el
+    // motivo, se muestra ESE mensaje — nunca más el genérico fijo que lo
+    // descartaba y dejaba la puerta muerta en silencio.
+    pzSubirErr(e && e.fromServer && e.message ? e.message : (en ? "It couldn't be uploaded — try again" : 'No se pudo subir — probá de nuevo'));
   }
   if (zona) zona.classList.remove('subiendo');
 }

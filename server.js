@@ -17807,7 +17807,10 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   // quedan como hoy (sin tope); el chat es la puerta que llenaba el
   // álbum en una tanda. Los diseños (kind='design') tampoco se topan.
   if (req.query.from === 'chat' && kind === 'photo') {
-    const nAlb = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).get(req.session.userId).c;
+    // TOPE-ALBUM-20 · MATERIAL DE TRABAJO (23/11): este tope ES el del
+    // álbum (misma cuenta, mismo mensaje) — cuenta con la misma regla:
+    // solo el material no incorporado a ningún posteo consume el techo.
+    const nAlb = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND (p.image_path = a.file_path OR p.carousel_paths LIKE '%' || a.file_path || '%' OR p.foto_asset_id IN (SELECT id FROM assets WHERE user_id = a.user_id AND file_path = a.file_path)))`).get(req.session.userId).c;
     if (nAlb >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
   }
   // (Gap 10, 2026-10-25) La foto real del cliente se normaliza al entrar
@@ -19191,7 +19194,13 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Archivo vacío' });
     const ct = req.get('Content-Type') || '';
     const isVideo = ct.startsWith('video/');
-    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).get(uid).c;
+    // TOPE-ALBUM-20 · MATERIAL DE TRABAJO (23/11): el tope cuenta SOLO el
+    // material todavía no incorporado a ningún posteo. El incorporado
+    // (publicado, programado o en borrador — el mismo predicado «usado»
+    // que protege el borrado en la biblioteca) ya cumplió su ciclo y no
+    // consume el techo: una cuenta fiel que postea todos los días no se
+    // queda sin puerta de subida por su propio historial.
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets a WHERE a.user_id = ? AND a.kind IN ('photo','video') AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = a.user_id AND p.status IN ('draft','scheduled','published') AND (p.image_path = a.file_path OR p.carousel_paths LIKE '%' || a.file_path || '%' OR p.foto_asset_id IN (SELECT id FROM assets WHERE user_id = a.user_id AND file_path = a.file_path)))`).get(uid).c;
     if (n >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
     if (isVideo) {
       // (Gap 9, 2026-10-25) Ingesta ÚNICA de video (ingestClientVideo):
@@ -48843,7 +48852,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1274';
+const BUILD_ID = '20261105-v1275';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -267,8 +267,8 @@ async function main() {
   console.log('== Parte B: estáticos ==');
   check('B1 /api/media devuelve el id (para adoptar)',
     /res\.json\(\{ path: filePath, id: mediaId \}\)/.test(serverSrc));
-  check('B2 /api/media topa las fotos del chat (from=chat) con el conteo del álbum (photo+video >= 20)',
-    /if \(req\.query\.from === 'chat' && kind === 'photo'\) \{\s*\n\s*const nAlb = db\.prepare\(`SELECT COUNT\(\*\) AS c FROM assets WHERE user_id = \? AND kind IN \('photo','video'\)`\)/.test(serverSrc));
+  check('B2 /api/media topa las fotos del chat (from=chat) con el conteo del álbum (photo+video >= 20, solo material de trabajo desde el 23/11)',
+    /if \(req\.query\.from === 'chat' && kind === 'photo'\) \{[\s\S]{0,500}?const nAlb = db\.prepare\(`SELECT COUNT\(\*\) AS c FROM assets a WHERE a\.user_id = \? AND a\.kind IN \('photo','video'\) AND NOT EXISTS \(SELECT 1 FROM posts p/.test(serverSrc));
   const albumH = serverSrc.slice(serverSrc.indexOf("app.post('/api/album/photo'"));
   check('B3 /api/album/photo tiene la rama adopt ANTES del chequeo de body vacío',
     albumH.indexOf('const adoptId = parseInt') !== -1
