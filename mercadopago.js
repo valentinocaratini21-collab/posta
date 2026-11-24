@@ -50,7 +50,7 @@ async function mpFetch(path, { method = 'GET', body } = {}) {
 async function createSubscription({ plan, userId, baseUrl, payerEmail, agente }) {
   const ag = ['posty', 'venty', 'gesty', 'atenty', 'completo'].includes(String(agente || '').toLowerCase())
     ? String(agente).toLowerCase() : 'posty';
-  const agLabel = { posty: 'Posty', venty: 'Venty', gesty: 'Gesty', atenty: 'Atenty', completo: 'Bambooty completo' }[ag];
+  const agLabel = { posty: 'Posty', venty: 'Venty', gesty: 'Gesty', atenty: 'Atenty', completo: 'Completo' }[ag];
   if (!mpConfigured()) throw new Error('Pagos no configurados todavía');
   if (!payerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) {
     throw new Error('Falta el email de MercadoPago.');
@@ -66,7 +66,7 @@ async function createSubscription({ plan, userId, baseUrl, payerEmail, agente })
   const preapproval = await mpFetch('/preapproval', {
     method: 'POST',
     body: {
-      reason: ag === 'posty' ? `Posta — Plan ${plan.name}` : `Posta — ${agLabel} ${plan.name}`,
+      reason: ag === 'posty' ? `Bambooffice - Plan ${plan.name}` : `Bambooffice - ${agLabel} ${plan.name}`,
       external_reference: `${userId}:${plan.id}:${ag}`,
       payer_email: payerEmail,
       auto_recurring: {
