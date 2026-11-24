@@ -262,8 +262,10 @@ function detalleCaso(marca, payload) {
 
 // EL BARRIDO DEL VIGILANTE (el despertar + el seguimiento por prueba).
 // deps: { findGuest(db, ig, domain), getUser(db, id), guestEnd(user, now),
-//         openCase(db, fields) } — inyectadas desde server.js para no
-// acoplar el módulo a sus internos. Nunca tira.
+//         openCase(db, fields), closeCase(db, dedupKey) } — inyectadas
+// desde server.js para no acoplar el módulo a sus internos. Nunca tira.
+// (LOTE LINEA-MANO-ADELANTE) closeCase cierra el caso abierto de un
+// disparo cuando su pieza ya está cargada (por la vía del equipo).
 function barrido(db, deps, now) {
   const t = Number(now) || Date.now();
   const res = { marcas: 0, atadas: 0, avisos: 0, convertidas: 0, cerradas: 0 };
@@ -326,20 +328,42 @@ function barrido(db, deps, now) {
           }
         }
         const dia = diaDePrueba(user.created_at, t);
-        if (dia >= 2 && !marca.aviso_dia2_at && !piezaCargada(payload, 1)) {
+        // (LOTE LINEA-MANO-ADELANTE) DISPARO ADELANTADO (orden del
+        // dueño 24/11): la producción va UN DÍA ANTES — el caso del
+        // día 2 se abre apenas la pieza del día 1 está cargada, y el
+        // del día 3 apenas la del día 2, pidiendo cargar HOY la
+        // pieza de MAÑANA (sale 19:00 y espera la aprobación del
+        // dueño en el conserje). El reloj de alta queda como piso:
+        // si la pieza anterior no se cargó, el caso se abre en su
+        // día como antes.
+        if (!marca.aviso_dia2_at && !piezaCargada(payload, 1) && (piezaCargada(payload, 0) || dia >= 2)) {
           if (abrir('dia2',
-            'Prueba a mano: ' + quien + ' está en su día 2 — producir y cargar la pieza de hoy',
-            'Producir la pieza del día 2 (proceso, según el arco definido el día 1) y cargarla hoy con la palanca admin de pieza a mano.')) {
+            'Prueba a mano: ' + quien + ' — producir y cargar HOY la pieza de MAÑANA (día 2)',
+            'Producir la pieza del día 2 (proceso, según el arco definido el día 1) y cargarla HOY con la palanca admin de pieza a mano: sale mañana 19:00 y queda esperando la aprobación del dueño en el conserje.')) {
             db.prepare('UPDATE trial_linea_mano SET aviso_dia2_at = ? WHERE cache_key = ?').run(t, marca.cache_key);
             res.avisos++;
           }
         }
-        if (dia >= 3 && !marca.aviso_dia3_at && !piezaCargada(payload, 2)) {
+        if (!marca.aviso_dia3_at && !piezaCargada(payload, 2) && (piezaCargada(payload, 1) || dia >= 3)) {
           if (abrir('dia3',
-            'Prueba a mano: ' + quien + ' está en su día 3 — producir y cargar la pieza de hoy',
-            'Producir la pieza del día 3 (momento, cierre del arco) y cargarla hoy con la palanca admin de pieza a mano.')) {
+            'Prueba a mano: ' + quien + ' — producir y cargar HOY la pieza de MAÑANA (día 3)',
+            'Producir la pieza del día 3 (momento, cierre del arco) y cargarla HOY con la palanca admin de pieza a mano: sale mañana 19:00 y queda esperando la aprobación del dueño en el conserje.')) {
             db.prepare('UPDATE trial_linea_mano SET aviso_dia3_at = ? WHERE cache_key = ?').run(t, marca.cache_key);
             res.avisos++;
+          }
+        }
+        // (LOTE LINEA-MANO-ADELANTE) CIERRE AUTOMÁTICO: la pieza de
+        // un disparo quedó cargada → su caso abierto se cierra solo
+        // (vía del equipo, dep closeCase por dedup_key). Sin esto,
+        // los casos cumplidos quedan abiertos ensuciando la cola
+        // (los 10 del día 1 de la corrida del 23/11).
+        if (deps && typeof deps.closeCase === 'function') {
+          const cierres = [['entrada', 0], ['dia2', 1], ['dia3', 2]];
+          for (const [disparo, idx] of cierres) {
+            const avisoAt = disparo === 'entrada' ? marca.aviso_entrada_at : (disparo === 'dia2' ? marca.aviso_dia2_at : marca.aviso_dia3_at);
+            if (avisoAt && piezaCargada(payload, idx)) {
+              try { deps.closeCase(db, 'trial-mano:' + uid + ':' + disparo); } catch (e) {}
+            }
           }
         }
       } catch (e) { /* una marca jamás frena el barrido de las demás */ }

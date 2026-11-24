@@ -33920,6 +33920,13 @@ function lineaManoSweep() {
       getUser: (d, id) => { try { return d.prepare('SELECT * FROM users WHERE id = ?').get(id) || null; } catch (e) { return null; } },
       guestEnd: (u, now) => (guestTrial && guestTrial.guestTrialEnd) ? guestTrial.guestTrialEnd(u, now) : 0,
       openCase: (d, fields) => supportCases.openCase(d, fields),
+      // (LOTE LINEA-MANO-ADELANTE) El cierre automático de los casos
+      // cumplidos de la línea, por la vía del equipo (la misma del
+      // botón de la consola: conserjeVista.cerrarCaso).
+      closeCase: (d, dedupKey) => {
+        const row = d.prepare("SELECT id FROM support_cases WHERE dedup_key = ? AND estado <> 'cerrado'").get(String(dedupKey || ''));
+        return row ? conserjeVista.cerrarCaso(d, row.id) : null;
+      },
     }, Date.now());
   } catch (e) { return null; }
 }
@@ -49274,7 +49281,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1317';
+const BUILD_ID = '20261105-v1318';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
