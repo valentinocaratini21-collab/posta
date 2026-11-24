@@ -3572,7 +3572,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1301';
+const PZ_BUILD = '20261105-v1302';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32667,15 +32667,40 @@ function pzPagarAhoraHTML(en) {
     </div>`;
   } catch (e) { return ''; }
 }
+function pzPaisPorZona() {
+  // (PAIS-POR-ZONA) País según la zona horaria del dispositivo — la que
+  // la cuenta usa para sus horarios — solo entre los países que Posty
+  // cobra. Si la zona no es de ninguno, devuelve '' y manda la regla
+  // siguiente (el idioma, como siempre).
+  try {
+    const tz = pzBrowserTz();
+    if (!tz) return '';
+    if (tz.indexOf('America/Argentina/') === 0 || tz === 'America/Buenos_Aires' || tz === 'America/Cordoba' || tz === 'America/Mendoza') return 'AR';
+    if (tz === 'America/Montevideo') return 'UY';
+    if (tz === 'Europe/Madrid' || tz === 'Atlantic/Canary' || tz === 'Africa/Ceuta' || tz === 'Africa/Melilla') return 'ES';
+    if (tz === 'Europe/London') return 'GB';
+    if (tz === 'America/Bogota') return 'CO';
+    if (tz === 'America/Lima') return 'PE';
+    if (tz === 'America/Santiago' || tz === 'Pacific/Easter') return 'CL';
+    if (['America/Mexico_City', 'America/Cancun', 'America/Monterrey', 'America/Tijuana', 'America/Mazatlan', 'America/Merida', 'America/Chihuahua', 'America/Hermosillo', 'America/Bahia_Banderas', 'America/Ojinaga', 'America/Matamoros', 'America/Ciudad_Juarez'].includes(tz)) return 'MX';
+    if (['America/Sao_Paulo', 'America/Fortaleza', 'America/Recife', 'America/Belem', 'America/Bahia', 'America/Manaus', 'America/Cuiaba', 'America/Campo_Grande', 'America/Porto_Velho', 'America/Boa_Vista', 'America/Rio_Branco', 'America/Santarem', 'America/Araguaina', 'America/Eirunepe', 'Atlantic/Noronha'].includes(tz)) return 'BR';
+    if (tz.indexOf('America/Indiana/') === 0 || tz.indexOf('America/Kentucky/') === 0 || tz.indexOf('America/North_Dakota/') === 0 ||
+        ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'America/Detroit', 'America/Boise', 'America/Juneau', 'America/Sitka', 'America/Nome', 'America/Yakutat', 'America/Metlakatla', 'America/Adak', 'Pacific/Honolulu'].includes(tz)) return 'US';
+    return '';
+  } catch (e) { return ''; }
+}
 function pzPagarPais() {
   // El mismo criterio del paywall de Mi plan (chunk-ajustes): país
-  // guardado ('posta-pais'; 'EU' guardado = España) → idioma en → US →
-  // AR. El riel lo decide el país, igual que en Mi plan.
+  // guardado ('posta-pais'; 'EU' guardado = España) → país por la zona
+  // horaria → idioma en → US → AR. El riel lo decide el país, igual
+  // que en Mi plan.
   try {
     let g = localStorage.getItem('posta-pais');
     if (g === 'EU') g = 'ES';
     if (g && ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES'].includes(g)) return g;
   } catch (e) {}
+  const pz = pzPaisPorZona();
+  if (pz) return pz;
   return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'US' : 'AR';
 }
 let PZ_PAGAR_EN_CURSO = false;

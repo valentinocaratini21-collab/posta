@@ -1243,7 +1243,13 @@ function bindSettings() {
     try {
       const g = localStorage.getItem('posta-pais');
       if (g && PZ_PAY_PAISES.includes(g)) pzPayCountry = g;
-      else if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US';
+      else {
+        // (PAIS-POR-ZONA) Sin país guardado: manda la zona horaria
+        // (helper de app.js); recién después, el idioma, como siempre.
+        const zp = (typeof pzPaisPorZona === 'function') ? pzPaisPorZona() : '';
+        if (zp) pzPayCountry = zp;
+        else if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US';
+      }
     } catch (e) { if (typeof ME !== 'undefined' && ME && ME.lang === 'en') pzPayCountry = 'US'; }
     if (pzDl.agente && pzDl.pais) {
       pzPayCountry = pzDl.pais;
