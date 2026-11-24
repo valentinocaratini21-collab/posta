@@ -3572,7 +3572,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1297';
+const PZ_BUILD = '20261105-v1298';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27075,7 +27075,7 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
-  if (tab === 'inicio') setTimeout(() => { try { pzNombreAjustar(); } catch (e) {} try { pzSpacesAplicar(); } catch (e) {} }, 0);
+  if (tab === 'inicio') setTimeout(() => { try { pzNombreAjustar(); } catch (e) {} try { pzSpacesAplicar(); } catch (e) {} try { pzPagarIntencion(); } catch (e) {} }, 0);
   // (LOTE BILLETERA-APPLE-PAY) El botón de Apple Pay se monta tras pintar
   // el tab Ads (y tras cada re-pintado de la billetera en pzAdsPintar):
   // si el dispositivo no lo soporta, la sección queda oculta.
@@ -32663,13 +32663,75 @@ function pzPagarAhoraHTML(en) {
     return `<div class="pz-pagar-ahora" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#0A1E33;border-radius:16px;padding:12px 14px;margin:0 0 14px">
       <div style="flex:1 1 180px;min-width:160px"><b style="color:#fff;font-size:14.5px">${en ? 'Already decided?' : '¿Ya lo tenés decidido?'}</b><br><span style="color:#BFD9EA;font-size:12.5px">${en ? 'Skip the trial — your week and your first post stay free either way.' : 'Salteá la prueba — tu semana y tu primer posteo siguen gratis igual.'}</span></div>
       <button type="button" class="pz-pa-btn" onclick="pzPagarAhora()" style="background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:11px 18px;font-weight:800;font-size:14.5px;cursor:pointer;white-space:nowrap">${en ? 'I want Posty now — USD 199/mo' : 'Quiero Posty ahora — USD 199/mes'}</button>
+      <div id="pzPaMsg" role="status" style="flex:1 1 100%;font-size:12.5px;line-height:1.45;color:#BFD9EA"></div>
     </div>`;
   } catch (e) { return ''; }
 }
-function pzPagarAhora() {
+function pzPagarPais() {
+  // El mismo criterio del paywall de Mi plan (chunk-ajustes): país
+  // guardado ('posta-pais'; 'EU' guardado = España) → idioma en → US →
+  // AR. El riel lo decide el país, igual que en Mi plan.
+  try {
+    let g = localStorage.getItem('posta-pais');
+    if (g === 'EU') g = 'ES';
+    if (g && ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'ES'].includes(g)) return g;
+  } catch (e) {}
+  return (typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'US' : 'AR';
+}
+let PZ_PAGAR_EN_CURSO = false;
+async function pzPagarAhora() {
   try {
     if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzPagarAhora()); return; }
-    bbGo('#/app/ajustes?plan_sel=posty');
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    // (LOTE PAGAR-DIRECTO) App instalada: adentro no se cobra (regla de
+    // las tiendas — el Mi plan nativo ni dibuja el paso de pago y el
+    // botón quedaba en un callejón, el defecto del 24/11). El toque abre
+    // el pago en el navegador del teléfono con la intención (?pagar=1):
+    // al entrar con la cuenta, la web cobra directo (pzPagarIntencion).
+    if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) {
+      try { window.open('https://postycommunitymanager.com/#/app/inicio?pagar=1', '_blank'); } catch (e) {}
+      return;
+    }
+    if (PZ_PAGAR_EN_CURSO) return;
+    PZ_PAGAR_EN_CURSO = true;
+    const btn = document.querySelector('.pz-pa-btn');
+    const msg = document.getElementById('pzPaMsg');
+    const etiqueta = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = en ? 'Opening secure payment…' : 'Abriendo el pago seguro…'; }
+    if (msg) { msg.style.color = '#BFD9EA'; msg.textContent = en ? 'Taking you to secure payment…' : 'Llevándote al pago seguro…'; }
+    const pais = pzPagarPais();
+    const esStripe = ['US', 'GB', 'ES', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(pais);
+    try {
+      if (esStripe) {
+        const r = await api.post('/api/billing/stripe/checkout', { plan: 'posty', country: pais, agente: 'posty' });
+        if (r && r.url) { location.href = r.url; return; }
+      } else {
+        const em = (typeof ME !== 'undefined' && ME && (ME.mp_payer_email || ME.email)) || '';
+        const r = await api.post('/api/billing/subscribe', { plan: 'posty', country: pais, payer_email: em, agente: 'posty' });
+        if (r && r.init_point) { location.href = r.init_point; return; }
+      }
+      throw new Error(en ? 'The payment could not be opened. Try again.' : 'No se pudo abrir el pago. Probá de nuevo.');
+    } catch (e) {
+      PZ_PAGAR_EN_CURSO = false;
+      if (btn) { btn.disabled = false; btn.textContent = etiqueta; }
+      if (msg) { msg.style.color = '#FFB4B4'; msg.textContent = (e && e.message) || (en ? 'The payment could not be opened.' : 'No se pudo abrir el pago.'); }
+    }
+  } catch (e) {}
+}
+let PZ_PAGAR_INTENT = false;
+function pzPagarIntencion() {
+  // Aterrizaje con ?pagar=1 (desde la app instalada o un link): la
+  // intención se honra UNA vez al entrar a Inicio — si la cuenta no
+  // está activa, el pago directo arranca solo (invitado: hoja de cuenta
+  // y sigue). El parámetro se limpia de la dirección.
+  try {
+    if (PZ_PAGAR_INTENT) return;
+    if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return;
+    const q = new URLSearchParams(String(location.hash || '').split('?')[1] || '');
+    if (q.get('pagar') !== '1') return;
+    PZ_PAGAR_INTENT = true;
+    try { history.replaceState(null, '', location.pathname + '#/app/inicio'); } catch (e) {}
+    setTimeout(() => { try { if (typeof ME !== 'undefined' && ME && ME.plan_status !== 'active') pzPagarAhora(); } catch (e) {} }, 700);
   } catch (e) {}
 }
 async function inicioView() {
