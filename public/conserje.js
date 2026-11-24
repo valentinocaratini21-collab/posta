@@ -418,33 +418,28 @@
       var porId = {};
       ((cliente && cliente.posteos) || []).forEach(function (p) { porId[p.id] = p; });
       var ini = iniciales(cliente && cliente.business_name);
-      cuerpo.innerHTML = '<div class="posts">' + (j.tiles || []).map(function (t) {
+      // (LOTE CONSERJE-FEED-GRILLA · pedido del dueño 24/11) «Su
+      // feed» es el feed LITERAL de Instagram: la grilla tal cual
+      // está hoy con los posteos armados en su posición final —
+      // el servidor ya ordena las tiles así — y cada pieza todavía
+      // no publicada con su marca chica de día y hora («marca» del
+      // servidor). Nada de lista con captions: el dueño aprueba
+      // viendo el resultado. La foto sigue siendo la tapa real
+      // (el póster en videos propios; la tile de IG trae su tapa)
+      // y el toque abre el visor en grande, como siempre.
+      cuerpo.innerHTML = '<div class="feedgrid">' + (j.tiles || []).map(function (t) {
         var esVideo = /video|reel/.test(String(t.media_type || ''));
-        // (LOTE CONSERJE-VER-GRANDE · cierra la F2 del censo 2) La
-        // ruta del feed emite la foto en «img», no en «image_url»:
-        // las fotos salían sin imagen y no había nada que tocar. El
-        // video de un posteo propio sigue yendo por su póster — jamás
-        // el .mp4 en un <img> (regla de CONSERJE-FOTO-VIDEO); la tile
-        // que viene del Instagram del cliente trae siempre en «img»
-        // una imagen real (su tapa), nunca el archivo de video.
         var img = t.poster_url || (esVideo && t.kind === 'post' ? '' : (t.img || t.image_url || ''));
         var aprobable = (t.status === 'scheduled' || t.status === 'draft') && porId[t.post_id] && porId[t.post_id].dia_key;
-        // (LOTE CONSERJE-BOTONES · F2) El borrador se dice en
-        // español, como en el resto de la consola — nunca el
-        // status crudo («draft») que esta rama imprimía tal cual.
-        var chip = t.status === 'published' ? '<span class="state-chip green">En su Instagram</span>'
-          : t.status === 'scheduled' ? '<span class="state-chip sky">Programado</span>'
-          : '<span class="state-chip yellow">Borrador</span>';
         var verAttrs = '';
         if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
         else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
-        return '<article class="post"><div class="thumb"' + verAttrs + '>'
+        return '<div class="fg-tile' + (t.es_revision ? ' fg-rev' : '') + '"' + verAttrs + '>'
           + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(ini) + '</span></div>')
-          + (esVideo ? '<span class="play">▶</span>' : '') + chip + '</div>'
-          + '<div class="p-body"><div class="p-cap">' + esc(trunc(t.caption || '', 90)) + '</div>'
-          + (t.es_revision ? '<div class="p-meta"><span class="mini-chip amarillo">Sale mañana</span></div>' : '')
-          + (aprobable ? '<div class="p-actions"><button class="btn primary small" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button">✓ Sale así</button></div>' : '')
-          + '</div></article>';
+          + (esVideo ? '<span class="fg-play">▶</span>' : '')
+          + (t.marca ? '<span class="fg-marca">' + esc(t.marca) + '</span>' : '')
+          + (aprobable ? '<button class="fg-sale" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button" aria-label="Sale así" title="Sale así">✓</button>' : '')
+          + '</div>';
       }).join('') + '</div>';
     }
     if (feedPorUsuario[uid]) { pintar(feedPorUsuario[uid]); return; }

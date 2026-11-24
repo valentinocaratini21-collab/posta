@@ -207,6 +207,19 @@
   .day.frenado .d-state{color:var(--red)}
 
   .posts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+  /* (LOTE CONSERJE-FEED-GRILLA) La grilla literal de Instagram de
+     «Su feed»: celdas cuadradas pegadas, la tapa real y solo dos
+     marcas chicas — el día/hora de lo que todavía no salió y el
+     ▶ de los videos. */
+  .feedgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:14px}
+  .fg-tile{position:relative;aspect-ratio:1;background:rgba(255,255,255,.05);overflow:hidden}
+  .fg-tile img{width:100%;height:100%;object-fit:cover;display:block}
+  .fg-tile .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .fg-tile .ph-initial{font-size:30px;font-weight:800;color:rgba(255,255,255,.35)}
+  .fg-tile.fg-rev{outline:2px solid var(--yellow);outline-offset:-2px}
+  .fg-marca{position:absolute;top:6px;left:6px;background:rgba(6,20,36,.78);color:#fff;font-size:11px;font-weight:700;line-height:1;padding:5px 8px;border-radius:999px;letter-spacing:.01em}
+  .fg-play{position:absolute;top:6px;right:8px;color:#fff;font-size:13px;text-shadow:0 1px 6px rgba(0,0,0,.65)}
+  .fg-sale{position:absolute;right:6px;bottom:6px;width:28px;height:28px;border-radius:50%;border:0;background:var(--sky);color:#fff;font-size:15px;font-weight:800;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
   .post{border-radius:18px;overflow:hidden;background:rgba(6,20,36,.42);border:1px solid rgba(255,255,255,.10);border-top-color:rgba(255,255,255,.24);display:flex;flex-direction:column}
   .post .thumb{position:relative;aspect-ratio:4/4.4;background:rgba(255,255,255,.05)}
   .post .thumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -642,6 +655,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=13"></script>
+<script src="/conserje.js?v=14"></script>
 </body>
 </html>

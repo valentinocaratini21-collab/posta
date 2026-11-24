@@ -13529,6 +13529,7 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
         // espejo lo pinta a él, jamás el .mp4 en un <img>.
         poster_url: posterUrlDePosteo(uid, p),
         media_type: p.media_type || 'image', status: p.status,
+        con_horario: !!p.scheduled_at,
         es_revision: postId > 0 && p.id === postId,
         pinned: !!p.pinned, pinned_at: p.pinned_at || '', key,
       });
@@ -13565,6 +13566,29 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
         kind: t.kind, post_id: t.post_id, img: t.img, media_type: t.media_type,
         poster_url: t.poster_url || '',
         status: t.status, es_revision: t.es_revision, pinned: t.pinned,
+        // (LOTE CONSERJE-FEED-GRILLA) La marca de la pieza todavía
+        // no publicada: su día y hora en la zona de la cuenta, para
+        // que la grilla la muestre en su posición final. Sin
+        // horario (borrador suelto) la marca lo dice, sin inventar
+        // una fecha. Publicadas y de IG: sin marca.
+        marca: (function () {
+          if (t.kind !== 'post' || t.status === 'published') return '';
+          if (!t.con_horario || !Number.isFinite(t.key)) return 'borrador';
+          try {
+            const tzF = (db.prepare('SELECT timezone FROM settings WHERE user_id = ?').get(uid) || {}).timezone || 'America/New_York';
+            const diaFmt = new Intl.DateTimeFormat('en-CA', { timeZone: tzF, year: 'numeric', month: '2-digit', day: '2-digit' });
+            const clave = (ms) => diaFmt.format(new Date(ms));
+            const hoyK = clave(Date.now());
+            const manK = clave(Date.now() + 24 * 3600 * 1000);
+            const k = clave(t.key);
+            const hora = new Intl.DateTimeFormat('es', { timeZone: tzF, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(t.key)).replace(/^24:/, '00:');
+            if (k === hoyK) return 'hoy ' + hora;
+            if (k === manK) return 'mañana ' + hora;
+            const sem = new Intl.DateTimeFormat('es', { timeZone: tzF, weekday: 'short' }).format(new Date(t.key)).replace(/\.$/, '');
+            const dia = new Intl.DateTimeFormat('es', { timeZone: tzF, day: 'numeric' }).format(new Date(t.key));
+            return sem + ' ' + dia + ' · ' + hora;
+          } catch (e) { return ''; }
+        })(),
       })),
     });
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
@@ -49281,7 +49305,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1319';
+const BUILD_ID = '20261105-v1320';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
