@@ -3572,7 +3572,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1298';
+const PZ_BUILD = '20261105-v1299';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32683,15 +32683,6 @@ async function pzPagarAhora() {
   try {
     if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzPagarAhora()); return; }
     const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
-    // (LOTE PAGAR-DIRECTO) App instalada: adentro no se cobra (regla de
-    // las tiendas — el Mi plan nativo ni dibuja el paso de pago y el
-    // botón quedaba en un callejón, el defecto del 24/11). El toque abre
-    // el pago en el navegador del teléfono con la intención (?pagar=1):
-    // al entrar con la cuenta, la web cobra directo (pzPagarIntencion).
-    if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) {
-      try { window.open('https://postycommunitymanager.com/#/app/inicio?pagar=1', '_blank'); } catch (e) {}
-      return;
-    }
     if (PZ_PAGAR_EN_CURSO) return;
     PZ_PAGAR_EN_CURSO = true;
     const btn = document.querySelector('.pz-pa-btn');
@@ -32702,15 +32693,29 @@ async function pzPagarAhora() {
     const pais = pzPagarPais();
     const esStripe = ['US', 'GB', 'ES', 'BR', 'MX', 'CL', 'CO', 'PE'].includes(pais);
     try {
+      let destino = '';
       if (esStripe) {
         const r = await api.post('/api/billing/stripe/checkout', { plan: 'posty', country: pais, agente: 'posty' });
-        if (r && r.url) { location.href = r.url; return; }
+        if (r && r.url) destino = r.url;
       } else {
         const em = (typeof ME !== 'undefined' && ME && (ME.mp_payer_email || ME.email)) || '';
         const r = await api.post('/api/billing/subscribe', { plan: 'posty', country: pais, payer_email: em, agente: 'posty' });
-        if (r && r.init_point) { location.href = r.init_point; return; }
+        if (r && r.init_point) destino = r.init_point;
       }
-      throw new Error(en ? 'The payment could not be opened. Try again.' : 'No se pudo abrir el pago. Probá de nuevo.');
+      if (!destino) throw new Error(en ? 'The payment could not be opened. Try again.' : 'No se pudo abrir el pago. Probá de nuevo.');
+      // (LOTE PAGAR-DIRECTO-2) App instalada: el pago ya se creó con la
+      // cuenta desde adentro (la sesión vive en la app) y su página se
+      // abre DIRECTO afuera — un toque a Stripe/MP, sin escala en la web
+      // y sin segundo login (corrección del dueño, 24/11 11:20).
+      if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) {
+        try { window.open(destino, '_blank'); } catch (e) {}
+        PZ_PAGAR_EN_CURSO = false;
+        if (btn) { btn.disabled = false; btn.textContent = etiqueta; }
+        if (msg) { msg.style.color = '#BFD9EA'; msg.textContent = en ? 'We opened the payment in your browser. When you finish, come back to the app.' : 'Te abrimos el pago en el navegador. Al terminar, volvé a la app.'; }
+        return;
+      }
+      location.href = destino;
+      return;
     } catch (e) {
       PZ_PAGAR_EN_CURSO = false;
       if (btn) { btn.disabled = false; btn.textContent = etiqueta; }
