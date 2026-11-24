@@ -544,7 +544,12 @@ function produccionManana(db, filas, opts, nowMs) {
   const items = [];
   for (const f of filas) {
     if (f.clase !== 'pago' && f.clase !== 'prueba_corriendo' && f.clase !== 'prueba_pendiente' && f.clase !== 'espacio' && f.clase !== 'casa') continue;
-    if (f.publishing_stopped) continue;
+    // (LOTE RUIDO-CASA · correctivo de RUIDO-ESPACIOS) La casa vive
+    // con el freno prendido (publishing_stopped: Posty no publica
+    // por ella) y ese freno es la razón de su fila informativa: la
+    // casa queda exceptuada del salteo por freno. Las demás cuentas
+    // frenadas siguen fuera, como siempre.
+    if (f.publishing_stopped && f.clase !== 'casa') continue;
     // (LOTE RUIDO-ESPACIOS · auditoría 24/11, hallazgos 6 y 8) El
     // espacio del dueño SIN Instagram conectado no tiene deber de
     // posteo: fuera de la producción de mañana (su «Mañana sin
