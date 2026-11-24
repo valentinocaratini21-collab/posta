@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1286';
+const PZ_BUILD = '20261105-v1287';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29749,7 +29749,7 @@ function homeHeadHTML(prof, bizName, opts) {
   return `<div class="hf-head${guestHead ? ' hf-head-invitado' : ''}">
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      <div class="hf-who">${user ? `<div class="hf-user">${esc(titleTxt)}${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
+      <div class="hf-who">${user ? `<div class="hf-user"><span class="hf-user-name">${esc(titleTxt)}</span>${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
     </div>
     ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     ${catHTML}
