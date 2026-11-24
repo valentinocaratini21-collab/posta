@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1323';
+const PZ_BUILD = '20261105-v1324';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -26594,6 +26594,23 @@ function bootSplashOff() {
     window.__pzAppPainted = true;
     const b = document.getElementById('posty-boot'); if (!b) return;
     const sp = window.__pzSplash;
+    // (LOTE APERTURA-UNICA · dueño 24/11 18:25: «siguen habiendo
+    // demasiadas cargas en la presentación. Es demasiado larga») En
+    // contexto app con el arranque en Inicio, el boot NO se retira
+    // con el esqueleto: la presentación es UNA sola pantalla hasta
+    // que Inicio pintó su contenido — render() marca
+    // __pzInicioReady tras asignarlo y vuelve a llamar, y recién ahí
+    // sale (con el mínimo de la magia que calcula la rama del
+    // splash). Sin moneda y sin rayo expuestos en el arranque, como
+    // manda su regla del 23/11. En cualquier otro caso (otra ruta,
+    // web, sin boot) el retiro es el de siempre.
+    if (window.__pzAppCtx === true && !window.__pzInicioReady) {
+      const rt = (location.hash || '').split('?')[0].split('/')[2] || '';
+      if (rt === 'inicio' || rt === '') {
+        if (sp && !sp.done) sp.waitingInicio = true;
+        return;
+      }
+    }
     if (sp && !sp.done) {
       // (LOTE APERTURA-MAGIA) La app ya pintó detrás de la presentación
       // de apertura: la salida espera a que la animación cumpla su
@@ -26607,6 +26624,14 @@ function bootSplashOff() {
       const wait = 1600 - (performance.now() - sp.t0);
       if (wait > 0) { setTimeout(() => { try { sp.finish(300); } catch (e) {} }, wait); return; }
       sp.finish(300); return;
+    }
+    // (LOTE APERTURA-UNICA) Documento sin magia (recarga de cura en
+    // la misma apertura) con el boot en modo espera: la salida es
+    // con el mismo fundido de la magia, nunca un corte seco.
+    if (window.__pzAppCtx === true && b.classList.contains('pz-boot-wait')) {
+      b.classList.add('pz-magic-out');
+      setTimeout(() => { if (b.parentNode) b.remove(); }, 300);
+      return;
     }
     b.remove();
   } catch (e) {}
@@ -27090,6 +27115,7 @@ function pzPrefetchKick() {
   bootSplashOff();
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
+  if (tab === 'inicio') { window.__pzInicioReady = true; bootSplashOff(); } // (LOTE APERTURA-UNICA) Inicio pintó: la presentación sale recién ahora
   bindApp(tab);
   if (tab === 'inicio') setTimeout(() => { try { pzNombreAjustar(); } catch (e) {} try { pzSpacesAplicar(); } catch (e) {} try { pzPagarIntencion(); } catch (e) {} }, 0);
   // (LOTE BILLETERA-APPLE-PAY) El botón de Apple Pay se monta tras pintar
@@ -32569,7 +32595,18 @@ function pzInicioSnapGet() {
   try {
     const k = pzInicioSnapKey();
     if (!k) return null;
-    const s = PZ_INICIO_SNAPS.get(k);
+    let s = PZ_INICIO_SNAPS.get(k);
+    if (typeof s !== 'string' || !s) {
+      // (LOTE APERTURA-UNICA) La foto también vive entre aperturas
+      // (localStorage): un arranque de cero la hidrata y Inicio
+      // pinta al instante detrás de la magia, en vez de esperar los
+      // datos con el esqueleto a la vista. La corrida de fondo la
+      // refresca como siempre (pzInicioRepaint repinta solo si
+      // cambió). Al salir de la cuenta, pzInicioSnapClear la borra
+      // de los dos lados — la foto se va con la cuenta.
+      try { s = localStorage.getItem('pz_inicio_snap_v1:' + k) || null; } catch (e) { s = null; }
+      if (typeof s === 'string' && s) PZ_INICIO_SNAPS.set(k, s);
+    }
     return (typeof s === 'string' && s) ? s : null;
   } catch (e) { return null; }
 }
@@ -32580,12 +32617,13 @@ function pzInicioSnapSet(html, key) {
     if (!PZ_INICIO_SNAPS.has(k) && PZ_INICIO_SNAPS.size >= 6) pzInicioSnapClear();
     if (PZ_INICIO_SNAPS.get(k) === html) return PZ_INICIO_SNAP_VS.get(k) || 0;
     PZ_INICIO_SNAPS.set(k, html);
+    try { if (html.length <= 450000) localStorage.setItem('pz_inicio_snap_v1:' + k, html); } catch (e) {} // (LOTE APERTURA-UNICA) la foto queda para la próxima apertura
     const v = ++PZ_INICIO_SNAP_VN;
     PZ_INICIO_SNAP_VS.set(k, v);
     return v;
   } catch (e) { return 0; }
 }
-function pzInicioSnapClear() { try { PZ_INICIO_SNAPS.clear(); PZ_INICIO_SNAP_VS.clear(); } catch (e) {} }
+function pzInicioSnapClear() { try { PZ_INICIO_SNAPS.clear(); PZ_INICIO_SNAP_VS.clear(); } catch (e) {} try { const ks = []; for (let i = 0; i < localStorage.length; i++) { const lk = localStorage.key(i); if (lk && lk.indexOf('pz_inicio_snap_v1:') === 0) ks.push(lk); } ks.forEach((lk) => localStorage.removeItem(lk)); } catch (e) {} }
 function pzInicioSnapVersion() {
   try {
     const k = pzInicioSnapKey();

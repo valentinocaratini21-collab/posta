@@ -519,16 +519,29 @@ html.pz-appctx #posty-boot .pz-boot-coin,html.pz-appctx #posty-boot .pz-boot-txt
 /* (LOTE REGRESO-NEGRO) Modo espera del boot: si la app todavía no
    pintó cuando la magia terminó (o la magia no suena en este
    documento), el boot NO se retira ni queda mudo: queda sobre el
-   degradé de la magia con el estándar de carga del dueño (la moneda
-   de Bambooty en su aro — LOTE MONEDA-CARGA — + su línea de estado,
-   en blanco sobre el degradé) y tapa la landing que vive debajo
+   degradé de la magia sosteniendo el cuadro final de la magia
+   (LOTE APERTURA-UNICA, 24/11: la moneda de MONEDA-CARGA quedó
+   solo para la web; la única línea de la espera es la de
+   reintento del modo lento) y tapa la landing que vive debajo
    hasta que la app pinta. Tapa también los toques
    (pointer-events:auto): estando logueado, ningún toque puede caer
    en el formulario público de abajo. */
 #posty-boot.pz-boot-wait{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
-#posty-boot.pz-boot-wait .pzsp-stage{display:none}
-html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-coin{display:flex}
-html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
+/* (LOTE APERTURA-UNICA · dueño 24/11: «siguen habiendo demasiadas
+   cargas en la presentación») El modo espera ya NO cambia de
+   pantalla: sostiene el CUADRO FINAL de la magia — la cara y
+   «Posty.» quietos sobre el degradé — hasta que Inicio pinta y el
+   boot sale. La moneda con su «Cargando…» no vuelve en contexto
+   app (las reglas que la volvían a mostrar acá mueren); solo el
+   modo lento (30 s sin pintar) muestra su línea de reintento,
+   debajo de la cara y sin moneda. */
+#posty-boot.pz-boot-wait .pzsp-stage{display:block;position:absolute;inset:0;container-type:size;overflow:hidden}
+#posty-boot.pz-boot-wait .pzsp-star,#posty-boot.pz-boot-wait .pzsp-ring{display:none}
+#posty-boot.pz-boot-wait .pzsp-glow{animation:none;opacity:.55}
+#posty-boot.pz-boot-wait .pzsp-face{animation:none;opacity:1;transform:scale(1) translateY(-3px)}
+#posty-boot.pz-boot-wait .pzsp-word{animation:none;opacity:1;transform:none}
+#posty-boot.pz-boot-wait .pzsp-dot{animation:none;opacity:1;transform:none}
+html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:absolute;left:0;right:0;bottom:11%;text-align:center;color:#fff}
 #posty-boot .pzsp-stage{display:none}
 #posty-boot.pz-magic .pz-boot-coin,#posty-boot.pz-magic .pz-boot-txt{display:none}
 #posty-boot.pz-magic .pzsp-stage{display:block;position:absolute;inset:0;container-type:size;overflow:hidden;font-family:Montserrat,Inter,system-ui,-apple-system,sans-serif}
@@ -640,7 +653,10 @@ html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
        todavía no pintó, el toque pasa el boot a modo espera — nunca
        deja la landing al descubierto (LOTE REGRESO-NEGRO). */
     boot.addEventListener('pointerdown', function () {
-      if (sp.appReady || window.__pzAppPainted) sp.finish(200);
+      // (LOTE APERTURA-UNICA) Tocar salta la magia solo si Inicio ya
+      // pintó detrás (appReady lo marca bootSplashOff con el
+      // contenido asignado); el esqueleto pintado ya no alcanza.
+      if (sp.appReady || window.__pzInicioReady) sp.finish(200);
       else { sp.waiting = true; waitMode(); }
     });
     var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -649,14 +665,17 @@ html.pz-appctx #posty-boot.pz-boot-wait .pz-boot-txt{display:block;color:#fff}
        app pinte (LOTE REGRESO-NEGRO). */
     setTimeout(function () {
       if (sp.done) return;
-      if (sp.appReady || window.__pzAppPainted) sp.finish(300);
+      // (LOTE APERTURA-UNICA) Al cumplir la magia, el boot sale
+      // solo si Inicio ya pintó su contenido; si no, sostiene el
+      // cuadro final en modo espera hasta que pinte.
+      if (sp.appReady || window.__pzInicioReady) sp.finish(300);
       else { sp.waiting = true; waitMode(); }
     }, reduced ? 500 : 1600);
   } catch (e) {}
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=940"></script>
+<script src="/app.js?v=941"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
