@@ -565,7 +565,7 @@ let BB = { estado: null, prefs: null, pendingAsk: '' };
 const BB_META = {
   posty: { n: 'Posty', c: '#2793C8', a: '/ai-avatar.png' },
   gesty: { n: 'Gesty', c: '#5B8C5A', a: null },
-  venty: { n: 'Venty', c: '#4CAF50', a: null },
+  venty: { n: 'Venty', c: '#4CAF50', a: '/venty-cara.webp?v=2' },
   growty: { n: 'Growty', c: '#8BC34A', a: null },
   atenty: { n: 'Atenty', c: '#2E8C83', a: null },
   desy: { n: 'Desy', c: '#E0218A', a: null },
@@ -1285,7 +1285,7 @@ function pzShellHeadHTML(tab) {
     : modoVolver === 'barra-desk' ? pzVolverBarraDeskHTML(tab) : '';
   return `<header class="pz-shell-head">
     ${volverBtn}<button type="button" class="pz-shell-ident" onclick="bbGo('${(typeof pzIsGuest === 'function' && pzIsGuest()) ? '#/app/chat' : '#/app/inicio'}')" aria-label="${(typeof pzIsGuest === 'function' && pzIsGuest()) ? (en ? 'Talk to us' : 'Hablá con nosotros') : (en ? 'Go to Home' : 'Ir a Inicio')}">
-      <span class="pz-shell-ava-wrap"><img src="ai-avatar.png" alt="${agHead ? agHead.nombre : 'Posty'}" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
+      <span class="pz-shell-ava-wrap"><img src="${agHead && agHead.cara ? esc(agHead.cara) : 'ai-avatar.png'}" alt="${agHead ? agHead.nombre : 'Posty'}" class="pz-shell-ava"><span class="pz-shell-dot" aria-hidden="true"></span></span>
       <span class="pz-shell-who"><b>${agHead ? (agHead.nombre + '<span class="pdot" style="color:' + agHead.punto + '">.</span>') : 'Posty<span class="pdot">.</span>'}</b><small class="pz-shell-state" id="pzShellState">${esc(estadoIni)}</small></span>
     </button>
     <span class="pz-shell-acts">
@@ -1610,7 +1610,7 @@ function pzCampanaBadgeRefrescar() {
 const PZ_AGENTES = [
   { id: 'posty', nombre: 'Posty', punto: '#2FBF71', medallon: '#2793C8', letra: '#FFFFFF', cara: '/ai-avatar.png', ruta: '#/app/inicio', descEs: 'Tu community manager: postea por tu negocio todos los días.', descEn: 'Your community manager: posts for your business every day.' },
   { id: 'gesty', nombre: 'Gesty', punto: '#2793C8', medallon: '#0A1E33', letra: '#FFFFFF', cara: '/gesty-cara.webp', ruta: '#/app/gesty', descEs: 'Administra, atiende y ordena los papeles de tu negocio.', descEn: 'Runs your admin, messages and paperwork.' },
-  { id: 'venty', nombre: 'Venty', punto: '#1E9E5A', medallon: '#1E9E5A', letra: '#FFFFFF', cara: '/venty-cara.webp', ruta: '#/app/venty', descEs: 'Vende y consigue clientes para tu negocio.', descEn: 'Sells and brings in clients for your business.' },
+  { id: 'venty', nombre: 'Venty', punto: '#1E9E5A', medallon: '#1E9E5A', letra: '#FFFFFF', cara: '/venty-cara.webp?v=2', ruta: '#/app/venty', descEs: 'Vende y consigue clientes para tu negocio.', descEn: 'Sells and brings in clients for your business.' },
 ];
 function pzAgenteMeta(id) { return PZ_AGENTES.find(a => a.id === id) || null; }
 function pzAgenteActual() {
@@ -1766,7 +1766,7 @@ function pzVentyFloatHTML(en) {
   // invitado y el registrado vuelve a Inicio, donde habla con su
   // agente): la cara lleva ahí, un toque. El chat propio DENTRO del
   // modo Venty es una etapa posterior del programa, no de este lote.
-  return `<button type="button" class="pzv-float" onclick="bbGo('#/app/inicio')" aria-label="${en ? 'Talk to Venty' : 'Hablar con Venty'}"><span class="pzv-float-cara"><img src="ai-avatar.png" alt=""></span><span class="pzv-float-txt">${en ? 'talk to venty' : 'hablar con venty'}</span></button>`;
+  return `<button type="button" class="pzv-float" onclick="bbGo('#/app/inicio')" aria-label="${en ? 'Talk to Venty' : 'Hablar con Venty'}"><span class="pzv-float-cara"><img src="/venty-cara.webp?v=2" alt=""></span><span class="pzv-float-txt">${en ? 'talk to venty' : 'hablar con venty'}</span></button>`;
 }
 function pzVentyMovHTML(mov, en) {
   // El movimiento semanal de un número del norte, en verde (Venty
@@ -1871,7 +1871,7 @@ function pzVentyHoyHTML(d, en) {
   return `<div class="pzv-wrap">
     ${banda}
     <div class="pzv-cara-zona">
-      <button type="button" class="pzv-cara" onclick="bbGo('#/app/inicio')" aria-label="${en ? 'Talk to Venty' : 'Hablar con Venty'}"><img src="ai-avatar.png" alt="Venty"></button>
+      <button type="button" class="pzv-cara" onclick="bbGo('#/app/inicio')" aria-label="${en ? 'Talk to Venty' : 'Hablar con Venty'}"><img src="/venty-cara.webp?v=2" alt="Venty"></button>
       <div class="pzv-cara-pista">${en ? "tap venty's face to talk to him" : 'tocá la cara para hablar con venty'}</div>
       ${chip}
     </div>
@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1324';
+const PZ_BUILD = '20261105-v1325';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
