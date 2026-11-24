@@ -257,6 +257,14 @@ function claseDeCuenta(db, u, nowMs) {
   // cerrada @posta.hacetodo, que figuraba como cliente pago. La
   // casa quedó exceptuada arriba, como decidió el tablero.
   if (Number(u.hold) === 1) return { clase: null, cerrada: true };
+  // (LOTE RUIDO-ESPACIOS · auditoría 24/11, hallazgo 6) Los espacios
+  // del dueño no son clientes: si la cuenta es un espacio del login
+  // de la casa (login_spaces), su clase es «espacio», con su tipo —
+  // nunca «pago», aunque su plan_status diga active.
+  const esp = safe(() => db.prepare(
+    'SELECT kind FROM login_spaces WHERE space_user_id = ? AND login_user_id = ?')
+    .get(uid, conserjeRevision.OWNER_USER_ID), null);
+  if (esp) return { clase: 'espacio', espacio_kind: String(esp.kind || 'negocio') };
   const st = String((u && u.plan_status) || '');
   if (st === 'active' || st === 'past_due') return { clase: 'pago' };
   if (st !== 'trial') return { clase: null };
@@ -349,7 +357,7 @@ function usuariosAtendidos(db, nowMs) {
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
             u.concierge, u.publishing_stopped, u.hold, u.hold_reason, u.trial_ends_at, u.trial_extended_until,
             u.trial_started_at, u.created_at,
-            p.business_name, p.ig_username, p.category
+            p.business_name, p.ig_username, p.category, p.ig_connected
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id
      WHERE (u.id = ${conserjeRevision.OWNER_USER_ID}
         OR u.plan_status IN ('active', 'past_due', 'trial'))
@@ -385,6 +393,7 @@ function filaRoster(db, u, opts, nowMs) {
   // la columna plan_status guardada queda como dato crudo, nada más.
   const claseInfo = claseDeCuenta(db, u, nowMs);
   const claseLabel = claseInfo.clase === 'casa' ? 'La casa'
+    : claseInfo.clase === 'espacio' ? (claseInfo.espacio_kind === 'vidriera' ? 'Vidriera de la casa' : 'Espacio de la casa')
     : claseInfo.clase === 'pago' ? 'Cliente'
     : claseInfo.clase === 'prueba_corriendo' ? 'Prueba'
     : claseInfo.clase === 'prueba_pendiente' ? 'Prueba · sin conectar' : '';
@@ -412,7 +421,12 @@ function filaRoster(db, u, opts, nowMs) {
   else { dot = 'grey'; estado = 'Sin posteos programados'; }
   return {
     user_id: uid,
-    business_name: u.business_name || u.guest_ig || u.email || '',
+    // (LOTE RUIDO-ESPACIOS · detalle 10 de la auditoría) El nombre
+    // que la consola muestra corta el rubro pegado que a veces trae
+    // el nombre de Instagram («Nombre | Rubro»): se muestra el
+    // nombre; el dato guardado no se toca.
+    business_name: String(u.business_name || '').split(' | ')[0] || u.guest_ig || u.email || '',
+    ig_connected: !!u.ig_connected,
     ig_username: u.ig_username || u.guest_ig || '',
     email: u.email || '',
     categoria: u.category || '',
@@ -477,6 +491,10 @@ function resumenHoy(db, filas, decisionesList, opts, nowMs) {
     // (reloj andando): la columna guardada contaba 42 «pruebas» con la
     // mayoría terminadas hace semanas.
     pruebas_activas: filas.filter((f) => f.clase === 'prueba_corriendo').length,
+    // (LOTE RUIDO-ESPACIOS · detalle 11) Las que esperan conexión,
+    // contadas aparte para que el encabezado no se lea «no hay
+    // pruebas» cuando hay una fila esperando.
+    pruebas_esperando: filas.filter((f) => f.clase === 'prueba_pendiente').length,
     decisiones_pendientes: decisionesList.length,
     suscriptores,
     meta_marzo: 30,
@@ -525,8 +543,15 @@ function produccionManana(db, filas, opts, nowMs) {
     .map((r) => Number(r.user_id)));
   const items = [];
   for (const f of filas) {
-    if (f.clase !== 'pago' && f.clase !== 'prueba_corriendo' && f.clase !== 'prueba_pendiente') continue;
+    if (f.clase !== 'pago' && f.clase !== 'prueba_corriendo' && f.clase !== 'prueba_pendiente' && f.clase !== 'espacio' && f.clase !== 'casa') continue;
     if (f.publishing_stopped) continue;
+    // (LOTE RUIDO-ESPACIOS · auditoría 24/11, hallazgos 6 y 8) El
+    // espacio del dueño SIN Instagram conectado no tiene deber de
+    // posteo: fuera de la producción de mañana (su «Mañana sin
+    // posteo» era permanente e imposible de resolver). El espacio
+    // CON Instagram sí entra — su falta es real. La casa entra como
+    // fila informativa: decisiones() no le crea tarjeta ni problema.
+    if (f.clase === 'espacio' && !f.ig_connected) continue;
     // La prueba que termina hoy ya no corre mañana: su mañana no se
     // le exige (su cierre vive en la derecha, clase plata).
     if (f.clase === 'prueba_corriendo' && f.prueba && f.prueba.termina_key && f.prueba.termina_key < fecha) continue;
@@ -716,6 +741,7 @@ function decisiones(db, filas, opts, nowMs) {
   // decide. La que ya tiene decisión no entra (ya se decidió).
   for (const it of (manana.items || [])) {
     if (!it.post || it.decision) continue;
+    if (it.clase === 'casa') continue; // (RUIDO-ESPACIOS) la casa es fila informativa en mañana: no se decide acá
     out.push({
       clase: 'decision',
       tipo: 'pieza', id: 'pieza-' + it.user_id + '-' + manana.fecha,
@@ -732,6 +758,7 @@ function decisiones(db, filas, opts, nowMs) {
   // problema accionable: «Posty lo arma» o ver la ficha).
   for (const it of (manana.items || [])) {
     if (it.estado !== 'falta') continue;
+    if (it.clase === 'casa') continue; // (RUIDO-ESPACIOS) la casa se publica a mano: su falta se ve en mañana, no como problema «Posty lo arma»
     out.push({
       clase: 'problema',
       tipo: 'pieza_falta', id: 'falta-' + it.user_id + '-' + manana.fecha,
@@ -1153,7 +1180,7 @@ function cliente(db, userId, opts) {
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
             u.concierge, u.publishing_stopped, u.hold, u.hold_reason, u.trial_ends_at, u.trial_extended_until,
             u.trial_started_at, u.created_at,
-            p.business_name, p.ig_username, p.category
+            p.business_name, p.ig_username, p.category, p.ig_connected
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
   if (!u) return { ok: false, error: 'sin_usuario' };
   const tz = conserjeRevision.accountTz(db, uid);

@@ -108,7 +108,8 @@
       + (h.publica_hoy != null ? h.publica_hoy : '—') + ' posteos</span>'
       + (h.proxima_hora ? '<span class="ts-label">· próximo ' + esc(h.proxima_hora) + '</span>' : '');
     $('statPruebas').innerHTML = '<span class="ts-label">Pruebas activas</span><span class="ts-value">'
-      + (h.pruebas_activas != null ? h.pruebas_activas : '—') + '</span>';
+      + (h.pruebas_activas != null ? h.pruebas_activas : '—') + '</span>'
+      + (h.pruebas_esperando ? '<span class="ts-label">· ' + h.pruebas_esperando + ' esperando conexión</span>' : '');
     setBadge('topPending', h.decisiones_pendientes != null ? h.decisiones_pendientes : null);
     $('statSubs').innerHTML = '<span class="ts-label">Suscriptores</span><span class="ts-value">'
       + (h.suscriptores != null ? h.suscriptores : '—') + '/' + (h.meta_marzo || 30)
