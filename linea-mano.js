@@ -345,9 +345,21 @@ function barrido(db, deps, now) {
           }
         }
         if (!marca.aviso_dia3_at && !piezaCargada(payload, 2) && (piezaCargada(payload, 1) || dia >= 3)) {
+          // (LOTE LINEA-MANO-TEXTO) La fecha de salida de la pieza
+          // del día 3 es la de SU plan (week[2].date, la etiqueta
+          // con la que producción la agenda); sin fecha en el plan
+          // no se inventa ninguna. Mañana esta pieza ENTRA a
+          // revisión — no sale: el texto anterior («sale mañana»)
+          // prometía una fecha que no era.
+          let fecha3 = '';
+          try {
+            const w3 = payload && Array.isArray(payload.week) ? payload.week[2] : null;
+            const d3 = w3 && typeof w3.date === 'string' ? w3.date.trim() : '';
+            if (/^[\p{L}0-9 ]{3,12}$/u.test(d3)) fecha3 = d3;
+          } catch (e) {}
           if (abrir('dia3',
-            'Prueba a mano: ' + quien + ' — producir y cargar HOY la pieza de MAÑANA (día 3)',
-            'Producir la pieza del día 3 (momento, cierre del arco) y cargarla HOY con la palanca admin de pieza a mano: sale mañana 19:00 y queda esperando la aprobación del dueño en el conserje.')) {
+            'Prueba a mano: ' + quien + ' — producir y cargar HOY la pieza del día 3 (entra mañana a revisión)',
+            'Producir la pieza del día 3 (momento, cierre del arco) y cargarla HOY con la palanca admin de pieza a mano: entra mañana a revisión y sale ' + (fecha3 ? 'el ' + fecha3 : 'a las 19:00 de su día') + (fecha3 ? ' 19:00' : '') + ', esperando la aprobación del dueño en el conserje.')) {
             db.prepare('UPDATE trial_linea_mano SET aviso_dia3_at = ? WHERE cache_key = ?').run(t, marca.cache_key);
             res.avisos++;
           }
