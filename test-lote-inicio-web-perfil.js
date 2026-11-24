@@ -103,9 +103,9 @@ function seccionA() {
 
   const idxEs = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
   const idxEn = fs.readFileSync(path.join(ROOT, 'public/en/index.html'), 'utf8');
-  t('A4 [FIX] sellos: app.js?v=909 y styles.css?v=20261329 (ES) · styles.css?v=20261329 (EN) · sin sellos viejos',
-    idxEs.includes('/app.js?v=909') && idxEs.includes('/styles.css?v=20261329')
-    && idxEn.includes('/styles.css?v=20261329')
+  t('A4 [FIX] sellos: app.js?v=910 y styles.css?v=20261330 (ES) · styles.css?v=20261330 (EN) · sin sellos viejos',
+    idxEs.includes('/app.js?v=910') && idxEs.includes('/styles.css?v=20261330')
+    && idxEn.includes('/styles.css?v=20261330')
     && !idxEs.includes('/styles.css?v=20261328') && !idxEn.includes('/styles.css?v=20261328')
     && !idxEs.includes('/app.js?v=902'));
 
@@ -155,8 +155,30 @@ db.prepare(\`INSERT INTO posts (id, user_id, image_path, caption, status, media_
 db.prepare(\`INSERT INTO posts (id, user_id, image_path, caption, status, media_type, scheduled_at, published_at, ig_permalink, created_at)
   VALUES (7012, 701, '/media/semilla.jpg', 'POSTEO DOS QA', 'published', 'image', ?, ?, 'https://www.instagram.com/p/VIVO2/', ?)\`)
   .run(iso(Date.now() - 10800000), iso(Date.now() - 10800000), iso(Date.now() - 10800000));
+db.prepare(\`INSERT INTO users (id, email, password_hash, plan, plan_status, is_guest, concierge, publishing_stopped, trial_started_at, trial_ends_at, bambooty_shell, lang, email_verified, created_at)
+  VALUES (702, 'shell@webqa.test', ?, 'posty', 'active', 0, 0, 0, NULL, NULL, 1, 'es', 1, '2026-09-01 10:00:00')\`).run(hash);
+db.prepare('INSERT INTO profiles (user_id, business_name, ig_username, category, ig_connected) VALUES (702, ?, ?, ?, 1)')
+  .run('Negocio Shell QA', 'webqa', 'café');
+db.prepare("INSERT INTO settings (user_id, timezone, ig_page_id) VALUES (702, 'America/New_York', '')").run();
+db.prepare(\`INSERT INTO posts (id, user_id, image_path, caption, status, media_type, scheduled_at, published_at, ig_permalink, created_at)
+  VALUES (7021, 702, '/media/semilla.jpg', 'POSTEO VIVO QA', 'published', 'image', ?, ?, 'https://www.instagram.com/p/VIVO1/', ?)\`)
+  .run(iso(Date.now() - 7200000), iso(Date.now() - 7200000), iso(Date.now() - 7200000));
 console.log('semilla ok');
 `;
+
+function seccionAHotfix() {
+  seccion('A · hotfix 23/11 (corrección del dueño 21:40)');
+  const css = fs.readFileSync(path.join(ROOT, 'public/styles.css'), 'utf8');
+  const app = fs.readFileSync(path.join(ROOT, 'public/app.js'), 'utf8');
+  t('A7 [HOTFIX] las dos columnas declaran grid-row:1 (arrancan alineadas arriba)',
+    css.includes('.iwp-main{grid-column:1;grid-row:1') && css.includes('.iwp-rail{grid-column:2;grid-row:1}'));
+  t('A8 [HOTFIX] bbShell gana su sidebar: marca en la barra + bloque de escritorio',
+    app.includes('bb-side-brand') && css.includes('.bb-app .bb-bar') && css.includes('.bb-side-brand{display:flex'));
+  t('A9 [HOTFIX] las pestañas de la sidebar no se estiran (flex:none contra .bb-bar .bb-tab{flex:1})',
+    css.includes('.bb-app .bb-tab{flex:none;'));
+  t('A10 [HOTFIX] el título del posteo corta en palabra y cierra con «…» (capFull)',
+    app.includes('const capFull = String((p && p.caption)') && app.includes("+ '…') : capFull"));
+}
 
 async function bootServidor() {
   const PORT = buscarPuerto();
@@ -188,15 +210,15 @@ async function seccionB(srv) {
   if (!srv || !srv.up) return;
   const rIdx = await fetch(srv.base + '/');
   const idxTxt = await rIdx.text();
-  t('B2 [FIX] el index servido trae app.js?v=909 y styles.css?v=20261329',
-    idxTxt.includes('/app.js?v=909') && idxTxt.includes('/styles.css?v=20261329'));
-  const rCss = await fetch(srv.base + '/styles.css?v=20261329');
+  t('B2 [FIX] el index servido trae app.js?v=910 y styles.css?v=20261330',
+    idxTxt.includes('/app.js?v=910') && idxTxt.includes('/styles.css?v=20261330'));
+  const rCss = await fetch(srv.base + '/styles.css?v=20261330');
   const cssTxt = await rCss.text();
   t('B3 [FIX] el styles servido trae el bloque INICIO-WEB-PERFIL',
     rCss.status === 200 && cssTxt.includes('INICIO-WEB-PERFIL') && cssTxt.includes('.drawer{background:#0A1E33'));
   const rEn = await fetch(srv.base + '/en/');
   const enTxt = await rEn.text();
-  t('B4 [FIX] el index EN servido trae styles.css?v=20261329', enTxt.includes('/styles.css?v=20261329'));
+  t('B4 [FIX] el index EN servido trae styles.css?v=20261330', enTxt.includes('/styles.css?v=20261330'));
 }
 
 async function seccionC(srv) {
@@ -262,6 +284,7 @@ async function seccionC(srv) {
           headR: R(head), tiraR: R(tira),
           chatVisible: !!chat && chat.getBoundingClientRect().height > 0 && getComputedStyle(chat).display !== 'none',
           mainContieneGrilla: !!main && !!(main.querySelector('.hf-grid') || main.querySelector('#hfGridSlot')),
+          mainR: R(main), railR: R(document.querySelector('#inicioView .iwp-rail')),
           inicioW: R(document.getElementById('inicioView')).width,
           links: document.querySelectorAll('.drawer .drawer-link[data-tab]').length,
           logout: !!document.getElementById('drawerLogout'),
@@ -273,6 +296,9 @@ async function seccionC(srv) {
       t('C2 [FIX] dos columnas: el perfil a la izquierda y la tira de la semana en el rail derecho',
         !!d.headR && !!d.tiraR && d.headR.right <= d.tiraR.left + 2 && d.inicioW >= 1000,
         JSON.stringify({ headR: d.headR && [d.headR.left, d.headR.right], tiraL: d.tiraR && d.tiraR.left, inicioW: d.inicioW }));
+      t('C2b [HOTFIX] las dos columnas arrancan alineadas arriba (misma fila del grid)',
+        !!d.mainR && !!d.railR && Math.abs(d.mainR.top - d.railR.top) <= 8,
+        JSON.stringify({ mainTop: d.mainR && d.mainR.top, railTop: d.railR && d.railR.top }));
       t('C3 [FIX] la grilla vive dentro de la columna del perfil y no hay scroll horizontal',
         d.mainContieneGrilla && d.sinScrollX);
       t('C5 los links del sidebar están (Inicio/Subir/Ads + Salir)', d.links === 3 && d.logout, 'links=' + d.links);
@@ -290,6 +316,59 @@ async function seccionC(srv) {
       t('C4 [FIX] la tarjeta de chat del rail es visible y su botón abre la ruta del chat (#/app/chat)',
         d.chatVisible && rutas.includes('/app/chat'), 'visible=' + d.chatVisible + ' rutas=' + JSON.stringify(rutas));
       await ctx.close();
+    }
+
+    // ---- Escritorio 1440 · shell Bambooty (bbShell, la cuenta del dueño) ----
+    {
+      const lr2 = await fetch(srv.base + '/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'shell@webqa.test', password: 'ClaveQA123' }),
+      });
+      const m2 = (lr2.headers.get('set-cookie') || '').match(/^([^=]+)=([^;]+)/);
+      t('C9 [HOTFIX] login de la cuenta semilla con shell Bambooty', lr2.status === 200 && !!m2);
+      if (m2) {
+        const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+        await ctx.addCookies([{ name: m2[1], value: m2[2], url: srv.base }]);
+        const page = await ctx.newPage();
+        await page.route('**/api/home/profile', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: perfil }));
+        await page.route('**/api/home/live-grid', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: vivo }));
+        await page.goto(srv.base + '/#/app/inicio', { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#inicioView .hf-head', { timeout: 20000 });
+        await sleep(700);
+        const d = await page.evaluate(() => {
+          const R = (el) => el ? el.getBoundingClientRect() : null;
+          const bar = document.querySelector('.bb-bar');
+          const brand = document.querySelector('.bb-side-brand');
+          const main = document.querySelector('#inicioView .iwp-main');
+          const rail = document.querySelector('#inicioView .iwp-rail');
+          const tab = document.querySelector('.bb-tab');
+          return {
+            barR: R(bar), barBg: bar ? getComputedStyle(bar).backgroundColor : '',
+            brandVisible: !!brand && R(brand).height > 0,
+            mainR: R(main), railR: R(rail), tabH: tab ? R(tab).height : 0,
+            sinScrollX: document.documentElement.scrollWidth <= window.innerWidth + 1,
+          };
+        });
+        t('C10 [HOTFIX] bbShell en escritorio: la barra es la sidebar marina fija a la izquierda',
+          !!d.barR && d.barR.left === 0 && d.barR.top === 0 && d.barR.height >= 890 && d.barBg === 'rgb(10, 30, 51)',
+          JSON.stringify({ bar: d.barR && [d.barR.left, d.barR.top, d.barR.width, d.barR.height], bg: d.barBg }));
+        t('C11 [HOTFIX] la marca (cara + Posty.) se ve en la sidebar y las pestañas son compactas',
+          d.brandVisible && d.tabH >= 36 && d.tabH <= 60, 'brand=' + d.brandVisible + ' tabH=' + d.tabH);
+        t('C12 [HOTFIX] bbShell: las dos columnas arrancan alineadas y sin scroll horizontal',
+          !!d.mainR && !!d.railR && Math.abs(d.mainR.top - d.railR.top) <= 8 && d.sinScrollX,
+          JSON.stringify({ mainTop: d.mainR && d.mainR.top, railTop: d.railR && d.railR.top }));
+        const det = await page.evaluate(() => {
+          const CAP = 'Ninguno de estos 8 negocios nos mandó una foto. Todos los posteos los armamos nosotros. Posty estudia tu negocio, arma el posteo y sale publicado. Todos los días.';
+          const iso2 = new Date().toISOString();
+          const html = pzHoyTiraDetalleHTML({ idx: 0, esHoy: false, esManana: false, revelado: true, post: { id: 999, caption: CAP, status: 'published', image_path: '', media_type: 'image', scheduled_at: iso2, published_at: iso2, ig_permalink: 'https://www.instagram.com/p/X/', approval: 'approved' } }, { en: false });
+          const host = document.createElement('div'); host.innerHTML = html;
+          const b = host.querySelector('.pz-hoy-tira-detalle .t b');
+          return b ? b.textContent : '';
+        });
+        t('C13 [HOTFIX] el título del posteo en la tira cierra con «…» y no a mitad de palabra',
+          det.endsWith('…') && !det.includes('nosotros. P'), JSON.stringify(det.slice(-30)));
+        await ctx.close();
+      }
     }
 
     // ---- Móvil 390 ----
@@ -324,6 +403,7 @@ async function seccionC(srv) {
 // ---------------------------------------------------------------------
 (async () => {
   seccionA();
+  seccionAHotfix();
   const srv = await bootServidor().catch((e) => { console.log('boot error: ' + String(e && e.message).slice(-200)); return null; });
   try {
     await seccionB(srv);
