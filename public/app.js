@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1284';
+const PZ_BUILD = '20261105-v1285';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32614,6 +32614,7 @@ function iwpChatCardHTML(en) {
     <div class="iwp-chat-head"><img class="iwp-chat-ava" src="/ai-avatar.png" alt="Posty"><span class="iwp-chat-who"><b>Posty</b></span></div>
     <p class="iwp-chat-txt">${en ? 'Ask for whatever you need, in writing: a change to a post, a new idea, anything.' : 'Pedile lo que quieras, por escrito: un cambio en un posteo, una idea nueva, lo que sea.'}</p>
     <button type="button" class="iwp-chat-go" onclick="bbGo('#/app/chat')">${en ? 'Write to Posty…' : 'Escribile a Posty…'}</button>
+    <p class="iwp-chat-eta">${en ? 'Estimated reply time: 30 minutes.' : 'Respuesta estimada: 30 minutos.'}</p>
   </div>`;
 }
 async function inicioView() {
