@@ -42872,7 +42872,11 @@ function trialLockRecordDeliveredFor(igRaw, domRaw, userId) {
 // directo sin @: el caché por @ no existe para esos visitantes.
 function trialCacheWriteWeb(domainRaw, out, testMode) {
   try {
-    if (testMode || !trialLock) return;
+    // (LOTE PUERTA-OPERADOR · 23/11) El modo test del operador también
+    // cachea por dominio: su semana se consume igual que la de la
+    // puerta (guest/start por dominio, pieza-mano). El parámetro
+    // testMode queda por compatibilidad de firma.
+    if (!trialLock) return;
     const dom = trialLock.normalizeDomain(domainRaw || '');
     if (!dom) return;
     const payload = JSON.stringify(out);
@@ -44138,7 +44142,7 @@ async function trialGenerateHandler(req, res) {
     // exclusiones de la frontera con el gate (test-mode, allowlist y
     // el reseteo del operador que precede a toda corrida del gate).
     const _lmDomS = (trialLock && fields && fields.web) ? trialLock.normalizeDomain(fields.web) : '';
-    const _lmNaceS = lineaMano.nace(db, { ig: igKey, domain: _lmDomS, testMode: !!testMode, allowlisted: !!(trialLock && trialLock.isAllowlisted(db, igKey, _lmDomS)) });
+    const _lmNaceS = lineaMano.nace(db, { ig: igKey, domain: _lmDomS, testMode: !!testMode, operador: !!testMode, allowlisted: !!(trialLock && trialLock.isAllowlisted(db, igKey, _lmDomS)) });
     if (_lmNaceS.marcada) {
       const specM = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText: webData ? (webData.description || '') : '', profilePicPath, extraPhotos: webExtraPhotos, digest: trialDigest, lang: contentLang, trialNoStock: true, draft: ocDraft, firmaStyle: firmaCode, firmaSinVideo, estiloVisual: ocEstiloVisual });
       const postsM = piezasEsqueletoMano(specM, { business, tone, country: effCountry, category: effCategory, lang: contentLang, digest: trialDigest });
@@ -44179,8 +44183,9 @@ async function trialGenerateHandler(req, res) {
         render_fallback: false,
         linea_mano: true,
       };
-      if (!testMode && igKey) {
+      if (igKey) {
         try {
+          if (testMode && !outM.origen) outM.origen = 'operador'; // (LOTE PUERTA-OPERADOR) el origen queda marcado en la semana
           const payloadM = JSON.stringify(outM);
           if (payloadM.length < 12 * 1024 * 1024) {
             db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
@@ -44188,8 +44193,8 @@ async function trialGenerateHandler(req, res) {
           }
         } catch (e) { console.error('[posta] no se pudo cachear la prueba a mano:', e.message); }
       }
-      if (!testMode) trialCacheWriteWeb(fields.web, outM, testMode);
-      if (!testMode) trialLockRecordFor(fields, webData, business, lang, outM);
+      trialCacheWriteWeb(fields.web, outM, testMode); // (PUERTA-OPERADOR) también con llave
+      trialLockRecordFor(fields, webData, business, lang, outM); // (PUERTA-OPERADOR) también con llave
       trialFormatoDiagLog(ig, specM.formato_diag);
       track(null, 'prueba_done', igKey);
       ok = true;
@@ -44431,8 +44436,9 @@ async function trialGenerateHandler(req, res) {
       render_fallback: !!genTimedOut, // (LOTE PRIMER-POSTEO-MEJOR) true = el render expiró y la semana salió con fotos reales
     };
     // Guardamos la semana por @ (72h): si vuelve, la ve al instante.
-    if (!testMode && igKey) {
+    if (igKey) {
       try {
+        if (testMode && !out.origen) out.origen = 'operador'; // (LOTE PUERTA-OPERADOR) el origen queda marcado en la semana
         const payload = JSON.stringify(out);
         if (payload.length < 12 * 1024 * 1024) {
           db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
@@ -44441,10 +44447,10 @@ async function trialGenerateHandler(req, res) {
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
     // (LOTE PRUEBA-ENTRADA-DIRECTA) Y por dominio, para entrar sin @.
-    if (!testMode) trialCacheWriteWeb(fields.web, out, testMode);
+    trialCacheWriteWeb(fields.web, out, testMode); // (PUERTA-OPERADOR) también con llave
     // (v323 · pieza 8) Nace el candado de 90 días de este negocio (@ o
     // dominio): la próxima generación de esta identidad espera al día 91.
-    if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
+    trialLockRecordFor(fields, webData, business, lang, out); // (PUERTA-OPERADOR) también con llave
     trialFormatoDiagLog(ig, genFormatoDiag); // (LOTE B) una línea por generación, también en la ruta sync
     track(null, 'prueba_done', igKey);
     ok = true;
@@ -45893,7 +45899,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // lineaMano.nace aplica las exclusiones de la frontera con el gate
     // (test-mode, allowlist, reseteo del operador previo).
     const _lmDom = (trialLock && fields && fields.web) ? trialLock.normalizeDomain(fields.web) : '';
-    const _lmNace = lineaMano.nace(db, { ig: igKey, domain: _lmDom, testMode: !!testMode, allowlisted: !!(trialLock && trialLock.isAllowlisted(db, igKey, _lmDom)) });
+    const _lmNace = lineaMano.nace(db, { ig: igKey, domain: _lmDom, testMode: !!testMode, operador: !!testMode, allowlisted: !!(trialLock && trialLock.isAllowlisted(db, igKey, _lmDom)) });
     if (_lmNace.marcada) {
       const postsMano = specPosts.map((sp, i) => ({
         type: 'image',
@@ -45955,8 +45961,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         video_ok: false,
         linea_mano: true,
       };
-      if (!testMode && igKey) {
+      if (igKey) {
         try {
+          if (testMode && !outM.origen) outM.origen = 'operador'; // (LOTE PUERTA-OPERADOR) el origen queda marcado en la semana
           const payloadM = JSON.stringify(outM);
           if (payloadM.length < 12 * 1024 * 1024) {
             db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
@@ -45964,8 +45971,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           }
         } catch (e) { console.error('[posta] no se pudo cachear la prueba a mano:', e.message); }
       }
-      if (!testMode) trialCacheWriteWeb(fields.web, outM, testMode);
-      if (!testMode) trialLockRecordFor(fields, webData, business, lang, outM);
+      trialCacheWriteWeb(fields.web, outM, testMode); // (PUERTA-OPERADOR) también con llave
+      trialLockRecordFor(fields, webData, business, lang, outM); // (PUERTA-OPERADOR) también con llave
       trialFormatoDiagLog(ig, spec.formato_diag);
       track(null, 'prueba_done', igKey);
       if (!closed) { send('done', { out: outM }); doneSent = true; }
@@ -47008,8 +47015,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       video_ok: videoOk,
     };
     // Cache 72h por @, igual que /api/trial/generate
-    if (!testMode && igKey) {
+    if (igKey) {
       try {
+        if (testMode && !out.origen) out.origen = 'operador'; // (LOTE PUERTA-OPERADOR) el origen queda marcado en la semana
         const payload = JSON.stringify(out);
         if (payload.length < 12 * 1024 * 1024) {
           db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
@@ -47043,9 +47051,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       } catch (e) {}
     }
     // (LOTE PRUEBA-ENTRADA-DIRECTA) Y por dominio, para entrar sin @.
-    if (!testMode) trialCacheWriteWeb(fields.web, out, testMode);
+    trialCacheWriteWeb(fields.web, out, testMode); // (PUERTA-OPERADOR) también con llave
     // (v323 · pieza 8) Nace el candado de 90 días de este negocio.
-    if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
+    trialLockRecordFor(fields, webData, business, lang, out); // (PUERTA-OPERADOR) también con llave
     trialFormatoDiagLog(ig, spec.formato_diag); // (LOTE B) una línea por generación, también en la ruta stream
     track(null, 'prueba_done', igKey);
     if (!closed) { send('done', { out }); doneSent = true; }
@@ -48889,7 +48897,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1282';
+const BUILD_ID = '20261105-v1283';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

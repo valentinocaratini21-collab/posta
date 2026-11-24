@@ -21,7 +21,14 @@
 //     resetea la clave (trial-reset → 'cerrada' + exclusión, abajo).
 //
 // FRONTERA CON EL GATE, POR CONSTRUCCIÓN (no por cuidado):
-//   - testMode (test_key del dueño) → jamás se marca.
+//   - testMode (test_key del dueño) → jamás se marca. EXCEPCIÓN
+//     (LOTE PUERTA-OPERADOR · 23/11): cuando la generación con llave
+//     es la puerta del operador corriendo pruebas REALES, el llamador
+//     pasa operador:true y la marca SÍ nace, sellada origen='operador'
+//     en la fila — son pruebas de la línea a mano corridas por el
+//     operador, y la métrica las distingue por ese sello. Las corridas
+//     del gate conservan su separación por la exclusión del reseteo,
+//     que corre igual para el operador (sin forzar no se salta).
 //   - Identidad en la allowlist del candado (las cuentas de la casa)
 //     → jamás se marca.
 //   - EXCLUSIÓN DEL RESETEO DEL OPERADOR: toda corrida del gate arranca,
@@ -68,6 +75,7 @@ function ensureSchema(db) {
     cerrada_at INTEGER NOT NULL DEFAULT 0,
     motivo_cierre TEXT NOT NULL DEFAULT ''
   )`);
+  try { db.exec(`ALTER TABLE trial_linea_mano ADD COLUMN origen TEXT NOT NULL DEFAULT ''`); } catch (e) {}
   db.exec(`CREATE TABLE IF NOT EXISTS trial_reset_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL DEFAULT '',
@@ -120,7 +128,7 @@ function registrarReseteo(db, igKey, domainKey, now) {
 function nace(db, o) {
   try {
     const opts = o || {};
-    if (opts.testMode) return { marcada: false, motivo: 'test-mode' };
+    if (opts.testMode && !opts.operador) return { marcada: false, motivo: 'test-mode' };
     const ig = String(opts.ig || '').trim();
     const dom = String(opts.domain || '').trim();
     const key = claveCache(ig, dom);
@@ -143,12 +151,12 @@ function nace(db, o) {
       }
     }
     const t = Number(opts.now) || Date.now();
-    db.prepare(`INSERT INTO trial_linea_mano (cache_key, ig, domain, user_id, estado, creada_at)
-      VALUES (?, ?, ?, 0, 'activa', ?)
+    db.prepare(`INSERT INTO trial_linea_mano (cache_key, ig, domain, user_id, estado, creada_at, origen)
+      VALUES (?, ?, ?, 0, 'activa', ?, ?)
       ON CONFLICT(cache_key) DO UPDATE SET ig = excluded.ig, domain = excluded.domain,
-        estado = 'activa', creada_at = excluded.creada_at, user_id = 0,
+        estado = 'activa', creada_at = excluded.creada_at, user_id = 0, origen = excluded.origen,
         aviso_entrada_at = 0, aviso_dia2_at = 0, aviso_dia3_at = 0,
-        cerrada_at = 0, motivo_cierre = ''`).run(key, ig, dom, t);
+        cerrada_at = 0, motivo_cierre = ''`).run(key, ig, dom, t, opts.operador ? 'operador' : '');
     return { marcada: true, motivo: 'nace' };
   } catch (e) {
     return { marcada: false, motivo: 'error' };
