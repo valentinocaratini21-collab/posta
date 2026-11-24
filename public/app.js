@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1309';
+const PZ_BUILD = '20261105-v1310';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -41051,12 +41051,19 @@ async function approvalPostView(id) {
   // historia» sale del detalle: la historia compañera es el mecanismo,
   // no un aviso al cliente.
   const apvStoryLine = '';
+  // (LOTE DETALLE-HORA-UNICA · dueño 24/11) La línea del reloj
+  // (.apv-when) sale del detalle de los programados: la hora de
+  // salida se dice UNA sola vez, en la píldora (apvPill ya trae
+  // «sale a las…» o la cuenta regresiva). La línea queda solo
+  // donde trae un dato que la píldora no tiene: el borrador (su
+  // hora propuesta, «Saldría… · si lo aceptás») y el publicado
+  // real (su hora real de salida, «Salió…», en whenPub).
   return `<div class="apv-wrap">
     ${apvBack}
     ${media}
     ${apvCleanTog}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
-    ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
+    ${(dOk && (isDraft || whenPub)) ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     ${apvStoryLine}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
