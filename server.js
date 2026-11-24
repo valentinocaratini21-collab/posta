@@ -28435,6 +28435,12 @@ async function homeProfileReadAndStore(uid, handle) {
         const api = await igProfile.fetchIgProfileFull({ igUserId: s.ig_user_id, accessToken: s.ig_access_token, expectedHandle: handle });
         if (api) {
           if (api.pic) payload.pic = api.pic;
+          // (LOTE NOMBRE-IG · dueño 23/11 22:03) El nombre del espejo es
+          // el nombre REAL de la cuenta de Instagram conectada, tal cual
+          // figura en Instagram: la API es la fuente de verdad del
+          // encabezado también para el nombre (el embed podía traerlo
+          // corto o vacío y la tarjeta salía con el nombre del negocio).
+          if (api.name) payload.name = api.name;
           if (api.bio) { payload.bio = api.bio; payload.bio_unread = false; }
           if (typeof api.followers === 'number') payload.followers = api.followers;
           if (typeof api.following === 'number') payload.following = api.following;
@@ -28585,7 +28591,12 @@ function homeDisplayOverlay(uid, prof, payload) {
     if (pbJunk) { try { db.prepare(`UPDATE profiles SET profile_bio='' WHERE user_id=? AND profile_bio=?`).run(uid, pbRaw); } catch (e) {} }
     const pb = pbJunk ? '' : pbRaw;
     const pl = String((prof && prof.profile_link) || '').trim();
-    if (pn) out.name = pn;
+    // (LOTE NOMBRE-IG · dueño 23/11 22:03) Con lectura real de
+    // Instagram (source 'read'), el nombre del espejo es el de la
+    // cuenta conectada: el nombre guardado en Posty NO lo pisa. El
+    // guardado sigue mandando antes de la conexión (kit), que es
+    // cuando todavía no hay nombre de Instagram que espejar.
+    if (pn && !(out && out.source === 'read')) out.name = pn;
     if (pb.trim()) { out.bio = pb; out.bio_unread = false; }
     if (pl) out.link = pl;
     // (LOTE CARTA-DESTINO-PERFIL · 23/11) El payload mismo también se
@@ -48897,7 +48908,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1285';
+const BUILD_ID = '20261105-v1286';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -54,10 +54,10 @@ async function fetchIgProfileFull(opts) {
     };
     // Intento 1: todos los campos. Si Meta rechaza alguno, se reintenta
     // sin foto/bio (solo conteos) y después solo con el username.
-    let d = await lookup(igUserId, 'username,profile_picture_url,biography,followers_count,follows_count,media_count');
+    let d = await lookup(igUserId, 'username,name,profile_picture_url,biography,followers_count,follows_count,media_count');
     if (d && d.error) {
       const msg = String((d.error && d.error.message) || '');
-      if (/profile_picture_url|biography|followers_count|follows_count|media_count/i.test(msg)) {
+      if (/profile_picture_url|biography|followers_count|follows_count|media_count|\bname\b/i.test(msg)) {
         d = await lookup(igUserId, 'username,followers_count,follows_count,media_count');
       }
     }
@@ -68,7 +68,7 @@ async function fetchIgProfileFull(opts) {
       }
     }
     if (d && d.error && /unsupported get request/i.test(String(d.error.message || ''))) {
-      d = await lookup('me', 'username,profile_picture_url,biography,followers_count,follows_count,media_count');
+      d = await lookup('me', 'username,name,profile_picture_url,biography,followers_count,follows_count,media_count');
       if (d && d.error) d = await lookup('me', 'username');
     }
     if (!d || d.error) return null;
@@ -81,6 +81,7 @@ async function fetchIgProfileFull(opts) {
     if (!d.username) return null;
     return {
       username: String(d.username || '').replace(/^@/, ''),
+      name: strOrNull(d.name),
       pic: strOrNull(d.profile_picture_url),
       bio: strOrNull(d.biography),
       followers: numOrNull(d.followers_count),
