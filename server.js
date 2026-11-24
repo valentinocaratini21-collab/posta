@@ -20990,6 +20990,7 @@ function subirIdeaPayload(uid, row) {
   return {
     id: Number(row.id), texto: row.texto || '', estado: row.estado || 'recibida',
     hora: subirIdeaHoraCorta(row.created_at, tz, lang),
+    piezas: String(row.asset_ids || '').split(',').filter(Boolean).length,
     respuesta: row.respuesta || '', posteo,
     hilo: subirIdeaHilo(uid, row, lang, tz),
   };
@@ -20999,8 +21000,23 @@ app.post('/api/subir/idea', requireAuth, (req, res) => {
     const uid = req.session.userId;
     const texto = String((req.body || {}).text || '').trim().slice(0, 2000);
     if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    // (LOTE SUBIR-COMPLETO) La idea puede salir CON el material del
+    // lote de Subir: los asset_ids se validan contra el álbum del
+    // propio usuario (máximo 10, sin duplicados) y quedan guardados
+    // en la idea — la cola del conserje los muestra como las piezas
+    // de ESTA idea. Un id ajeno o inexistente se descarta en
+    // silencio: la idea nunca se frena por el material.
+    let assetIds = [];
+    const crudos = Array.isArray((req.body || {}).asset_ids) ? req.body.asset_ids : [];
+    for (const c of crudos) {
+      const id = Number(c) || 0;
+      if (id > 0 && !assetIds.includes(id) && assetIds.length < 10) {
+        const propio = db.prepare('SELECT id FROM assets WHERE id = ? AND user_id = ?').get(id, uid);
+        if (propio) assetIds.push(id);
+      }
+    }
     const m = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', texto, 0, 'general');
-    const ins = db.prepare('INSERT INTO subir_ideas (user_id, message_id, texto) VALUES (?,?,?)').run(uid, Number(m.lastInsertRowid), texto);
+    const ins = db.prepare('INSERT INTO subir_ideas (user_id, message_id, texto, asset_ids) VALUES (?,?,?,?)').run(uid, Number(m.lastInsertRowid), texto, assetIds.join(','));
     const row = db.prepare('SELECT * FROM subir_ideas WHERE id = ?').get(Number(ins.lastInsertRowid));
     // (LOTE RESPUESTA-HILO-IDEA) El mensaje que abre la idea queda
     // también enlazado por idea_id: el hilo se lee por un solo camino.
@@ -49359,7 +49375,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1325';
+const BUILD_ID = '20261105-v1326';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -333,6 +333,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS subir_ideas (
   resuelta_at TEXT
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_ideas_user ON subir_ideas (user_id, id)`); } catch (e) { /* índice opcional */ }
+try { db.exec("ALTER TABLE subir_ideas ADD COLUMN asset_ids TEXT NOT NULL DEFAULT ''"); } catch (e) { /* la columna ya existe */ }
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_subir_ideas_msg ON subir_ideas (message_id)`); } catch (e) { /* índice opcional */ }
 // (LOTE SUBIR-VOZ-PRIMERO · 20/11) El RECIBO de la anotación por voz
 // del material recién subido: lo que el cliente confirmó con «Va así»

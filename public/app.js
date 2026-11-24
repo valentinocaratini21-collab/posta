@@ -1259,7 +1259,7 @@ function pzShellHeadHTML(tab) {
   // equilibrio total). Para cualquier otra pestaña, agHead es null y
   // la barra sale byte a byte como siempre.
   const agHead = (tab === 'venty' || tab === 'gesty') ? pzAgenteMeta(tab) : null;
-  let estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'your community manager' : 'tu community manager');
+  let estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'your community managers' : 'tus community managers');
   if (agHead) estadoIni = (typeof window !== 'undefined' && window.__pzAgenteEstado && window.__pzAgenteEstado.tab === tab && window.__pzAgenteEstado.txt) || pzBarraTextoCarga(tab);
   // (LOTE CAMPANA-BADGE) La insignia nace pintada desde la caché si
   // ya se conoce el conteo (mismo patrón que la línea de estado con
@@ -1355,7 +1355,7 @@ function pzBarraEstadoComputar(ritual, idea) {
   // lo que la tarjeta del día ya dice —: es la identidad de Posty para
   // el negocio, siempre. El estado del día vive en su tarjeta.
   const en = pzBarraEn();
-  return en ? 'your community manager' : 'tu community manager';
+  return en ? 'your community managers' : 'tus community managers';
 }
 function pzBarraEstadoPintar(txt) {
   try {
@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1325';
+const PZ_BUILD = '20261105-v1326';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -35084,7 +35084,7 @@ function pzGridScrollNuevo() {
 const PZ_SUBIR = { asset: null, kind: '', thumb: '', todo: false, answers: { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' }, extra: '', busy: false };
 // (LOTE SUBIR-VOZ-PRIMERO) Estado del flujo post-subida: el lote de
 // piezas recién subidas, la transcripción, lo entendido y su plan.
-const PZ_VP = { assets: [], transcript: '', entendido: null, plan: null, guarda: '', busy: false, editReciboId: 0, chipIntencion: '', chipTratamiento: '' };
+const PZ_VP = { assets: [], transcript: '', entendido: null, plan: null, guarda: '', busy: false, editReciboId: 0, chipIntencion: '', chipTratamiento: '', topeNota: false };
 const PZ_IDEA = { idea: null, ejemplos: null, busy: false };
 function pzSubirPayload() {
   const a = PZ_SUBIR.answers;
@@ -35102,7 +35102,7 @@ async function subirView() {
   const en = pzVozEn();
   PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = ''; PZ_SUBIR.extra = ''; PZ_SUBIR.todo = false; PZ_SUBIR.busy = false;
   PZ_SUBIR.answers = { cuando: 'posty', promo: 'no', mejora: 'si', caption: 'posty', subs: 'si' };
-  PZ_VP.assets = []; PZ_VP.transcript = ''; PZ_VP.entendido = null; PZ_VP.plan = null; PZ_VP.guarda = ''; PZ_VP.busy = false; PZ_VP.editReciboId = 0; PZ_VP.chipIntencion = ''; PZ_VP.chipTratamiento = '';
+  PZ_VP.assets = []; PZ_VP.transcript = ''; PZ_VP.entendido = null; PZ_VP.plan = null; PZ_VP.guarda = ''; PZ_VP.busy = false; PZ_VP.editReciboId = 0; PZ_VP.chipIntencion = ''; PZ_VP.chipTratamiento = ''; PZ_VP.topeNota = false;
   PZ_IDEA.idea = null; PZ_IDEA.ejemplos = null; PZ_IDEA.busy = false;
   PZ_EVENTO.es = false; PZ_EVENTO.respondida = false; PZ_EVENTO.nombre = ''; PZ_EVENTO.nombreOk = false; PZ_EVENTO.leido = ''; PZ_EVENTO.fecha = ''; PZ_EVENTO.caraAsset = 0; PZ_EVENTO.caraThumb = ''; PZ_EVENTO.postId = 0; PZ_EVENTO.pedidoId = 0; PZ_EVENTO.busy = false;
   PZ_CERO.idea = ''; PZ_CERO.ent = null; PZ_CERO.conf = { quien: false, fecha: false, que: false }; PZ_CERO.datos = { nombre: '', quien: '', fecha: '', que: '' }; PZ_CERO.caraAsset = 0; PZ_CERO.caraThumb = ''; PZ_CERO.postId = 0; PZ_CERO.pedidoId = 0; PZ_CERO.busy = false;
@@ -35113,9 +35113,9 @@ async function subirView() {
   // material en la bandeja, junto al material y antes de las preguntas.
   const inner = `<div class="pz-subir">
     <h1>${en ? 'Upload' : 'Subir'}</h1>
-    <div class="sub">${en ? 'Photos and videos of your business.' : 'Fotos y videos de tu negocio.'}</div>
-    <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload a photo or a video' : 'Tocá para subir una foto o un video'}</p></div>
-    <input type="file" id="pzSubirFile" accept="image/*,video/*" hidden>
+    <div class="sub">${en ? "What you upload becomes this week's posts." : 'Con lo que subís armo los posteos de tu semana.'}</div>
+    <div class="zona" id="pzSubirZona"><div class="plus">+</div><p>${en ? 'Tap to upload your photos and videos' : 'Tocá para subir tus fotos y videos'}</p></div>
+    <input type="file" id="pzSubirFile" accept="image/*,video/*" multiple hidden>
     <div id="pzSubirUp"></div>
     <div class="preg-card pz-vp" id="pzVpCard" hidden>
       <div id="pzVpThumbs"></div>
@@ -35149,7 +35149,7 @@ function pzSubirErr(msg) {
   if (!msg) { el.hidden = true; el.textContent = ''; return; }
   el.hidden = false; el.textContent = msg;
 }
-async function pzSubirUpload(file) {
+async function pzSubirUpload(file, opts) {
   const en = pzVozEn();
   if (!file) return;
   pzSubirErr('');
@@ -35167,7 +35167,7 @@ async function pzSubirUpload(file) {
     // acumulan en UN lote: la pregunta se hace una sola vez por lote.
     PZ_VP.assets.push({ id: d.id, kind: PZ_SUBIR.kind, thumb: PZ_SUBIR.thumb });
     pzVpPintarLote();
-    pzVpMostrarPregunta();
+    if (!(opts && opts.deferPregunta)) pzVpMostrarPregunta();
   } catch (e) {
     // TOPE-ALBUM-20 · ERROR HONESTO (23/11): si el servidor explicó el
     // motivo, se muestra ESE mensaje — nunca más el genérico fijo que lo
@@ -35175,6 +35175,26 @@ async function pzSubirUpload(file) {
     pzSubirErr(e && e.fromServer && e.message ? e.message : (en ? "It couldn't be uploaded — try again" : 'No se pudo subir — probá de nuevo'));
   }
   if (zona) zona.classList.remove('subiendo');
+}
+// (LOTE SUBIR-COMPLETO) La selección múltiple de una pasada: el
+// selector del teléfono devuelve hasta 10 piezas y entran TODAS al
+// mismo lote, de a una por la subida de siempre; la pregunta del
+// lote se muestra una sola vez, al final. Si el cliente eligió más
+// de 10, entran las primeras 10 y la bandeja lo dice — nunca se
+// corta en silencio.
+async function pzSubirUploadFiles(list) {
+  const files = Array.prototype.slice.call(list || []);
+  if (!files.length) return;
+  const tope = files.slice(0, 10);
+  PZ_VP.topeNota = files.length > 10;
+  let subio = false;
+  for (const f of tope) {
+    const antes = PZ_VP.assets.length;
+    await pzSubirUpload(f, { deferPregunta: true });
+    if (PZ_VP.assets.length > antes) subio = true;
+  }
+  pzVpPintarLote();
+  if (subio) pzVpMostrarPregunta();
 }
 // (LOTE SUBIR-HOY) El motivo honesto cuando el cliente pidió «hoy»
 // y hoy no se pudo: el recibo muestra el día real en su línea y esta
@@ -35336,10 +35356,33 @@ function pzVpPintarLote() {
   const en = pzVozEn();
   const up = document.getElementById('pzSubirUp');
   if (!up) return;
-  if (!PZ_VP.assets.length) { up.innerHTML = ''; return; }
+  if (!PZ_VP.assets.length) { up.innerHTML = ''; if (typeof pzIdeaPiezasPintar === 'function') pzIdeaPiezasPintar(); return; }
   const n = PZ_VP.assets.length;
-  up.innerHTML = PZ_VP.assets.map((a) => `<div class="up">${a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : ''}<div><div class="n">${en ? 'Just uploaded' : 'Recién subido'}</div><div class="e">✓ ${en ? 'Saved' : 'Guardado'}</div></div><div class="tag">${a.kind === 'video' ? 'VIDEO' : 'FOTO'}</div></div>`).join('')
-    + (n > 1 ? `<div class="pz-vp-lote">${en ? n + ' pieces together — one question for the whole batch' : n + ' piezas juntas — una sola pregunta por el lote'}</div>` : '');
+  up.innerHTML = PZ_VP.assets.map((a) => `<div class="up">${a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : ''}<div><div class="n">${en ? 'Just uploaded' : 'Recién subido'}</div><div class="e">✓ ${en ? 'Saved' : 'Guardado'}</div></div><div class="tag">${a.kind === 'video' ? 'VIDEO' : 'FOTO'}</div><button type="button" class="up-x" data-vp-quitar="${a.id}" aria-label="${en ? 'Remove from this batch' : 'Sacar de este lote'}">×</button></div>`).join('')
+    + (n > 1 ? `<div class="pz-vp-lote">${en ? n + ' pieces together — one question for the whole batch' : n + ' piezas juntas — una sola pregunta por el lote'}</div>` : '')
+    + (PZ_VP.topeNota ? `<div class="pz-vp-lote">${en ? 'I took the first 10 — the rest goes in another round.' : 'Subí las primeras 10 — el resto va en otra tanda.'}</div>` : '');
+  up.querySelectorAll('[data-vp-quitar]').forEach((b) => { b.onclick = () => pzVpQuitar(Number(b.getAttribute('data-vp-quitar'))); });
+  if (typeof pzIdeaPiezasPintar === 'function') pzIdeaPiezasPintar();
+}
+// (LOTE SUBIR-COMPLETO) Sacar una pieza del lote antes de mandar:
+// sale de ESTE envío (queda guardada en el álbum) y la bandeja, la
+// pregunta y la tarjeta de la idea se repintan con lo que queda. Si
+// el lote queda vacío, la pregunta se guarda: no hay nada que
+// preguntar.
+function pzVpQuitar(id) {
+  const i = PZ_VP.assets.findIndex((a) => Number(a.id) === Number(id));
+  if (i < 0) return;
+  PZ_VP.assets.splice(i, 1);
+  if (!PZ_VP.assets.length) {
+    PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = '';
+    const card = document.getElementById('pzVpCard');
+    if (card) card.hidden = true;
+  } else {
+    const last = PZ_VP.assets[PZ_VP.assets.length - 1];
+    PZ_SUBIR.asset = last.id; PZ_SUBIR.kind = last.kind; PZ_SUBIR.thumb = last.thumb;
+    pzVpRepintarPregunta();
+  }
+  pzVpPintarLote();
 }
 function pzVpChipsPintar() {
   const en = pzVozEn();
@@ -35351,7 +35394,7 @@ function pzVpChipsPintar() {
   box.innerHTML = chips.map((c) => `<button type="button" class="chip${(PZ_VP.chipIntencion === c.v || PZ_VP.chipTratamiento === c.v) ? ' on' : ''}" data-vp-chip="${c.v}">${c.t}</button>`).join('');
   box.querySelectorAll('[data-vp-chip]').forEach((b) => { b.onclick = () => pzVpChip(b.getAttribute('data-vp-chip')); });
 }
-function pzVpMostrarPregunta() {
+function pzVpRepintarPregunta() {
   const en = pzVozEn();
   const card = document.getElementById('pzVpCard');
   if (!card) return;
@@ -35371,7 +35414,11 @@ function pzVpMostrarPregunta() {
   const th = document.getElementById('pzVpThumbs');
   if (th) th.innerHTML = PZ_VP.assets.map((a) => `<div class="pz-vp-thumb">${a.thumb ? `<img src="${esc(a.thumb)}" alt="">` : ''}<span>${a.kind === 'video' ? 'VIDEO' : 'FOTO'}</span></div>`).join('');
   pzVpChipsPintar();
-  try { card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+}
+function pzVpMostrarPregunta() {
+  pzVpRepintarPregunta();
+  const card = document.getElementById('pzVpCard');
+  if (card) { try { card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
 }
 function pzVpEstado(txt) {
   const el = document.getElementById('pzVpEstado');
@@ -35594,13 +35641,15 @@ function pzVpBind() {
 // el payload no trae hilo (una versión vieja en caché), se compone
 // de la propia idea: su texto y su respuesta guardada.
 function pzIdeaHiloHTML(idea) {
+  const enH = pzVozEn();
+  const qA = enH ? '"' : '«', qC = enH ? '"' : '»';
   const hilo = (idea.hilo && idea.hilo.length) ? idea.hilo.slice() : [{ rol: 'cliente', texto: idea.texto || '' }];
   if (idea.respuesta && !hilo.some((m) => m.rol === 'posty' && m.texto === idea.respuesta)) {
     hilo.push({ rol: 'posty', texto: idea.respuesta });
   }
   return '<div class="pz-idea-hilo">' + hilo.map((m) => m.rol === 'posty'
     ? `<div class="pz-idea-resp"><img src="/ai-avatar.png" alt=""><span>${esc(m.texto || '')}</span></div>`
-    : `<div class="pz-idea-sent">«${esc(m.texto || '')}»</div>`).join('') + '</div>';
+    : `<div class="pz-idea-sent">${qA}${esc(m.texto || '')}${qC}</div>`).join('') + '</div>';
 }
 // El campo «Responder…» con su botón, en el mismo lugar de la
 // tarjeta: la conversación sigue acá, sin navegar a otra pantalla.
@@ -35608,6 +35657,21 @@ function pzIdeaResponderHTML(en) {
   return `<textarea id="pzIdeaRespTexto" rows="2" placeholder="${en ? 'Reply…' : 'Responder…'}"></textarea>
       <div class="pz-idea-err" id="pzIdeaRespErr" hidden></div>
       <button type="button" class="listo pz-idea-enviar" id="pzIdeaRespEnviar">${en ? 'Reply' : 'Responder'}</button>`;
+}
+// (LOTE SUBIR-COMPLETO) La línea que ata la idea al material del
+// lote: si hay piezas en la bandeja, la tarjeta lo dice junto al
+// botón — el envío de la idea las lleva consigo.
+function pzIdeaPiezasHTML() {
+  const en = pzVozEn();
+  const n = PZ_VP.assets.length;
+  if (!n) return '';
+  return n === 1
+    ? (en ? 'Your idea goes with the piece you uploaded.' : 'Tu idea sale con la pieza que subiste.')
+    : (en ? 'Your idea goes with the ' + n + ' pieces you uploaded.' : 'Tu idea sale con las ' + n + ' piezas que subiste.');
+}
+function pzIdeaPiezasPintar() {
+  const el = document.getElementById('pzIdeaPiezas');
+  if (el) el.textContent = pzIdeaPiezasHTML();
 }
 function pzIdeaPintar() {
   const en = pzVozEn();
@@ -35619,6 +35683,7 @@ function pzIdeaPintar() {
       ${pzIdeaHiloHTML(idea)}
       <div class="pz-idea-ok">✓ ${en ? 'Received' : 'Recibida'} · ${esc(idea.hora || '')}</div>
       <div class="pz-idea-sub">${en ? "We're on it. Estimated reply: <b>30 min</b> — we'll let you know with a push." : 'La estamos viendo. Respuesta estimada: <b>30 min</b> — te avisamos con una push.'}</div>
+      ${idea.piezas ? `<div class="pz-idea-sub">${en ? (idea.piezas === 1 ? 'With your piece.' : 'With your ' + idea.piezas + ' pieces.') : (idea.piezas === 1 ? 'Con tu pieza.' : 'Con tus ' + idea.piezas + ' piezas.')}</div>` : ''}
       ${pzIdeaResponderHTML(en)}
       <button type="button" class="pz-idea-link" id="pzIdeaOtra">${en ? 'Write another idea' : 'Escribir otra idea'}</button>`;
   } else if (idea && idea.estado === 'resuelta') {
@@ -35638,14 +35703,18 @@ function pzIdeaPintar() {
       <button type="button" class="pz-idea-link" id="pzIdeaOtra">${en ? 'Write another idea' : 'Escribir otra idea'}</button>`;
   } else {
     const ej = PZ_IDEA.ejemplos || {};
+    const qA = en ? '"' : '«', qC = en ? '"' : '»';
+    const ejChip = (k, txt) => `<button type="button" class="pz-idea-ejchip" data-ej="${k}">${qA}${esc(txt)}${qC}</button>`;
     card.innerHTML = `<div class="pz-idea-t">${en ? 'Got an idea?' : '¿Tenés una idea?'}</div>
       <div class="pz-idea-bub"><img src="/ai-avatar.png" alt=""><span>${en ? 'you can ask me for things like these 👇' : 'podés pedirme cosas así 👇'}</span></div>
-      ${ej.producto ? `<div class="pz-idea-ej">«${esc(ej.producto)}»</div>` : ''}
-      ${ej.fecha ? `<div class="pz-idea-ej">«${esc(ej.fecha)}»</div>` : ''}
+      ${(ej.producto || ej.fecha) ? `<div class="pz-idea-ejs">${ej.producto ? ejChip('producto', ej.producto) : ''}${ej.fecha ? ejChip('fecha', ej.fecha) : ''}</div>` : ''}
       <textarea id="pzIdeaTexto" rows="3" placeholder="${en ? 'the more detail you give me, the better we make it…' : 'cuanto más detalle me des, mejor lo hacemos…'}"></textarea>
       <div class="pz-idea-est">◷ ${en ? 'Estimated reply time:' : 'Tiempo estimado de respuesta:'} <b>30 min</b></div>
       <div class="pz-idea-err" id="pzIdeaErr" hidden></div>
+      <div class="pz-idea-piezas" id="pzIdeaPiezas"></div>
       <button type="button" class="listo pz-idea-enviar" id="pzIdeaEnviar">${en ? 'Send idea' : 'Enviar idea'}</button>`;
+    card.querySelectorAll('[data-ej]').forEach((b) => { b.onclick = () => { const ta = document.getElementById('pzIdeaTexto'); const v = (PZ_IDEA.ejemplos || {})[b.getAttribute('data-ej')]; if (ta && v) { ta.value = v; ta.focus(); } }; });
+    pzIdeaPiezasPintar();
   }
   const otra = document.getElementById('pzIdeaOtra');
   if (otra) otra.onclick = () => { PZ_IDEA.idea = null; pzIdeaPintar(); };
@@ -35666,9 +35735,21 @@ async function pzIdeaEnviar() {
   if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzIdeaEnviar()); return; }
   PZ_IDEA.busy = true;
   try {
-    const r = await api.post('/api/subir/idea', { text });
+    const assetIds = PZ_VP.assets.map((a) => Number(a.id)).filter((x) => x > 0);
+    const r = await api.post('/api/subir/idea', { text, asset_ids: assetIds });
     if (!r || !r.ok || !r.idea) throw new Error((r && r.error) || 'idea');
     PZ_IDEA.idea = r.idea;
+    if (assetIds.length) {
+      // (LOTE SUBIR-COMPLETO) La idea salió CON el material: el lote
+      // se consumió en este envío único — la bandeja se vacía y la
+      // pregunta del lote se guarda, porque la idea ES la
+      // instrucción sobre esas piezas.
+      PZ_VP.assets = []; PZ_VP.topeNota = false;
+      PZ_SUBIR.asset = null; PZ_SUBIR.kind = ''; PZ_SUBIR.thumb = '';
+      const vpCard = document.getElementById('pzVpCard');
+      if (vpCard) vpCard.hidden = true;
+      pzVpPintarLote();
+    }
     pzIdeaPintar();
   } catch (e) {
     if (err) { err.hidden = false; err.textContent = en ? "It couldn't be sent just now — your idea stays written here; try again." : 'No se pudo enviar ahora — tu idea queda escrita acá; probá de nuevo.'; }
@@ -35818,7 +35899,7 @@ function bindSubir() {
   const zona = document.getElementById('pzSubirZona');
   if (zona) zona.onclick = () => pick();
   const f1 = document.getElementById('pzSubirFile');
-  if (f1) f1.onchange = () => pzSubirUpload(f1.files && f1.files[0]);
+  if (f1) f1.onchange = () => pzSubirUploadFiles(f1.files);
   const todo = document.getElementById('pzSubirTodo');
   if (todo) todo.onclick = () => {
     if (PZ_SUBIR.asset) { pzSubirResolver(true); return; }

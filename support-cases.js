@@ -1573,14 +1573,14 @@ function voiceRequests(db, opts) {
     // resuelva por su puerta (resolver-idea: push + resultado en la
     // tarjeta). Sin fila, no es idea: es_idea queda en false.
     let ideaRow = safe(() => db.prepare(
-      'SELECT id, estado FROM subir_ideas WHERE message_id = ?').get(Number(r.id)), null);
+      'SELECT id, estado, asset_ids FROM subir_ideas WHERE message_id = ?').get(Number(r.id)), null);
     if (!ideaRow && Number(r.idea_id)) {
       // (LOTE RESPUESTA-HILO-IDEA) El pedido es un SEGUIMIENTO del
       // hilo de una idea (el cliente respondió tras la resolución y
       // la idea se reabrió): la idea se encuentra por el idea_id que
       // el mensaje lleva estampado, no por message_id.
       ideaRow = safe(() => db.prepare(
-        'SELECT id, estado FROM subir_ideas WHERE id = ?').get(Number(r.idea_id)), null);
+        'SELECT id, estado, asset_ids FROM subir_ideas WHERE id = ?').get(Number(r.idea_id)), null);
     }
     // El hilo COMPLETO de la idea (el mensaje que la abrió + los
     // enlazados por idea_id, en orden): quien responde desde la cola
@@ -1626,6 +1626,18 @@ function voiceRequests(db, opts) {
         };
       }
     }
+    // (LOTE SUBIR-COMPLETO) Las piezas que el cliente mandó CON la
+    // idea (subir_ideas.asset_ids): la cola las muestra junto a la
+    // idea para que quien la resuelve vea el material exacto del
+    // que habla el pedido.
+    let ideaPiezas = [];
+    if (ideaRow && ideaRow.asset_ids) {
+      const idsP = String(ideaRow.asset_ids).split(',').map((x) => Number(x) || 0).filter((x) => x > 0).slice(0, 10);
+      for (const aid of idsP) {
+        const a = safe(() => db.prepare('SELECT kind, file_path, thumb_path FROM assets WHERE id = ? AND user_id = ?').get(aid, uid), null);
+        if (a) ideaPiezas.push({ id: aid, kind: a.kind || 'foto', thumb: safe(() => abs(uid, a.thumb_path || a.file_path), '') || '' });
+      }
+    }
     const tz = accountTz(db, uid);
     let cuando = String(r.created_at || '');
     try {
@@ -1648,6 +1660,7 @@ function voiceRequests(db, opts) {
         decidido_en: rev && rev.decidido_en ? String(rev.decidido_en) : null,
       },
       es_idea: !!ideaRow,
+      idea_piezas: ideaPiezas,
       idea_estado: ideaRow ? String(ideaRow.estado) : '',
       idea_id: ideaRow ? Number(ideaRow.id) : 0,
       idea_hilo: ideaHilo,

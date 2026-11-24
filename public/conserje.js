@@ -604,6 +604,7 @@
         ideaHead = '<div class="d-txt">Idea: <em>«' + esc(d.pedido || '') + '»</em></div>';
       }
       cuerpo = ideaHead
+        + ((d.idea_piezas && d.idea_piezas.length) ? '<div class="thumbrow">' + d.idea_piezas.map(function (pz) { return pz.thumb ? '<span><img src="' + esc(pz.thumb) + '" alt=""></span>' : ''; }).join('') + '<div class="cap">' + (d.idea_piezas.length === 1 ? 'La pieza que mandó con la idea' : 'Las ' + d.idea_piezas.length + ' piezas que mandó con la idea') + '</div></div>' : '')
         + '<div id="ideaRes-' + d.message_id + '"></div>'
         + '<div class="d-actions"><button class="btn primary small" data-act="idea-resolver" data-mid="' + d.message_id + '" data-uid="' + d.user_id + '" type="button">Resolver y avisar</button>'
         + '<button class="btn small ghost-danger" data-act="voz-descartar" data-mid="' + d.message_id + '" type="button">Descartar</button></div>';
