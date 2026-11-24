@@ -44,7 +44,7 @@ function constructEvent(client, rawBody, signature) {
 const priceIdCache = new Map(); // planId -> priceId (por proceso)
 function lookupKeyFor(planId) { return `posty_us_${planId}_monthly`; }
 function planIdFromLookupKey(lk) {
-  const m = /^posty_us_(esencial|pro|total|posty)_(monthly|founder_\d+)$/.exec(String(lk || ''));
+  const m = /^posty_us_(esencial|pro|total|posty)_(monthly|founder_\d+|desc_\d+)$/.exec(String(lk || ''));
   return m ? m[1] : null;
 }
 function founderLookupKeyFor(planId, amountUsd) { return `posty_us_${planId}_founder_${Math.round(Number(amountUsd) * 100)}`; }
@@ -192,8 +192,87 @@ async function ensureFounderPrice(client, plan, amountUsd) {
   founderPriceCache.set(lk, price.id);
   return price.id;
 }
+
+// (LOTE DESCUENTOS-CODIGO) Precio a un monto con descuento: el espejo de
+// ensureFounderPrice para el mayor descuento vigente (lookup_key propio
+// desc_<cents>, metadata descuento=1; el plan se sigue leyendo de la
+// metadata de la suscripción y del plan_id del precio).
+const descuentoPriceCache = new Map(); // lookup_key -> priceId
+function descuentoLookupKeyFor(planId, amountUsd) { return `posty_us_${planId}_desc_${Math.round(Number(amountUsd) * 100)}`; }
+async function ensureDescuentoPrice(client, plan, amountUsd) {
+  client = client || stripeClient();
+  if (!client) throw new Error('Stripe no configurado');
+  const cents = Math.round(Number(amountUsd) * 100);
+  if (!plan || !plan.id || !(cents > 0)) throw new Error('Precio con descuento inválido');
+  const lk = descuentoLookupKeyFor(plan.id, amountUsd);
+  if (descuentoPriceCache.has(lk)) return descuentoPriceCache.get(lk);
+  const found = await client.prices.list({ lookup_keys: [lk], active: true, limit: 1 });
+  let price = found && found.data && found.data[0];
+  if (!price) {
+    let productId = null;
+    try {
+      const cat = await client.prices.list({ lookup_keys: [lookupKeyFor(plan.id)], active: true, limit: 1 });
+      if (cat && cat.data && cat.data[0]) productId = cat.data[0].product;
+    } catch (e) { /* si falla, se crea el producto abajo */ }
+    if (!productId) {
+      const product = await client.products.create({
+        name: `Posty — ${plan.name}`,
+        description: plan.tagline || undefined,
+        metadata: { plan_id: plan.id, app: 'posty' },
+      });
+      productId = product.id;
+    }
+    price = await client.prices.create({
+      product: productId,
+      unit_amount: cents,
+      currency: 'usd',
+      recurring: { interval: 'month' },
+      lookup_key: lk,
+      metadata: { plan_id: plan.id, descuento: '1' },
+    });
+  }
+  descuentoPriceCache.set(lk, price.id);
+  return price.id;
+}
+
+// (LOTE DESCUENTOS-CODIGO) Conciliación de precios Stripe: el precio de
+// cada suscripción activa sigue al descuento vigente del usuario (el
+// multDe lo calcula billing-sync: el MAYOR descuento, sin sumar). Al
+// vencer un código temporal, la suscripción vuelve sola al precio que
+// le toca — el cambio no prorratea: rige desde el próximo ciclo.
+async function reconcileDiscountPrices(db, multDe) {
+  const client = stripeClient();
+  if (!client) return;
+  const rows = db.prepare(`SELECT id, stripe_subscription_id, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE plan_status = 'active' AND stripe_subscription_id IS NOT NULL AND stripe_subscription_id != ''`).all();
+  let catalog = null;
+  for (const u of rows) {
+    try {
+      const mult = Number(multDe(u.id)) || 1;
+      const founderAplica = u.founder_number && Number(u.founder_price) > 0 && u.founder_plan === PLAN_UNICO.id
+        && String(u.founder_currency || '') === 'USD' && Number(u.founder_price_at) > 0;
+      const base = founderAplica ? Number(u.founder_price) : Number(PLAN_UNICO.price);
+      const wantCents = Math.round(base * mult * 100);
+      const sub = await client.subscriptions.retrieve(u.stripe_subscription_id);
+      if (!sub || sub.status === 'canceled') continue;
+      const item = sub.items && sub.items.data && sub.items.data[0];
+      if (!item || !item.price) continue;
+      if (Number(item.price.unit_amount) === wantCents) continue;
+      let priceId = null;
+      if (mult === 1 && !founderAplica) {
+        if (!catalog) catalog = await ensureCatalog(client);
+        priceId = catalog[PLAN_UNICO.id];
+      } else {
+        priceId = await ensureDescuentoPrice(client, PLAN_UNICO, base * mult);
+      }
+      if (!priceId) continue;
+      await client.subscriptions.update(u.stripe_subscription_id, { items: [{ id: item.id, price: priceId }], proration_behavior: 'none' });
+      console.log(`[stripe-descuentos] user ${u.id}: precio ${item.price.unit_amount} -> ${wantCents} (mult ${mult})`);
+    } catch (e) { console.error(`[stripe-descuentos] user ${u.id}: ${e.message}`); }
+  }
+}
+
 // Solo para tests: limpia las cachés de precios del proceso.
-function _clearPriceCache() { priceIdCache.clear(); founderPriceCache.clear(); }
+function _clearPriceCache() { priceIdCache.clear(); founderPriceCache.clear(); descuentoPriceCache.clear(); }
 
 async function createCheckout(db, client, { user, plan, baseUrl, trialEndSec, priceId: priceOverride }) {
   client = client || stripeClient();
@@ -530,7 +609,7 @@ async function recuperarTopupIntent(client, paymentIntentId, userId) {
 
 module.exports = {
   stripeConfigured, webhookConfigured, stripeClient, _setClient,
-  constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, _clearPriceCache, getOrCreateCustomer,
+  constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, ensureDescuentoPrice, descuentoLookupKeyFor, reconcileDiscountPrices, _clearPriceCache, getOrCreateCustomer,
   buildCheckoutParams, createCheckout, createPortalSession,
   buildSetupParams, createSetupSession, fijarTarjetaPorDefecto, adjuntarTarjeta, motivoAdjuntarError,
   processEvent, applySubscription,

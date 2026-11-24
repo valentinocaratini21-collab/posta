@@ -1298,6 +1298,11 @@ function bindSettings() {
       }
       const billingData = await loadPlans(!pzDl.agente);
       const { plans, mp_configured, stripe_configured } = billingData;
+      // (LOTE DESCUENTOS-CODIGO) El descuento que manda para este negocio
+      // (fuente, mult y su código vigente con vencimiento), del servidor.
+      const codInfo = billingData.descuento || null;
+      const pzCodigoVigente = codInfo && codInfo.codigo ? codInfo.codigo : null;
+      const pzCodigoEnviar = () => pzCodigoVigente ? pzCodigoVigente.code : ((document.getElementById('pzCodInput') || {}).value || '').trim();
       const isUS = !!(ME && ME.lang === 'en');
       // (LOTE PLAN-ÚNICO-PAYWALL) El plan único se cobra por Stripe en USD
       // para TODOS los países (incluidos AR/UY, cuyo riel por país es MP
@@ -1375,6 +1380,26 @@ function bindSettings() {
             </div>` : ''}
           </div>`;
       };
+      const bindCodigo = () => {
+        const btn = document.getElementById('pzCodBtn');
+        if (!btn) return;
+        btn.onclick = async () => {
+          if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(); return; }
+          const inp = document.getElementById('pzCodInput');
+          const msg = document.getElementById('pzCodMsg');
+          const code = ((inp && inp.value) || '').trim();
+          if (!code) { if (msg) msg.innerHTML = `<span style="color:#c0392b">${isUS ? 'Enter your code first.' : 'Escribí tu código primero.'}</span>`; return; }
+          btn.disabled = true;
+          try {
+            const r = await api.post('/api/billing/descuento/canjear', { codigo: code });
+            if (msg) msg.innerHTML = `<span style="color:#1E9E62">${isUS ? `Code applied: <b>${r.codigo.percent}% off</b>${r.codigo.expires_at ? ` until ${new Date(r.codigo.expires_at).toLocaleDateString('en-US')}` : ' · no expiry'}.` : `Código aplicado: <b>${r.codigo.percent}% off</b>${r.codigo.expires_at ? ` hasta el ${new Date(r.codigo.expires_at).toLocaleDateString('es-AR')}` : ' · sin vencimiento'}.`}</span>`;
+            setTimeout(() => { run(); }, 900);
+          } catch (e) {
+            btn.disabled = false;
+            if (msg) msg.innerHTML = `<span style="color:#c0392b">${esc(e.message)}</span>`;
+          }
+        };
+      };
       const bindSub = () => {
         $$('#planList [data-sub], #planListDl [data-sub]').forEach(b => b.onclick = async () => {
           // (LOTE PRUEBA-ENTRADA-DIRECTA) Cuenta al primer toque: pagar
@@ -1390,7 +1415,7 @@ function bindSettings() {
             b.disabled = true;
             $('#planMsg').innerHTML = `<div style="font-size:12.5px;color:var(--mut)">${isUS ? '⏳ Taking you to secure checkout…' : '⏳ Llevándote al pago seguro…'}</div>`;
             try {
-              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub, country: pzPayCountry, agente: (pzDl.agente || 'posty') });
+              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub, country: pzPayCountry, agente: (pzDl.agente || 'posty'), codigo: pzCodigoEnviar() });
               track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = url;
             } catch (e) {
@@ -1404,7 +1429,9 @@ function bindSettings() {
           const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
           const subPlan = plans.find(p => p.id === b.dataset.sub) || curPlan;
           const discSym = ({ ARS: '$', UYU: '$U ', USD: isUS ? '$' : 'USD ', GBP: '\u00a3', EUR: '\u20ac', CAD: 'C$' })[subPlan.currency] || '$';
-          const discLine = (refInfo && refInfo.discount_active)
+          const discLine = (codInfo && codInfo.fuente === 'codigo' && codInfo.codigo)
+            ? `<div class="pz-disc" style="margin:0 0 10px">${pzIc('gift', 14)} ${isUS ? `You have <b>${codInfo.codigo.percent}% off</b> with your code <b>${esc(codInfo.codigo.code)}</b>: this plan comes to <b>${discSym}${Math.round(subPlan.price * codInfo.mult).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mo</b>.` : `Tenés <b>${codInfo.codigo.percent}% off</b> con tu código <b>${esc(codInfo.codigo.code)}</b>: este plan te queda en <b>${discSym}${Math.round(subPlan.price * codInfo.mult).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.`}</div>`
+            : (refInfo && refInfo.discount_active)
             ? `<div class="pz-disc" style="margin:0 0 10px">${pzIc('gift', 14)} Tenés <b>50% off</b> por referidos: este plan te queda en <b>${discSym}${Math.round(subPlan.price / 2).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
             : (refInfo && refInfo.invited)
               ? `<div class="pz-disc" style="margin:0 0 10px">${pzIc('gift', 14)} Tenés <b>20% off</b> de invitado: este plan te queda en <b>${discSym}${Math.round(subPlan.price * 0.8).toLocaleString(isUS ? 'en-US' : 'es-AR')}/mes</b>.</div>`
@@ -1429,7 +1456,7 @@ function bindSettings() {
             const btn = $('#btnGoMP');
             btn.disabled = true; btn.textContent = '⏳ Redirigiendo a MercadoPago...';
             try {
-              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em, country: pzPayCountry, agente: (pzDl.agente || 'posty') });
+              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em, country: pzPayCountry, agente: (pzDl.agente || 'posty'), codigo: pzCodigoEnviar() });
               track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = init_point;
             } catch (e) {
@@ -1443,6 +1470,16 @@ function bindSettings() {
         // botón "Ver planes" las despliega. El flujo ?plan_sel= las
         // auto-despliega más abajo, antes de su click programático.
         z.innerHTML = `
+        ${pzCodigoVigente ? '' : `
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px">
+          <div style="font-weight:800;margin-bottom:4px">${pzIc('gift', 14)} ${isUS ? 'Do you have a discount code?' : '¿Tenés un código de descuento?'}</div>
+          <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">${isUS ? 'Enter it here and it applies to your subscription.' : 'Cargalo acá y se aplica a tu suscripción.'}</div>
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <div class="field" style="flex:1;margin:0"><input id="pzCodInput" type="text" placeholder="POSTY-XXXXXX" style="text-transform:uppercase" autocomplete="off"></div>
+            <button class="btn btn-primary" id="pzCodBtn" type="button">${isUS ? 'Apply' : 'Aplicar'}</button>
+          </div>
+          <div id="pzCodMsg" style="font-size:12.5px;margin-top:8px"></div>
+        </div>`}
         <div style="margin-bottom:16px">
           <div style="font-size:11.5px;color:var(--dim)">Plan actual</div>
           <div style="font-size:17.5px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
@@ -1459,6 +1496,7 @@ function bindSettings() {
         </div>
         <div id="planMsg" style="margin-top:10px"></div>`;
         bindSub();
+        bindCodigo();
         // (v401) Tocar la tarjeta (sin tocar Suscribirse) despliega el detalle
         // «por vos» en el lugar; el botón del detalle usa el mismo data-sub.
         const pl = $('#planList');
@@ -1542,6 +1580,16 @@ function bindSettings() {
       }
       // 🎁 50% off por referidos: se aplica automáticamente al suscribirte
       try {
+        if (codInfo && codInfo.codigo) {
+          const cv = codInfo.codigo;
+          const vence = cv.expires_at ? new Date(cv.expires_at).toLocaleDateString(isUS ? 'en-US' : 'es-AR') : null;
+          const pleno = curPlan && curPlan.price_label ? curPlan.price_label : '';
+          if (codInfo.fuente === 'codigo') {
+            z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">${pzIc('gift', 14)} <b>${cv.percent}% off</b> ${isUS ? `with your code <b>${esc(cv.code)}</b>` : `con tu código <b>${esc(cv.code)}</b>`}: ${isUS ? 'it applies automatically when you subscribe' : 'se aplica automáticamente al suscribirte'}${vence ? (isUS ? `. It runs until <b>${vence}</b> — after that, your plan goes back to <b>${esc(pleno)}/mo</b>.` : `. Corre hasta el <b>${vence}</b> — desde ahí tu plan vuelve a <b>${esc(pleno)}/mes</b>.`) : (isUS ? '. No expiry.' : '. Sin vencimiento.')}</div>`);
+          } else {
+            z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">${pzIc('gift', 14)} ${isUS ? `Your code <b>${esc(cv.code)}</b> (${cv.percent}% off) is active${vence ? ` until <b>${vence}</b>` : ''} — today your ${codInfo.fuente === 'referidos' ? 'referral' : 'guest'} discount is bigger, so that one applies.` : `Tu código <b>${esc(cv.code)}</b> (${cv.percent}% off) está activo${vence ? ` hasta el <b>${vence}</b>` : ''} — hoy tu descuento por ${codInfo.fuente === 'referidos' ? 'referidos' : 'invitado'} es mayor, así que manda ese.`}</div>`);
+          }
+        }
         if (refInfo && refInfo.discount_active) {
           z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">${pzIc('gift', 14)} <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
         } else if (refInfo && refInfo.invited && !hasActive) {
@@ -1620,6 +1668,7 @@ function bindSettings() {
         </div>`;
         z.appendChild(secA);
         bindSub();
+        bindCodigo();
         const plA = secA.querySelector('#planListDl');
         if (plA) plA.addEventListener('click', (e) => {
           if (e.target.closest('[data-sub]')) return;

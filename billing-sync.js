@@ -21,12 +21,32 @@ const REFERRALS_NEEDED = 2;
 const REFERRAL_DISCOUNT = 0.5;
 const FRIEND_DISCOUNT = 0.8;
 
+// (LOTE DESCUENTOS-CODIGO) Multiplicador del código vigente del usuario
+// (canje activo y no vencido; espejo de dcCodigoVigente en server.js).
+function codigoMultDe(db, userId) {
+  try {
+    const now = new Date().toISOString();
+    const r = db.prepare(`SELECT c.percent FROM discount_redemptions r JOIN discount_codes c ON c.id = r.code_id
+      WHERE r.user_id = ? AND c.active = 1 AND (r.expires_at IS NULL OR r.expires_at > ?) ORDER BY r.id DESC LIMIT 1`).get(userId, now);
+    return r ? Math.max(0, 1 - (Number(r.percent) || 0) / 100) : 1;
+  } catch (e) { return 1; }
+}
+
+// El multiplicador objetivo: el MAYOR descuento aplicable (referidos /
+// invitado / código) — no se suman. Al vencer un código temporal, el
+// objetivo vuelve solo al que siga (o al precio pleno) y la
+// conciliación mueve el monto cobrado.
 function targetMult(db, userId) {
+  let m = 1;
   const row = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND plan_status = 'active'`).get(userId);
-  if (row && row.n >= REFERRALS_NEEDED) return REFERRAL_DISCOUNT;
-  const me = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(userId);
-  if (me && me.referred_by) return FRIEND_DISCOUNT;
-  return 1;
+  if (row && row.n >= REFERRALS_NEEDED) m = REFERRAL_DISCOUNT;
+  else {
+    const me = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(userId);
+    if (me && me.referred_by) m = FRIEND_DISCOUNT;
+  }
+  const cm = codigoMultDe(db, userId);
+  if (cm < m) m = cm;
+  return m;
 }
 
 // Backfill para suscriptores que existen desde antes de estas columnas:
@@ -125,4 +145,15 @@ async function reconcileAll(db) {
   }
 }
 
-module.exports = { reconcileUser, reconcileAll, reconcilePending, targetMult };
+// (LOTE DESCUENTOS-CODIGO) La conciliación Stripe vive en
+// stripe-billing.js (dueño del cliente): acá solo se la invoca con el
+// multiplicador objetivo de esta casa.
+async function reconcileStripeCodigos(db) {
+  try {
+    const sb = require('./stripe-billing');
+    if (!sb.stripeConfigured || !sb.stripeConfigured()) return;
+    await sb.reconcileDiscountPrices(db, (uid) => targetMult(db, uid));
+  } catch (e) { console.error('[billing-sync] stripe descuentos:', e.message); }
+}
+
+module.exports = { reconcileUser, reconcileAll, reconcilePending, targetMult, reconcileStripeCodigos };

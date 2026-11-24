@@ -13650,6 +13650,70 @@ app.get('/api/admin/conserje/vista/cliente', requireAdminToken, (req, res) => {
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
+
+// (LOTE DESCUENTOS-CODIGO) Descuentos por código, desde el Conserje:
+// el dueño crea el código (porcentaje suyo — 50% sugerido —, duración
+// 3 meses / 6 meses / permanente, un solo uso o reutilizable, ligado a
+// un negocio o libre) y ve quién lo canjeó, cuándo y qué duración corre.
+function dcEtiquetaNegocio(uid) {
+  try {
+    const u = db.prepare('SELECT email FROM users WHERE id = ?').get(uid);
+    if (!u) return '';
+    let label = u.email || '';
+    try { const p = getProfile(uid) || {}; label = p.profile_name || p.business_name || label; } catch (e) {}
+    return label;
+  } catch (e) { return ''; }
+}
+app.get('/api/admin/conserje/descuentos', requireAdminToken, (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const codes = db.prepare('SELECT * FROM discount_codes ORDER BY id DESC').all();
+    const out = codes.map((c) => {
+      const reds = db.prepare('SELECT id, user_id, redeemed_at, expires_at, via FROM discount_redemptions WHERE code_id = ? ORDER BY id DESC').all(c.id);
+      return {
+        id: c.id, code: c.code, percent: Number(c.percent) || 0,
+        duration_months: c.duration_months == null ? null : Number(c.duration_months),
+        single_use: !!c.single_use, user_id: c.user_id || null,
+        user_label: c.user_id ? dcEtiquetaNegocio(c.user_id) : '',
+        active: !!c.active, created_at: c.created_at || '',
+        canjes: reds.map((r) => ({
+          id: r.id, user_id: r.user_id, negocio: dcEtiquetaNegocio(r.user_id),
+          redeemed_at: r.redeemed_at || '', expires_at: r.expires_at || null, via: r.via || '',
+          vigente: !r.expires_at || r.expires_at > now,
+        })),
+      };
+    });
+    res.json({ ok: true, codigos: out });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/descuentos', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    let code = String(b.code || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!code) code = dcNuevoCodigo();
+    if (code.length > 40) return res.status(400).json({ ok: false, error: 'codigo_largo' });
+    const percent = Math.round(Number(b.percent));
+    if (!(percent >= 1 && percent <= 90)) return res.status(400).json({ ok: false, error: 'porcentaje_invalido' });
+    const dur = (b.duration === 'permanente' || b.duration == null || b.duration === '') ? null : Number(b.duration);
+    if (dur !== null && ![3, 6].includes(dur)) return res.status(400).json({ ok: false, error: 'duracion_invalida' });
+    const uid = Number(b.user_id) || null;
+    if (uid && !db.prepare('SELECT id FROM users WHERE id = ?').get(uid)) return res.status(400).json({ ok: false, error: 'negocio_inexistente' });
+    if (db.prepare('SELECT id FROM discount_codes WHERE code = ?').get(code)) return res.status(409).json({ ok: false, error: 'codigo_repetido' });
+    const info = db.prepare('INSERT INTO discount_codes (code, percent, duration_months, single_use, user_id, active, created_at, created_by) VALUES (?,?,?,?,?,1,?,?)')
+      .run(code, percent, dur, b.single_use ? 1 : 0, uid, new Date().toISOString(), 'conserje');
+    res.json({ ok: true, codigo: { id: info.lastInsertRowid, code, percent, duration_months: dur, single_use: !!b.single_use, user_id: uid } });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/descuentos/activar', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = Number(b.id) || 0;
+    if (!id) return res.status(400).json({ ok: false, error: 'sin_id' });
+    db.prepare('UPDATE discount_codes SET active = ? WHERE id = ?').run(b.active ? 1 : 0, id);
+    res.json({ ok: true, id, active: !!b.active });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+
 app.post('/api/admin/conserje/vista/tratamiento', requireAdminToken, express.json(), (req, res) => {
   try {
     const b = req.body || {};
@@ -28652,6 +28716,32 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS login_spaces (
   PRIMARY KEY (login_user_id, space_user_id)
 )`); } catch (e) {}
 
+/* (LOTE DESCUENTOS-CODIGO · decisión del dueño 2026-11-24) Códigos de
+   descuento que crea el dueño desde el Conserje: porcentaje suyo,
+   duración 3 meses / 6 meses / permanente (duration_months NULL),
+   de un solo uso o reutilizable, ligado a un negocio (user_id) o libre.
+   El canje queda registrado con su vencimiento: al vencer, la
+   suscripción vuelve sola al precio pleno (conciliación MP/Stripe). */
+try { db.exec(`CREATE TABLE IF NOT EXISTS discount_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT UNIQUE NOT NULL,
+  percent INTEGER NOT NULL,
+  duration_months INTEGER,
+  single_use INTEGER DEFAULT 0,
+  user_id INTEGER,
+  active INTEGER DEFAULT 1,
+  created_at TEXT,
+  created_by TEXT
+)`); } catch (e) {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS discount_redemptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  redeemed_at TEXT,
+  expires_at TEXT,
+  via TEXT
+)`); } catch (e) {}
+
 function pzLoginIdDe(req) {
   return (req.session && (req.session.loginUserId || req.session.userId)) || 0;
 }
@@ -30316,6 +30406,10 @@ app.get('/api/billing/plans', (req, res) => {
   const q = String(req.query.country || '').toUpperCase();
   const country = ['US', 'AR', 'BR', 'MX', 'CL', 'CO', 'PE', 'UY', 'GB', 'EU', 'ES', 'CA'].includes(q) ? q : 'AR';
   const plans = getPlans(country);
+  // (LOTE DESCUENTOS-CODIGO) Con sesión, la respuesta trae el descuento
+  // que manda para este negocio (fuente, % y su código con vencimiento)
+  // para que Mi plan lo muestre antes de que cambie el precio.
+  const descInfo = (() => { try { const uid = req.session && req.session.userId; return uid ? descuentoEfectivoInfo(uid) : null; } catch (e) { return null; } })();
   const anchor = PLAN_ANCHOR[country];
   const meta = COUNTRY_META[country] || COUNTRY_META.AR;
   // (PLAN ÚNICO, Valentino 2026-11-06) La vidriera sirve UN SOLO plan
@@ -30339,6 +30433,7 @@ app.get('/api/billing/plans', (req, res) => {
       local_price_pending: false,
       countries: SELECTOR_COUNTRIES.map((c) => ({ code: c, ...COUNTRY_META[c] })),
       plans: [p],
+      descuento: descInfo,
       anchor: anchorU,
       trial_plan: TRIAL_PLAN,
       mp_configured: mp.mpConfigured(),
@@ -30368,6 +30463,7 @@ app.get('/api/billing/plans', (req, res) => {
     local_price_pending: !!meta.pending,
     countries: SELECTOR_COUNTRIES.map((c) => ({ code: c, ...COUNTRY_META[c] })),
     plans: Object.values(plans).map((p) => ({ ...p, price_label: formatPrice(p) })),
+    descuento: descInfo,
     anchor,
     trial_plan: TRIAL_PLAN,
     mp_configured: mp.mpConfigured(),
@@ -30411,6 +30507,112 @@ app.all('/api/admin/grant-free', (req, res) => {
   reactivatePausedPosts(u.id);
   console.log(`[posta] cuenta gratis otorgada a ${email}`);
   res.json({ ok: true, email });
+});
+
+
+// ---------- Descuentos por código (LOTE DESCUENTOS-CODIGO) ----------
+// Composición con los descuentos que ya existen (referidos 50% ·
+// invitado 20%): NO se suman en silencio — rige el MAYOR descuento
+// aplicable, y eso es lo que muestran Mi plan y el Conserje.
+function dcAddMonthsISO(baseMs, months) {
+  const d = new Date(baseMs);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
+function dcNuevoCodigo() {
+  const abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  for (let i = 0; i < 10; i++) {
+    let s = '';
+    for (let j = 0; j < 6; j++) s += abc[crypto.randomInt(abc.length)];
+    const code = 'POSTY-' + s;
+    if (!db.prepare('SELECT id FROM discount_codes WHERE code = ?').get(code)) return code;
+  }
+  return 'POSTY-' + crypto.randomBytes(4).toString('hex').toUpperCase();
+}
+function dcCodigoVigente(userId) {
+  try {
+    const now = new Date().toISOString();
+    const r = db.prepare(`SELECT r.id AS redemption_id, r.redeemed_at, r.expires_at, c.code, c.percent, c.duration_months
+      FROM discount_redemptions r JOIN discount_codes c ON c.id = r.code_id
+      WHERE r.user_id = ? AND c.active = 1 AND (r.expires_at IS NULL OR r.expires_at > ?)
+      ORDER BY r.id DESC LIMIT 1`).get(userId, now);
+    return r || null;
+  } catch (e) { return null; }
+}
+// El descuento que manda para este usuario: el MAYOR entre referidos,
+// invitado y código vigente. Devuelve también el código vigente (aunque
+// no sea el que manda) para que la app lo muestre con su vencimiento.
+function descuentoEfectivoInfo(userId) {
+  let mult = 1, fuente = null;
+  try { if (referralStats(userId).discount_active) { mult = REFERRAL_DISCOUNT; fuente = 'referidos'; } } catch (e) {}
+  if (mult > FRIEND_DISCOUNT) {
+    try { const u = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(userId); if (u && u.referred_by) { mult = FRIEND_DISCOUNT; fuente = 'invitado'; } } catch (e) {}
+  }
+  const v = dcCodigoVigente(userId);
+  if (v) {
+    const cm = Math.max(0, 1 - (Number(v.percent) || 0) / 100);
+    if (cm < mult) { mult = cm; fuente = 'codigo'; }
+  }
+  return {
+    mult, fuente, percent_off: Math.round((1 - mult) * 100),
+    codigo: v ? { code: v.code, percent: Number(v.percent) || 0, duration_months: v.duration_months == null ? null : Number(v.duration_months), redeemed_at: v.redeemed_at, expires_at: v.expires_at } : null,
+  };
+}
+function dcValidar(codeRaw, userId) {
+  const code = String(codeRaw || '').trim().toUpperCase();
+  if (!code) return { ok: false, error: 'codigo_vacio' };
+  let c = null;
+  try { c = db.prepare('SELECT * FROM discount_codes WHERE code = ?').get(code); } catch (e) {}
+  if (!c || !c.active) return { ok: false, error: 'codigo_invalido' };
+  if (c.user_id && Number(c.user_id) !== Number(userId)) return { ok: false, error: 'codigo_otro_negocio' };
+  const now = new Date().toISOString();
+  const ya = db.prepare('SELECT id, user_id, expires_at FROM discount_redemptions WHERE code_id = ? ORDER BY id DESC').all(c.id);
+  const mioVig = ya.find((r) => Number(r.user_id) === Number(userId) && (!r.expires_at || r.expires_at > now));
+  if (mioVig) return { ok: true, code: c, ya_mio: true };
+  if (c.single_use && ya.length) return { ok: false, error: 'codigo_ya_usado' };
+  return { ok: true, code: c, ya_mio: false };
+}
+function dcCanjear(userId, codeRaw, via) {
+  const v = dcValidar(codeRaw, userId);
+  if (!v.ok) return v;
+  if (v.ya_mio) return { ok: true, ya: true, codigo: dcCodigoVigente(userId), descuento: descuentoEfectivoInfo(userId) };
+  const nowMs = Date.now();
+  const dur = v.code.duration_months == null ? null : Number(v.code.duration_months);
+  const expires = dur ? dcAddMonthsISO(nowMs, dur) : null;
+  db.prepare('INSERT INTO discount_redemptions (code_id, user_id, redeemed_at, expires_at, via) VALUES (?,?,?,?,?)')
+    .run(v.code.id, userId, new Date(nowMs).toISOString(), expires, via || null);
+  return { ok: true, ya: false, codigo: dcCodigoVigente(userId), descuento: descuentoEfectivoInfo(userId) };
+}
+function dcErrorText(key, lang) {
+  const en = lang === 'en';
+  const t = {
+    codigo_vacio: en ? 'Enter your discount code.' : 'Escribí tu código de descuento.',
+    codigo_invalido: en ? "That code doesn't exist or is no longer active." : 'Ese código no existe o ya no está activo.',
+    codigo_otro_negocio: en ? 'That code was created for another business.' : 'Ese código fue creado para otro negocio.',
+    codigo_ya_usado: en ? 'That code was already used.' : 'Ese código ya fue usado.',
+  };
+  return t[key] || (en ? 'That code could not be applied.' : 'No se pudo aplicar ese código.');
+}
+function dcLangDe(userId) {
+  try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(userId); return (u && u.lang) || 'es'; } catch (e) { return 'es'; }
+}
+
+// El negocio valida su código sin consumirlo (la app lo muestra antes
+// de pagar) y lo canjea al suscribirse: el canje queda registrado con
+// su vencimiento y el precio de la suscripción lo toma de acá.
+app.post('/api/billing/descuento/validar', requireAuth, (req, res) => {
+  try {
+    const v = dcValidar((req.body || {}).codigo, req.session.userId);
+    if (!v.ok) return res.status(400).json({ error: dcErrorText(v.error, dcLangDe(req.session.userId)) });
+    res.json({ ok: true, code: v.code.code, percent: Number(v.code.percent) || 0, duration_months: v.code.duration_months == null ? null : Number(v.code.duration_months), ya_aplicado: !!v.ya_mio });
+  } catch (e) { res.status(500).json({ error: 'No se pudo validar el código.' }); }
+});
+app.post('/api/billing/descuento/canjear', requireAuth, (req, res) => {
+  try {
+    const r = dcCanjear(req.session.userId, (req.body || {}).codigo, 'app');
+    if (!r.ok) return res.status(400).json({ error: dcErrorText(r.error, dcLangDe(req.session.userId)) });
+    res.json({ ok: true, ya: !!r.ya, codigo: r.codigo, descuento: r.descuento });
+  } catch (e) { res.status(500).json({ error: 'No se pudo aplicar el código.' }); }
 });
 
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
@@ -30485,14 +30687,16 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     let finalPlan = basePlan;
     let discount = false;
     let mult = 1;
-    if (referralStats(user.id).discount_active) {
+    // (LOTE DESCUENTOS-CODIGO) Si el body trae un código, se valida y se
+    // canjea en el acto. El precio lo manda el MAYOR descuento aplicable
+    // (referidos / invitado / código): no se suman.
+    if (req.body && req.body.codigo) { try { dcCanjear(user.id, req.body.codigo, 'mp'); } catch (e) {} }
+    const efecMp = descuentoEfectivoInfo(user.id);
+    if (efecMp.mult < 1) {
       discount = true;
-      mult = REFERRAL_DISCOUNT;
-      finalPlan = { ...basePlan, price: Math.round(basePlan.price * REFERRAL_DISCOUNT), name: `${plan.name} (50% off referidos)` };
-    } else if (user.referred_by) {
-      discount = true;
-      mult = FRIEND_DISCOUNT;
-      finalPlan = { ...basePlan, price: Math.round(basePlan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
+      mult = efecMp.mult;
+      const sufijo = efecMp.fuente === 'referidos' ? '(50% off referidos)' : efecMp.fuente === 'invitado' ? '(20% off invitado)' : `(${efecMp.percent_off}% off código)`;
+      finalPlan = { ...basePlan, price: Math.round(basePlan.price * efecMp.mult), name: `${plan.name} ${sufijo}` };
     }
     // (Pagos lado app) Precio fundador y descuentos por referido son de
     // Posty: para otro poder/completo no se aplican. Completo cobra su
@@ -30532,7 +30736,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     if (agente === 'posty') {
       try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(basePlan.price, mult, user.id); } catch (e) {}
     }
-    res.json({ init_point, discount_applied: discount });
+    res.json({ init_point, discount_applied: discount, discount_source: efecMp.fuente });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
     res.status(500).json({ error: 'No se pudo iniciar el pago: ' + e.message });
@@ -30771,8 +30975,28 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
       try { completoPriceId = await ensureCompletoPriceId(null, plan, compAmount); }
       catch (e) { console.error('[stripe] precio completo:', e.message); return res.status(500).json({ error: 'Could not start the payment: ' + e.message }); }
     }
+    // (LOTE DESCUENTOS-CODIGO) El checkout cobra la base (precio
+    // fundador si aplica; si no, la de catálogo) por el multiplicador
+    // del MAYOR descuento vigente (referidos / invitado / código), con
+    // un precio de Stripe a ese monto — la misma regla que MP. Si el
+    // body trae un código, se canjea en el acto antes de calcular.
+    let descuentoPriceId = null;
+    if (agenteStripe === 'posty') {
+      try {
+        if (req.body && req.body.codigo) dcCanjear(user.id, req.body.codigo, 'stripe');
+        const efecSt = descuentoEfectivoInfo(user.id);
+        if (efecSt.mult < 1) {
+          const founderAplica = user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
+            && String(user.founder_currency || '') === 'USD' && String(plan.currency || '') === 'USD'
+            && Number(user.founder_price_at) > 0;
+          const baseAmt = founderAplica ? Number(user.founder_price) : Number(plan.price);
+          const amt = Math.round(baseAmt * efecSt.mult);
+          if (amt > 0 && amt !== Number(plan.price)) descuentoPriceId = await stripeBilling.ensureDescuentoPrice(null, plan, amt);
+        }
+      } catch (e) { console.error('[stripe] descuento:', e.message); }
+    }
     guardarCheckoutIntent(db, user.id, agenteStripe, plan.id);
-    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec, ...(completoPriceId ? { priceId: completoPriceId } : founderPriceId ? { priceId: founderPriceId } : {}) });
+    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec, ...(completoPriceId ? { priceId: completoPriceId } : descuentoPriceId ? { priceId: descuentoPriceId } : founderPriceId ? { priceId: founderPriceId } : {}) });
     track(user.id, 'checkout_start', plan.id);
     res.json({ url: out.url });
   } catch (e) {
@@ -49004,7 +49228,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1294';
+const BUILD_ID = '20261105-v1295';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

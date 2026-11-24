@@ -350,6 +350,7 @@
       : '';
     var nota = '<div class="nota"><input id="notaInput" maxlength="200" placeholder="Nota interna de la ficha (máx. 200)…" value="' + esc((ficha.nota && ficha.nota.texto) || '') + '">'
       + '<button class="btn small" data-act="nota-guardar" type="button">Guardar nota</button></div>';
+    var descHtml = mDescHtml(c);
     var week = '<div class="week">' + (c.semana || []).map(function (d) {
       var cls = '', sym = '—', note = '';
       if (d.estado === 'publicado') { cls = 'done'; sym = '✓'; note = 'Publicó'; }
@@ -382,7 +383,7 @@
       + '<div class="control-strip">' + progresoHtml
       + '<div class="kpi"><div class="k-label">Próximo posteo</div><div class="k-value">' + (proxPost ? esc(fechaCorta(proxPost.dia_key)) : '—') + '</div><div class="k-sub">' + (proxPost ? esc(proxPost.titulo || '') + (proxPost.status === 'draft' ? ' · borrador por decidir' : '') : 'Nada programado') + '</div></div>'
       + necesita + impulsoKpi + '</div>'
-      + funda + trat + nota
+      + funda + trat + nota + descHtml
       + '<div class="sec-title">Su semana <span class="hint">así la ve el cliente</span><span class="spacer"></span>'
       + '<span class="toggle"><button data-vista="semana" class="' + (centroVista === 'semana' ? 'on' : '') + '" type="button">Semana</button><button data-vista="feed" class="' + (centroVista === 'feed' ? 'on' : '') + '" type="button">Su feed</button></span></div>'
       + '<div id="centroCuerpo">' + (centroVista === 'semana' ? week + grid : '<div class="cargando">Cargando su feed…</div>') + '</div>'
@@ -751,6 +752,7 @@
     if (mTab === 'negocios') body.innerHTML = (mFichaUid && cliente && Number(cliente.user_id) === Number(mFichaUid)) ? mFichaHtml() : mTableroHtml();
     else if (mTab === 'posteos') body.innerHTML = mPosteosHtml();
     else if (mTab === 'mas') body.innerHTML = mMasHtml();
+    else if (mTab === 'descuentos') { body.innerHTML = descuentosHtml(); bindDescuentos(body); }
     else body.innerHTML = mHoyHtml();
     if (mTab === 'negocios' && highlightPostId) {
       var el = $('post-' + highlightPostId);
@@ -825,6 +827,7 @@
       + '<div class="m-ficha-head"><div class="nm">' + esc(c.business_name || 'Sin nombre') + '</div>'
       + '<div class="hd">@' + esc(c.ig_username || '—') + (c.categoria ? ' · ' + esc(c.categoria) : '') + '</div>'
       + '<div class="st"><span class="dot ' + dot + '"></span>' + esc(fila.estado || '') + '</div></div>'
+      + mDescHtml(c)
       + '<div class="sec-t">Su semana</div>' + week
       + '<div class="sec-t">Sus posteos</div>' + grid;
   }
@@ -862,6 +865,7 @@
     return '<div class="sec-t" style="margin-top:2px">Accesos</div>'
       + '<button class="m-link" data-mact="escritorio" type="button">🖥️ Consola completa<span class="go">›</span></button>'
       + '<a class="m-link" href="/panel">🧭 Panel de soporte<span class="go">›</span></a>'
+      + '<button class="m-link" data-mact="descuentos" type="button">🏷️ Descuentos por código<span class="go">›</span></button>'
       + '<button class="m-link" data-mact="recargar" type="button">↻ Actualizar la vista<span class="go">›</span></button>'
       + '<div class="sec-t">Últimas decisiones</div>'
       + (us.length ? us.map(function (u) {
@@ -886,10 +890,109 @@
       var a = ac.getAttribute('data-mact');
       if (a === 'escritorio') { document.body.classList.add('ver-escritorio'); window.scrollTo(0, 0); }
       else if (a === 'recargar') { cargar(true); }
+      else if (a === 'descuentos') { mTab = 'descuentos'; renderMovil(); window.scrollTo(0, 0); }
       return;
     }
     var go = ev.target.closest('[data-goto]');
     if (go) { mTab = 'negocios'; mFichaUid = Number(go.getAttribute('data-goto')); }
+  });
+
+
+  // ---------------- Descuentos por código (LOTE DESCUENTOS-CODIGO) ----------------
+  // El dueño crea los códigos acá (porcentaje suyo, duración 3/6 meses o
+  // permanente, un solo uso o reutilizable, ligado a un negocio o libre)
+  // y ve quién lo canjeó, cuándo y qué duración corre. La misma sección
+  // vive en escritorio (#descuentosBody) y en la capa móvil (Más).
+  var descuentosData = null;
+  var descFormUser = 0;
+  function dcFecha(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('es-AR'); }
+  function dcDurTxt(m) { return m == null ? 'permanente' : (m + ' meses'); }
+  function descuentosHtml() {
+    var negOpts = '<option value="">Libre — para entregar a cualquiera</option>' + (((vista && vista.clientes) || []).map(function (f) {
+      return '<option value="' + f.user_id + '"' + (Number(descFormUser) === Number(f.user_id) ? ' selected' : '') + '>' + esc(f.business_name || ('@' + (f.ig_username || ''))) + '</option>';
+    }).join(''));
+    var form = '<div class="dc-form">'
+      + '<label>Código<input class="dc-f-code" type="text" placeholder="Automático si lo dejás vacío" maxlength="40" style="text-transform:uppercase"></label>'
+      + '<label>% de descuento<input class="dc-f-pct" type="number" min="1" max="90" value="50"></label>'
+      + '<label>Duración<select class="dc-f-dur"><option value="3">3 meses</option><option value="6">6 meses</option><option value="permanente">Permanente</option></select></label>'
+      + '<label>Uso<select class="dc-f-uso"><option value="">Reutilizable</option><option value="1">Un solo uso</option></select></label>'
+      + '<label>Negocio<select class="dc-f-neg">' + negOpts + '</select></label>'
+      + '<button class="btn primary dc-f-crear" type="button">Crear código</button>'
+      + '</div>'
+      + '<div class="dc-msg"></div>';
+    if (!descuentosData) return form + '<div class="vacio">Cargando códigos…</div>';
+    var cs = descuentosData.codigos || [];
+    if (!cs.length) return form + '<div class="vacio">Todavía no creaste ningún código.</div>';
+    var list = cs.map(function (c) {
+      var canjes = (c.canjes || []).map(function (r) {
+        return '<div class="dc-canje">' + (r.vigente ? '🟢' : '⚪') + ' <b>' + esc(r.negocio || ('#' + r.user_id)) + '</b> · canjeó el ' + dcFecha(r.redeemed_at)
+          + (r.expires_at ? ' · vence el ' + dcFecha(r.expires_at) : ' · sin vencimiento') + (r.via ? ' · vía ' + esc(r.via) : '') + '</div>';
+      }).join('');
+      return '<div class="dc-item' + (c.active ? '' : ' off') + '">'
+        + '<div class="dc-head"><span class="dc-code">' + esc(c.code) + '</span>'
+        + '<span class="dc-tag">' + c.percent + '% off</span>'
+        + '<span class="dc-tag">' + dcDurTxt(c.duration_months) + '</span>'
+        + '<span class="dc-tag">' + (c.single_use ? 'un solo uso' : 'reutilizable') + '</span>'
+        + (c.user_id ? '<span class="dc-tag">para ' + esc(c.user_label || ('#' + c.user_id)) + '</span>' : '<span class="dc-tag">libre</span>')
+        + (c.active ? '' : '<span class="dc-tag warn">desactivado</span>')
+        + '<span class="spacer"></span>'
+        + '<button class="btn small" data-dc-toggle="' + c.id + '" data-on="' + (c.active ? '0' : '1') + '" type="button">' + (c.active ? 'Desactivar' : 'Activar') + '</button></div>'
+        + (canjes || '<div class="dc-canje dim">Todavía nadie lo canjeó.</div>')
+        + '</div>';
+    }).join('');
+    return form + '<div class="dc-list">' + list + '</div>';
+  }
+  function bindDescuentos(root) {
+    if (!root) return;
+    var q = function (sel) { return root.querySelector(sel); };
+    var btn = q('.dc-f-crear');
+    if (btn) btn.onclick = function () {
+      var body = {
+        code: (q('.dc-f-code') || {}).value || '',
+        percent: Number((q('.dc-f-pct') || {}).value || 0),
+        duration: (q('.dc-f-dur') || {}).value || '3',
+        single_use: ((q('.dc-f-uso') || {}).value || '') === '1',
+        user_id: Number((q('.dc-f-neg') || {}).value || 0) || null,
+      };
+      btn.disabled = true;
+      api('/api/admin/conserje/descuentos', { method: 'POST', body: body }).then(function (j) {
+        btn.disabled = false;
+        var msg = q('.dc-msg');
+        if (j && j.ok) { toast('Código ' + j.codigo.code + ' creado ✓'); descFormUser = 0; renderDescuentos(); }
+        else if (msg) msg.textContent = 'No se pudo crear: ' + ((j && j.error) || 'error');
+      }).catch(function () { btn.disabled = false; var msg = q('.dc-msg'); if (msg) msg.textContent = 'No se pudo crear el código.'; });
+    };
+    var tgl = root.querySelectorAll('[data-dc-toggle]');
+    for (var i = 0; i < tgl.length; i++) (function (b) {
+      b.onclick = function () {
+        api('/api/admin/conserje/descuentos/activar', { method: 'POST', body: { id: Number(b.getAttribute('data-dc-toggle')), active: b.getAttribute('data-on') === '1' } }).then(function (j) {
+          if (j && j.ok) renderDescuentos(); else toast('No se pudo cambiar el código.', 'err');
+        });
+      };
+    })(tgl[i]);
+  }
+  function renderDescuentos() {
+    api('/api/admin/conserje/descuentos').then(function (j) {
+      if (j && j.ok) descuentosData = j;
+      var sec = $('descuentosBody');
+      if (sec) { sec.innerHTML = descuentosHtml(); bindDescuentos(sec); }
+      if (mTab === 'descuentos') renderMovil();
+    }).catch(function () { /* la sección reintenta en la próxima carga */ });
+  }
+  function mDescHtml(c) {
+    var d = c && c.descuento;
+    var line = d
+      ? '<div class="desc-line">🏷️ <b>' + d.percent_off + '% off</b> por ' + (d.fuente === 'codigo' ? 'código' : d.fuente === 'referidos' ? 'referidos' : 'invitado')
+        + (d.codigo ? ' · código <b>' + esc(d.codigo.code) + '</b>' + (d.codigo.expires_at ? ' · vence el ' + dcFecha(d.codigo.expires_at) : ' · permanente') : '') + '</div>'
+      : '<div class="desc-line dim">Sin descuento activo.</div>';
+    return '<div class="desc-box">' + line + '<button class="btn small" data-dc-link="' + c.user_id + '" type="button">Crear código para este negocio</button></div>';
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-dc-link]');
+    if (!b) return;
+    descFormUser = Number(b.getAttribute('data-dc-link')) || 0;
+    if (window.innerWidth <= 760) { mTab = 'descuentos'; renderMovil(); window.scrollTo(0, 0); }
+    else { renderDescuentos(); var s = $('descuentosSec'); if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
   });
 
   // ---------------- carga ----------------
@@ -905,7 +1008,7 @@
         return;
       }
       vista = j;
-      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola(); renderMovil();
+      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola(); renderMovil(); renderDescuentos();
       // (LOTE CONSERJE-FORMA) Al abrir, el centro es la producción de
       // mañana — la vista de trabajo. La ficha se abre solo cuando el
       // dueño toca una cuenta o un ítem (el drill-in); un recargar la

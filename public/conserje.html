@@ -521,6 +521,25 @@
     .pulse{animation:none}
     .fade-swap{animation:none}
   }
+.dc-form{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:6px 0 4px}
+.dc-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--mut,#7A6A55);text-transform:uppercase;letter-spacing:.04em}
+.dc-form input,.dc-form select{font:inherit;font-size:14px;text-transform:none;letter-spacing:0;padding:8px 10px;border:1.5px solid #E7DAC6;border-radius:10px;background:#fff;color:#2B2118;min-height:40px}
+.dc-form input{width:190px}
+.dc-msg{font-size:13px;color:#2793C8;min-height:18px;margin:2px 0 6px}
+.dc-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.dc-item{border:1.5px solid #F0E4D2;border-radius:14px;padding:12px 14px;background:#FFFDF8;color:#2B2118}
+.dc-item .btn,.desc-box .btn{color:#2B2118;border-color:#D8C9AE;background:#fff}
+.dc-item.off{opacity:.55}
+.dc-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dc-code{font-weight:900;font-size:16px;letter-spacing:.03em}
+.dc-tag{font-size:11.5px;font-weight:700;background:#F2E9DA;border-radius:99px;padding:3px 9px;color:#6B5B43}
+.dc-tag.warn{background:#FBE3E0;color:#B3402F}
+.dc-head .spacer{flex:1}
+.dc-canje{font-size:13px;margin-top:7px;color:#4A3F30}
+.dc-canje.dim{color:#A2937D}
+.desc-box{border:1.5px solid #F0E4D2;border-radius:14px;padding:12px 14px;margin:10px 0;background:#FFFDF8;color:#2B2118;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.desc-line{font-size:13.5px}
+.desc-line.dim{color:#A2937D}
 </style>
 </head>
 <body>
@@ -580,6 +599,12 @@
     <div class="q-title">Cola de producción <span class="hint">lo que bamboo está haciendo ahora</span></div>
     <div class="q-row" id="cola"><span class="vacio">Cargando…</span></div>
   </section>
+
+  <!-- ======= DESCUENTOS POR CÓDIGO (LOTE DESCUENTOS-CODIGO) ======= -->
+  <section class="glass queue" id="descuentosSec" aria-label="Descuentos por código">
+    <div class="q-title">Descuentos por código <span class="hint">los creás vos y los entregás a quien quieras</span></div>
+    <div id="descuentosBody"><span class="vacio">Cargando…</span></div>
+  </section>
 </div>
 
 <!-- ======= LOTE CONSERJE-BANDEJA · LA CAPA MÓVIL (solo ≤760px) ======= -->
@@ -622,6 +647,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=10"></script>
+<script src="/conserje.js?v=11"></script>
 </body>
 </html>

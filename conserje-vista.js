@@ -1107,6 +1107,30 @@ function mediaDePosteo(db, uid, postId, opts) {
   };
 }
 
+
+// (LOTE DESCUENTOS-CODIGO) El descuento del negocio para su ficha: el
+// código vigente (aunque no sea el que manda) y la fuente que manda
+// (el MAYOR descuento, sin sumar — misma regla que server.js).
+function descuentoDe(db, uid) {
+  try {
+    const now = new Date().toISOString();
+    const v = db.prepare(`SELECT c.code, c.percent, c.duration_months, r.redeemed_at, r.expires_at FROM discount_redemptions r JOIN discount_codes c ON c.id = r.code_id WHERE r.user_id = ? AND c.active = 1 AND (r.expires_at IS NULL OR r.expires_at > ?) ORDER BY r.id DESC LIMIT 1`).get(uid, now);
+    let mult = 1, fuente = null;
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND plan_status = 'active'`).get(uid);
+    if (n && n.n >= 2) { mult = 0.5; fuente = 'referidos'; }
+    else {
+      const me = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(uid);
+      if (me && me.referred_by) { mult = 0.8; fuente = 'invitado'; }
+    }
+    if (v && (1 - (Number(v.percent) || 0) / 100) < mult) { mult = 1 - (Number(v.percent) || 0) / 100; fuente = 'codigo'; }
+    if (!v && !fuente) return null;
+    return {
+      fuente, percent_off: Math.round((1 - mult) * 100),
+      codigo: v ? { code: v.code, percent: Number(v.percent) || 0, duration_months: v.duration_months == null ? null : Number(v.duration_months), redeemed_at: v.redeemed_at, expires_at: v.expires_at } : null,
+    };
+  } catch (e) { return null; }
+}
+
 function cliente(db, userId, opts) {
   const o = opts || {};
   const uid = Number(userId) || 0;
@@ -1143,6 +1167,7 @@ function cliente(db, userId, opts) {
       budget_cents: boost.budget_cents || 0, fee_cents: boost.fee_cents || 0,
       error: boost.error || '', created_at: boost.created_at || '',
     } : null,
+    descuento: descuentoDe(db, uid),
   };
 }
 

@@ -964,13 +964,17 @@ function startScheduler(db) {
   }
   // Conciliación de descuentos con MercadoPago: cada 12 horas
   try {
-    const { reconcileAll } = require('./billing-sync');
+    const { reconcileAll, reconcileStripeCodigos } = require('./billing-sync');
     cron.schedule('0 */12 * * *', () => {
       reconcileAll(db).catch((e) => console.error('[billing-sync]', e.message));
+      // (LOTE DESCUENTOS-CODIGO) La misma conciliación, lado Stripe:
+      // al vencer un código, la suscripción vuelve sola al precio pleno.
+      reconcileStripeCodigos(db).catch((e) => console.error('[billing-sync] stripe:', e.message));
     });
     // Primera pasada a los 5 minutos del arranque (hace backfill si hace falta)
     setTimeout(() => {
       reconcileAll(db).catch((e) => console.error('[billing-sync]', e.message));
+      reconcileStripeCodigos(db).catch((e) => console.error('[billing-sync] stripe:', e.message));
     }, 5 * 60 * 1000);
   } catch (e) {
     console.error('[billing-sync] no se pudo iniciar:', e.message);
