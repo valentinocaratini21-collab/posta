@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1279';
+const PZ_BUILD = '20261105-v1280';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32595,6 +32595,23 @@ function pzInicioRepaint(freshHtml, paintedHtml, key, fromV, freshV) {
     setTimeout(() => { try { pzCampanaBadgeRefrescar(); } catch (e) {} }, 0);
   } catch (e) {}
 }
+/* (LOTE INICIO-WEB-PERFIL · 23/11 · mock 1 «El perfil manda» aprobado
+   por el dueño) Tarjeta de chat del rail de ESCRITORIO de Inicio: la
+   puerta al chat de siempre — el mismo destino que ya usa el botón
+   de chat del detalle de la tira (bbGo('#/app/chat'), pzHoyTiraBind):
+   para el invitado es su pantalla de chat; para el registrado manda
+   el rebote vigente del router (TAB-SUBIR: su conversación vive en
+   Inicio). No es un compositor nuevo ni abre hojas: es la entrada,
+   solo escrita — sin notas de voz. En móvil la tarjeta no se ve (el
+   CSS la muestra solo en el rail ≥1024px): las entradas al chat en
+   el teléfono quedan como están. */
+function iwpChatCardHTML(en) {
+  return `<div class="iwp-chat">
+    <div class="iwp-chat-head"><img class="iwp-chat-ava" src="/ai-avatar.png" alt="Posty"><span class="iwp-chat-who"><b>Posty</b></span></div>
+    <p class="iwp-chat-txt">${en ? 'Ask for whatever you need, in writing: a change to a post, a new idea, anything.' : 'Pedile lo que quieras, por escrito: un cambio en un posteo, una idea nueva, lo que sea.'}</p>
+    <button type="button" class="iwp-chat-go" onclick="bbGo('#/app/chat')">${en ? 'Write to Posty…' : 'Escribile a Posty…'}</button>
+  </div>`;
+}
 async function inicioView() {
   try { await pzRevalidateIdentity(); } catch (e) {}
   const tz = pcTz();
@@ -33065,12 +33082,20 @@ async function inicioView() {
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, '')}
   ${hoySegHTML}
   <div id="pzTemaInicio"></div>
+  <!-- (LOTE INICIO-WEB-PERFIL) Las dos columnas del website nacen acá: .iwp-rail (Hoy + la tarjeta de chat) y .iwp-main (el perfil con su grilla). En móvil los envoltorios son bloques sin estilo y el orden visual queda el de siempre (Hoy primero, el perfil después); el grid es solo ≥1024px. -->
+  <div class="iwp-cols">
+    <div class="iwp-rail">
   ${hoyAprobarHTML}
+  ${HF_VISITOR ? '' : iwpChatCardHTML(enHome)}
+    </div>
+    <div class="iwp-main">
   <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
   ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB, splitHead: true, racha: pzRacha, headIcons: false /* (LOTE HOY-REDISEÑO v810) Los íconos de compartir/ajustes viven SOLO en el encabezado del shell: la tarjeta de perfil ya no los duplica. */ })}
   ${hfTabsHTML(HF_TAB, enHome)}
   ${mnPlanStr}
   ${gridHTML}
+    </div>
+  </div>
   ${visitorPillHTML}
   <!-- (LOTE SACAR-CHATBAR-INICIO · decisión Valentino 5/11) La caja de chat sale de Inicio: sin campo, sin mic, sin +. La entrada de subida es el tab Agregar del dock (hoja «Subir foto / Subir video» → chat con la foto). La hoja del chat (mzSheet) queda: es la superficie del cambio del posteo (hfOpenChatForPost). -->
   <div class="mz-sheet" id="mzSheet" hidden>

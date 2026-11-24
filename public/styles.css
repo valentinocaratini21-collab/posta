@@ -7161,3 +7161,60 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pzv-float-cara img{width:100%;height:100%;object-fit:cover;display:block}
 .pzv-float-txt{font-size:10.5px;font-weight:700;color:#14703C;background:rgba(255,255,255,.88);border-radius:999px;padding:2px 8px}
 /* ===== /LOTE VENTY-ETAPA-1 ===== */
+
+/* ============================================================
+   LOTE INICIO-WEB-PERFIL (23/11 · mock 1 «El perfil manda»,
+   aprobado por el dueño 13:47): el Inicio en el WEBSITE usa el
+   ancho de la pantalla — sidebar marina fija, lienzo crema
+   #FFF9F0, el perfil literal en grande a la izquierda y el rail
+   Hoy / Semana / Chat a la derecha. SOLO presentación de
+   escritorio: todo vive en @media(min-width:1024px) y el layout
+   móvil/app queda byte a byte como estaba (la tarjeta de chat
+   del rail nace oculta y solo aparece en el rail). Ningún
+   handler cambia: son los renders y binders de siempre.
+   ============================================================ */
+.iwp-chat{display:none}
+@media(min-width:1024px){
+  /* — La sidebar fija de escritorio, marina (mock 1) — */
+  .drawer{background:#0A1E33;box-shadow:8px 0 32px rgba(10,30,51,.28)}
+  .drawer-link{color:#BFD4E2}
+  .drawer-link:hover{background:rgba(39,147,200,.16);color:#fff}
+  .drawer-link.on{background:rgba(39,147,200,.25);color:#fff}
+  .drawer-logout{color:#FFB3B3}
+  .side-posty{border-bottom-color:rgba(255,255,255,.16)}
+  .side-posty-ava-wrap{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.35)}
+  .side-posty-txt b{color:#fff}
+  .side-posty-txt small{color:#9CC3DE}
+  /* — Lienzo crema y columna ancha, solo con el Inicio del dueño — */
+  .app-shell:has(#inicioView:not(.hf-visitor)){background:#FFF9F0}
+  .main:has(> #inicioView:not(.hf-visitor)){max-width:1300px}
+  #inicioView.hf-wrap:not(.hf-visitor){background:transparent;max-width:none;margin:0;padding:10px 6px 70px}
+  /* — Dos columnas: el perfil manda | el rail — */
+  #inicioView:not(.hf-visitor) .iwp-cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:18px;align-items:start}
+  #inicioView .iwp-main{grid-column:1;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:10px 0 16px}
+  #inicioView .iwp-rail{grid-column:2}
+  #inicioView .iwp-main .hf-head{background:transparent;border:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:0;margin:0;padding:16px 22px 0}
+  #inicioView .iwp-main .hf-ava-in{width:118px;height:118px}
+  #inicioView .iwp-main .hf-ava-letter{font-size:40px}
+  #inicioView .iwp-main .hf-grid{margin:12px 14px 0}
+  #inicioView .iwp-main .mn-plan{margin:14px 14px 0}
+  /* — El rail: Hoy, después Semana, después Chat (orden del mock) — */
+  #inicioView .iwp-rail{display:flex;flex-direction:column;gap:18px;min-width:0}
+  #inicioView #pzHoyAprobar{display:flex;flex-direction:column;gap:14px}
+  #inicioView #pzHoyAprobar .pz-hoy-speech-row{order:1}
+  #inicioView #pzHoyAprobar .pz-hoy-speech{margin-bottom:0}
+  #inicioView #pzHoyAprobar .pz-hoy-para{order:2}
+  #inicioView #pzHoyAprobar .pz-hoy-hoy{order:3;margin-top:0;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:14px 16px}
+  #inicioView #pzHoyAprobar #pzHoyTira{order:4;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:14px 16px 6px}
+  #inicioView #pzHoyTira .pz-hoy-tira-detalle{margin-bottom:8px}
+  #inicioView #pzHoyAprobar .pz-wow{order:5}
+  #inicioView #pzHoyAprobar .pz-postwow-email{order:6}
+  /* — La tarjeta de chat del rail: la puerta al chat de siempre — */
+  #inicioView .iwp-chat{display:block;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:18px}
+  .iwp-chat-head{display:flex;align-items:center;gap:12px}
+  .iwp-chat-ava{width:44px;height:44px;border-radius:50%;object-fit:cover;display:block}
+  .iwp-chat-who b{font-size:16px;color:#0A1E33}
+  .iwp-chat-txt{color:#5B6B7A;font-size:13.5px;line-height:1.5;margin:12px 0 14px}
+  .iwp-chat-go{width:100%;text-align:left;border:1.5px solid #DCE5EC;background:#fff;border-radius:999px;padding:11px 16px;font-size:14px;font-family:inherit;color:#5B6B7A;cursor:pointer}
+  .iwp-chat-go:hover{border-color:#2793C8;color:#0A1E33}
+}
