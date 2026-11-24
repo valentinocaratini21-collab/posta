@@ -292,9 +292,6 @@
   .decision textarea::placeholder{color:var(--ink-3)}
   .all-done{display:none;text-align:center;padding:18px 10px 6px;color:var(--green);font-weight:750}
   .all-done.show{display:block}
-  .ultimas{padding:2px 18px 16px}
-  .logrow{padding:9px 2px;border-bottom:1px dashed rgba(255,255,255,.1);font-size:12.5px}
-  .logrow:last-child{border-bottom:0}
   .logrow .w{color:var(--ink-3);font-size:11.5px}
   .logrow .d{color:var(--ink-2);display:block;margin-top:2px;line-height:1.45}
 
@@ -423,7 +420,7 @@
      pinta las tarjetas de siempre (decCard) con la piel crema;
      Negocios compone el tablero semáforo desde clientes + mano y
      abre la ficha actual; Posteos es la cola de revisión de mañana
-     con las decisiones por pieza; Más trae ultimas + accesos. */
+     con las decisiones por pieza; Más trae los accesos. */
   #movil{display:none}
   #volverBandeja{display:none}
   @media (max-width:760px){
@@ -589,8 +586,6 @@
       <div class="col-head"><span class="col-title">Hoy necesita una mano</span><span class="badge" id="rightPending">—</span></div>
       <div class="decisions" id="decisiones"><div class="cargando">Cargando…</div></div>
       <div class="all-done" id="allDone">Todo resuelto ✓ — nada necesita una mano hoy.</div>
-      <div class="col-head" style="padding-top:6px"><span class="col-title">Últimas decisiones</span></div>
-      <div class="ultimas" id="ultimas"><div class="cargando">Cargando…</div></div>
     </aside>
   </div>
 
@@ -647,6 +642,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=11"></script>
+<script src="/conserje.js?v=12"></script>
 </body>
 </html>

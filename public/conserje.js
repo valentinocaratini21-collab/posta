@@ -699,16 +699,10 @@
     }
     $('allDone').classList.toggle('show', !ds.length);
   }
-  var ETIQUETAS_VISTA = { tratamiento: 'Asignó tratamiento', voz_resuelta_mano: 'Resolvió un pedido de voz a mano' };
-  function renderUltimas() {
-    var us = (vista && vista.ultimas) || [];
-    $('ultimas').innerHTML = us.length ? us.map(function (u) {
-      return '<div class="logrow"><b>' + esc(ETIQUETAS_VISTA[u.action] || u.etiqueta || u.action || '') + '</b> '
-        + (u.business_name ? '<span>· ' + esc(u.business_name) + '</span>' : '')
-        + ' <span class="w">' + esc(u.cuando || '') + '</span>'
-        + (u.detalle ? '<span class="d">' + esc(u.detalle) + '</span>' : '') + '</div>';
-    }).join('') : '<div class="vacio">Todavía no hay decisiones registradas.</div>';
-  }
+  // (LOTE LIMPIEZA-23/11 · ÚLTIMAS-FUERA) La sección «Últimas
+  // decisiones» salió de la consola (orden del dueño 23/11): ni el
+  // escritorio ni el «Más» del móvil la pintan; el dato
+  // vista.ultimas queda en la vista, sin superficie.
   function renderCola() {
     var cs = (vista && vista.cola) || [];
     $('cola').innerHTML = cs.length ? cs.map(function (j) {
@@ -729,7 +723,7 @@
   // con las decisiones POR PIEZA de revision/* — «Aprobar todo» no
   // existe del lado operador: la tanda la aprueba el dueño del
   // negocio, es su puerta (fork del CENSO-CONSERJE-3 §5.1). Más trae
-  // vista.ultimas y los accesos. La capa solo pinta: cada acción va
+  // los accesos. La capa solo pinta: cada acción va
   // por los handlers de siempre y la vista se relee entera.
   var mTab = 'hoy';
   var mFichaUid = null;
@@ -861,18 +855,11 @@
     return html;
   }
   function mMasHtml() {
-    var us = (vista && vista.ultimas) || [];
     return '<div class="sec-t" style="margin-top:2px">Accesos</div>'
       + '<button class="m-link" data-mact="escritorio" type="button">🖥️ Consola completa<span class="go">›</span></button>'
       + '<a class="m-link" href="/panel">🧭 Panel de soporte<span class="go">›</span></a>'
       + '<button class="m-link" data-mact="descuentos" type="button">🏷️ Descuentos por código<span class="go">›</span></button>'
-      + '<button class="m-link" data-mact="recargar" type="button">↻ Actualizar la vista<span class="go">›</span></button>'
-      + '<div class="sec-t">Últimas decisiones</div>'
-      + (us.length ? us.map(function (u) {
-          return '<div class="m-log"><b>' + esc(ETIQUETAS_VISTA[u.action] || u.etiqueta || u.action || '') + '</b>'
-            + (u.business_name ? ' · ' + esc(u.business_name) : '') + ' <span class="w">' + esc(u.cuando || '') + '</span>'
-            + (u.detalle ? '<span class="d">' + esc(u.detalle) + '</span>' : '') + '</div>';
-        }).join('') : '<div class="m-cargando">Todavía no hay decisiones registradas.</div>');
+      + '<button class="m-link" data-mact="recargar" type="button">↻ Actualizar la vista<span class="go">›</span></button>';
   }
   // La delegación de la capa móvil: convive con la de siempre (que
   // sigue atendiendo los data-act / data-goto / data-ver de las
@@ -1008,7 +995,7 @@
         return;
       }
       vista = j;
-      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderUltimas(); renderCola(); renderMovil(); renderDescuentos();
+      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderCola(); renderMovil(); renderDescuentos();
       // (LOTE CONSERJE-FORMA) Al abrir, el centro es la producción de
       // mañana — la vista de trabajo. La ficha se abre solo cuando el
       // dueño toca una cuenta o un ítem (el drill-in); un recargar la
@@ -1083,7 +1070,7 @@
     var go = ev.target.closest('[data-goto]');
     if (go) { gotoFicha(go.getAttribute('data-goto'), go.getAttribute('data-goto-post')); return; }
     var f = ev.target.closest('[data-filtro]');
-    if (f) { filtro = f.getAttribute('data-filtro'); renderRoster(); return; }
+    if (f) { filtro = f.getAttribute('data-filtro'); $('buscador').value = ''; renderRoster(); return; } // (LOTE LIMPIEZA-23/11 · TODOS-LIMPIA) Tocar un chip vacía el buscador: con una búsqueda sin match activa, «Todos» volvía a una lista vacía.
     var v = ev.target.closest('[data-vista]');
     if (v) { centroVista = v.getAttribute('data-vista'); renderCentro(); return; }
     var b = ev.target.closest('[data-act]');
