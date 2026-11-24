@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1310';
+const PZ_BUILD = '20261105-v1323';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -23565,7 +23565,13 @@ function pzAdsConexionHTML() {
   const btnTxt = (cx && cx.ad_account_id)
     ? (en ? 'Change connection' : 'Cambiar conexión')
     : (en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria');
-  return `<div><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p><button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div>`;
+  // (LOTE ADS-ESPACIOS) Con la conexión del login a la vista, el
+  // límite verdadero de ESTE espacio se dice acá también: su
+  // Instagram todavía no está en la cuenta publicitaria. Nunca
+  // «conectá tu cuenta» sobre una cuenta ya conectada.
+  const limiteIgHTML = (s.motivoGate === 'ig_fuera_de_cuenta_publicitaria')
+    ? `<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#8a5a00">${esc(pzBoostMotivo('ig_fuera_de_cuenta_publicitaria'))}</p>` : '';
+  return `<div><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p>${limiteIgHTML}<button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div>`;
 }
 
 // (LOTE ADS-TARJETA-UNICA) El valor corto de la fila «Conexión»: el
@@ -24611,6 +24617,13 @@ function pzBoostMotivo(motivo, monto, cobroId) {
       return gzT('El anuncio se creó en Meta pero no se pudo debitar de tu billetera. Quedó registrado para revisión manual — no se te cobró dos veces.', 'The ad was created on Meta but couldn’t be debited from your wallet. It was recorded for manual review — you weren’t charged twice.');
     case 'demo':
       return gzT('Todavía estás en modo demo: conectá tu Instagram para cargar plata y meterle ads.', 'You’re still in demo mode: connect your Instagram to top up and run ads.');
+    case 'ig_fuera_de_cuenta_publicitaria': {
+      // (LOTE ADS-ESPACIOS) El límite verdadero del espacio: la
+      // cuenta publicitaria del login está conectada, pero el
+      // Instagram de ESTE espacio todavía no está adentro.
+      const igF = (typeof pzBoostState !== 'undefined' && pzBoostState && pzBoostState.motivoIg) ? '@' + pzBoostState.motivoIg : '';
+      return gzT('Tu Instagram ' + (igF ? igF + ' ' : '') + 'todavía no está en tu cuenta publicitaria: desde este espacio todavía no se puede impulsar. Tu billetera y tu conexión son las de tu cuenta principal. No se gastó nada.', 'Your Instagram ' + (igF ? igF + ' ' : '') + 'isn’t in your ad account yet: this space can’t boost yet. Your wallet and your connection are your main account’s. Nothing was spent.');
+    }
     case 'moneda_cuenta_indeterminada':
       return gzT('No pudimos confirmar la moneda de la cuenta publicitaria. No se creó ningún anuncio y no se gastó nada. Probá de nuevo en un momento.', 'We couldn’t confirm the ad account’s currency. No ad was created and nothing was spent. Try again in a moment.');
     case 'moneda_cuenta_incompatible':
@@ -24740,7 +24753,7 @@ function pzBoostTitulo(p) {
 // la compuerta se considera cerrada.
 function pzBoostGate() {
   const s = pzBoostState || {};
-  if (s.adsReady === false) return { cerrado: true, motivo: (s.motivoGate === 'ig_not_connected' ? 'ig_not_connected' : (s.motivoGate === 'ads_not_configured' ? 'ads_no_configurado' : (s.motivoGate === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria'))) };
+  if (s.adsReady === false) return { cerrado: true, motivo: (s.motivoGate === 'ig_fuera_de_cuenta_publicitaria' ? 'ig_fuera_de_cuenta_publicitaria' : (s.motivoGate === 'ig_not_connected' ? 'ig_not_connected' : (s.motivoGate === 'ads_not_configured' ? 'ads_no_configurado' : (s.motivoGate === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria')))) };
   if (s.adsReady !== true) return { cerrado: true, motivo: 'sin_datos' };
   if (s.boostHabilitado === false) return { cerrado: true, motivo: 'boost_deshabilitado' };
   if (s.adsPermiso === false) return { cerrado: true, motivo: 'ads_sin_permiso' };
@@ -24767,6 +24780,7 @@ async function pzBoostLoad(opts) {
   s.elegibles = (elig && elig.ok && Array.isArray(elig.elegibles)) ? elig.elegibles.map((e) => pzBoostNormPost(e)).filter(Boolean) : [];
   s.adsReady = (elig && elig.ok) ? !!elig.ads_ready : null;
   s.motivoGate = (elig && elig.ok && !elig.ads_ready) ? String(elig.motivo || 'page_not_authorized') : '';
+  s.motivoIg = (elig && elig.ok) ? String(elig.motivo_ig_username || '') : '';
   // (LOTE CAMINO-CLIENTE-ADS) La URL del flujo de conexión, cuando el
   // servidor la ofrece: es lo que abre el botón de la tarjeta.
   // (LOTE RECONEXION-ADS) Ahora viaja también con la compuerta lista

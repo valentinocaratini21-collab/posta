@@ -14341,7 +14341,7 @@ app.post('/api/destacado/impulsar', requireAuth, requireTrialValid, express.json
     // (LOTE CONEXIÓN-PÁGINA) Sin configuración de Posty, el riel del
     // cliente igual corre: su conexión capturada es la habilitación.
     if (!metaAds.adsConfigured() && gate.via !== 'cliente') return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
-    if (!gate.ready) return res.status(409).json({ ok: false, motivo: gate.code === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria', code: gate.code || null, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: gate.code === 'ig_fuera_de_cuenta_publicitaria' ? 'ig_fuera_de_cuenta_publicitaria' : (gate.code === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria'), code: gate.code || null, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
     // Permiso ads_management (App Review): se verifica ANTES de cobrar.
     // Sin él, Meta rechaza la creación del anuncio DESPUÉS del cobro
     // (el cliente pagaría por un ad que nunca corre). Sin verificar
@@ -14590,7 +14590,7 @@ app.get('/api/estrategia/mejor-posteo', requireAuth, async (req, res) => {
 });
 
 app.get('/api/ads/config', requireAuth, (req, res) => {
-  const w = getAdWallet(req.session.userId);
+  const w = getAdWallet(pzAdsTitularId(req.session.userId));
   res.json({
     ok: true,
     balance_cents: w.balance_cents,
@@ -14608,7 +14608,7 @@ app.get('/api/ads/config', requireAuth, (req, res) => {
     // (LOTE RECONEXION-ADS) El mismo estado de conexión que
     // alimenta la pestaña Ads, por el canal liviano que Ajustes ya
     // consume: la fila de Ads en Conexiones lo lee de acá.
-    conexion: adsConexionDetalle(req.session.userId),
+    conexion: adsConexionDetalle(pzAdsTitularId(req.session.userId)),
     connect_url: unifiedReady(req.session.userId) ? '/api/ig/unified/go' : '',
   });
 });
@@ -14651,9 +14651,10 @@ function railCobro(uid) {
 app.get('/api/ads/billetera', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
-    const w = getAdWallet(uid);
+    const tid = pzAdsTitularId(uid);
+    const w = getAdWallet(tid);
     let movs = [];
-    try { movs = db.prepare(`SELECT kind, amount_cents, balance_after, ref, note, created_at FROM ad_transactions WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(uid); } catch (e) { movs = []; }
+    try { movs = db.prepare(`SELECT kind, amount_cents, balance_after, ref, note, created_at FROM ad_transactions WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(tid); } catch (e) { movs = []; }
     let adsPermiso = null;
     try {
       if (metaAds.adsConfigured()) {
@@ -14672,7 +14673,7 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
     // no cambia de semántica (solo dice que existe un customer).
     let tarjeta = null;
     try {
-      const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid);
+      const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(tid);
       const cid = (u && u.stripe_customer_id) || '';
       const client = cid && stripeBilling.stripeConfigured() ? stripeBilling.stripeClient() : null;
       if (client) {
@@ -14689,20 +14690,20 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
       // riel de la suscripción. Sin riel, el cliente ve el flujo USD
       // de siempre (y la carga falla con sin_cliente_stripe → el botón
       // «Agregar tarjeta» de v877).
-      billing_provider: railCobro(uid),
+      billing_provider: railCobro(tid),
       // (LOTE ADS-MONEDA) La moneda del impulso es la de la billetera
       // cuando el riel no coincide con ella: riel MP viejo + billetera
       // USD = la pantalla corre en USD (el crédito que el usuario cargó
       // manda). Solo con riel MP Y billetera ARS el impulso es en pesos.
-      impulso_ars: railCobro(uid) === 'mp' && w.currency === 'ARS',
+      impulso_ars: railCobro(tid) === 'mp' && w.currency === 'ARS',
       montos_ars: adsBilletera.MONTOS_CARGA_ARS,
       presupuestos_ars: adsBilletera.MONTOS_IMPULSO_ARS,
       min_topup_ars: adsBilletera.MONTOS_CARGA_ARS[0],
       boostHabilitado: destacadoSemana.boostHabilitado(process.env),
       ads_permiso: adsPermiso, conversion_pendiente: !destacadoSemana.conversionARSFromEnv(process.env),
       // (LOTE ADS-DIRECTO v758) Carga automática + si hay con qué cobrarla.
-      auto_topup: adsBilletera.getAutoTopup(db, uid),
-      tiene_tarjeta: (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(uid); return !!(u && u.stripe_customer_id); } catch (e) { return false; } })(),
+      auto_topup: adsBilletera.getAutoTopup(db, tid),
+      tiene_tarjeta: (() => { try { const u = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(tid); return !!(u && u.stripe_customer_id); } catch (e) { return false; } })(),
       tarjeta,
       movimientos: movs });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudo cargar tu billetera' }); }
@@ -15299,7 +15300,13 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     // configurado (unifiedReady): sin config_id no hay flujo que
     // prometer, como ya decía el comentario de CAMINO-CLIENTE-ADS.
     const connectUrlAds = unifiedReady(uid) ? '/api/ig/unified/go' : '';
-    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? { riel: gate.via === 'cliente' ? 'cliente' : 'billetera' } : { motivo: gate.code || 'page_not_authorized' }), ...(connectUrlAds ? { connect_url: connectUrlAds } : {}), conexion: adsConexionDetalle(uid), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
+    // (LOTE ADS-ESPACIOS) Cuando la compuerta dice el límite
+    // verdadero (el IG de este espacio no está en la cuenta
+    // publicitaria del login), el username del espacio viaja para
+    // nombrarlo tal cual en la pantalla.
+    const motivoIgAds = (!gate.ready && gate.code === 'ig_fuera_de_cuenta_publicitaria')
+      ? (() => { try { const p = getProfile(uid); return (p && p.ig_username) || ''; } catch (e) { return ''; } })() : '';
+    res.json({ ok: true, ads_ready: !!gate.ready, ...(gate.ready ? { riel: gate.via === 'cliente' ? 'cliente' : 'billetera' } : { motivo: gate.code || 'page_not_authorized' }), ...(connectUrlAds ? { connect_url: connectUrlAds } : {}), conexion: adsConexionDetalle(pzAdsTitularId(uid)), ...(motivoIgAds ? { motivo_ig_username: motivoIgAds } : {}), elegibles: adsBilletera.elegiblesParaAds(todos, mejor ? mejor.id : null, impulsados, { incluirImpulsados: incluirImp, semanaActual: wk }) });
   } catch (e) { res.status(500).json({ ok: false, error: 'No se pudieron cargar tus posteos' }); }
 });
 
@@ -15822,7 +15829,7 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
     // (LOTE CONEXIÓN-PÁGINA) Sin configuración de Posty, el riel del
     // cliente igual corre: su conexión capturada es la habilitación.
     if (!metaAds.adsConfigured() && gate.via !== 'cliente') return res.status(503).json({ ok: false, motivo: 'ads_no_configurado' });
-    if (!gate.ready) return res.status(409).json({ ok: false, motivo: gate.code === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria', code: gate.code || null, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
+    if (!gate.ready) return res.status(409).json({ ok: false, motivo: gate.code === 'ig_fuera_de_cuenta_publicitaria' ? 'ig_fuera_de_cuenta_publicitaria' : (gate.code === 'ads_not_connected' ? 'sin_cuenta_publicitaria' : 'sin_autorizacion_publicitaria'), code: gate.code || null, ...(gate.connect_url ? { connect_url: gate.connect_url } : {}) });
     const elig = await metaAds.checkEligibility(cand.ig_media_id, gate.via === 'cliente' ? { token: gate.suat, adAccountId: gate.adAccountId } : null).catch(() => ({ ok: true }));
     if (!elig.ok) return res.status(409).json({ ok: false, motivo: 'sin_elegible' });
     // Permiso ads_management ANTES de gastar (mismo gate que impulsar).
@@ -16277,6 +16284,20 @@ function getAdsConnection(userId) {
 // guardados al conectar. Sale de la fila capturada
 // (ig_ads_connections), sin lecturas en vivo; lo que la fila no
 // trae queda null — honesto, nunca inventado. Sin fila, null.
+// (LOTE ADS-ESPACIOS) La billetera y la conexión publicitaria son
+// del LOGIN, no del espacio: un espacio es otro negocio de la misma
+// persona (modelo CAMBIO-CUENTA) y no tiene billetera ni conexión
+// propias. Sin esto, el espacio EN del fundador mostraba «US$0» y
+// «Not connected» con la billetera en US$22 y la cuenta conectada en
+// su espacio principal — el producto contradiciendo la realidad en
+// la pantalla de Ads (defecto del dueño, 24/11).
+function pzAdsTitularId(uid) {
+  try {
+    const info = pzEspacioInfo(uid);
+    if (info && info.login && Number(info.login) !== Number(uid)) return Number(info.login);
+  } catch (e) {}
+  return uid;
+}
 function adsConexionDetalle(userId) {
   const conn = getAdsConnection(userId);
   if (!conn) return null;
@@ -16332,6 +16353,23 @@ async function adsReadiness(userId) {
   const s = getSettings(userId);
   const igUserId = s.ig_user_id || '';
   if (!igUserId) return { ready: false, code: 'ig_not_connected' };
+  // (LOTE ADS-ESPACIOS) Un espacio no tiene conexión propia: la
+  // conexión es la del login. Si el login SÍ capturó la suya y el
+  // Instagram de ESTE espacio no está entre las cuentas de esa
+  // conexión, el límite es ese — dicho tal cual, jamás «conectá tu
+  // cuenta»: la cuenta ya está conectada; lo que falta es este
+  // Instagram adentro. Si el IG del espacio SÍ es parte, la
+  // compuerta sigue su curso de siempre.
+  try {
+    const infoAds = pzEspacioInfo(userId);
+    if (infoAds && infoAds.login && Number(infoAds.login) !== Number(userId)) {
+      const connT = getAdsConnection(infoAds.login);
+      if (connT && connT.suat && connT.primary_ad_account_id) {
+        const idsT = new Set([...(connT.ig_account_ids || []), ...((connT.ig_accounts || []).map((a) => a && a.id))].map((x) => String(x || '')));
+        if (!idsT.has(String(igUserId))) return { ready: false, code: 'ig_fuera_de_cuenta_publicitaria' };
+      }
+    }
+  } catch (e) {}
   // (1) Riel del cliente: lo capturado en la conexión manda.
   const conn = getAdsConnection(userId);
   if (conn && conn.suat && conn.primary_ad_account_id) {
@@ -49321,7 +49359,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1322';
+const BUILD_ID = '20261105-v1323';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
