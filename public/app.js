@@ -2210,6 +2210,7 @@ async function bbBandejaContent() {
   const resueltas = items.filter((i) => i.estado !== 'pendiente').slice(0, 8);
   const focusId = (location.hash.match(/[?&]item=(\d+)/) || [])[1];
   const card = (i) => `<article class="bb-bcard${String(i.id) === String(focusId) ? ' foco' : ''}" id="bb-item-${i.id}">
+      ${i.negocio ? `<div class="bb-bcard-neg"><strong>${esc(i.negocio)}</strong>${i.ig ? `<span>@${esc(String(i.ig).replace(/^@+/, ''))}</span>` : ''}</div>` : ''}
       <div class="bb-card-head">${bbAvatarHTML(i.poder, i.avatar, i.nombre, i.color)}<div><strong>${esc(i.nombre)}</strong><span class="bb-card-rol">espera tu OK · ${bbHace(i.espera_desde)}</span></div></div>
       <h3>${esc(i.que)}</h3>
       ${i.propuesta ? `<p class="bb-bcard-prop">${esc(i.propuesta)}</p>` : ''}
@@ -3562,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1307';
+const PZ_BUILD = '20261105-v1308';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un

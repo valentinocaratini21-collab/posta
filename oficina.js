@@ -161,11 +161,18 @@ function listarBandeja(db, uid, { soloPendientes } = {}) {
   const rows = soloPendientes
     ? db.prepare("SELECT * FROM oficina_bandeja WHERE user_id = ? AND estado = 'pendiente' ORDER BY espera_desde ASC").all(uid)
     : db.prepare('SELECT * FROM oficina_bandeja WHERE user_id = ? ORDER BY espera_desde DESC LIMIT 60').all(uid);
+  let negP = '', igP = '';
+  try { const p = db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(uid); if (p) { negP = p.business_name || ''; igP = p.ig_username || ''; } } catch (e) {}
   return rows.map((r) => {
     const def = niveles.IDENTIDADES[r.poder] || {};
+    let ctx = null; try { ctx = r.contexto_json ? JSON.parse(r.contexto_json) : null; } catch (e) {}
     return {
       ...r,
-      contexto: r.contexto_json ? JSON.parse(r.contexto_json) : null,
+      contexto: ctx,
+      // (LOTE BANDEJA-NOMBRE) Toda tarjeta nombra a su negocio: el del
+      // contexto del ítem o, si no lo trae, el de la cuenta dueña.
+      negocio: (ctx && ctx.negocio) || negP,
+      ig: (ctx && ctx.ig) || igP,
       nombre: def.nombre || r.poder, color: def.color || '#D6A463', avatar: def.avatar || null,
     };
   });

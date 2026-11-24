@@ -11,6 +11,48 @@ const oficina = require('./oficina');
 const niveles = require('./niveles');
 const preguntasPosteos = require('./preguntas-posteos'); // PP-PREGUNTAS-POSTEOS-OFICINA
 
+// (LOTE BANDEJA-NOMBRE · defecto del dueño 24/11) Las cuentas demo de
+// la oficina (84 Café Aroma y las vidriera 86–90) no dejan decisiones
+// en la Bandeja: su semana es material de muestra, no trabajo real.
+const CUENTAS_DEMO = [84, 86, 87, 88, 89, 90];
+function esCuentaDemo(uid) { return CUENTAS_DEMO.includes(Number(uid)); }
+
+// Los datos reales del negocio dueño de la tarjeta: nombre, @, la
+// estrella de su fundamento (si la declaró) y su idioma.
+function datosNegocio(db, uid) {
+  let negocio = '', ig = '', estrella = '', en = false;
+  try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); en = !!(u && u.lang === 'en'); } catch (e) {}
+  try {
+    const p = db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(uid);
+    if (p) { negocio = p.business_name || ''; ig = p.ig_username || ''; }
+  } catch (e) {}
+  if (!negocio) { try { const f = db.prepare("SELECT hecho FROM oficina_fundamento WHERE user_id = ? AND clave = 'nombre'").get(uid); if (f) negocio = f.hecho || ''; } catch (e) {} }
+  try { const f = db.prepare("SELECT hecho FROM oficina_fundamento WHERE user_id = ? AND clave LIKE '%estrella%' ORDER BY ts DESC LIMIT 1").get(uid); if (f) estrella = f.hecho || ''; } catch (e) {}
+  return { negocio, ig, estrella, en };
+}
+
+// Concordancia: «1 posteo» / «N posteos», en el idioma de la cuenta.
+function nPosteos(n, en) { return en ? (n === 1 ? '1 post' : n + ' posts') : (n === 1 ? '1 posteo' : n + ' posteos'); }
+function nBorradores(n, en) { return en ? (n === 1 ? '1 draft' : n + ' drafts') : (n === 1 ? '1 borrador' : n + ' borradores'); }
+function nProgramados(n, en) { return en ? (n === 1 ? '1 scheduled' : n + ' scheduled') : (n === 1 ? '1 programado' : n + ' programados'); }
+function nPublicados(n, en) { return en ? (n === 1 ? '1 published' : n + ' published') : (n === 1 ? '1 publicado' : n + ' publicados'); }
+
+// Los textos de la tarjeta de la semana, desde la cuenta real: nada de
+// texto demo — el negocio, su estrella y su idioma mandan.
+function textosSemana(db, uid, c) {
+  const d = datosNegocio(db, uid);
+  const nom = d.negocio || (d.en ? 'your business' : 'tu negocio');
+  const detalle = `${nBorradores(c.borradores, d.en)} · ${nProgramados(c.programados, d.en)} · ${nPublicados(c.publicados, d.en)}`;
+  const resumen = d.en
+    ? `Posty built the week for ${nom} from its foundation: ${nPosteos(c.total, true)} (${detalle})`
+    : `Posty armó la semana de ${nom} desde su fundamento: ${nPosteos(c.total, false)} (${detalle})`;
+  const que = d.en ? 'Your Instagram week is ready' : 'Tu semana de Instagram está lista';
+  const propuesta = d.en
+    ? `Posty made ${nPosteos(c.total, true)} from your foundation: your price list, your palette${d.estrella ? ' and your star (' + d.estrella + ')' : ''}. If you accept, the week is set and Posty's autopilot posts on its own, as always on your account.`
+    : `Posty generó ${nPosteos(c.total, false)} desde tu fundamento: tu lista de precios, tu paleta${d.estrella ? ' y tu estrella (' + d.estrella + ')' : ''}. Si aceptás, la semana queda aceptada y el autopiloto de Posty publica solo, como siempre en tu cuenta.`;
+  return { resumen, que, propuesta, datos: d };
+}
+
 function conteoSemana(db, uid) {
   let rows = [];
   try { rows = db.prepare('SELECT status, COUNT(*) AS n FROM posts WHERE user_id = ? GROUP BY status').all(uid); } catch (e) {}
@@ -25,20 +67,38 @@ function conteoSemana(db, uid) {
 // Idempotente: una sola salida «semana» por cuenta en el programa.
 async function sincronizarSemana(db, uid) {
   const c = conteoSemana(db, uid);
+  if (esCuentaDemo(uid)) return { ok: true, semana: false, causa: 'cuenta_demo', conteo: c };
   if (!c.total) return { ok: true, semana: false, causa: 'sin_posteos_todavia', conteo: c };
-  const ya = db.prepare("SELECT id FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'semana' AND salida = 1").get(uid);
-  if (ya) return { ok: true, semana: true, ya_registrada: true, conteo: c };
+  const ya = db.prepare("SELECT id, registro_ref FROM oficina_registros WHERE user_id = ? AND poder = 'posty' AND tipo = 'semana' AND salida = 1").get(uid);
+  if (ya) {
+    // Ítems de la era del texto demo: si la tarjeta de esta semana quedó
+    // sin el negocio en su contexto, se reescribe con los datos reales
+    // de la cuenta (su nombre, su idioma, su conteo) en esta misma sync.
+    try {
+      const t = textosSemana(db, uid, c);
+      const items = db.prepare("SELECT id, contexto_json FROM oficina_bandeja WHERE user_id = ? AND poder = 'posty' AND registro_ref = ?").all(uid, ya.registro_ref || '');
+      for (const it of items) {
+        let ctx = null; try { ctx = it.contexto_json ? JSON.parse(it.contexto_json) : null; } catch (e) {}
+        if (ctx && ctx.tipo === 'semana_posty' && !ctx.negocio) {
+          ctx.negocio = t.datos.negocio; ctx.ig = t.datos.ig;
+          db.prepare('UPDATE oficina_bandeja SET que = ?, propuesta = ?, contexto_json = ? WHERE id = ?').run(t.que, t.propuesta, JSON.stringify(ctx), it.id);
+        }
+      }
+    } catch (e) {}
+    return { ok: true, semana: true, ya_registrada: true, conteo: c };
+  }
+  const t = textosSemana(db, uid, c);
   const sal = oficina.registrarSalida(db, uid, {
     poder: 'posty', tipo: 'semana',
-    resumen: `Posty armó la semana de Café Aroma desde su fundamento: ${c.total} posteos (${c.borradores} borradores · ${c.programados} programados · ${c.publicados} publicados)`,
+    resumen: t.resumen,
     recibo: { motor: 'Posty (su generador de semanas)', posteos: c.total, borradores: c.borradores, programados: c.programados, publicados: c.publicados },
     evento_nivel: 'semana_generada',
   });
   await oficina.crearBandejaItem(db, uid, {
     poder: 'posty',
-    que: 'Tu semana de Instagram está lista',
-    propuesta: `Posty generó ${c.total} posteos desde tu fundamento: tu lista de precios, tu paleta y tu estrella (el Brunch Aroma para dos). Si aceptás, la semana queda aceptada y el autopiloto de Posty publica solo, como siempre en tu cuenta.`,
-    contexto: { tipo: 'semana_posty', registro_ref: sal.registro_ref },
+    que: t.que,
+    propuesta: t.propuesta,
+    contexto: { tipo: 'semana_posty', registro_ref: sal.registro_ref, negocio: t.datos.negocio, ig: t.datos.ig },
     registro_ref: sal.registro_ref,
   });
   return { ok: true, semana: true, salida: sal.registro_ref, conteo: c };
@@ -62,7 +122,7 @@ function hookBandeja(db, uid, item, accion) {
   if (accion === 'aceptar') {
     niveles.registrarEvento(db, uid, {
       poder: 'posty', evento: 'semana_aceptada',
-      hecho: 'El dueño aceptó la semana entera de Café Aroma', registro_ref: item.registro_ref || '',
+      hecho: 'El dueño aceptó la semana entera de ' + (((item.contexto || {}).negocio) || 'tu negocio'), registro_ref: item.registro_ref || '',
     }, oficina.metricas(db, uid));
     oficina.registrarRegistro(db, uid, {
       poder: 'posty', tipo: 'semana_aceptada',
@@ -87,7 +147,7 @@ function rutaChat(db, uid) {
   }
   const pend = oficina.listarBandeja(db, uid, { soloPendientes: true }).filter((i) => i.poder === 'posty').length;
   return {
-    reply: `Tu semana ya está armada desde tu fundamento: ${c.total} posteos (${c.publicados} publicados · ${c.programados} programados · ${c.borradores} en borrador).${pend ? ' Te está esperando en la Bandeja para tu OK.' : ' El autopiloto publica solo, como siempre.'}`,
+    reply: `Tu semana ya está armada desde tu fundamento: ${nPosteos(c.total, false)} (${c.publicados} publicados · ${c.programados} programados · ${c.borradores} en borrador).${pend ? ' Te está esperando en la Bandeja para tu OK.' : ' El autopiloto publica solo, como siempre.'}`,
   };
 }
 
@@ -99,7 +159,7 @@ function rutaDiseno(db, uid) {
     return { reply: 'El diseño de tus piezas es mío: trabajo con tu paleta, tu estrella y tu fundamento. Todavía no hay piezas esta semana; cuando el motor las arme, las ves en tu Agenda y en el río.' };
   }
   return {
-    reply: `El diseño de tus piezas es mío: salen de tu paleta y tu fundamento, nunca de una plantilla genérica. Esta semana hay ${c.total} posteos armados (${c.borradores} en borrador · ${c.programados} programados · ${c.publicados} publicados).`,
+    reply: `El diseño de tus piezas es mío: salen de tu paleta y tu fundamento, nunca de una plantilla genérica. Esta semana hay ${nPosteos(c.total, false)} armados (${c.borradores} en borrador · ${c.programados} programados · ${c.publicados} publicados).`,
   };
 }
 
