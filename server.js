@@ -41624,8 +41624,13 @@ app.get('/conserje', (req, res) => {
   if (adminToken && puertaConserjeEsCasa(req)) {
     try {
       const html = fs.readFileSync(path.join(__dirname, 'public', 'conserje.html'), 'utf8');
-      const tag = '<script src="/conserje.js?v=2"></script>';
-      if (html.includes(tag)) {
+      // (LOTE SIEMBRA-SELLO · auditoría 24/11) La siembra busca la
+      // etiqueta de conserje.js por patrón, agnóstica al sello: el
+      // literal con ?v=2 murió cuando el sello avanzó (hoy ?v=11) y
+      // el acceso caía a la puerta manual en silencio.
+      const tagM = html.match(/<script src="\/conserje\.js\?v=\d+"><\/script>/);
+      if (tagM) {
+        const tag = tagM[0];
         const siembra = '<script>try{localStorage.setItem(\'posta_admin_token\',' + JSON.stringify(adminToken) + ')}catch(e){}</script>';
         return res.type('html').send(html.replace(tag, siembra + tag));
       }
@@ -49269,7 +49274,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1311';
+const BUILD_ID = '20261105-v1312';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
