@@ -525,7 +525,7 @@ function produccionManana(db, filas, opts, nowMs) {
     .map((r) => Number(r.user_id)));
   const items = [];
   for (const f of filas) {
-    if (f.clase !== 'pago' && f.clase !== 'prueba_corriendo') continue;
+    if (f.clase !== 'pago' && f.clase !== 'prueba_corriendo' && f.clase !== 'prueba_pendiente') continue;
     if (f.publishing_stopped) continue;
     // La prueba que termina hoy ya no corre mañana: su mañana no se
     // le exige (su cierre vive en la derecha, clase plata).
@@ -534,6 +534,13 @@ function produccionManana(db, filas, opts, nowMs) {
     const it = porId[uid] || null;
     const post = it ? (it.post || null) : null;
     const decision = it ? (it.decision || null) : null;
+    // (LOTE POSTEO-1-PRUEBA-PENDIENTE · M265, auditoría 24/11) La
+    // prueba pendiente entra SOLO con su posteo de mañana en la
+    // cola — su posteo 1, el que el operador tiene que poder
+    // decidir desde la bandeja. Sin posteo de mañana queda fuera:
+    // todavía no conectó, su mañana no se le exige y no nace una
+    // «falta» imposible de resolver.
+    if (f.clase === 'prueba_pendiente' && !post) continue;
     let estado = 'falta', sinPosteoDecidido = false;
     if (post && post.status === 'scheduled') estado = 'listo';
     else if (!post && decision && decision.decision === 'no_sale') { estado = 'listo'; sinPosteoDecidido = true; }
