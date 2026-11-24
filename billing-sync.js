@@ -46,6 +46,18 @@ function targetMult(db, userId) {
   }
   const cm = codigoMultDe(db, userId);
   if (cm < m) m = cm;
+  // (LOTE ESPACIOS-PRECIO) El segundo negocio del mismo login con
+  // otro espacio activo conserva su 20% off en la reconciliación.
+  try {
+    const link = db.prepare('SELECT login_user_id, kind FROM login_spaces WHERE space_user_id = ?').get(userId);
+    if (link && link.kind === 'negocio') {
+      const login = Number(link.login_user_id);
+      const ids = [login];
+      for (const r of db.prepare('SELECT space_user_id FROM login_spaces WHERE login_user_id = ?').all(login)) ids.push(Number(r.space_user_id));
+      const activo = ids.some((oid) => { if (Number(oid) === Number(userId)) return false; const u = db.prepare('SELECT plan_status FROM users WHERE id = ?').get(oid); return !!(u && u.plan_status === 'active'); });
+      if (activo && 0.8 < m) m = 0.8;
+    }
+  } catch (e) {}
   return m;
 }
 

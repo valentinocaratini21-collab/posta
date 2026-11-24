@@ -5629,6 +5629,10 @@ app.get('/api/auth/me', (req, res) => {
       // cliente pinta la flecha de cambio de cuenta en el primer render
       // con este dato de sesión, sin esperar a que vuelva la lista.
       spaces_count: (() => { try { const r = db.prepare('SELECT COUNT(*) AS n FROM login_spaces WHERE login_user_id = ?').get(pzLoginIdDe(req)); return 1 + (r ? Number(r.n || 0) : 0); } catch (e) { return 1; } })(),
+      // (LOTE ESPACIOS-PRECIO) Qué espacio es esta sesión y si le toca
+      // el 20% de segundo negocio: la barra de pago pinta con esto.
+      space_kind: (() => { try { return pzEspacioInfo(user.id).kind; } catch (e) { return 'principal'; } })(),
+      space_discount: (() => { try { const i = pzEspacioInfo(user.id); return i.kind === 'negocio' && i.otroActivo; } catch (e) { return false; } })(),
     },
   });
 });
@@ -28755,6 +28759,25 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS discount_redemptions (
 function pzLoginIdDe(req) {
   return (req.session && (req.session.loginUserId || req.session.userId)) || 0;
 }
+// (LOTE ESPACIOS-PRECIO) Qué es este espacio para su login y si otro
+// espacio del mismo login ya está activo (pagando). Sin fila en
+// login_spaces, el usuario ES el principal de su login.
+function pzEspacioInfo(userId) {
+  try {
+    const link = db.prepare('SELECT login_user_id, kind FROM login_spaces WHERE space_user_id = ?').get(userId);
+    if (!link) return { kind: 'principal', login: Number(userId), otroActivo: false };
+    const login = Number(link.login_user_id);
+    const ids = [login];
+    for (const r of db.prepare('SELECT space_user_id FROM login_spaces WHERE login_user_id = ?').all(login)) ids.push(Number(r.space_user_id));
+    let otroActivo = false;
+    for (const oid of ids) {
+      if (oid === Number(userId)) continue;
+      const u = db.prepare('SELECT plan_status FROM users WHERE id = ?').get(oid);
+      if (u && u.plan_status === 'active') { otroActivo = true; break; }
+    }
+    return { kind: String(link.kind || 'negocio'), login, otroActivo };
+  } catch (e) { return { kind: 'principal', login: Number(userId), otroActivo: false }; }
+}
 function pzEspaciosDe(loginId, currentId) {
   const out = [];
   const push = (uid, kind) => {
@@ -30563,6 +30586,13 @@ function descuentoEfectivoInfo(userId) {
     const cm = Math.max(0, 1 - (Number(v.percent) || 0) / 100);
     if (cm < mult) { mult = cm; fuente = 'codigo'; }
   }
+  // (LOTE ESPACIOS-PRECIO · opción 1 del dueño 24/11) El segundo
+  // NEGOCIO del mismo login paga 20% off mientras otro espacio del
+  // login esté activo. La vidriera no entra: va incluida.
+  try {
+    const ei = pzEspacioInfo(userId);
+    if (ei.kind === 'negocio' && ei.otroActivo && 0.8 < mult) { mult = 0.8; fuente = 'espacio'; }
+  } catch (e) {}
   return {
     mult, fuente, percent_off: Math.round((1 - mult) * 100),
     codigo: v ? { code: v.code, percent: Number(v.percent) || 0, duration_months: v.duration_months == null ? null : Number(v.duration_months), redeemed_at: v.redeemed_at, expires_at: v.expires_at } : null,
@@ -49239,7 +49269,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1306';
+const BUILD_ID = '20261105-v1307';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

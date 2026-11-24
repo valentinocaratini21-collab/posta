@@ -3562,7 +3562,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1306';
+const PZ_BUILD = '20261105-v1307';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32651,9 +32651,17 @@ function pzPagarAhoraHTML(en) {
   try {
     if (typeof ME === 'undefined' || !ME) return '';
     if (ME.plan_status === 'active') return '';
+    // (LOTE ESPACIOS-PRECIO · opción 1 del dueño 24/11) La vidriera va
+    // incluida en el plan del negocio: la barra lo dice y no cobra.
+    if (ME.space_kind === 'vidriera') {
+      return `<div class="pz-pagar-ahora" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#0A1E33;border-radius:16px;padding:12px 14px;margin:0 0 14px">
+      <div style="flex:1 1 180px;min-width:160px"><b style="color:#fff;font-size:14.5px">${en ? 'This storefront is included' : 'Esta vidriera está incluida'}</b><br><span style="color:#BFD9EA;font-size:12.5px">${en ? 'It runs on your business\u2019s Posty plan \u2014 there is nothing separate to pay here.' : 'Funciona con el plan Posty de tu negocio \u2014 acá no hay nada separado para pagar.'}</span></div>
+    </div>`;
+    }
+    const pzPaPrecio = ME.space_discount ? 'USD 159' : 'USD 199';
     return `<div class="pz-pagar-ahora" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#0A1E33;border-radius:16px;padding:12px 14px;margin:0 0 14px">
       <div style="flex:1 1 180px;min-width:160px"><b style="color:#fff;font-size:14.5px">${en ? 'Already decided?' : '¿Ya lo tenés decidido?'}</b><br><span style="color:#BFD9EA;font-size:12.5px">${en ? 'Skip the trial — your week and your first post stay free either way.' : 'Salteá la prueba — tu semana y tu primer posteo siguen gratis igual.'}</span></div>
-      <button type="button" class="pz-pa-btn" onclick="pzPagarAhora()" style="background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:11px 18px;font-weight:800;font-size:14.5px;cursor:pointer;white-space:nowrap">${en ? 'I want Posty now — USD 199/mo' : 'Quiero Posty ahora — USD 199/mes'}</button>
+      <button type="button" class="pz-pa-btn" onclick="pzPagarAhora()" style="background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:11px 18px;font-weight:800;font-size:14.5px;cursor:pointer;white-space:nowrap">${en ? 'I want Posty now — ' + pzPaPrecio + '/mo' : 'Quiero Posty ahora — ' + pzPaPrecio + '/mes'}</button>
       <div id="pzPaMsg" role="status" style="flex:1 1 100%;font-size:12.5px;line-height:1.45;color:#BFD9EA"></div>
     </div>`;
   } catch (e) { return ''; }
