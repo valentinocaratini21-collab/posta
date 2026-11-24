@@ -2120,7 +2120,7 @@ function bbShell(tab, content) {
   return `<div class="bb-app${tab === 'inicio' ? ' bb-glass-inicio' : ''}${(tab === 'jardin-posty' || tab === 'analisis' || tab === 'ajustes' || tab === 'subir' || tab === 'schedule' || tab === 'bandeja' || tab === 'post' || tab === 'numeros' || tab === 'dogfood' || tab === 'ads' || tab === 'admin' || tab === 'conserje') ? ' bb-glass-pantallas' : ''}">
     ${pzShellHeadHTML(tab)}
     <main class="bb-main">${content}</main>
-    <nav class="bb-bar"><div class="bb-side-brand"><img class="bb-side-ava" src="/ai-avatar.png" alt=""><span class="bb-side-name">Posty<span class="pdot">.</span></span></div>${tab === 'venty' ? pzVentyNavHTML(pzVentySub(), 'bb') : tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}</nav><!-- (LOTE ICONOS-BARRA · 20/11) orden Inicio · Subir · Ads: Subir queda como acción central, con el set «Hilo» --><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
+    <nav class="bb-bar">${tab === 'venty' ? pzVentyNavHTML(pzVentySub(), 'bb') : tabBtn('inicio', '#/app/inicio', gzT('Inicio', 'Home')) + tabBtn('subir', '#/app/subir', gzT('Subir', 'Upload')) + tabBtn('ads', '#/app/ads', gzT('Ads', 'Ads'))}</nav><!-- (LOTE ICONOS-BARRA · 20/11) orden Inicio · Subir · Ads: Subir queda como acción central, con el set «Hilo» --><!-- (LOTE SIN-TAB-AJUSTES · 13/11) sin tab de Ajustes: se entra desde la ruedita del encabezado -->
     ${rsShareSheetHTML()}
   </div>`;
 }
@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1281';
+const PZ_BUILD = '20261105-v1282';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un

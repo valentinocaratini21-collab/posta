@@ -103,9 +103,9 @@ function seccionA() {
 
   const idxEs = fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8');
   const idxEn = fs.readFileSync(path.join(ROOT, 'public/en/index.html'), 'utf8');
-  t('A4 [FIX] sellos: app.js?v=910 y styles.css?v=20261330 (ES) · styles.css?v=20261330 (EN) · sin sellos viejos',
-    idxEs.includes('/app.js?v=910') && idxEs.includes('/styles.css?v=20261330')
-    && idxEn.includes('/styles.css?v=20261330')
+  t('A4 [FIX] sellos: app.js?v=911 y styles.css?v=20261331 (ES) · styles.css?v=20261331 (EN) · sin sellos viejos',
+    idxEs.includes('/app.js?v=911') && idxEs.includes('/styles.css?v=20261331')
+    && idxEn.includes('/styles.css?v=20261331')
     && !idxEs.includes('/styles.css?v=20261328') && !idxEn.includes('/styles.css?v=20261328')
     && !idxEs.includes('/app.js?v=902'));
 
@@ -172,10 +172,10 @@ function seccionAHotfix() {
   const app = fs.readFileSync(path.join(ROOT, 'public/app.js'), 'utf8');
   t('A7 [HOTFIX] las dos columnas declaran grid-row:1 (arrancan alineadas arriba)',
     css.includes('.iwp-main{grid-column:1;grid-row:1') && css.includes('.iwp-rail{grid-column:2;grid-row:1}'));
-  t('A8 [HOTFIX] bbShell gana su sidebar: marca en la barra + bloque de escritorio',
-    app.includes('bb-side-brand') && css.includes('.bb-app .bb-bar') && css.includes('.bb-side-brand{display:flex'));
-  t('A9 [HOTFIX] las pestañas de la sidebar no se estiran (flex:none contra .bb-bar .bb-tab{flex:1})',
-    css.includes('.bb-app .bb-tab{flex:none;'));
+  t('A8 [ALCANCE 21:44] bbShell NO se toca: sin marca bb-side-brand ni bloque de sidebar para ese shell',
+    !app.includes('bb-side-brand') && !css.includes('.bb-app .bb-bar') && !css.includes('bb-side-brand'));
+  t('A9 [ALCANCE 21:44] la sidebar marina del lote es solo el drawer de appShell',
+    css.includes('.drawer{background:#0A1E33'));
   t('A10 [HOTFIX] el título del posteo corta en palabra y cierra con «…» (capFull)',
     app.includes('const capFull = String((p && p.caption)') && app.includes("+ '…') : capFull"));
 }
@@ -210,15 +210,15 @@ async function seccionB(srv) {
   if (!srv || !srv.up) return;
   const rIdx = await fetch(srv.base + '/');
   const idxTxt = await rIdx.text();
-  t('B2 [FIX] el index servido trae app.js?v=910 y styles.css?v=20261330',
-    idxTxt.includes('/app.js?v=910') && idxTxt.includes('/styles.css?v=20261330'));
-  const rCss = await fetch(srv.base + '/styles.css?v=20261330');
+  t('B2 [FIX] el index servido trae app.js?v=911 y styles.css?v=20261331',
+    idxTxt.includes('/app.js?v=911') && idxTxt.includes('/styles.css?v=20261331'));
+  const rCss = await fetch(srv.base + '/styles.css?v=20261331');
   const cssTxt = await rCss.text();
   t('B3 [FIX] el styles servido trae el bloque INICIO-WEB-PERFIL',
     rCss.status === 200 && cssTxt.includes('INICIO-WEB-PERFIL') && cssTxt.includes('.drawer{background:#0A1E33'));
   const rEn = await fetch(srv.base + '/en/');
   const enTxt = await rEn.text();
-  t('B4 [FIX] el index EN servido trae styles.css?v=20261330', enTxt.includes('/styles.css?v=20261330'));
+  t('B4 [FIX] el index EN servido trae styles.css?v=20261331', enTxt.includes('/styles.css?v=20261331'));
 }
 
 async function seccionC(srv) {
@@ -349,11 +349,11 @@ async function seccionC(srv) {
             sinScrollX: document.documentElement.scrollWidth <= window.innerWidth + 1,
           };
         });
-        t('C10 [HOTFIX] bbShell en escritorio: la barra es la sidebar marina fija a la izquierda',
-          !!d.barR && d.barR.left === 0 && d.barR.top === 0 && d.barR.height >= 890 && d.barBg === 'rgb(10, 30, 51)',
-          JSON.stringify({ bar: d.barR && [d.barR.left, d.barR.top, d.barR.width, d.barR.height], bg: d.barBg }));
-        t('C11 [HOTFIX] la marca (cara + Posty.) se ve en la sidebar y las pestañas son compactas',
-          d.brandVisible && d.tabH >= 36 && d.tabH <= 60, 'brand=' + d.brandVisible + ' tabH=' + d.tabH);
+        t('C10 [ALCANCE 21:44] bbShell en escritorio queda como estaba: su barra sigue abajo',
+          !!d.barR && d.barR.bottom >= 899 && !d.brandVisible,
+          JSON.stringify({ bar: d.barR && [d.barR.left, d.barR.bottom], brand: d.brandVisible }));
+        t('C11 [ALCANCE 21:44] sin marca de sidebar en bbShell y pestañas de barra estándar',
+          !d.brandVisible && d.tabH >= 30 && d.tabH <= 80, 'brand=' + d.brandVisible + ' tabH=' + d.tabH);
         t('C12 [HOTFIX] bbShell: las dos columnas arrancan alineadas y sin scroll horizontal',
           !!d.mainR && !!d.railR && Math.abs(d.mainR.top - d.railR.top) <= 8 && d.sinScrollX,
           JSON.stringify({ mainTop: d.mainR && d.mainR.top, railTop: d.railR && d.railR.top }));
