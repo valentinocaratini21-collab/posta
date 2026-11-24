@@ -5005,6 +5005,10 @@ function httpsGet(url, timeoutMs, extraHeaders) {
 // DOBLE escapado (\\u2022 en el HTML = \u2022 tras un nivel = • tras
 // dos): se decodifica en dos pasadas, cada una de un solo nivel, para
 // no comerse una barra ni decodificar de más.
+// (LOTE NOMBRE-COMPLETO · dueño 24/11) El nombre NO se corta en la «•»:
+// el nombre del producto es el nombre COMPLETO de Instagram en todas las
+// cuentas y en todo estado (la versión vieja devolvía solo la primera
+// parte: «Posty • Your community managers» volvía como «Posty»).
 function decodeIgName(raw) {
   let name = String(raw || '');
   for (let k = 0; k < 2; k++) {
@@ -5018,8 +5022,7 @@ function decodeIgName(raw) {
     });
   }
   name = name.replace(/[\u0000-\u001F]/g, '');
-  const cut = name.split(/\s*•\s*/)[0].trim();
-  return (cut || name).trim().slice(0, 60);
+  return name.trim().slice(0, 60);
 }
 
 async function fetchIgProfile(ig) {

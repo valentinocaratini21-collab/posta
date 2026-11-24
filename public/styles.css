@@ -2109,7 +2109,7 @@ textarea.in{resize:vertical;min-height:96px}
    de una pieza reutiliza la capa .scf-pop existente (mismo vault). */
 .hf-wrap{max-width:560px;margin:0 auto;padding:6px 0 96px;background:#fff;min-height:70vh}
 .hf-head{padding:2px 16px 0;background:#fff}
-.hf-user{display:flex;align-items:center;flex-wrap:nowrap;min-width:0;font-size:19px;font-weight:800;letter-spacing:-.2px;margin:2px 0 12px;color:#0a1e33}.hf-user>*{flex:none}.hf-user>.hf-user-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hf-verified{display:inline-flex;vertical-align:-3px;margin-left:6px;flex:none}.hf-verified svg{width:16px;height:16px;display:block}
+.hf-user{display:flex;align-items:center;flex-wrap:nowrap;min-width:0;font-size:19px;font-weight:800;letter-spacing:-.2px;margin:2px 0 12px;color:#0a1e33}.hf-user>*{flex:none}.hf-user>.hf-user-name{flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap}.hf-verified{display:inline-flex;vertical-align:-3px;margin-left:6px;flex:none}.hf-verified svg{width:16px;height:16px;display:block}
 .hf-prow{display:flex;align-items:center;gap:18px}
 .hf-ava{flex:none;position:relative}
 /* (v360) Nota de IG sobre la foto y línea gris de categoría pública */
@@ -5217,7 +5217,7 @@ body.pz-postchat-open{overflow:hidden}
    cambio es instantáneo, sin riesgo de tirones con el scroll en iOS. */
 #inicioView.hf-collapsed .hf-head{display:flex;align-items:center;gap:10px;padding:10px 12px}
 #inicioView.hf-collapsed .hf-head .hf-prow{order:1;flex:none}
-#inicioView.hf-collapsed .hf-head .hf-user{order:2;margin:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#inicioView.hf-collapsed .hf-head .hf-user{order:2;margin:0;font-size:15px;white-space:nowrap;overflow:hidden}
 #inicioView.hf-collapsed .hf-head .hf-name{order:3;margin:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #inicioView.hf-collapsed .hf-head .hf-ava-in{width:40px;height:40px}
 #inicioView.hf-collapsed .hf-head .hf-ava-letter{font-size:16px}
@@ -7255,3 +7255,5 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-spaces-txt b{color:#0a1e33;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pz-spaces-txt span{color:#5b6b7a;font-size:13px}
 .pz-spaces-check{color:#2793c8;flex:none;display:inline-flex}
+/* (LOTE NOMBRE-COMPLETO) Colapsado: el nombre entra entero con letra menor, sin «…» */
+#inicioView.hf-collapsed .hf-head .hf-user .hf-user-name{font-size:12.5px}

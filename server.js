@@ -28601,6 +28601,15 @@ function homeDisplayOverlay(uid, prof, payload) {
     // guardado sigue mandando antes de la conexión (kit), que es
     // cuando todavía no hay nombre de Instagram que espejar.
     if (pn && !(out && out.source === 'read')) out.name = pn;
+    // (LOTE NOMBRE-COMPLETO · dueño 24/11) Con lectura real, si el nombre
+    // leído y el guardado son la misma raíz y uno es la forma cortada del
+    // otro (una lectura vieja del embed cortaba en la «•»), manda la forma
+    // COMPLETA: el nombre del producto es el nombre completo de Instagram
+    // en todo estado. Si difieren de raíz, manda la lectura (NOMBRE-IG).
+    if (pn && out && out.source === 'read' && out.name) {
+      const rn = String(out.name).trim();
+      if (rn && pn !== rn && (pn.startsWith(rn) || rn.startsWith(pn))) out.name = pn.length > rn.length ? pn : rn;
+    }
     if (pb.trim()) { out.bio = pb; out.bio_unread = false; }
     if (pl) out.link = pl;
     // (LOTE CARTA-DESTINO-PERFIL · 23/11) El payload mismo también se
@@ -28672,9 +28681,15 @@ function pzEspaciosDe(loginId, currentId) {
     const p = getProfile(uid) || {};
     let pic = null, snapName = '';
     try { const snap = homeSnapshotGet(uid); if (snap && snap.payload) { pic = snap.payload.pic || null; snapName = snap.payload.name || ''; } } catch (e) {}
+    // (LOTE NOMBRE-COMPLETO) Entre la lectura y el nombre guardado, si uno
+    // es la forma cortada del otro manda la completa (misma regla del overlay).
+    let fullName = snapName || '';
+    const pnS = p.profile_name || '';
+    if (fullName && pnS && fullName !== pnS && (fullName.startsWith(pnS) || pnS.startsWith(fullName))) fullName = fullName.length > pnS.length ? fullName : pnS;
+    if (!fullName) fullName = pnS;
     out.push({
       user_id: uid, kind: kind || 'negocio',
-      name: snapName || p.profile_name || p.business_name || (p.ig_username ? '@' + String(p.ig_username).replace(/^@+/, '') : ''),
+      name: fullName || p.business_name || (p.ig_username ? '@' + String(p.ig_username).replace(/^@+/, '') : ''),
       handle: String(p.ig_username || '').replace(/^@+/, ''),
       pic, lang: u.lang || 'es', current: uid === currentId,
     });
@@ -49006,7 +49021,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1288';
+const BUILD_ID = '20261105-v1289';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

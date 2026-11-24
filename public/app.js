@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1288';
+const PZ_BUILD = '20261105-v1289';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27071,7 +27071,7 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
-  if (tab === 'inicio') setTimeout(() => { try { pzSpacesAplicar(); } catch (e) {} }, 0);
+  if (tab === 'inicio') setTimeout(() => { try { pzNombreAjustar(); } catch (e) {} try { pzSpacesAplicar(); } catch (e) {} }, 0);
   // (LOTE BILLETERA-APPLE-PAY) El botón de Apple Pay se monta tras pintar
   // el tab Ads (y tras cada re-pintado de la billetera en pzAdsPintar):
   // si el dispositivo no lo soporta, la sección queda oculta.
@@ -35443,6 +35443,23 @@ async function pzIdeaCargar() {
 }
 function pzIdeaBind() { pzIdeaCargar(); }
 
+/* ---------- LOTE NOMBRE-COMPLETO · el nombre entra entero, sin truncar ----------
+   (Dueño 24/11) El nombre del perfil espejo entra COMPLETO en la línea con
+   el tilde: si no entra, se achica la letra hasta que entre — nunca se
+   corta con «…» (reemplaza el ellipsis de NOMBRE-VERIFICADO-LINEA v1287). */
+function pzNombreAjustar() {
+  document.querySelectorAll('#inicioView .hf-user').forEach((u) => {
+    const n = u.querySelector('.hf-user-name');
+    if (!n) return;
+    n.style.fontSize = '';
+    const base = parseFloat(window.getComputedStyle(n).fontSize) || 17.5;
+    let avail = u.clientWidth;
+    u.querySelectorAll(':scope > *').forEach((el) => { if (el !== n) avail -= el.getBoundingClientRect().width + 6; });
+    let fs = base, w = n.scrollWidth, guard = 0;
+    while (w > avail && fs > 10 && guard < 40) { fs -= 0.5; n.style.fontSize = fs + 'px'; w = n.scrollWidth; guard++; }
+  });
+}
+
 /* ---------- LOTE CAMBIO-CUENTA · cambiar de espacio desde el encabezado ----------
    El nombre del perfil espejo es la puerta: si el login tiene más de un
    espacio, el encabezado gana un chevron y al tocarlo se abre la hoja de
@@ -35470,6 +35487,7 @@ async function pzSpacesAplicar() {
   chev.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   u.appendChild(chev);
   u.addEventListener('click', () => pzSpacesAbrir());
+  try { pzNombreAjustar(); } catch (e) {}
 }
 function pzSpacesCerrar() { const b = document.getElementById('pzSpacesBack'); if (b) b.remove(); }
 function pzSpacesAbrir() {
