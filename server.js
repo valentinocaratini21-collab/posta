@@ -3707,6 +3707,7 @@ app.post('/api/auth/register', (req, res) => {
     // (email + token; la contraseña NUNCA) para "Continuar como" de un toque.
     req.session.regenerate(() => {
       req.session.userId = newUserId;
+      req.session.loginUserId = newUserId;
       let dt = null;
       try { dt = deviceTokens.issue(db, newUserId); } catch (e) { console.error('[posta] device token (register):', e.message); }
       res.json({ ok: true, email: email.trim().toLowerCase(), device_token: dt ? dt.token : null, device_token_expires_at: dt ? dt.expiresAt : null });
@@ -3809,6 +3810,7 @@ app.post('/api/auth/login', (req, res) => {
   const wantRemember = remember !== 0 && remember !== false && remember !== '0';
   req.session.regenerate(() => {
     req.session.userId = user.id;
+    req.session.loginUserId = user.id;
     if (!wantRemember) { req.session.cookie.maxAge = null; req.session.cookie.expires = false; }
     // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
     try {
@@ -3860,6 +3862,7 @@ app.post('/api/auth/device-exchange', (req, res) => {
   authHitClear(rlKey);
   req.session.regenerate(() => {
     req.session.userId = out.userId;
+    req.session.loginUserId = out.userId;
     res.json({ ok: true, device_token: out.token, device_token_expires_at: out.expiresAt });
   });
 });
@@ -5554,6 +5557,7 @@ async function socialCallback(provider, req, res) {
     req.session.regenerate((err) => {
       if (err) return res.redirect('/#/login?social=error');
       req.session.userId = user.id;
+    req.session.loginUserId = user.id;
       res.redirect('/#/auth/callback?provider=' + provider + '&new=' + (created ? '1' : '0'));
     });
   } catch (e) {
@@ -28643,6 +28647,100 @@ function homeDisplayOverlay(uid, prof, payload) {
     return out;
   } catch (e) { return payload; }
 }
+/* ---------- LOTE CAMBIO-CUENTA · espacios de un mismo login ----------
+   Un solo ingreso, varios espacios de trabajo: cada negocio o vidriera es
+   su propio usuario (su perfil, su semana, su chat) y el login dueño los
+   enlaza en login_spaces. Cambiar de espacio cambia la sesión entera:
+   todo el producto ya lee req.session.userId. */
+try { db.exec(`CREATE TABLE IF NOT EXISTS login_spaces (
+  login_user_id INTEGER NOT NULL,
+  space_user_id INTEGER NOT NULL,
+  kind TEXT DEFAULT 'negocio',
+  created_at TEXT,
+  PRIMARY KEY (login_user_id, space_user_id)
+)`); } catch (e) {}
+
+function pzLoginIdDe(req) {
+  return (req.session && (req.session.loginUserId || req.session.userId)) || 0;
+}
+function pzEspaciosDe(loginId, currentId) {
+  const out = [];
+  const push = (uid, kind) => {
+    if (!uid || out.some((x) => x.user_id === uid)) return;
+    const u = db.prepare('SELECT id, lang FROM users WHERE id = ?').get(uid);
+    if (!u) return;
+    const p = getProfile(uid) || {};
+    let pic = null, snapName = '';
+    try { const snap = homeSnapshotGet(uid); if (snap && snap.payload) { pic = snap.payload.pic || null; snapName = snap.payload.name || ''; } } catch (e) {}
+    out.push({
+      user_id: uid, kind: kind || 'negocio',
+      name: snapName || p.profile_name || p.business_name || (p.ig_username ? '@' + String(p.ig_username).replace(/^@+/, '') : ''),
+      handle: String(p.ig_username || '').replace(/^@+/, ''),
+      pic, lang: u.lang || 'es', current: uid === currentId,
+    });
+  };
+  push(loginId, 'principal');
+  try {
+    const links = db.prepare('SELECT space_user_id, kind FROM login_spaces WHERE login_user_id = ? ORDER BY created_at, space_user_id').all(loginId);
+    for (const l of links) push(l.space_user_id, l.kind);
+  } catch (e) {}
+  return out;
+}
+app.get('/api/spaces', requireAuth, (req, res) => {
+  const loginId = pzLoginIdDe(req);
+  res.json({ ok: true, login_user_id: loginId, current_user_id: req.session.userId, spaces: pzEspaciosDe(loginId, req.session.userId) });
+});
+app.post('/api/spaces/switch', requireAuth, (req, res) => {
+  const loginId = pzLoginIdDe(req);
+  const target = parseInt((req.body || {}).user_id, 10) || 0;
+  if (!target) return res.status(400).json({ ok: false, error: 'sin_destino' });
+  let allowed = target === loginId;
+  if (!allowed) {
+    try { allowed = !!db.prepare('SELECT 1 FROM login_spaces WHERE login_user_id = ? AND space_user_id = ?').get(loginId, target); } catch (e) {}
+  }
+  if (!allowed) return res.status(403).json({ ok: false, error: 'espacio_no_vinculado' });
+  const u = db.prepare('SELECT id, is_guest FROM users WHERE id = ?').get(target);
+  if (!u || u.is_guest) return res.status(404).json({ ok: false, error: 'espacio_invalido' });
+  req.session.userId = target;
+  req.session.loginUserId = loginId;
+  if (typeof req.session.save === 'function') req.session.save(() => {});
+  res.json({ ok: true, current_user_id: target, spaces: pzEspaciosDe(loginId, target) });
+});
+app.get('/api/admin/spaces', requireAdminToken, (req, res) => {
+  const loginId = parseInt(req.query.login_user_id, 10) || 0;
+  if (!loginId) return res.status(400).json({ ok: false, error: 'sin_login' });
+  res.json({ ok: true, login_user_id: loginId, spaces: pzEspaciosDe(loginId, loginId) });
+});
+app.post('/api/admin/spaces/link', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  const loginId = parseInt(b.login_user_id, 10) || 0;
+  const spaceId = parseInt(b.space_user_id, 10) || 0;
+  if (!loginId || !spaceId || loginId === spaceId) return res.status(400).json({ ok: false, error: 'datos_invalidos' });
+  try {
+    db.prepare("INSERT OR IGNORE INTO login_spaces (login_user_id, space_user_id, kind, created_at) VALUES (?, ?, ?, datetime('now'))").run(loginId, spaceId, String(b.kind || 'negocio'));
+  } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+  res.json({ ok: true, spaces: pzEspaciosDe(loginId, loginId) });
+});
+app.post('/api/admin/spaces/create', requireAdminToken, (req, res) => {
+  const b = req.body || {};
+  const loginId = parseInt(b.login_user_id, 10) || 0;
+  const business = String(b.business_name || '').trim();
+  if (!loginId || !business) return res.status(400).json({ ok: false, error: 'datos_invalidos' });
+  const kind = String(b.kind || 'negocio');
+  const lang = String(b.lang || 'es') === 'en' ? 'en' : 'es';
+  const handle = String(b.ig_username || '').replace(/^@+/, '').trim().toLowerCase();
+  const email = 'espacio+' + loginId + '+' + kind + '+' + Math.random().toString(36).slice(2, 8) + '@posta.interno';
+  try {
+    const hash = bcrypt.hashSync(Math.random().toString(36).slice(2) + String(Date.now()), 10);
+    const info = db.prepare("INSERT INTO users (email, password_hash, plan, plan_status, is_guest, lang, email_verified, created_at) VALUES (?, ?, 'posty', 'active', 0, ?, 1, datetime('now'))").run(email, hash, lang);
+    const newId = Number(info.lastInsertRowid);
+    db.prepare('INSERT INTO profiles (user_id, business_name, ig_username, category, ig_connected, profile_name) VALUES (?, ?, ?, ?, 0, ?)').run(newId, business, handle, 'otro', String(b.profile_name || business));
+    try { db.prepare('INSERT INTO settings (user_id, timezone, ig_page_id) VALUES (?, ?, ?)').run(newId, lang === 'en' ? 'America/New_York' : 'America/Asuncion', ''); } catch (e) {}
+    db.prepare("INSERT OR IGNORE INTO login_spaces (login_user_id, space_user_id, kind, created_at) VALUES (?, ?, ?, datetime('now'))").run(loginId, newId, kind);
+    res.json({ ok: true, space_user_id: newId, spaces: pzEspaciosDe(loginId, loginId) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.get('/api/home/profile', requireAuth, async (req, res) => {
   const uid = req.session.userId;
   try {
@@ -48908,7 +49006,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1287';
+const BUILD_ID = '20261105-v1288';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

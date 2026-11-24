@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1287';
+const PZ_BUILD = '20261105-v1288';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27071,6 +27071,7 @@ function pzPrefetchKick() {
   if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  if (tab === 'inicio') setTimeout(() => { try { pzSpacesAplicar(); } catch (e) {} }, 0);
   // (LOTE BILLETERA-APPLE-PAY) El botón de Apple Pay se monta tras pintar
   // el tab Ads (y tras cada re-pintado de la billetera en pzAdsPintar):
   // si el dispositivo no lo soporta, la sección queda oculta.
@@ -35441,6 +35442,74 @@ async function pzIdeaCargar() {
   pzIdeaPintar();
 }
 function pzIdeaBind() { pzIdeaCargar(); }
+
+/* ---------- LOTE CAMBIO-CUENTA · cambiar de espacio desde el encabezado ----------
+   El nombre del perfil espejo es la puerta: si el login tiene más de un
+   espacio, el encabezado gana un chevron y al tocarlo se abre la hoja de
+   cuentas; elegir otra cambia la sesión entera y recarga en su Inicio. */
+let PZ_SPACES = null;
+let PZ_SPACES_PROMISE = null;
+function pzSpacesCargar() {
+  if (PZ_SPACES) return Promise.resolve(PZ_SPACES);
+  if (PZ_SPACES_PROMISE) return PZ_SPACES_PROMISE;
+  PZ_SPACES_PROMISE = fetch('/api/spaces').then((r) => r.json()).then((d) => {
+    if (d && d.ok && Array.isArray(d.spaces)) PZ_SPACES = d.spaces;
+    return PZ_SPACES;
+  }).catch(() => null);
+  return PZ_SPACES_PROMISE;
+}
+async function pzSpacesAplicar() {
+  const spaces = await pzSpacesCargar();
+  if (!spaces || spaces.length < 2) return;
+  const u = document.querySelector('#inicioView .hf-user');
+  if (!u || u.classList.contains('hf-user-switch')) return;
+  u.classList.add('hf-user-switch');
+  u.setAttribute('role', 'button');
+  const chev = document.createElement('span');
+  chev.className = 'hf-user-chev';
+  chev.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  u.appendChild(chev);
+  u.addEventListener('click', () => pzSpacesAbrir());
+}
+function pzSpacesCerrar() { const b = document.getElementById('pzSpacesBack'); if (b) b.remove(); }
+function pzSpacesAbrir() {
+  const en = pzVozEn();
+  pzSpacesCerrar();
+  const spaces = PZ_SPACES || [];
+  const rows = spaces.map((s) => {
+    const ini = (s.name || s.handle || '?').trim().charAt(0).toUpperCase() || '?';
+    const ava = s.pic ? `<img src="${esc(s.pic)}" alt="">` : `<span class="pz-spaces-ini">${esc(ini)}</span>`;
+    return `<button type="button" class="pz-spaces-row${s.current ? ' on' : ''}" data-space="${s.user_id}" ${s.current ? 'disabled' : ''}>
+      <span class="pz-spaces-ava">${ava}</span>
+      <span class="pz-spaces-txt"><b>${esc(s.name || s.handle || '')}</b>${s.handle ? `<span>@${esc(s.handle)}</span>` : ''}</span>
+      ${s.current ? '<span class="pz-spaces-check">' + pzIc('check', 18) + '</span>' : ''}
+    </button>`;
+  }).join('');
+  const back = document.createElement('div');
+  back.className = 'pz-spaces-back';
+  back.id = 'pzSpacesBack';
+  back.innerHTML = `<div class="pz-spaces-sheet">
+    <div class="pz-spaces-head"><b>${en ? 'Your accounts' : 'Tus cuentas'}</b><button type="button" class="pz-spaces-x" aria-label="${en ? 'Close' : 'Cerrar'}">✕</button></div>
+    <div class="pz-spaces-rows">${rows}</div>
+  </div>`;
+  document.body.appendChild(back);
+  back.addEventListener('click', (e) => { if (e.target === back) pzSpacesCerrar(); });
+  back.querySelector('.pz-spaces-x').onclick = () => pzSpacesCerrar();
+  back.querySelectorAll('[data-space]').forEach((btn) => {
+    btn.onclick = () => pzSpacesCambiar(parseInt(btn.getAttribute('data-space'), 10));
+  });
+}
+async function pzSpacesCambiar(uid) {
+  if (!uid) return;
+  try {
+    const r = await fetch('/api/spaces/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid }) });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d || !d.ok) { pzSpacesCerrar(); return; }
+    PZ_SPACES = null; PZ_SPACES_PROMISE = null;
+    try { location.hash = '#/app/inicio'; } catch (e) {}
+    location.reload();
+  } catch (e) { pzSpacesCerrar(); }
+}
 
 function bindSubir() {
   const pick = () => { const inp = document.getElementById('pzSubirFile'); if (inp) { inp.value = ''; inp.click(); } };
