@@ -7247,3 +7247,12 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-spaces-check{color:#2793c8;flex:none;display:inline-flex}
 /* (LOTE NOMBRE-COMPLETO) Colapsado: el nombre entra entero con letra menor, sin «…» */
 #inicioView.hf-collapsed .hf-head .hf-user .hf-user-name{font-size:12.5px}
+
+/* (LOTE INICIO-SIN-RUIDO) Tira de cambio por escrito: campo + enviar + ETA */
+.pz-voz-form{display:flex;gap:8px;align-items:center;margin-top:9px}
+.pz-voz-input{flex:1;min-width:0;border:1.5px solid #D8E4EE;border-radius:999px;padding:10px 14px;font-size:13.5px;color:#0A1E33;background:#fff;outline:none;font-family:inherit}
+.pz-voz-input:focus{border-color:#2793C8}
+.pz-voz-send{flex:none;border:none;border-radius:999px;background:#2793C8;color:#fff;font-weight:700;font-size:13.5px;padding:11px 16px;cursor:pointer;font-family:inherit}
+.pz-voz-send:disabled,.pz-voz-input:disabled{opacity:.55}
+.pz-voz-eta{font-size:12px;color:#7A8CA3;margin-top:7px}
+a.hf-name{text-decoration:none;color:inherit;cursor:pointer}

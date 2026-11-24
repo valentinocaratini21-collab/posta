@@ -3572,7 +3572,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1303';
+const PZ_BUILD = '20261105-v1304';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29581,7 +29581,9 @@ function homeTileHTML(t, i) {
     // cartel de agenda acompaña a la píldora en la banda (sin píldora,
     // ocChip ya ES el cartel: viene de la misma chip computada arriba).
     const saleCap = saleTxt ? `<span class="hf-chip hf-chip-sale">${pzIc('clock', 12)} ${esc(saleTxt)}</span>` : '';
-    const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${saleCap}${cuentaHtmlR1}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
+    // (LOTE INICIO-SIN-RUIDO · dueño 24/11) Sin cuenta regresiva en la banda:
+    // la píldora de salida ya dice día y hora.
+    const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${saleCap}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
     return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia${esPieza ? ' hf-tile-pieza' : ''}" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${piezaLock}${hoyBadge}${nuevoBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile${esPieza ? ' hf-tile-pieza' : ''}${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${piezaLock}${hoyBadge}${nuevoBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span>${capSubir}</span>`;
@@ -29766,7 +29768,7 @@ function homeHeadHTML(prof, bizName, opts) {
   return `<div class="hf-head${guestHead ? ' hf-head-invitado' : ''}">
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      <div class="hf-who">${user ? `<div class="hf-user${multiSpace ? ' hf-user-switch' : ''}"${multiSpace ? ' role="button"' : ''}><span class="hf-user-name">${esc(titleTxt)}</span>${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}${chevHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
+      <div class="hf-who">${user ? `<div class="hf-user${multiSpace ? ' hf-user-switch' : ''}"${multiSpace ? ' role="button"' : ''}><span class="hf-user-name">${esc(titleTxt)}</span>${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}${chevHTML}</div>` : ''}${nameLineTxt ? (handleTxt ? `<a class="hf-name" href="https://instagram.com/${esc(user)}" target="_blank" rel="noopener">${esc(nameLineTxt)}</a>` : `<div class="hf-name">${esc(nameLineTxt)}</div>`) : ''}</div>
     </div>
     ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     ${catHTML}
@@ -31447,12 +31449,18 @@ function pzHoyCardHTML(p, o) {
     // ya lleva la hora en la cabecera («hoy · 19:00»); el badge «Hoy
     // 19:00» sobre la foto repetiría la hora. Solo la principal lo pide.
     const cuando = (cartita || (o && o.sinCuando)) ? '' : pzHoyCuandoCorto(p, tz, en);
-    const cuenta = (cartita && p.scheduled_at) ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
-    const cuentaHtml = cuenta
-      ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at))}">${esc(cuenta)}</span>` : '';
+    // (LOTE INICIO-SIN-RUIDO · dueño 24/11) La cuenta regresiva también
+    // sale de la cartita: la hora queda en el «cuando» de la miniatura.
+    const cuentaHtml = '';
     const caption = String((p && p.caption) || '').trim();
     const whenAttr = (prop && prop.iso) ? prop.iso : (p.scheduled_at || '');
-    const acciones = pendiente
+    // (LOTE INICIO-SIN-RUIDO · dueño 24/11) El posteo programado en modo
+    // automático sale solo: no lleva botón de confirmación (era teatro:
+    // su handler solo dejaba un «like»). El botón queda donde la
+    // aprobación es la compuerta real (manual) y en borradores, donde
+    // publicarlo sí es una decisión.
+    const saleSolo = st === 'scheduled' && String((p && p.approval) || '') === 'auto';
+    const acciones = (pendiente && !saleSolo)
       ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button></div>`
       : '';
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La nota de la tarjeta
@@ -31461,10 +31469,9 @@ function pzHoyCardHTML(p, o) {
     // (LOTE GLOBO-AGENDADO-SIMPLE · decisión Valentino 12/11) El globo de
     // confirmación queda SOLO «✓ agendado»: que también sale como historia
     // se comunica en el DETALLE del posteo (approvalPostView), no acá.
-    const notaOk = (!pendiente && st === 'scheduled')
-      ? (igOkHoy
-        ? `<div class="pz-hoy-ok">✓ ${en ? 'scheduled' : 'agendado'}</div>`
-        : `<div class="pz-hoy-ok">⏳ ${esc(cuando || (en ? 'Scheduled' : 'Agendado'))} — ${en ? 'it goes out once you connect your Instagram.' : 'sale cuando conectes tu Instagram.'}</div>`) : '';
+    // (LOTE INICIO-SIN-RUIDO · dueño 24/11) La nota «✓ agendado» de la
+    // tarjeta compacta sale con el mismo aviso del héroe.
+    const notaOk = '';
     // (LOTE POSTEO-HOY-COMPACTO v859 · 9/11 · mock aprobado por Valentino:
     // tarjeta horizontal — miniatura 96x120 4:5 a la izquierda + columna
     // de texto; el caption aparece UNA sola vez, en el cuerpo; la chapita
@@ -31525,21 +31532,11 @@ function pzHoyCardHTML(p, o) {
       // completo — el pedido de cambio vive en la tira de voz de
       // esta misma tarjeta (y en publicados, «Editar» conserva su
       // camino al chat vía data-pz-hoy-cambiar).
-      const pillEstado = (!pendiente && st === 'scheduled')
-        ? (() => {
-            const hh = (typeof pzHoyHoraCorta === 'function') ? (pzHoyHoraCorta(p.scheduled_at, tz, en) || '') : '';
-            let rel = '';
-            try {
-              const d = (typeof pcParseDate === 'function') ? pcParseDate(p.scheduled_at) : null;
-              if (d && !isNaN(d) && typeof pzWhenRelDay === 'function') rel = pzWhenRelDay(d, tz, en) || '';
-            } catch (e) {}
-            const dia = rel ? (rel.charAt(0).toLowerCase() + rel.slice(1)) : (en ? 'today' : 'hoy');
-            const core = (en ? 'Scheduled · ' : 'Agendado · ') + dia + (hh ? ' ' + hh : '');
-            return igOkHoy
-              ? `<div class="pz-hoy-pill-estado">${pzIc('checkCircle', 15)}<span>${esc(core)} — ${en ? 'also shared as a story' : 'también sale como historia'}</span></div>`
-              : `<div class="pz-hoy-pill-estado">${pzIc('clock', 15)}<span>${esc(core)} — ${en ? 'goes out once you connect your Instagram' : 'sale cuando conectes tu Instagram'}</span></div>`;
-          })()
-        : '';
+      // (LOTE INICIO-SIN-RUIDO · dueño 24/11) La píldora «Agendado · hoy
+      // 19:00 — también sale como historia» sale del héroe: es el aviso
+      // que el dueño mandó sacar; la hora vive en la píldora de la
+      // cabecera de la sección («hoy · 19:00») y nada más.
+      const pillEstado = '';
       const redoLeft = (typeof hfRedoLeft === 'function') ? hfRedoLeft(p) : null;
       const redoLine = (redoLeft !== null && typeof hfRedoLineHTML === 'function') ? hfRedoLineHTML(p, en) : '';
       const cardRehacer = (redoLeft !== null)
@@ -32034,10 +32031,10 @@ function pzHoyHoyHTML(p, o) {
     // Sin scheduled_at o ya en hora, pzHoyCuentaSaleTxt da '' y no
     // hay span. La hora aparece UNA sola vez: el badge «Hoy 19:00»
     // sobre la foto se suprime (sinCuando).
-    const cuenta = (p && p.scheduled_at && typeof pzHoyCuentaSaleTxt === 'function') ? pzHoyCuentaSaleTxt(p.scheduled_at, en) : '';
-    const cuentaHtml = cuenta
-      ? `<span class="pz-hoy-cuenta" data-pz-cuenta-sale="${esc(String(p.scheduled_at))}">${esc(cuenta)}</span>` : '';
-    return `<div class="pz-hoy-hoy"><div class="pz-hoy-hoy-head"><h3>${en ? 'TODAY\u2019S POST' : 'EL POSTEO DE HOY'}</h3><span class="pz-hoy-hoy-right"><span class="pz-hoy-hoy-pill">${esc(pill)}</span>${cuentaHtml}</span></div>`
+    // (LOTE INICIO-SIN-RUIDO · dueño 24/11) La cuenta regresiva («sale en
+    // 5 h 02 min») sale de la cabecera del héroe: repetía la hora de la
+    // píldora «hoy · 19:00», que queda como único lugar con la hora.
+    return `<div class="pz-hoy-hoy"><div class="pz-hoy-hoy-head"><h3>${en ? 'TODAY\u2019S POST' : 'EL POSTEO DE HOY'}</h3><span class="pz-hoy-hoy-right"><span class="pz-hoy-hoy-pill">${esc(pill)}</span></span></div>`
       + pzHoyCardHTML(p, { cartita: false, sinCuando: true, en, tz, prop: (o && o.prop) || null, hero: true })
       + `</div>`;
   } catch (e) { return ''; }
@@ -34692,7 +34689,9 @@ function pzVozStripHTML(p) {
     return `<section class="pz-voz" data-pz-voz="${pid}">`
       + `<div class="pz-voz-hilo" data-pz-voz-hilo hidden></div>`
       + (prev ? `<button type="button" class="pz-voz-volver" data-pz-voz-volver="${pid}">↩ ${en ? 'Back to the previous image' : 'Volver a la imagen anterior'}</button>` : '')
-      + `<div class="pz-voz-bar"><span class="pz-voz-hint">${en ? '<b>Hold down</b> and tell me if you need a change to this post' : '<b>Mantené apretado</b> y decime si necesitás un cambio en este posteo'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>`
+      + `<div class="pz-voz-hint">${en ? 'Need a change to this post? Write it here and Posty takes care of it.' : '¿Necesitás un cambio en este posteo? Escribilo acá y Posty se encarga.'}</div>`
+      + `<div class="pz-voz-form"><input type="text" class="pz-voz-input" data-pz-voz-input maxlength="500" placeholder="${en ? 'Write the change…' : 'Escribí el cambio…'}"><button type="button" class="pz-voz-send" data-pz-voz-send>${en ? 'Send' : 'Enviar'}</button></div>`
+      + `<div class="pz-voz-eta">${en ? 'Estimated reply time: 30 minutes.' : 'Respuesta estimada: 30 minutos.'}</div>`
       + `<div class="pz-voz-estado" data-pz-voz-estado hidden></div>`
       + `</section>`;
   } catch (e) { return ''; }
@@ -34703,13 +34702,15 @@ function pzVozSemanaHTML() {
     return `<section class="pz-voz pz-voz-semana" data-pz-voz="semana">`
       + `<div class="pz-voz-tit">${en ? 'Something about your week?' : '¿Algo de tu semana?'}</div>`
       + `<div class="pz-voz-hilo" data-pz-voz-hilo hidden></div>`
-      + `<div class="pz-voz-bar"><span class="pz-voz-hint">${en ? '<b>Hold down</b> and tell me what change you want in your week' : '<b>Mantené apretado</b> y contame qué cambio querés en tu semana'}</span><button type="button" class="pz-voz-mic" data-pz-voz-mic aria-label="${en ? 'Hold to talk' : 'Mantené apretado para hablar'}">${pzIc('mic', 22)}</button></div>`
+      + `<div class="pz-voz-hint">${en ? 'Write the change you want in your week and Posty takes care of it.' : 'Escribí el cambio que querés en tu semana y Posty se encarga.'}</div>`
+      + `<div class="pz-voz-form"><input type="text" class="pz-voz-input" data-pz-voz-input maxlength="500" placeholder="${en ? 'Write the change…' : 'Escribí el cambio…'}"><button type="button" class="pz-voz-send" data-pz-voz-send>${en ? 'Send' : 'Enviar'}</button></div>`
+      + `<div class="pz-voz-eta">${en ? 'Estimated reply time: 30 minutes.' : 'Respuesta estimada: 30 minutos.'}</div>`
       + `<div class="pz-voz-estado" data-pz-voz-estado hidden></div>`
       + `</section>`;
   } catch (e) { return ''; }
 }
 function pzVozMsgHTML(m) {
-  if (m.role === 'user') return `<div class="pz-voz-msg u"><span class="pz-voz-msg-ic">${pzIc('mic', 12)}</span><span>${esc(m.text)}</span></div>`;
+  if (m.role === 'user') return `<div class="pz-voz-msg u"><span class="pz-voz-msg-ic">${pzIc('pencil', 12)}</span><span>${esc(m.text)}</span></div>`;
   return `<div class="pz-voz-msg a"><img class="pz-voz-face" src="/ai-avatar.png" alt=""><span>${esc(m.text)}</span></div>`;
 }
 function pzVozHiloPintar(strip, msgs) {
@@ -34934,6 +34935,18 @@ async function pzVozVolver(btn) {
     } else { btn.disabled = false; }
   } catch (e) { btn.disabled = false; }
 }
+async function pzVozEnviarDesdeInput(strip) {
+  const inp = strip.querySelector('[data-pz-voz-input]');
+  if (!inp || inp.disabled) return;
+  const text = String(inp.value || '').trim().slice(0, 500);
+  if (!text) { try { inp.focus(); } catch (e) {} return; }
+  const btn = strip.querySelector('[data-pz-voz-send]');
+  inp.disabled = true;
+  if (btn) btn.disabled = true;
+  try { await pzVozEnviar(strip, text); inp.value = ''; } catch (e) {}
+  inp.disabled = false;
+  if (btn) btn.disabled = false;
+}
 function pzVozDelegar() {
   if (window.__pzVozWired) return;
   window.__pzVozWired = true;
@@ -34954,8 +34967,21 @@ function pzVozDelegar() {
       if (strip) { strip.classList.toggle('pz-voz-open'); pzVozHiloPintar(strip, strip._pzVozMsgs || []); }
       return;
     }
+    const send = e.target.closest('[data-pz-voz-send]');
+    if (send) {
+      const strip = send.closest('[data-pz-voz]');
+      if (strip) pzVozEnviarDesdeInput(strip);
+      return;
+    }
     const vol = e.target.closest('[data-pz-voz-volver]');
     if (vol) pzVozVolver(vol);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const inp = e.target && e.target.closest ? e.target.closest('[data-pz-voz-input]') : null;
+    if (!inp) return;
+    const strip = inp.closest('[data-pz-voz]');
+    if (strip) { e.preventDefault(); pzVozEnviarDesdeInput(strip); }
   });
 }
 pzVozDelegar();
@@ -41011,8 +41037,10 @@ async function approvalPostView(id) {
   // posteo de feed (imagen o carrusel; nunca historia ni reel) ya aprobado
   // o publicado.
   const apvMt = String(p.media_type || 'image');
-  const apvStoryLine = ((apvMt === 'image' || apvMt === 'carousel') && ((st === 'scheduled' && ap !== 'pending') || st === 'published'))
-    ? `<div class="apv-when apv-story">📸 ${en ? 'Posty also shares it as a story.' : 'Posty también lo sube como historia.'}</div>` : '';
+  // (LOTE INICIO-SIN-RUIDO · dueño 24/11) La línea «también lo sube como
+  // historia» sale del detalle: la historia compañera es el mecanismo,
+  // no un aviso al cliente.
+  const apvStoryLine = '';
   return `<div class="apv-wrap">
     ${apvBack}
     ${media}
