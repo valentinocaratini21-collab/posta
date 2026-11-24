@@ -7218,3 +7218,19 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
   .iwp-chat-go{width:100%;text-align:left;border:1.5px solid #DCE5EC;background:#fff;border-radius:999px;padding:11px 16px;font-size:14px;font-family:inherit;color:#5B6B7A;cursor:pointer}
   .iwp-chat-go:hover{border-color:#2793C8;color:#0A1E33}
 }
+
+/* ————————————————————————————————————————————————————————————
+   LOTE INICIO-WEB-BARRA (23/11 · pedido del dueño 21:55: «ahora
+   hagamos que la barra de arriba esté alineada a lo de abajo») —
+   en el Inicio de escritorio la barra superior (.pz-shell-head,
+   que la regla de ≥761px dejaba en 920px centrados) pasa a tener
+   el mismo ancho y los mismos bordes que el bloque de contenido:
+   el bloque entra 30px por lado dentro del área de contenido
+   (padding de la vista + su borde) a todo ancho, así que la barra
+   toma ese mismo recuadro con margin 0 30px y sin tope de ancho.
+   Solo con el Inicio presente (las demás pantallas no cambian),
+   solo escritorio ≥1024 (el móvil no se toca), la sidebar no se
+   toca. ——————————————————————————————————————————————————————— */
+@media(min-width:1024px){
+  .app-shell:has(#inicioView:not(.hf-visitor)) .pz-shell-head{max-width:none;width:auto;margin:0 30px}
+}
