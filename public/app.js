@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1291';
+const PZ_BUILD = '20261105-v1292';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32229,14 +32229,15 @@ function pzHoySpeechHTML(o) {
       ? (en ? `Your week is approved. To have it go out on your Instagram, connect it: without a connection, Posty can't publish it.` : `Tu semana ya está aprobada. Para que salga en tu Instagram, conectalo: sin conexión, Posty no puede publicarla.`)
       : '';
   } else {
-    destArmar = true;
-    // (LOTE VERDAD-INVITADO · Blind Barber P8) Sin semana, el
-    // invitado dice lo mismo que el registrado y su burbuja ARMA
-    // (destArmar, abajo): la variante «Contame qué tenés para
-    // mostrar» lo mandaba al chat, que no arma la semana.
-    cuerpo = en
-      ? `Shall we build your week? Posty builds it from what you already post.`
-      : `¿Armamos tu semana? Posty la arma con lo que ya publicás.`;
+    // (LOTE SIN-ARMAMOS · orden del dueño 24/11 01:53, con captura:
+    // «Completamente innecesario. Elimina esto») Sin semana, la burbuja
+    // «¿Armamos tu semana?…» / «Shall we build your week?…» sale
+    // ENTERA de Inicio, en los dos
+    // idiomas y en todo estado: narraba lo que la pantalla ya hace.
+    // Sin cuerpo no hay burbuja (la regla de v879/v901 e
+    // INICIO-SIN-RELLENO); el armado de la semana sigue vivo en el
+    // botón «Que Posty lo arme» del héroe de Hoy, que ya existía.
+    cuerpo = '';
   }
   // (LOTE HOY-REDISEÑO v810 + HOY-AVATAR-FEED 8/11) El saludo se rinde
   // como mensaje de Posty: SOLO la burbuja, sin carita (la cara vive en
