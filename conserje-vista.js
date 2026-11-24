@@ -250,6 +250,13 @@ function claseDeCuenta(db, u, nowMs) {
   const uid = Number(u && u.id) || 0;
   if (!uid) return { clase: null };
   if (uid === conserjeRevision.OWNER_USER_ID) return { clase: 'casa' };
+  // (LOTE PADRÓN-CIERRE · auditoría 24/11, hallazgos 1 y 7) La marca
+  // de cierre manda sobre el plan: una cuenta en hold (el cierre
+  // registrado del equipo, POST /api/admin/hold) sale del padrón
+  // aunque su plan_status siga «active» — el caso de la cuenta
+  // cerrada @posta.hacetodo, que figuraba como cliente pago. La
+  // casa quedó exceptuada arriba, como decidió el tablero.
+  if (Number(u.hold) === 1) return { clase: null, cerrada: true };
   const st = String((u && u.plan_status) || '');
   if (st === 'active' || st === 'past_due') return { clase: 'pago' };
   if (st !== 'trial') return { clase: null };
@@ -340,7 +347,7 @@ function usuariosAtendidos(db, nowMs) {
   const now = Number(nowMs) || Date.now();
   const rows = safe(() => db.prepare(
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
-            u.concierge, u.publishing_stopped, u.trial_ends_at, u.trial_extended_until,
+            u.concierge, u.publishing_stopped, u.hold, u.hold_reason, u.trial_ends_at, u.trial_extended_until,
             u.trial_started_at, u.created_at,
             p.business_name, p.ig_username, p.category
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id
@@ -1137,7 +1144,7 @@ function cliente(db, userId, opts) {
   if (!uid) return { ok: false, error: 'sin_usuario' };
   const u = safe(() => db.prepare(
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
-            u.concierge, u.publishing_stopped, u.trial_ends_at, u.trial_extended_until,
+            u.concierge, u.publishing_stopped, u.hold, u.hold_reason, u.trial_ends_at, u.trial_extended_until,
             u.trial_started_at, u.created_at,
             p.business_name, p.ig_username, p.category
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
