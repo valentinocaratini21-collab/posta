@@ -30739,7 +30739,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     res.json({ init_point, discount_applied: discount, discount_source: efecMp.fuente });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
-    res.status(500).json({ error: 'No se pudo iniciar el pago: ' + e.message });
+    res.status(500).json({ error: (dcLangDe(req.session.userId) === 'en' ? 'Could not start the payment: ' : 'No se pudo iniciar el pago: ') + e.message });
   }
 });
 
@@ -30924,6 +30924,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: 'Stripe checkout is only available for US, UK and Eurozone accounts.' });
     }
+    const errPagoTxt = user.lang === 'en' ? 'Could not start the payment: ' : 'No se pudo iniciar el pago: ';
     // (Pagos lado app) Guardia por poder, espejo de MP.
     if (agenteStripe === 'posty') {
       if (user.plan_status === 'active' && user.stripe_subscription_id) {
@@ -30973,7 +30974,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
       const compAmount = completoPrice(plan.currency, plan.id);
       if (compAmount == null) return res.status(400).json({ error: 'Bambooty complete is not available for this currency.' });
       try { completoPriceId = await ensureCompletoPriceId(null, plan, compAmount); }
-      catch (e) { console.error('[stripe] precio completo:', e.message); return res.status(500).json({ error: 'Could not start the payment: ' + e.message }); }
+      catch (e) { console.error('[stripe] precio completo:', e.message); return res.status(500).json({ error: errPagoTxt + e.message }); }
     }
     // (LOTE DESCUENTOS-CODIGO) El checkout cobra la base (precio
     // fundador si aplica; si no, la de catálogo) por el multiplicador
@@ -31001,7 +31002,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     res.json({ url: out.url });
   } catch (e) {
     console.error('[stripe] Error creando checkout:', e.message);
-    res.status(500).json({ error: 'Could not start the payment: ' + e.message });
+    res.status(500).json({ error: (dcLangDe(req.session.userId) === 'en' ? 'Could not start the payment: ' : 'No se pudo iniciar el pago: ') + e.message });
   }
 });
 
@@ -49228,7 +49229,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1302';
+const BUILD_ID = '20261105-v1303';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

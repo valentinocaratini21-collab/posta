@@ -136,14 +136,14 @@ function buildCheckoutParams({ priceId, plan, user, baseUrl, trialEndSec }) {
     // vive la bienvenida post-pago de app.js. El abandono vuelve a Ajustes.
     success_url: `${baseUrl}/#/app/schedule?plan=ok`,
     cancel_url: `${baseUrl}/#/app/ajustes?plan=error`,
-    // (LOTE AGREGAR-TARJETA) La tarjeta de la suscripción queda guardada
-    // como la de pago por defecto: así sirve para Ads (Cargar/Impulsar
-    // off-session) sin agregarla de nuevo. En modo subscription Stripe
-    // ya guarda la tarjeta en el cliente; este parámetro lo deja
-    // explícito como default de la suscripción. El webhook además la fija
-    // como default del cliente (ver processEvent), que es lo que lee el
-    // cobro de la billetera.
-    payment_settings: { save_default_payment_method: 'on_subscription' },
+    // (LOTE STRIPE-PARAM v1303) SIN payment_settings a nivel sesión: la API
+    // de Stripe de la cuenta lo rechaza («Received unknown parameter:
+    // payment_settings») y el checkout entero caía — nadie podía pagar por
+    // Stripe (visto en producción el 2026-11-24). No se pierde nada: en modo
+    // subscription la tarjeta ya queda guardada en el cliente, y el webhook
+    // la fija como default del cliente (processEvent → customers.update con
+    // invoice_settings.default_payment_method), que es lo que lee el cobro
+    // de la billetera de Ads. NO re-agregar este parámetro a la sesión.
   };
   if (user.stripe_customer_id) params.customer = user.stripe_customer_id;
   else if (user.email) params.customer_email = user.email;
