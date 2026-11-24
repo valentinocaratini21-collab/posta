@@ -1608,9 +1608,9 @@ function pzCampanaBadgeRefrescar() {
 // invitado), byte a byte la app de siempre. La hoja-filtro solo
 // existe donde hay más de un poder: la casa.
 const PZ_AGENTES = [
-  { id: 'posty', nombre: 'Posty', punto: '#2FBF71', medallon: '#2793C8', letra: '#FFFFFF', ruta: '#/app/inicio', descEs: 'Tu community manager: postea por tu negocio todos los días.', descEn: 'Your community manager: posts for your business every day.' },
-  { id: 'gesty', nombre: 'Gesty', punto: '#2793C8', medallon: '#0A1E33', letra: '#FFFFFF', ruta: '#/app/gesty', descEs: 'Administra, atiende y ordena los papeles de tu negocio.', descEn: 'Runs your admin, messages and paperwork.' },
-  { id: 'venty', nombre: 'Venty', punto: '#1E9E5A', medallon: '#1E9E5A', letra: '#FFFFFF', ruta: '#/app/venty', descEs: 'Vende y consigue clientes para tu negocio.', descEn: 'Sells and brings in clients for your business.' },
+  { id: 'posty', nombre: 'Posty', punto: '#2FBF71', medallon: '#2793C8', letra: '#FFFFFF', cara: '/ai-avatar.png', ruta: '#/app/inicio', descEs: 'Tu community manager: postea por tu negocio todos los días.', descEn: 'Your community manager: posts for your business every day.' },
+  { id: 'gesty', nombre: 'Gesty', punto: '#2793C8', medallon: '#0A1E33', letra: '#FFFFFF', cara: '/gesty-cara.webp', ruta: '#/app/gesty', descEs: 'Administra, atiende y ordena los papeles de tu negocio.', descEn: 'Runs your admin, messages and paperwork.' },
+  { id: 'venty', nombre: 'Venty', punto: '#1E9E5A', medallon: '#1E9E5A', letra: '#FFFFFF', cara: '/venty-cara.webp', ruta: '#/app/venty', descEs: 'Vende y consigue clientes para tu negocio.', descEn: 'Sells and brings in clients for your business.' },
 ];
 function pzAgenteMeta(id) { return PZ_AGENTES.find(a => a.id === id) || null; }
 function pzAgenteActual() {
@@ -1673,7 +1673,7 @@ function pzAgenteFiltroAbrir() {
   const actual = pzAgenteActual();
   const rows = PZ_AGENTES.map(a => `
     <button type="button" class="pz-agente-row" onclick="pzAgenteElegir('${a.id}')">
-      <span class="pz-agente-med" style="background:${a.medallon};color:${a.letra}">${a.nombre.charAt(0)}</span>
+      <span class="pz-agente-med" style="background:${a.medallon};color:${a.letra}">${a.nombre.charAt(0)}${a.cara ? '<img class="pz-agente-cara" src="' + a.cara + '" alt="" loading="lazy" onerror="this.remove()">' : ''}</span>
       <span class="pz-agente-info"><span class="pz-agente-nom">${a.nombre}<span class="pdot" style="color:${a.punto}">.</span></span><span class="pz-agente-desc">${esc(en ? a.descEn : a.descEs)}</span></span>
       ${actual === a.id ? '<span class="pz-agente-aca">' + (en ? "You're here" : 'Estás acá') + '</span>' : ''}
     </button>`).join('');
