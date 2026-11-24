@@ -1334,7 +1334,8 @@ function pzShellDatosHoy() {
 //       trajo carta, o todavía no llegó la revelación de las 9:00 —
 //       GET /api/ritual/hoy, la MISMA promesa cacheada que ya pide
 //       pzShellDatosHoy: un solo fetch por carga, sin polling nuevo)
-//       → «armando el posteo de hoy…»
+//       → desde INICIO-SIMPLE (24/11), la línea genérica «trabajando
+//       para vos…»: el «armando» vive solo en la tarjeta del día.
 //   3 · el posteo de hoy ya salió (publicado_hoy) →
 //       «tu posteo de hoy ya salió»
 //   4 · el posteo de hoy está listo (revelado) → el hecho con su
@@ -1353,8 +1354,11 @@ function pzBarraEstadoComputar(ritual, idea) {
   if (idea && idea.estado && idea.estado !== 'resuelta') return en ? 'working on your request…' : 'trabajando en tu pedido…';
   if (!ritual || ritual.ok === false) return en ? 'working for you…' : 'trabajando para vos…';
   if (ritual.publicado_hoy) return en ? "today's post is out" : 'tu posteo de hoy ya salió';
-  if (!ritual.hoy || !ritual.recomendada) return en ? "putting today's post together…" : 'armando el posteo de hoy…';
-  if (ritual.abre_a && ritual.ahora && String(ritual.ahora) < String(ritual.abre_a)) return en ? "putting today's post together…" : 'armando el posteo de hoy…';
+  // (LOTE INICIO-SIMPLE · orden del dueño 24/11: el estado «armando»
+  // se dice UNA vez — en la tarjeta del día; el subtítulo de la barra
+  // no lo repite y cae a la línea genérica verdadera.)
+  if (!ritual.hoy || !ritual.recomendada) return en ? 'working for you…' : 'trabajando para vos…';
+  if (ritual.abre_a && ritual.ahora && String(ritual.ahora) < String(ritual.abre_a)) return en ? 'working for you…' : 'trabajando para vos…';
   // (LOTE BARRA-TEXTO) Listo: el hecho con la hora que trae la carta
   // recomendada (hora_salida: la salida real del posteo en la zona de
   // la cuenta, formateada por idioma en el servidor — «19:00» ES,
@@ -3568,7 +3572,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1296';
+const PZ_BUILD = '20261105-v1297';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29673,11 +29677,15 @@ function homeHeadHTML(prof, bizName, opts) {
   // como lista (links[]): la lectura pública de hoy expone un solo link
   // y la lista llega vacía — jamás se completa con ficción.
   const linksArr = (Array.isArray(P.links) ? P.links : []).map((x) => String(x || '').trim()).filter(Boolean);
+  // (LOTE INICIO-SIMPLE · orden del dueño 24/11: el @ no se repite en
+  // la tarjeta — queda solo el @ bajo el nombre, como en Instagram.
+  // Sin link real no hay línea: el fallback que repetía el @ en azul
+  // al final de la bio salió.)
   const linkHTML = linksArr.length > 1
     ? `<span class="hf-links">${linksArr.map(linkOne).join('')}</span>`
     : rawLink
       ? linkOne(rawLink)
-      : user ? `<a class="hf-link" href="https://www.instagram.com/${esc(user)}/" target="_blank" rel="noopener">@${esc(user)}</a>` : '';
+      : '';
   // (Tanda feed 5 · ítem 8) Chip de Threads junto al @: SOLO si el
   // payload trae la cuenta de Threads (hoy ninguna fuente la expone).
   const threadsHTML = (typeof P.threads === 'string' && P.threads.trim())
@@ -30856,8 +30864,8 @@ function pzHoyMotivoTxt(reason, en) {
 // 9:00 va con la hora; pasadas las 9:00 sin posteo, el estado
 // honesto es «está en armado.» (sin hora); un día futuro
 // revelado (mañana) anuncia su posteo a las 9:00 de ese día.
-// «subir algo mío» se queda tal cual (mismo botón, mismo
-// data-*): es la acción real del dueño. El ensure («Que Posty
+// (INICIO-SIMPLE · 24/11) «subir algo mío» SALIÓ de la tarjeta del
+// día por orden del dueño: duplica la pestaña Subir. El ensure («Que Posty
 // lo arme») sigue vivo por sus otros caminos: la mini de la
 // semana (pzHoySemanaMiniHTML), la burbuja sin semana
 // (pzHoySpeechHTML con destArmar) y el reintento del estado con
@@ -30868,7 +30876,6 @@ function pzHoyVaciaPromesaHTML(d, o) {
   const nombre = (o && o.nombre) || '';
   const labelsFull = en ? ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   const reloj = '<svg class="pz-hoy-promesa-reloj" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.6V12l3.1 2"/></svg>';
-  const subir = `<button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button>`;
   let grande = '', linea = '';
   if (d && d.esHoy) {
     // La hora de AHORA en la zona del negocio (h23: 0–23
@@ -30890,7 +30897,7 @@ function pzHoyVaciaPromesaHTML(d, o) {
     grande = en ? (diaNom + "'s post") : ('El posteo del ' + diaNom.toLowerCase());
     linea = en ? 'arrives at <span class="pz-hoy-promesa-hora">9:00 AM</span>' : 'llega a las <span class="pz-hoy-promesa-hora">9:00</span>';
   }
-  return `<div class="pz-hoy-tira-detalle vacia promesa"><div class="t"><b>${esc(nombre)}</b></div>${reloj}<div class="pz-hoy-promesa-grande">${esc(grande)}</div><div class="pz-hoy-promesa-linea">${linea}</div>${subir}</div>`;
+  return `<div class="pz-hoy-tira-detalle vacia promesa"><div class="t"><b>${esc(nombre)}</b></div>${reloj}<div class="pz-hoy-promesa-grande">${esc(grande)}</div><div class="pz-hoy-promesa-linea">${linea}</div></div>`;
 }
 
 function pzHoyTiraDetalleHTML(d, o) {
@@ -30946,7 +30953,7 @@ function pzHoyTiraDetalleHTML(d, o) {
       // verdadero, con su explicación breve.
       const motivoHoy = (typeof PZ_HOY_ARMAR_MOTIVO !== 'undefined' && PZ_HOY_ARMAR_MOTIVO) ? String(PZ_HOY_ARMAR_MOTIVO) : '';
       if (motivoHoy === 'cuenta_propia') {
-        return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div><p class="pz-hoy-freno-txt">${en ? "This account's posts are made by the team by hand, day by day — the software doesn't generate here." : 'Los posteos de esta cuenta los arma el equipo a mano, día a día — el software no genera acá.'}</p><button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button></div>`;
+        return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div><p class="pz-hoy-freno-txt">${en ? "This account's posts are made by the team by hand, day by day — the software doesn't generate here." : 'Los posteos de esta cuenta los arma el equipo a mano, día a día — el software no genera acá.'}</p></div>`;
       }
       const motivoTxt = (motivoHoy && d.esHoy) ? pzHoyMotivoTxt(motivoHoy, en) : '';
       // (LOTE TARJETA-PROMESA-9AM · 23/11) Sin motivo de freno, el
@@ -30958,7 +30965,7 @@ function pzHoyTiraDetalleHTML(d, o) {
       // promesa de las 9:00 sería falsa bajo un freno (un día
       // cerrado o frenado por el dueño no tiene posteo a las 9:00).
       if (!motivoTxt) return pzHoyVaciaPromesaHTML(d, { en, tz, nombre });
-      return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div>${motivoTxt ? `<p class="pz-hoy-motivo-txt">${esc(motivoTxt)}</p>` : ''}<button type="button" class="pz-hoy-glass-btn" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button><button type="button" class="pz-hoy-subir-link" data-pz-hoy-subir="1">${en ? 'upload my own' : 'subir algo mío'}</button></div>`;
+      return `<div class="pz-hoy-tira-detalle vacia"><div class="t"><b>${esc(nombre)}</b><small>${en ? 'No post today yet.' : 'Todavía no hay posteo.'}</small></div>${motivoTxt ? `<p class="pz-hoy-motivo-txt">${esc(motivoTxt)}</p>` : ''}<button type="button" class="pz-hoy-glass-btn" data-pz-hoy-armar="1">${en ? 'Have Posty build it' : 'Que Posty lo arme'}</button></div>`;
     }
     // (LOTE INTEGRIDAD-PRE-PUBLICACIÓN) Fila frenada por el chequeo de
     // integridad del servidor (p.integridad_freno): la tarjeta NO la
