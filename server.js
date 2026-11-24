@@ -5624,6 +5624,11 @@ app.get('/api/auth/me', (req, res) => {
       // como email real (el cliente lo ignora cuando is_guest=1).
       is_guest: !!user.is_guest,
       guest_ig: user.guest_ig || '',
+      // (LOTE FLECHITA-DETERMINISTA · dueño 24/11) Cuántos espacios
+      // tiene el LOGIN de esta sesión (él mismo + los vinculados): el
+      // cliente pinta la flecha de cambio de cuenta en el primer render
+      // con este dato de sesión, sin esperar a que vuelva la lista.
+      spaces_count: (() => { try { const r = db.prepare('SELECT COUNT(*) AS n FROM login_spaces WHERE login_user_id = ?').get(pzLoginIdDe(req)); return 1 + (r ? Number(r.n || 0) : 0); } catch (e) { return 1; } })(),
     },
   });
 });
@@ -48999,7 +49004,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1292';
+const BUILD_ID = '20261105-v1293';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1292';
+const PZ_BUILD = '20261105-v1293';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29747,10 +29747,18 @@ function homeHeadHTML(prof, bizName, opts) {
   // info y el chip de conexión) NO se atenúa: conectar es la acción.
   // Para el cliente conectado la clase nunca se agrega.
   const guestHead = (typeof pzIsGuest === 'function' && pzIsGuest());
+  // (LOTE FLECHITA-DETERMINISTA · dueño 24/11) La puerta de cambio de
+  // cuenta nace EN el render cuando la sesión ya sabe que el login
+  // tiene más de un espacio (ME.spaces_count, de /api/auth/me): la
+  // flecha está desde el primer pintado, sin depender de que la lista
+  // de espacios vuelva a tiempo — la intermitencia que el dueño vio
+  // (a veces sí, a veces no) era esa carrera.
+  const multiSpace = (typeof ME !== 'undefined' && ME && Number(ME.spaces_count || 0) > 1);
+  const chevHTML = multiSpace ? `<span class="hf-user-chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>` : '';
   return `<div class="hf-head${guestHead ? ' hf-head-invitado' : ''}">
     <div class="hf-prow">
       <div class="hf-ava">${avaHTML}${noteHTML}</div>
-      <div class="hf-who">${user ? `<div class="hf-user"><span class="hf-user-name">${esc(titleTxt)}</span>${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
+      <div class="hf-who">${user ? `<div class="hf-user${multiSpace ? ' hf-user-switch' : ''}"${multiSpace ? ' role="button"' : ''}><span class="hf-user-name">${esc(titleTxt)}</span>${P.is_verified === true ? `<span class="hf-verified" role="img" aria-label="${en ? 'Verified account' : 'Cuenta verificada'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#0095F6"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}${threadsHTML}${chevHTML}</div>` : ''}${nameLineTxt ? `<div class="hf-name">${esc(nameLineTxt)}</div>` : ''}</div>
     </div>
     ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
     ${catHTML}
@@ -35474,11 +35482,26 @@ let PZ_SPACES_PROMISE = null;
 function pzSpacesCargar() {
   if (PZ_SPACES) return Promise.resolve(PZ_SPACES);
   if (PZ_SPACES_PROMISE) return PZ_SPACES_PROMISE;
+  // (LOTE FLECHITA-DETERMINISTA) Si la carga vuelve vacía o falla, la
+  // promesa se limpia: un intento fallido no envenena la sesión entera
+  // (antes la promesa muerta quedaba cacheada y la puerta no volvía).
   PZ_SPACES_PROMISE = fetch('/api/spaces').then((r) => r.json()).then((d) => {
     if (d && d.ok && Array.isArray(d.spaces)) PZ_SPACES = d.spaces;
+    if (!PZ_SPACES) PZ_SPACES_PROMISE = null;
     return PZ_SPACES;
-  }).catch(() => null);
+  }).catch(() => { PZ_SPACES_PROMISE = null; return null; });
   return PZ_SPACES_PROMISE;
+}
+// (LOTE FLECHITA-DETERMINISTA) El toque en el encabezado-puerta se
+// escucha UNA vez, por delegación: no depende de qué pintura haya
+// bindeado qué — cualquier .hf-user.hf-user-switch abre la hoja.
+if (typeof window !== 'undefined' && !window.__pzSpacesDelegado) {
+  window.__pzSpacesDelegado = true;
+  document.addEventListener('click', (ev) => {
+    const t = ev.target;
+    const u = t && t.closest ? t.closest('#inicioView .hf-user.hf-user-switch') : null;
+    if (u) { try { pzSpacesAbrir(); } catch (e) {} }
+  });
 }
 async function pzSpacesAplicar() {
   const spaces = await pzSpacesCargar();
@@ -35491,14 +35514,15 @@ async function pzSpacesAplicar() {
   chev.className = 'hf-user-chev';
   chev.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   u.appendChild(chev);
-  u.addEventListener('click', () => pzSpacesAbrir());
   try { pzNombreAjustar(); } catch (e) {}
 }
 function pzSpacesCerrar() { const b = document.getElementById('pzSpacesBack'); if (b) b.remove(); }
-function pzSpacesAbrir() {
+async function pzSpacesAbrir() {
   const en = pzVozEn();
+  let spaces = PZ_SPACES;
+  if (!spaces || spaces.length < 2) spaces = await pzSpacesCargar();
+  if (!spaces || spaces.length < 2) return;
   pzSpacesCerrar();
-  const spaces = PZ_SPACES || [];
   const rows = spaces.map((s) => {
     const ini = (s.name || s.handle || '?').trim().charAt(0).toUpperCase() || '?';
     const ava = s.pic ? `<img src="${esc(s.pic)}" alt="">` : `<span class="pz-spaces-ini">${esc(ini)}</span>`;
