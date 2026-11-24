@@ -504,7 +504,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* ---------- mobile topbar ---------- */
 .mtop{display:none}
 @media(max-width:760px){
-  .mtop{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.94);z-index:40;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .mtop{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:40} /* (LOTE CABECERA-SCROLL-IOS) Sin backdrop-filter en la cabecera pegajosa: con blur, iOS la compone corrida sobre el contenido al deslizar (la captura y el video del dueño, 24/11). Fondo opaco: la misma franja, clavada. */
   .mtabs{display:flex;gap:6px;overflow-x:auto;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:57px;background:var(--bg);z-index:39}
 }
 .mtab{flex:none;border:none;background:var(--card2,#F2F9FD);color:var(--mut);font-weight:700;font-size:12.5px;padding:10px 18px;border-radius:999px;cursor:pointer;font-family:inherit}
@@ -1752,7 +1752,7 @@ textarea.in{resize:vertical;min-height:96px}
    ============================================================ */
 @media(min-width:761px){
   /* Topbar visible también en desktop */
-  .mtop{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.94);z-index:40;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .mtop{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:40} /* (LOTE CABECERA-SCROLL-IOS) Ídem breakpoint ancho: sin blur en la cabecera pegajosa. */
   .mtop-burger{width:44px;height:44px;border:none;background:none;font-size:26px;line-height:1;color:var(--txt);cursor:pointer;font-family:inherit;border-radius:12px;display:flex;align-items:center;justify-content:center}
   .mtop-burger:hover{background:var(--bg2)}
   .mtop-pill{display:inline-flex;align-items:center;background:var(--yl);color:#0A1E33;font-weight:800;font-size:13px;padding:11px 20px;border-radius:999px;text-decoration:none;font-family:inherit;white-space:nowrap;box-shadow:0 2px 10px rgba(254,193,77,.4)}
@@ -3581,7 +3581,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    Solo aplica dentro de .bb-app (el shell): la web de Posty no lo toca. */
 .bb-app{--bb-gold:#D6A463;--bb-gold-a:#DFA856;--bb-gold-b:#DBA453;--bb-ink:#22301F;--bb-soft:#6B7263;--bb-card:#FFFFFF;--bb-fondo:#FBF7EE;min-height:100dvh;background:var(--bb-fondo);color:var(--bb-ink);display:flex;flex-direction:column}
 .bb-gold-tx{background:linear-gradient(100deg,var(--bb-gold-a),var(--bb-gold-b) 55%,var(--bb-gold));-webkit-background-clip:text;background-clip:text;color:transparent}
-.bb-top{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:rgba(251,247,238,.92);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5}
+.bb-top{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:#FBF7EE;position:sticky;top:0;z-index:5} /* (LOTE CABECERA-SCROLL-IOS) La cabecera de la oficina, igual: sticky sin blur, fondo opaco. */
 .bb-top-av{width:38px;height:38px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px var(--bb-gold)}
 .bb-top-tx{display:flex;flex-direction:column;line-height:1.15}
 .bb-top-tx strong{font-size:19px;letter-spacing:.2px}
