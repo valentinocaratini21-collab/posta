@@ -4641,32 +4641,10 @@ app.post('/api/questions/:id/dismiss', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ error: 'no pude guardarla 😅' }); }
 });
 
-// ---------- LOTE REDISENO-R6 · PREGUNTA DE LOS LUNES: SOLO CONSULTAS ----------
-// Un tema puntual del chat, una vez por semana: «¿cuántas consultas te
-// entraron esta semana?» con 4 rangos para tocar. El rango es el único
-// dato honesto que conecta el trabajo con la plata (Posty no ve las
-// ventas ni las consultas del negocio). Lo lee Análisis (R3); el chat
-// solo pregunta y guarda. Sin respuesta, no hay cero inventado.
-const WEEKLY_CONSULTAS_RANGOS = ['0', '1-5', '6-15', '15+'];
-app.get('/api/weekly-consultas', requireAuth, (req, res) => {
-  const uid = req.session.userId;
-  const wk = mondayKeyOf(tzToday(userTz(uid)));
-  let row = null;
-  try { row = db.prepare('SELECT week_key, rango, created_at FROM weekly_consultas WHERE user_id = ? AND week_key = ?').get(uid, wk); } catch (e) { /* tabla nueva */ }
-  res.json({ ok: true, week_key: wk, rango: row ? row.rango : null, answered_at: row ? row.created_at : null });
-});
-app.post('/api/weekly-consultas', requireAuth, express.json(), (req, res) => {
-  const uid = req.session.userId;
-  const rango = String((req.body && req.body.rango) || '');
-  if (!WEEKLY_CONSULTAS_RANGOS.includes(rango)) return res.status(400).json({ ok: false, error: 'rango_invalido' });
-  const wk = mondayKeyOf(tzToday(userTz(uid)));
-  try {
-    db.prepare(`INSERT INTO weekly_consultas (user_id, week_key, rango) VALUES (?,?,?)
-      ON CONFLICT(user_id, week_key) DO UPDATE SET rango = excluded.rango, created_at = datetime('now')`).run(uid, wk, rango);
-  } catch (e) { console.error('[weekly-consultas]', e.message); return res.status(500).json({ ok: false, error: 'no pude guardarla 😅 probá de nuevo' }); }
-  try { track(uid, 'weekly_consultas', rango); } catch (e) {}
-  res.json({ ok: true, week_key: wk, rango });
-});
+// (LOTE SIN-PREGUNTA · dueño 24/11) La pregunta de los lunes salió del
+// producto: los endpoints /api/weekly-consultas ya no existen. La tabla
+// weekly_consultas queda con su historia; nadie vuelve a preguntar.
+
 
 // ---------- 📣 PRUEBA SOCIAL REAL (2026-10-24, v370) ----------
 // El hueco de la home para la primera historia de un cliente pago
@@ -49021,7 +48999,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1289';
+const BUILD_ID = '20261105-v1290';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

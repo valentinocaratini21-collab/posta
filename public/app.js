@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1289';
+const PZ_BUILD = '20261105-v1290';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -33087,7 +33087,6 @@ async function inicioView() {
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, '')}
   ${hoySegHTML}
-  <div id="pzTemaInicio"></div>
   <!-- (LOTE INICIO-WEB-PERFIL) Las dos columnas del website nacen acá: .iwp-rail (Hoy + la tarjeta de chat) y .iwp-main (el perfil con su grilla). En móvil los envoltorios son bloques sin estilo y el orden visual queda el de siempre (Hoy primero, el perfil después); el grid es solo ≥1024px. -->
   <div class="iwp-cols">
     <div class="iwp-rail">
@@ -36163,9 +36162,11 @@ function bindChatFull() {
    con UN tema puntual por vez y respuestas cortas para tocar; escribir
    no existe: todo se responde tocando o hablando (v846). El motor real
    cablea esos temas a datos y endpoints reales, nunca al JS demo del
-   mock. Orden: (1) el posteo de hoy por aprobar, (2) la pregunta de
-   los lunes — solo consultas —, (3) un comentario pendiente con su
-   respuesta ya escrita; al final, «Nada pendiente ✓».
+   mock. Orden: (1) el posteo de hoy por aprobar, (2) un comentario
+   pendiente con su respuesta ya escrita; al final, «Nada pendiente ✓».
+   (LOTE SIN-PREGUNTA · dueño 24/11) La pregunta de los lunes salió
+   entera del producto: Posty no le pasa tarea de reporte al dueño;
+   lo que necesite saber lo lee de la cuenta conectada.
    - «Cambialo» NO cierra el tema: pregunta qué cambiar (foto/texto/
      hora), muestra la versión nueva en el chat y avanza solo al
      confirmar («Queda así») o dejarlo para después.
@@ -36215,9 +36216,8 @@ async function pzTemaCargar() {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="pz-tema"><div class="pz-tema-sub">' + esc(pzTemaT('cargando tus temas…', 'loading your topics…')) + '</div></div>';
-  let hoy = null, consultas = null, comentarios = [];
+  let hoy = null, comentarios = [];
   try { hoy = await api.get('/api/ritual/hoy'); } catch (e) { hoy = null; }
-  try { consultas = await api.get('/api/weekly-consultas'); } catch (e) { consultas = null; }
   try { const r = await api.get('/api/comments'); comentarios = (r && r.comments) || []; } catch (e) { comentarios = []; }
   const temas = [];
   // (1) El posteo de hoy, si todavía no está aprobado ni publicado.
@@ -36227,18 +36227,7 @@ async function pzTemaCargar() {
       temas.push({ kind: 'hoy', post: card, hora: card.hora_salida || pzTemaHora(card.scheduled_at) });
     }
   } catch (e) {}
-  // (2) La pregunta de los lunes: solo si esta semana sigue sin respuesta.
-  // (LOTE NOTA-VOZ-ÚNICA-PUERTA) El invitado NO la recibe: en la prueba no
-  // hay semana de consultas que reportar (en la corrida de Blind Barber
-  // apareció un viernes dentro de una prueba). Para el registrado el
-  // cuándo no cambia: queda pendiente toda la semana hasta responderla.
-  try {
-    const esInvitado = (typeof pzIsGuest === 'function') && pzIsGuest();
-    if (!esInvitado && consultas && consultas.rango == null && consultas.week_key && !PZ_TEMA_DESPUES['lunes:' + consultas.week_key]) {
-      temas.push({ kind: 'lunes', week_key: consultas.week_key });
-    }
-  } catch (e) {}
-  // (3) Un comentario pendiente con su respuesta ya escrita.
+  // (2) Un comentario pendiente con su respuesta ya escrita.
   try {
     const c = (comentarios || []).find((x) => x && x.id && (x.suggested || '').trim());
     if (c && !PZ_TEMA_DESPUES['comentario:' + c.id]) temas.push({ kind: 'comentario', c });
@@ -36297,123 +36286,6 @@ function pzTemaColapsar(titulo, sub) {
   // El colapso cambia la altura: el scroll a abajo corre DESPUÉS.
   try { chatScroll(true); } catch (e) {}
 }
-// (RS-5 · REGLA 13) La pregunta de los lunes va ADENTRO del mensaje
-// del día, no como tarjeta propia. Caja con la pregunta + 4 rangos
-// para tocar (mismos rangos que la tarjeta 'lunes').
-function pzTemaLunesBoxHTML(lunesTema) {
-  const wk = (lunesTema && lunesTema.week_key) || '';
-  return '<div class="pz-monday-box" data-week-key="' + esc(wk) + '">'
-    + '<span class="pz-monday-tag">' + esc(pzTemaT('LOS LUNES · ADENTRO DE ESTE MISMO MENSAJE', 'MONDAYS · INSIDE THIS SAME MESSAGE')) + '</span>'
-    + '<b class="pz-monday-q">' + esc(pzTemaT('¿Cuántas consultas te entraron esta semana?', 'How many inquiries came in this week?')) + '</b>'
-    + '<p class="pz-monday-sub">' + esc(pzTemaT('Tocá un rango. Con eso conecto mi trabajo con tu caja — Instagram no muestra tus ventas.', 'Tap a range. That connects my work to your cash — Instagram does not show your sales.')) + '</p>'
-    + '<div class="pz-monday-grid">'
-    + '<button type="button" class="pz-monday-opt" data-lunes-rango="0">' + esc(pzTemaT('Sin consultas', 'No inquiries')) + '</button>'
-    + '<button type="button" class="pz-monday-opt" data-lunes-rango="1-5">' + esc(pzTemaT('1 a 5', '1 to 5')) + '</button>'
-    + '<button type="button" class="pz-monday-opt" data-lunes-rango="6-15">' + esc(pzTemaT('6 a 15', '6 to 15')) + '</button>'
-    + '<button type="button" class="pz-monday-opt" data-lunes-rango="15+">' + esc(pzTemaT('Más de 15 🎉', 'More than 15 🎉')) + '</button>'
-    + '</div>'
-    + '<p class="pz-monday-confirm" style="display:none"></p>'
-    + '</div>';
-}
-// Respuesta a la pregunta de los lunes DESDE el mensaje del día:
-// guarda el rango (mismo endpoint que la tarjeta 'lunes'), muestra
-// la confirmación adentro de la caja y saca el tema 'lunes' de la
-// lista para que no aparezca como tarjeta propia después.
-async function pzTemaGuardarLunesDesdeHoy(rango, btn) {
-  const box = btn ? btn.closest('.pz-monday-box') : null;
-  if (!box) return;
-  try { box.querySelectorAll('[data-lunes-rango]').forEach((b) => { b.disabled = true; if (b === btn) b.classList.add('on'); }); } catch (e) {}
-  try {
-    const r = await api.post('/api/weekly-consultas', { rango });
-    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
-    const ack = rango === '0' ? pzTemaT('✓ Anotado: semana sin consultas.', '✓ Noted: a week with no inquiries.')
-      : rango === '1-5' ? pzTemaT('✓ Anotado: 1 a 5 consultas.', '✓ Noted: 1 to 5 inquiries.')
-      : rango === '6-15' ? pzTemaT('✓ Anotado: 6 a 15 consultas 🎉', '✓ Noted: 6 to 15 inquiries 🎉')
-      : pzTemaT('✓ Anotado: más de 15 🎉 semana récord.', '✓ Noted: more than 15 🎉 record week.');
-    const conf = box.querySelector('.pz-monday-confirm');
-    if (conf) { conf.textContent = ack; conf.style.display = 'block'; }
-    try {
-      if (PZ_TEMA && Array.isArray(PZ_TEMA.temas)) {
-        PZ_TEMA.temas = PZ_TEMA.temas.filter((x) => !(x && x.kind === 'lunes'));
-      }
-    } catch (e) {}
-  } catch (e) {
-    try { box.querySelectorAll('[data-lunes-rango]').forEach((b) => { b.disabled = false; b.classList.remove('on'); }); } catch (e2) {}
-    try { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', 'i could not save it 😕 try again')); } catch (e2) {}
-  }
-}
-/* ===== LOTE PREGUNTA-A-INICIO · LA PREGUNTA DE LOS LUNES EN INICIO =====
-   La pila de temas (pzTemaInit/pzTemaCargar) se monta solo dentro de
-   #pzChatFull, y la ruta del chat quedó solo para el invitado: el
-   registrado rebota a Inicio (router, tab 'chat') y la pregunta de los
-   lunes — el único tema de la pila sin otra superficie viva para él —
-   quedaba sin puerta. Acá vive en Inicio, arriba del contenido del
-   día, con la MISMA tarjeta, los MISMOS rangos y el MISMO endpoint
-   (POST /api/weekly-consultas) que la tarjeta del chat: cambia la
-   superficie, no la pregunta. El invitado NO la recibe (en la prueba
-   no hay semana de consultas: el mismo gate pzIsGuest() que la pila)
-   ni el espejo «ver como visitante». Sin chat nuevo: una tarjeta con
-   toques, y al responder colapsa a la línea de confirmación. */
-async function pzTemaInicioInit() {
-  const slot = document.getElementById('pzTemaInicio');
-  if (!slot || slot.dataset.temaInit) return;
-  try { if (typeof pzIsGuest === 'function' && pzIsGuest()) return; } catch (e) {}
-  try { if (typeof HF_VISITOR !== 'undefined' && HF_VISITOR) return; } catch (e) {}
-  slot.dataset.temaInit = '1';
-  let consultas = null;
-  try { consultas = await api.get('/api/weekly-consultas'); } catch (e) { consultas = null; }
-  // La misma condición de nacimiento que en pzTemaCargar: la semana
-  // sigue sin respuesta (rango == null) y no se dejó para después en
-  // esta sesión. Respondida o sin semana, Inicio no muestra nada.
-  if (!consultas || consultas.rango != null || !consultas.week_key) return;
-  if (PZ_TEMA_DESPUES['lunes:' + consultas.week_key]) return;
-  slot.innerHTML = '<div class="pz-tema">'
-    + '<b>' + esc(pzTemaT('La pregunta de los lunes', "Monday's question")) + '</b>'
-    + '<span>' + esc(pzTemaT('Solo esto: cuántas consultas entraron esta semana. Una respuesta y queda anotado.', 'Just this: how many inquiries came in this week. One answer and it is saved.')) + '</span>'
-    + pzTemaQuickHTML([
-      { id: 'lunes-0', text: pzTemaT('Sin consultas', 'No inquiries') },
-      { id: 'lunes-1-5', text: pzTemaT('1 a 5', '1 to 5') },
-      { id: 'lunes-6-15', text: pzTemaT('6 a 15', '6 to 15') },
-      { id: 'lunes-15+', text: pzTemaT('Más de 15 🎉', 'More than 15 🎉') },
-    ])
-    + '</div>';
-  try {
-    slot.querySelectorAll('[data-tema-op]').forEach((b) => {
-      if (b.dataset.temaBound) return; b.dataset.temaBound = '1';
-      b.onclick = () => { try { pzTemaInicioElegir(b.dataset.temaOp, b); } catch (e) {} };
-    });
-  } catch (e) {}
-}
-async function pzTemaInicioElegir(op, btn) {
-  const RANGOS = { 'lunes-0': '0', 'lunes-1-5': '1-5', 'lunes-6-15': '6-15', 'lunes-15+': '15+' };
-  const rango = RANGOS[op];
-  if (!rango) return;
-  const slot = document.getElementById('pzTemaInicio');
-  if (!slot) return;
-  // Anti doble-toque, como pzTemaElegir; si el guardado falla, los
-  // botones se reactivan y el error va en la línea de la tarjeta (el
-  // equivalente sin chat de pzTemaReactivar + chatSay de error).
-  try { slot.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = true; if (b === btn) b.classList.add('picked'); }); } catch (e) {}
-  try {
-    const r = await api.post('/api/weekly-consultas', { rango });
-    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
-    const ack = rango === '0' ? pzTemaT('Anotado: semana sin consultas.', 'Noted: a week with no inquiries.')
-      : rango === '1-5' ? pzTemaT('Anotado: 1 a 5 consultas.', 'Noted: 1 to 5 inquiries.')
-      : rango === '6-15' ? pzTemaT('Anotado: 6 a 15 consultas 🎉', 'Noted: 6 to 15 inquiries 🎉')
-      : pzTemaT('Anotado: más de 15 🎉 semana récord.', 'Noted: more than 15 🎉 record week.');
-    // Espejo del guardado desde el mensaje del día: si la pila del
-    // chat tuviera el tema cargado, sale de su lista también.
-    try {
-      if (PZ_TEMA && Array.isArray(PZ_TEMA.temas)) {
-        PZ_TEMA.temas = PZ_TEMA.temas.filter((x) => !(x && x.kind === 'lunes'));
-      }
-    } catch (e) {}
-    slot.innerHTML = pzTemaMiniHTML(pzTemaT('La pregunta de los lunes', "Monday's question"), ack);
-  } catch (e) {
-    try { slot.querySelectorAll('[data-tema-op]').forEach((b) => { b.disabled = false; b.classList.remove('picked'); }); } catch (e2) {}
-    try { const s = slot.querySelector('.pz-tema > span'); if (s) s.textContent = pzTemaT('no pude guardarlo 😕 probá de nuevo', 'i could not save it 😕 try again'); } catch (e2) {}
-  }
-}
 function pzTemaPintar() {
   const wrap = document.getElementById('pzTemaWrap');
   if (!wrap || !PZ_TEMA) return;
@@ -36431,9 +36303,7 @@ function pzTemaPintar() {
     const titulo = (p.caption_corta || p.caption || '').trim() || pzTemaT('El posteo de hoy', "Today's post");
     const meta = pzTemaT('Hoy', 'Today') + (tema.hora ? ' · ' + tema.hora : '') + ' · ' + pzTemaT('Por aprobar', 'To approve');
     // (RS-5 · UN SOLO MENSAJE POR DÍA) El mensaje del día es la tarjeta
-    // misma: sin «TEMA X DE N», sin «seguimos con el próximo tema». La
-    // pregunta de los lunes va ADENTRO de este mensaje (regla 13).
-    const lunesPend = (temas || []).find((x) => x && x.kind === 'lunes');
+    // misma: sin «TEMA X DE N», sin «seguimos con el próximo tema».
     html = '<div class="pz-tema pz-daily-msg"><div class="pz-daily-head"><span class="pz-daily-label">' + esc(pzTemaT('HOY · EL ÚNICO MENSAJE DE POSTY', "TODAY · POSTY'S ONLY MESSAGE")) + '</span><span class="pz-daily-time">' + esc(tema.hora || '') + '</span></div>'
       + '<p class="pz-daily-intro">' + esc(pzTemaT('Hola, este es tu posteo de hoy. Aprobalo con un toque, o cambialo tocando — sin escribir nada.', "Hi, this is today's post. Approve it with a tap, or change it by tapping — no typing needed.")) + '</p>'
       + (p.imagen ? '<div class="pz-tema-thumb"><img src="' + esc(p.imagen) + '" alt=""><div><b>' + esc(titulo) + '</b><span>' + esc(meta) + '</span></div></div>' : '')
@@ -36442,22 +36312,7 @@ function pzTemaPintar() {
         { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it') },
         { id: 'hoy-despues', text: pzTemaT('Después', 'Later') },
       ])
-      + (lunesPend ? pzTemaLunesBoxHTML(lunesPend) : '')
       + '<p class="pz-one-a-day">' + esc(pzTemaT('Eso es todo por hoy: un solo mensaje de Posty por día. Mañana llega el de mañana, en este mismo hilo.', "That's all for today: one Posty message a day. Tomorrow's arrives tomorrow, in this same thread.")) + '</p>'
-      + '</div>';
-  } else if (tema.kind === 'lunes') {
-    // (RS-5) Solo se pinta como tarjeta propia cuando NO hay mensaje
-    // del día (el posteo ya se aprobó): si hay 'hoy', la pregunta va
-    // adentro de ese mensaje (regla 13) y este tema no se pinta.
-    html = '<div class="pz-tema">'
-      + '<b>' + esc(pzTemaT('La pregunta de los lunes', "Monday's question")) + '</b>'
-      + '<span>' + esc(pzTemaT('Solo esto: cuántas consultas entraron esta semana. Una respuesta y queda anotado.', 'Just this: how many inquiries came in this week. One answer and it is saved.')) + '</span>'
-      + pzTemaQuickHTML([
-        { id: 'lunes-0', text: pzTemaT('Sin consultas', 'No inquiries') },
-        { id: 'lunes-1-5', text: pzTemaT('1 a 5', '1 to 5') },
-        { id: 'lunes-6-15', text: pzTemaT('6 a 15', '6 to 15') },
-        { id: 'lunes-15+', text: pzTemaT('Más de 15 🎉', 'More than 15 🎉') },
-      ])
       + '</div>';
   } else if (tema.kind === 'comentario') {
     const c = tema.c;
@@ -36479,14 +36334,6 @@ function pzTemaPintar() {
       b.onclick = () => { try { pzTemaElegir(b.dataset.temaOp, b); } catch (e) {} };
     });
   } catch (e) {}
-  // (RS-5 · REGLA 13) Rangos de la pregunta de los lunes adentro del
-  // mensaje del día: se guardan desde ahí, sin tarjeta propia.
-  try {
-    wrap.querySelectorAll('[data-lunes-rango]').forEach((b) => {
-      if (b.dataset.lunesBound) return; b.dataset.lunesBound = '1';
-      b.onclick = () => { try { pzTemaGuardarLunesDesdeHoy(b.dataset.lunesRango, b); } catch (e) {} };
-    });
-  } catch (e) {}
 }
 function pzTemaAvanzar() {
   if (!PZ_TEMA) return;
@@ -36494,11 +36341,9 @@ function pzTemaAvanzar() {
   PZ_TEMA.idx++;
   if (PZ_TEMA.idx >= PZ_TEMA.temas.length) { pzTemaPintar(); return; }
   const sig = PZ_TEMA.temas[PZ_TEMA.idx];
-  const puente = sig.kind === 'lunes'
-    ? pzTemaT('ahora mi pregunta de los lunes: ¿cuántas consultas te entraron esta semana? es el único dato que no puedo ver — instagram no muestra tus ventas — y conecta mi trabajo con tu caja.', "now my monday question: how many inquiries came in this week? it is the one thing i cannot see — instagram does not show your sales — and it connects my work to your cash.")
-    : sig.kind === 'comentario'
-      ? pzTemaT('queda un tema solo: hay un comentario nuevo y ya te dejé la respuesta armada. ¿la mandamos?', 'one topic left: there is a new comment and i already drafted the reply. shall we send it?')
-      : '';
+  const puente = sig.kind === 'comentario'
+    ? pzTemaT('queda un tema solo: hay un comentario nuevo y ya te dejé la respuesta armada. ¿la mandamos?', 'one topic left: there is a new comment and i already drafted the reply. shall we send it?')
+    : '';
   setTimeout(() => {
     try { if (puente) chatSay(puente); } catch (e) {}
     pzTemaPintar();
@@ -36570,7 +36415,6 @@ function pzTemaSetCuerpo(html) {
 function pzTemaTituloTema(tema) {
   if (!tema) return '';
   return tema.kind === 'hoy' ? pzTemaT('el posteo de hoy', "today's post")
-    : tema.kind === 'lunes' ? pzTemaT('la pregunta de los lunes', "monday's question")
     : pzTemaT('el comentario', 'the comment');
 }
 function pzTemaPosponerCambio() {
@@ -36629,24 +36473,6 @@ async function pzTemaAprobarHoy() {
     }
     chatSay(pzTemaT('no se pudo 😕 probá de nuevo', "it did not work 😕 try again")); pzTemaReactivar();
   }
-}
-async function pzTemaGuardarLunes(rango, etiqueta) {
-  const tema = pzTemaActual();
-  if (!tema || tema.kind !== 'lunes') return;
-  try {
-    const r = await api.post('/api/weekly-consultas', { rango });
-    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
-    const ack = rango === '0' ? pzTemaT('anotado: semana sin consultas. queda guardado.', 'noted: a week with no inquiries. saved.')
-      : rango === '1-5' ? pzTemaT('anotado: 1 a 5 consultas. queda guardado.', 'noted: 1 to 5 inquiries. saved.')
-      : rango === '6-15' ? pzTemaT('anotado: 6 a 15 consultas 🎉 queda guardado.', 'noted: 6 to 15 inquiries 🎉 saved.')
-      : pzTemaT('anotado: más de 15 🎉 semana récord. queda guardado.', 'noted: more than 15 🎉 record week. saved.');
-    chatSay(ack);
-    // (LOTE CHAT-MEJORA) Al responder, la tarjeta colapsa a una
-    // línea y lo puntual lo dice Posty como mensaje del chat (la
-    // línea «¿Algo puntual…?» ya no vive en la tarjeta).
-    try { pzTemaColapsar(pzTemaT('La pregunta de los lunes', "Monday's question"), pzTemaT('Anotado', 'Saved')); } catch (e) {}
-    setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
-  } catch (e) { chatSay(pzTemaT('no pude guardarlo 😕 probá de nuevo', "i could not save it 😕 try again")); pzTemaReactivar(); }
 }
 async function pzTemaMandarComentario() {
   const tema = pzTemaActual();
@@ -36772,7 +36598,6 @@ function pzTemaResolverHoy() {
     const clon = card.cloneNode(true);
     const q2 = clon.querySelector('.pz-tema-quick'); if (q2) q2.remove();
     const one = clon.querySelector('.pz-one-a-day'); if (one) one.remove();
-    const lun = clon.querySelector('.pz-monday-box'); if (lun) lun.remove();
     const ets = Date.now();
     chatAppendMsg(box, '<div class="chat-msg ai" data-ts="' + ets + '">' + clon.innerHTML + chatHoraHtml(ets) + '</div>', ets);
     try { chatScroll(); } catch (e) {}
@@ -36896,7 +36721,6 @@ function pzTemaElegir(op, btn, textoLibre) {
   }
   if (op === 'ch-despues' || op === 'ch-despues2') { pzTemaPosponerCambio(); return; }
   if (op === 'ch-confirmar') { pzTemaConfirmar(); return; }
-  if (op && op.indexOf('lunes-') === 0) { pzTemaGuardarLunes(op.slice(6), label); return; }
   if (op === 'com-mandar') { pzTemaMandarComentario(); return; }
   if (op === 'com-ver') {
     setTimeout(() => {
@@ -36984,17 +36808,6 @@ function pzTemaOnSend(text, unsent) {
     if (/cambia/.test(norm)) { limpiar(); pzTemaElegir('hoy-cambialo', null, text); return true; }
     if (/publica|dale|aprob/.test(norm)) { limpiar(); pzTemaElegir('hoy-aprobar', null, text); return true; }
     if (despues || /lo miro/.test(norm)) { limpiar(); pzTemaElegir('hoy-despues', null, text); return true; }
-  } else if (tema.kind === 'lunes') {
-    const m = norm.match(/(\d+)/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      const rango = n === 0 ? '0' : n <= 5 ? '1-5' : n <= 15 ? '6-15' : '15+';
-      pzTemaBurbujaUsuario(text); limpiar();
-      pzTemaGuardarLunes(rango, text);
-      return true;
-    }
-    if (/sin consultas/.test(norm)) { pzTemaBurbujaUsuario(text); limpiar(); pzTemaGuardarLunes('0', text); return true; }
-    if (/mas de 15/.test(norm)) { pzTemaBurbujaUsuario(text); limpiar(); pzTemaGuardarLunes('15+', text); return true; }
   } else if (tema.kind === 'comentario') {
     if (/manda|envia|respond/.test(norm)) { limpiar(); pzTemaElegir('com-mandar', null, text); return true; }
     if (despues) { limpiar(); pzTemaElegir('com-despues', null, text); return true; }
@@ -40031,10 +39844,6 @@ function bindInicio() {
   // (LOTE REDISEÑO R1 · HOY) Segmentador, mensaje→chat, tarjetas por
   // aprobar, hoja de subida, entrada al conserje.
   try { pzHoyBind(document.getElementById('inicioView')); } catch (e) {}
-  // (LOTE PREGUNTA-A-INICIO) La pregunta de los lunes en Inicio: la pila
-  // de temas vive solo en la vista de chat (ruta del invitado); el
-  // registrado entra por Inicio y la pregunta quedaba sin puerta.
-  try { pzTemaInicioInit(); } catch (e) {}
   // Bloque de respaldo (sin piezas todavía): flechas del carrusel, el
   // mismo cableado que hace bindSchedule en su vista.
   const wl = document.querySelector('#inicioView #hsWeekList');
