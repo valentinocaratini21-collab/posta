@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1293';
+const PZ_BUILD = '20261105-v1294';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32628,7 +32628,7 @@ function iwpChatCardHTML(en) {
   return `<div class="iwp-chat">
     <div class="iwp-chat-head"><img class="iwp-chat-ava" src="/ai-avatar.png" alt="Posty"><span class="iwp-chat-who"><b>Posty</b></span></div>
     <p class="iwp-chat-txt">${en ? 'Ask for whatever you need, in writing: a change to a post, a new idea, anything.' : 'Pedile lo que quieras, por escrito: un cambio en un posteo, una idea nueva, lo que sea.'}</p>
-    <button type="button" class="iwp-chat-go" onclick="bbGo('#/app/chat')">${en ? 'Write to Posty…' : 'Escribile a Posty…'}</button>
+    <button type="button" class="iwp-chat-go" onclick="pzChatGeneralAbrir()">${en ? 'Write to Posty…' : 'Escribile a Posty…'}</button>
     <p class="iwp-chat-eta">${en ? 'Estimated reply time: 30 minutes.' : 'Respuesta estimada: 30 minutos.'}</p>
   </div>`;
 }
@@ -34463,6 +34463,12 @@ function pzNivelMount() {
 }
 
 function mzOpenSheet(focus) {
+  // (LOTE BOTON-CHAT · defecto del dueño 24/11) Para el REGISTRADO,
+  // «abrir el chat» es abrir la hoja del chat único sobre Inicio (su
+  // conversación vive ahí): navegar a la ruta le rebota a Inicio sin
+  // abrir nada — así moría el botón «Corregilo en el chat» de Ajustes.
+  // El invitado sigue a su pantalla, como siempre.
+  if (!(typeof pzIsGuest === 'function' && pzIsGuest())) { pzChatGeneralAbrir(); return; }
   // (LOTE CHATPANTALLA) La hoja se retiró: abrir el chat = navegar a
   // su pantalla. Si ya estamos en ella, foco como siempre.
   if ((location.hash || '').split('?')[0] !== '#/app/chat') { location.hash = '#/app/chat'; return; }
@@ -34471,6 +34477,34 @@ function mzOpenSheet(focus) {
   try { chatUpdateSendBtn(); } catch (e) {}
   try { chatScroll(); } catch (e) {}
   try { pzPhStart(); } catch (e) {}
+}
+/* (LOTE BOTON-CHAT · defecto del dueño 24/11) Abrir EL chat del
+   espacio actual, como prometen los botones que lo anuncian: el
+   invitado va a su vista de chat; el registrado abre la hoja del chat
+   único sobre Inicio (bindInicio ya cablea esa tarjeta: bindChat). Si
+   Inicio todavía no está pintado, el pedido queda pendiente y lo
+   entrega bindInicio al pintar. */
+let PZ_CHAT_GENERAL_PENDING = false;
+function pzChatGeneralAbrir() {
+  if (typeof pzIsGuest === 'function' && pzIsGuest()) { location.hash = '#/app/chat'; return; }
+  if ((location.hash || '').split('?')[0] === mzHomeHash() && document.getElementById('mzSheet')) { pzChatGeneralEntregar(); return; }
+  PZ_CHAT_GENERAL_PENDING = true;
+  location.hash = mzHomeHash();
+}
+function pzChatGeneralEntregar() {
+  const sh = document.getElementById('mzSheet');
+  if (!sh) return false;
+  sh.hidden = false;
+  try { document.body.classList.add('mz-sheet-open'); } catch (e) {}
+  const x = document.getElementById('mzSheetX');
+  if (x && !x.dataset.pzGenBound) { x.dataset.pzGenBound = '1'; x.onclick = () => { try { mzCloseSheet(); } catch (e) {} }; }
+  if (!sh.dataset.pzGenBound) {
+    sh.dataset.pzGenBound = '1';
+    sh.addEventListener('click', (e) => { if (e.target === sh) { try { mzCloseSheet(); } catch (e2) {} } });
+  }
+  try { chatLoadHistory(); } catch (e) {}
+  try { chatScroll(); } catch (e) {}
+  return true;
 }
 // (LOTE SALIR-SIN-ZOOM · 2/11) Antes de retirar/ocultar una hoja,
 // soltar el foco: en WKWebView, si el campo enfocado se elimina u
@@ -39793,6 +39827,12 @@ function pzPostChatClose() {
 // con el botón: el chat vive solo dentro del detalle.
 
 function bindInicio() {
+  // (LOTE BOTON-CHAT) Pedido de abrir el chat general hecho desde otra
+  // vista (Ajustes, el rail web): se entrega acá, con Inicio pintado.
+  if (typeof PZ_CHAT_GENERAL_PENDING !== 'undefined' && PZ_CHAT_GENERAL_PENDING) {
+    PZ_CHAT_GENERAL_PENDING = false;
+    setTimeout(() => { try { pzChatGeneralEntregar(); } catch (e) {} }, 0);
+  }
   try { pzNivelMount(); } catch (e) {}
   // (v442) Píldora de activación a un costado: su toggle vive en la vista.
   try { bindSetupPill(document.getElementById('inicioView')); } catch (e) {}

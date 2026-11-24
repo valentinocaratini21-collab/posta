@@ -132,7 +132,7 @@ function ajustesView() {
   return `<div class="page-head aj-head"><div class="ph-ico">${pzIc('gear', 26)}</div><div class="ph-txt"><h1>Ajustes</h1></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div id="ajMenu"${ajInitSec ? ' hidden' : ''}>
-    <button type="button" class="aj-chatline" onclick="bbGo('#/app/chat')">${ajEn ? 'Something Posty knows about you is wrong? Fix it in the chat →' : '¿Algo de tu negocio está mal? Corregilo en el chat →'}</button>
+    <button type="button" class="aj-chatline" onclick="pzChatGeneralAbrir()">${ajEn ? 'Something Posty knows about you is wrong? Fix it in the chat →' : '¿Algo de tu negocio está mal? Corregilo en el chat →'}</button>
     <div class="sec-head"><h2>${ajEn ? 'Your account' : 'Tu cuenta'}</h2></div>
     <div class="know">
       <div class="row" data-ajnav="plan"><span class="k">${ajEn ? 'Plan' : 'Plan'}</span><span class="v"><span id="rsPlanVal">${esc(stPlanTx) || (ajEn ? 'Monthly' : 'Mensual')}</span> · ${esc(rsPagoShortTx)}</span><button type="button" class="linklike">${ajEn ? 'View' : 'Ver'}</button></div>
