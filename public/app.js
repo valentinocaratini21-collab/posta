@@ -1259,7 +1259,7 @@ function pzShellHeadHTML(tab) {
   // equilibrio total). Para cualquier otra pestaña, agHead es null y
   // la barra sale byte a byte como siempre.
   const agHead = (tab === 'venty' || tab === 'gesty') ? pzAgenteMeta(tab) : null;
-  let estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'working for you…' : 'trabajando para vos…');
+  let estadoIni = (typeof window !== 'undefined' && window.__pzBarraEstadoTxt) || (en ? 'your community manager' : 'tu community manager');
   if (agHead) estadoIni = (typeof window !== 'undefined' && window.__pzAgenteEstado && window.__pzAgenteEstado.tab === tab && window.__pzAgenteEstado.txt) || pzBarraTextoCarga(tab);
   // (LOTE CAMPANA-BADGE) La insignia nace pintada desde la caché si
   // ya se conoce el conteo (mismo patrón que la línea de estado con
@@ -1350,22 +1350,12 @@ function pzShellDatosHoy() {
 // estado honesto de arranque «trabajando para vos…».
 function pzBarraEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en'); }
 function pzBarraEstadoComputar(ritual, idea) {
+  // (LOTE SUBTITULO-CM · decisión del dueño 24/11: «tu community
+  // manager») El subtítulo de la barra ya no narra el posteo — repetía
+  // lo que la tarjeta del día ya dice —: es la identidad de Posty para
+  // el negocio, siempre. El estado del día vive en su tarjeta.
   const en = pzBarraEn();
-  if (idea && idea.estado && idea.estado !== 'resuelta') return en ? 'working on your request…' : 'trabajando en tu pedido…';
-  if (!ritual || ritual.ok === false) return en ? 'working for you…' : 'trabajando para vos…';
-  if (ritual.publicado_hoy) return en ? "today's post is out" : 'tu posteo de hoy ya salió';
-  // (LOTE INICIO-SIMPLE · orden del dueño 24/11: el estado «armando»
-  // se dice UNA vez — en la tarjeta del día; el subtítulo de la barra
-  // no lo repite y cae a la línea genérica verdadera.)
-  if (!ritual.hoy || !ritual.recomendada) return en ? 'working for you…' : 'trabajando para vos…';
-  if (ritual.abre_a && ritual.ahora && String(ritual.ahora) < String(ritual.abre_a)) return en ? 'working for you…' : 'trabajando para vos…';
-  // (LOTE BARRA-TEXTO) Listo: el hecho con la hora que trae la carta
-  // recomendada (hora_salida: la salida real del posteo en la zona de
-  // la cuenta, formateada por idioma en el servidor — «19:00» ES,
-  // «7:00 PM» EN); sin ese dato, el hecho sin hora. Nunca un eslogan.
-  const horaSalida = (ritual.recomendada && ritual.recomendada.hora_salida) ? String(ritual.recomendada.hora_salida) : '';
-  if (horaSalida) return en ? "today's post goes out at " + horaSalida : 'tu posteo de hoy sale a las ' + horaSalida;
-  return en ? "today's post is ready" : 'tu posteo de hoy está listo';
+  return en ? 'your community manager' : 'tu community manager';
 }
 function pzBarraEstadoPintar(txt) {
   try {
@@ -3572,7 +3562,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1305';
+const PZ_BUILD = '20261105-v1306';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
