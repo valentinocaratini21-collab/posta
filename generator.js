@@ -1850,6 +1850,15 @@ const SPANISH_LEAK_RE = /(¡|¿|\b(escribinos|escribime|comentá|comenta(?!r)|re
  * pegadas); (c) fragmento titular cosido tras ":" seguido de otra apertura
  * con artículo; (d) palabra duplicada en la costura ("the the", "and and"). */
 function captionOpenIsGarbledEn(caption) {
+  // (Juli, 2026-11-24 — LOTE JULI-EN-EMOJI v1301; id real 752): el
+  // cierre con puntuación se mide SIN el emoji final — «This is what
+  // a Georgia backyard is for. 🏡» es una oración COMPLETA que
+  // termina en preposición, pero el test de puntuación miraba el
+  // emoji, no el punto, y la última palabra («for») caía en la lista
+  // de colgantes: falso empalme. El cómputo de palabras ya pelaba
+  // los pictogramas; el test de puntuación no. Los dos tests de
+  // cierre de esta función usan esta misma normalización.
+  const cierraConPuntuacion = (s) => /[.!?…]["']?$/.test(String(s).replace(/(?:\p{Extended_Pictographic}|\s)+$/u, ''));
   const blocks = String(caption || '').split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
   for (let bi = 0; bi < blocks.length; bi++) {
     const first = (blocks[bi].split('\n')[0] || '').trim();
@@ -1877,7 +1886,7 @@ function captionOpenIsGarbledEn(caption) {
     // (LOTE PRIMER-POSTEO-PERFECTO · pieza 4) La lista suma las
     // SUBORDINANTES colgantes (clase de la auditoría Veja #7, posteo
     // 659: el gancho «Salar, where ✨» es una frase cortada a la mitad).
-    if (bi === 0 && !/[.!?…]["']?$/.test(first)) {
+    if (bi === 0 && !cierraConPuntuacion(first)) {
       const words = first.replace(/[\p{Extended_Pictographic}]/gu, '').trim().split(/\s+/).filter(Boolean);
       const last = words.length ? words[words.length - 1].toLowerCase().replace(/[^a-z']/g, '') : '';
       if (['the', 'a', 'an', 'of', 'to', 'for', 'with', 'and', 'or', 'your', 'our', 'in', 'on', 'at',
@@ -1890,7 +1899,7 @@ function captionOpenIsGarbledEn(caption) {
     // que ya no se produce; esto caza la subordinante viva).
     const blockLines = blocks[bi].split('\n').map((s) => s.trim()).filter(Boolean);
     const lastLine = blockLines.length ? blockLines[blockLines.length - 1] : '';
-    if (lastLine && !/[.!?…]["']?$/.test(lastLine)
+    if (lastLine && !cierraConPuntuacion(lastLine)
       && clientDigest.EN_HANGING_SUBORDINATORS && clientDigest.EN_HANGING_SUBORDINATORS.has(clientDigest.lastContentWord(lastLine))) return true;
   }
   return false;
