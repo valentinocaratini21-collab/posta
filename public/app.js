@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1308';
+const PZ_BUILD = '20261105-v1309';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24783,12 +24783,14 @@ async function pzBoostLoad(opts) {
   s.boostHabilitado = (bil && bil.ok && bil.boostHabilitado !== undefined) ? bil.boostHabilitado : undefined;
   s.adsPermiso = (bil && bil.ok && bil.ads_permiso !== undefined) ? bil.ads_permiso : undefined;
   s.conversionPendiente = (bil && bil.ok) ? !!bil.conversion_pendiente : undefined;
-  // (LOTE RIEL-SUSCRIPCION v878) El monto elegido vive en la moneda del
-  // riel: si el riel es MP y el monto es de la lista USD, se pasa al
-  // presupuesto ARS del medio ($10.000); si no es MP y el monto es ARS,
-  // se vuelve al default USD ($50, el recomendado de la hoja).
-  if (s.billetera && s.billetera.billing_provider === 'mp' && [20, 50, 100].includes(Number(s.selMonto))) s.selMonto = 10000;
-  else if (s.billetera && s.billetera.billing_provider !== 'mp' && [5000, 10000, 20000].includes(Number(s.selMonto))) s.selMonto = 50;
+  // (LOTE RIEL-SUSCRIPCION v878) El monto elegido vive en la moneda
+  // del impulso. (LOTE ADS-META-BILLETERA) La moneda que manda es la
+  // RESUELTA por pzBoostEsMP() — la de la billetera desde ADS-MONEDA —,
+  // no el riel crudo: con billetera USD y un riel MP viejo, el monto
+  // USD se queda (antes el default 50 se convertía en 10000 y la meta
+  // de la billetera salía «US$11000»).
+  if (s.billetera && pzBoostEsMP() && [20, 50, 100].includes(Number(s.selMonto))) s.selMonto = 10000;
+  else if (s.billetera && !pzBoostEsMP() && [5000, 10000, 20000].includes(Number(s.selMonto))) s.selMonto = 50;
   // Pre-selección: el recomendado; si está impulsado, el primer elegible
   // no impulsado; si el anterior sigue elegible, se conserva.
   // (v846) La selección es por clave (pzBoostKey): el reciente de IG
@@ -25342,7 +25344,12 @@ function pzAdsDiferencia() {
   const esMP = pzBoostEsMP();
   const monedaWallet = String(s.billetera.currency || 'USD');
   if (esMP ? monedaWallet !== 'ARS' : monedaWallet !== 'USD') return null;
-  const pauta = Number(s.selMonto) || (esMP ? 10000 : 50);
+  // (LOTE ADS-META-BILLETERA) La pauta sale de la tabla de la moneda
+  // resuelta (la misma guarda del bloque de la billetera): un
+  // selMonto heredado de la otra moneda nunca entra a la cuenta.
+  const montosD = pzBoostMontos();
+  const selD = Number(s.selMonto);
+  const pauta = montosD.includes(selD) ? selD : (montosD.length > 1 ? montosD[1] : montosD[0]);
   const total = pzBoostTotal(pauta);
   const saldo = Math.floor(Number(s.billetera.balance_cents || 0) / 100);
   const falta = total - saldo;
