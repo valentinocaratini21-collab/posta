@@ -22586,6 +22586,22 @@ function scheduleLintForPost(uid, postId) {
     if (!caption.trim()) return { ok: true }; // sin caption no hay copy que lintear
     let founder = false;
     try { founder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+    // (LOTE ESPACIO-FUNDADOR · 24/11) La exención del fundador alcanza a
+    // sus ESPACIOS: un espacio es una fila users propia con email interno
+    // (espacio+<login>+…@posta.interno), así que isFounderEmail lo dejaba
+    // afuera y este lint retenía (needs_review=1) las piezas a mano de la
+    // vidriera EN — invisibles en su Inicio, que declaraba «Today's post
+    // is being built» con el posteo del día cargado (post 761, clase
+    // prohibida del 15/11). El espacio es la cuenta principal a todos los
+    // efectos: si su login es fundador, la exención es la misma.
+    if (!founder) {
+      try {
+        const infoEsp = pzEspacioInfo(uid);
+        if (infoEsp && Number(infoEsp.login) && Number(infoEsp.login) !== Number(uid)) {
+          founder = !!(costs.isFounderEmail && costs.isFounderEmail(Number(infoEsp.login)));
+        }
+      } catch (e) {}
+    }
     if (founder) return { ok: true, founder: true };
     const prof = getProfile(uid) || {};
     const dna = digestForUser(uid);
@@ -49305,7 +49321,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1321';
+const BUILD_ID = '20261105-v1322';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
