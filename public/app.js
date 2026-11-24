@@ -3568,7 +3568,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1295';
+const PZ_BUILD = '20261105-v1296';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -32632,6 +32632,39 @@ function iwpChatCardHTML(en) {
     <p class="iwp-chat-eta">${en ? 'Estimated reply time: 30 minutes.' : 'Respuesta estimada: 30 minutos.'}</p>
   </div>`;
 }
+// ===== LOTE PAGAR-AL-ENTRAR (decisión del dueño 24/11 09:07, chat de
+// Posty: «que esté a la vista la opción de pagar los USD 199 apenas se
+// entra, para el que entra decidido») =====
+// La barra vive SOLO dentro de la app y solo para quien todavía no paga
+// (invitado o en prueba): al tope de Inicio, AL LADO del camino de la
+// prueba — no lo reemplaza ni es una pared: el decidido paga en un toque
+// y el que duda sigue viendo su semana y su primer posteo gratis, igual
+// que siempre. Verdad de puerta: las páginas públicas (lista / prueba)
+// NO muestran pago — ahí no se promete lo que hoy no se puede cobrar;
+// las entradas que hoy llegan a la app son las de la puerta del
+// operador, y la puerta pública lo tendrá cuando abra la venta.
+// El toque: invitado → la hoja de cuenta de siempre (al crearla, el
+// flujo sigue solo con el pago); registrado → Ajustes con
+// ?plan_sel=posty, cuyo click programático existente arranca el checkout
+// del plan único (Stripe, o el paso de email de Mercado Pago). Ese
+// checkout es el de Mi plan: acepta los códigos de descuento vigentes
+// (DESCUENTOS-CODIGO) y cobra el precio que manda el mayor descuento.
+function pzPagarAhoraHTML(en) {
+  try {
+    if (typeof ME === 'undefined' || !ME) return '';
+    if (ME.plan_status === 'active') return '';
+    return `<div class="pz-pagar-ahora" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#0A1E33;border-radius:16px;padding:12px 14px;margin:0 0 14px">
+      <div style="flex:1 1 180px;min-width:160px"><b style="color:#fff;font-size:14.5px">${en ? 'Already decided?' : '¿Ya lo tenés decidido?'}</b><br><span style="color:#BFD9EA;font-size:12.5px">${en ? 'Skip the trial — your week and your first post stay free either way.' : 'Salteá la prueba — tu semana y tu primer posteo siguen gratis igual.'}</span></div>
+      <button type="button" class="pz-pa-btn" onclick="pzPagarAhora()" style="background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:11px 18px;font-weight:800;font-size:14.5px;cursor:pointer;white-space:nowrap">${en ? 'I want Posty now — USD 199/mo' : 'Quiero Posty ahora — USD 199/mes'}</button>
+    </div>`;
+  } catch (e) { return ''; }
+}
+function pzPagarAhora() {
+  try {
+    if (typeof pzIsGuest === 'function' && pzIsGuest()) { pzGuestAccountSheet(() => pzPagarAhora()); return; }
+    bbGo('#/app/ajustes?plan_sel=posty');
+  } catch (e) {}
+}
 async function inicioView() {
   try { await pzRevalidateIdentity(); } catch (e) {}
   const tz = pcTz();
@@ -33100,6 +33133,7 @@ async function inicioView() {
   // del próximo es la entrada (ver el fetch retirado arriba).
   return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, '')}
+  ${pzPagarAhoraHTML(enHome)}
   ${hoySegHTML}
   <!-- (LOTE INICIO-WEB-PERFIL) Las dos columnas del website nacen acá: .iwp-rail (Hoy + la tarjeta de chat) y .iwp-main (el perfil con su grilla). En móvil los envoltorios son bloques sin estilo y el orden visual queda el de siempre (Hoy primero, el perfil después); el grid es solo ≥1024px. -->
   <div class="iwp-cols">
