@@ -506,7 +506,7 @@ const adsFee = require('./ads-fee');
 const adsAudiencia = require('./ads-audiencia'); // (LOTE ADS-ESTRATÉGICOS) objetivo + audiencia desde el fundamento
 const adsStats = require('./ads-stats'); // (LOTE ADS-STATS-TARJETA) la carga de la tarjeta del impulso activo, pura desde la fila
 // === FEE-IMPULSAR require (fin) ===
-const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
+const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS, adsMoney, fmtMoney } = require('./config/ads');
 
 // Funnel: eventos de conversión (prueba → registro → conexión → semana → pago).
 // Tabla funnel_events (db.js). Sin PII: solo user_id + evento.
@@ -14568,10 +14568,12 @@ app.get('/api/ads/config', requireAuth, (req, res) => {
     balance_cents: w.balance_cents,
     currency: w.currency,
     fee_pct: AD_FEE_PCT,
-    min_topup_cents: AD_MIN_TOPUP_CENTS,
-    topup_options: AD_TOPUP_OPTIONS,
-    budget_options: AD_BUDGET_OPTIONS,
-    min_budget_cents: AD_MIN_BUDGET_CENTS,
+    // (LOTE ADS-MONEDA) Los montos siguen la moneda de la billetera:
+    // una cuenta con crédito en USD ve USD 20/50/100, no los pesos.
+    min_topup_cents: adsMoney(w.currency).min_topup_cents,
+    topup_options: adsMoney(w.currency).topup_options,
+    budget_options: adsMoney(w.currency).budget_options,
+    min_budget_cents: adsMoney(w.currency).min_budget_cents,
     default_days: AD_DEFAULT_DAYS,
     ads_ready: metaAds.adsConfigured(),
     mp_ready: mp.mpConfigured(),
@@ -14660,6 +14662,11 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
       // de siempre (y la carga falla con sin_cliente_stripe → el botón
       // «Agregar tarjeta» de v877).
       billing_provider: railCobro(uid),
+      // (LOTE ADS-MONEDA) La moneda del impulso es la de la billetera
+      // cuando el riel no coincide con ella: riel MP viejo + billetera
+      // USD = la pantalla corre en USD (el crédito que el usuario cargó
+      // manda). Solo con riel MP Y billetera ARS el impulso es en pesos.
+      impulso_ars: railCobro(uid) === 'mp' && w.currency === 'ARS',
       montos_ars: adsBilletera.MONTOS_CARGA_ARS,
       presupuestos_ars: adsBilletera.MONTOS_IMPULSO_ARS,
       min_topup_ars: adsBilletera.MONTOS_CARGA_ARS[0],
@@ -16396,8 +16403,11 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
   const postId = Number(req.body.post_id) || 0;
   const budgetCents = Math.round(Number(req.body.budget_cents) || 0);
   if (!postId) return res.status(400).json({ error: 'Elegí un posteo' });
-  if (!(budgetCents >= AD_MIN_BUDGET_CENTS)) {
-    return res.status(400).json({ error: `El presupuesto mínimo por pauta es de ${fmtARS(AD_MIN_BUDGET_CENTS)}` });
+  // (LOTE ADS-MONEDA) El mínimo se mide en la moneda de la billetera:
+  // un presupuesto de USD 20 ya no se rechaza contra el mínimo en pesos.
+  const minBoost = adsMoney(getAdWallet(req.session.userId).currency);
+  if (!(budgetCents >= minBoost.min_budget_cents)) {
+    return res.status(400).json({ error: `El presupuesto mínimo por pauta es de ${fmtMoney(minBoost.min_budget_cents, minBoost.currency)}` });
   }
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, req.session.userId);
   if (!post || !post.ig_media_id) {
@@ -49229,7 +49239,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1304';
+const BUILD_ID = '20261105-v1305';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

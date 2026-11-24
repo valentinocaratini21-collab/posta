@@ -33,6 +33,29 @@ function fmtARS(cents) {
   return '$' + Math.round(cents / 100).toLocaleString('es-AR');
 }
 
+function fmtUSD(cents) {
+  return '$' + Math.round(cents / 100).toLocaleString('en-US');
+}
+
+// (LOTE ADS-MONEDA) Las tablas por moneda de la BILLETERA del usuario:
+// la plata que cargó manda. USD espeja los montos del diseño aprobado
+// (impulsos de USD 20 / 50 / 100 por 7 días).
+const AD_MIN_TOPUP_CENTS_USD = 1000; // USD 10
+const AD_TOPUP_OPTIONS_USD = [2000, 5000, 10000]; // USD 20 / 50 / 100
+const AD_BUDGET_OPTIONS_USD = [2000, 5000, 10000];
+const AD_MIN_BUDGET_CENTS_USD = 2000; // USD 20
+
+function adsMoney(currency) {
+  if (String(currency || '').toUpperCase() === 'USD') {
+    return { currency: 'USD', min_topup_cents: AD_MIN_TOPUP_CENTS_USD, topup_options: AD_TOPUP_OPTIONS_USD, budget_options: AD_BUDGET_OPTIONS_USD, min_budget_cents: AD_MIN_BUDGET_CENTS_USD, fmt: fmtUSD };
+  }
+  return { currency: 'ARS', min_topup_cents: AD_MIN_TOPUP_CENTS, topup_options: AD_TOPUP_OPTIONS, budget_options: AD_BUDGET_OPTIONS, min_budget_cents: AD_MIN_BUDGET_CENTS, fmt: fmtARS };
+}
+
+function fmtMoney(cents, currency) {
+  return adsMoney(currency).fmt(cents);
+}
+
 module.exports = {
   AD_FEE_PCT,
   AD_MIN_TOPUP_CENTS,
@@ -42,4 +65,7 @@ module.exports = {
   AD_DEFAULT_DAYS,
   adSplit,
   fmtARS,
+  fmtUSD,
+  adsMoney,
+  fmtMoney,
 };

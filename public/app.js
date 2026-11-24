@@ -3572,7 +3572,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1304';
+const PZ_BUILD = '20261105-v1305';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24509,6 +24509,10 @@ function pzBoostSaldoUSD() {
 function pzBoostEsMP() {
   const s = pzBoostState || {};
   const b = s.billetera || {};
+  // (LOTE ADS-MONEDA) El servidor declara la moneda del impulso
+  // (impulso_ars): con billetera USD la pantalla corre en USD aunque la
+  // suscripción tenga un riel MP viejo. Sin el dato, rige el riel.
+  if (typeof b.impulso_ars !== 'undefined') return !!b.impulso_ars;
   return b.billing_provider === 'mp';
 }
 function pzBoostFmtMonto(n) {
