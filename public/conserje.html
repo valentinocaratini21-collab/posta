@@ -593,12 +593,130 @@
   .prod-ig img{width:52px;height:52px;border-radius:10px;object-fit:cover}
   .prod-ig-t{font-size:14px;font-weight:700;color:#0A1E33}
   .prod-ig-d{font-size:12.5px;color:#40536A;margin-top:1px}
+  /* ===== LOTE CONSERJE-PRODUCTO-DISENO · el marco del mock v2 (modo ficha) ===== */
+  #mkTop{display:none}
+  #railHead{display:none}
+  #railFootMock{display:none}
+  .cr-chip{display:none}
+  body.ficha-open{background:#0A1E33}
+  body.ficha-open .bg{display:none}
+  body.ficha-open .app{padding:0;max-width:none}
+  body.ficha-open #mkTop{display:flex;align-items:center;gap:16px;padding:14px 22px}
+  .mkbrand{color:#fff;font-weight:800;font-size:21px;letter-spacing:-.4px;line-height:1.05}
+  .mkbrand i{color:#FEC14D;font-style:normal}
+  .mkbrand small{display:block;font-size:10.5px;font-weight:700;letter-spacing:2.2px;color:#8fb0c9;margin-top:2px}
+  .mksearch{margin-left:auto;position:relative}
+  .mksearch input{width:270px;max-width:52vw;padding:9px 14px 9px 34px;border-radius:22px;border:none;font-size:13.5px;background:#12314f;color:#fff;outline:none}
+  .mksearch input::placeholder{color:#7e9cb5}
+  .mksearch span{position:absolute;left:12px;top:9px;color:#7e9cb5;font-size:14px}
+  body.ficha-open .topstrip,body.ficha-open .semaforo,body.ficha-open .col-right,body.ficha-open .queue{display:none!important}
+  body.ficha-open .layout{display:grid;grid-template-columns:288px 1fr;background:#FBF7EE;border-radius:24px 24px 0 0;min-height:calc(100vh - 74px);overflow:hidden;gap:0;padding:0;margin:0}
+  body.ficha-open .layout>aside[aria-label="Clientes"]{background:#f5efdf;border-right:1.5px solid #e7dfcd;border-radius:0;box-shadow:none;padding:16px 12px}
+  body.ficha-open .layout>aside .col-head,body.ficha-open .layout>aside .search,body.ficha-open .layout>aside .chips,body.ficha-open #rosterFoot{display:none}
+  body.ficha-open #railHead{display:flex;justify-content:space-between;font-size:11px;font-weight:800;letter-spacing:1.6px;color:#71879a;padding:2px 8px 10px}
+  body.ficha-open #railFootMock{display:block;padding:12px 8px 2px;font-size:11.5px;color:#71879a;line-height:1.5;border-top:1px dashed #e7dfcd;margin-top:10px}
+  .kbd{background:#eef2f5;border:1px solid #d5dde3;border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:11px;font-weight:700;color:#12212f}
+  body.ficha-open .client-row{display:flex;gap:11px;align-items:center;padding:10px;border-radius:14px;border:1.5px solid transparent;background:transparent;width:100%;text-align:left;margin-bottom:4px;box-shadow:none}
+  body.ficha-open .client-row:hover{background:#fff}
+  body.ficha-open .client-row.selected{background:#fff;border-color:#e7dfcd;box-shadow:0 3px 10px rgba(10,30,51,.07)}
+  body.ficha-open .client-row .avatar{width:40px;height:40px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;background:var(--avag)}
+  body.ficha-open .client-row .cr-main{display:flex;flex-direction:column;min-width:0}
+  body.ficha-open .client-row .cr-name{font-size:14px;font-weight:700;color:#12212f;line-height:1.2}
+  body.ficha-open .client-row .cr-handle{font-size:12px;color:#71879a}
+  body.ficha-open .client-row .cr-meta,body.ficha-open .client-row .cr-state,body.ficha-open .client-row .cr-urg,body.ficha-open .client-row .racha{display:none}
+  body.ficha-open .cr-chip{display:block;margin-left:auto;flex:none;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:12px}
+  .cr-chip.d-req{background:#fdf0d3;color:#b97e10}
+  .cr-chip.d-ok{background:#e3f4ea;color:#14703C}
+  .cr-chip.d-bad{background:#fbe7e3;color:#c0392b}
+  body.ficha-open #proxBar .prox-btn{width:100%;margin-bottom:10px;background:#0A1E33;color:#FEC14D;border:none}
+  body.ficha-open .center{background:transparent;border:none;box-shadow:none;padding:20px 22px 30px;color:#12212f}
+  .mkbizbar{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-bottom:4px}
+  .mkbizava{width:50px;height:50px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex:none}
+  .mkbizname{font-size:21px;font-weight:800;letter-spacing:-.3px;color:#12212f;line-height:1.15}
+  .mkbizig{color:#71879a;font-size:13.5px}
+  .mkchip{font-size:12px;font-weight:700;padding:5px 11px;border-radius:20px;background:#e8f3fa;color:#14608c}
+  .mkchip.warn{background:#fdf0d3;color:#b97e10}
+  .mkchip.bad{background:#fbe7e3;color:#c0392b}
+  .mkiglink{font-size:12.5px;font-weight:700;color:#2793C8;text-decoration:none}
+  .mkswitcher{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .mkswbtn{width:36px;height:36px;border-radius:50%;border:1.5px solid #e7dfcd;background:#fff;font-size:16px;cursor:pointer;color:#0A1E33;display:flex;align-items:center;justify-content:center}
+  .mkswbtn:hover{border-color:#2793C8;color:#2793C8}
+  .mkswpos{font-size:12.5px;color:#71879a;font-weight:700;min-width:52px;text-align:center}
+  .mkvolver{border:1.5px solid #e7dfcd;background:#fff;border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:700;color:#0A1E33;cursor:pointer}
+  .mktabs{display:flex;gap:6px;margin:14px 0 18px;border-bottom:1.5px solid #e7dfcd}
+  .mktab{padding:8px 14px;font-size:13.5px;font-weight:700;color:#71879a;border:none;border-bottom:3px solid transparent;margin-bottom:-1.5px;cursor:pointer;background:none}
+  .mktab.on{color:#0A1E33;border-color:#FEC14D}
+  .mkcols{display:grid;grid-template-columns:372px 1fr;gap:22px;align-items:start}
+  @media (max-width:1180px){.mkcols{grid-template-columns:1fr}}
+  .mksec{font-size:11.5px;font-weight:800;letter-spacing:1.4px;color:#71879a;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .mklive{background:#1E9E5A;color:#fff;font-size:9.5px;padding:2px 7px;border-radius:10px;letter-spacing:.6px}
+  .mkphone{background:#fff;border:1.5px solid #e7dfcd;border-radius:26px;padding:16px 14px;box-shadow:0 10px 26px rgba(10,30,51,.08)}
+  .mkprof{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .mkpava{width:38px;height:38px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+  .mkpname{font-weight:800;font-size:14px;color:#12212f}
+  .mkver{color:#2793C8;font-size:12px}
+  .mkpsub{color:#71879a;font-size:11.5px}
+  .mkdaycard{border:1.5px solid #efe8d8;border-radius:16px;overflow:hidden;margin-bottom:14px}
+  .mkcover{height:196px;position:relative;display:flex;align-items:flex-end;padding:12px;background:#5b7186}
+  .mkcover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .mkglass{position:relative;background:rgba(255,255,255,.16);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:12px;padding:8px 12px;font-weight:800;font-size:17px;line-height:1.15;max-width:85%}
+  .mkpill{position:absolute;top:10px;right:10px;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;z-index:2}
+  .mkpill.pub{background:#1E9E5A}.mkpill.sched{background:#2793C8}.mkpill.build{background:#5b7186}
+  .mkdaymeta{padding:10px 12px;font-size:13px;color:#40586c;line-height:1.45}
+  .mkdayact{margin-top:8px}
+  .mkgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+  .mkcell{aspect-ratio:4/5;border-radius:8px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:6px;color:#fff;font-size:10.5px;font-weight:700;line-height:1.25;background:#d8d2c0;cursor:pointer}
+  .mkcell img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .mkcell.empty{background:#efe9da;cursor:default}
+  .mkmark{position:absolute;top:5px;left:6px;background:rgba(10,30,51,.55);color:#fff;padding:2px 7px;border-radius:12px;font-size:9.5px;font-weight:700;z-index:2}
+  .mkcell-t{position:relative;z-index:2;text-shadow:0 1px 4px rgba(10,30,51,.6)}
+  .mkfnote{color:#71879a;font-size:12px;line-height:1.5;margin-top:12px}
+  .mkcard{background:#fff;border:1.5px solid #e7dfcd;border-radius:18px;padding:16px 18px;margin-bottom:16px}
+  .mkreq{display:flex;gap:12px;align-items:flex-start}
+  .mkreq + .mkreq{margin-top:14px;padding-top:14px;border-top:1px dashed #e7dfcd}
+  .mkreqico{width:36px;height:36px;border-radius:50%;background:#fdf0d3;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+  .mkreqico.idea{background:#e8f3fa}
+  .mkreqmain{flex:1;min-width:0}
+  .mkreqtxt{font-size:14px;line-height:1.45;color:#22384c}
+  .mkreqmeta{font-size:12px;color:#b97e10;font-weight:700;margin-top:4px}
+  .mkreqmeta.bad{color:#c0392b}
+  .mknone{font-size:14px;color:#71879a;line-height:1.5}
+  .mknext{display:flex;gap:15px;align-items:center}
+  .mkveil{width:94px;height:118px;border-radius:12px;flex:none;position:relative;overflow:hidden;background:#d8d2c0}
+  .mkveil img{width:100%;height:118px;object-fit:cover;filter:blur(5px);transform:scale(1.15)}
+  .mkveil-ph{display:block;width:100%;height:100%}
+  .mkveil::after{content:'🔒';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:21px;background:rgba(255,255,255,.20)}
+  .mkunseen{display:inline-block;background:#0A1E33;color:#FEC14D;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:14px;margin-bottom:6px;letter-spacing:.4px}
+  .mknexttxt{font-size:14px;line-height:1.55;color:#22384c}
+  .mkstatus{margin:0;padding:0}
+  .mkstatus li{list-style:none;font-size:13.5px;padding:5px 0;display:flex;gap:9px;align-items:baseline;color:#22384c}
+  .mkstatus .ok{color:#14703C;font-weight:800}
+  .mkstatus .bad{color:#c0392b;font-weight:800}
+  .mkstatus .warn{color:#b97e10;font-weight:800}
+  .mkigrow{display:flex;gap:12px;align-items:center}
+  .mkigth{width:54px;height:54px;border-radius:10px;object-fit:cover;flex:none}
+  .mkigline{font-size:14px;color:#22384c;line-height:1.45}
+  .mkigline .ok{color:#14703C;font-weight:800}
+  .mkigline .bad{color:#c0392b;font-weight:800}
+  .mkigline .warn{color:#b97e10;font-weight:800}
+  .mkigsub{font-size:12px;color:#71879a;margin-top:4px}
+  .mkmatgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .mkmat{aspect-ratio:4/5;border-radius:10px;overflow:hidden;position:relative;background:#efe9da;cursor:pointer}
+  .mkmat img{width:100%;height:100%;object-fit:cover}
+  .mkmat-tag{position:absolute;left:6px;bottom:6px;background:rgba(10,30,51,.55);color:#fff;padding:2px 7px;border-radius:12px;font-size:9.5px;font-weight:700}
+
 </style>
 </head>
 <body>
 <div class="bg" aria-hidden="true"><div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div><div class="glow g4"></div></div>
 
 <div class="app">
+
+  <!-- ======= LOTE CONSERJE-PRODUCTO-DISENO · BARRA DEL MOCK (modo ficha) ======= -->
+  <header id="mkTop">
+    <div class="mkbrand">Posty<i>.</i><small>CONSERJE</small></div>
+    <label class="mksearch"><span>⌕</span><input id="buscadorTop" type="search" placeholder="Buscar negocio o @…" autocomplete="off"></label>
+  </header>
 
   <!-- ======= TOP STRIP · HOY ======= -->
   <header class="topstrip glass" aria-label="Hoy">
@@ -622,6 +740,7 @@
 
     <!-- ======= LEFT · CLIENTES ======= -->
     <aside class="glass" aria-label="Clientes">
+      <div id="railHead"><span>NEGOCIOS</span><span id="railCount"></span></div>
       <div class="col-head"><span class="col-title">Clientes</span><span class="col-count" id="rosterCount"></span></div>
       <label class="search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D9EAF4" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
@@ -631,6 +750,7 @@
       <div id="proxBar"></div>
       <div class="roster" id="roster"><div class="cargando">Cargando cuentas…</div></div>
       <div id="rosterFoot"></div>
+      <div id="railFootMock">Tocás un negocio y ves <b>su</b> producto. También pasás con las flechas <span class="kbd">←</span> <span class="kbd">→</span> del teclado.</div>
     </aside>
 
     <!-- ======= CENTER · PRODUCCIÓN DE MAÑANA / FICHA ======= -->
@@ -699,6 +819,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=17"></script>
+<script src="/conserje.js?v=18"></script>
 </body>
 </html>

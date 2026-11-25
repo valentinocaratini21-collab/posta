@@ -1191,6 +1191,7 @@ function cliente(db, userId, opts) {
   const tz = conserjeRevision.accountTz(db, uid);
   const nowMs = Number(o.nowMs) || Date.now();
   const fila = filaRoster(db, u, o, nowMs);
+  const absM = typeof o.absImageUrl === 'function' ? o.absImageUrl : (x) => x;
   const ficha = safe(() => conserjeRevision.fichaCliente(db, uid, {}), null);
   const planInfo = planDePrueba(db, u);
   const boost = safe(() => db.prepare(
@@ -1213,6 +1214,17 @@ function cliente(db, userId, opts) {
       budget_cents: boost.budget_cents || 0, fee_cents: boost.fee_cents || 0,
       error: boost.error || '', created_at: boost.created_at || '',
     } : null,
+    // (LOTE CONSERJE-PRODUCTO-DISENO) Su material: lo que el negocio
+    // subió en «Subir» (la misma tabla que lee su álbum), más nuevo
+    // primero — la pestaña «Material» de su ficha lo espeja.
+    material: safe(() => db.prepare(
+      `SELECT id, kind, file_path, thumb_path, album_tag, created_at FROM assets
+       WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 24`).all(uid), [])
+      .map((a) => ({
+        id: a.id, kind: a.kind, tag: a.album_tag || '',
+        img: a.thumb_path || a.file_path ? absM(uid, a.thumb_path || a.file_path) : '',
+        cuando: a.created_at || '',
+      })),
     descuento: descuentoDe(db, uid),
   };
 }

@@ -55,6 +55,11 @@
     var p = String(nombre || '?').trim().split(/\s+/);
     return ((p[0] || '?').charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
   }
+  // (LOTE CONSERJE-PRODUCTO-DISENO) El degradé del avatar por negocio,
+  // determinista por user_id: el mismo en el riel, la barra y el teléfono.
+  var AVA_GRADS = ['linear-gradient(135deg,#b0722e,#6b3f14)','linear-gradient(135deg,#3a4a5a,#101c28)','linear-gradient(135deg,#c0392b,#6e1f14)','linear-gradient(135deg,#b04a8a,#5f2350)','linear-gradient(135deg,#2793C8,#0A1E33)','linear-gradient(135deg,#1E9E5A,#0d5c31)','linear-gradient(135deg,#7a4ab0,#33184a)','linear-gradient(135deg,#d4692a,#7a3410)'];
+  function avaGrad(uid) { return AVA_GRADS[Math.abs(Number(uid) || 0) % AVA_GRADS.length]; }
+  var rosterOrden = [];
   function avaClass(uid) { return 'avatar a' + (Math.abs(Number(uid) || 0) % 7); }
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   function fechaCorta(key) {
@@ -201,6 +206,10 @@
       if (na !== nb) return na - nb;
       return ((b.urgencia && b.urgencia.espera_min) || 0) - ((a.urgencia && a.urgencia.espera_min) || 0);
     });
+    // (LOTE CONSERJE-PRODUCTO-DISENO) El orden visible del riel es el
+    // orden del switcher ‹ › y de las flechas del teclado.
+    rosterOrden = cs.map(function (f) { return f.user_id; });
+    var rcEl = $('railCount'); if (rcEl) rcEl.textContent = cs.length + ' de ' + ((vista && vista.clientes) || []).length;
     // (LOTE CONSERJE-FORMA · la falla #1) La lista NUNCA se vacía como
     // efecto de seleccionar un cliente: el estado vacío existe SOLO
     // para una búsqueda explícita, con el texto visible y borrable en
@@ -225,14 +234,19 @@
         ? 'Prueba · ' + (f.prueba.dias_restantes === 0 ? 'último día' : 'quedan ' + f.prueba.dias_restantes + (f.prueba.dias_restantes === 1 ? ' día' : ' días'))
         : (f.clase_label || '');
       var meta = [f.categoria || '', claseTxt].filter(Boolean).join(' · ');
+      var chipCls = 'd-ok', chipTxt = 'todo ok';
+      if (f.urgencia && f.urgencia.nivel === 0) { var np = (f.pendientes ? (f.pendientes.voz || 0) + (f.pendientes.ideas || 0) : 0); chipCls = 'd-req'; chipTxt = np > 0 ? (np + (np === 1 ? ' pedido' : ' pedidos')) : 'pedido'; }
+      else if (f.urgencia && f.urgencia.nivel === 1) { chipCls = 'd-bad'; chipTxt = 'sin posteo'; }
+      else if (f.urgencia && f.urgencia.nivel === 2) { chipCls = 'd-req'; chipTxt = 'incompleta'; }
       return '<button class="client-row' + (selUser === f.user_id ? ' selected' : '') + '" data-sel="' + f.user_id + '" type="button">'
-        + '<span class="' + avaClass(f.user_id) + '">' + esc(iniciales(f.business_name)) + '</span>'
+        + '<span class="' + avaClass(f.user_id) + '" style="--avag:' + avaGrad(f.user_id) + '">' + esc(iniciales(f.business_name)) + '</span>'
         + '<span class="cr-main"><span class="cr-name">' + esc(f.business_name || 'Sin nombre') + '</span>'
         + (f.racha >= 2 ? '<span class="racha">🔥 ' + f.racha + ' días</span>' : '')
         + ' <span class="cr-handle">@' + esc(f.ig_username || '—') + '</span>'
         + (meta ? '<span class="cr-meta">' + esc(meta) + '</span>' : '')
         + (f.urgencia && f.urgencia.nivel < 3 ? '<span class="cr-urg urg' + f.urgencia.nivel + '">' + esc(f.urgencia.detalle || '') + '</span>' : '')
-        + '<span class="cr-state"><span class="dot ' + dot + '"></span>' + esc(f.estado || '') + '</span></span></button>';
+        + '<span class="cr-state"><span class="dot ' + dot + '"></span>' + esc(f.estado || '') + '</span></span>'
+        + '<span class="cr-chip ' + chipCls + '">' + esc(chipTxt) + '</span></button>';
     }).join('');
   }
 
@@ -279,6 +293,9 @@
   }
   // ---------------- centro: producción de mañana / la ficha ----------------
   function renderCentro() {
+    // (LOTE CONSERJE-PRODUCTO-DISENO) Con una ficha abierta, la página
+    // entera toma el marco del mock v2 (body.ficha-open).
+    document.body.classList.toggle('ficha-open', centroModo === 'ficha');
     if (centroModo === 'ficha') { renderFicha(); return; }
     renderManana();
   }
@@ -385,21 +402,43 @@
     var boostStrip = c.boost && c.boost.status !== 'error'
       ? '<div class="boost"><span class="b-ico">🚀</span><div class="b-main"><div class="b-title">Impulso ' + esc(c.boost.status || '') + '</div><div class="b-txt">Posteo #' + (c.boost.post_id || '—') + ' · US$ ' + (Number(c.boost.budget_cents || 0) / 100).toFixed(0) + ' de pauta' + (c.boost.fee_cents ? ' · US$ ' + (Number(c.boost.fee_cents) / 100).toFixed(2) + ' de gestión' : '') + '</div></div></div>'
       : '';
-    $('centro').innerHTML =
-      '<div class="back-row"><button class="btn small" data-act="ir-manana" type="button">← Producción de mañana</button></div>'
-      + '<div class="c-head"><div class="c-id"><span class="' + avaClass(c.user_id) + '">' + esc(ini) + '</span>'
-      + '<div><div class="c-name">' + esc(c.business_name || 'Sin nombre') + '</div>'
-      + '<div class="c-sub"><span class="handle">@' + esc(c.ig_username || '—') + '</span>' + (c.categoria ? ' · ' + esc(c.categoria) : '') + (c.es_invitado ? ' · invitado de la puerta' : '') + '</div></div></div>'
-      + '<div class="c-side">' + etapaTag + (c.racha >= 2 ? '<span class="tag warn">🔥 Racha de ' + c.racha + ' días</span>' : '')
-      + (c.ig_username ? '<a class="btn" href="https://instagram.com/' + esc(c.ig_username) + '" target="_blank" rel="noopener">Ver su Instagram ↗</a>' : '') + '</div></div>'
-      + '<div class="control-strip">' + progresoHtml
+    var filaSelf = ((vista && vista.clientes) || []).filter(function (x) { return x.user_id === c.user_id; })[0] || null;
+    var planChipTxt = filaSelf
+      ? (filaSelf.clase === 'prueba_corriendo' && filaSelf.prueba && filaSelf.prueba.dias_restantes != null
+        ? 'Prueba · quedan ' + filaSelf.prueba.dias_restantes + (filaSelf.prueba.dias_restantes === 1 ? ' día' : ' días')
+        : (filaSelf.clase_label || ''))
+      : (c.clase_label || '');
+    var urgSelf = filaSelf && filaSelf.urgencia ? filaSelf.urgencia : null;
+    var alertChip = urgSelf && urgSelf.nivel < 3
+      ? '<span class="mkchip ' + (urgSelf.nivel === 1 ? 'bad' : 'warn') + '">' + esc(urgSelf.detalle || urgSelf.motivo || '') + '</span>' : '';
+    var posIdx = rosterOrden.indexOf(c.user_id);
+    var fichaTop = '<div class="mkbizbar">'
+      + '<span class="mkbizava" style="background:' + avaGrad(c.user_id) + '">' + esc(ini) + '</span>'
+      + '<div class="mkbizid"><div class="mkbizname">' + esc(c.business_name || 'Sin nombre') + '</div>'
+      + '<div class="mkbizig">@' + esc(c.ig_username || '—') + (c.categoria ? ' · ' + esc(c.categoria) : '') + '</div></div>'
+      + (planChipTxt ? '<span class="mkchip">' + esc(planChipTxt) + '</span>' : '')
+      + alertChip
+      + (c.ig_username ? '<a class="mkiglink" href="https://instagram.com/' + esc(c.ig_username) + '" target="_blank" rel="noopener">Ver su Instagram ↗</a>' : '')
+      + '<div class="mkswitcher"><button class="mkswbtn" data-act="cli-prev" type="button" title="Cliente anterior">‹</button>'
+      + '<span class="mkswpos">' + (posIdx >= 0 ? (posIdx + 1) + ' / ' + rosterOrden.length : '—') + '</span>'
+      + '<button class="mkswbtn" data-act="cli-next" type="button" title="Cliente siguiente">›</button></div>'
+      + '<button class="mkvolver" data-act="ir-manana" type="button">← Hoy</button>'
+      + '</div>'
+      + '<div class="mktabs">'
+      + '<button data-vista="producto" class="mktab' + (centroVista === 'producto' ? ' on' : '') + '" type="button">Su producto</button>'
+      + '<button data-vista="feed" class="mktab' + (centroVista === 'feed' ? ' on' : '') + '" type="button">Su feed</button>'
+      + '<button data-vista="material" class="mktab' + (centroVista === 'material' ? ' on' : '') + '" type="button">Material</button>'
+      + '<button data-vista="semana" class="mktab' + (centroVista === 'semana' ? ' on' : '') + '" type="button">Su ficha</button>'
+      + '</div>';
+    var fichaDetalle = '<div class="control-strip">' + progresoHtml
       + '<div class="kpi"><div class="k-label">Próximo posteo</div><div class="k-value">' + (proxPost ? esc(fechaCorta(proxPost.dia_key)) : '—') + '</div><div class="k-sub">' + (proxPost ? esc(proxPost.titulo || '') + (proxPost.status === 'draft' ? ' · borrador por decidir' : '') : 'Nada programado') + '</div></div>'
       + necesita + impulsoKpi + '</div>'
-      + funda + trat + nota + descHtml
-      + '<div class="sec-title">' + (centroVista === 'producto' ? 'Su producto' : 'Su semana') + ' <span class="hint">así la ve el cliente</span><span class="spacer"></span>'
-      + '<span class="toggle"><button data-vista="producto" class="' + (centroVista === 'producto' ? 'on' : '') + '" type="button">Su producto</button><button data-vista="semana" class="' + (centroVista === 'semana' ? 'on' : '') + '" type="button">Semana</button><button data-vista="feed" class="' + (centroVista === 'feed' ? 'on' : '') + '" type="button">Su feed</button></span></div>'
-      + '<div id="centroCuerpo">' + (centroVista === 'semana' ? week + grid : '<div class="cargando">Cargando…</div>') + '</div>'
-      + boostStrip;
+      + funda + trat + nota + descHtml;
+    $('centro').innerHTML = fichaTop
+      + '<div id="centroCuerpo">'
+      + (centroVista === 'semana' ? fichaDetalle + week + grid : centroVista === 'material' ? materialHTML(c) : '<div class="cargando">Cargando…</div>')
+      + '</div>'
+      + (centroVista === 'semana' ? boostStrip : '');
     $('centro').classList.remove('fade-swap'); void $('centro').offsetWidth; $('centro').classList.add('fade-swap');
     var sel = $('tratSel');
     if (sel) sel.addEventListener('change', onTratamiento);
@@ -478,100 +517,161 @@
   // abiertos con la espera, y la próxima pieza marcada como todavía
   // no vista. Lo que su producto esconde (la cola de revisión) acá
   // no se pinta como visto: el servidor compone el espejo.
+  // (LOTE CONSERJE-PRODUCTO-DISENO) La pestaña «Material»: el álbum
+  // del negocio tal como lo ve él en «Subir», más nuevo primero.
+  function materialHTML(c) {
+    var mats = (c && c.material) || [];
+    if (!mats.length) return '<div class="vacio">Este negocio todavía no subió material. Lo que suba en «Subir» aparece acá, tal como lo ve él.</div>';
+    return '<div class="mksec">Su material <span class="hint">lo que subió en Subir, más nuevo primero</span></div>'
+      + '<div class="mkmatgrid">' + mats.map(function (m) {
+          return '<div class="mkmat"' + (m.img ? ' data-ver data-ver-img="' + esc(m.img) + '"' : '') + '>'
+            + (m.img ? '<img src="' + esc(m.img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">—</span></div>')
+            + (m.kind === 'video' ? '<span class="fg-play">▶</span>' : '')
+            + (m.tag ? '<span class="mkmat-tag">' + esc(m.tag) + '</span>' : '') + '</div>';
+        }).join('') + '</div>';
+  }
+
   function renderProducto() {
     var uid = selUser;
     var cuerpo = $('centroCuerpo');
     if (!cuerpo || !uid) return;
-    cuerpo.innerHTML = '<div class="cargando">Cargando su producto…</div>';
-    var pj = null, fj = feedPorUsuario[uid] || null, feedListo = !!fj;
-    function listo() { if (pj && feedListo) pintar(pj, fj); }
-    function pintar(p, f) {
-      if (selUser !== uid) return;
-      if (!p || !p.ok) { cuerpo.innerHTML = '<div class="vacio">No se pudo leer su producto.</div>'; return; }
-      var hoy = p.hoy || {};
-      var hoyHtml = '<div class="prod-hoy">'
-        + (hoy.img ? '<img class="prod-hoy-img" src="' + esc(hoy.img) + '" alt="">' : '')
-        + '<div class="prod-hoy-main"><div class="prod-k">Su Inicio de hoy — así lo ve</div>'
-        + '<div class="prod-hoy-linea">' + esc(hoy.linea || '') + '</div>'
-        + (hoy.titulo ? '<div class="prod-hoy-tit">' + esc(hoy.titulo) + '</div>' : '')
-        + '</div>'
-        + (hoy.post_id ? '<span class="prod-ve">✓ Lo ve en su producto</span>' : '<span class="prod-ve espera">⏳ Todavía sin pieza a la vista</span>')
-        + '</div>'
-        + (hoy.estado === 'sale_hoy' && hoy.post_id ? '<div class="prod-acts"><button class="btn small" data-act="pieza-arreglar" data-uid="' + uid + '" data-fecha="' + esc(hoy.fecha_key || '') + '" data-pid="' + hoy.post_id + '" type="button">↻ Rehacer el posteo de hoy</button></div>' : '');
-      var gridHtml = '';
-      if (f && f.ok && f.disponible) gridHtml = '<div class="prod-sec">Su semana — la grilla literal</div>' + feedTilesHTML(f);
-      else if (f && f.ok && !f.disponible) gridHtml = '<div class="prod-sec">Su semana — la grilla literal</div><div class="vacio">Sin snapshot de su Instagram: no mostramos una grilla inventada.</div>';
-      var pedHtml = '<div class="prod-sec">Sus pedidos abiertos</div>';
-      if ((p.pedidos || []).length) {
-        pedHtml += p.pedidos.map(function (pd) {
-          var vencido = (pd.espera_min || 0) > 30;
-          var sema = '<span class="prod-sema ' + (vencido ? 'rojo' : 'verde') + '">' + (vencido ? '⏱ Promesa vencida' : '⏱ Dentro de la promesa') + ' · espera ' + esc(pd.hace || '') + '</span>';
-          var acts = '';
-          if (pd.tipo === 'idea' && pd.message_id) acts = '<div class="d-actions"><button class="btn small" data-act="idea-resolver" data-mid="' + pd.message_id + '" data-uid="' + uid + '" type="button">Resolver la idea</button></div><div id="ideaRes-' + pd.message_id + '"></div>';
-          else if (pd.message_id) acts = '<div class="d-actions"><button class="btn small" data-act="voz-responder" data-mid="' + pd.message_id + '" data-uid="' + uid + '" type="button">Responder</button></div><div id="vozReply-' + pd.message_id + '"></div>';
-          return '<div class="prod-ped"><span class="prod-ped-tag">' + (pd.tipo === 'idea' ? '💡 Idea de Subir' : (pd.ambito === 'posteo' ? '✎ Cambio en un posteo' : '💬 Mensaje sin responder')) + '</span>'
-            + '<div class="prod-ped-txt">«' + esc(pd.texto || '') + '»</div>'
-            + '<div class="prod-ped-hace">' + sema + '</div>' + acts + '</div>';
-        }).join('');
-      } else pedHtml += '<div class="vacio">Sin pedidos abiertos: está al día.</div>';
-      var sigHtml = '<div class="prod-sec">Lo próximo que todavía no vio</div>';
-      if (p.siguiente) {
-        var s = p.siguiente;
-        sigHtml += '<div class="prod-sig"><span class="prod-novio">Todavía no lo vio</span>'
-          + '<div class="prod-sig-tit">' + esc(s.titulo || 'Pieza en preparación') + '</div>'
-          + '<div class="prod-sig-det">' + esc(s.detalle || '') + '</div>'
-          + '<div class="prod-sig-when">' + (s.fecha ? 'Sale ' + esc(s.fecha) : '') + (s.hora ? ' · ' + esc(s.hora) : '') + '</div>'
-          + (s.estado === 'en_revision' && s.post_id ? '<div class="d-actions"><button class="btn primary small" data-act="pieza-sale" data-uid="' + uid + '" data-fecha="' + esc(s.fecha_key || '') + '" data-pid="' + s.post_id + '" type="button">Aceptar: que lo vea</button></div>' : '')
-          + '</div>';
-      } else sigHtml += '<div class="vacio">Nada en preparación: lo próximo que salga ya lo ve en su grilla.</div>';
-      var ac = p.actividad || {};
-      var actPartes = [];
-      if (ac.ultima_hace) actPartes.push('Última actividad ' + esc(ac.ultima_hace));
-      if (ac.vio_hace) actPartes.push('Vio su Inicio ' + esc(ac.vio_hace));
-      if (ac.acepto_hace) actPartes.push('Aceptó un posteo ' + esc(ac.acepto_hace));
-      var actHtml = actPartes.length ? '<div class="prod-act">👀 ' + actPartes.join(' · ') + '</div>' : '';
-      var promHtml = '<div class="prod-sec">Lo prometido, contra lo real</div>' + (p.promesas || []).map(function (pr) {
-        var ico = pr.estado === 'cumplida' ? '✓' : (pr.estado === 'rota' ? '✗' : '⏳');
-        return '<div class="prod-prom ' + esc(pr.estado) + '"><span class="prod-prom-ico">' + ico + '</span>'
-          + '<div><div class="prod-prom-t">«' + esc(pr.texto || '') + '»</div><div class="prod-prom-d">' + esc(pr.detalle || '') + '</div></div>'
-          + '<span class="prod-prom-e">' + esc(pr.estado) + '</span></div>';
-      }).join('');
-      var ig = p.ig_real || {};
-      var igTxt = ig.estado === 'confirma' ? ['✓ Su Instagram confirma el último posteo', 'El producto y su Instagram dicen lo mismo.']
-        : ig.estado === 'no_esta' ? ['⚠ El producto dice publicado y en su Instagram NO está', 'El último posteo publicado no aparece en su Instagram real: hay que mirarlo ya.']
-        : ig.estado === 'sin_publicados' ? ['Todavía no publicó nada desde el producto', 'Su Instagram real es lo único que hay para comparar.']
-        : ['Sin lectura reciente de su Instagram', 'No afirmamos una diferencia sin la lectura que la pruebe.'];
-      var igHtml = '<div class="prod-sec">Su Instagram real</div><div class="prod-ig' + (ig.estado === 'no_esta' ? ' roja' : '') + '">'
-        + (ig.ultimo_real && ig.ultimo_real.img ? '<img src="' + esc(ig.ultimo_real.img) + '" alt="">' : '')
-        + '<div><div class="prod-ig-t">' + igTxt[0] + '</div><div class="prod-ig-d">' + igTxt[1]
-        + (ig.ultimo_real && ig.ultimo_real.cuando ? ' Último posteo real: ' + esc(ig.ultimo_real.cuando) + '.' : '')
-        + (ig.leido_hace ? ' Lectura de ' + esc(ig.leido_hace) + '.' : '') + '</div></div></div>';
-      cuerpo.innerHTML = '<div class="prod">' + hoyHtml + actHtml + gridHtml + pedHtml + sigHtml + promHtml + igHtml + '</div>';
+    function pintar(j, feed) {
+      if (!j || !j.ok) { cuerpo.innerHTML = '<div class="vacio">No se pudo leer su producto.</div>'; return; }
+      cuerpo.innerHTML = productoHTML(j, feed);
     }
-    api('/api/admin/conserje/vista/producto?user_id=' + uid).then(function (j) { pj = j; listo(); })
-      .catch(function () { pj = { ok: false }; listo(); });
-    if (!feedListo) {
-      api('/api/admin/support/conserje/feed?user_id=' + uid).then(function (j) { feedPorUsuario[uid] = j; fj = j; feedListo = true; listo(); })
-        .catch(function () { fj = null; feedListo = true; listo(); });
-    }
+    api('/api/admin/conserje/vista/producto?user_id=' + uid).then(function (j) {
+      var f = feedPorUsuario[uid];
+      if (f) { pintar(j, f); return; }
+      api('/api/admin/support/conserje/feed?user_id=' + uid).then(function (fj) {
+        if (fj && fj.ok) feedPorUsuario[uid] = fj;
+        pintar(j, fj && fj.ok ? fj : null);
+      }).catch(function () { pintar(j, null); });
+    }).catch(function () { cuerpo.innerHTML = '<div class="vacio">No se pudo leer su producto.</div>'; });
   }
 
-  function onTratamiento(ev) {
-    var sel = ev.target;
-    var fam = sel.value;
-    var anterior = cliente ? cliente.tratamiento : '';
-    api('/api/admin/conserje/vista/tratamiento', { method: 'POST', body: { user_id: selUser, familia: fam } }).then(function (j) {
-      if (j && j.ok) {
-        toast(fam ? 'Tratamiento asignado. Quedó registrado en la ficha.' : 'Tratamiento retirado de la ficha.');
-        cargar(false);
-      } else if (j && j.error === 'colision') {
-        sel.value = anterior || '';
-        toast('Esa familia ya la lleva ' + (j.ocupa.business_name || 'otro negocio') + (j.ocupa.ig_username ? ' (@' + j.ocupa.ig_username + ')' : '') + '. No se aplicó: dos negocios no salen con el mismo look.', 'warn');
-      } else {
-        sel.value = anterior || '';
-        toast('No se pudo asignar el tratamiento (' + (j && j.error || 'error') + ').', 'err');
-      }
-    }).catch(function () { sel.value = anterior || ''; toast('No se pudo asignar el tratamiento.', 'err'); });
+  // (LOTE CONSERJE-PRODUCTO-DISENO) «Su producto» con el diseño EXACTO
+  // del mock v2 que aprobó el dueño: a la izquierda el TELÉFONO del
+  // espejo (perfil, tarjeta del día con su pill y su título en glass,
+  // su semana en grilla) y a la derecha las tarjetas blancas — pidió
+  // algo, el próximo velado, el estado prometido contra real, su
+  // Instagram real y su actividad. La LÓGICA es la de v1327/v1328 sin
+  // tocar: mismo payload, mismas acciones por las mismas puertas.
+  function productoHTML(j, feed) {
+    var en = j.lang === 'en';
+    function L(es, enT) { return en ? enT : es; }
+    var p = j, h = p.hoy;
+    var ini = iniciales(j.business_name);
+    var grad = avaGrad(j.user_id);
+    // --- la tarjeta del día ---
+    var pillCls = h.estado === 'publicado' ? 'pub' : (h.estado === 'sale_hoy' || h.estado === 'borrador' ? 'sched' : 'build');
+    var daycard = '<div class="mkdaycard">'
+      + '<div class="mkcover"' + (h.img ? '' : ' style="background:' + grad + '"') + '>'
+      + (h.img ? '<img class="mkcover-img" src="' + esc(h.img) + '" alt="">' : '')
+      + '<span class="mkpill ' + pillCls + '">' + esc(h.linea || '') + '</span>'
+      + '<div class="mkglass">' + esc(h.titulo || L('Su posteo de hoy', "Today's post")) + '</div></div>'
+      + '<div class="mkdaymeta"><b>' + L('Posteo de hoy', "Today's post") + '</b> · ' + esc(h.linea || '')
+      + (h.estado === 'sale_hoy' && h.post_id ? '<div class="mkdayact"><button class="btn small" data-act="pieza-arreglar" data-uid="' + j.user_id + '" data-pid="' + h.post_id + '" data-fecha="' + esc(h.fecha_key || '') + '" type="button">↩ ' + L('Rehacer esta pieza', 'Redo this piece') + '</button></div>' : '')
+      + '</div></div>';
+    // --- su semana en grilla (las piezas del feed, en su orden final) ---
+    var porId = {};
+    ((cliente && cliente.posteos) || []).forEach(function (x) { porId[x.id] = x; });
+    var cells = [];
+    ((feed && feed.tiles) || []).slice(0, 9).forEach(function (t) {
+      var esVideo = /video|reel/.test(String(t.media_type || ''));
+      var img = t.poster_url || (esVideo && t.kind === 'post' ? '' : (t.img || t.image_url || ''));
+      var tit = t.post_id && porId[t.post_id] ? (porId[t.post_id].titulo || '') : '';
+      var verAttrs = '';
+      if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
+      else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
+      cells.push('<div class="mkcell"' + verAttrs + '>' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '')
+        + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '')
+        + (tit ? '<span class="mkcell-t">' + esc(tit) + '</span>' : '') + '</div>');
+    });
+    while (cells.length && cells.length % 3 !== 0) cells.push('<div class="mkcell empty"><span class="mkmark">—</span></div>');
+    if (!cells.length) cells = ['<div class="mkcell empty"><span class="mkmark">—</span></div>', '<div class="mkcell empty"><span class="mkmark">—</span></div>', '<div class="mkcell empty"><span class="mkmark">—</span></div>'];
+    var phone = '<div class="mkphone">'
+      + '<div class="mkprof"><span class="mkpava" style="background:' + grad + '">' + esc(ini) + '</span>'
+      + '<div><div class="mkpname">' + esc(j.business_name || '') + ' <span class="mkver">✔</span></div>'
+      + '<div class="mkpsub">@' + esc(j.ig_username || '—') + (cliente && cliente.categoria ? ' · ' + esc(cliente.categoria) : '') + '</div></div></div>'
+      + daycard
+      + '<div class="mksec">' + L('Su semana', 'His week') + '</div>'
+      + '<div class="mkgrid">' + cells.join('') + '</div>'
+      + '<div class="mkfnote">' + L('Espejo fiel de su Inicio y su grilla, en su idioma y su horario. Si él no lo ve, acá tampoco se ve.', "A faithful mirror of his Home and his grid, in his language and his timezone. If he doesn't see it, it doesn't show here either.") + '</div>'
+      + '</div>';
+    // --- pidió algo (con su semáforo y sus acciones) ---
+    var reqs;
+    if (!p.pedidos.length) {
+      reqs = '<div class="mknone">' + L('No pidió nada.', 'He asked for nothing.')
+        + (p.actividad && p.actividad.acepto_hace ? ' ' + L('Su último toque: aceptó un posteo', 'His last touch: he accepted a post') + ' ' + esc(p.actividad.acepto_hace) + '.' : '') + '</div>';
+    } else {
+      reqs = p.pedidos.map(function (pd) {
+        var esIdea = pd.tipo === 'idea';
+        var ico = esIdea ? '💡' : '✎';
+        var sema = pd.espera_min != null
+          ? '<div class="mkreqmeta' + (pd.espera_min > 30 ? ' bad' : '') + '">⏱ ' + (pd.espera_min > 30 ? L('Promesa vencida · ', 'Promise missed · ') : '') + L('espera ', 'waiting ') + esc(pd.hace || '') + '</div>' : '';
+        var acts = esIdea
+          ? '<button class="btn small" data-act="idea-resolver" data-mid="' + pd.message_id + '" data-uid="' + j.user_id + '" type="button">' + L('Resolver con una pieza', 'Resolve with a piece') + '</button>'
+          : '<button class="btn small" data-act="voz-responder" data-mid="' + pd.message_id + '" data-uid="' + j.user_id + '" type="button">' + L('Responder', 'Reply') + '</button>';
+        return '<div class="mkreq"><div class="mkreqico' + (esIdea ? ' idea' : '') + '">' + ico + '</div><div class="mkreqmain">'
+          + '<div class="mkreqtxt">«' + esc(pd.texto || '') + '»</div>' + sema
+          + '<div class="prod-acts">' + acts + '</div>'
+          + '<div id="vozReply-' + pd.message_id + '"></div><div id="ideaRes-' + pd.message_id + '"></div>'
+          + '</div></div>';
+      }).join('');
+    }
+    // --- el próximo que va a salir (velado) ---
+    var s = p.siguiente, nextCard;
+    if (!s) {
+      nextCard = '<div class="mknone">' + L('Nada en preparación todavía: su semana está completa o su plan arranca cuando conecte.', 'Nothing in preparation yet: his week is complete or his plan starts when he connects.') + '</div>';
+    } else {
+      var saleTxt = s.fecha ? ' ' + L('Sale', 'Goes out') + ' <b>' + esc(s.fecha) + (s.hora ? ' · ' + esc(s.hora) : '') + '</b>.' : '';
+      nextCard = '<div class="mknext">'
+        + '<div class="mkveil">' + (s.img ? '<img src="' + esc(s.img) + '" alt="">' : '<span class="mkveil-ph" style="background:' + grad + '"></span>') + '</div>'
+        + '<div class="mknexttxt"><span class="mkunseen">' + L('TODAVÍA NO LO VIO', "HE HASN'T SEEN IT YET") + '</span><br>'
+        + '<b>«' + esc(s.titulo || L('La próxima pieza', 'The next piece')) + '»</b> — ' + esc(s.detalle || '') + saleTxt
+        + (s.estado === 'en_revision' && s.post_id ? '<div class="prod-acts"><button class="btn small primary" data-act="pieza-sale" data-uid="' + j.user_id + '" data-pid="' + s.post_id + '" data-fecha="' + esc(s.fecha_key || '') + '" type="button">✓ ' + L('Aceptar — que la vea', 'Accept — let him see it') + '</button></div>' : '')
+        + '</div></div>';
+    }
+    // --- estado: lo prometido contra lo real ---
+    var status = (p.promesas || []).map(function (pr) {
+      var ic = pr.estado === 'cumplida' ? '<span class="ok">✔</span>' : pr.estado === 'rota' ? '<span class="bad">✖</span>' : '<span class="warn">●</span>';
+      return '<li>' + ic + '<span><b>' + esc(pr.texto) + '</b>' + (pr.detalle ? ' — ' + esc(pr.detalle) : '') + '</span></li>';
+    }).join('');
+    // --- su Instagram real ---
+    var ig = p.ig_real, igBody;
+    if (ig.estado === 'confirma') {
+      igBody = '<div class="mkigrow">' + (ig.ultimo_real && ig.ultimo_real.img ? '<img class="mkigth" src="' + esc(ig.ultimo_real.img) + '" alt="">' : '')
+        + '<div><div class="mkigline"><span class="ok">✔</span> ' + L('Su Instagram confirma el último posteo', 'His Instagram confirms the latest post') + (ig.ultimo_producto ? ': <b>«' + esc(ig.ultimo_producto.titulo || '') + '»</b>' : '') + '</div>'
+        + '<div class="mkigsub">' + (ig.ultimo_real && ig.ultimo_real.cuando ? L('Último posteo real: ', 'Latest real post: ') + esc(ig.ultimo_real.cuando) + ' · ' : '') + L('lectura', 'read') + ' ' + esc(ig.leido_hace || '') + '</div></div></div>';
+    } else if (ig.estado === 'no_esta') {
+      igBody = '<div class="mkigline"><span class="bad">✖</span> ' + L('El último posteo figura publicado pero NO está en su Instagram real', 'The latest post shows as published but is NOT on his real Instagram') + (ig.ultimo_producto ? ': <b>«' + esc(ig.ultimo_producto.titulo || '') + '»</b>' : '') + '</div>'
+        + '<div class="mkigsub">' + L('Lectura', 'Read') + ' ' + esc(ig.leido_hace || '') + '.</div>';
+    } else if (ig.estado === 'sin_publicados') {
+      igBody = '<div class="mkigline"><span class="warn">●</span> ' + L('Todavía no publicó nada: no hay nada que contrastar.', 'He has not published anything yet: nothing to cross-check.') + '</div>';
+    } else {
+      igBody = '<div class="mkigline"><span class="warn">●</span> ' + L('Sin lectura reciente de su Instagram: no afirmamos nada.', 'No recent read of his Instagram: we claim nothing.') + '</div>'
+        + (ig.ultimo_real && ig.ultimo_real.cuando ? '<div class="mkigsub">' + L('Último posteo real visto: ', 'Latest real post seen: ') + esc(ig.ultimo_real.cuando) + '.</div>' : '');
+    }
+    // --- su actividad ---
+    var a = p.actividad, actBody;
+    if (!a || (!a.ultima_hace && !a.vio_hace && !a.acepto_hace)) {
+      actBody = '<div class="mknone">' + L('Sin actividad registrada todavía.', 'No activity recorded yet.') + '</div>';
+    } else {
+      actBody = '<ul class="mkstatus">'
+        + (a.ultima_hace ? '<li><span class="warn">●</span><span>' + L('Última actividad en su producto', 'Last activity in his product') + ' — <b>' + esc(a.ultima_hace) + '</b></span></li>' : '')
+        + (a.vio_hace ? '<li><span class="warn">●</span><span>' + L('Vio su Inicio', 'He saw his Home') + ' — <b>' + esc(a.vio_hace) + '</b></span></li>' : '')
+        + (a.acepto_hace ? '<li><span class="ok">✔</span><span>' + L('Aceptó un posteo', 'He accepted a post') + ' — <b>' + esc(a.acepto_hace) + '</b></span></li>' : '')
+        + '</ul>';
+    }
+    return '<div class="mkcols">'
+      + '<div><div class="mksec">' + L('Su producto — así lo ve él', 'His product — as he sees it') + ' <span class="mklive">' + L('ESPEJO EN VIVO', 'LIVE MIRROR') + '</span></div>' + phone + '</div>'
+      + '<div>'
+      + '<div class="mksec">' + L('Pidió algo', 'He asked for something') + '</div><div class="mkcard">' + reqs + '</div>'
+      + '<div class="mksec">' + L('El próximo que va a salir', 'The next one going out') + '</div><div class="mkcard">' + nextCard + '</div>'
+      + '<div class="mksec">' + L('Estado', 'Status') + '</div><div class="mkcard"><ul class="mkstatus">' + status + '</ul></div>'
+      + '<div class="mksec">' + L('Su Instagram real', 'His real Instagram') + '</div><div class="mkcard">' + igBody + '</div>'
+      + '<div class="mksec">' + L('Su actividad', 'His activity') + '</div><div class="mkcard">' + actBody + '</div>'
+      + '</div></div>';
   }
 
   // ---------------- visor en grande (LOTE CONSERJE-VER-GRANDE) ----------------
@@ -1162,6 +1262,27 @@
     if (nota) body.nota = nota;
     return api('/api/admin/support/conserje/revision/decidir', { method: 'POST', body: body });
   }
+  // (LOTE CONSERJE-PRODUCTO-DISENO) El switcher del mock: pasar de un
+  // negocio al siguiente en el orden visible del riel, con los botones
+  // ‹ › o las flechas del teclado, sin salir de la pestaña abierta.
+  function stepCliente(d) {
+    if (!rosterOrden.length) return;
+    var idx = rosterOrden.indexOf(selUser);
+    var base = idx < 0 ? 0 : idx;
+    var next = rosterOrden[(((base + d) % rosterOrden.length) + rosterOrden.length) % rosterOrden.length];
+    if (next && next !== selUser) { selUser = next; cargarCliente(next); irAlCentro(); }
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (!document.body.classList.contains('ficha-open')) return;
+    if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+    var ae = document.activeElement;
+    if (ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
+    var vs = $('visor');
+    if (vs && vs.classList.contains('open')) return;
+    ev.preventDefault();
+    stepCliente(ev.key === 'ArrowRight' ? 1 : -1);
+  });
+
   document.addEventListener('click', function (ev) {
     // (LOTE CONSERJE-VER-GRANDE) La imagen de un posteo se mira en
     // grande ANTES que cualquier otra cosa: la miniatura puede vivir
@@ -1170,7 +1291,7 @@
     var ver = ev.target.closest('[data-ver]');
     if (ver) { onVerThumb(ver); return; }
     var sel = ev.target.closest('[data-sel]');
-    if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); return; }
+    if (sel) { selUser = Number(sel.getAttribute('data-sel')); if (!document.body.classList.contains('ficha-open')) centroVista = 'producto'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); return; }
     var go = ev.target.closest('[data-goto]');
     if (go) { gotoFicha(go.getAttribute('data-goto'), go.getAttribute('data-goto-post')); return; }
     var f = ev.target.closest('[data-filtro]');
@@ -1182,6 +1303,8 @@
     var act = b.getAttribute('data-act');
     b.disabled = true;
     var re = function () { b.disabled = false; };
+    if (act === 'cli-prev') { stepCliente(-1); re(); return; }
+    if (act === 'cli-next') { stepCliente(1); re(); return; }
     if (act === 'ir-proximo') {
       var ordenP = ((vista && vista.clientes) || []).filter(function (f) { return f.urgencia && f.urgencia.nivel < 3; })
         .sort(function (a, b) { return (a.urgencia.nivel - b.urgencia.nivel) || ((b.urgencia.espera_min || 0) - (a.urgencia.espera_min || 0)); });
@@ -1329,6 +1452,8 @@
   }, { passive: true });
   $('volverBandeja').addEventListener('click', function () { document.body.classList.remove('ver-escritorio'); window.scrollTo(0, 0); });
   $('buscador').addEventListener('input', renderRoster);
+  var bTop = $('buscadorTop');
+  if (bTop) bTop.addEventListener('input', function () { var b = $('buscador'); if (b) b.value = bTop.value; renderRoster(); });
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
 
   // ---------------- gate ----------------
