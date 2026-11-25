@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1338';
+const PZ_BUILD = '20261105-v1339';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -23358,6 +23358,23 @@ function pzAdsImpulsoTarjetaHTML(b) {
     interacciones: en ? 'INTERACTIONS' : 'INTERACCIONES',
     clics: en ? 'CLICKS' : 'CLICS',
   };
+  // (LOTE ADS-DESTRABE-VERDAD) La verdad manda sobre la forma: si
+  // Meta no confirma que el aviso está corriendo, la tarjeta lo dice
+  // («Tu aviso no está saliendo» + el motivo) — nunca IMPULSANDO ni
+  // conteo de días sobre un aviso que no corre.
+  if (t.verdad && t.verdad.sale === false) {
+    const motivos = {
+      sin_confirmar: en ? "We couldn't confirm your ad on Meta." : 'No pudimos confirmar tu aviso en Meta.',
+      rechazado: en ? 'Meta rejected the ad.' : 'Meta rechazó el aviso.',
+      pausado: en ? 'Your ad is paused on Meta.' : 'Tu aviso está pausado en Meta.',
+    };
+    const cuerpoVerdad = `<p style="margin:12px 0 0;font-size:13px;font-weight:600;color:#7a2d20">${esc(en ? "Your ad isn't running." : 'Tu aviso no está saliendo.')}</p>`
+      + `<p style="margin:4px 0 0;font-size:12px;color:#7c8fa3">${esc(motivos[t.verdad.motivo] || motivos.sin_confirmar)}</p>`;
+    return `<div style="background:#fff;border:1.5px solid #e8b4ac;border-radius:18px;padding:13px 14px;box-shadow:0 2px 10px rgba(90,70,20,.07);margin-top:12px">`
+      + `<div style="display:flex;align-items:center;gap:10px">${thumb}<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.3">${esc(titulo)}</div><div style="font-size:11.5px;color:#7c8fa3">${esc(en ? 'Post' : 'Posteo')} #${esc(String(b.post_id || '?'))}</div></div>`
+      + `<span style="display:inline-block;background:#fdecec;color:#b3261e;font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;flex:none">${esc(en ? "ISN'T RUNNING" : 'NO ESTÁ SALIENDO')}</span></div>`
+      + cuerpoVerdad + `</div>`;
+  }
   let cuerpo = '';
   if (t.tiene_datos && Array.isArray(t.stats) && t.stats.length) {
     const stats = t.stats.map((s) => `<div style="flex:1;background:#fbf7ee;border-radius:12px;padding:8px 4px;text-align:center"><b style="display:block;font-size:16px">${esc(Number(s.valor || 0).toLocaleString(loc))}</b><span style="font-size:10px;color:#7c8fa3;font-weight:600">${esc(etiquetas[s.clave] || s.clave)}</span></div>`).join('');
@@ -23382,7 +23399,7 @@ function pzAdsImpulsoTarjetaHTML(b) {
 // armada. Sin activos (o sin datos cargados), no pinta nada — la
 // pantalla queda como siempre.
 function pzAdsImpulsosActivosHTML() {
-  const list = (Array.isArray(pzAdsBoosts) ? pzAdsBoosts : []).filter((b) => b && b.status === 'active' && b.tarjeta);
+  const list = (Array.isArray(pzAdsBoosts) ? pzAdsBoosts : []).filter((b) => b && (b.status === 'active' || b.zombi) && b.tarjeta);
   if (!list.length) return '';
   return `<section>${list.map(pzAdsImpulsoTarjetaHTML).join('')}</section>`;
 }

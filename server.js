@@ -16743,8 +16743,26 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
 // se creó sin débito — son estados creados, no intentos. El filtro
 // va en el SQL para que el LIMIT 20 cuente solo impulsos reales.
 app.get('/api/ads/boosts', requireAuth, async (req, res) => {
+  // (LOTE ADS-DESTRABE-VERDAD) La fila ZOMBI: quedó 'active' sin los
+  // ids de Meta (boost 24: el aviso nunca corrió y el panel contaba
+  // días igual, y encima bloqueaba el re-impulso del posteo). Al
+  // leerla se degrada a 'error' con su motivo honesto — deja de
+  // mentir y de bloquear — y viaja UNA vez en esta respuesta con su
+  // tarjeta de verdad (zombi: true), para que el cliente vea «tu
+  // aviso no está saliendo» en vez de que el impulso desaparezca en
+  // silencio. En memoria la fila conserva su forma (status 'active',
+  // sin campaña) para que la tarjeta compute su verdad.
+  let zombis = [];
+  try {
+    zombis = db.prepare(`SELECT * FROM ad_boosts WHERE user_id = ? AND status = 'active' AND COALESCE(meta_campaign_id, '') = '' ORDER BY id DESC`).all(req.session.userId);
+    for (const z of zombis) {
+      try { db.prepare(`UPDATE ad_boosts SET status = 'error', error = ? WHERE id = ?`).run('impulso sin confirmación en Meta: quedó activo sin los ids de la campaña — el aviso no está corriendo (reparación ADS-DESTRABE-VERDAD)', z.id); } catch (e) {}
+      z.zombi = true;
+    }
+  } catch (e) { zombis = []; }
   let boosts = [];
   try { boosts = db.prepare(`SELECT * FROM ad_boosts WHERE user_id = ? AND NOT (status = 'error' AND COALESCE(meta_campaign_id, '') = '') ORDER BY id DESC LIMIT 20`).all(req.session.userId); } catch (e) {}
+  boosts = zombis.concat(boosts);
   // (LOTE ADS-STATS-TARJETA) El refresco lee en la cuenta donde vive
   // la campaña: primero con la conexión de Ads DEL CLIENTE (su SUAT,
   // su cuenta — el riel con el que se crean hoy los impulsos) y, si
@@ -16766,6 +16784,26 @@ app.get('/api/ads/boosts', requireAuth, async (req, res) => {
   for (const b of boosts) {
     if (b.status !== 'active' || !b.meta_campaign_id) continue;
     const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+    // (LOTE ADS-DESTRABE-VERDAD) El estado REAL del aviso en Meta se
+    // refresca con el mismo ritmo horario que las stats y queda
+    // persistido (meta_estado): es la fuente de la verdad de la
+    // tarjeta. Se lee en la cuenta del cliente primero y en la de
+    // Posty después, como las stats; si ninguna lectura devuelve
+    // estado, se conserva lo persistido y la tarjeta no afirma.
+    const staleEstado = !b.meta_estado_at || (Date.now() - new Date(b.meta_estado_at + 'Z').getTime() > 3600000);
+    if (!stale && !staleEstado) continue;
+    if (staleEstado) {
+      try {
+        let er = null;
+        if (ctxStats) { try { er = await metaAds.leerEstadoRealBoost({ campaignId: b.meta_campaign_id, adsetId: b.meta_adset_id || '', adId: b.meta_ad_id || '', ctx: ctxStats }); } catch (e) { er = null; } }
+        if ((!er || !er.estado) && metaAds.adsConfigured()) { try { er = await metaAds.leerEstadoRealBoost({ campaignId: b.meta_campaign_id, adsetId: b.meta_adset_id || '', adId: b.meta_ad_id || '', ctx: null }); } catch (e) { er = null; } }
+        if (er && er.estado) {
+          try { db.prepare(`UPDATE ad_boosts SET meta_estado = ?, meta_motivo = ?, meta_estado_at = datetime('now') WHERE id = ?`).run(er.estado, er.motivo || '', b.id); } catch (e) {}
+          b.meta_estado = er.estado; b.meta_motivo = er.motivo || '';
+          b.meta_estado_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        }
+      } catch (e) { /* sin lectura no hay afirmación: la verdad queda en sin_confirmar */ }
+    }
     if (!stale) continue;
     try {
       let s = null;
@@ -16829,6 +16867,101 @@ app.get('/api/admin/ads', (req, res) => {
   } catch (e) {}
   res.json({ ok: true, pending, ads_configured: metaAds.adsConfigured(),
     earned_cents: earned, wallets_total_cents: walletsTotal, active_spend_cents: spent });
+});
+
+// ---------- (LOTE ADS-DESTRABE-VERDAD) Reparación de un impulso ----------
+// POST /api/admin/ads/reparar-impulso { boost_id } — el arreglo del
+// boost 24 y de cualquier zombi de su clase: (1) pausa en Meta la
+// campaña rota (por su id si la fila lo tiene; si no, por el nombre
+// «Posty · Impulso u<uid> · p<post>» con el que el producto la creó),
+// (2) degrada la fila a 'error' con el motivo honesto, y (3) recrea
+// el impulso con createBoost — ya pareado: el creativo de mensajes
+// lleva su botón — con el mismo posteo, monto, días y objetivo de la
+// fila, persistiendo la fila 'active' SOLO con los ids reales que
+// createBoost verificó ACTIVE en Meta. SIN cobros y SIN movimientos
+// de billetera: el impulso roto gastó US$0 en Meta y su billetera
+// nunca se debitó; recrearlo restaura la intención original del
+// dueño, no la duplica. Si la recreación falla, queda su fila
+// 'error' con los ids y el detalle entero, como en los dos rieles.
+app.post('/api/admin/ads/reparar-impulso', async (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  const boostId = Number((req.body || {}).boost_id || 0);
+  if (!boostId) return res.status(400).json({ ok: false, motivo: 'sin_boost_id' });
+  let fila = null;
+  try { fila = db.prepare('SELECT * FROM ad_boosts WHERE id = ?').get(boostId); } catch (e) {}
+  if (!fila) return res.status(404).json({ ok: false, motivo: 'sin_fila' });
+  if (fila.status === 'active' && fila.meta_campaign_id) return res.json({ ok: false, motivo: 'no_es_zombi', boost_id: boostId });
+  const uid = fila.user_id;
+  const pasos = { pausa: null, degradada: false, recreacion: null };
+  let gate = { ready: false };
+  try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
+  const ctx = (gate && gate.via === 'cliente' && gate.suat) ? { token: gate.suat, adAccountId: gate.adAccountId } : null;
+  // (1) Pausar la campaña rota.
+  try {
+    let campId = String(fila.meta_campaign_id || '');
+    if (!campId) {
+      const nombre = `Impulso u${uid} · p${fila.post_id}`;
+      let cands = [];
+      try { cands = await metaAds.listarCampanasPorNombre(ctx, nombre); } catch (e) { cands = []; }
+      const activa = cands.find((c) => c.status === 'ACTIVE');
+      campId = activa ? activa.id : '';
+      pasos.pausa = { por_nombre: nombre, encontradas: cands.length, campana: campId || null };
+    }
+    if (campId) {
+      const pz = await metaAds.pausarCampanaAds(campId, ctx);
+      pasos.pausa = { ...(pasos.pausa || {}), campana: campId, ok: !!pz.ok, motivo: pz.motivo || '' };
+    } else if (!pasos.pausa) {
+      pasos.pausa = { campana: null, ok: false, motivo: 'sin_campana' };
+    }
+  } catch (e) { pasos.pausa = { ok: false, motivo: String((e && e.message) || e).slice(0, 160) }; }
+  // (2) Degradar la fila.
+  try {
+    db.prepare(`UPDATE ad_boosts SET status = 'error', error = ? WHERE id = ?`)
+      .run('impulso roto: el aviso nunca corrió en Meta (el creativo no era compatible con el objetivo) — campaña pausada y impulso recreado por la reparación ADS-DESTRABE-VERDAD', boostId);
+    pasos.degradada = true;
+  } catch (e) {}
+  // (3) Recrear con el pareo corregido.
+  const objetivoFila = String(fila.objetivo || '');
+  const mapeo = adsAudiencia.mapeoMeta(adsAudiencia.OBJETIVOS.includes(objetivoFila) ? objetivoFila : null);
+  let cr = null; let crError = null;
+  try {
+    cr = await metaAds.createBoost({
+      name: `Posty · Impulso u${uid} · p${fila.post_id}`,
+      pageId: (gate && gate.pageId) || '', igUserId: (gate && gate.igUserId) || '', igMediaId: fila.ig_media_id,
+      spendCents: Number(fila.budget_cents || 0), days: Number(fila.duration_days || 7), country: adCountry(uid),
+      objective: mapeo.campaignObjective, optimizationGoal: mapeo.optimizationGoal,
+      destinationType: mapeo.destinationType, ctx,
+    });
+  } catch (e) { cr = null; crError = e; }
+  if (!cr || !cr.campaignId) {
+    try {
+      const esAct = crError && (crError.code === 'activacion_fallida' || crError.code === 'activacion_sin_dato');
+      db.prepare(`INSERT INTO ad_boosts
+        (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, error, objetivo, audiencia_json)
+        VALUES (?,?,?,?,0,0,?,'error',?,?,?,'engagement',?,?,?,?)`)
+        .run(uid, fila.post_id, fila.ig_media_id, Number(fila.budget_cents || 0), fila.currency || 'USD',
+          (crError && crError.campaignId) || '', (crError && crError.adsetId) || '', (crError && crError.adId) || '',
+          Number(fila.duration_days || 7),
+          `${esAct ? 'activación fallida en Meta (reparación)' : 'creación fallida en la reparación'}: ${metaAds.detalleErrorMeta(crError)}`,
+          objetivoFila, String(fila.audiencia_json || ''));
+    } catch (e) {}
+    pasos.recreacion = { ok: false, error: metaAds.detalleErrorMeta(crError) };
+    try { track(uid, 'ads_reparacion_fallida', String(boostId)); } catch (e) {}
+    return res.json({ ok: false, motivo: 'recreacion_fallida', boost_id: boostId, pasos });
+  }
+  let nuevoId = null;
+  try {
+    const ins = db.prepare(`INSERT INTO ad_boosts
+      (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
+      VALUES (?,?,?,?,0,?,?,'active',?,?,?,'engagement',?,?,?)`)
+      .run(uid, fila.post_id, fila.ig_media_id, Number(fila.budget_cents || 0), Number(fila.budget_cents || 0), fila.currency || 'USD',
+        cr.campaignId, cr.adsetId || '', cr.adId || '', Number(fila.duration_days || 7), objetivoFila, String(fila.audiencia_json || ''));
+    nuevoId = ins.lastInsertRowid;
+  } catch (e) {}
+  pasos.recreacion = { ok: true, campaignId: cr.campaignId, adsetId: cr.adsetId || '', adId: cr.adId || '' };
+  try { track(uid, 'ads_reparacion_ok', String(cr.campaignId)); } catch (e) {}
+  return res.json({ ok: true, boost_id: boostId, nuevo_boost_id: nuevoId, pasos });
 });
 
 // ---------- Reporte semanal "tu semana en números" (in-app) ----------
@@ -49453,7 +49586,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1338';
+const BUILD_ID = '20261105-v1339';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

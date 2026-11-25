@@ -724,6 +724,14 @@ try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN last_visitas_perfil INTEGER NOT 
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN refund_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN repair_intentos INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN repair_ultimo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (LOTE ADS-DESTRABE-VERDAD) La verdad del impulso en Meta:
+// meta_estado = el effective_status real del aviso, leído por el
+// refresco del panel; meta_motivo = el motivo de Meta cuando el
+// aviso quedó WITH_ISSUES; meta_estado_at = cuándo se leyó. Sin
+// lectura, la tarjeta no afirma que el aviso esté corriendo.
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN meta_estado TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN meta_estado_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE ad_boosts ADD COLUMN meta_motivo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // (LOTE ADS-ESTRATÉGICOS · + OTRA GENTE) Estado mínimo de la tarea
 // «otra gente»: una fila por usuario con el resumen del anuncio y, si
 // el cliente ya contó en el chat a quién busca, el chip traducido que

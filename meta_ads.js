@@ -665,6 +665,20 @@ async function createBoost({ name, pageId, igUserId, igMediaId, spendCents, days
       source_instagram_media_id: String(igMediaId),
     };
     if (pageId) creativeParams.object_id = pageId;
+    // (LOTE ADS-DESTRABE-VERDAD) Con destino de mensajes
+    // (INSTAGRAM_DIRECT), el creativo del posteo existente lleva su
+    // botón de mensaje: sin call_to_action, Meta crea el aviso y lo
+    // deja WITH_ISSUES «Invalid Creative For Objective» — nunca
+    // corre (boost 24, 23/11: campaña y conjunto ACTIVE, aviso
+    // pausado, gasto US$0, y el panel contando días igual). El campo
+    // call_to_action es el que la referencia oficial de AdCreative
+    // define para los anuncios creados desde un posteo existente de
+    // Instagram, y el botón del canal es INSTAGRAM_MESSAGE con su
+    // link canónico. La rama de engagement NO lo lleva: su forma
+    // histórica («sin CTA inventado») queda intacta.
+    if (destinationType === 'INSTAGRAM_DIRECT') {
+      creativeParams.call_to_action = { type: 'INSTAGRAM_MESSAGE', value: { link: 'https://www.instagram.com/' } };
+    }
     return g(`${A}/adcreatives`, { method: 'POST', ctx: gctx, params: creativeParams });
   });
 
@@ -1250,4 +1264,36 @@ async function findOrCreateEngagementAudienceId(ctx, igUserId) {
   }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, getBoostStatsConCtx, statsDesdeRow, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta };
+// (LOTE ADS-DESTRABE-VERDAD) El estado REAL de un impulso en Meta:
+// el effective_status del aviso (compone campaña y conjunto: un
+// aviso ACTIVE bajo una campaña pausada lee CAMPAIGN_PAUSED) y, si
+// Meta lo dejó WITH_ISSUES, el motivo de issues_info. Es la fuente
+// de la verdad de la tarjeta del panel: sin esta lectura, no se
+// afirma que un aviso esté corriendo. Ante cualquier error devuelve
+// estado null — el llamador conserva lo persistido y la tarjeta
+// cae a «sin confirmar», nunca a una afirmación falsa.
+async function leerEstadoRealBoost({ campaignId = '', adsetId = '', adId = '', ctx = null } = {}) {
+  const id = adId || campaignId;
+  if (!id) return { estado: null, motivo: '' };
+  try {
+    const d = await g(`/${id}`, { params: { fields: 'effective_status,issues_info' }, ctx });
+    const estado = (d && d.effective_status) || null;
+    let motivo = '';
+    const iss = (d && Array.isArray(d.issues_info)) ? d.issues_info : [];
+    if (iss.length) motivo = String(iss[0].error_summary || iss[0].error_message || '').slice(0, 200);
+    return { estado, motivo };
+  } catch (e) { return { estado: null, motivo: '' }; }
+}
+
+// (LOTE ADS-DESTRABE-VERDAD) Pausar una campaña por el camino Graph
+// del riel (la reparación del impulso roto la usa: la campaña queda
+// en pie para el censo, pero nada puede gastar desde ella).
+async function pausarCampanaAds(campaignId, ctx = null) {
+  if (!campaignId) return { ok: false, motivo: 'sin_id' };
+  try {
+    await g(`/${campaignId}`, { method: 'POST', ctx, params: { status: 'PAUSED' } });
+    return { ok: true, motivo: '' };
+  } catch (e) { return { ok: false, motivo: detalleErrorMeta(e) }; }
+}
+
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, getBoostStatsConCtx, statsDesdeRow, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta, leerEstadoRealBoost, pausarCampanaAds };

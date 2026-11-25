@@ -79,6 +79,31 @@ function diaDe(boost, ahoraMs) {
   return { dia, total };
 }
 
+// (LOTE ADS-DESTRABE-VERDAD) LA VERDAD DEL IMPULSO. La tarjeta
+// afirma «IMPULSANDO» solo cuando Meta confirmó que el aviso está
+// corriendo: meta_estado ACTIVE (leído del aviso real y persistido
+// por el refresco del panel), o el impulso recién creado con ids
+// (createBoost ya verificó los tres ACTIVE al crearlo, dentro de la
+// hora). Todo lo demás es «no sale», con su motivo:
+//  · sin_confirmar — la fila no tiene ids de Meta (la zombi) o
+//    todavía no hay lectura que la respalde: no se puede afirmar.
+//  · rechazado — Meta dejó el aviso WITH_ISSUES.
+//  · pausado — Meta lo tiene en cualquier otro estado no activo.
+// Para filas que no son 'active' no hay verdad que computar (null):
+// no son la tarjeta del impulso en curso.
+function verdadDe(boost) {
+  if (!boost || boost.status !== 'active') return null;
+  if (!boost.meta_campaign_id) return { sale: false, motivo: 'sin_confirmar' };
+  const est = String(boost.meta_estado || '');
+  if (est === 'ACTIVE') return { sale: true, motivo: null };
+  if (est === 'WITH_ISSUES') return { sale: false, motivo: 'rechazado' };
+  if (est) return { sale: false, motivo: 'pausado' };
+  const iniTxt = String(boost.created_at || '');
+  const ini = Date.parse(iniTxt.replace(' ', 'T') + (/Z|[+-]\d{2}:?\d{2}$/.test(iniTxt) ? '' : 'Z'));
+  if (Number.isFinite(ini) && (Date.now() - ini) < 3600000) return { sale: true, motivo: null };
+  return { sale: false, motivo: 'sin_confirmar' };
+}
+
 // La carga completa de la tarjeta para una fila de ad_boosts.
 // stats: hasta 3, en orden — alcance (reach de Meta), la acción
 // del objetivo, clics (clicks de Meta) — solo las que tienen dato.
@@ -96,6 +121,7 @@ function tarjetaDe(boost, ahoraMs) {
   }
   const dias = diaDe(boost, ahoraMs);
   return {
+    verdad: verdadDe(boost),
     tiene_datos: tieneDatos,
     stats,
     gastado_cents: Math.max(0, Number(boost.last_spend_cents || 0) || 0),
@@ -106,4 +132,4 @@ function tarjetaDe(boost, ahoraMs) {
   };
 }
 
-module.exports = { tarjetaDe, diaDe, statDelObjetivo };
+module.exports = { tarjetaDe, diaDe, statDelObjetivo, verdadDe };
