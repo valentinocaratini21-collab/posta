@@ -13679,6 +13679,18 @@ app.get('/api/admin/conserje/vista/cliente', requireAdminToken, (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
 
+// (LOTE CONSERJE-PRODUCTO) «Su producto»: el espejo fiel de lo que el
+// cliente ve — su Inicio de hoy con sus palabras, sus pedidos
+// abiertos con la espera y la próxima pieza que todavía no lo vio.
+app.get('/api/admin/conserje/vista/producto', requireAdminToken, (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const r = conserjeVista.producto(db, Number(req.query.user_id), { absImageUrl, posterUrlFor: posterUrlDePosteo });
+    if (!r.ok) return res.status(404).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+
 // (LOTE DESCUENTOS-CODIGO) Descuentos por código, desde el Conserje:
 // el dueño crea el código (porcentaje suyo — 50% sugerido —, duración
 // 3 meses / 6 meses / permanente, un solo uso o reutilizable, ligado a
@@ -49375,7 +49387,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1326';
+const BUILD_ID = '20261105-v1327';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

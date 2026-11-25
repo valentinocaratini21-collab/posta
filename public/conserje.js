@@ -385,14 +385,15 @@
       + '<div class="kpi"><div class="k-label">Próximo posteo</div><div class="k-value">' + (proxPost ? esc(fechaCorta(proxPost.dia_key)) : '—') + '</div><div class="k-sub">' + (proxPost ? esc(proxPost.titulo || '') + (proxPost.status === 'draft' ? ' · borrador por decidir' : '') : 'Nada programado') + '</div></div>'
       + necesita + impulsoKpi + '</div>'
       + funda + trat + nota + descHtml
-      + '<div class="sec-title">Su semana <span class="hint">así la ve el cliente</span><span class="spacer"></span>'
-      + '<span class="toggle"><button data-vista="semana" class="' + (centroVista === 'semana' ? 'on' : '') + '" type="button">Semana</button><button data-vista="feed" class="' + (centroVista === 'feed' ? 'on' : '') + '" type="button">Su feed</button></span></div>'
-      + '<div id="centroCuerpo">' + (centroVista === 'semana' ? week + grid : '<div class="cargando">Cargando su feed…</div>') + '</div>'
+      + '<div class="sec-title">' + (centroVista === 'producto' ? 'Su producto' : 'Su semana') + ' <span class="hint">así la ve el cliente</span><span class="spacer"></span>'
+      + '<span class="toggle"><button data-vista="producto" class="' + (centroVista === 'producto' ? 'on' : '') + '" type="button">Su producto</button><button data-vista="semana" class="' + (centroVista === 'semana' ? 'on' : '') + '" type="button">Semana</button><button data-vista="feed" class="' + (centroVista === 'feed' ? 'on' : '') + '" type="button">Su feed</button></span></div>'
+      + '<div id="centroCuerpo">' + (centroVista === 'semana' ? week + grid : '<div class="cargando">Cargando…</div>') + '</div>'
       + boostStrip;
     $('centro').classList.remove('fade-swap'); void $('centro').offsetWidth; $('centro').classList.add('fade-swap');
     var sel = $('tratSel');
     if (sel) sel.addEventListener('change', onTratamiento);
     if (centroVista === 'feed') renderFeed();
+    if (centroVista === 'producto') renderProducto();
     // (LOTE CONSERJE-FORMA) El posteo referido por un ítem de la
     // derecha queda abierto en la ficha: se lo trae a la vista y se
     // lo marca, para decidir en el momento sin salir a buscarlo.
@@ -403,6 +404,29 @@
         el.classList.add('flash');
       }
     }
+  }
+
+  // La grilla literal, compartida: la pinta «Su feed» y la pinta
+  // «Su producto» (LOTE CONSERJE-PRODUCTO) — una sola fuente del
+  // marcado para que el espejo no derive de la vista original.
+  function feedTilesHTML(j) {
+    var porId = {};
+    ((cliente && cliente.posteos) || []).forEach(function (p) { porId[p.id] = p; });
+    var ini = iniciales(cliente && cliente.business_name);
+    return '<div class="feedgrid">' + (j.tiles || []).map(function (t) {
+      var esVideo = /video|reel/.test(String(t.media_type || ''));
+      var img = t.poster_url || (esVideo && t.kind === 'post' ? '' : (t.img || t.image_url || ''));
+      var aprobable = (t.status === 'scheduled' || t.status === 'draft') && porId[t.post_id] && porId[t.post_id].dia_key;
+      var verAttrs = '';
+      if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
+      else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
+      return '<div class="fg-tile' + (t.es_revision ? ' fg-rev' : '') + '"' + verAttrs + '>'
+        + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(ini) + '</span></div>')
+        + (esVideo ? '<span class="fg-play">▶</span>' : '')
+        + (t.marca ? '<span class="fg-marca">' + esc(t.marca) + '</span>' : '')
+        + (aprobable ? '<button class="fg-sale" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button" aria-label="Sale así" title="Sale así">✓</button>' : '')
+        + '</div>';
+    }).join('') + '</div>';
   }
 
   function renderFeed() {
@@ -427,26 +451,68 @@
       // viendo el resultado. La foto sigue siendo la tapa real
       // (el póster en videos propios; la tile de IG trae su tapa)
       // y el toque abre el visor en grande, como siempre.
-      cuerpo.innerHTML = '<div class="feedgrid">' + (j.tiles || []).map(function (t) {
-        var esVideo = /video|reel/.test(String(t.media_type || ''));
-        var img = t.poster_url || (esVideo && t.kind === 'post' ? '' : (t.img || t.image_url || ''));
-        var aprobable = (t.status === 'scheduled' || t.status === 'draft') && porId[t.post_id] && porId[t.post_id].dia_key;
-        var verAttrs = '';
-        if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
-        else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
-        return '<div class="fg-tile' + (t.es_revision ? ' fg-rev' : '') + '"' + verAttrs + '>'
-          + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(ini) + '</span></div>')
-          + (esVideo ? '<span class="fg-play">▶</span>' : '')
-          + (t.marca ? '<span class="fg-marca">' + esc(t.marca) + '</span>' : '')
-          + (aprobable ? '<button class="fg-sale" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button" aria-label="Sale así" title="Sale así">✓</button>' : '')
-          + '</div>';
-      }).join('') + '</div>';
+      cuerpo.innerHTML = feedTilesHTML(j);
     }
     if (feedPorUsuario[uid]) { pintar(feedPorUsuario[uid]); return; }
     api('/api/admin/support/conserje/feed?user_id=' + uid).then(function (j) {
       feedPorUsuario[uid] = j;
       if (selUser === uid && centroVista === 'feed') pintar(j);
     }).catch(function () { cuerpo.innerHTML = '<div class="vacio">No se pudo leer el feed.</div>'; });
+  }
+
+  // ---------------- su producto: el espejo del cliente ----------------
+  // (LOTE CONSERJE-PRODUCTO · idea del dueño 24/11 19:12) La ficha
+  // muestra el producto TAL COMO LO VE EL CLIENTE: su Inicio de hoy
+  // con sus palabras y su idioma, la grilla literal, sus pedidos
+  // abiertos con la espera, y la próxima pieza marcada como todavía
+  // no vista. Lo que su producto esconde (la cola de revisión) acá
+  // no se pinta como visto: el servidor compone el espejo.
+  function renderProducto() {
+    var uid = selUser;
+    var cuerpo = $('centroCuerpo');
+    if (!cuerpo || !uid) return;
+    cuerpo.innerHTML = '<div class="cargando">Cargando su producto…</div>';
+    var pj = null, fj = feedPorUsuario[uid] || null, feedListo = !!fj;
+    function listo() { if (pj && feedListo) pintar(pj, fj); }
+    function pintar(p, f) {
+      if (selUser !== uid) return;
+      if (!p || !p.ok) { cuerpo.innerHTML = '<div class="vacio">No se pudo leer su producto.</div>'; return; }
+      var hoy = p.hoy || {};
+      var hoyHtml = '<div class="prod-hoy">'
+        + (hoy.img ? '<img class="prod-hoy-img" src="' + esc(hoy.img) + '" alt="">' : '')
+        + '<div class="prod-hoy-main"><div class="prod-k">Su Inicio de hoy — así lo ve</div>'
+        + '<div class="prod-hoy-linea">' + esc(hoy.linea || '') + '</div>'
+        + (hoy.titulo ? '<div class="prod-hoy-tit">' + esc(hoy.titulo) + '</div>' : '')
+        + '</div>'
+        + (hoy.post_id ? '<span class="prod-ve">✓ Lo ve en su producto</span>' : '<span class="prod-ve espera">⏳ Todavía sin pieza a la vista</span>')
+        + '</div>';
+      var gridHtml = '';
+      if (f && f.ok && f.disponible) gridHtml = '<div class="prod-sec">Su semana — la grilla literal</div>' + feedTilesHTML(f);
+      else if (f && f.ok && !f.disponible) gridHtml = '<div class="prod-sec">Su semana — la grilla literal</div><div class="vacio">Sin snapshot de su Instagram: no mostramos una grilla inventada.</div>';
+      var pedHtml = '<div class="prod-sec">Sus pedidos abiertos</div>';
+      if ((p.pedidos || []).length) {
+        pedHtml += p.pedidos.map(function (pd) {
+          return '<div class="prod-ped"><span class="prod-ped-tag">' + (pd.tipo === 'idea' ? '💡 Idea de Subir' : (pd.ambito === 'posteo' ? '✎ Cambio en un posteo' : '💬 Mensaje sin responder')) + '</span>'
+            + '<div class="prod-ped-txt">«' + esc(pd.texto || '') + '»</div>'
+            + '<div class="prod-ped-hace">espera ' + esc(pd.hace || '') + '</div></div>';
+        }).join('');
+      } else pedHtml += '<div class="vacio">Sin pedidos abiertos: está al día.</div>';
+      var sigHtml = '<div class="prod-sec">Lo próximo que todavía no vio</div>';
+      if (p.siguiente) {
+        var s = p.siguiente;
+        sigHtml += '<div class="prod-sig"><span class="prod-novio">Todavía no lo vio</span>'
+          + '<div class="prod-sig-tit">' + esc(s.titulo || 'Pieza en preparación') + '</div>'
+          + '<div class="prod-sig-det">' + esc(s.detalle || '') + '</div>'
+          + '<div class="prod-sig-when">' + (s.fecha ? 'Sale ' + esc(s.fecha) : '') + (s.hora ? ' · ' + esc(s.hora) : '') + '</div></div>';
+      } else sigHtml += '<div class="vacio">Nada en preparación: lo próximo que salga ya lo ve en su grilla.</div>';
+      cuerpo.innerHTML = '<div class="prod">' + hoyHtml + gridHtml + pedHtml + sigHtml + '</div>';
+    }
+    api('/api/admin/conserje/vista/producto?user_id=' + uid).then(function (j) { pj = j; listo(); })
+      .catch(function () { pj = { ok: false }; listo(); });
+    if (!feedListo) {
+      api('/api/admin/support/conserje/feed?user_id=' + uid).then(function (j) { feedPorUsuario[uid] = j; fj = j; feedListo = true; listo(); })
+        .catch(function () { fj = null; feedListo = true; listo(); });
+    }
   }
 
   function onTratamiento(ev) {

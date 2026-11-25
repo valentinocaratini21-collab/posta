@@ -1302,6 +1302,130 @@ function vista(db, opts) {
   };
 }
 
+// ---------------------------------------------------------------------
+// SU PRODUCTO (LOTE CONSERJE-PRODUCTO · idea del dueño 24/11 19:12):
+// el espejo fiel de lo que el cliente ve, al abrir su negocio en el
+// conserje — su Inicio de hoy con SUS palabras y su idioma, sus
+// pedidos abiertos con la espera, y la próxima pieza que todavía no
+// llegó a su producto. La regla del espejo manda sobre la vista de
+// admin: lo que el cliente no ve (needs_review = 1, la cola de
+// revisión) acá NO se pinta como visto — va a «todavía no lo vio».
+// ---------------------------------------------------------------------
+function producto(db, userId, opts) {
+  const o = opts || {};
+  const uid = Number(userId) || 0;
+  if (!uid) return { ok: false, error: 'sin_usuario' };
+  const u = safe(() => db.prepare(
+    `SELECT u.id, u.lang, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
+            p.business_name, p.ig_username
+     FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
+  if (!u) return { ok: false, error: 'sin_usuario' };
+  const tz = conserjeRevision.accountTz(db, uid);
+  const en = u.lang === 'en';
+  const nowMs = Number(o.nowMs) || Date.now();
+  const hoyKey = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+  const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : null;
+  const horaDe = (ms, h12) => {
+    if (!Number.isFinite(ms)) return '';
+    try { return new Intl.DateTimeFormat(en ? 'en-US' : 'es', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: !!h12 }).format(new Date(ms)); }
+    catch (e) { return ''; }
+  };
+  // --- 1 · su posteo de hoy, como lo ve él (filtro del cliente:
+  // GET /api/posts esconde needs_review = 1; el rango por día es el
+  // mismo de semanaDe: publicado > programado > borrador) ---
+  const visibles = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND COALESCE(needs_review, 0) = 0 AND status IN ('published', 'scheduled', 'draft')`).all(uid), []);
+  const rango = { published: 3, scheduled: 2, draft: 1 };
+  let hoyPost = null;
+  for (const p of visibles) {
+    const t = toMs(p.scheduled_at || p.published_at || p.created_at);
+    if (!Number.isFinite(t)) continue;
+    if (safe(() => dayKeyInTz(new Date(t), tz), '') !== hoyKey) continue;
+    if (!hoyPost || (rango[p.status] || 0) > (rango[hoyPost.status] || 0)) hoyPost = p;
+  }
+  let hoy;
+  if (hoyPost) {
+    const t = toMs(hoyPost.scheduled_at || hoyPost.published_at);
+    let poster = '';
+    if (typeof o.posterUrlFor === 'function') { try { poster = o.posterUrlFor(uid, hoyPost) || ''; } catch (e) { poster = ''; } }
+    const img = poster || (abs && hoyPost.image_path && !String(hoyPost.image_path).startsWith('data:') ? abs(uid, hoyPost.image_path) : '');
+    const estado = hoyPost.status === 'published' ? 'publicado' : (hoyPost.status === 'scheduled' ? 'sale_hoy' : 'borrador');
+    const linea = estado === 'publicado'
+      ? (en ? 'Already out · ' + horaDe(t, true) : 'Ya salió · ' + horaDe(t, false))
+      : estado === 'sale_hoy'
+        ? (en ? 'Today · ' + horaDe(t, true) : 'Sale hoy · ' + horaDe(t, false))
+        : (en ? 'Draft in their week' : 'Borrador en su semana');
+    hoy = { estado, post_id: hoyPost.id, titulo: conserjeRevision.tituloDe(hoyPost), hora: horaDe(t, en), linea, img };
+  } else {
+    // Las dos caras de su tarjeta vacía (pzHoyVaciaPromesaHTML):
+    // antes de las 9:00 de SU zona, la promesa; desde las 9:00, el
+    // armado. El espejo dice lo mismo que su pantalla.
+    let hh = -1;
+    try { hh = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date(nowMs)), 10); } catch (e) {}
+    if (!(hh >= 0 && hh <= 23)) hh = new Date(nowMs).getHours();
+    hoy = hh < 9
+      ? { estado: 'antes_de_las_9', post_id: null, titulo: '', hora: '', linea: en ? 'Your next post · available at 9:00 AM' : 'Tu próximo posteo · disponible a las 9:00', img: '' }
+      : { estado: 'en_armado', post_id: null, titulo: '', hora: '', linea: en ? "Today's post · is being built" : 'Tu posteo de hoy · está en armado', img: '' };
+  }
+  // --- 2 · sus pedidos abiertos: lo que escribió y todavía espera.
+  // La cola de pedidos de voz trae los tres hilos (posteo, semana,
+  // general) y las ideas con su estado propio: una idea recibida
+  // espera aunque su mensaje no tenga fila de revisión, y un pedido
+  // ya respondido en el hilo no espera respuesta. ---
+  const haceLabel = (utc) => {
+    if (!utc) return '';
+    const t = new Date(String(utc).replace(' ', 'T') + 'Z').getTime();
+    if (!Number.isFinite(t)) return '';
+    const min = Math.max(1, Math.round((nowMs - t) / 60000));
+    if (min < 60) return 'hace ' + min + ' min';
+    const h = Math.round(min / 60);
+    if (h < 48) return 'hace ' + h + (h === 1 ? ' hora' : ' horas');
+    const d = Math.round(h / 24);
+    return 'hace ' + d + (d === 1 ? ' día' : ' días');
+  };
+  const pedidos = [];
+  const cola = safe(() => supportCases.voiceRequests(db, { limit: 60, userId: uid, absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor }), null);
+  for (const pd of (cola && cola.pedidos) || []) {
+    if (pd.es_idea) {
+      if (pd.idea_estado === 'recibida') pedidos.push({ tipo: 'idea', ambito: '', texto: trunc(pd.pedido || '', 400), hace: haceLabel(pd.cuando_utc), desde: pd.cuando_utc || '', post_id: 0 });
+    } else if (pd.revision && pd.revision.estado === 'pendiente' && !pd.respuesta) {
+      pedidos.push({ tipo: 'pedido', ambito: pd.ambito || '', texto: trunc(pd.pedido || '', 400), hace: haceLabel(pd.cuando_utc), desde: pd.cuando_utc || '', post_id: pd.posteo ? pd.posteo.id : 0 });
+    }
+  }
+  pedidos.sort((a, b) => String(a.desde).localeCompare(String(b.desde)));
+  // --- 3 · lo próximo que todavía no vio: primero la pieza cargada
+  // que su producto esconde (la cola de revisión); si no hay, la
+  // pieza de su plan de prueba que sigue en preparación. ---
+  let siguiente = null;
+  const invisible = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND COALESCE(needs_review, 0) = 1 AND status IN ('scheduled', 'draft')
+     ORDER BY COALESCE(scheduled_at, created_at) ASC LIMIT 1`).get(uid), null);
+  if (invisible) {
+    const t = toMs(invisible.scheduled_at || invisible.created_at);
+    const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
+    siguiente = {
+      estado: 'en_revision', post_id: invisible.id, titulo: conserjeRevision.tituloDe(invisible),
+      fecha: k ? fechaCortaDeKey(k) : '', hora: horaDe(t, false),
+      detalle: 'Está en la cola de revisión: sale cuando lo aceptás.',
+    };
+  } else {
+    const planInfo = planDePrueba(db, u);
+    const slot = planInfo && planInfo.plan.slots.find((s) => s.estado !== 'listo');
+    if (slot) {
+      siguiente = {
+        estado: 'en_preparacion', post_id: null, titulo: slot.nombre || '',
+        fecha: slot.fecha || '', hora: slot.hora || '',
+        detalle: 'Pieza de su prueba en preparación: todavía no se cargó a su producto.',
+      };
+    }
+  }
+  return {
+    ok: true, user_id: uid, lang: en ? 'en' : 'es',
+    business_name: u.business_name || '', ig_username: u.ig_username || '',
+    hoy, pedidos: pedidos.slice(0, 8), siguiente,
+  };
+}
+
 module.exports = {
   catalogoTratamientos,
   tratamientoDe,
@@ -1322,6 +1446,7 @@ module.exports = {
   posteosDe,
   mediaDePosteo,
   cliente,
+  producto,
   marcarVozResuelto,
   abrirOrdenProduccion,
   cerrarCaso,
