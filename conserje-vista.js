@@ -1655,9 +1655,26 @@ function producto(db, userId, opts) {
   // que su producto esconde (la cola de revisión); si no hay, la
   // pieza de su plan de prueba que sigue en preparación. ---
   let siguiente = null;
-  const invisible = safe(() => db.prepare(
+  // (LOTE CONSERJE-RECHAZO-FUERA · regla del dueño 24/11: «si es vieja,
+  // no tiene que aparecer más en el conserje») La pieza «próxima» nunca
+  // es una rechazada ni una cuya fecha de salida ya pasó: se recorren
+  // las candidatas en orden de salida y se toma la primera vigente.
+  // El borrador sin fecha (el que volvió por «arreglar») sí es vigente:
+  // esta tarjeta es su puerta de re-decisión.
+  const candidatas = safe(() => db.prepare(
     `SELECT * FROM posts WHERE user_id = ? AND COALESCE(needs_review, 0) = 1 AND status IN ('scheduled', 'draft')
-     ORDER BY COALESCE(scheduled_at, created_at) ASC LIMIT 1`).get(uid), null);
+     AND COALESCE(approval, 'pending') <> 'rejected'
+     ORDER BY COALESCE(scheduled_at, created_at) ASC LIMIT 8`).all(uid), []);
+  let invisible = null;
+  for (const cand of candidatas) {
+    if (cand.scheduled_at) {
+      const tCand = toMs(cand.scheduled_at);
+      const kCand = Number.isFinite(tCand) ? safe(() => dayKeyInTz(new Date(tCand), tz), '') : '';
+      if (kCand && hoyKey && kCand < hoyKey) continue;
+    }
+    invisible = cand;
+    break;
+  }
   if (invisible) {
     const t = toMs(invisible.scheduled_at || invisible.created_at);
     const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';

@@ -13507,8 +13507,10 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
     const snap = homeSnapshotGet(uid);
     if (!snap || !snap.payload) return res.json({ ok: true, disponible: false, motivo: 'sin_feed' });
     const prof = snap.payload;
+    // (LOTE CONSERJE-RECHAZO-FUERA) La grilla no muestra piezas
+    // rechazadas: ya se decidió que no salen, no son «lo que viene».
     const rows = db.prepare(`SELECT id, image_path, media_type, cover_path, status, scheduled_at, published_at, created_at, pinned, pinned_at, ig_permalink, ig_state, needs_review
-      FROM posts WHERE user_id = ? AND status IN ('published','scheduled','draft')`).all(uid);
+      FROM posts WHERE user_id = ? AND status IN ('published','scheduled','draft') AND COALESCE(approval, 'pending') <> 'rejected'`).all(uid);
     const tiles = [];
     const pubShortcodes = new Set();
     const archivedShortcodes = new Set();
@@ -49415,7 +49417,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1330';
+const BUILD_ID = '20261105-v1331';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

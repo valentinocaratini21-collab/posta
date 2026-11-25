@@ -533,6 +533,10 @@ function decidirRevision(db, opts) {
       }
     } else if (decision === 'no_sale') {
       // Rechazado y fuera del slot ahora mismo (no espera a las 17:00).
+      // (LOTE CONSERJE-RECHAZO-FUERA) Sale también de revisión
+      // (needs_review = 0): sin esto, el espejo de «Su producto» lo
+      // seguía mostrando como «el próximo» aunque ya estaba rechazado
+      // (caso real: post 463 de Café Aroma, 24/11).
       // El posteo queda como borrador, no se borra.
       // (LOTE PAUSA-DURABLE) El gesto se UNIFICA con la pausa del
       // dueño: (a) suma user_stopped=1 — era el único freno que no lo
@@ -543,7 +547,7 @@ function decidirRevision(db, opts) {
       // frenada en day_stops: «no sale» es durable también a nivel
       // día, ningún relleno agenda un reemplazo para esa fecha. El
       // gesto inverso es 'pedir' («Posty lo arma»), que borra el stop.
-      db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'rejected', error = '' WHERE id = ?`).run(post.id);
+      db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, approval = 'rejected', needs_review = 0, error = '' WHERE id = ?`).run(post.id);
       safe(() => db.prepare(`UPDATE posts SET user_stopped = 1 WHERE id = ?`).run(post.id), null);
       // (LOTE PATRONES-DE-SERIE · C4) Y la PIEZA queda frenada: el
       // «no sale» del dueño no lo deshace ningún agendado automático.
