@@ -1657,21 +1657,26 @@ function producto(db, userId, opts) {
   let siguiente = null;
   // (LOTE CONSERJE-RECHAZO-FUERA · regla del dueño 24/11: «si es vieja,
   // no tiene que aparecer más en el conserje») La pieza «próxima» nunca
-  // es una rechazada ni una cuya fecha de salida ya pasó: se recorren
-  // las candidatas en orden de salida y se toma la primera vigente.
-  // El borrador sin fecha (el que volvió por «arreglar») sí es vigente:
-  // esta tarjeta es su puerta de re-decisión.
+  // es una rechazada ni una vencida: se recorren las candidatas en
+  // orden de salida y se toma la primera vigente. (v1333 · RECHAZO-
+  // FUERA-2) TODA candidata se juzga por su día efectivo — el de su
+  // salida programada o, si no tiene fecha, el de su creación: la
+  // excepción «sin fecha siempre vigente» dejó pasar un borrador
+  // demo del 25 oct sin fecha (post 464 de Café Aroma) apenas la
+  // pieza de adelante fue rechazada. El borrador sin fecha DE HOY
+  // (la propuesta fresca, el que vuelve por «arreglar» en el día)
+  // sí es vigente: esta tarjeta es su puerta de re-decisión; el de
+  // un día pasado queda en su ficha y en la cola, no acá.
   const candidatas = safe(() => db.prepare(
     `SELECT * FROM posts WHERE user_id = ? AND COALESCE(needs_review, 0) = 1 AND status IN ('scheduled', 'draft')
      AND COALESCE(approval, 'pending') <> 'rejected'
      ORDER BY COALESCE(scheduled_at, created_at) ASC LIMIT 8`).all(uid), []);
   let invisible = null;
   for (const cand of candidatas) {
-    if (cand.scheduled_at) {
-      const tCand = toMs(cand.scheduled_at);
-      const kCand = Number.isFinite(tCand) ? safe(() => dayKeyInTz(new Date(tCand), tz), '') : '';
-      if (kCand && hoyKey && kCand < hoyKey) continue;
-    }
+    const rawCand = cand.scheduled_at || cand.created_at;
+    const tCand = (typeof rawCand === 'number' || /^\d+$/.test(String(rawCand || ''))) ? Number(rawCand) : toMs(rawCand);
+    const kCand = Number.isFinite(tCand) ? safe(() => dayKeyInTz(new Date(tCand), tz), '') : '';
+    if (kCand && hoyKey && kCand < hoyKey) continue;
     invisible = cand;
     break;
   }
