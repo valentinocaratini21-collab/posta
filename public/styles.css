@@ -7299,3 +7299,32 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
    raíz ya lo tenía y medía 560 igual). Se completa para toda raíz
    de vista: ninguna supera el ancho de la columna. */
 .bb-main>*{min-width:0;max-width:100%}
+
+/* (LOTE SCROLL-ADS-REPAINT · v1341) Sin backdrop-filter en el shell
+   sobre superficies que conviven con el scroll: en iOS cada una
+   obliga a re-muestrear lo que pasa debajo en cada frame y el
+   contenido se pinta dos veces corrido (el video del dueño en Ads,
+   25/11 — la misma familia de CABECERA-SCROLL-IOS v1317, que solo
+   había limpiado la cabecera del shell web). La cabecera del shell
+   (.pz-shell-head, sticky) y el dock fijo (.bb-bar/.mz-tabs) quedan
+   OPACOS: son las dos superficies por las que el contenido pasa
+   debajo. El vidrio sigue como tinte + borde + sombra; lo que se va
+   es el muestreo. Fuera de esta franja, a propósito: el botón
+   primario vidrio-azul (un elemento chico por pantalla) y el vidrio
+   de modales y hojas, que no scrollean con el contenido. */
+.bb-app .pz-shell-head, .bb-app .pz-shell-ic, .bb-app .bb-bar, .bb-app .mz-tabs,
+.bb-app .btn:not(.btn-primary), .bb-app .bb-btn,
+.bb-app .mn-slot, .bb-app .mn-connect-btn,
+.bb-app .hf-tile-chat::before, .bb-app .hf-head-ic, .bb-app .hf-info-btn,
+.bb-app .mx-tira-jardin, .bb-app .hf-head, .bb-app .hf-pmain, .bb-app .mz-chatbar,
+.bb-app .mx-tarjeta, .bb-app .ana-card, .bb-app .card.ajsec,
+.bb-app .sched-col, .bb-app .bb-bcard, .bb-app .bb-bloque, .bb-app .bb-libre,
+.bb-app .apv-wrap .card, .bb-app .hf-dcard, .bb-app .form-card, .bb-app .st-card,
+.bb-app .st-wrap .card, .bb-app .ob-wrap .card, .bb-app .ads-wrap .card, .bb-app .ads-wrap .ads-rec,
+.accept-pill, .hf-accept-bar {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.bb-app .pz-shell-head { background: #fff; }
+.bb-app.bb-glass-inicio .bb-bar, .bb-app.bb-glass-pantallas .bb-bar, .bb-app .bb-bar { background: rgba(255,255,255,.96); }
+.bb-app .mz-tabs { background: rgba(255,255,255,.96); }
