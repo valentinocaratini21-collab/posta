@@ -75,6 +75,7 @@ const CASE_TYPES = {
   sin_aprobar: { label: 'Sin aprobar', severidad: 'ambar' },
   ayuda: { label: 'Ayuda pedida', severidad: 'ambar' },
   conserje: { label: 'Mensaje en modo conserje', severidad: 'ambar' },
+  pedido_dueno: { label: 'Pedido del dueño (chat de la ficha)', severidad: 'ambar' },
 };
 
 function nowUtc(d) {

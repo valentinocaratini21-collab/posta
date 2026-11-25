@@ -705,6 +705,60 @@
   .mkmat img{width:100%;height:100%;object-fit:cover}
   .mkmat-tag{position:absolute;left:6px;bottom:6px;background:rgba(10,30,51,.55);color:#fff;padding:2px 7px;border-radius:12px;font-size:9.5px;font-weight:700}
 
+
+  /* (LOTE CONSERJE-INICIO) «Su ficha» en el diseño claro del marco:
+     sus bloques internos traían los colores de la consola oscura y
+     sobre la lámina crema se veían grises. Solo con la ficha abierta. */
+  body.ficha-open .sec-title{color:#71879a}
+  body.ficha-open .sec-title .hint{color:#9db2c1}
+  body.ficha-open .kpi{background:#fff;border-color:#e7dfcd;box-shadow:0 2px 8px rgba(10,30,51,.04)}
+  body.ficha-open .kpi .k-label{color:#71879a}
+  body.ficha-open .kpi .k-value{color:#12212f}
+  body.ficha-open .kpi .k-value.yellow{color:#b97e10}
+  body.ficha-open .kpi .k-value.green{color:#1E9E5A}
+  body.ficha-open .kpi .k-sub{color:#71879a}
+  body.ficha-open .kpi .bar{background:#efe9da}
+  body.ficha-open .fund{background:#fff;border-color:#e7dfcd;box-shadow:0 2px 8px rgba(10,30,51,.04)}
+  body.ficha-open .fund .f-label{color:#14608c}
+  body.ficha-open .fund .f-value{color:#12212f}
+  body.ficha-open .fund .f-value .sin{color:#71879a}
+  body.ficha-open .fund .fuente{color:#71879a}
+  body.ficha-open .trat{background:#fff;border-color:#e7dfcd}
+  body.ficha-open .trat .t-label{color:#14608c}
+  body.ficha-open .trat select{background:#fff;color:#12212f;border-color:#e7dfcd}
+  body.ficha-open .trat .t-hint{color:#71879a}
+  body.ficha-open .nota input{background:#fff;color:#12212f;border-color:#e7dfcd}
+  body.ficha-open .nota input::placeholder{color:#9db2c1}
+  body.ficha-open .day{background:#fff;border-color:#e7dfcd}
+  body.ficha-open .day .d-name{color:#71879a}
+  body.ficha-open .day .d-note{color:#71879a}
+  body.ficha-open .day.today{background:#fdf6e0;border-color:#FEC14D}
+  body.ficha-open .post{background:#fff;border-color:#e7dfcd}
+  body.ficha-open .post .p-day{color:#71879a}
+  body.ficha-open .post .p-title{color:#12212f}
+  body.ficha-open .post .p-cap{color:#71879a}
+  body.ficha-open .post .thumb .ph{background:#f5efdf;color:#71879a}
+  body.ficha-open .boost{background:#fff;border-color:#e7dfcd}
+  body.ficha-open .boost .b-title{color:#12212f}
+  body.ficha-open .boost .b-txt{color:#71879a}
+  /* La celda velada del teléfono y la franja de su chat */
+  .mkcell.velada img{filter:blur(7px) brightness(.72);transform:scale(1.07)}
+  .mkcell .mkvel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:19px;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+  .mkchatmir{display:flex;gap:9px;align-items:center;border:1px solid #efe8d8;border-radius:14px;padding:9px 11px;margin-top:12px;background:#fff}
+  .mkcm-dot{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2793C8,#0A1E33);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+  .mkcm-t{font-size:13px;font-weight:800;color:#12212f;line-height:1.15}
+  .mkcm-s{font-size:12px;color:#71879a}
+  /* El chat del dueño con bamboo */
+  .mkthread{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow:auto}
+  .mkmsg{max-width:88%}
+  .mkmsg .mkmsg-b{background:#f5efdf;border:1px solid #e7dfcd;border-radius:14px;padding:8px 11px;font-size:13.5px;color:#12212f;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+  .mkmsg.mio{align-self:flex-end}
+  .mkmsg.mio .mkmsg-b{background:#e8f3fa;border-color:#cfe6f3}
+  .mkmsg-h{font-size:11px;color:#71879a;margin-top:3px}
+  .mkmsg.mio .mkmsg-h{text-align:right}
+  .mkchatrow{display:flex;gap:8px;margin-top:10px}
+  .mkchatrow input{flex:1;border:1px solid #e7dfcd;border-radius:12px;padding:9px 12px;font-size:13.5px;outline:none;background:#fff;color:#12212f;min-height:38px}
+  .mkchatrow input:focus{border-color:#2793C8}
 </style>
 </head>
 <body>
@@ -819,6 +873,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=18"></script>
+<script src="/conserje.js?v=19"></script>
 </body>
 </html>

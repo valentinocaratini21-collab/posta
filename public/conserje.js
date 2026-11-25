@@ -60,6 +60,7 @@
   var AVA_GRADS = ['linear-gradient(135deg,#b0722e,#6b3f14)','linear-gradient(135deg,#3a4a5a,#101c28)','linear-gradient(135deg,#c0392b,#6e1f14)','linear-gradient(135deg,#b04a8a,#5f2350)','linear-gradient(135deg,#2793C8,#0A1E33)','linear-gradient(135deg,#1E9E5A,#0d5c31)','linear-gradient(135deg,#7a4ab0,#33184a)','linear-gradient(135deg,#d4692a,#7a3410)'];
   function avaGrad(uid) { return AVA_GRADS[Math.abs(Number(uid) || 0) % AVA_GRADS.length]; }
   var rosterOrden = [];
+  var autoInicioHecho = false;
   function avaClass(uid) { return 'avatar a' + (Math.abs(Number(uid) || 0) % 7); }
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   function fechaCorta(key) {
@@ -583,6 +584,16 @@
       var verAttrs = '';
       if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
       else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
+      if (t.en_revision) {
+        // (LOTE CONSERJE-INICIO) La pieza que todavía no le mandamos:
+        // ocupa su lugar en la grilla, pero VELADA — borrosa y con
+        // candado, sin título y sin visor. Él no la vio; el espejo
+        // muestra que está y dónde va a caer, nada más.
+        cells.push('<div class="mkcell velada">' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '')
+          + '<span class="mkvel">🔒</span>'
+          + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '') + '</div>');
+        return;
+      }
       cells.push('<div class="mkcell"' + verAttrs + '>' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '')
         + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '')
         + (tit ? '<span class="mkcell-t">' + esc(tit) + '</span>' : '') + '</div>');
@@ -596,7 +607,8 @@
       + daycard
       + '<div class="mksec">' + L('Su semana', 'His week') + '</div>'
       + '<div class="mkgrid">' + cells.join('') + '</div>'
-      + '<div class="mkfnote">' + L('Espejo fiel de su Inicio y su grilla, en su idioma y su horario. Si él no lo ve, acá tampoco se ve.', "A faithful mirror of his Home and his grid, in his language and his timezone. If he doesn't see it, it doesn't show here either.") + '</div>'
+      + '<div class="mkchatmir"><span class="mkcm-dot">P</span><div><div class="mkcm-t">Posty</div><div class="mkcm-s">' + L('Su chat: nos escribe y le respondemos', 'His chat: he writes to us and we reply') + '</div></div></div>'
+      + '<div class="mkfnote">' + L('Espejo fiel de su Inicio y su grilla, en su idioma y su horario. Lo que todavía no le mandamos se ve velado, en su lugar.', 'A faithful mirror of his Home and his grid, in his language and his timezone. What we have not sent him yet shows veiled, in its place.') + '</div>'
       + '</div>';
     // --- pidió algo (con su semáforo y sus acciones) ---
     var reqs;
@@ -663,6 +675,14 @@
         + (a.acepto_hace ? '<li><span class="ok">✔</span><span>' + L('Aceptó un posteo', 'He accepted a post') + ' — <b>' + esc(a.acepto_hace) + '</b></span></li>' : '')
         + '</ul>';
     }
+    // --- el chat del dueño con bamboo ---
+    var chatBody = (j.dueno_chat || []).map(function (m) {
+      var mio = m.autor === 'dueno';
+      return '<div class="mkmsg' + (mio ? ' mio' : '') + '"><div class="mkmsg-b">' + esc(m.texto) + '</div><div class="mkmsg-h">' + (mio ? L('Vos', 'You') : 'bamboo') + (m.hace ? ' · ' + esc(m.hace) : '') + '</div></div>';
+    }).join('');
+    var chatCard = '<div class="mksec">' + L('Chat con bamboo', 'Chat with bamboo') + '</div><div class="mkcard">'
+      + '<div class="mkthread">' + (chatBody || '<div class="mknone">' + L('Pedile el cambio que quieras sobre este negocio: me llega como tarea y te respondo acá.', 'Ask for any change about this business: it reaches me as a task and I reply here.') + '</div>') + '</div>'
+      + '<div class="mkchatrow"><input id="duenoChatIn" type="text" maxlength="1000" placeholder="' + L('Pedile un cambio a bamboo…', 'Ask bamboo for a change…') + '"><button class="btn primary small" data-act="dueno-enviar" type="button">' + L('Enviar', 'Send') + '</button></div></div>';
     return '<div class="mkcols">'
       + '<div><div class="mksec">' + L('Su producto — así lo ve él', 'His product — as he sees it') + ' <span class="mklive">' + L('ESPEJO EN VIVO', 'LIVE MIRROR') + '</span></div>' + phone + '</div>'
       + '<div>'
@@ -671,6 +691,7 @@
       + '<div class="mksec">' + L('Estado', 'Status') + '</div><div class="mkcard"><ul class="mkstatus">' + status + '</ul></div>'
       + '<div class="mksec">' + L('Su Instagram real', 'His real Instagram') + '</div><div class="mkcard">' + igBody + '</div>'
       + '<div class="mksec">' + L('Su actividad', 'His activity') + '</div><div class="mkcard">' + actBody + '</div>'
+      + chatCard
       + '</div></div>';
   }
 
@@ -1206,6 +1227,20 @@
       // conserva si ya estaba abierta, sin auto-abrir ninguna.
       if (recargarCliente && selUser && centroModo === 'ficha') return cargarCliente(selUser);
       renderCentro();
+      // (LOTE CONSERJE-INICIO · pedido del dueño 24/11) El inicio del
+      // conserje ES «Su producto»: en la primera carga se abre el
+      // negocio más urgente en esa vista. El tablero «Hoy» queda a un
+      // toque. La bandera se consume una vez: las recargas y las
+      // vueltas al tablero no re-abren nada.
+      if (!autoInicioHecho) {
+        autoInicioHecho = true;
+        if (!selUser && rosterOrden.length) {
+          selUser = rosterOrden[0];
+          centroVista = 'producto';
+          renderRoster();
+          cargarCliente(selUser);
+        }
+      }
     }).catch(function () { toast('No se pudo cargar la consola.', 'err'); });
   }
   function cargarCliente(uid, postId) {
@@ -1273,6 +1308,7 @@
     if (next && next !== selUser) { selUser = next; cargarCliente(next); irAlCentro(); }
   }
   document.addEventListener('keydown', function (ev) {
+    if (ev.target && ev.target.id === 'duenoChatIn' && ev.key === 'Enter') { var bD = document.querySelector('[data-act="dueno-enviar"]'); if (bD) bD.click(); return; }
     if (!document.body.classList.contains('ficha-open')) return;
     if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
     var ae = document.activeElement;
@@ -1305,6 +1341,17 @@
     var re = function () { b.disabled = false; };
     if (act === 'cli-prev') { stepCliente(-1); re(); return; }
     if (act === 'cli-next') { stepCliente(1); re(); return; }
+    if (act === 'dueno-enviar') {
+      var inpD = $('duenoChatIn');
+      var txtD = inpD ? String(inpD.value || '').trim() : '';
+      if (txtD) {
+        api('/api/admin/conserje/vista/dueno-chat', { method: 'POST', body: { user_id: Number(selUser), texto: txtD, autor: 'dueno' } }).then(function (j) {
+          if (j && j.ok) { toast('Pedido enviado: bamboo lo tiene como tarea.'); renderFicha(); }
+          else { toast('No se pudo enviar el pedido.', 'err'); re(); }
+        }).catch(function () { toast('No se pudo enviar el pedido.', 'err'); re(); });
+      } else { re(); }
+      return;
+    }
     if (act === 'ir-proximo') {
       var ordenP = ((vista && vista.clientes) || []).filter(function (f) { return f.urgencia && f.urgencia.nivel < 3; })
         .sort(function (a, b) { return (a.urgencia.nivel - b.urgencia.nivel) || ((b.urgencia.espera_min || 0) - (a.urgencia.espera_min || 0)); });

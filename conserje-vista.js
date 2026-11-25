@@ -981,7 +981,7 @@ function colaProduccion(db, filas) {
     `SELECT c.id, c.user_id, c.titulo, c.detalle, c.siguiente_paso, c.created_at,
             p.business_name, p.ig_username
      FROM support_cases c LEFT JOIN profiles p ON p.user_id = c.user_id
-     WHERE c.tipo = 'prueba_linea_mano' AND c.estado <> 'cerrado'
+     WHERE c.tipo IN ('prueba_linea_mano', 'pedido_dueno') AND c.estado <> 'cerrado'
      ORDER BY c.id ASC`).all(), []);
   for (const c of casos) {
     const f = porId[c.user_id];
@@ -1547,6 +1547,61 @@ function urgenciaDe(db, uid, clase, o, nowMs) {
   return RESTO;
 }
 
+// ---------------------------------------------------------------------
+// EL CHAT DEL DUEÑO CON BAMBOO (LOTE CONSERJE-INICIO · pedido del
+// dueño 24/11): en la ficha de cada negocio, el dueño le pide un
+// cambio a bamboo por escrito. El hilo vive en dueno_chat; cada
+// mensaje del dueño abre (o renueva) su tarea en la cola del conserje
+// — un caso pedido_dueno por negocio — y la respuesta de bamboo la
+// cierra. Nada de esto lo ve el cliente: es la línea interna.
+// ---------------------------------------------------------------------
+function ensureDuenoChat(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS dueno_chat (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    autor TEXT NOT NULL,
+    texto TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+}
+
+function duenoChatDe(db, uid, nowMs) {
+  ensureDuenoChat(db);
+  const rows = safe(() => db.prepare(
+    'SELECT autor, texto, created_at FROM dueno_chat WHERE user_id = ? ORDER BY id DESC LIMIT 30').all(Number(uid)), []);
+  return rows.reverse().map((m) => ({
+    autor: m.autor === 'bamboo' ? 'bamboo' : 'dueno',
+    texto: m.texto || '',
+    hace: haceLabelDe(nowMs, m.created_at),
+  }));
+}
+
+function duenoChatAgregar(db, userId, autor, texto) {
+  const uid = Number(userId) || 0;
+  if (!uid) return { ok: false, error: 'sin_usuario' };
+  const user = safe(() => db.prepare('SELECT id FROM users WHERE id = ?').get(uid), null);
+  if (!user) return { ok: false, error: 'sin_usuario' };
+  const t = trunc(String(texto || '').trim(), 1000);
+  if (!t) return { ok: false, error: 'sin_texto' };
+  const a = autor === 'bamboo' ? 'bamboo' : 'dueno';
+  ensureDuenoChat(db);
+  db.prepare('INSERT INTO dueno_chat (user_id, autor, texto) VALUES (?, ?, ?)').run(uid, a, t);
+  if (a === 'dueno') {
+    safe(() => supportCases.openCase(db, {
+      userId: uid, tipo: 'pedido_dueno',
+      titulo: 'Pedido del dueño en el chat de la ficha',
+      detalle: t,
+      dueno: 'equipo', siguientePaso: 'Hacer el cambio y responderle al dueño en el chat de la ficha.',
+      dedupKey: 'dueno-chat:' + uid,
+    }), null);
+  } else {
+    const c = safe(() => db.prepare(
+      "SELECT id FROM support_cases WHERE dedup_key = ? AND estado <> 'cerrado' ORDER BY id DESC LIMIT 1").get('dueno-chat:' + uid), null);
+    if (c && c.id) safe(() => supportCases.closeCase(db, c.id, { confirmadoPor: 'bamboo — respondió en el chat de la ficha' }), null);
+  }
+  return { ok: true, dueno_chat: duenoChatDe(db, uid, Date.now()) };
+}
+
 function producto(db, userId, opts) {
   const o = opts || {};
   const uid = Number(userId) || 0;
@@ -1631,6 +1686,7 @@ function producto(db, userId, opts) {
     ok: true, user_id: uid, lang: en ? 'en' : 'es',
     business_name: u.business_name || '', ig_username: u.ig_username || '',
     hoy, pedidos: pedidos.slice(0, 8), siguiente, promesas, ig_real: igReal, actividad,
+    dueno_chat: duenoChatDe(db, uid, nowMs),
   };
 }
 
@@ -1658,5 +1714,7 @@ module.exports = {
   marcarVozResuelto,
   abrirOrdenProduccion,
   cerrarCaso,
+  duenoChatAgregar,
+  duenoChatDe,
   vista,
 };

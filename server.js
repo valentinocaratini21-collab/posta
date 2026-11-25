@@ -13507,7 +13507,7 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
     const snap = homeSnapshotGet(uid);
     if (!snap || !snap.payload) return res.json({ ok: true, disponible: false, motivo: 'sin_feed' });
     const prof = snap.payload;
-    const rows = db.prepare(`SELECT id, image_path, media_type, cover_path, status, scheduled_at, published_at, created_at, pinned, pinned_at, ig_permalink, ig_state
+    const rows = db.prepare(`SELECT id, image_path, media_type, cover_path, status, scheduled_at, published_at, created_at, pinned, pinned_at, ig_permalink, ig_state, needs_review
       FROM posts WHERE user_id = ? AND status IN ('published','scheduled','draft')`).all(uid);
     const tiles = [];
     const pubShortcodes = new Set();
@@ -13531,6 +13531,7 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
         media_type: p.media_type || 'image', status: p.status,
         con_horario: !!p.scheduled_at,
         es_revision: postId > 0 && p.id === postId,
+        en_revision: Number(p.needs_review || 0) === 1,
         pinned: !!p.pinned, pinned_at: p.pinned_at || '', key,
       });
     }
@@ -13548,11 +13549,21 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
       .sort((a, b) => String(a.pinned_at).localeCompare(String(b.pinned_at)) || (a.post_id - b.post_id));
     const rest = tiles.filter((t) => !(t.kind === 'post' && t.pinned));
     const esPub = (t) => t.kind === 'ig' || t.status === 'published';
+    // (LOTE CONSERJE-INICIO · pedido del dueño 24/11) El orden de la
+    // grilla: el posteo que sale mañana a la izquierda de todo. Primero
+    // las piezas por salir, en orden de salida (la más cercana
+    // primero); después las publicadas, de la más nueva a la más
+    // vieja; al final, los borradores vencidos o sin fecha.
+    const tzOrd = (db.prepare('SELECT timezone FROM settings WHERE user_id = ?').get(uid) || {}).timezone || 'America/New_York';
+    const fmtOrd = new Intl.DateTimeFormat('en-CA', { timeZone: tzOrd, year: 'numeric', month: '2-digit', day: '2-digit' });
+    const hoyOrd = fmtOrd.format(new Date());
+    for (const t of tiles) { t.dk = Number.isFinite(t.key) ? fmtOrd.format(new Date(t.key)) : ''; }
+    const grpOrd = (t) => { if (esPub(t)) return 1; if (t.dk && t.dk >= hoyOrd) return 0; return 2; };
     rest.sort((a, b) => {
-      const pa = esPub(a) ? 1 : 0, pb = esPub(b) ? 1 : 0;
-      if (pa !== pb) return pa - pb;
+      const ga = grpOrd(a), gb = grpOrd(b);
+      if (ga !== gb) return ga - gb;
       const fa = Number.isFinite(a.key), fb = Number.isFinite(b.key);
-      if (fa && fb) return b.key - a.key;
+      if (fa && fb) return ga === 0 ? a.key - b.key : b.key - a.key;
       if (fa) return -1;
       if (fb) return 1;
       return 0;
@@ -13565,7 +13576,7 @@ app.get('/api/admin/support/conserje/feed', requireAdminToken, (req, res) => {
       tiles: ordenadas.map((t) => ({
         kind: t.kind, post_id: t.post_id, img: t.img, media_type: t.media_type,
         poster_url: t.poster_url || '',
-        status: t.status, es_revision: t.es_revision, pinned: t.pinned,
+        status: t.status, es_revision: t.es_revision, en_revision: t.en_revision === true, pinned: t.pinned,
         // (LOTE CONSERJE-FEED-GRILLA) La marca de la pieza todavía
         // no publicada: su día y hora en la zona de la cuenta, para
         // que la grilla la muestre en su posición final. Sin
@@ -13686,6 +13697,23 @@ app.get('/api/admin/conserje/vista/producto', requireAdminToken, (req, res) => {
   try {
     if (!/^\d+$/.test(String(req.query.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
     const r = conserjeVista.producto(db, Number(req.query.user_id), { absImageUrl, posterUrlFor: posterUrlDePosteo });
+    if (!r.ok) return res.status(404).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+
+// (LOTE CONSERJE-INICIO) El chat del dueño con bamboo en la ficha de
+// cada negocio: el dueño pide un cambio y le entra como tarea a la
+// cola del conserje (caso pedido_dueno); bamboo responde por esta
+// misma puerta (autor 'bamboo') y la respuesta cierra el caso.
+app.post('/api/admin/conserje/vista/dueno-chat', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const texto = String(b.texto || '').trim();
+    if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
+    const autor = b.autor === 'bamboo' ? 'bamboo' : 'dueno';
+    const r = conserjeVista.duenoChatAgregar(db, Number(b.user_id), autor, texto.slice(0, 1000));
     if (!r.ok) return res.status(404).json(r);
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
@@ -49387,7 +49415,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1329';
+const BUILD_ID = '20261105-v1330';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
