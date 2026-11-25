@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1336';
+const PZ_BUILD = '20261105-v1337';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -31443,7 +31443,7 @@ function pzHoyCuentaSaleTxt(iso, en) {
 }
 
 // Tarjeta de «Por aprobar» (estructura del mock: foto + formato + día/
-// hora + título + texto + «Dale, publicalo ✓»). La cartita
+// hora + título + texto + «Aprobalo ✓»). La cartita
 // lleva la píldora «Se postea mañana · HH:MM» y la cuenta en vivo hasta
 // que SALE (data-pz-cuenta-sale). Aprobada: nota «✓ Agendado…» sin
 // botones. Sin imagen no hay foto (nunca un bloque de color).
@@ -31509,9 +31509,24 @@ function pzHoyCardHTML(p, o) {
     // aprobación es la compuerta real (manual) y en borradores, donde
     // publicarlo sí es una decisión.
     const saleSolo = st === 'scheduled' && String((p && p.approval) || '') === 'auto';
+    // (LOTE PUBLICALO-VERDAD · dueño 25/11 «Dejá el toque, corregí el
+    // texto») El botón dice lo que hace: APRUEBA — el posteo sale solo
+    // a su hora, no se publica en el acto. «Aprobalo ✓»; al aprobar, la
+    // misma zona lee la verdad de la salida («Sale hoy · 19:00 ✓», la
+    // fórmula del detalle v1336, desde la misma píldora). El que sale
+    // solo (approval 'auto') no lleva ni botón ni línea de aprobado:
+    // su estado lo lleva la píldora, como siempre.
+    const pillSaleOk = (() => {
+      if (!(st === 'scheduled' && !pendiente)) return '';
+      const t = pzHoyPillSalida(p, tz, en);
+      if (!t) return '';
+      if (!en && t.indexOf('Se postea ') === 0) return t.replace('Se postea ', 'Sale ') + ' ✓';
+      if (en && t.indexOf('Goes out ') === 0) return t + ' ✓';
+      return '';
+    })();
     const acciones = (pendiente && !saleSolo)
-      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Publish it ✓' : 'Dale, publicalo ✓'}</button></div>`
-      : '';
+      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Approve it ✓' : 'Aprobalo ✓'}</button></div>`
+      : (pillSaleOk ? `<div class="pz-hoy-actions"><span class="pz-hoy-sale-ok">${esc(pillSaleOk)}</span></div>` : '');
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La nota de la tarjeta
     // aprobada tampoco afirma la salida (ni la historia) sin conexión.
     const igOkHoy = (typeof PROFILE === 'undefined' || !PROFILE) ? true : !!PROFILE.ig_connected;
@@ -32353,7 +32368,7 @@ function pzHoySetView(nombre) {
 }
 
 
-// «Dale, publicalo ✓» de UNA tarjeta: mismo camino vigente que
+// «Aprobalo ✓» de UNA tarjeta: mismo camino vigente que
 // «Aprobar todo» (pzAcceptAllWeek) para programados — manual: POST
 // /api/posts/:id/approve; piloto: PATCH like (constancia) — y mismo
 // camino que el Aceptar de borrador (bindReview) para drafts: PATCH

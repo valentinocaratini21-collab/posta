@@ -7281,3 +7281,7 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
 .apv-sale-ok{flex:1;display:flex;align-items:center;justify-content:center;min-height:54px;font-size:16px;font-weight:800;color:#15803D;background:rgba(34,197,94,.10);border:1.5px solid rgba(34,197,94,.45);border-radius:999px;padding:12px 8px;box-sizing:border-box}
 .apv-sec-row{margin-top:10px}
 .apv-sec-direct{display:inline-flex;align-items:center;gap:7px;justify-content:center}
+
+/* LOTE PUBLICALO-VERDAD (v1337): la verdad de la salida en la zona de
+   acciones de la tarjeta de Hoy, espejo de .apv-sale-ok del detalle. */
+.pz-hoy-sale-ok{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;font-size:16px;font-weight:800;color:#15803D;background:rgba(34,197,94,.10);border:1.5px solid rgba(34,197,94,.45);border-radius:999px;padding:12px 8px;box-sizing:border-box}
