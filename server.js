@@ -5633,6 +5633,11 @@ app.get('/api/auth/me', (req, res) => {
       // el 20% de segundo negocio: la barra de pago pinta con esto.
       space_kind: (() => { try { return pzEspacioInfo(user.id).kind; } catch (e) { return 'principal'; } })(),
       space_discount: (() => { try { const i = pzEspacioInfo(user.id); return i.kind === 'negocio' && i.otroActivo; } catch (e) { return false; } })(),
+      // (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) La sesión es de
+      // la casa si su LOGIN es el dueño (OWNER_USER_ID): sus espacios
+      // son gratis por definición y el cliente no les pinta ni barra
+      // ni tarjeta de pago en Inicio, nunca.
+      es_casa: (() => { try { return Number(pzLoginIdDe(req)) === OWNER_USER_ID; } catch (e) { return false; } })(),
     },
   });
 });
@@ -49448,7 +49453,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1335';
+const BUILD_ID = '20261105-v1336';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

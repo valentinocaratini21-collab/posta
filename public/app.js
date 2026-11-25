@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1326';
+const PZ_BUILD = '20261105-v1336';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29625,7 +29625,11 @@ function homeTileHTML(t, i) {
     const saleCap = saleTxt ? `<span class="hf-chip hf-chip-sale">${pzIc('clock', 12)} ${esc(saleTxt)}</span>` : '';
     // (LOTE INICIO-SIN-RUIDO · dueño 24/11) Sin cuenta regresiva en la banda:
     // la píldora de salida ya dice día y hora.
-    const capR1 = pillR1 ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${saleCap}</span>` : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
+    // (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) Si la carta es el
+    // posteo de HOY, la banda «Se postea hoy · 19:00» SALE: duplica la
+    // chapita HOY que ya vive dentro de la miniatura. El cartel de
+    // agenda de la pieza del invitado (saleCap) se conserva.
+    const capR1 = (pillR1 && !hoyBadge) ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${saleCap}</span>` : hoyBadge ? (saleCap ? `<span class="hf-tile-cap">${saleCap}</span>` : '') : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
     return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia${esPieza ? ' hf-tile-pieza' : ''}" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${piezaLock}${hoyBadge}${nuevoBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile${esPieza ? ' hf-tile-pieza' : ''}${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${piezaLock}${hoyBadge}${nuevoBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span>${capSubir}</span>`;
@@ -29778,7 +29782,10 @@ function homeHeadHTML(prof, bizName, opts) {
   // ícono (lápiz, Editar perfil) SALE: nadie edita su perfil desde
   // Posty, lo hace por Instagram; la lámina guardaba solo en Posty.
   const headIconsHTML = (opts && opts.headIcons) ? `<span class="hf-head-icons"><button type="button" class="hf-head-ic" data-hf-pact="share" aria-label="${en ? 'Referrals' : 'Referidos'}">${pzIc('share', 20)}</button><button type="button" class="hf-head-ic" data-hf-pact="settings" aria-label="${en ? 'Settings' : 'Ajustes'}">${pzIc('gear', 20)}</button></span>` : '';
-  const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt + infoBtnHTML : infoRowHTML}${headIconsHTML}</div>` : '';
+  // (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) Con racha, la fila
+  // va SIN el botón (i) al lado: «N semanas seguidas publicando» se
+  // explica sola. Sin racha queda la fila «¿Cómo publica Posty?».
+  const rachaHTML = user ? `<div class="hf-racha">${rachaTxt ? rachaTxt : infoRowHTML}${headIconsHTML}</div>` : '';
   // (LOTE HOY-REDISEÑO v810 · mock aprobado 8/11) La tarjeta de perfil
   // es FINA: avatar + nombre + handle en una fila (.hf-prow con
   // .hf-who), y las stats en su propia fila debajo, en línea
@@ -32711,19 +32718,25 @@ function pzPagarAhoraHTML(en) {
   try {
     if (typeof ME === 'undefined' || !ME) return '';
     if (ME.plan_status === 'active') return '';
-    // (LOTE ESPACIOS-PRECIO · opción 1 del dueño 24/11) La vidriera va
-    // incluida en el plan del negocio: la barra lo dice y no cobra.
+    // (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) Los espacios del
+    // fundador no ven oferta de pago, nunca: la sesión es de la casa
+    // (ME.es_casa — el login es el dueño) y sus espacios son gratis
+    // por definición. La captura era su propio Inicio ofreciéndole
+    // «Quiero Posty ahora — USD 199/mes» siendo fundador.
+    if (ME.es_casa) return '';
+    // La vidriera incluida se dice en UNA línea, sin tarjeta:
+    // funciona con el plan Posty del negocio, nada separado.
     if (ME.space_kind === 'vidriera') {
-      return `<div class="pz-pagar-ahora" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#0A1E33;border-radius:16px;padding:12px 14px;margin:0 0 14px">
-      <div style="flex:1 1 180px;min-width:160px"><b style="color:#fff;font-size:14.5px">${en ? 'This storefront is included' : 'Esta vidriera está incluida'}</b><br><span style="color:#BFD9EA;font-size:12.5px">${en ? 'It runs on your business\u2019s Posty plan \u2014 there is nothing separate to pay here.' : 'Funciona con el plan Posty de tu negocio \u2014 acá no hay nada separado para pagar.'}</span></div>
-    </div>`;
+      return `<div class="pz-pagar-ahora pz-pagar-nota">${en ? 'This storefront is included in your business\u2019s Posty plan' : 'Esta vidriera está incluida en el plan Posty de tu negocio'}</div>`;
     }
     const pzPaPrecio = ME.space_discount ? 'USD 159' : 'USD 199';
-    return `<div class="pz-pagar-ahora" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#0A1E33;border-radius:16px;padding:12px 14px;margin:0 0 14px">
-      <div style="flex:1 1 180px;min-width:160px"><b style="color:#fff;font-size:14.5px">${en ? 'Already decided?' : '¿Ya lo tenés decidido?'}</b><br><span style="color:#BFD9EA;font-size:12.5px">${en ? 'Skip the trial — your week and your first post stay free either way.' : 'Salteá la prueba — tu semana y tu primer posteo siguen gratis igual.'}</span></div>
-      <button type="button" class="pz-pa-btn" onclick="pzPagarAhora()" style="background:#FEC14D;color:#0A1E33;border:none;border-radius:999px;padding:11px 18px;font-weight:800;font-size:14.5px;cursor:pointer;white-space:nowrap">${en ? 'I want Posty now — ' + pzPaPrecio + '/mo' : 'Quiero Posty ahora — ' + pzPaPrecio + '/mes'}</button>
-      <div id="pzPaMsg" role="status" style="flex:1 1 100%;font-size:12.5px;line-height:1.45;color:#BFD9EA"></div>
-    </div>`;
+    // (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) Vuelve la BARRA
+    // FINA de una línea del diseño original de pago en la entrada:
+    // Inicio entra en una pantalla y la tarjeta entera se comía
+    // media pantalla antes del posteo de hoy. Una línea; tocar paga
+    // directo (pzPagarAhora, el checkout de siempre). El #pzPaMsg
+    // queda debajo, vacío hasta que el pago tenga algo que decir.
+    return `<button type="button" class="pz-pagar-ahora pz-pagar-bar pz-pa-btn" onclick="pzPagarAhora()"><span class="pz-pagar-q">${en ? 'Already decided?' : '¿Ya lo tenés decidido?'}</span><span class="pz-pagar-cta">${en ? 'I want Posty now · ' + pzPaPrecio + '/mo' : 'Quiero Posty ahora · ' + pzPaPrecio + '/mes'}</span></button><div id="pzPaMsg" role="status" class="pz-pagar-msg"></div>`;
   } catch (e) { return ''; }
 }
 function pzPaisPorZona() {
@@ -33225,7 +33238,7 @@ async function inicioView() {
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
       + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: needOKR1, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
-      + (hoyPendienteR1 ? pzHoyParaAprobarHTML(1, enHome) : '')
+      + '' /* (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) Sin segundo encabezado: «Para aprobar · N» duplicaba el del posteo de hoy (que queda, con su pastilla de hora); el conteo de pendientes vive en el saludo, como el resto de los conteos. */
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
       + pzWowConnectHTML({ post: wowPostR1, posts: allPosts, tz, en: enHome, justConnected: wowJustConnectedR1 })
       + pzTrialAvisoHTML({ hoyPost: hoyPostR1, posts: allPosts, hoyKey: hoyKeyR1, tz, en: enHome })
@@ -41141,13 +41154,7 @@ async function approvalPostView(id) {
     ${canAccept ? `<div class="apv-actions apv-primary" id="apvActions">
       <button class="btn btn-primary apv-accept" id="apvAccept" data-apvid="${esc(String(p.id))}">${pzIc('checkCircle', 18)} Aceptar</button>
     </div>` : ''}
-    ${canMenu && !isDraft ? `<div class="apv-confirm" id="apvConfirm" hidden>
-      <p><b>¿Seguro?</b> No se va a publicar.</p>
-      <div class="apv-actions">
-        <button class="btn btn-danger" id="apvRejectYes" data-apvid="${esc(String(p.id))}">Sí, rechazar</button>
-        <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
-      </div>
-    </div>` : ''}` : '';
+` : '';
   // (v326) Acciones del borrador: Aceptar lo programa en su horario propuesto
   // (el mismo flujo PATCH que usa la Agenda), Editar va al chat con el
   // prefill de siempre y Rechazar lo cancela con confirmación.
@@ -41156,19 +41163,38 @@ async function approvalPostView(id) {
       <button class="btn btn-primary apv-accept" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">${pzIc('checkCircle', 18)} Aceptar</button>
     </div>
     <div id="apvGate"></div>
-    <div class="apv-confirm" id="apvConfirm" hidden>
-      <p><b>¿Seguro?</b> No se va a publicar.</p>
-      <div class="apv-actions">
-        <button class="btn btn-danger" id="apvCancelYes" data-apvid="${esc(String(p.id))}">Sí, rechazar</button>
-        <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
-      </div>
-    </div>` : '';
+` : '';
   // (TARJETA-FECHA-REAL) Un publicado muestra su fecha REAL de publicación
   // en pasado («Salió hoy 19:01»), nunca «Sale hoy 19:00» de la hora
   // programada. Sin published_at no se inventa nada: apvWhenText de siempre.
   const dPub = (typeof pzIsPubReal === 'function' && pzIsPubReal(p)) ? apvParse(p.published_at) : null;
   const whenPub = (dPub && !isNaN(dPub)) ? apvWhenTextPub(dPub, tz) : '';
   const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : (whenPub || apvWhenText(d, tz))) : '';
+
+  // (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) El detalle queda en
+  // DOS estados, sin menú ···: «Editar» sale (el cambio escrito ES la
+  // edición: la caja de cambio al pie), «Frenar» solo existe DESPUÉS
+  // de aprobar, y Rechazar / Rehacer / Compartir salen de esta
+  // pantalla. Estado A (sin aprobar): el verde + la caja + Eliminar.
+  // Estado B (aprobado): la zona del botón dice la verdad de la
+  // salida — «Sale hoy · 19:00 ✓», con el día y la hora reales de
+  // ESTE posteo en la zona de la cuenta — + Frenar + Eliminar. Los
+  // handlers son los de siempre (apvHold / apvDelete, por id). El
+  // publicado conserva sus dos botones (apvMoreHTML, rama publicada).
+  const apvIsApproved = st === 'scheduled' && ap === 'approved';
+  const apvSaleTxt = (() => {
+    try {
+      const pill = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, tz, en) : '';
+      if (pill) return (en ? pill : pill.replace(/^Se postea /, 'Sale ')) + ' ✓';
+    } catch (e) {}
+    return en ? 'Approved ✓' : 'Aprobado ✓';
+  })();
+  const apvDeleteBtn = (canMenu || apvIsApproved) ? `<button class="btn btn-soft apv-sec-direct" id="apvDelete" data-apvid="${esc(String(p.id))}">${pzIc('trash', 18)} ${en ? 'Delete' : 'Eliminar'}</button>` : '';
+  const apvZonaHTML = st === 'published'
+    ? apvMoreHTML(p, st, canMenu, isDraft)
+    : apvIsApproved
+      ? `<div class="apv-actions apv-primary"><div class="apv-sale-ok" role="status">${esc(apvSaleTxt)}</div></div><div class="apv-actions apv-sec-row"><button class="btn btn-soft apv-sec-direct" id="apvHold" data-apvid="${esc(String(p.id))}">⏸ ${en ? 'Hold' : 'Frenar'}</button>${apvDeleteBtn}</div>`
+      : (apvDeleteBtn ? `<div class="apv-actions apv-sec-row">${apvDeleteBtn}</div>` : '');
   const apvBack = pzApvBackHTML(en);
   // (LOTE DETALLE-3) apv: misma regla que el detalle — foto limpia
   // solo con hermana real verificada (caption_on=1), porqué solo con
@@ -41201,7 +41227,7 @@ async function approvalPostView(id) {
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
     ${String(p.overlay_text || '').trim() ? `<div class="apv-overlay">${en ? 'Text on the photo' : 'Texto en la foto'}: "${esc(String(p.overlay_text).trim())}"</div>` : ''}
     ${apvReviewNotice}${actions}${draftActions}
-    ${apvMoreHTML(p, st, canMenu, isDraft)}
+    ${apvZonaHTML}
     ${hfAskChangeBtnHTML(p)}
     ${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}
   </div>`;
