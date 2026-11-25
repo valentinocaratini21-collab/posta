@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1341';
+const PZ_BUILD = '20261105-v1342';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -27079,7 +27079,13 @@ function pzPrefetchKick() {
       }).catch(() => {});
     } else {
       pzPaintSkeleton(tab);
-      content = await inicioView();
+      // (LOTE APERTURA-SALIDA · 25/11) La espera de datos de un Inicio
+      // frío tiene tope: si una petición queda colgada (la red móvil
+      // la deja sin respuesta y sin error), a los 12 s la rama corta
+      // con error y el catch del dispatch pinta su pantalla de error
+      // con Reintentar — la apertura se libera por el camino normal
+      // y nadie queda frente a la presentación clavada.
+      content = await Promise.race([inicioView(), new Promise((_, rej) => setTimeout(() => rej(new Error('inicio_timeout')), 12000))]);
       pzInicioSnapSet(content);
     }
   }

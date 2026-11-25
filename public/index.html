@@ -621,6 +621,36 @@ html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:abs
     waitMode();
     setTimeout(function () { if (!painted()) slowMode(); }, 24000);
   }, 6000);
+  /* (LOTE APERTURA-SALIDA · 25/11 — el dueño entró y vio toda la
+     pantalla en negro) La salida garantizada: estos dos timers miran
+     lo único que importa — si el boot sigue en el DOM — y no la marca
+     __pzAppPainted, porque pintar el esqueleto ya la marca y es justo
+     en ese caso (Inicio frío esperando datos sin tope) donde la
+     apertura podía quedar clavada para siempre. A los 12 s la línea
+     de reintento se muestra siempre (tocar recarga, por el handler de
+     pz-boot-lento); a los 20 s el boot se retira a la fuerza y, si la
+     app no pintó nada debajo, entra una tarjeta visible de error con
+     su Reintentar. La apertura sana no cambia: en su camino el boot
+     ya no existe cuando estos timers miran. */
+  setTimeout(function () {
+    var b12 = document.getElementById('posty-boot');
+    if (b12) slowMode();
+  }, 12000);
+  setTimeout(function () {
+    var b20 = document.getElementById('posty-boot');
+    if (!b20) return;
+    if (b20.parentNode) b20.remove();
+    var app = document.getElementById('app');
+    var pintoApp = document.querySelector('.bb-app,.bb-main,.mtop,.pz-shell-head,#inicioView,.bb-error');
+    if (app && !pintoApp) {
+      app.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F6F9FC;padding:24px;font-family:Inter,system-ui,sans-serif">'
+        + '<div style="background:#fff;border:1px solid #E3ECF3;border-radius:18px;padding:28px 22px;max-width:340px;text-align:center;box-shadow:0 12px 32px rgba(10,30,51,.10)">'
+        + '<p style="font-size:17px;font-weight:800;color:#0A1E33;margin:0 0 8px">No pudimos abrir tu Posty</p>'
+        + '<p style="font-size:14px;color:#47617A;margin:0 0 18px">Algo tardó demasiado en cargar. Probá de nuevo.</p>'
+        + '<button onclick="location.reload()" style="background:#2793C8;color:#fff;border:0;border-radius:999px;padding:12px 26px;font-size:15px;font-weight:800;cursor:pointer">Reintentar</button>'
+        + '</div></div>';
+    }
+  }, 20000);
   if (!appCtx) return;
   try {
     /* (LOTE APERTURA-UNA-SOLA) Un solo disparo por apertura en frío:
@@ -675,7 +705,7 @@ html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:abs
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=949"></script>
+<script src="/app.js?v=950"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
