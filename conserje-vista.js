@@ -1089,7 +1089,30 @@ function posteosDe(db, uid, tz, opts) {
       `SELECT * FROM posts WHERE user_id = ? AND id = ? AND status IN ('published', 'scheduled', 'draft', 'failed')`).get(Number(uid), incluirId), null);
     if (extra) rows.push(extra);
   }
-  return rows.map((p) => {
+  // (LOTE CONSERJE-ORDEN-SALIDA · regla del dueño 24/11) La ficha
+  // pinta los posteos en ORDEN DE SALIDA, como la grilla: primero
+  // los que van a salir (el próximo primero), después los
+  // publicados (el más nuevo primero) y al final los borradores
+  // vencidos o sin fecha. Nunca por id ni por orden de creación.
+  const hoyKOrd = safe(() => dayKeyInTz(new Date(), tz), '');
+  const tOrd = (p) => toMs(p.scheduled_at || p.published_at || p.created_at);
+  const grpOrd = (p) => {
+    if (p.status === 'published') return 1;
+    const t = tOrd(p);
+    const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
+    return (k && hoyKOrd && k >= hoyKOrd) ? 0 : 2;
+  };
+  const ordenados = [...rows].sort((a, b) => {
+    const ga = grpOrd(a), gb = grpOrd(b);
+    if (ga !== gb) return ga - gb;
+    const ta = tOrd(a), tb = tOrd(b);
+    const fa = Number.isFinite(ta), fb = Number.isFinite(tb);
+    if (fa && fb) return ga === 0 ? ta - tb : tb - ta;
+    if (fa) return -1;
+    if (fb) return 1;
+    return 0;
+  });
+  return ordenados.map((p) => {
     const t = toMs(p.scheduled_at || p.published_at || p.created_at);
     let poster = '';
     if (typeof o.posterUrlFor === 'function') { try { poster = o.posterUrlFor(Number(uid), p) || ''; } catch (e) { poster = ''; } }
@@ -1433,13 +1456,23 @@ function promesasDe(db, u, tz, nowMs, hoyKey, hoyPost, en, horaDe) {
       const t = toMs(p.scheduled_at || p.published_at || p.created_at);
       if (Number.isFinite(t)) { const k = safe(() => dayKeyInTz(new Date(t), tz), ''); if (k) conPieza.add(k); }
     }
-    let faltan = 0, rotaB = false;
+    // (LOTE CONSERJE-ORDEN-SALIDA · defecto 3) La semana se juzga
+    // desde que la cuenta ARRANCA: un día anterior a su primera
+    // pieza no es un día perdido (caso Shocking 24/11: su prueba
+    // arranca el 24/11 y el Estado acusaba el 23/11, que no le
+    // debía nada a nadie). Y si un día dentro de su historia
+    // quedó sin pieza, el detalle lo NOMBRA por su fecha.
+    let cotaB = '';
+    for (const k of conPieza) if (!cotaB || k < cotaB) cotaB = k;
+    let faltan = 0;
+    const perdidosB = [];
     for (let i = 0; i < 7; i++) {
       const k = shiftDayKey(lunes, i);
-      if (!conPieza.has(k)) { faltan++; if (k < hoyKey) rotaB = true; }
+      if (cotaB && k < cotaB) continue;
+      if (!conPieza.has(k)) { faltan++; if (k < hoyKey) perdidosB.push(k); }
     }
-    if (!faltan) { estadoB = 'cumplida'; detalleB = en ? 'The seven days have their piece.' : 'Los siete días tienen su pieza.'; }
-    else if (rotaB) { estadoB = 'rota'; detalleB = en ? 'A past day went by without its post.' : 'Un día pasado quedó sin su posteo.'; }
+    if (!faltan) { estadoB = 'cumplida'; detalleB = (cotaB && cotaB > lunes) ? (en ? 'Since it started, every day has its piece.' : 'Desde que arrancó, todos los días tienen su pieza.') : (en ? 'The seven days have their piece.' : 'Los siete días tienen su pieza.'); }
+    else if (perdidosB.length) { estadoB = 'rota'; detalleB = en ? ('Went by without its post: ' + perdidosB.map(fechaCortaDeKey).join(', ') + '.') : (perdidosB.length === 1 ? ('El ' + fechaCortaDeKey(perdidosB[0]) + ' quedó sin su posteo.') : ('Quedaron sin su posteo: ' + perdidosB.map(fechaCortaDeKey).join(', ') + '.')); }
     else { estadoB = 'pendiente'; detalleB = en ? (faltan + (faltan === 1 ? ' day' : ' days') + ' still to load.') : ('Faltan ' + faltan + (faltan === 1 ? ' día' : ' días') + ' por cargar.'); }
   }
   out.push({ clave: 'semana', texto: en ? 'Your week, planned' : 'Tu semana lista', estado: estadoB, detalle: detalleB });
@@ -1697,6 +1730,32 @@ function producto(db, userId, opts) {
         fecha: slot.fecha || '', hora: slot.hora || '',
         detalle: 'Pieza de su prueba en preparación: todavía no se cargó a su producto.',
       };
+    } else {
+      // (LOTE CONSERJE-ORDEN-SALIDA · defecto 2) La próxima pieza
+      // programada que YA está cargada y visible en su producto:
+      // la tarjeta la nombra, con su día y su hora (antes decía
+      // «nada en preparación» con la pieza cargada al lado —
+      // caso Shocking 24/11: su pieza del 26/11 programada y la
+      // tarjeta en «nada»).
+      const progCands = safe(() => db.prepare(
+        `SELECT * FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL
+         AND COALESCE(approval, 'pending') <> 'rejected'
+         ORDER BY scheduled_at ASC LIMIT 8`).all(uid), []);
+      for (const cand of progCands) {
+        const tP = toMs(cand.scheduled_at);
+        const kP = Number.isFinite(tP) ? safe(() => dayKeyInTz(new Date(tP), tz), '') : '';
+        if (!kP || !hoyKey || kP <= hoyKey) continue;
+        let posterP = '';
+        if (typeof o.posterUrlFor === 'function') { try { posterP = o.posterUrlFor(uid, cand) || ''; } catch (e) { posterP = ''; } }
+        const imgP = posterP || (abs && cand.image_path && !String(cand.image_path).startsWith('data:') ? abs(uid, cand.image_path) : '');
+        siguiente = {
+          estado: 'programado', post_id: cand.id, titulo: conserjeRevision.tituloDe(cand),
+          fecha: fechaCortaDeKey(kP), fecha_key: kP, hora: horaDe(tP, en),
+          detalle: en ? 'Already loaded in his product.' : 'Ya está cargado en su producto.',
+          img: imgP,
+        };
+        break;
+      }
     }
   }
   // --- 4 · lo prometido contra lo real · 5 · su Instagram real ·

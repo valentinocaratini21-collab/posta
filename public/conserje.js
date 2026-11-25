@@ -471,8 +471,15 @@
       var verAttrs = '';
       if (img && t.kind === 'post' && t.post_id) verAttrs = ' data-ver data-ver-post="' + t.post_id + '" data-ver-fb="' + regVisorFallback({ media_type: t.media_type, image_url: '', poster_url: t.poster_url || '', img: t.img || '', caption: '' }) + '"';
       else if (img) verAttrs = ' data-ver data-ver-img="' + esc(img) + '"';
-      return '<div class="fg-tile' + (t.es_revision ? ' fg-rev' : '') + '"' + verAttrs + '>'
+      // (LOTE CONSERJE-ORDEN-SALIDA · agregado del dueño 24/11)
+      // La tile compone como la de su producto: las de su
+      // Instagram atenuadas (.pub), el borrador con el borde
+      // punteado (.fg-draft) y la que él todavía no vio, velada
+      // en su lugar (.fg-rev), como en «Su producto».
+      var clsTile = 'fg-tile' + (t.kind === 'ig' ? ' pub' : '') + (t.es_revision ? ' fg-rev' : '') + (t.kind === 'post' && t.status === 'draft' ? ' fg-draft' : '');
+      return '<div class="' + clsTile + '"' + verAttrs + '>'
         + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<div class="ph"><span class="ph-initial">' + esc(ini) + '</span></div>')
+        + (t.es_revision ? '<span class="fg-lock">🔒</span>' : '')
         + (esVideo ? '<span class="fg-play">▶</span>' : '')
         + (t.marca ? '<span class="fg-marca">' + esc(t.marca) + '</span>' : '')
         + (aprobable ? '<button class="fg-sale" data-act="post-sale" data-id="' + t.post_id + '" data-fecha="' + esc(porId[t.post_id].dia_key) + '" type="button" aria-label="Sale así" title="Sale así">✓</button>' : '')
@@ -637,9 +644,14 @@
       nextCard = '<div class="mknone">' + L('Nada en preparación todavía: su semana está completa o su plan arranca cuando conecte.', 'Nothing in preparation yet: his week is complete or his plan starts when he connects.') + '</div>';
     } else {
       var saleTxt = s.fecha ? ' ' + L('Sale', 'Goes out') + ' <b>' + esc(s.fecha) + (s.hora ? ' · ' + esc(s.hora) : '') + '</b>.' : '';
+      // (LOTE CONSERJE-ORDEN-SALIDA) La pieza «programada» ya está
+      // en su producto: se muestra SIN velo y con su sello propio;
+      // el velo y el «todavía no lo vio» son solo para lo que el
+      // cliente todavía no vio (en revisión o en preparación).
+      var esProg = s.estado === 'programado';
       nextCard = '<div class="mknext">'
-        + '<div class="mkveil">' + (s.img ? '<img src="' + esc(s.img) + '" alt="">' : '<span class="mkveil-ph" style="background:' + grad + '"></span>') + '</div>'
-        + '<div class="mknexttxt"><span class="mkunseen">' + L('TODAVÍA NO LO VIO', "HE HASN'T SEEN IT YET") + '</span><br>'
+        + '<div class="mkveil' + (esProg ? ' clara' : '') + '">' + (s.img ? '<img src="' + esc(s.img) + '" alt="">' : '<span class="mkveil-ph" style="background:' + grad + '"></span>') + '</div>'
+        + '<div class="mknexttxt"><span class="' + (esProg ? 'mkseen' : 'mkunseen') + '">' + (esProg ? L('YA LO VE EN SU PRODUCTO', 'ALREADY IN HIS PRODUCT') : L('TODAVÍA NO LO VIO', "HE HASN'T SEEN IT YET")) + '</span><br>'
         + '<b>«' + esc(s.titulo || L('La próxima pieza', 'The next piece')) + '»</b> — ' + esc(s.detalle || '') + saleTxt
         + (s.estado === 'en_revision' && s.post_id ? '<div class="prod-acts"><button class="btn small primary" data-act="pieza-sale" data-uid="' + j.user_id + '" data-pid="' + s.post_id + '" data-fecha="' + esc(s.fecha_key || '') + '" type="button">✓ ' + L('Aceptar — que la vea', 'Accept — let him see it') + '</button></div>' : '')
         + '</div></div>';
