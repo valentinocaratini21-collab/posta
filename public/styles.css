@@ -6648,7 +6648,7 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 /* ---------- LOTE SUBIR-VOZ-PRIMERO (20/11): pregunta pegada al material ---------- */
 .pz-subir .pz-vp[hidden]{display:none}
 .pz-subir .pz-vp-lote{margin-top:9px;font-size:12px;font-weight:700;color:#47617A;text-align:center}
-.pz-subir .pz-vp #pzVpThumbs{display:flex;gap:8px;margin-bottom:10px}
+.pz-subir .pz-vp #pzVpThumbs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .pz-subir .pz-vp-thumb{position:relative;width:64px;height:64px;border-radius:14px;overflow:hidden;box-shadow:0 4px 8px rgba(10,30,51,.16)}
 .pz-subir .pz-vp-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .pz-subir .pz-vp-thumb span{position:absolute;left:5px;bottom:5px;font-size:9px;font-weight:800;letter-spacing:.5px;color:#fff;background:rgba(10,30,51,.62);border-radius:999px;padding:2px 6px}
@@ -7285,3 +7285,17 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
 /* LOTE PUBLICALO-VERDAD (v1337): la verdad de la salida en la zona de
    acciones de la tarjeta de Hoy, espejo de .apv-sale-ok del detalle. */
 .pz-hoy-sale-ok{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;font-size:16px;font-weight:800;color:#15803D;background:rgba(34,197,94,.10);border:1.5px solid rgba(34,197,94,.45);border-radius:999px;padding:12px 8px;box-sizing:border-box}
+
+/* ============ LOTE SUBIR-DESBORDE (25/11) ============ */
+/* Causa raíz del corte de Subir en el teléfono, medida en gemelo:
+   la raíz de la vista (.pz-subir) es ítem flex de .bb-main y lleva
+   margin:0 auto — un ítem flex con márgenes cruzados automáticos se
+   dimensiona a su fit-content (su contenido ancho, p. ej. la fila de
+   miniaturas del lote sin wrap) en vez de estirarse a la columna, y
+   su max-width:560 lo dejaba en 560px sobre una columna de 362: la
+   pantalla entera se recortaba a la derecha, sin scroll. El
+   cinturón de DEFECTO2-CINTURON (4/11) cubría .bb-main y
+   #inicioView con min-width:0 — que no alcanza para esta clase (la
+   raíz ya lo tenía y medía 560 igual). Se completa para toda raíz
+   de vista: ninguna supera el ancho de la columna. */
+.bb-main>*{min-width:0;max-width:100%}
