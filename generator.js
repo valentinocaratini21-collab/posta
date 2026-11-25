@@ -2098,7 +2098,14 @@ function captionPassesEn(caption, input) {
     }
   }
   // CTA: al menos UNA señal concreta (las hashtags no cuentan).
-  const bodyLow = c.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').toLowerCase();
+  const bodyLowRaw = c.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').toLowerCase();
+  // BOOKED-NO-ES-CTA (Juli, 2026-11-25 — id 773 real, Ideal Barbers): la
+  // señal 'book' matcheaba «Booked, on time, seven days a week» — un
+  // adjetivo descriptivo en pasado, no un llamado a la acción — y el
+  // caption cerraba solo en la dirección pasando la puerta como si
+  // tuviera CTA. Se enmascara SOLO la forma en pasado 'booked' antes de
+  // escanear: el imperativo 'book' («Book your chair») sigue contando.
+  const bodyLow = bodyLowRaw.replace(/\bbooked\b/g, 'done');
   const hasCta = CTA_SIGNALS_EN.some((s) => bodyLow.includes(s)) || /\bdm\b/.test(bodyLow);
   if (!hasCta) return { ok: false, reason: 'missing a clear call to action (DM, comment, save, book…)' };
   const ctaHits = CTA_SIGNALS_EN.filter((s) => bodyLow.includes(s)).length;
