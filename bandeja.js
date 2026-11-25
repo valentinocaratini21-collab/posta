@@ -536,6 +536,30 @@ function quizasAvisar(db, deps, uid, tanda) {
 }
 
 // ---------------------------------------------------------------------------
+// (LOTE BANDEJA-PROPIA · 25/11) ¿El mensaje lo mandó el propio negocio?
+// La doble llave: por id O por username. El id guardado al conectar sale
+// del flujo de Instagram Login (graph.instagram.com, el user_id de /me)
+// y NO siempre es el mismo número que el from.id que devuelve la lectura
+// de conversaciones — comparar solo por id dejó pasar los mensajes
+// salientes del dueño como si fueran entrantes y la bandeja le preparó
+// respuestas a él mismo (los 25 pendientes de la cuenta de la casa eran
+// todos suyos). El username coincide en ambos mundos: es la vara que los
+// comentarios ya usaban. Todo juicio de «propio» en DMs pasa por acá.
+// ---------------------------------------------------------------------------
+function esMensajePropio(msg, creds, bizHandle) {
+  if (!msg) return false;
+  if (creds && creds.igUserId && String(msg.fromId || '') === String(creds.igUserId)) return true;
+  if (bizHandle && String(msg.fromUsername || '').toLowerCase() === bizHandle) return true;
+  return false;
+}
+function esParticipantePropio(p, creds, bizHandle) {
+  if (!p) return false;
+  if (creds && creds.igUserId && String(p.id || '') === String(creds.igUserId)) return true;
+  if (bizHandle && String(p.username || '').toLowerCase() === bizHandle) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // pollBandeja(db, deps, opts) — la ingesta silenciosa.
 // deps: { credsOf(uid), suggestFn(uid), apiKeyOf(uid), planFilter(uid),
 //         notify(uid, info), fetchers }
@@ -655,13 +679,13 @@ async function pollBandeja(db, deps, opts) {
       for (const cv of convs) {
         const msgs = cv.messages || [];
         if (!msgs.length) continue;
-        const otro = (cv.participants || []).find(p => String(p.id) !== String(creds.igUserId)) || {};
+        const otro = (cv.participants || []).find(p => !esParticipantePropio(p, creds, bizHandle)) || {};
         const last = msgs[0]; // la API devuelve del más nuevo al más viejo
         if (!last || !last.id) continue;
         if (last.created_time && new Date(last.created_time).getTime() < since) continue;
         const tanda = getOrCreateTanda(db, uid, { groupKey: 'dm:' + cv.id, kind: 'dm', etiqueta: otro.username ? '@' + otro.username : 'Mensaje directo' });
         const existing = db.prepare(`SELECT * FROM bandeja_items WHERE user_id = ? AND source = 'dm' AND thread_key = ?`).get(uid, cv.id);
-        const negocioMandoUltimo = String(last.fromId) === String(creds.igUserId);
+        const negocioMandoUltimo = esMensajePropio(last, creds, bizHandle);
 
         // FRENO (1) en DMs: si el último mensaje lo mandó el negocio, ya respondió.
         if (negocioMandoUltimo) {
@@ -676,7 +700,7 @@ async function pollBandeja(db, deps, opts) {
         if (existing) {
           // FRENO (3) en DMs: mensaje nuevo en la conversación.
           if (['pendiente', 'sin_permiso', 'error'].includes(existing.estado) && last.id !== existing.last_msg_id) {
-            const contexto = msgs.filter(m => String(m.fromId) !== String(creds.igUserId)).slice(0, 4).reverse().map(m => `@${m.fromUsername || username}: ${m.text}`).join('\n').slice(0, 600);
+            const contexto = msgs.filter(m => !esMensajePropio(m, creds, bizHandle)).slice(0, 4).reverse().map(m => `@${m.fromUsername || username}: ${m.text}`).join('\n').slice(0, 600);
             if (existing.edited) {
               db.prepare(`UPDATE bandeja_items SET last_msg_id = ?, text = ?, last_in_at = ?, author_id = ?, actualizado = 1, note = 'La persona escribió de nuevo: revisá tu respuesta.', updated_at = datetime('now') WHERE id = ?`)
                 .run(last.id, String(last.text).slice(0, 500), String(last.created_time || ''), String(last.fromId || ''), existing.id);
@@ -690,6 +714,9 @@ async function pollBandeja(db, deps, opts) {
           }
           continue;
         }
+        // (LOTE BANDEJA-PROPIA) Candado final: un mensaje del propio
+        // negocio NUNCA nace como ítem, venga de la rama que venga.
+        if (esMensajePropio(last, creds, bizHandle)) continue;
         const clase = clasificar(last.text);
         if (clase === 'spam') {
           // En DMs el spam no se oculta en silencio (doctrina de la casa):
@@ -754,7 +781,7 @@ async function refreshTanda(db, uid, tandaId, deps) {
       const conv = convs.find(cv => 'dm:' + cv.id === tanda.group_key);
       if (conv && conv.messages && conv.messages.length) {
         const last = conv.messages[0];
-        if (String(last.fromId) === String(creds.igUserId)) {
+        if (esMensajePropio(last, creds, bizHandle)) {
           const r = db.prepare(`UPDATE bandeja_items SET estado = 'ya_respondido', decided_at = datetime('now'), updated_at = datetime('now') WHERE tanda_id = ? AND estado IN ('pendiente','sin_permiso','error')`).run(tandaId);
           flips = Number(r.changes || 0);
         }
@@ -1096,7 +1123,7 @@ async function approveTanda(db, uid, tandaId, deps) {
     } else {
       const convs = await F.fetchConversations(creds);
       const conv = convs.find(cv => 'dm:' + cv.id === tanda.group_key);
-      if (conv && conv.messages && conv.messages.length && String(conv.messages[0].fromId) === String(creds.igUserId)) convNegocioUltimo = true;
+      if (conv && conv.messages && conv.messages.length && esMensajePropio(conv.messages[0], creds, bizHandle)) convNegocioUltimo = true;
     }
   } catch (e) { /* si la re-lectura falla, el envío mismo decide ítem por ítem */ }
 

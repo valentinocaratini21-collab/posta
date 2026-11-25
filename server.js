@@ -38992,6 +38992,19 @@ app.get('/api/admin/bandeja/censo', requireAdminToken, (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// (LOTE BANDEJA-PROPIA) Re-poll admin de una cuenta: la misma ingesta
+// que corre el scheduler, a pedido — cura la cola de una cuenta sin
+// esperar la corrida programada (los ítems que nacieron con el freno
+// de dirección roto se cierran solos en esta pasada, por el FRENO 1).
+app.post('/api/admin/bandeja/repoll', requireAdminToken, express.json(), async (req, res) => {
+  const uid = Number((req.body || {}).user_id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  try {
+    const r = await require('./bandeja').pollBandeja(db, bandejaDeps(), { onlyUser: uid });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // =====================================================================
 // ATENCIÓN TOTAL — agenda, seguimiento y cierre (cableado 2026-10-21)
 // Los motores son booking.js / followups.js / payment-close.js (build
@@ -49606,7 +49619,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1342';
+const BUILD_ID = '20261105-v1343';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
