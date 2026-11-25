@@ -13792,10 +13792,41 @@ app.post('/api/admin/conserje/vista/tratamiento', requireAdminToken, express.jso
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
-app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.json(), (req, res) => {
+app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.json(), async (req, res) => {
   try {
-    const r = conserjeVista.marcarVozResuelto(db, Number((req.body || {}).message_id) || 0, 'equipo');
+    const mid = Number((req.body || {}).message_id) || 0;
+    // (LOTE CONSERJE-PEDIDO-PUSH · regla del dueño 24/11: «apenas
+    // tengas el cambio listo, lo subís al producto, le respondés al
+    // cliente para que sepa, y le llega una push») Al resolver el
+    // pedido, el cliente recibe su push con la respuesta — la
+    // misma tarjeta del flujo automático de trabajos. Solo en la
+    // resolución FRESCA (re-marcar un pedido ya resuelto no vuelve
+    // a empujar) y solo si el equipo ya le respondió después de su
+    // pedido: sin respuesta no hay nada que avisar. La push nunca
+    // frena la resolución: va en su propio try y su resultado
+    // vuelve en la respuesta (ok/reason de sendPush).
+    let previa = null;
+    try { previa = db.prepare('SELECT estado FROM support_voz_pedidos WHERE message_id = ?').get(mid); } catch (e) {}
+    const r = conserjeVista.marcarVozResuelto(db, mid, 'equipo');
     if (!r.ok) return res.status(400).json(r);
+    if (mid && !(previa && previa.estado === 'resuelto_mano')) {
+      try {
+        const m = db.prepare("SELECT user_id FROM chat_messages WHERE id = ? AND role = 'user'").get(mid);
+        const uid = m ? Number(m.user_id) || 0 : 0;
+        const resp = uid ? db.prepare("SELECT text FROM chat_messages WHERE user_id = ? AND role = 'assistant' AND id > ? ORDER BY id DESC LIMIT 1").get(uid, mid) : null;
+        const textoResp = resp ? String(resp.text || '').trim() : '';
+        if (uid && textoResp && textoResp[0] !== '[') {
+          const en = langOfUser(uid) === 'en';
+          const pr = await push.sendPush(uid, {
+            title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo',
+            body: textoResp.slice(0, 120),
+            url: '/#/app/chat',
+            data: { message_id: mid },
+          });
+          r.push = { ok: !!(pr && pr.ok), reason: (pr && pr.reason) || '' };
+        }
+      } catch (e) { /* la push nunca frena la resolución */ }
+    }
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
@@ -49417,7 +49448,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1333';
+const BUILD_ID = '20261105-v1334';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
