@@ -569,6 +569,30 @@
   .prod-sig-tit{font-size:15px;font-weight:800;color:#0A1E33;margin-top:6px}
   .prod-sig-det{font-size:13px;color:#40536A;margin-top:2px}
   .prod-sig-when{font-size:12.5px;font-weight:700;color:#47617A;margin-top:4px}
+
+  .prox-btn{width:100%;margin:2px 0 10px}
+  .cr-urg{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:2px 7px;margin-top:3px}
+  .cr-urg.urg0{background:#FDE8E8;color:#B3261E}
+  .cr-urg.urg1{background:#FFF1D6;color:#8A6D00}
+  .cr-urg.urg2{background:#EAF2FA;color:#47617A}
+  .prod-acts{margin:0 0 6px}
+  .prod-act{font-size:12.5px;color:#40536A;background:#F2F7FB;border:1px solid #E3EAF1;border-radius:12px;padding:8px 12px;margin-bottom:6px}
+  .prod-sema{display:inline-block;font-size:11.5px;font-weight:800;border-radius:999px;padding:3px 8px}
+  .prod-sema.verde{background:#E7F6EC;color:#1E7B34}
+  .prod-sema.rojo{background:#FDE8E8;color:#B3261E}
+  .prod-prom{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #E3EAF1;border-radius:14px;padding:10px 12px;margin-bottom:8px}
+  .prod-prom-ico{font-size:15px;line-height:1.2}
+  .prod-prom-t{font-size:14px;font-weight:700;color:#0A1E33}
+  .prod-prom-d{font-size:12.5px;color:#40536A;margin-top:1px}
+  .prod-prom-e{margin-left:auto;font-size:11px;font-weight:800;border-radius:999px;padding:3px 8px;flex:0 0 auto;text-transform:capitalize}
+  .prod-prom.cumplida .prod-prom-e{background:#E7F6EC;color:#1E7B34}
+  .prod-prom.pendiente .prod-prom-e{background:#FFF4D6;color:#8A6D00}
+  .prod-prom.rota .prod-prom-e{background:#FDE8E8;color:#B3261E}
+  .prod-ig{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #E3EAF1;border-radius:14px;padding:10px 12px}
+  .prod-ig.roja{border-color:#F2B8B5;background:#FFF5F5}
+  .prod-ig img{width:52px;height:52px;border-radius:10px;object-fit:cover}
+  .prod-ig-t{font-size:14px;font-weight:700;color:#0A1E33}
+  .prod-ig-d{font-size:12.5px;color:#40536A;margin-top:1px}
 </style>
 </head>
 <body>
@@ -604,6 +628,7 @@
         <input id="buscador" type="search" placeholder="Buscar cliente o @…" autocomplete="off">
       </label>
       <div class="chips" id="filtros" role="group" aria-label="Filtros"></div>
+      <div id="proxBar"></div>
       <div class="roster" id="roster"><div class="cargando">Cargando cuentas…</div></div>
       <div id="rosterFoot"></div>
     </aside>
@@ -674,6 +699,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=16"></script>
+<script src="/conserje.js?v=17"></script>
 </body>
 </html>

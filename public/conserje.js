@@ -184,12 +184,22 @@
   }
   function renderRoster() {
     renderFiltros();
+    var conProb = ((vista && vista.clientes) || []).filter(function (f) { return f.urgencia && f.urgencia.nivel < 3; });
+    $('proxBar').innerHTML = conProb.length ? '<button class="btn primary prox-btn" data-act="ir-proximo" type="button">Ir al próximo con problemas → (' + conProb.length + ')</button>' : '';
     renderRosterFoot();
     var q = ($('buscador').value || '').trim().toLowerCase();
     var base = ((vista && vista.clientes) || []).filter(pasaFiltro);
     var cs = base.filter(function (f) {
       if (!q) return true;
       return (f.business_name || '').toLowerCase().indexOf(q) >= 0 || (f.ig_username || '').toLowerCase().indexOf(q) >= 0;
+    });
+    // (LOTE CONSERJE-PRODUCTO-ACCION) La lista se ordena por
+    // urgencia: pedido vencido, hoy sin posteo, semana incompleta,
+    // el resto — y dentro del mismo nivel, el que más espera.
+    cs.sort(function (a, b) {
+      var na = a.urgencia ? a.urgencia.nivel : 3, nb = b.urgencia ? b.urgencia.nivel : 3;
+      if (na !== nb) return na - nb;
+      return ((b.urgencia && b.urgencia.espera_min) || 0) - ((a.urgencia && a.urgencia.espera_min) || 0);
     });
     // (LOTE CONSERJE-FORMA · la falla #1) La lista NUNCA se vacía como
     // efecto de seleccionar un cliente: el estado vacío existe SOLO
@@ -221,6 +231,7 @@
         + (f.racha >= 2 ? '<span class="racha">🔥 ' + f.racha + ' días</span>' : '')
         + ' <span class="cr-handle">@' + esc(f.ig_username || '—') + '</span>'
         + (meta ? '<span class="cr-meta">' + esc(meta) + '</span>' : '')
+        + (f.urgencia && f.urgencia.nivel < 3 ? '<span class="cr-urg urg' + f.urgencia.nivel + '">' + esc(f.urgencia.detalle || '') + '</span>' : '')
         + '<span class="cr-state"><span class="dot ' + dot + '"></span>' + esc(f.estado || '') + '</span></span></button>';
     }).join('');
   }
@@ -485,16 +496,22 @@
         + (hoy.titulo ? '<div class="prod-hoy-tit">' + esc(hoy.titulo) + '</div>' : '')
         + '</div>'
         + (hoy.post_id ? '<span class="prod-ve">✓ Lo ve en su producto</span>' : '<span class="prod-ve espera">⏳ Todavía sin pieza a la vista</span>')
-        + '</div>';
+        + '</div>'
+        + (hoy.estado === 'sale_hoy' && hoy.post_id ? '<div class="prod-acts"><button class="btn small" data-act="pieza-arreglar" data-uid="' + uid + '" data-fecha="' + esc(hoy.fecha_key || '') + '" data-pid="' + hoy.post_id + '" type="button">↻ Rehacer el posteo de hoy</button></div>' : '');
       var gridHtml = '';
       if (f && f.ok && f.disponible) gridHtml = '<div class="prod-sec">Su semana — la grilla literal</div>' + feedTilesHTML(f);
       else if (f && f.ok && !f.disponible) gridHtml = '<div class="prod-sec">Su semana — la grilla literal</div><div class="vacio">Sin snapshot de su Instagram: no mostramos una grilla inventada.</div>';
       var pedHtml = '<div class="prod-sec">Sus pedidos abiertos</div>';
       if ((p.pedidos || []).length) {
         pedHtml += p.pedidos.map(function (pd) {
+          var vencido = (pd.espera_min || 0) > 30;
+          var sema = '<span class="prod-sema ' + (vencido ? 'rojo' : 'verde') + '">' + (vencido ? '⏱ Promesa vencida' : '⏱ Dentro de la promesa') + ' · espera ' + esc(pd.hace || '') + '</span>';
+          var acts = '';
+          if (pd.tipo === 'idea' && pd.message_id) acts = '<div class="d-actions"><button class="btn small" data-act="idea-resolver" data-mid="' + pd.message_id + '" data-uid="' + uid + '" type="button">Resolver la idea</button></div><div id="ideaRes-' + pd.message_id + '"></div>';
+          else if (pd.message_id) acts = '<div class="d-actions"><button class="btn small" data-act="voz-responder" data-mid="' + pd.message_id + '" data-uid="' + uid + '" type="button">Responder</button></div><div id="vozReply-' + pd.message_id + '"></div>';
           return '<div class="prod-ped"><span class="prod-ped-tag">' + (pd.tipo === 'idea' ? '💡 Idea de Subir' : (pd.ambito === 'posteo' ? '✎ Cambio en un posteo' : '💬 Mensaje sin responder')) + '</span>'
             + '<div class="prod-ped-txt">«' + esc(pd.texto || '') + '»</div>'
-            + '<div class="prod-ped-hace">espera ' + esc(pd.hace || '') + '</div></div>';
+            + '<div class="prod-ped-hace">' + sema + '</div>' + acts + '</div>';
         }).join('');
       } else pedHtml += '<div class="vacio">Sin pedidos abiertos: está al día.</div>';
       var sigHtml = '<div class="prod-sec">Lo próximo que todavía no vio</div>';
@@ -503,9 +520,33 @@
         sigHtml += '<div class="prod-sig"><span class="prod-novio">Todavía no lo vio</span>'
           + '<div class="prod-sig-tit">' + esc(s.titulo || 'Pieza en preparación') + '</div>'
           + '<div class="prod-sig-det">' + esc(s.detalle || '') + '</div>'
-          + '<div class="prod-sig-when">' + (s.fecha ? 'Sale ' + esc(s.fecha) : '') + (s.hora ? ' · ' + esc(s.hora) : '') + '</div></div>';
+          + '<div class="prod-sig-when">' + (s.fecha ? 'Sale ' + esc(s.fecha) : '') + (s.hora ? ' · ' + esc(s.hora) : '') + '</div>'
+          + (s.estado === 'en_revision' && s.post_id ? '<div class="d-actions"><button class="btn primary small" data-act="pieza-sale" data-uid="' + uid + '" data-fecha="' + esc(s.fecha_key || '') + '" data-pid="' + s.post_id + '" type="button">Aceptar: que lo vea</button></div>' : '')
+          + '</div>';
       } else sigHtml += '<div class="vacio">Nada en preparación: lo próximo que salga ya lo ve en su grilla.</div>';
-      cuerpo.innerHTML = '<div class="prod">' + hoyHtml + gridHtml + pedHtml + sigHtml + '</div>';
+      var ac = p.actividad || {};
+      var actPartes = [];
+      if (ac.ultima_hace) actPartes.push('Última actividad ' + esc(ac.ultima_hace));
+      if (ac.vio_hace) actPartes.push('Vio su Inicio ' + esc(ac.vio_hace));
+      if (ac.acepto_hace) actPartes.push('Aceptó un posteo ' + esc(ac.acepto_hace));
+      var actHtml = actPartes.length ? '<div class="prod-act">👀 ' + actPartes.join(' · ') + '</div>' : '';
+      var promHtml = '<div class="prod-sec">Lo prometido, contra lo real</div>' + (p.promesas || []).map(function (pr) {
+        var ico = pr.estado === 'cumplida' ? '✓' : (pr.estado === 'rota' ? '✗' : '⏳');
+        return '<div class="prod-prom ' + esc(pr.estado) + '"><span class="prod-prom-ico">' + ico + '</span>'
+          + '<div><div class="prod-prom-t">«' + esc(pr.texto || '') + '»</div><div class="prod-prom-d">' + esc(pr.detalle || '') + '</div></div>'
+          + '<span class="prod-prom-e">' + esc(pr.estado) + '</span></div>';
+      }).join('');
+      var ig = p.ig_real || {};
+      var igTxt = ig.estado === 'confirma' ? ['✓ Su Instagram confirma el último posteo', 'El producto y su Instagram dicen lo mismo.']
+        : ig.estado === 'no_esta' ? ['⚠ El producto dice publicado y en su Instagram NO está', 'El último posteo publicado no aparece en su Instagram real: hay que mirarlo ya.']
+        : ig.estado === 'sin_publicados' ? ['Todavía no publicó nada desde el producto', 'Su Instagram real es lo único que hay para comparar.']
+        : ['Sin lectura reciente de su Instagram', 'No afirmamos una diferencia sin la lectura que la pruebe.'];
+      var igHtml = '<div class="prod-sec">Su Instagram real</div><div class="prod-ig' + (ig.estado === 'no_esta' ? ' roja' : '') + '">'
+        + (ig.ultimo_real && ig.ultimo_real.img ? '<img src="' + esc(ig.ultimo_real.img) + '" alt="">' : '')
+        + '<div><div class="prod-ig-t">' + igTxt[0] + '</div><div class="prod-ig-d">' + igTxt[1]
+        + (ig.ultimo_real && ig.ultimo_real.cuando ? ' Último posteo real: ' + esc(ig.ultimo_real.cuando) + '.' : '')
+        + (ig.leido_hace ? ' Lectura de ' + esc(ig.leido_hace) + '.' : '') + '</div></div></div>';
+      cuerpo.innerHTML = '<div class="prod">' + hoyHtml + actHtml + gridHtml + pedHtml + sigHtml + promHtml + igHtml + '</div>';
     }
     api('/api/admin/conserje/vista/producto?user_id=' + uid).then(function (j) { pj = j; listo(); })
       .catch(function () { pj = { ok: false }; listo(); });
@@ -1141,7 +1182,16 @@
     var act = b.getAttribute('data-act');
     b.disabled = true;
     var re = function () { b.disabled = false; };
-    if (act === 'ir-manana') {
+    if (act === 'ir-proximo') {
+      var ordenP = ((vista && vista.clientes) || []).filter(function (f) { return f.urgencia && f.urgencia.nivel < 3; })
+        .sort(function (a, b) { return (a.urgencia.nivel - b.urgencia.nivel) || ((b.urgencia.espera_min || 0) - (a.urgencia.espera_min || 0)); });
+      var idxP = -1;
+      ordenP.forEach(function (f, i) { if (f.user_id === selUser) idxP = i; });
+      var sigP = null;
+      for (var kP = 1; kP <= ordenP.length; kP++) { var candP = ordenP[(idxP + kP) % ordenP.length]; if (candP && candP.user_id !== selUser) { sigP = candP; break; } }
+      if (!sigP) { toast(ordenP.length ? 'El único con problemas es el que estás viendo.' : 'Nadie con problemas.'); re(); return; }
+      selUser = sigP.user_id; centroVista = 'producto'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); re();
+    } else if (act === 'ir-manana') {
       centroModo = 'manana'; highlightPostId = null; renderCentro(); re();
     } else if (act === 'limpiar-busqueda') {
       $('buscador').value = ''; renderRoster(); re();

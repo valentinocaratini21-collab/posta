@@ -1282,6 +1282,10 @@ function vista(db, opts) {
   const nowMs = Number(o.nowMs) || Date.now();
   const usuarios = usuariosAtendidos(db, nowMs);
   const filas = usuarios.map((u) => filaRoster(db, u, o, nowMs));
+  // (LOTE CONSERJE-PRODUCTO-ACCION) Cada fila trae su urgencia: la
+  // lista se ordena por ella y el botón «Ir al próximo con
+  // problemas» salta con el mismo criterio.
+  for (const f of filas) { f.urgencia = urgenciaDe(db, f.user_id, f.clase, o, nowMs); }
   // (LOTE CONSERJE-FORMA) La producción de mañana se computa una vez
   // y alimenta dos superficies: el centro (el tablero de mañana) y la
   // derecha (las decisiones del dueño y las faltas como problema).
@@ -1311,12 +1315,232 @@ function vista(db, opts) {
 // admin: lo que el cliente no ve (needs_review = 1, la cola de
 // revisión) acá NO se pinta como visto — va a «todavía no lo vio».
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// PIEZAS COMPARTIDAS DEL ESPEJO (LOTE CONSERJE-PRODUCTO-ACCION): la
+// espera, los pedidos abiertos y el posteo visible de un día los
+// computan igual «Su producto» y la urgencia de la lista — una sola
+// fuente para que las dos superficies nunca se contradigan.
+// ---------------------------------------------------------------------
+function haceLabelDe(nowMs, utc) {
+  if (!utc) return '';
+  const t = new Date(String(utc).replace(' ', 'T') + (String(utc).includes('T') ? '' : 'Z')).getTime();
+  if (!Number.isFinite(t)) return '';
+  const min = Math.max(1, Math.round((nowMs - t) / 60000));
+  if (min < 60) return 'hace ' + min + ' min';
+  const h = Math.round(min / 60);
+  if (h < 48) return 'hace ' + h + (h === 1 ? ' hora' : ' horas');
+  const d = Math.round(h / 24);
+  return 'hace ' + d + (d === 1 ? ' día' : ' días');
+}
+
+function pedidosAbiertosDe(db, uid, o, nowMs) {
+  const cola = safe(() => supportCases.voiceRequests(db, { limit: 60, userId: uid, absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor }), null);
+  const out = [];
+  for (const pd of (cola && cola.pedidos) || []) {
+    const t = pd.cuando_utc ? new Date(String(pd.cuando_utc).replace(' ', 'T') + 'Z').getTime() : NaN;
+    const espera = Number.isFinite(t) ? Math.max(1, Math.round((nowMs - t) / 60000)) : 0;
+    if (pd.es_idea) {
+      if (pd.idea_estado === 'recibida') out.push({ tipo: 'idea', ambito: '', texto: trunc(pd.pedido || '', 400), hace: haceLabelDe(nowMs, pd.cuando_utc), desde: pd.cuando_utc || '', espera_min: espera, message_id: pd.id || 0, post_id: 0 });
+    } else if (pd.revision && pd.revision.estado === 'pendiente' && !pd.respuesta) {
+      out.push({ tipo: 'pedido', ambito: pd.ambito || '', texto: trunc(pd.pedido || '', 400), hace: haceLabelDe(nowMs, pd.cuando_utc), desde: pd.cuando_utc || '', espera_min: espera, message_id: pd.id || 0, post_id: pd.posteo ? pd.posteo.id : 0 });
+    }
+  }
+  out.sort((a, b) => String(a.desde).localeCompare(String(b.desde)));
+  return out;
+}
+
+// El posteo de un día TAL COMO LO VE el cliente: el filtro de
+// GET /api/posts (needs_review = 0) y el rango de semanaDe.
+function postVisibleEn(db, uid, tz, key) {
+  if (!key) return null;
+  const rows = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND COALESCE(needs_review, 0) = 0 AND status IN ('published', 'scheduled', 'draft')`).all(uid), []);
+  const rango = { published: 3, scheduled: 2, draft: 1 };
+  let best = null;
+  for (const p of rows) {
+    const t = toMs(p.scheduled_at || p.published_at || p.created_at);
+    if (!Number.isFinite(t)) continue;
+    if (safe(() => dayKeyInTz(new Date(t), tz), '') !== key) continue;
+    if (!best || (rango[p.status] || 0) > (rango[best.status] || 0)) best = p;
+  }
+  return best;
+}
+
+function shortcodeDe(permalink) {
+  const m = /instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/.exec(String(permalink || ''));
+  return m ? m[1] : '';
+}
+
+// LO PROMETIDO CONTRA LO REAL: las tres promesas que su pantalla le
+// hizo, tildadas de los datos — cumplida, pendiente o rota. Nada se
+// marca cumplido sin el hecho detrás.
+function promesasDe(db, u, tz, nowMs, hoyKey, hoyPost, en, horaDe) {
+  const uid = u.id;
+  const out = [];
+  // (a) el posteo de hoy sale a su hora
+  const bh = (u.best_hour >= 9 && u.best_hour <= 21) ? u.best_hour : 19;
+  let horaTxt, estadoA, detalleA;
+  if (hoyPost && hoyPost.status === 'published') {
+    horaTxt = horaDe(toMs(hoyPost.published_at || hoyPost.scheduled_at), en);
+    estadoA = 'cumplida'; detalleA = en ? 'It went out.' : 'Salió.';
+  } else {
+    const fallidoHoy = safe(() => db.prepare(
+      `SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'failed'`).all(uid), [])
+      .some((p) => safe(() => dayKeyInTz(new Date(toMs(p.scheduled_at)), tz), '') === hoyKey);
+    if (hoyPost && hoyPost.scheduled_at) horaTxt = horaDe(toMs(hoyPost.scheduled_at), en);
+    else horaTxt = en ? (((bh + 11) % 12) + 1) + ':00 ' + (bh < 12 ? 'AM' : 'PM') : bh + ':00';
+    if (fallidoHoy) { estadoA = 'rota'; detalleA = en ? 'It was supposed to go out and failed.' : 'Tenía que salir y falló.'; }
+    else if (hoyPost) {
+      const t = toMs(hoyPost.scheduled_at);
+      const vencida = Number.isFinite(t) && nowMs > t + 15 * 60000;
+      estadoA = vencida ? 'rota' : 'pendiente';
+      detalleA = vencida ? (en ? 'The time passed and it did not go out.' : 'Pasó la hora y no salió.') : (en ? 'Loaded and scheduled.' : 'Cargado y programado.');
+    } else {
+      let pasada = false;
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(nowMs));
+        const hh = Number((parts.find((x) => x.type === 'hour') || {}).value || 0);
+        const mm = Number((parts.find((x) => x.type === 'minute') || {}).value || 0);
+        pasada = (hh * 60 + mm) > (bh * 60 + 15);
+      } catch (e) {}
+      estadoA = pasada ? 'rota' : 'pendiente';
+      detalleA = pasada ? (en ? 'The time passed with nothing loaded.' : 'Pasó la hora y no hay nada cargado.') : (en ? 'Still to be loaded.' : 'Todavía no se cargó.');
+    }
+  }
+  out.push({ clave: 'hoy', texto: en ? 'Out today · ' + horaTxt : 'Sale a las ' + horaTxt, estado: estadoA, detalle: detalleA });
+  // (b) tu semana lista: una pieza por día (visible o en revisión)
+  let estadoB = 'pendiente', detalleB = '';
+  if (hoyKey) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(hoyKey);
+    const dow = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay();
+    const lunes = shiftDayKey(hoyKey, -((dow + 6) % 7));
+    const conPieza = new Set();
+    const rows = safe(() => db.prepare(
+      `SELECT scheduled_at, published_at, created_at FROM posts WHERE user_id = ? AND status IN ('published', 'scheduled', 'draft')`).all(uid), []);
+    for (const p of rows) {
+      const t = toMs(p.scheduled_at || p.published_at || p.created_at);
+      if (Number.isFinite(t)) { const k = safe(() => dayKeyInTz(new Date(t), tz), ''); if (k) conPieza.add(k); }
+    }
+    let faltan = 0, rotaB = false;
+    for (let i = 0; i < 7; i++) {
+      const k = shiftDayKey(lunes, i);
+      if (!conPieza.has(k)) { faltan++; if (k < hoyKey) rotaB = true; }
+    }
+    if (!faltan) { estadoB = 'cumplida'; detalleB = en ? 'The seven days have their piece.' : 'Los siete días tienen su pieza.'; }
+    else if (rotaB) { estadoB = 'rota'; detalleB = en ? 'A past day went by without its post.' : 'Un día pasado quedó sin su posteo.'; }
+    else { estadoB = 'pendiente'; detalleB = en ? (faltan + (faltan === 1 ? ' day' : ' days') + ' still to load.') : ('Faltan ' + faltan + (faltan === 1 ? ' día' : ' días') + ' por cargar.'); }
+  }
+  out.push({ clave: 'semana', texto: en ? 'Your week, planned' : 'Tu semana lista', estado: estadoB, detalle: detalleB });
+  // (c) mañana a las 9:00 lo ves acá
+  const mananaKey = hoyKey ? shiftDayKey(hoyKey, 1) : '';
+  const visManana = mananaKey ? postVisibleEn(db, uid, tz, mananaKey) : null;
+  let estadoC, detalleC;
+  if (visManana) { estadoC = 'cumplida'; detalleC = en ? 'Already in their product.' : 'Ya está en su producto.'; }
+  else {
+    const hayManana = mananaKey ? safe(() => db.prepare(
+      `SELECT id, scheduled_at, created_at FROM posts WHERE user_id = ? AND status IN ('scheduled', 'draft')`).all(uid), [])
+      .some((p) => safe(() => dayKeyInTz(new Date(toMs(p.scheduled_at || p.created_at)), tz), '') === mananaKey) : false;
+    estadoC = 'pendiente';
+    detalleC = hayManana ? (en ? 'Loaded, waiting in review.' : 'Cargada, espera en revisión.') : (en ? 'Not loaded yet.' : 'Todavía no se cargó.');
+  }
+  out.push({ clave: 'manana', texto: en ? 'Tomorrow at 9:00 AM, here' : 'Mañana 9:00 lo ves acá', estado: estadoC, detalle: detalleC });
+  return out;
+}
+
+// SU INSTAGRAM REAL contra lo que el producto cree: el último
+// publicado del producto tiene que estar en su Instagram. La
+// diferencia solo se afirma cuando el publicado cae dentro de la
+// ventana que la lectura cubre — afuera de la ventana, no se sabe.
+function igRealDe(db, uid, nowMs) {
+  const pub = safe(() => db.prepare(
+    `SELECT id, caption, ig_permalink, published_at FROM posts WHERE user_id = ? AND status = 'published' ORDER BY published_at DESC LIMIT 1`).get(uid), null);
+  const ultimoProducto = pub ? { post_id: pub.id, titulo: conserjeRevision.tituloDe(pub), cuando: haceLabelDe(nowMs, pub.published_at), permalink: pub.ig_permalink || '' } : null;
+  const snap = safe(() => db.prepare('SELECT payload, fetched_at FROM ig_home_snapshot WHERE user_id = ?').get(uid), null);
+  if (!snap) return { estado: 'sin_lectura', ultimo_real: null, ultimo_producto: ultimoProducto, leido_hace: '' };
+  let recents = [];
+  try { recents = (JSON.parse(snap.payload) || {}).recents || []; } catch (e) {}
+  const r0 = recents[0] || null;
+  const ultimoReal = r0 ? { img: r0.img || '', shortcode: r0.shortcode || '', cuando: haceLabelDe(nowMs, r0.taken_at) } : null;
+  const leidoHace = snap.fetched_at ? haceLabelDe(nowMs, new Date(Number(snap.fetched_at)).toISOString()) : '';
+  if (!pub) return { estado: 'sin_publicados', ultimo_real: ultimoReal, ultimo_producto: null, leido_hace: leidoHace };
+  const sc = shortcodeDe(pub.ig_permalink);
+  let estado;
+  if (sc && recents.some((r) => r.shortcode === sc)) estado = 'confirma';
+  else {
+    const oldest = recents.length ? toMs(recents[recents.length - 1].taken_at) : NaN;
+    const pubMs = toMs(pub.published_at);
+    estado = (Number.isFinite(oldest) && Number.isFinite(pubMs) && pubMs >= oldest) ? 'no_esta' : 'sin_lectura';
+  }
+  return { estado, ultimo_real: ultimoReal, ultimo_producto: ultimoProducto, leido_hace: leidoHace };
+}
+
+// SI EL CLIENTE ESTÁ MIRANDO: su actividad real en el producto —
+// la última actividad registrada, cuándo vio su Inicio (su semana)
+// y cuándo aceptó un posteo. Sin evento, no se muestra: sin fuente
+// no hay señal.
+function actividadDe(db, uid, nowMs) {
+  const ultimo = safe(() => db.prepare('SELECT created_at FROM events WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(uid), null);
+  const vio = safe(() => db.prepare(
+    `SELECT created_at FROM events WHERE user_id = ? AND name = 'screen_view' AND props LIKE '%inicio%' ORDER BY created_at DESC LIMIT 1`).get(uid), null);
+  const acepto = safe(() => db.prepare(
+    `SELECT created_at FROM events WHERE user_id = ? AND name IN ('apv_approve', 'draft_accept', 'accept_all', 'f3_dbltap_approve') ORDER BY created_at DESC LIMIT 1`).get(uid), null);
+  return {
+    ultima_hace: ultimo ? haceLabelDe(nowMs, ultimo.created_at) : '',
+    vio_hace: vio ? haceLabelDe(nowMs, vio.created_at) : '',
+    acepto_hace: acepto ? haceLabelDe(nowMs, acepto.created_at) : '',
+  };
+}
+
+// LA URGENCIA DE UNA CUENTA para ordenar la lista: pedido vencido
+// (la promesa de 30 minutos rota) → hoy sin posteo a la vista →
+// semana incompleta → el resto. Las clases que no producen posteos
+// (espacios) quedan en el resto: no ensucian el orden.
+function urgenciaDe(db, uid, clase, o, nowMs) {
+  const RESTO = { nivel: 3, motivo: '', detalle: '', espera_min: 0 };
+  if (!['pago', 'prueba_corriendo', 'prueba_pendiente', 'casa'].includes(clase)) return RESTO;
+  const u = safe(() => db.prepare(
+    `SELECT u.id, u.plan_status, u.created_at, u.trial_started_at, u.is_guest, u.guest_ig, u.guest_domain,
+            p.ig_username
+     FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
+  if (!u) return RESTO;
+  const pedidos = pedidosAbiertosDe(db, uid, o, nowMs);
+  const vencido = pedidos.find((p) => p.espera_min > 30);
+  if (vencido) return { nivel: 0, motivo: 'pedido_vencido', detalle: 'Un pedido espera ' + vencido.hace, espera_min: vencido.espera_min };
+  const tz = conserjeRevision.accountTz(db, uid);
+  const hoyKey = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+  if (!hoyKey) return RESTO;
+  if (!postVisibleEn(db, uid, tz, hoyKey)) return { nivel: 1, motivo: 'sin_posteo_hoy', detalle: 'Hoy sin posteo a la vista', espera_min: 0 };
+  if (u.plan_status === 'trial') {
+    const planInfo = planDePrueba(db, u);
+    const inicio = Number(u.trial_started_at) || 0;
+    if (planInfo && inicio > 0) {
+      const dias = Math.floor((nowMs - inicio) / 86400000);
+      const vencidoSlot = planInfo.plan.slots.some((s, i) => s.estado !== 'listo' && dias >= i);
+      if (vencidoSlot) return { nivel: 2, motivo: 'semana_incompleta', detalle: 'Su prueba tiene una pieza vencida', espera_min: 0 };
+    }
+  } else {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(hoyKey);
+    if (m) {
+      const dow = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay();
+      const lunes = shiftDayKey(hoyKey, -((dow + 6) % 7));
+      const stops = new Set(safe(() => db.prepare('SELECT day_key FROM day_stops WHERE user_id = ?').all(uid), []).map((r) => r.day_key));
+      const creadaKey = u.created_at ? safe(() => dayKeyInTz(new Date(toMs(u.created_at)), tz), '') : '';
+      for (let k = lunes; k < hoyKey; k = shiftDayKey(k, 1)) {
+        if (creadaKey && k < creadaKey) continue;
+        if (stops.has(k)) continue;
+        if (!postVisibleEn(db, uid, tz, k)) return { nivel: 2, motivo: 'semana_incompleta', detalle: 'Le falta un posteo esta semana', espera_min: 0 };
+      }
+    }
+  }
+  return RESTO;
+}
+
 function producto(db, userId, opts) {
   const o = opts || {};
   const uid = Number(userId) || 0;
   if (!uid) return { ok: false, error: 'sin_usuario' };
   const u = safe(() => db.prepare(
-    `SELECT u.id, u.lang, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
+    `SELECT u.id, u.lang, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain, u.best_hour,
             p.business_name, p.ig_username
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
   if (!u) return { ok: false, error: 'sin_usuario' };
@@ -1333,16 +1557,7 @@ function producto(db, userId, opts) {
   // --- 1 · su posteo de hoy, como lo ve él (filtro del cliente:
   // GET /api/posts esconde needs_review = 1; el rango por día es el
   // mismo de semanaDe: publicado > programado > borrador) ---
-  const visibles = safe(() => db.prepare(
-    `SELECT * FROM posts WHERE user_id = ? AND COALESCE(needs_review, 0) = 0 AND status IN ('published', 'scheduled', 'draft')`).all(uid), []);
-  const rango = { published: 3, scheduled: 2, draft: 1 };
-  let hoyPost = null;
-  for (const p of visibles) {
-    const t = toMs(p.scheduled_at || p.published_at || p.created_at);
-    if (!Number.isFinite(t)) continue;
-    if (safe(() => dayKeyInTz(new Date(t), tz), '') !== hoyKey) continue;
-    if (!hoyPost || (rango[p.status] || 0) > (rango[hoyPost.status] || 0)) hoyPost = p;
-  }
+  const hoyPost = postVisibleEn(db, uid, tz, hoyKey);
   let hoy;
   if (hoyPost) {
     const t = toMs(hoyPost.scheduled_at || hoyPost.published_at);
@@ -1355,7 +1570,7 @@ function producto(db, userId, opts) {
       : estado === 'sale_hoy'
         ? (en ? 'Today · ' + horaDe(t, true) : 'Sale hoy · ' + horaDe(t, false))
         : (en ? 'Draft in their week' : 'Borrador en su semana');
-    hoy = { estado, post_id: hoyPost.id, titulo: conserjeRevision.tituloDe(hoyPost), hora: horaDe(t, en), linea, img };
+    hoy = { estado, post_id: hoyPost.id, titulo: conserjeRevision.tituloDe(hoyPost), hora: horaDe(t, en), linea, img, fecha_key: hoyKey };
   } else {
     // Las dos caras de su tarjeta vacía (pzHoyVaciaPromesaHTML):
     // antes de las 9:00 de SU zona, la promesa; desde las 9:00, el
@@ -1364,35 +1579,11 @@ function producto(db, userId, opts) {
     try { hh = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date(nowMs)), 10); } catch (e) {}
     if (!(hh >= 0 && hh <= 23)) hh = new Date(nowMs).getHours();
     hoy = hh < 9
-      ? { estado: 'antes_de_las_9', post_id: null, titulo: '', hora: '', linea: en ? 'Your next post · available at 9:00 AM' : 'Tu próximo posteo · disponible a las 9:00', img: '' }
-      : { estado: 'en_armado', post_id: null, titulo: '', hora: '', linea: en ? "Today's post · is being built" : 'Tu posteo de hoy · está en armado', img: '' };
+      ? { estado: 'antes_de_las_9', post_id: null, titulo: '', hora: '', linea: en ? 'Your next post · available at 9:00 AM' : 'Tu próximo posteo · disponible a las 9:00', img: '', fecha_key: hoyKey }
+      : { estado: 'en_armado', post_id: null, titulo: '', hora: '', linea: en ? "Today's post · is being built" : 'Tu posteo de hoy · está en armado', img: '', fecha_key: hoyKey };
   }
-  // --- 2 · sus pedidos abiertos: lo que escribió y todavía espera.
-  // La cola de pedidos de voz trae los tres hilos (posteo, semana,
-  // general) y las ideas con su estado propio: una idea recibida
-  // espera aunque su mensaje no tenga fila de revisión, y un pedido
-  // ya respondido en el hilo no espera respuesta. ---
-  const haceLabel = (utc) => {
-    if (!utc) return '';
-    const t = new Date(String(utc).replace(' ', 'T') + 'Z').getTime();
-    if (!Number.isFinite(t)) return '';
-    const min = Math.max(1, Math.round((nowMs - t) / 60000));
-    if (min < 60) return 'hace ' + min + ' min';
-    const h = Math.round(min / 60);
-    if (h < 48) return 'hace ' + h + (h === 1 ? ' hora' : ' horas');
-    const d = Math.round(h / 24);
-    return 'hace ' + d + (d === 1 ? ' día' : ' días');
-  };
-  const pedidos = [];
-  const cola = safe(() => supportCases.voiceRequests(db, { limit: 60, userId: uid, absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor }), null);
-  for (const pd of (cola && cola.pedidos) || []) {
-    if (pd.es_idea) {
-      if (pd.idea_estado === 'recibida') pedidos.push({ tipo: 'idea', ambito: '', texto: trunc(pd.pedido || '', 400), hace: haceLabel(pd.cuando_utc), desde: pd.cuando_utc || '', post_id: 0 });
-    } else if (pd.revision && pd.revision.estado === 'pendiente' && !pd.respuesta) {
-      pedidos.push({ tipo: 'pedido', ambito: pd.ambito || '', texto: trunc(pd.pedido || '', 400), hace: haceLabel(pd.cuando_utc), desde: pd.cuando_utc || '', post_id: pd.posteo ? pd.posteo.id : 0 });
-    }
-  }
-  pedidos.sort((a, b) => String(a.desde).localeCompare(String(b.desde)));
+  // --- 2 · sus pedidos abiertos (el helper compartido) ---
+  const pedidos = pedidosAbiertosDe(db, uid, o, nowMs);
   // --- 3 · lo próximo que todavía no vio: primero la pieza cargada
   // que su producto esconde (la cola de revisión); si no hay, la
   // pieza de su plan de prueba que sigue en preparación. ---
@@ -1405,7 +1596,7 @@ function producto(db, userId, opts) {
     const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
     siguiente = {
       estado: 'en_revision', post_id: invisible.id, titulo: conserjeRevision.tituloDe(invisible),
-      fecha: k ? fechaCortaDeKey(k) : '', hora: horaDe(t, false),
+      fecha: k ? fechaCortaDeKey(k) : '', fecha_key: k || '', hora: horaDe(t, false),
       detalle: 'Está en la cola de revisión: sale cuando lo aceptás.',
     };
   } else {
@@ -1419,10 +1610,15 @@ function producto(db, userId, opts) {
       };
     }
   }
+  // --- 4 · lo prometido contra lo real · 5 · su Instagram real ·
+  // 6 · si el cliente está mirando ---
+  const promesas = promesasDe(db, u, tz, nowMs, hoyKey, hoyPost, en, horaDe);
+  const igReal = igRealDe(db, uid, nowMs);
+  const actividad = actividadDe(db, uid, nowMs);
   return {
     ok: true, user_id: uid, lang: en ? 'en' : 'es',
     business_name: u.business_name || '', ig_username: u.ig_username || '',
-    hoy, pedidos: pedidos.slice(0, 8), siguiente,
+    hoy, pedidos: pedidos.slice(0, 8), siguiente, promesas, ig_real: igReal, actividad,
   };
 }
 
