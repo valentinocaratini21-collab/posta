@@ -16891,8 +16891,28 @@ app.post('/api/admin/ads/reparar-impulso', async (req, res) => {
   let fila = null;
   try { fila = db.prepare('SELECT * FROM ad_boosts WHERE id = ?').get(boostId); } catch (e) {}
   if (!fila) return res.status(404).json({ ok: false, motivo: 'sin_fila' });
-  if (fila.status === 'active' && fila.meta_campaign_id) return res.json({ ok: false, motivo: 'no_es_zombi', boost_id: boostId });
   const uid = fila.user_id;
+  // (LOTE ADS-DESTRABE-VERDAD-2) La guarda no frena por «tiene
+  // ids»: el boost 24 los tiene y su aviso está WITH_ISSUES — tener
+  // ids no es estar sano. Se frena SOLO si el aviso corre de
+  // verdad: el estado persistido fresco dice ACTIVE, o la lectura
+  // en vivo a Meta lo confirma. Si no corre (o no se puede
+  // confirmar que corre), la reparación procede: pausar, degradar
+  // y recrear con el pareo corregido.
+  if (fila.status === 'active' && fila.meta_campaign_id) {
+    const fresco = fila.meta_estado_at && (Date.now() - new Date(String(fila.meta_estado_at).replace(' ', 'T') + 'Z').getTime() < 3600000);
+    let corre = !!(fresco && fila.meta_estado === 'ACTIVE');
+    if (!corre) {
+      let gateG = { ready: false };
+      try { gateG = await adsReadiness(uid); } catch (e) { gateG = { ready: false }; }
+      const ctxG = (gateG && gateG.via === 'cliente' && gateG.suat) ? { token: gateG.suat, adAccountId: gateG.adAccountId } : null;
+      try {
+        const erG = await metaAds.leerEstadoRealBoost({ campaignId: fila.meta_campaign_id, adsetId: fila.meta_adset_id || '', adId: fila.meta_ad_id || '', ctx: ctxG });
+        if (erG && erG.estado === 'ACTIVE') corre = true;
+      } catch (e) {}
+    }
+    if (corre) return res.json({ ok: false, motivo: 'no_es_zombi', boost_id: boostId });
+  }
   const pasos = { pausa: null, degradada: false, recreacion: null };
   let gate = { ready: false };
   try { gate = await adsReadiness(uid); } catch (e) { gate = { ready: false }; }
@@ -49586,7 +49606,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1339';
+const BUILD_ID = '20261105-v1340';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
