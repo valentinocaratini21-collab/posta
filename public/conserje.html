@@ -776,6 +776,26 @@
   .mkchatrow{display:flex;gap:8px;margin-top:10px}
   .mkchatrow input{flex:1;border:1px solid #e7dfcd;border-radius:12px;padding:9px 12px;font-size:13.5px;outline:none;background:#fff;color:#12212f;min-height:38px}
   .mkchatrow input:focus{border-color:#2793C8}
+  /* ===== LOTE CONSERJE-MOVIL · la ficha en el teléfono (piel escritorio) =====
+     El marco de la ficha (body.ficha-open) nació de escritorio: su grilla
+     de 288px + 1fr con overflow:hidden NO tenía forma de teléfono. En una
+     pantalla de 360–430px el panel quedaba estacionado fuera del área
+     visible (la grilla medía ~645px dentro de una caja de ~390) y el
+     «traerlo» dependía de que scrollIntoView scrolleara por programa un
+     contenedor overflow:hidden — en Safari de iOS eso no sucede y el toque
+     en un negocio parecía no hacer nada (reporte del dueño 25/11 20:42).
+     Acá la ficha se apila en UNA columna que entra en la pantalla: la
+     lista arriba (con su propio scroll, acotada) y el panel debajo, a lo
+     ancho; el toque scrollea la VENTANA hasta el panel (irAlCentro, el
+     gesto de siempre) y «← Hoy» vuelve a la lista. Escritorio intacto:
+     todo esto vive detrás del corte de 760px de la casa. */
+  @media (max-width:760px){
+    body.ficha-open .layout{grid-template-columns:minmax(0,1fr);overflow:visible;min-height:0}
+    body.ficha-open .layout>aside[aria-label="Clientes"]{border-right:none;border-bottom:1.5px solid #e7dfcd}
+    body.ficha-open .roster{max-height:36vh}
+    body.ficha-open #mkTop{flex-wrap:wrap;padding:12px 14px}
+    body.ficha-open .center{padding:16px 14px 24px}
+  }
 </style>
 </head>
 <body>
@@ -890,6 +910,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=22"></script>
+<script src="/conserje.js?v=23"></script>
 </body>
 </html>
