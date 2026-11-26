@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1358';
+const PZ_BUILD = '20261105-v1359';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -23588,7 +23588,45 @@ function pzAdsConexionHTML() {
   // «conectá tu cuenta» sobre una cuenta ya conectada.
   const limiteIgHTML = (s.motivoGate === 'ig_fuera_de_cuenta_publicitaria')
     ? `<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#8a5a00">${esc(pzBoostMotivo('ig_fuera_de_cuenta_publicitaria'))}</p>` : '';
-  return `<div><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p>${limiteIgHTML}<button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div>`;
+  return `<div><p style="margin:0 0 10px;font-size:13.5px;line-height:1.5;color:#33475b">${esc(linea)}</p>${limiteIgHTML}${pzAdsGuiaMetaHTML()}<button type="button" class="btn btn-ghost btn-block" onclick="pzAdsCambiarConexion(this)">${esc(btnTxt)}</button><p class="pz-boost-msg" id="pzAdsConexionMsg"></p></div>`;
+}
+
+// (LOTE ADS-GUIA-META · dueño 26/11) La guía que le explica al
+// negocio CÓMO sumar su Instagram a su cuenta publicitaria — el
+// paso vive dentro de Meta y el producto no lo contaba: el cliente
+// veía el aviso y no sabía qué hacer. Solo aparece cuando ESE es
+// el límite de este espacio (su Instagram fuera de la cuenta); si
+// está conectado, no aparece nada — la conexión sana no necesita
+// instrucciones. El botón de Meta abre la configuración de SU
+// negocio (business_id de su conexión), directo en la sección de
+// cuentas de Instagram.
+function pzAdsGuiaMetaHTML() {
+  const s = pzBoostState || {};
+  if (s.motivoGate !== 'ig_fuera_de_cuenta_publicitaria') return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const cx = s.conexion || {};
+  const ig = s.motivoIg ? '@' + s.motivoIg : (cx.ig_username ? '@' + cx.ig_username : '');
+  const urlMeta = 'https://business.facebook.com/settings/instagram-account' + (cx.business_id ? '?business_id=' + encodeURIComponent(cx.business_id) : '');
+  const paso = (n, html) => `<div style="display:flex;gap:9px;align-items:flex-start;margin:0 0 9px"><span style="flex:none;width:20px;height:20px;border-radius:50%;background:#2793C8;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px">${n}</span><div style="font-size:13.5px;line-height:1.5;color:#33475b">${html}</div></div>`;
+  return `<div style="background:rgba(39,147,200,.08);border:1px solid rgba(39,147,200,.25);border-radius:14px;padding:14px;margin:0 0 12px">`
+    + `<p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#0A1E33">${esc(gzT('Cómo sumar tu Instagram a tu cuenta publicitaria', 'How to add your Instagram to your ad account'))}</p>`
+    + paso(1, esc(gzT('Abrí la configuración de tu negocio en Meta.', 'Open your business settings in Meta.')) + ` <a class="btn btn-primary btn-sm" style="margin-left:4px;text-decoration:none" href="${esc(urlMeta)}" target="_blank" rel="noopener">${esc(gzT('Abrir Meta Business Settings', 'Open Meta Business Settings'))}</a>`)
+    + paso(2, esc(gzT('Andá a Cuentas → Cuentas de Instagram y tocá Agregar.', 'Go to Accounts → Instagram accounts and tap Add.')))
+    + paso(3, esc(gzT('Entrá con el Instagram de este espacio' + (ig ? ' (' + ig + ')' : '') + '.', "Log in with this space's Instagram" + (ig ? ' (' + ig + ')' : '') + '.')))
+    + paso(4, esc(gzT('Asignalo a tu cuenta publicitaria: eso es lo que habilita los impulsos de este espacio.', "Assign it to your ad account — that's what lets this space boost.")))
+    + `<p style="margin:2px 0 10px;font-size:13px;line-height:1.5;color:#33475b"><strong>${esc(gzT('¿Todavía no tenés cuenta publicitaria?', "Don't have an ad account yet?"))}</strong> ${esc(gzT('Creá tu cuenta de negocio en ese mismo lugar — Meta te guía — y después volvé y conectala acá.', 'Create your business account in the same place — Meta walks you through it — then come back and connect it here.'))}</p>`
+    + `<button type="button" class="btn btn-primary btn-block" onclick="pzAdsGuiaRevisar(this)">${esc(gzT('Ya lo hice, revisá de nuevo', 'Done — check again'))}</button>`
+    + `</div>`;
+}
+
+// «Ya lo hice»: se vuelve a leer la conexión y se repinta Ads — si
+// el Instagram ya entró a la cuenta, el aviso y la guía se van
+// solos y el espacio queda habilitado.
+async function pzAdsGuiaRevisar(btn) {
+  const txt0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = gzT('Revisando…', 'Checking…'); }
+  try { await pzBoostLoad(); } catch (e) {}
+  try { pzAdsPintar(); } catch (e) { if (btn) { btn.disabled = false; btn.textContent = txt0; } }
 }
 
 // (LOTE ADS-TARJETA-UNICA) El valor corto de la fila «Conexión»: el

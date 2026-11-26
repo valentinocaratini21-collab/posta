@@ -16509,6 +16509,11 @@ function adsConexionDetalle(userId) {
     ig_username: (dePagina && dePagina.username) ? String(dePagina.username) : null,
     ad_account_id: conn.primary_ad_account_id || null,
     ad_account_name: (primaria && primaria.name) ? String(primaria.name) : null,
+    // (LOTE ADS-GUIA-META) El negocio de Meta de la conexión: la
+    // guía de Ads lo usa para que su botón abra la configuración
+    // de ESE negocio, directo en la sección de cuentas de
+    // Instagram — no la portada genérica de Meta.
+    business_id: conn.client_business_id || null,
   };
 }
 function adsConnectionReady(userId) {
@@ -49766,7 +49771,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1358';
+const BUILD_ID = '20261105-v1359';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
