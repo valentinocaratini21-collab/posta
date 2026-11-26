@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1352';
+const PZ_BUILD = '20261105-v1353';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -33386,7 +33386,7 @@ async function inicioView() {
   <div class="iwp-cols">
     <div class="iwp-rail">
   ${hoyAprobarHTML}
-  ${HF_VISITOR ? '' : iwpChatCardHTML(enHome)}
+  ${HF_VISITOR || hoyPostR1 ? '' : iwpChatCardHTML(enHome)}<!-- (LOTE CHAT-NO-REPETIDO · dueño 26/11) Con el posteo del día en pantalla, la tarjeta general de chat del rail NO se monta: la tarjeta del posteo ya trae su propia puerta de cambio escrito (pzVozStripHTML, con la misma respuesta estimada de 30 minutos) y las dos tarjetas seguidas repetían la misma promesa — el cliente no sabía dónde escribir. La tarjeta general queda para cuando NO hay posteo del día: ahí sí es la única puerta. -->
     </div>
     <div class="iwp-main">
   <!-- (LOTE PERFIL-JUNTO-AL-FEED · 8/11 · decisión Valentino: el perfil baja a encabezar la grilla del feed — nombre, números y «¿Cómo publica Posty?» son el encabezado del feed, no de Hoy; arriba Inicio arranca con el saludo de Posty. Solo se mueve la llamada a homeHeadHTML.) -->
