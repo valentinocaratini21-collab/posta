@@ -8541,6 +8541,16 @@ function pzPostTitulo(post) {
 // Inserción de mensaje con contexto de hilo: hilo='post' + post_id para
 // que el resultado se vea en el hilo del posteo (y en el conserje); el
 // hilo principal usa la inserción histórica de siempre.
+// (LOTE PEDIDO-PUSH-DESTINO · dueño 26/11) La push de un cambio
+// listo lleva DIRECTO a la pantalla donde se ve el cambio: el
+// posteo si el pedido es de un posteo, la semana si es de la
+// semana, y el chat solo si el pedido nació en el chat.
+function pzPushUrlCambio(hilo, postId) {
+  const pid = Number(postId) || 0;
+  if (hilo === 'post' && pid) return '/#/app/post/' + pid;
+  if (hilo === 'semana') return '/#/app/semana';
+  return '/#/app/chat';
+}
 function pzChatMsgInsert(uid, text, hilo, postId) {
   const t = String(text || '').slice(0, 3000);
   if (hilo === 'post' && postId) {
@@ -8828,7 +8838,7 @@ async function pzTrabajoChatCambioRun(jobId) {
     } catch (e) { console.error('[trabajo-cambio] settle lista:', e.message); return false; }
   };
   const avisar = async (titulo) => {
-    try { await push.sendPush(uid, { title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo', body: titulo, url: '/#/app/chat', data: { trabajo_id: job.id } }); } catch (e) {}
+    try { await push.sendPush(uid, { title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo', body: titulo, url: pzPushUrlCambio(job.hilo, job.post_id), data: { trabajo_id: job.id } }); } catch (e) {}
   };
   const guardarVersion = (post) => {
     try {
@@ -13481,7 +13491,7 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver', requireAdminToken, 
       pushR = await push.sendPush(r.user_id, {
         title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo',
         body: String(b.respuesta || '').slice(0, 140),
-        url: '/#/app/chat',
+        url: pzPushUrlCambio(r.hilo, r.post_id),
         data: { message_id: r.message_id },
       });
     } catch (e) { pushR = { ok: false, reason: 'error' }; }
@@ -13907,7 +13917,7 @@ app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.js
     if (!r.ok) return res.status(400).json(r);
     if (mid && !(previa && previa.estado === 'resuelto_mano')) {
       try {
-        const m = db.prepare("SELECT user_id FROM chat_messages WHERE id = ? AND role = 'user'").get(mid);
+        const m = db.prepare("SELECT user_id, hilo, post_id FROM chat_messages WHERE id = ? AND role = 'user'").get(mid);
         const uid = m ? Number(m.user_id) || 0 : 0;
         const resp = uid ? db.prepare("SELECT text FROM chat_messages WHERE user_id = ? AND role = 'assistant' AND id > ? ORDER BY id DESC LIMIT 1").get(uid, mid) : null;
         const textoResp = resp ? String(resp.text || '').trim() : '';
@@ -13916,7 +13926,7 @@ app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.js
           const pr = await push.sendPush(uid, {
             title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo',
             body: textoResp.slice(0, 120),
-            url: '/#/app/chat',
+            url: pzPushUrlCambio(m.hilo, m.post_id),
             data: { message_id: mid },
           });
           r.push = { ok: !!(pr && pr.ok), reason: (pr && pr.reason) || '' };
@@ -49756,7 +49766,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1357';
+const BUILD_ID = '20261105-v1358';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
