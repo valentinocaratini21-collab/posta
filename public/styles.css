@@ -7348,12 +7348,31 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
    aprobación usan el lienzo entero. Móvil (<1024px) intacto,
    píxel a píxel. Solo layout: ningún backdrop-filter nuevo en
    superficies del shell (lección v1341) y ningún color nuevo.
+   LOTE WEB-ANCHO-2 (25/11 · el dueño vio el resultado en vivo:
+   «se sigue viendo bastante chico en pantalla de website») — el
+   lienzo de escritorio pasa de 920px a 1280px en el shell y en
+   todas estas superficies, y se suman los topes que vivían fuera
+   de este bloque: la .main clásica (920 en su regla ≥1024), la
+   raíz de la Semana (.sched-wrap, 920 en regla base) y la pila
+   fija de chat/aceptar de Inicio, que calculaba su ancho sobre
+   la columna de 920. La foto del detalle conserva su tope de
+   560 centrada (DETALLE-FOTO-CHICA). La .main del Inicio del
+   dueño ya tenía su propio tope de 1300px (regla :has de
+   INICIO-WEB-PERFIL): queda como está, más ancha que el lienzo
+   nuevo. Móvil (<1024px) intacto, píxel a píxel.
    ============================================================ */
 @media(min-width:1024px){
   /* El shell: columna, encabezado y dock al ancho del website */
-  .bb-main{max-width:920px}
-  .pz-shell-head{max-width:920px}
-  .bb-bar{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:920px}
+  .bb-main{max-width:1280px}
+  .pz-shell-head{max-width:1280px}
+  .bb-bar{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:1280px}
+  /* (WEB-ANCHO-2) Topes de 920 que vivían fuera de este bloque:
+     la .main clásica del shell, la raíz de la Semana y la pila
+     fija de Inicio (su left/width se calculaban sobre la columna
+     de 920 con sidebar de 280: siguen al lienzo nuevo) */
+  .main{max-width:1280px}
+  .sched-wrap{max-width:1280px}
+  .main #inicioView .mz-bottomstack{left:calc(280px + max(24px,(100vw - 280px - 1280px)/2 + 24px));width:calc(min(1280px,100vw - 280px) - 48px)}
   /* Subir: carga y preguntas a la izquierda; la idea, a la
      derecha; cualquier otro hijo, a todo el ancho */
   .pz-subir{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:16px;align-items:start}
@@ -7375,14 +7394,14 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
   /* Bandeja: su raíz trae el tope de 560 en los estilos que
      inyecta app.js (.pzb-wrap); acá manda el lienzo, con mayor
      especificidad y el mismo valor que el shell */
-  .bb-main .pzb-wrap,.main .pzb-wrap{max-width:920px}
+  .bb-main .pzb-wrap,.main .pzb-wrap{max-width:1280px}
   /* Detalle y aprobación: lienzo entero; la foto conserva su
      tope de siempre, centrada (foto + caption + acción siguen
      entrando en la primera pantalla, como pide DETALLE-FOTO-CHICA) */
-  .apv-wrap{max-width:920px}
+  .apv-wrap{max-width:1280px}
   .apv-media{max-width:560px;margin-left:auto;margin-right:auto}
-  .hf-dcard{max-width:920px}
-  .hf-d-accept{width:min(888px,calc(100% - 48px))}
+  .hf-dcard{max-width:1280px}
+  .hf-d-accept{width:min(1248px,calc(100% - 48px))}
   /* Análisis y Tus números: del tope de 680 al lienzo */
-  .ana-wrap,.st-wrap{max-width:920px}
+  .ana-wrap,.st-wrap{max-width:1280px}
 }
