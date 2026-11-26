@@ -11638,6 +11638,46 @@ app.post('/api/admin/extend-trial', requireAdminToken, express.json(), (req, res
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// (LOTE ARRANQUE-RELOJ-OPERADOR) Arranque manual del reloj de prueba de
+// una cuenta nacida «pendiente de conexión» (trial_started_at = 0): su
+// reloj solo arranca con la conexión real de Instagram, así que un
+// invitado de la puerta del operador — que nunca conecta un Instagram
+// real — jamás vence: no aparece el panel de pago ni se bloquea nada, y
+// el cruce del paywall no se puede verificar en vivo. Esta ruta arranca
+// el reloj con LA MISMA primitiva que usa la conexión
+// (guestTrial.startTrialOnConnect): arranque = ahora, fin = ahora +
+// TRIAL_DAYS. Solo actúa sobre cuentas en trial todavía pendientes; una
+// cuenta con el reloj ya andando NO se toca (idempotente: devuelve
+// arranco=false con el estado vigente) y una cuenta que no está en
+// trial se rechaza.
+app.post('/api/admin/trial/arrancar-reloj', requireAdminToken, express.json(), (req, res) => {
+  const uid = Number((req.body || {}).user_id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  try {
+    const u = db.prepare('SELECT id, email, plan_status, trial_ends_at, trial_extended_until, created_at, trial_started_at FROM users WHERE id = ?').get(uid);
+    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
+    if (u.plan_status !== 'trial') return res.status(409).json({ error: 'no_es_trial', plan_status: u.plan_status });
+    const pending = u.trial_started_at !== undefined && u.trial_started_at !== null && Number(u.trial_started_at) === 0;
+    if (!pending) {
+      const eff = trialEffectiveEnd(u);
+      return res.json({
+        ok: true, user_id: uid, arranco: false, motivo: 'reloj_ya_andando',
+        trial_started_at: Number(u.trial_started_at) || 0,
+        effective_trial_end: (eff && Number.isFinite(eff)) ? eff : null,
+        effective_trial_end_iso: (eff && Number.isFinite(eff)) ? new Date(eff).toISOString() : null,
+      });
+    }
+    const started = !!(guestTrial && guestTrial.startTrialOnConnect && guestTrial.startTrialOnConnect(db, uid, TRIAL_DAYS));
+    const after = db.prepare('SELECT trial_started_at, trial_ends_at FROM users WHERE id = ?').get(uid);
+    console.log(`[admin] arrancar-reloj uid=${uid}: arranco=${started} fin=${after && after.trial_ends_at ? new Date(Number(after.trial_ends_at)).toISOString() : '—'}`);
+    res.json({
+      ok: true, user_id: uid, arranco: started,
+      trial_started_at: after ? Number(after.trial_started_at) : null,
+      trial_ends_at: after ? Number(after.trial_ends_at) : null,
+      trial_ends_iso: (after && after.trial_ends_at) ? new Date(Number(after.trial_ends_at)).toISOString() : null,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // (LOTE RESET-PRUEBA-NEGOCIO · v918) Resetea el registro de prueba de UN
 // negocio para que pueda repetir su prueba de cero (caso Crumbl 11/11: el
 // primer intento generó antes de frenarse por el aviso de dispositivo y su
@@ -49636,7 +49676,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1350';
+const BUILD_ID = '20261105-v1351';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
