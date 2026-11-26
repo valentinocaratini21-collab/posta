@@ -147,6 +147,10 @@ function ensureSchema(db) {
     estado TEXT NOT NULL DEFAULT 'pendiente',
     decidido_en TEXT
   )`);
+  // (LOTE PEDIDO-VISTO-CIERRE) El «visto» del pedido: cuándo lo
+  // revisó el lado Posty (bamboo). El cliente lo ve como los dos
+  // ticks de su mensaje (✓ enviado → ✓✓ revisado, como WhatsApp).
+  try { db.exec(`ALTER TABLE support_voz_pedidos ADD COLUMN visto_en TEXT`); } catch (e) { /* ya existe */ }
 }
 
 function accountTz(db, uid) {
@@ -1567,7 +1571,7 @@ function voiceRequests(db, opts) {
     // el lote del lado Subir va a volcar su interpretación parseada
     // cuando exista; sin entendido no se aprueba (no a ciegas).
     const rev = safe(() => db.prepare(
-      'SELECT estado, decidido_en FROM support_voz_pedidos WHERE message_id = ?').get(Number(r.id)), null);
+      'SELECT estado, decidido_en, visto_en FROM support_voz_pedidos WHERE message_id = ?').get(Number(r.id)), null);
     // (LOTE SUBIR-ESCRITO) Si el pedido es la idea ESCRITA del tab
     // Subir, su estado de tarjeta vive en subir_ideas: la cola lo
     // marca para que la consola lo distinga de una nota de voz y lo
@@ -1659,6 +1663,7 @@ function voiceRequests(db, opts) {
       revision: {
         estado: rev && rev.estado ? String(rev.estado) : 'pendiente',
         decidido_en: rev && rev.decidido_en ? String(rev.decidido_en) : null,
+        visto_en: rev && rev.visto_en ? String(rev.visto_en) : null,
       },
       es_idea: !!ideaRow,
       idea_piezas: ideaPiezas,
@@ -1726,12 +1731,70 @@ function decideVoiceRequest(db, opts) {
         ORDER BY id ASC LIMIT 1`).get(Number(m.user_id), m.hilo, Number(m.post_id) || 0, mid), null);
     if (!reply) return { ok: false, error: 'sin_interpretacion' };
   }
+  // (LOTE PEDIDO-VISTO-CIERRE) Decidir un pedido es haberlo
+  // revisado: la decisión también estampa el visto (sin pisar un
+  // visto anterior).
   safe(() => db.prepare(
-    `INSERT INTO support_voz_pedidos (message_id, estado, decidido_en) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(message_id) DO UPDATE SET estado = excluded.estado, decidido_en = excluded.decidido_en`).run(mid, decision), null);
-  const row = safe(() => db.prepare('SELECT estado, decidido_en FROM support_voz_pedidos WHERE message_id = ?').get(mid), null);
+    `INSERT INTO support_voz_pedidos (message_id, estado, decidido_en, visto_en) VALUES (?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(message_id) DO UPDATE SET estado = excluded.estado, decidido_en = excluded.decidido_en, visto_en = COALESCE(support_voz_pedidos.visto_en, excluded.visto_en)`).run(mid, decision), null);
+  const row = safe(() => db.prepare('SELECT estado, decidido_en, visto_en FROM support_voz_pedidos WHERE message_id = ?').get(mid), null);
   if (!row) return { ok: false, error: 'no_se_guardo' };
-  return { ok: true, message_id: mid, estado: String(row.estado), decidido_en: row.decidido_en ? String(row.decidido_en) : null };
+  return { ok: true, message_id: mid, estado: String(row.estado), decidido_en: row.decidido_en ? String(row.decidido_en) : null, visto_en: row.visto_en ? String(row.visto_en) : null };
+}
+
+// (LOTE PEDIDO-VISTO-CIERRE · dueño 26/11) Marcar un pedido como
+// VISTO por el lado Posty, sin decidir nada: el cliente ve los
+// dos ticks en su mensaje y sabe que su pedido entró en revisión.
+// El estado queda como estaba (pendiente si nadie decidió).
+function markVoiceRequestSeen(db, opts) {
+  ensureSchema(db);
+  const o = opts || {};
+  const mid = Number(o.messageId);
+  if (!mid) return { ok: false, error: 'sin_pedido' };
+  const m = safe(() => db.prepare(
+    "SELECT id FROM chat_messages WHERE id = ? AND role = 'user' AND hilo IN ('post', 'semana', 'general')").get(mid), null);
+  if (!m) return { ok: false, error: 'pedido_inexistente' };
+  safe(() => db.prepare(
+    `INSERT INTO support_voz_pedidos (message_id, estado, visto_en) VALUES (?, 'pendiente', datetime('now'))
+     ON CONFLICT(message_id) DO UPDATE SET visto_en = COALESCE(support_voz_pedidos.visto_en, excluded.visto_en)`).run(mid), null);
+  const row = safe(() => db.prepare('SELECT estado, visto_en FROM support_voz_pedidos WHERE message_id = ?').get(mid), null);
+  if (!row) return { ok: false, error: 'no_se_guardo' };
+  return { ok: true, message_id: mid, estado: String(row.estado), visto_en: row.visto_en ? String(row.visto_en) : null };
+}
+
+// (LOTE PEDIDO-VISTO-CIERRE · dueño 26/11) El cierre de bamboo en
+// una sola llamada: el cambio YA está hecho a mano y este cierre
+// deja la respuesta de Posty en el hilo del pedido, lo marca
+// visto y aprobado, y devuelve lo que la ruta necesita para
+// mandar la push («El cambio que pediste está listo»). Antes, una
+// resolución a mano por una puerta lateral (editar el caption por
+// admin, por ejemplo) no dejaba respuesta ni push y el cliente no
+// se enteraba — el caso real fue el pedido 1089 del propio dueño.
+function resolveVoiceRequest(db, opts) {
+  ensureSchema(db);
+  const o = opts || {};
+  const mid = Number(o.messageId);
+  const respuesta = trunc(String(o.respuesta || '').trim(), 2000);
+  if (!mid) return { ok: false, error: 'sin_pedido' };
+  if (!respuesta) return { ok: false, error: 'respuesta_vacia' };
+  const m = safe(() => db.prepare(
+    "SELECT id, user_id, hilo, post_id FROM chat_messages WHERE id = ? AND role = 'user' AND hilo IN ('post', 'semana', 'general')").get(mid), null);
+  if (!m) return { ok: false, error: 'pedido_inexistente' };
+  const uid = Number(m.user_id);
+  const hilo = String(m.hilo || 'general');
+  const pid = Number(m.post_id) || 0;
+  let ins;
+  if (hilo === 'post' && pid) {
+    ins = db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?, ?, ?, ?, ?)').run(uid, 'assistant', respuesta, 'post', pid);
+  } else if (hilo === 'semana') {
+    ins = db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?, ?, ?, ?, 0)').run(uid, 'assistant', respuesta, 'semana');
+  } else {
+    ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?, ?, ?)').run(uid, 'assistant', respuesta);
+  }
+  safe(() => db.prepare(
+    `INSERT INTO support_voz_pedidos (message_id, estado, decidido_en, visto_en) VALUES (?, 'aprobado', datetime('now'), datetime('now'))
+     ON CONFLICT(message_id) DO UPDATE SET estado = 'aprobado', decidido_en = excluded.decidido_en, visto_en = COALESCE(support_voz_pedidos.visto_en, excluded.visto_en)`).run(mid), null);
+  return { ok: true, message_id: mid, reply_id: Number(ins.lastInsertRowid) || null, user_id: uid, hilo, post_id: pid };
 }
 
 module.exports = {
@@ -1740,7 +1803,7 @@ module.exports = {
   scanAlerts, refreshCaseStates, buildJourney, buildOverview, luzFor, accountTz,
   reschedulePost, redoPost, replyAsPosty,
   isConcierge, setConcierge, divertToConcierge, conciergeClients, pendingConcierge,
-  morningFor, confirmMorning, logOperatorAction, buildOwnerPanel, voiceRequests, decideVoiceRequest, conteosPedidos,
+  morningFor, confirmMorning, logOperatorAction, buildOwnerPanel, voiceRequests, decideVoiceRequest, conteosPedidos, markVoiceRequestSeen, resolveVoiceRequest,
   ACTION_LABELS,
   CASE_TYPES, FUNNEL_STEPS,
 };

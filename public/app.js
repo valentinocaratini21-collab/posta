@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1356';
+const PZ_BUILD = '20261105-v1357';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -34868,7 +34868,11 @@ function pzVozSemanaHTML() {
   } catch (e) { return ''; }
 }
 function pzVozMsgHTML(m) {
-  if (m.role === 'user') return `<div class="pz-voz-msg u"><span class="pz-voz-msg-ic">${pzIc('pencil', 12)}</span><span>${esc(m.text)}</span></div>`;
+  // (LOTE PEDIDO-VISTO-CIERRE · dueño 26/11) Los ticks del mensaje
+  // del cliente, como en WhatsApp: ✓ simple al enviarlo y ✓✓ en
+  // amarillo cuando Posty ya lo revisó (el servidor lo marca con
+  // visto=1 en el hilo cuando bamboo lo toma).
+  if (m.role === 'user') return `<div class="pz-voz-msg u"><span class="pz-voz-msg-ic">${pzIc('pencil', 12)}</span><span>${esc(m.text)}</span><span class="pz-voz-ticks${m.visto ? ' ok' : ''}" aria-hidden="true">${m.visto ? '✓✓' : '✓'}</span></div>`;
   return `<div class="pz-voz-msg a"><img class="pz-voz-face" src="/ai-avatar.png" alt=""><span>${esc(m.text)}</span></div>`;
 }
 function pzVozHiloPintar(strip, msgs) {

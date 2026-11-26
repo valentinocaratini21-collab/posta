@@ -13451,6 +13451,43 @@ app.post('/api/admin/support/conserje/pedidos-voz/decidir', requireAdminToken, (
     res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
+// (LOTE PEDIDO-VISTO-CIERRE · dueño 26/11) Marcar un pedido como
+// visto por el lado Posty: el cliente ve los dos ticks (✓✓) en su
+// mensaje, como en WhatsApp — sabe que su pedido entró en
+// revisión. No decide nada.
+app.post('/api/admin/support/conserje/pedidos-voz/visto', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = supportCases.markVoiceRequestSeen(db, { messageId: b.message_id });
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+// (LOTE PEDIDO-VISTO-CIERRE · dueño 26/11) El cierre de un pedido
+// que bamboo resolvió a mano: respuesta de Posty en el hilo del
+// pedido + visto + aprobado + PUSH al cliente («El cambio que
+// pediste está listo», la misma push del camino automático).
+// Regla del dueño: todo cambio pedido por el chat del producto
+// lo resuelve bamboo a mano, y toda resolución avisa con push —
+// sin excepciones ni puertas laterales.
+app.post('/api/admin/support/conserje/pedidos-voz/resolver', requireAdminToken, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = supportCases.resolveVoiceRequest(db, { messageId: b.message_id, respuesta: b.respuesta });
+    if (!r.ok) return res.status(400).json(r);
+    let pushR = null;
+    try {
+      const en = langOfUser(r.user_id) === 'en';
+      pushR = await push.sendPush(r.user_id, {
+        title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo',
+        body: String(b.respuesta || '').slice(0, 140),
+        url: '/#/app/chat',
+        data: { message_id: r.message_id },
+      });
+    } catch (e) { pushR = { ok: false, reason: 'error' }; }
+    res.json({ ...r, push: { ok: !!(pushR && pushR.ok), sent: (pushR && pushR.sent) || 0, reason: (pushR && pushR.reason) || '' } });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
 // ---------- SUPERVISIÓN DEL CHAT (bamboo detrás de Posty) ----------
 // El cliente piensa que chatea con Posty; la cabeza es bamboo. La lectura
 // (chat), la cola (pendientes) y el dictado (dictar/borrador) viven acá.
@@ -19976,6 +20013,19 @@ app.post('/api/album/:id/armar', requireAuth, express.json(), async (req, res) =
 // Posty viven bajo el posteo (hilo='post', post_id) o bajo la semana
 // (hilo='semana', post_id=0). El historial general queda con hilo=''
 // y NO se mezcla: la tira lee y escribe solo su hilo.
+// (LOTE PEDIDO-VISTO-CIERRE · dueño 26/11) Los ticks del cliente:
+// cada mensaje suyo del hilo lleva visto=1 cuando el lado Posty
+// ya lo revisó (visto_en cargado, o una decisión tomada — decidir
+// es haber revisado). Sin tabla o sin fila, visto=0 (✓ simple).
+function pzHiloAdjuntarVistos(rows) {
+  try {
+    const ids = rows.filter((x) => x.role === 'user').map((x) => Number(x.id)).filter((x) => x > 0);
+    if (!ids.length) return;
+    const revs = db.prepare(`SELECT message_id, visto_en, decidido_en FROM support_voz_pedidos WHERE message_id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+    const vistos = new Set(revs.filter((x) => x.visto_en || x.decidido_en).map((x) => Number(x.message_id)));
+    rows.forEach((x) => { if (x.role === 'user') x.visto = vistos.has(Number(x.id)) ? 1 : 0; });
+  } catch (e) {}
+}
 app.get('/api/chat/hilo', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
@@ -19984,6 +20034,7 @@ app.get('/api/chat/hilo', requireAuth, (req, res) => {
       const post = db.prepare('SELECT id, prev_image_path, image_path FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
       if (!post) return res.status(404).json({ ok: false, error: 'Posteo no encontrado' });
       const rows = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? AND post_id = ? AND hilo = 'post' ORDER BY id ASC LIMIT 200`).all(uid, pid);
+      pzHiloAdjuntarVistos(rows);
       // (REHACER-ANCLADO · pieza 3) image_path viaja también: tras un
       // rehacer del carril del cerebro, la tira repinta la foto nueva y
       // ofrece «Volver a la imagen anterior» en el mismo hilo.
@@ -19991,6 +20042,7 @@ app.get('/api/chat/hilo', requireAuth, (req, res) => {
     }
     if (String(req.query.semana || '') === '1') {
       const rows = db.prepare(`SELECT id, role, text, created_at FROM chat_messages WHERE user_id = ? AND post_id = 0 AND hilo = 'semana' ORDER BY id ASC LIMIT 200`).all(uid);
+      pzHiloAdjuntarVistos(rows);
       return res.json({ ok: true, messages: rows });
     }
     return res.status(400).json({ ok: false, error: 'Falta el posteo o la semana' });
@@ -49704,7 +49756,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1356';
+const BUILD_ID = '20261105-v1357';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

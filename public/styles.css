@@ -6707,6 +6707,11 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-voz-msg{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;line-height:1.45;border-radius:15px;padding:9px 11px;max-width:92%}
 .pz-voz-msg.u{align-self:flex-end;background:linear-gradient(180deg,#35A2DB,#1E82BE);color:#fff;border-bottom-right-radius:5px}
 .pz-voz-msg.u .pz-voz-msg-ic{flex:none;margin-top:1px;opacity:.9}
+/* (LOTE PEDIDO-VISTO-CIERRE) Los ticks del mensaje del cliente:
+   ✓ simple en blanco suave al enviarlo; ✓✓ en amarillo de la
+   marca cuando Posty ya lo revisó. */
+.pz-voz-ticks{align-self:flex-end;flex:none;font-size:10.5px;font-weight:800;letter-spacing:-2.5px;margin:0 -1px -2px 2px;color:rgba(255,255,255,.62)}
+.pz-voz-ticks.ok{color:#FEC14D}
 .pz-voz-msg.a{align-self:flex-start;background:#F2F7FA;color:#0A1E33;border:1px solid #E7EEF3;border-bottom-left-radius:5px}
 .pz-voz-face{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:0 2px 4px rgba(10,30,51,.2)}
 .pz-voz-mas{align-self:center;background:none;border:none;color:#1E82BE;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;padding:2px 6px}
