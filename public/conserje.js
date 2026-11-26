@@ -335,6 +335,35 @@
     }
     $('centro').innerHTML = html;
   }
+  // (LOTE CONSERJE-TAP) El cambio de tratamiento de la ficha. La
+  // función se había perdido y el render la seguía enlazando: cada
+  // apertura de ficha en la vista «semana» (la del teléfono SIEMPRE;
+  // en escritorio, la de data-goto y la pestaña «Su ficha») moría con
+  // ReferenceError dentro del .then de cargarCliente — la ficha no
+  // abría y el .catch mentía «No se pudo cargar la ficha.». Acá está,
+  // contra la puerta de siempre: aplica, avisa el choque de familia
+  // con el nombre del que la lleva y restaura el selector si no se
+  // pudo.
+  function onTratamiento() {
+    var selT = $('tratSel');
+    if (!selT || !cliente) return;
+    var fam = selT.value || '';
+    selT.disabled = true;
+    api('/api/admin/conserje/vista/tratamiento', { method: 'POST', body: { user_id: Number(cliente.user_id), familia: fam } })
+      .then(function (j) {
+        if (j && j.ok) {
+          cliente.tratamiento = fam || null;
+          despuesDeActuar(fam ? 'Tratamiento aplicado a la ficha.' : 'Tratamiento retirado de la ficha.');
+        } else if (j && j.error === 'colision' && j.ocupa) {
+          toast('Esa familia ya la lleva ' + (j.ocupa.business_name || ('@' + (j.ocupa.ig_username || ''))) + ': no se aplicó.', 'warn');
+          renderFicha();
+        } else {
+          toast('No se pudo aplicar el tratamiento.', 'err');
+          renderFicha();
+        }
+      })
+      .catch(function () { toast('No se pudo aplicar el tratamiento.', 'err'); renderFicha(); });
+  }
   function renderFicha() {
     var c = cliente;
     if (!c || !c.ok) { $('centro').innerHTML = '<div class="cargando">Elegí una cuenta de la lista para ver su ficha.</div>'; return; }
@@ -1286,6 +1315,28 @@
     var centro = $('centro');
     if (centro) centro.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
+  // (LOTE CONSERJE-TAP) La marca «Posty · CONSERJE» vuelve al inicio
+  // de la consola: sin cliente elegido, el centro en la producción de
+  // mañana, los filtros y buscadores limpios y el teléfono en su
+  // pestaña de arranque — el mismo estado en el que la consola abre,
+  // en las dos pieles. Como las demás vueltas (data-mback, «← Hoy»),
+  // no conserva lo tipeado sin guardar: la ficha se re-pinta entera.
+  function irAlInicio() {
+    selUser = null;
+    cliente = null;
+    highlightPostId = null;
+    centroModo = 'manana';
+    centroVista = 'semana';
+    filtro = 'todos';
+    var bIni = $('buscador'); if (bIni) bIni.value = '';
+    var bTopIni = $('buscadorTop'); if (bTopIni) bTopIni.value = '';
+    mFichaUid = null;
+    mTab = 'hoy';
+    renderRoster();
+    renderCentro();
+    renderMovil();
+    window.scrollTo(0, 0);
+  }
   function gotoFicha(uid, postId) {
     highlightPostId = postId ? Number(postId) : null;
     selUser = Number(uid);
@@ -1510,6 +1561,11 @@
     if (Math.abs(dx) > 42) visorIrA(visor.idx + (dx < 0 ? 1 : -1));
   }, { passive: true });
   $('volverBandeja').addEventListener('click', function () { document.body.classList.remove('ver-escritorio'); window.scrollTo(0, 0); });
+  // (LOTE CONSERJE-TAP) La marca, a inicio: en escritorio es la de la
+  // barra del mock (visible con la ficha abierta); en el teléfono, la
+  // placa y el título de la cabecera de la bandeja.
+  var brandEls = document.querySelectorAll('.mkbrand, #movil .m-ava, #movil .m-head > div');
+  for (var bi = 0; bi < brandEls.length; bi++) brandEls[bi].addEventListener('click', irAlInicio);
   $('buscador').addEventListener('input', renderRoster);
   var bTop = $('buscadorTop');
   if (bTop) bTop.addEventListener('input', function () { var b = $('buscador'); if (b) b.value = bTop.value; renderRoster(); });

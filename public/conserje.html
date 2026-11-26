@@ -462,6 +462,7 @@
     body.ver-escritorio #movil{display:none}
     body.ver-escritorio #volverBandeja{display:block;position:fixed;right:14px;bottom:18px;z-index:70;background:var(--yellow);color:var(--yellow-ink);font-weight:800;border-radius:999px;padding:12px 18px;box-shadow:0 10px 26px rgba(0,0,0,.35);min-height:48px}
     .m-head{display:flex;align-items:center;gap:12px;padding:16px 16px 8px}
+    #movil .m-ava, #movil .m-head>div{cursor:pointer}
     .m-ava{width:46px;height:46px;border-radius:50%;flex:none;box-shadow:0 4px 12px rgba(120,90,30,.25)}
     .m-head h1{font-size:23px;font-weight:900;letter-spacing:-.5px;margin:0;color:#0A1E33}
     .m-sub{font-size:12.5px;color:#7A7264;font-weight:600}
@@ -613,7 +614,7 @@
   body.ficha-open .bg{display:none}
   body.ficha-open .app{padding:0;max-width:none}
   body.ficha-open #mkTop{display:flex;align-items:center;gap:16px;padding:14px 22px}
-  .mkbrand{color:#fff;font-weight:800;font-size:21px;letter-spacing:-.4px;line-height:1.05}
+  .mkbrand{color:#fff;font-weight:800;font-size:21px;letter-spacing:-.4px;line-height:1.05;cursor:pointer}
   .mkbrand i{color:#FEC14D;font-style:normal}
   .mkbrand small{display:block;font-size:10.5px;font-weight:700;letter-spacing:2.2px;color:#8fb0c9;margin-top:2px}
   .mksearch{margin-left:auto;position:relative}
@@ -887,6 +888,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=20"></script>
+<script src="/conserje.js?v=21"></script>
 </body>
 </html>
