@@ -1832,7 +1832,17 @@ const BANNED_PHRASES_EN = [
   'magic happen', 'bring your visions to life', 'bring it to life',
   'community of happy customers', 'sweet escape',
 ];
-const CTA_SIGNALS_EN = ['dm us', 'dm me', 'message us', 'comment', 'save this', 'save it', 'save these', 'book', 'stop by', 'come by', 'link in bio', 'tap the link', 'order', 'call us', 'text us', 'tag ', 'share this', 'grab yours', 'get yours', 'reserve', 'schedule', 'sign up', 'join us', 'try it', 'visit us', 'shop now', 'tell us'];
+const CTA_SIGNALS_EN = ['dm us', 'dm me', 'message us', 'comment', 'save this', 'save it', 'save these', 'book', 'stop by', 'come by', 'link in bio', 'tap the link', 'order', 'call us', 'text us', 'tag ', 'share this', 'grab yours', 'get yours', 'reserve', 'schedule', 'sign up', 'join us', 'join the waitlist', 'join the list', 'try it', 'visit us', 'shop now', 'tell us'];
+// WAITLIST-CTA (Juli, 2026-11-26 — ids reales 790 PUBLICADO y 792 programado,
+// cuenta 138, la casa EN): el cierre canónico de lanzamiento «Join the
+// waitlist from the link.» era rechazado por esta puerta como «missing a
+// clear call to action» — la lista tenía 'join us' y 'link in bio' /
+// 'tap the link', pero no la frase real, mientras el espejo ES pasaba por
+// la señal amplia 'link' de CTA_SIGNALS. Paridad: 'join the waitlist' y
+// 'join the list' son UN CTA concreto (sumarse a la lista, desde el link).
+// Firma angosta a propósito: 'join' a secas NO entra — «join our community
+// of happy customers» sigue siendo frase quemada (se frena antes, en
+// BANNED_PHRASES_EN) y un «join» suelto sin objeto no pide ninguna acción.
 const GENERIC_OPENINGS_EN = [
   'welcome to', 'hello everyone', 'hey everyone', 'hey guys', 'in today\'s post', 'today we want to',
   'we are happy to', 'we\'re happy to', 'it is with great pleasure', 'look no further',
