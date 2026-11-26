@@ -7379,6 +7379,17 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
   .pz-subir>*{grid-column:1/-1;min-width:0}
   .pz-subir>.zona,.pz-subir>#pzSubirUp,.pz-subir>.preg-card{grid-column:1}
   .pz-subir>.pz-idea{grid-column:2;grid-row:3/span 3}
+  /* (LOTE SUBIR-WEB-ESPACIO · dueño 26/11, mock aprobado por él) La
+     pantalla de Subir en website usa el lienzo: un poco más de aire
+     arriba del título, la zona de carga ESTIRADA a la altura de la
+     tarjeta de la idea (su contenido centrado en vertical, como en
+     el mock) y la caja de escribir de la idea con altura real para
+     escribir (120px). Nada nuevo: mismos elementos, misma copia —
+     solo el reparto en la pantalla grande. En móvil no cambia nada. */
+  .pz-subir{padding-top:32px}
+  .pz-subir>.zona{align-self:stretch;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .pz-subir .zona .plus{margin:0 0 9px}
+  .pz-subir .pz-idea textarea{min-height:120px}
   /* Ads: la tarjeta de impulso a la izquierda; elegir otro, los
      activos y las filas, a la derecha. En modo elegir vuelve a
      una sola columna (ahí manda la grilla del feed) */
