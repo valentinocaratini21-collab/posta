@@ -630,12 +630,30 @@
           + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '') + '</div>');
         return;
       }
-      cells.push('<div class="mkcell"' + verAttrs + '>' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '')
-        + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '')
-        + (tit ? '<span class="mkcell-t">' + esc(tit) + '</span>' : '') + '</div>');
+      // (LOTE SEMANA-CONSERJE · dueño 25/11) La pieza se muestra
+      // LIMPIA, como en su producto: la imagen a todo el marco y solo
+      // la marca de día/hora adentro. El título NO va más sobre la
+      // foto — las piezas ya traen su texto diseñado adentro y la
+      // segunda capa lo pisaba (dos textos encimados, cortados a mitad
+      // de palabra por el overflow). Sin imagen, la pieza ES el texto:
+      // tarjeta con el degradé del negocio, el título en flujo normal
+      // y corte limpio con «…» por line-clamp, sin pisar la marca.
+      if (img) {
+        cells.push('<div class="mkcell"' + verAttrs + '><img src="' + esc(img) + '" alt="" loading="lazy">'
+          + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '') + '</div>');
+      } else {
+        cells.push('<div class="mkcell texto" style="background:' + grad + '">'
+          + (t.marca ? '<span class="mkmark">' + esc(t.marca) + '</span>' : '')
+          + (tit ? '<span class="mkcell-txt' + (t.marca ? ' conmarca' : '') + '">' + esc(tit) + '</span>' : '') + '</div>');
+      }
     });
-    while (cells.length && cells.length % 3 !== 0) cells.push('<div class="mkcell empty"><span class="mkmark">—</span></div>');
-    if (!cells.length) cells = ['<div class="mkcell empty"><span class="mkmark">—</span></div>', '<div class="mkcell empty"><span class="mkmark">—</span></div>', '<div class="mkcell empty"><span class="mkmark">—</span></div>'];
+    // (LOTE SEMANA-CONSERJE) El hueco que completa la grilla se ve
+    // VELADO, como promete la nota al pie del espejo («lo que todavía
+    // no le mandamos se ve velado, en su lugar»): degradé del negocio
+    // y candado — nunca más la caja beige con un guion solo.
+    var celdaVacia = '<div class="mkcell velada vacia" style="background:' + grad + '"><span class="mkvel">🔒</span></div>';
+    while (cells.length && cells.length % 3 !== 0) cells.push(celdaVacia);
+    if (!cells.length) cells = [celdaVacia, celdaVacia, celdaVacia];
     var phone = '<div class="mkphone">'
       + '<div class="mkprof"><span class="mkpava" style="background:' + grad + '">' + esc(ini) + '</span>'
       + '<div><div class="mkpname">' + esc(j.business_name || '') + ' <span class="mkver">✔</span></div>'
