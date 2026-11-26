@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1347';
+const PZ_BUILD = '20261105-v1348';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -33286,6 +33286,15 @@ async function inicioView() {
       if (window.__pzHoyAnalisis && window.__pzHoyAnalisis.insight) insightHoy = String(window.__pzHoyAnalisis.insight);
     }
   } catch (e) { insightHoy = ''; }
+  // (LOTE SEMANA-TOP · dueño 25/11) La tira de la semana sale del rail
+  // de Hoy: vive como bloque propio ARRIBA de las dos columnas del
+  // website (hijo directo de #inicioView, antes de .iwp-cols), a todo
+  // el ancho (feed + derecha). Es el MISMO #pzHoyTira de siempre — el
+  // mismo pzHoyTiraHTML con los mismos datos, un solo render por
+  // vista; el binder (pzHoyBind → pzHoyTiraBind) lo encuentra por id
+  // bajo #inicioView igual que antes. En móvil queda primera del
+  // flujo, como ya era (era la primera del rail, que va primero).
+  let hoyTiraTopHTML = '';
   const hoyAprobarHTML = (!HF_VISITOR) ? (() => {
     const hoyPendienteR1 = !!(hoyPostR1 && (String(hoyPostR1.status || '') === 'draft' || (String(hoyPostR1.status || '') === 'scheduled' && (String(hoyPostR1.approval || 'pending') === 'pending' || String(hoyPostR1.approval || 'pending') === 'auto'))));
     const tiraDiasR1 = pzHoyTiraDias(semR1, allPosts, hoyKeyR1, tz);
@@ -33300,8 +33309,8 @@ async function inicioView() {
     // de semana, no bloque de contenido. El saludo y el posteo de hoy
     // quedan en su orden, debajo de la tira. LOTE TAB-ADS: Impulsar salió
     // de Hoy — vive solo en el tab Ads.)
+    hoyTiraTopHTML = `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`;
     return `<div id="pzHoyAprobar"${PZ_HOY_VIEW === 'aprobar' ? '' : ' hidden'}>`
-      + `<div id="pzHoyTira">` + pzHoyTiraHTML(tiraDiasR1, { en: enHome, tz, hoyKey: hoyKeyR1, sel: PZ_HOY_TIRA_SEL }) + `</div>`
       + pzHoySpeechHTML({ hoyPost: hoyPostR1, pendientes: needOKR1, haySemana: haySemanaR1, en: enHome, tz, manual: modoR1.manual, needOK: needOKR1, schedSolo: schedSoloR1, insight: insightHoy })
       + '' /* (LOTE DETALLE-E-INICIO-SIMPLES · dueño 25/11) Sin segundo encabezado: «Para aprobar · N» duplicaba el del posteo de hoy (que queda, con su pastilla de hora); el conteo de pendientes vive en el saludo, como el resto de los conteos. */
       + (hoyPostR1 ? pzHoyHoyHTML(hoyPostR1, { en: enHome, tz, prop: HF_PROPS[hoyPostR1.id] || proposedLabelFor(hoyPostR1, pl.proposals, tz) }) : '')
@@ -33371,6 +33380,8 @@ async function inicioView() {
   ${HF_VISITOR ? '' : hfProfileActionsHTML(enHome, '')}
   ${pzPagarAhoraHTML(enHome)}
   ${hoySegHTML}
+  <!-- (LOTE SEMANA-TOP · dueño 25/11) La tira de la semana va ARRIBA DE TODO, antes de las columnas: en el website ocupa el ancho del feed + lo de la derecha; en móvil queda primera del contenido, como ya era dentro del rail. -->
+  ${hoyTiraTopHTML}
   <!-- (LOTE INICIO-WEB-PERFIL) Las dos columnas del website nacen acá: .iwp-rail (Hoy + la tarjeta de chat) y .iwp-main (el perfil con su grilla). En móvil los envoltorios son bloques sin estilo y el orden visual queda el de siempre (Hoy primero, el perfil después); el grid es solo ≥1024px. -->
   <div class="iwp-cols">
     <div class="iwp-rail">

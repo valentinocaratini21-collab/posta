@@ -7203,7 +7203,8 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
   #inicioView #pzHoyAprobar .pz-hoy-speech{margin-bottom:0}
   #inicioView #pzHoyAprobar .pz-hoy-para{order:2}
   #inicioView #pzHoyAprobar .pz-hoy-hoy{order:3;margin-top:0;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:14px 16px}
-  #inicioView #pzHoyAprobar #pzHoyTira{order:4;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:14px 16px 6px}
+  /* (LOTE SEMANA-TOP · dueño 25/11) La tira de la semana ya no es la tarjeta order:4 del rail: es el bloque de arriba de todo de Inicio, hijo directo de #inicioView antes de .iwp-cols — misma tarjeta blanca, a todo el ancho (feed + derecha), con el aire de 18px del grid debajo. */
+  #inicioView > #pzHoyTira{background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(10,30,51,.06);padding:14px 16px 6px;margin:0 0 18px}
   #inicioView #pzHoyTira .pz-hoy-tira-detalle{margin-bottom:8px}
   #inicioView #pzHoyAprobar .pz-wow{order:5}
   #inicioView #pzHoyAprobar .pz-postwow-email{order:6}
