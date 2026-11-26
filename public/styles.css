@@ -6434,6 +6434,10 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
    de filas utilitarias (Conexión · Billetera · Tus impulsos) y la
    grilla del feed en el lugar, con la geometría del mock aprobado. */
 .pz-ads-pickrow{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;box-sizing:border-box;background:#fff;border:0;border-radius:14px;box-shadow:0 4px 14px rgba(20,60,95,.08);padding:12px 14px;font:inherit;font-size:13.5px;font-weight:700;color:var(--txt);cursor:pointer;margin:0 0 12px;text-align:left}
+/* (LOTE ADS-WEB-ESPACIO) Contenedor de la columna derecha de Ads:
+   apila elegir-otro, activos y filas. En móvil es una pila
+   transparente (la pantalla se ve igual que siempre). */
+.pz-ads-side{display:flex;flex-direction:column;min-width:0}
 .pz-ads-pickrow-go{color:#2793C8;font-weight:800;white-space:nowrap}
 .pz-ads-rows{background:#fff;border-radius:18px;box-shadow:0 6px 18px rgba(20,60,95,.07);padding:4px 14px;margin:0 0 6px}
 .pz-ads-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;box-sizing:border-box;background:none;border:0;border-top:1px solid #EFF3F6;padding:11px 0;font:inherit;font-size:13.5px;color:var(--txt);cursor:pointer;text-align:left}
@@ -7405,7 +7409,14 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
   #pzAdsRoot>*{min-width:0}
   #pzAdsRoot>.pz-ads-title,#pzAdsRoot>.pz-ads-sub{grid-column:1/-1}
   #pzAdsRoot>.pz-ads-rec{grid-column:1}
-  #pzAdsRoot>.pz-ads-pickrow,#pzAdsRoot>.pz-ads-rows,#pzAdsRoot>section:not(.pz-ads-rec):not(.pz-ads-rows){grid-column:2}
+  /* (LOTE ADS-WEB-ESPACIO · dueño 26/11, mock aprobado) La columna
+     derecha es un solo ítem (.pz-ads-side): sus tarjetas quedan
+     agrupadas arriba, sin el hueco que dejaba el reparto por
+     filas. La tarjeta de impulso gana un poco de aire y la
+     miniatura del posteo elegido crece un poco. */
+  #pzAdsRoot>.pz-ads-side{grid-column:2}
+  .pz-ads-rec .pz-boost-3d3{padding:22px}
+  .pz-ads-rec-thumb{width:104px;height:104px}
   #pzAdsRoot:has(>.pz-ads-pick-head){display:block}
   /* Semana: los días en grilla sobre el lienzo entero */
   .sched-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:14px;max-width:none;align-items:start}

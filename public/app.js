@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1355';
+const PZ_BUILD = '20261105-v1356';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -24058,7 +24058,14 @@ function pzAdsHTML() {
   // (LOTE ADS-TARJETA-UNICA) El modo elegir reemplaza el cuerpo por
   // el encabezado + la grilla + LA MISMA tarjeta rearmada.
   if (pzAdsModoElegir) return pzAdsElegirHTML(recHTML);
-  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${recHTML}${pzAdsPickRowHTML()}${pzAdsImpulsosActivosHTML()}${pzAdsFilasHTML()}`;
+  // (LOTE ADS-WEB-ESPACIO · dueño 26/11, mock aprobado por él) Las
+  // tres piezas de la columna derecha (elegir otro, activos y las
+  // filas) viajan en un contenedor propio (.pz-ads-side): en la
+  // grilla de escritorio son UN solo ítem de la columna 2 y se
+  // apilan pegadas arriba, en vez de repartirse por las filas de
+  // la tarjeta de impulso y dejar el hueco en el medio que se veía
+  // en la captura del dueño. Mismos elementos, misma copia.
+  return `<h1 class="pz-ads-title">Ads</h1><p class="pz-ads-sub">${esc(en ? 'Boost the post that performed best and bring in new customers.' : 'Impulsá el posteo que más rindió y traé clientes nuevos.')}</p>${recHTML}<div class="pz-ads-side">${pzAdsPickRowHTML()}${pzAdsImpulsosActivosHTML()}${pzAdsFilasHTML()}</div>`;
 }
 // (LOTE ADS-TRABA-BILLETERA · SECCIÓN A) La firma del estado visible
 // de la pestaña: lo que de verdad cambia lo que se ve. Si no cambió,
