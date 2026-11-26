@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1344';
+const PZ_BUILD = '20261105-v1345';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -22578,7 +22578,7 @@ function adsRecCardHTML(r, budgets) {
   return `
   <div class="ads-rec" data-rec="${r.post_id}">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
-      <img src="${esc(r.image_path)}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;flex-shrink:0" alt="">
+      ${pzAdsThumb(r, 'width:52px;height:52px;border-radius:10px;flex-shrink:0')}
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.caption || 'Posteo')}</div>
         <div style="color:var(--mut);font-size:10.5px">${pzIc('eye', 16)} ${Number(r.reach || 0).toLocaleString('es-AR')} alcance · ${pzIc('bolt', 16)} ${r.er_pct}% interacción</div>
@@ -23744,17 +23744,17 @@ function pzAdsFeedGridHTML() {
   const eleg = Array.isArray(s.elegibles) ? s.elegibles : [];
   const elegKeys = new Set(eleg.map((e) => pzBoostKey(e)));
   const items = [];
-  (pzAdsFeedPosts || []).forEach((f) => { items.push({ key: 'p' + f.post_id, img: f.image_path || '', ya: !!f.ya_impulsado }); });
+  (pzAdsFeedPosts || []).forEach((f) => { items.push({ key: 'p' + f.post_id, thumb: pzAdsThumb(f), ya: !!f.ya_impulsado }); });
   eleg.forEach((e) => {
     const k = pzBoostKey(e);
-    if (k.indexOf('ig:') === 0) items.push({ key: k, img: e.image_path || '', ya: !!e.ya_impulsado });
+    if (k.indexOf('ig:') === 0) items.push({ key: k, thumb: pzAdsThumb(e), ya: !!e.ya_impulsado });
   });
   if (!items.length) return `<p class="pz-ads-note" style="margin:10px 0 14px">${esc(en ? 'There are no published posts in your feed yet.' : 'Todavía no hay posteos publicados en tu feed.')}</p>`;
   const cells = items.map((it) => {
     const sel = s.selId === it.key;
     const okCell = elegKeys.has(it.key) && !it.ya;
     const veil = it.ya ? `<span class="pz-ads-grid-ya">${esc(en ? 'Boosted ✓' : 'Impulsado ✓')}</span>` : '';
-    return `<button type="button" class="pz-ads-grid-cell${sel ? ' sel' : ''}" ${okCell ? `onclick="pzAdsFeedElegir('${it.key}')"` : 'disabled'}><img src="${esc(it.img)}" alt="">${veil}</button>`;
+    return `<button type="button" class="pz-ads-grid-cell${sel ? ' sel' : ''}" ${okCell ? `onclick="pzAdsFeedElegir('${it.key}')"` : 'disabled'}>${it.thumb}${veil}</button>`;
   }).join('');
   return `<div class="pz-ads-grid">${cells}</div>`;
 }
@@ -23902,6 +23902,29 @@ function pzAdsBilleteraBloqueHTML(conTotal) {
   return `<div class="pz-ads-bill"><button type="button" class="pz-ads-bill-head" onclick="pzAdsFilaToggle('billetera')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-bill-k">${esc(en ? 'YOUR WALLET' : 'TU BILLETERA')}</span><span class="pz-ads-bill-saldo">${esc(sim + pzBoostFmtMonto(saldo))}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${barraHTML}${det}</div>`;
 }
 
+// (LOTE ADS-THUMB) La miniatura de un posteo en las superficies de
+// Ads/Impulsar: un posteo de video se pinta por su PORTADA
+// (cover_path), nunca por el .mp4 — un <img> con src de video es el
+// ícono de imagen rota de la captura del dueño. Sin portada, el
+// respaldo es el bloque de marca con ▶ (el mismo criterio que
+// pzAdsImpulsoTarjetaHTML): jamás un <img> alimentado con un archivo
+// de video. La detección es por media_type o, si el objeto no lo
+// trae, por la extensión del image_path. `st` es el estilo inline
+// que el sitio ya le daba a su <img> (solo adsRecCardHTML lo usa).
+function pzAdsThumb(p, st) {
+  if (!p) return '';
+  const img = String(p.image_path || '');
+  const cover = String(p.cover_path || '');
+  const mt = String(p.media_type || '').toLowerCase();
+  const esVideo = /video|reel/.test(mt) || /\.(mp4|mov|webm)(\?|#|$)/i.test(img);
+  const style = st ? ` style="${st}"` : '';
+  if (esVideo) {
+    if (cover) return `<img src="${esc(cover)}" alt=""${style}>`;
+    return `<span class="pz-ads-thumb-fb" aria-hidden="true"${style}>▶</span>`;
+  }
+  return img ? `<img src="${esc(img)}" alt=""${style}>` : '';
+}
+
 function pzAdsHTML() {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const s = pzBoostState || {};
@@ -23966,14 +23989,14 @@ function pzAdsHTML() {
     // cuenta publicitaria del cliente, no solo su Página — y el
     // estado reducido ahora cubre también 'ads_not_connected', que
     // antes pintaba la tarjeta completa con el texto rojo al pie.
-    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const img = pzAdsThumb(p);
     const lineaAut = p.recomendado
       ? (en ? 'This was your best post of the week. One tap is all it takes to boost it: connect your ad account.' : 'Este fue tu mejor posteo de la semana. Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.')
       : (en ? 'One tap is all it takes to boost it: connect your ad account.' : 'Para impulsarlo falta un solo toque: conectar tu cuenta publicitaria.');
     recHTML = `<section class="pz-ads-rec"><div class="pz-boost-3d3 pz-ads-rec-card">${pzAdsBilleteraBloqueHTML(false)}${kickHTML}<div class="pz-ads-rec-top"><div class="pz-ads-rec-thumb">${img}</div><div><p>${esc(lineaAut)}</p></div></div><button type="button" class="pz-ads-big" style="background:linear-gradient(180deg,#ffd97a,#FEC14D 55%,#f5b93f);color:#0A1E33;box-shadow:0 5px 0 #d99a16,0 14px 24px rgba(254,193,77,.35),inset 0 1px 0 rgba(255,255,255,.5)" onclick="pzAdsAutorizarPagina(this)">${esc(en ? 'Connect my ad account' : 'Conectar mi cuenta publicitaria')}</button><p class="pz-ads-credito">${esc(en ? 'Nothing was spent.' : 'No se gastó nada.')}</p>${gate.motivo === 'sin_cuenta_publicitaria' ? pzAdsGuiaSinCuentaHTML() : ''}<p class="pz-boost-msg" id="pzAdsRecMsg"></p></div></section>`;
   } else {
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(pzBoostKey(p));
-    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const img = pzAdsThumb(p);
     // (LOTE TARJETA-IMPULSAR) UNA línea con los números reales y sin el
     // caption truncado arriba (pzAdsRecLinea). Sale «Por eso Posty te
     // recomienda este y no otro».
@@ -24692,6 +24715,10 @@ function pzBoostNormPost(p) {
     ig_media_id: ig,
     solo_ig: !!p.solo_ig && !id,
     image_path: p.image_path || '',
+    // (LOTE ADS-THUMB) media_type + cover_path sobreviven a la
+    // normalización: la miniatura de Ads se pinta por la portada.
+    media_type: String(p.media_type || ''),
+    cover_path: p.cover_path || '',
     caption: String(p.caption || ''),
     reach: Number(p.reach || 0),
     likes: Number(p.likes || 0),
@@ -24901,7 +24928,7 @@ function pzBoostPickRowsHTML(list) {
     const key = pzBoostKey(p);
     const sel = !!key && key === s.selId;
     const ya = !!p.ya_impulsado || pzBoostImpulsados.has(key);
-    const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const img = pzAdsThumb(p);
     const badge = p.recomendado ? `<span class="pz-boost-badge">RECOMENDADO</span>` : '';
     const check = `<span class="pz-boost-check">${(sel && !ya) || ya ? '✓' : ''}</span>`;
     return `<button type="button" role="radio" aria-checked="${sel && !ya ? 'true' : 'false'}" class="pz-boost-opt${sel && !ya ? ' on' : ''}" ${ya ? 'disabled' : ''} onclick="pzBoostElegirPick('${key}', this)">
@@ -24979,7 +25006,7 @@ function pzBoostPintarBoost() {
   // «No se gastó nada.». Sin montos (eran botones que no podían
   // terminar), sin el aviso en rojo al pie y sin Cargar.
   if (gate.cerrado && (gate.motivo === 'sin_cuenta_publicitaria' || gate.motivo === 'sin_autorizacion_publicitaria')) {
-    const imgNc = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+    const imgNc = pzAdsThumb(p);
     body.innerHTML = `<div class="pz-boost-3d3">${xBtn}
     <div class="pz-boost-3d3-title">${esc(gzT('Impulsar posteo', 'Boost post'))} <span>${esc(gzT('con Ads', 'with Ads'))}</span></div>
     <div class="pz-boost-3d3-row">
@@ -25026,7 +25053,7 @@ function pzBoostPintarBoost() {
   const saldoLinea = s.billetera
     ? `<div class="pz-boost-3d3-saldo">${esc(gzT('Tenés $' + pzBoostFmtMonto(saldo) + ' en tu billetera', 'You have $' + pzBoostFmtMonto(saldo) + ' in your wallet'))}</div>`
     : '';
-  const img = p.image_path ? `<img src="${esc(p.image_path)}" alt="">` : '';
+  const img = pzAdsThumb(p);
   const nums = pzBoostNumerosComa(p);
   const linea = (p.recomendado && nums)
     ? `${esc(gzT('El mejor de tu semana', 'Your best post this week'))} · <b>${esc(nums)}</b>`

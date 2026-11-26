@@ -483,6 +483,10 @@ function elegiblesParaAds(rows, mejorPostId, yaImpulsados, opts) {
     .map((r) => ({
       post_id: r.id,
       image_path: r.image_path || '',
+      // (LOTE ADS-THUMB) media_type + cover_path viajan: la miniatura
+      // del cliente se pinta por la portada en los posteos de video.
+      media_type: r.media_type || '',
+      cover_path: r.cover_path || '',
       caption: cortarCaption(String(r.caption || ''), 90),
       ig_media_id: r.ig_media_id,
       // (v846) Reciente de IG sin fila local: post_id null + solo_ig.

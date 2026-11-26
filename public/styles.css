@@ -6470,6 +6470,11 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-ads-grid-cell img{width:100%;height:100%;object-fit:cover;display:block}
 .pz-ads-grid-cell.sel{outline:3px solid #2793C8;outline-offset:-3px}
 .pz-ads-grid-cell[disabled]{cursor:default}
+/* (LOTE ADS-THUMB) Respaldo de miniatura de video sin portada en las
+   superficies de Ads/Impulsar: bloque de marca con ▶ que llena el
+   contenedor (en el picker, la celda fija de 48px del <img>). */
+.pz-ads-thumb-fb{display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#2793C8,#0A1E33);color:#fff;font-size:17px;width:100%;height:100%}
+.pz-boost-opt .pz-ads-thumb-fb{width:48px;height:48px;border-radius:11px;flex:0 0 48px}
 .pz-ads-grid-ya{position:absolute;left:0;right:0;bottom:0;background:rgba(10,30,51,.72);color:#fff;font-size:10.5px;font-weight:800;text-align:center;padding:3px 2px}
 
 /* ---------- LOTE CHAT-MEJORAS · reacciones / buscar / fijar / editar-borrar / galería ---------- */

@@ -15329,7 +15329,7 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     let rows = [];
     try {
       rows = db.prepare(`
-        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type, p.published_at,
+        SELECT p.id, p.image_path, p.cover_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type, p.published_at,
                COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
                COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
@@ -15343,6 +15343,16 @@ app.get('/api/ads/billetera/elegibles', requireAuth, async (req, res) => {
     // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed): el
     // recomendado de abajo sale de estas filas ya filtradas.
     rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
+    // (LOTE ADS-THUMB) La portada del video viaja en el payload: la
+    // tarjeta y el selector de Ads pintan la miniatura desde
+    // cover_path, nunca desde el .mp4 (la costura hermana de la del
+    // feed, LOTE VIDEO-VIVO). Fail-soft: sin frame, la fila sale como
+    // estaba y el cliente rinde su respaldo de marca.
+    try {
+      for (const r of rows) {
+        if (r && pzEsTipoVideo(r.media_type) && !String(r.cover_path || '')) { const c = asegurarCoverDeVideo(r); if (c) r.cover_path = c; }
+      }
+    } catch (e) { /* la portada nunca frena la lista */ }
     const wk = mondayKeyOf(tzToday(userTz(uid)));
     const mejor = elegirMejorPosteoSemana(rows.filter((r) => r.week_key === wk));
     // (v846) El feed entero: los medios de IG sin fila local se suman
@@ -15403,7 +15413,7 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
     let rows = [];
     try {
       rows = db.prepare(`
-        SELECT p.id, p.image_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type, p.published_at,
+        SELECT p.id, p.image_path, p.cover_path, p.caption, p.ig_media_id, p.status, p.week_key, p.media_type, p.published_at,
                COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
                COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
         FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
@@ -15417,6 +15427,13 @@ app.get('/api/ads/billetera/buscar', requireAuth, async (req, res) => {
     } catch (e) { rows = []; }
     // (v867) Solo lo que sigue vivo en el feed (ver idsVivosEnFeed).
     rows = filtrarPosteosVivos(rows, await idsVivosEnFeed(db, uid));
+    // (LOTE ADS-THUMB) La misma costura de portada que en /elegibles:
+    // el resultado del buscador se pinta con la misma miniatura.
+    try {
+      for (const r of rows) {
+        if (r && pzEsTipoVideo(r.media_type) && !String(r.cover_path || '')) { const c = asegurarCoverDeVideo(r); if (c) r.cover_path = c; }
+      }
+    } catch (e) { /* la portada nunca frena la búsqueda */ }
     let impulsados = new Set();
     try { impulsados = new Set(db.prepare(`SELECT post_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(uid).map((r) => r.post_id)); } catch (e) { impulsados = new Set(); }
     // (v846) El buscador también ve el feed entero: los medios de IG
@@ -49619,7 +49636,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1344';
+const BUILD_ID = '20261105-v1345';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
