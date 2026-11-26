@@ -12071,13 +12071,13 @@ app.get('/api/trial/mi-plan', requireAuth, (req, res) => {
       if (s.estado !== 'listo') continue;
       let pr = null;
       if (s.post_id) {
-        try { pr = db.prepare('SELECT id, image_path, media_type, cover_path FROM posts WHERE id = ? AND user_id = ?').get(s.post_id, uid); } catch (e) {}
+        try { pr = db.prepare('SELECT id, image_path, media_type, cover_path, scheduled_at FROM posts WHERE id = ? AND user_id = ?').get(s.post_id, uid); } catch (e) {}
       }
       if (!pr) {
         if (!poolTarjetas) {
           try {
             const enlazados = new Set(plan.slots.map((x) => Number(x.post_id) || 0).filter(Boolean));
-            poolTarjetas = db.prepare("SELECT id, image_path, media_type, cover_path FROM posts WHERE user_id = ? AND source = 'trial' AND status NOT IN ('cancelled', 'discarded') ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC").all(uid)
+            poolTarjetas = db.prepare("SELECT id, image_path, media_type, cover_path, scheduled_at FROM posts WHERE user_id = ? AND source = 'trial' AND status NOT IN ('cancelled', 'discarded') ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC").all(uid)
               .filter((r) => !enlazados.has(Number(r.id)));
           } catch (e) { poolTarjetas = []; }
         }
@@ -12088,6 +12088,20 @@ app.get('/api/trial/mi-plan', requireAuth, (req, res) => {
         s.media = pr.image_path;
         s.media_tipo = pr.media_type || s.tipo;
         if ((pr.media_type === 'video' || s.tipo === 'video') && pr.cover_path && !String(pr.cover_path).startsWith('data:')) s.media = pr.cover_path;
+      }
+      // (LOTE REGLA-15-19 · 26/11) LA VERDAD DEL PLAN: con la fila
+      // del posteo en la mano, el día y la hora que ve el cliente
+      // salen de SU agenda real (scheduled_at en la zona de la
+      // cuenta), nunca de las etiquetas que la generación escribió
+      // en el payload — era el desacuerdo de la corrida ×10: el
+      // plan decía «viernes 12:30» y el posteo salía el jueves a
+      // las 19:00. Sin scheduled_at (borrador sin agendar), quedan
+      // las etiquetas del payload como respaldo.
+      if (pr && pr.scheduled_at) {
+        try {
+          const et = modeloNuevo.etiquetasPara(plan.lang, userTz(uid), Date.parse(pr.scheduled_at), Date.now());
+          if (et) { s.dia_semana = et.dia_semana; s.fecha = et.fecha; s.hora = et.hora; s.sale_hoy = et.sale_hoy; }
+        } catch (e) { /* etiquetas del payload, como respaldo */ }
       }
     }
     let aprobadaAt = 0;
@@ -27766,7 +27780,15 @@ function scheduleDraftsPerWeek(uid, drafts, apply, opts) {
     // la regla no cambia (días cerrados, día ya ocupado, cupo).
     if (d.source === 'trial' && monday < tomorrow) {
       const candToday = zonedWallToUtc(`${today} ${String(hour).padStart(2, '0')}:00`, tz);
-      if (candToday && Date.parse(candToday) > Date.now()) firstDay = today;
+      // (LOTE REGLA-15-19 · regla del dueño 26/11) Hoy solo es
+      // elegible si la pieza está lista con la anticipación de la
+      // casa: antes de la hora de corte (la de salida − 4 h; para
+      // las 19:00, las 15:00). Una prueba que se importa a las
+      // 18:30 ya no sale a las 19:00 con media hora de aire: su
+      // día 1 pasa a mañana 19:00, como promete su plan.
+      let antesDelCorte = false;
+      try { antesDelCorte = modeloNuevo.saleHoySiListoAntesDe(tz, hour, Date.now()); } catch (e) { antesDelCorte = true; }
+      if (candToday && Date.parse(candToday) > Date.now() && antesDelCorte) firstDay = today;
     }
     if (d.source === 'trial') {
       // (LOTE CORRECTIVO-1 · PRUEBA-COMPLETA-VISIBLE · decisión 20:09) Los
@@ -43121,7 +43143,13 @@ function buildTrialWeekCasara(lang) {
     y = Number(got.year); m = Number(got.month); d = Number(got.day); hh = Number(got.hour) % 24;
   } catch (e) { /* sin zona legible: la semana genérica de siempre */ }
   if (!y || !m || !d) return buildTrialWeek(3, lang);
-  const startOffset = 1; // (PLAN-MAGIA) día 1 = mañana 19:00, sin excepción
+  // (LOTE REGLA-15-19 · regla del dueño 26/11) El día 1 de la cáscara
+  // sigue la regla de la casa: si la semana nace antes del corte
+  // (15:00, cuatro horas antes de la salida de las 19:00), el primer
+  // posteo sale HOY; si nace después, mañana. Reemplaza el «mañana
+  // sin excepción» de PLAN-MAGIA (18/11), derogado por el dueño.
+  let startOffset = 1;
+  try { startOffset = modeloNuevo.offsetDiaUnoCasara(lang, Date.now()); } catch (e) { /* mañana, como antes */ }
   return Array.from({ length: 3 }, (_, i) => {
     const dt = new Date(Date.UTC(y, m - 1, d + startOffset + i, 12, 0, 0));
     return {
@@ -49676,7 +49704,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1351';
+const BUILD_ID = '20261105-v1352';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -13,10 +13,13 @@
    (3) VIDRIO MÁGICO: el slot en plan (también vacío) es vidrio con
        luz que lo atraviesa, hilo de luz, chispas flotantes y brillo
        que lo recorre — CSS puro, prefers-reduced-motion quieto.
-   (A) FECHAS DEL MODELO: el día 1 de una prueba fresca sale MAÑANA
-       19:00, nunca hoy — la cáscara nace desde mañana y la
-       proyección (mi-plan) reasigna las cáscaras viejas que
-       arrancan hoy. Pin: invitado creado hoy → slots mañana/+2/+3.
+   (A) FECHAS DEL MODELO — REESCRITO POR REGLA-15-19 (26/11): la
+       regla «mañana, nunca hoy» quedó derogada por el dueño («si
+       hacen el posteo antes de 3pm, sale ese mismo día 7pm; con
+       4 hrs de anticipación»). El día 1 de una prueba fresca es HOY
+       si la semana nace antes del corte de las 15:00 y MAÑANA si
+       nace después; la proyección ya no reasigna ninguna cáscara.
+       Pin: la cáscara fechada hoy se muestra hoy, tal cual.
    (B) CÓDIGO LITERAL EN UN TÍTULO: «Tu primer posteo» rendía el
        fragmento ' + pzIc('rocket', 13) + ' sin evaluar (dos
        template literals: fastTrackCardHTML y firstPublishCardHTML).
@@ -101,7 +104,7 @@ try {
 } catch (e) { ok(false, 'C5 · la tarjeta fast-track rinde ícono + «Tu primer posteo»', e.message); }
 
 /* ---------------- D. Unidad — la proyección y las fechas del modelo ---------------- */
-console.log('\n— D. planSemanaPrueba: el día 1 es mañana, nunca hoy —');
+console.log('\n— D. planSemanaPrueba: la proyección no reescribe fechas (REGLA-15-19) —');
 const NOW = Date.now();
 function shellWeek(startOffsetDays, lang) {
   return [0, 1, 2].map((i) => {
@@ -125,28 +128,29 @@ function labels(plan) { return plan.slots.map((s) => s.dia_semana + '|' + s.fech
 function expectedLabels(lang, from) { return [0, 1, 2].map((i) => { const et = MN.etiquetaHoy(lang, NOW + (from + i) * 86400000); return et.day + '|' + et.date; }); }
 
 const pOld = MN.planSemanaPrueba(shellPayload(0, 'es', false), NOW);
-ok(JSON.stringify(labels(pOld)) === JSON.stringify(expectedLabels('es', 1)), 'D1 · cáscara vieja (arranca hoy): la proyección la reasigna a mañana/+2/+3', labels(pOld).join(' · '));
-ok(pOld.slots.every((s) => s.sale_hoy === false), 'D2 · tras la reasignación ningún slot dice «sale hoy»');
+ok(JSON.stringify(labels(pOld)) === JSON.stringify(expectedLabels('es', 0)), 'D1 · cáscara que arranca hoy: la proyección la deja intacta (hoy/+2/+3) — la reasignación de PLAN-MAGIA quedó derogada', labels(pOld).join(' · '));
+ok(pOld.slots[0].sale_hoy === true && pOld.slots.slice(1).every((s) => s.sale_hoy === false), 'D2 · el slot 1 dice «sale hoy» y los demás no');
 const hoyLbl = MN.etiquetaHoy('es', NOW);
-ok(!labels(pOld).includes(hoyLbl.day + '|' + hoyLbl.date), 'D3 · la fecha de hoy no aparece en ningún slot del plan fresco');
+ok(labels(pOld)[0] === (hoyLbl.day + '|' + hoyLbl.date), 'D3 · la fecha de hoy aparece en el slot 1, que es donde va');
 const pNew = MN.planSemanaPrueba(shellPayload(1, 'es', false), NOW);
 ok(JSON.stringify(labels(pNew)) === JSON.stringify(expectedLabels('es', 1)), 'D4 · cáscara nueva (arranca mañana): la proyección la deja intacta');
 const pListo = MN.planSemanaPrueba(shellPayload(0, 'es', true), NOW);
 ok(labels(pListo)[0] === (hoyLbl.day + '|' + hoyLbl.date) && pListo.slots[0].sale_hoy === true, 'D5 · slot 1 ya LISTO con fecha de hoy: la proyección NO lo reescribe (su fecha es real)');
 const pEn = MN.planSemanaPrueba(shellPayload(0, 'en', false), NOW);
-ok(JSON.stringify(labels(pEn)) === JSON.stringify(expectedLabels('en', 1)), 'D6 · espejo EN: la reasignación también corre (mañana/+2/+3)');
+ok(JSON.stringify(labels(pEn)) === JSON.stringify(expectedLabels('en', 0)), 'D6 · espejo EN: la cáscara que arranca hoy también queda intacta');
 
 /* ---------------- E. Unidad — la cáscara nace mañana ---------------- */
-console.log('\n— E. buildTrialWeekCasara: la semana cáscara arranca mañana —');
-ok(SRV.includes('const startOffset = 1;'), 'E1 · startOffset fijo en 1 (día 1 = mañana 19:00, sin excepción)');
+console.log('\n— E. buildTrialWeekCasara: el arranque sigue la regla 15→19 —');
+ok(SRV.includes('modeloNuevo.offsetDiaUnoCasara'), 'E1 · el arranque de la cáscara sale de la regla (offsetDiaUnoCasara), no de un fijo');
 try {
   const casaraSrc = sliceFn(SRV, 'function buildTrialWeek(', 'const TRIAL_IMG_MIME');
-  const buildTrialWeekCasara = new Function(casaraSrc + '\nreturn buildTrialWeekCasara;')();
+  const buildTrialWeekCasara = new Function('modeloNuevo', casaraSrc + '\nreturn buildTrialWeekCasara;')(MN);
   const wk = buildTrialWeekCasara('es');
-  const lbl = (off) => { const et = MN.etiquetaHoy('es', Date.now() + off * 86400000); return et.day + '|' + et.date; };
-  ok(wk.length === 3 && (wk[0].day + '|' + wk[0].date) === lbl(1) && (wk[1].day + '|' + wk[1].date) === lbl(2) && (wk[2].day + '|' + wk[2].date) === lbl(3), 'E2 · la cáscara trae mañana/+2/+3', wk.map((w) => w.day + ' ' + w.date).join(' · '));
+  const off = MN.offsetDiaUnoCasara('es', Date.now());
+  const lbl = (o) => { const et = MN.etiquetaHoy('es', Date.now() + o * 86400000); return et.day + '|' + et.date; };
+  ok(wk.length === 3 && (wk[0].day + '|' + wk[0].date) === lbl(off) && (wk[1].day + '|' + wk[1].date) === lbl(off + 1) && (wk[2].day + '|' + wk[2].date) === lbl(off + 2), 'E2 · la cáscara trae el arranque de la regla (hoy si nació antes del corte, mañana si no)', wk.map((w) => w.day + ' ' + w.date).join(' · '));
   ok(wk.every((w) => w.hour === '19:00'), 'E3 · los tres lugares a las 19:00');
-} catch (e) { ok(false, 'E2 · la cáscara trae mañana/+2/+3', e.message); }
+} catch (e) { ok(false, 'E2 · la cáscara trae el arranque de la regla', e.message); }
 
 /* ---------------- F. Unidad — el render de la sección ---------------- */
 console.log('\n— F. mnPlanHTML rendido: orden, banner y magia —');
@@ -180,11 +184,11 @@ try {
 
 /* ---------------- G. Sellos ---------------- */
 console.log('\n— G. Sellos —');
-ok(IDX.includes('app.js?v=797') && IDX.includes('styles.css?v=20261299'), 'G1 · (re-pin PUERTA-NUEVA) índice ES: app.js 797 + estilos 20261299 (sellos del aterrizaje)');
-ok(IDXEN.includes('styles.css?v=20261299') && !IDXEN.includes('app.js?v='), 'G2 · índice EN: solo estilos 20261299 (no carga app.js; las menciones son comentarios)');
+ok(IDX.includes('app.js?v=958') && IDX.includes('styles.css?v=20261351'), 'G1 · (re-pin REGLA-15-19) índice ES: app.js 958 + estilos 20261351 (sellos del aterrizaje)');
+ok(IDXEN.includes('styles.css?v=20261351') && !IDXEN.includes('app.js?v='), 'G2 · índice EN: solo estilos 20261351 (no carga app.js; las menciones son comentarios)');
 
 /* ---------------- H. Arranque real: invitado fresco → mi-plan ---------------- */
-console.log('\n— H. Arranque real: la cáscara vieja entra hoy, el plan sale mañana —');
+console.log('\n— H. Arranque real: la cáscara entra fechada hoy, el plan la muestra hoy —');
 const PORT = 18900 + (process.pid % 300);
 const ADMIN = 'adm-pm-suite';
 const TKEY = 'pm-test-key';
@@ -220,8 +224,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(up, 'H0 · el servidor del lote arranca', srvLog.slice(-300));
     if (!up) throw new Error('sin servidor');
 
-    // La cáscara VIEJA sembrada como la dejaba la regla anterior:
-    // el slot 1 fechado HOY. La proyección tiene que reasignarla.
+    // La cáscara sembrada con el slot 1 fechado HOY: con la regla
+    // 15→19 esa fecha es una promesa válida y el plan la muestra
+    // tal cual (antes de REGLA-15-19 la proyección la corría).
     const payload = shellPayload(0, 'es', false);
     const { DatabaseSync } = require('node:sqlite');
     const dbf = new DatabaseSync(path.join(tmpDir, 'posta.db'));
@@ -235,8 +240,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const pl = p0.json && p0.json.plan;
     ok(p0.status === 200 && !!pl, 'H2 · mi-plan devuelve el plan del invitado');
     const got = pl ? pl.slots.map((s) => s.dia_semana + '|' + s.fecha) : [];
-    ok(JSON.stringify(got) === JSON.stringify(expectedLabels('es', 1)), 'H3 · el invitado creado hoy ve mañana/+2/+3 — nunca hoy', got.join(' · '));
-    ok(!!pl && pl.slots.every((s) => s.sale_hoy === false), 'H4 · ningún slot del plan fresco dice «sale hoy»');
+    ok(JSON.stringify(got) === JSON.stringify(expectedLabels('es', 0)), 'H3 · el invitado con cáscara de hoy ve hoy/+2/+3, sin reasignación', got.join(' · '));
+    ok(!!pl && pl.slots[0].sale_hoy === true && pl.slots.slice(1).every((s) => s.sale_hoy === false), 'H4 · el slot 1 dice «sale hoy» y los demás no');
   } catch (e) {
     ok(false, 'H · el arranque real completó', String(e && e.message || e).slice(0, 200));
   } finally {
