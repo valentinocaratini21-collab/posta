@@ -113,6 +113,11 @@
   .search svg{flex:none;opacity:.65}
   .search input{flex:1;min-width:0;background:none;border:none;outline:none;padding:10px 0;color:var(--ink);min-height:38px}
   .search input::placeholder{color:var(--ink-3)}
+  /* (LOTE CONSERJE-BUSQUEDA) La × de limpiar dentro del buscador del
+     riel: aparece solo cuando el campo tiene texto (vía
+     :placeholder-shown) y es un blanco tocable de 32px. */
+  .search .search-x{display:none;flex:none;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.14);color:var(--ink);font-size:16px;line-height:1;align-items:center;justify-content:center;cursor:pointer;padding:0}
+  .search input:not(:placeholder-shown) ~ .search-x{display:inline-flex}
   .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
   .chip{padding:6px 12px;border-radius:999px;border:1px solid var(--stroke);background:rgba(255,255,255,.04);color:var(--ink-2);font-size:12.5px;font-weight:600;min-height:32px}
   .chip.active{background:var(--sky);border-color:transparent;color:#fff;box-shadow:0 6px 16px rgba(39,147,200,.4)}
@@ -367,9 +372,12 @@
   .sem-txt b{font-weight:800}
   .sem-txt .sem-sub{color:var(--ink-3);font-weight:500;font-size:13.5px}
 
-  .roster-empty{padding:16px 14px;color:var(--ink-3);font-size:13.5px;line-height:1.5}
-  .roster-empty b{color:var(--ink-2)}
-  .roster-empty .btn{margin-top:10px}
+  .roster-empty{padding:16px 14px;color:var(--ink-2);font-size:13.5px;line-height:1.5}
+  .roster-empty b{color:var(--ink)}
+  /* (LOTE CONSERJE-BUSQUEDA) La salida de una búsqueda sin match es un
+     botón SÓLIDO y tocable, no un fantasma: amarillo de marca con tinta
+     oscura — se lee sobre el glass oscuro y sobre la crema de la ficha. */
+  .roster-empty .btn{margin-top:10px;background:var(--yellow);border-color:transparent;color:var(--yellow-ink);font-weight:800;min-height:40px;padding:8px 18px}
 
   .mano-group{font-size:11.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:16px 2px 8px;display:flex;align-items:center;gap:8px}
   .mano-group:first-child{margin-top:2px}
@@ -621,6 +629,12 @@
   .mksearch input{width:270px;max-width:52vw;padding:9px 14px 9px 34px;border-radius:22px;border:none;font-size:13.5px;background:#12314f;color:#fff;outline:none}
   .mksearch input::placeholder{color:#7e9cb5}
   .mksearch span{position:absolute;left:12px;top:9px;color:#7e9cb5;font-size:14px}
+  /* (LOTE CONSERJE-BUSQUEDA) La × de limpiar dentro del buscador de la
+     barra superior (la boca visible en la piel de ficha): aparece solo
+     cuando el campo tiene texto y el texto no pasa por debajo de ella. */
+  .mksearch .search-x{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:16px;line-height:1;align-items:center;justify-content:center;cursor:pointer;padding:0}
+  .mksearch input:not(:placeholder-shown){padding-right:38px}
+  .mksearch input:not(:placeholder-shown) ~ .search-x{display:inline-flex}
   body.ficha-open .topstrip,body.ficha-open .semaforo,body.ficha-open .col-right,body.ficha-open .queue{display:none!important}
   body.ficha-open .layout{display:grid;grid-template-columns:288px 1fr;background:#FBF7EE;border-radius:24px 24px 0 0;min-height:calc(100vh - 74px);overflow:hidden;gap:0;padding:0;margin:0}
   body.ficha-open .layout>aside[aria-label="Clientes"]{background:#f5efdf;border-right:1.5px solid #e7dfcd;border-radius:0;box-shadow:none;padding:16px 12px}
@@ -641,6 +655,14 @@
   .cr-chip.d-ok{background:#e3f4ea;color:#14703C}
   .cr-chip.d-bad{background:#fbe7e3;color:#c0392b}
   body.ficha-open #proxBar .prox-btn{width:100%;margin-bottom:10px;background:#0A1E33;color:#FEC14D;border:none}
+  /* (LOTE CONSERJE-BUSQUEDA) El estado vacío sobre la crema se lee con
+     la tinta de esta piel (#12212f): la regla base usa la tinta del
+     glass oscuro (blanco azulado tenue) y sobre #f5efdf quedaba
+     invisible — el dueño quedó atrapado en una búsqueda filtrada a
+     cero sin poder leer ni el texto ni su salida. El botón ya es
+     sólido por la regla base de .roster-empty .btn. */
+  body.ficha-open .roster-empty{color:#12212f}
+  body.ficha-open .roster-empty b{color:#0A1E33}
   body.ficha-open .center{background:transparent;border:none;box-shadow:none;padding:20px 22px 30px;color:#12212f}
   .mkbizbar{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-bottom:4px}
   .mkbizava{width:50px;height:50px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex:none}
@@ -806,7 +828,7 @@
   <!-- ======= LOTE CONSERJE-PRODUCTO-DISENO · BARRA DEL MOCK (modo ficha) ======= -->
   <header id="mkTop">
     <div class="mkbrand">Posty<i>.</i><small>CONSERJE</small></div>
-    <label class="mksearch"><span>⌕</span><input id="buscadorTop" type="search" placeholder="Buscar negocio o @…" autocomplete="off"></label>
+    <label class="mksearch"><span>⌕</span><input id="buscadorTop" type="search" placeholder="Buscar negocio o @…" autocomplete="off"><button class="search-x" type="button" data-act="limpiar-busqueda" aria-label="Limpiar búsqueda">×</button></label>
   </header>
 
   <!-- ======= TOP STRIP · HOY ======= -->
@@ -836,6 +858,7 @@
       <label class="search">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D9EAF4" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
         <input id="buscador" type="search" placeholder="Buscar cliente o @…" autocomplete="off">
+        <button class="search-x" type="button" data-act="limpiar-busqueda" aria-label="Limpiar búsqueda">×</button>
       </label>
       <div class="chips" id="filtros" role="group" aria-label="Filtros"></div>
       <div id="proxBar"></div>
@@ -910,6 +933,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=23"></script>
+<script src="/conserje.js?v=24"></script>
 </body>
 </html>

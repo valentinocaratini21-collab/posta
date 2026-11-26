@@ -1445,7 +1445,12 @@
     } else if (act === 'ir-manana') {
       centroModo = 'manana'; highlightPostId = null; renderCentro(); re();
     } else if (act === 'limpiar-busqueda') {
-      $('buscador').value = ''; renderRoster(); re();
+      // (LOTE CONSERJE-BUSQUEDA) Limpiar es limpiar LAS DOS bocas de la
+      // misma búsqueda: la del riel y la de la barra superior se espejan,
+      // y texto que quede en cualquiera vuelve a filtrar al próximo render.
+      var bL = $('buscador'); if (bL) bL.value = '';
+      var bTL = $('buscadorTop'); if (bTL) bTL.value = '';
+      renderRoster(); re();
     } else if (act === 'idea-resolver') {
       var midI = b.getAttribute('data-mid'), uidI = b.getAttribute('data-uid');
       var boxI = $('ideaRes-' + midI);
@@ -1584,9 +1589,26 @@
   // placa y el título de la cabecera de la bandeja.
   var brandEls = document.querySelectorAll('.mkbrand, #movil .m-ava, #movil .m-head > div');
   for (var bi = 0; bi < brandEls.length; bi++) brandEls[bi].addEventListener('click', irAlInicio);
-  $('buscador').addEventListener('input', renderRoster);
+  // (LOTE CONSERJE-BUSQUEDA) Las dos bocas de la búsqueda se espejan en
+  // los dos sentidos: lo que se tipea en una se ve en la otra, así el
+  // filtro activo nunca queda escondido en el campo que no se está
+  // mirando (en la piel de ficha el buscador del riel está oculto y el
+  // de arriba es el que manda; su texto filtraba sin verse en ningún
+  // campo del riel).
+  $('buscador').addEventListener('input', function () { var btS = $('buscadorTop'); if (btS && btS.value !== $('buscador').value) btS.value = $('buscador').value; renderRoster(); });
   var bTop = $('buscadorTop');
   if (bTop) bTop.addEventListener('input', function () { var b = $('buscador'); if (b) b.value = bTop.value; renderRoster(); });
+  // (LOTE CONSERJE-BUSQUEDA) La consola SIEMPRE abre sin filtro. La
+  // búsqueda no se persiste en ningún storage ni en la URL, pero el
+  // navegador sí puede restaurar el valor de un campo al volver a la
+  // pestaña o desde su caché de página — y el arranque no lo pisaba:
+  // un texto restaurado (p. ej. el mail que el teclado del teléfono
+  // sugiere con un toque) dejaba la cartera en «0 de N» sin que nadie
+  // hubiera buscado en esta visita. Se pisa al arrancar y en cada
+  // vuelta desde la caché de página (pageshow persistido).
+  function limpiarBuscadores() { var b1 = $('buscador'); if (b1) b1.value = ''; var b2 = $('buscadorTop'); if (b2) b2.value = ''; }
+  limpiarBuscadores();
+  window.addEventListener('pageshow', function (ev) { if (ev && ev.persisted) { limpiarBuscadores(); renderRoster(); } });
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
 
   // ---------------- gate ----------------
