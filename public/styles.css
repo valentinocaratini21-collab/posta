@@ -7378,14 +7378,21 @@ a.hf-name{text-decoration:none;color:inherit;cursor:pointer}
   .pz-subir{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:16px;align-items:start}
   .pz-subir>*{grid-column:1/-1;min-width:0}
   .pz-subir>.zona,.pz-subir>#pzSubirUp,.pz-subir>.preg-card{grid-column:1}
-  .pz-subir>.pz-idea{grid-column:2;grid-row:3/span 3}
+  .pz-subir>.pz-idea{grid-column:2;grid-row:3}
   /* (LOTE SUBIR-WEB-ESPACIO · dueño 26/11, mock aprobado por él) La
      pantalla de Subir en website usa el lienzo: un poco más de aire
      arriba del título, la zona de carga ESTIRADA a la altura de la
      tarjeta de la idea (su contenido centrado en vertical, como en
      el mock) y la caja de escribir de la idea con altura real para
      escribir (120px). Nada nuevo: mismos elementos, misma copia —
-     solo el reparto en la pantalla grande. En móvil no cambia nada. */
+     solo el reparto en la pantalla grande. En móvil no cambia nada.
+     (AJUSTE v1355, verificación en vivo del mismo día: con la idea
+     abarcando 3 filas, su altura se repartía entre las tres y la
+     fila de la zona quedaba en un tercio — la zona medía ~115px
+     contra ~390px de la tarjeta. La idea ahora vive SOLO en la
+     fila 3: la fila toma la altura entera de la tarjeta y la zona,
+     estirada, la iguala. La bandeja y las preguntas siguen en la
+     columna izquierda, filas 4 y 5, como siempre.) */
   .pz-subir{padding-top:32px}
   .pz-subir>.zona{align-self:stretch;display:flex;flex-direction:column;align-items:center;justify-content:center}
   .pz-subir .zona .plus{margin:0 0 9px}
