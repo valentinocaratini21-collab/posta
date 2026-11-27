@@ -21427,6 +21427,13 @@ function subirIdeaHoraCorta(isoUtc, tz, lang) {
 // semana», «avisalo desde unos días antes, con lo que hacemos ese
 // día») y la forma sin producto dejó de ser una instrucción sobre
 // el mensaje («con su precio y para cuándo lo quiero»).
+// (LOTE SUBIR-EJEMPLO-MANANA · dueño 27/11) El ejemplo de producto
+// cambia de forma por palabra del dueño: «quiero que el posteo de
+// mañana sea de…» — reemplaza la forma anterior «quiero un posteo
+// de X — sale $…»: sin sufijo de precio (el precio ya vive en el
+// fundamento y Posty lo conoce) y anclado en el posteo de mañana,
+// que es como el dueño lo pide. La generación por negocio (digest,
+// protagonista, regla de verdad) no cambia: solo la plantilla.
 function subirIdeaEjemplos(uid) {
   const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
   const dg = digestForUser(uid) || {};
@@ -21447,11 +21454,11 @@ function subirIdeaEjemplos(uid) {
   if (!it) it = items[0] || null;
   const producto = it
     ? (lang === 'en'
-      ? `I want a post about ${it.nombre}${it.precio ? ' — it goes for ' + it.precio : ''}`
-      : `quiero un posteo de ${it.nombre}${it.precio ? ' — sale ' + it.precio : ''}`)
+      ? `I want tomorrow's post to be about ${it.nombre}`
+      : `quiero que el posteo de mañana sea de ${it.nombre}`)
     : (lang === 'en'
-      ? 'I want a post about my star product'
-      : 'quiero un posteo de mi producto estrella');
+      ? "I want tomorrow's post to be about my star product"
+      : 'quiero que el posteo de mañana sea de mi producto estrella');
   let promo = '';
   for (const p of (Array.isArray(dg.promos) ? dg.promos : [])) {
     const n = String((p && typeof p === 'object') ? (p.titulo || p.nombre || '') : (p || '')).trim();
@@ -49921,7 +49928,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1377';
+const BUILD_ID = '20261105-v1378';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
