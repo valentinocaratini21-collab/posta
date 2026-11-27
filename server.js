@@ -15748,6 +15748,43 @@ app.post('/api/admin/ads/reparar', async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: 'barrido_fallido' }); }
 });
 
+// (LOTE ADS-STATS-FONDO · 26/11) Barrido de fondo de stats: cada 20
+// minutos refresca los impulsos activos cuya lectura ya venció (la
+// misma caché horaria del GET), sin esperar a que el cliente abra la
+// pantalla de Ads — el dueño vio su aviso corriendo en Instagram y el
+// panel en cero porque nadie había abierto Ads desde que arrancó la
+// entrega. El ctx de Ads se resuelve por usuario, como en la pantalla.
+async function barridoStatsAds() {
+  const resumen = { revisadas: 0, refrescadas: 0 };
+  let filas = [];
+  try { filas = db.prepare(`SELECT * FROM ad_boosts WHERE status = 'active' AND COALESCE(meta_campaign_id, '') != '' ORDER BY id ASC LIMIT 50`).all(); } catch (e) { filas = []; }
+  const ctxPorUsuario = new Map();
+  for (const b of filas) {
+    const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+    const staleEstado = !b.meta_estado_at || (Date.now() - new Date(b.meta_estado_at + 'Z').getTime() > 3600000);
+    if (!stale && !staleEstado) continue;
+    resumen.revisadas++;
+    if (!ctxPorUsuario.has(b.user_id)) {
+      let ctxU = null;
+      try { const conn = getAdsConnection(b.user_id); if (conn && conn.suat && conn.primary_ad_account_id) ctxU = { token: conn.suat, adAccountId: conn.primary_ad_account_id }; } catch (e) {}
+      ctxPorUsuario.set(b.user_id, ctxU);
+    }
+    const antes = b.stats_updated_at || '';
+    try { await pzAdsRefrescarBoost(b, ctxPorUsuario.get(b.user_id)); } catch (e) {}
+    if ((b.stats_updated_at || '') !== antes) resumen.refrescadas++;
+  }
+  return resumen;
+}
+setInterval(() => { barridoStatsAds().catch(() => {}); }, 20 * 60 * 1000);
+
+// Disparo admin del barrido de stats (el mismo token de /api/admin/ads).
+app.post('/api/admin/ads/refrescar-stats', async (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  try { const r = await barridoStatsAds(); res.json({ ok: true, ...r }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'barrido_fallido' }); }
+});
+
 // (LOTE CIERRE-ADS · FIX 1) Reconciliación ÚNICA de las huérfanas del
 // 17/11: las campañas «Posty · Impulso u<uid> · p<post>» que quedaron
 // PAUSED en Meta sin fila local con sus ids (la creación moría en el
@@ -16865,6 +16902,54 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
 // anuncio existió en Meta y no quedó activo (activación fallida) o
 // se creó sin débito — son estados creados, no intentos. El filtro
 // va en el SQL para que el LIMIT 20 cuente solo impulsos reales.
+// (LOTE ADS-STATS-FONDO · 26/11) El refresco de UN impulso (estado
+// real + stats de Meta, con la caché horaria de siempre) extraído del
+// GET /api/ads/boosts a una sola función: la usan la pantalla al abrir
+// Y el barrido de fondo, para que los números lleguen solos sin que
+// el cliente tenga que abrir Ads.
+async function pzAdsRefrescarBoost(b, ctxStats) {
+
+  if (b.status !== 'active' || !b.meta_campaign_id) return;
+  const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+  // (LOTE ADS-DESTRABE-VERDAD) El estado REAL del aviso en Meta se
+  // refresca con el mismo ritmo horario que las stats y queda
+  // persistido (meta_estado): es la fuente de la verdad de la
+  // tarjeta. Se lee en la cuenta del cliente primero y en la de
+  // Posty después, como las stats; si ninguna lectura devuelve
+  // estado, se conserva lo persistido y la tarjeta no afirma.
+  const staleEstado = !b.meta_estado_at || (Date.now() - new Date(b.meta_estado_at + 'Z').getTime() > 3600000);
+  if (!stale && !staleEstado) return;
+  if (staleEstado) {
+    try {
+      let er = null;
+      if (ctxStats) { try { er = await metaAds.leerEstadoRealBoost({ campaignId: b.meta_campaign_id, adsetId: b.meta_adset_id || '', adId: b.meta_ad_id || '', ctx: ctxStats }); } catch (e) { er = null; } }
+      if ((!er || !er.estado) && metaAds.adsConfigured()) { try { er = await metaAds.leerEstadoRealBoost({ campaignId: b.meta_campaign_id, adsetId: b.meta_adset_id || '', adId: b.meta_ad_id || '', ctx: null }); } catch (e) { er = null; } }
+      if (er && er.estado) {
+        try { db.prepare(`UPDATE ad_boosts SET meta_estado = ?, meta_motivo = ?, meta_estado_at = datetime('now') WHERE id = ?`).run(er.estado, er.motivo || '', b.id); } catch (e) {}
+        b.meta_estado = er.estado; b.meta_motivo = er.motivo || '';
+        b.meta_estado_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      }
+    } catch (e) { /* sin lectura no hay afirmación: la verdad queda en sin_confirmar */ }
+  }
+  if (!stale) return;
+  try {
+    let s = null;
+    if (ctxStats) { try { s = await metaAds.getBoostStatsConCtx(b.meta_campaign_id, ctxStats); } catch (e) { s = null; } }
+    if (!s && metaAds.adsConfigured()) { try { s = await metaAds.getBoostStats(b.meta_campaign_id); } catch (e) { s = null; } }
+    if (s) {
+      db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, last_visitas_perfil=?, last_interacciones=?, stats_updated_at=datetime('now') WHERE id=?`)
+        .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0),
+          Number(s.visitas_perfil || 0), (s.interacciones == null ? null : Number(s.interacciones)), b.id);
+      b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
+      b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0);
+      b.last_visitas_perfil = Number(s.visitas_perfil || 0);
+      b.last_interacciones = (s.interacciones == null ? null : Number(s.interacciones));
+      b.stats_updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    }
+  } catch (e) { /* no bloquea el historial */ }
+
+}
+
 app.get('/api/ads/boosts', requireAuth, async (req, res) => {
   // (LOTE ADS-DESTRABE-VERDAD) La fila ZOMBI: quedó 'active' sin los
   // ids de Meta (boost 24: el aviso nunca corrió y el panel contaba
@@ -16905,44 +16990,7 @@ app.get('/api/ads/boosts', requireAuth, async (req, res) => {
   const ctxStats = (connStats && connStats.suat && connStats.primary_ad_account_id)
     ? { token: connStats.suat, adAccountId: connStats.primary_ad_account_id } : null;
   for (const b of boosts) {
-    if (b.status !== 'active' || !b.meta_campaign_id) continue;
-    const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
-    // (LOTE ADS-DESTRABE-VERDAD) El estado REAL del aviso en Meta se
-    // refresca con el mismo ritmo horario que las stats y queda
-    // persistido (meta_estado): es la fuente de la verdad de la
-    // tarjeta. Se lee en la cuenta del cliente primero y en la de
-    // Posty después, como las stats; si ninguna lectura devuelve
-    // estado, se conserva lo persistido y la tarjeta no afirma.
-    const staleEstado = !b.meta_estado_at || (Date.now() - new Date(b.meta_estado_at + 'Z').getTime() > 3600000);
-    if (!stale && !staleEstado) continue;
-    if (staleEstado) {
-      try {
-        let er = null;
-        if (ctxStats) { try { er = await metaAds.leerEstadoRealBoost({ campaignId: b.meta_campaign_id, adsetId: b.meta_adset_id || '', adId: b.meta_ad_id || '', ctx: ctxStats }); } catch (e) { er = null; } }
-        if ((!er || !er.estado) && metaAds.adsConfigured()) { try { er = await metaAds.leerEstadoRealBoost({ campaignId: b.meta_campaign_id, adsetId: b.meta_adset_id || '', adId: b.meta_ad_id || '', ctx: null }); } catch (e) { er = null; } }
-        if (er && er.estado) {
-          try { db.prepare(`UPDATE ad_boosts SET meta_estado = ?, meta_motivo = ?, meta_estado_at = datetime('now') WHERE id = ?`).run(er.estado, er.motivo || '', b.id); } catch (e) {}
-          b.meta_estado = er.estado; b.meta_motivo = er.motivo || '';
-          b.meta_estado_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        }
-      } catch (e) { /* sin lectura no hay afirmación: la verdad queda en sin_confirmar */ }
-    }
-    if (!stale) continue;
-    try {
-      let s = null;
-      if (ctxStats) { try { s = await metaAds.getBoostStatsConCtx(b.meta_campaign_id, ctxStats); } catch (e) { s = null; } }
-      if (!s && metaAds.adsConfigured()) { try { s = await metaAds.getBoostStats(b.meta_campaign_id); } catch (e) { s = null; } }
-      if (s) {
-        db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, last_clicks=?, last_conversaciones=?, last_visitas_perfil=?, last_interacciones=?, stats_updated_at=datetime('now') WHERE id=?`)
-          .run(s.spend_cents, s.reach, s.impressions, Number(s.clicks || 0), Number(s.conversaciones || 0),
-            Number(s.visitas_perfil || 0), (s.interacciones == null ? null : Number(s.interacciones)), b.id);
-        b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
-        b.last_clicks = Number(s.clicks || 0); b.last_conversaciones = Number(s.conversaciones || 0);
-        b.last_visitas_perfil = Number(s.visitas_perfil || 0);
-        b.last_interacciones = (s.interacciones == null ? null : Number(s.interacciones));
-        b.stats_updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      }
-    } catch (e) { /* no bloquea el historial */ }
+    await pzAdsRefrescarBoost(b, ctxStats);
   }
   // (LOTE ADS-ESTRATÉGICOS) El resultado que se le muestra al cliente
   // es el de SU objetivo (conversaciones si el objetivo es de mensajes,
@@ -49771,7 +49819,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1361';
+const BUILD_ID = '20261105-v1362';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
