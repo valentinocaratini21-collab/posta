@@ -21380,6 +21380,13 @@ function subirIdeaHoraCorta(isoUtc, tz, lang) {
 // servicio, el ejemplo de producto va EN LA FORMA, sin nombre; el de
 // fecha usa una promo real si el fundamento la trae y, si no, la
 // forma del aniversario, sin fecha ni descuento inventados.
+// (LOTE SUBIR-EJEMPLO-SIMPLE · dueño 26/11: «el ejemplo no se
+// entiende. poner algo mas simple») Los ejemplos se acortaron a UNA
+// frase llana, como la escribiría el dueño: afuera las coletillas
+// de brief («que se vea bien de cerca, como para venderlo esta
+// semana», «avisalo desde unos días antes, con lo que hacemos ese
+// día») y la forma sin producto dejó de ser una instrucción sobre
+// el mensaje («con su precio y para cuándo lo quiero»).
 function subirIdeaEjemplos(uid) {
   const lang = langOfUser(uid) === 'en' ? 'en' : 'es';
   const dg = digestForUser(uid) || {};
@@ -21400,11 +21407,11 @@ function subirIdeaEjemplos(uid) {
   if (!it) it = items[0] || null;
   const producto = it
     ? (lang === 'en'
-      ? `I want a post about ${it.nombre}${it.precio ? ' — it goes for ' + it.precio : ''} — show it up close, like to sell it this week`
-      : `quiero un posteo de ${it.nombre}${it.precio ? ' — sale ' + it.precio : ''} — que se vea bien de cerca, como para venderlo esta semana`)
+      ? `I want a post about ${it.nombre}${it.precio ? ' — it goes for ' + it.precio : ''}`
+      : `quiero un posteo de ${it.nombre}${it.precio ? ' — sale ' + it.precio : ''}`)
     : (lang === 'en'
-      ? 'I want a post about my star product — with its price and when I want it out'
-      : 'quiero un posteo de mi producto estrella — con su precio y para cuándo lo quiero');
+      ? 'I want a post about my star product'
+      : 'quiero un posteo de mi producto estrella');
   let promo = '';
   for (const p of (Array.isArray(dg.promos) ? dg.promos : [])) {
     const n = String((p && typeof p === 'object') ? (p.titulo || p.nombre || '') : (p || '')).trim();
@@ -21412,11 +21419,11 @@ function subirIdeaEjemplos(uid) {
   }
   const fecha = promo
     ? (lang === 'en'
-      ? `we have ${promo} coming up — I want a post announcing it a few days ahead`
-      : `se viene ${promo} — quiero un posteo que lo avise unos días antes`)
+      ? `we have ${promo} coming up — I want a post to announce it`
+      : `se viene ${promo} — quiero un posteo para avisarlo`)
     : (lang === 'en'
-      ? "for our anniversary I want a special post — announce it a few days ahead, with what we're doing that day"
-      : 'para nuestro aniversario quiero un posteo especial — avisalo desde unos días antes, con lo que hacemos ese día');
+      ? "for our anniversary I want a special post"
+      : 'para nuestro aniversario quiero un posteo especial');
   return { producto, fecha };
 }
 // (LOTE RESPUESTA-HILO-IDEA) El hilo de UNA idea, en orden de
@@ -49874,7 +49881,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1370';
+const BUILD_ID = '20261105-v1371';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
