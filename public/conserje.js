@@ -197,7 +197,7 @@
     var base = ((vista && vista.clientes) || []).filter(pasaFiltro);
     var cs = base.filter(function (f) {
       if (!q) return true;
-      return (f.business_name || '').toLowerCase().indexOf(q) >= 0 || (f.ig_username || '').toLowerCase().indexOf(q) >= 0;
+      return (f.business_name || '').toLowerCase().indexOf(q) >= 0 || (f.ig_username || '').toLowerCase().indexOf(q) >= 0 || (f.email || '').toLowerCase().indexOf(q) >= 0;
     });
     // (LOTE CONSERJE-PRODUCTO-ACCION) La lista se ordena por
     // urgencia: pedido vencido, hoy sin posteo, semana incompleta,
@@ -596,7 +596,7 @@
   function productoHTML(j, feed) {
     var en = j.lang === 'en';
     function L(es, enT) { return en ? enT : es; }
-    var p = j, h = p.hoy;
+    var p = j, h = p.hoy || {};
     var ini = iniciales(j.business_name);
     var grad = avaGrad(j.user_id);
     // --- la tarjeta del día ---
@@ -709,7 +709,7 @@
       return '<li>' + ic + '<span><b>' + esc(pr.texto) + '</b>' + (pr.detalle ? ' — ' + esc(pr.detalle) : '') + '</span></li>';
     }).join('');
     // --- su Instagram real ---
-    var ig = p.ig_real, igBody;
+    var ig = p.ig_real || {}, igBody;
     if (ig.estado === 'confirma') {
       igBody = '<div class="mkigrow">' + (ig.ultimo_real && ig.ultimo_real.img ? '<img class="mkigth" src="' + esc(ig.ultimo_real.img) + '" alt="">' : '')
         + '<div><div class="mkigline"><span class="ok">✔</span> ' + L('Su Instagram confirma el último posteo', 'His Instagram confirms the latest post') + (ig.ultimo_producto ? ': <b>«' + esc(ig.ultimo_producto.titulo || '') + '»</b>' : '') + '</div>'
@@ -1307,7 +1307,7 @@
     // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido viaja en el
     // pedido: la ficha lo incluye aunque no esté entre los 12 últimos.
     return api('/api/admin/conserje/vista/cliente?user_id=' + uid + (postId ? '&post_id=' + Number(postId) : '')).then(function (j) {
-      if (j && j.ok) { cliente = j; renderRoster(); renderCentro(); renderMovil(); return; }
+      if (j && j.ok) { cliente = j; try { renderRoster(); renderCentro(); renderMovil(); } catch (e) { toast('La ficha se cargó pero no se pudo mostrar.', 'err'); } return; }
       // (LOTE CONSERJE-BOTONES · F5) La ficha que no carga AVISA —
       // nunca más el silencio que dejaba la ficha vieja (o ninguna)
       // como si el toque no hubiera hecho nada: con el token vencido
