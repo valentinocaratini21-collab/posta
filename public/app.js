@@ -3563,7 +3563,55 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1368';
+const PZ_BUILD = '20261105-v1369';
+
+// (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
+// es por hash: una sesión abierta NUNCA recarga la página, así que
+// sin esto cada arreglo llega recién cuando el dueño cierra y
+// reabre la app (pasó hoy: la cabecera ya estaba corregida en el
+// servidor y su pantalla seguía con la versión de antes). Ahora la
+// app compara su build con el vivo al volver a primer plano y cada
+// 5 minutos; si hay uno nuevo, recarga UNA sola vez por build — y
+// nunca si el usuario está escribiendo un mensaje.
+(function pzAutoUpdate() {
+  try {
+    if (typeof window === 'undefined' || typeof fetch !== 'function') return;
+    var corriendo = (typeof PZ_BUILD !== 'undefined') ? String(PZ_BUILD) : '';
+    if (!corriendo) return;
+    var chequeando = false;
+    function hayTextoEnCurso() {
+      try {
+        var a = document.activeElement;
+        if (!a) return false;
+        var tag = (a.tagName || '').toLowerCase();
+        if (tag === 'textarea') return !!String(a.value || '').trim();
+        if (tag === 'input') { var tp = (a.type || 'text').toLowerCase(); return (tp === 'text' || tp === 'search' || tp === '') && !!String(a.value || '').trim(); }
+        if (a.isContentEditable) return !!String(a.textContent || '').trim();
+      } catch (e) {}
+      return false;
+    }
+    function chequear() {
+      if (chequeando || document.hidden) return;
+      chequeando = true;
+      fetch('/api/version', { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          chequeando = false;
+          try {
+            var vivo = (j && j.build) ? String(j.build) : '';
+            if (!vivo || vivo === corriendo) return;
+            if (hayTextoEnCurso()) return;
+            if (sessionStorage.getItem('pzAutoReload') === vivo) return;
+            sessionStorage.setItem('pzAutoReload', vivo);
+            location.reload();
+          } catch (e) {}
+        })
+        .catch(function () { chequeando = false; });
+    }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) chequear(); });
+    setInterval(chequear, 5 * 60 * 1000);
+  } catch (e) {}
+})();
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
