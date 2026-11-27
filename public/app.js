@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1374';
+const PZ_BUILD = '20261105-v1375';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -23982,10 +23982,21 @@ function pzAdsBilleteraBloqueHTML(conTotal) {
   const sim = moneda === 'USD' ? 'US$' : '$';
   const saldo = pzBoostSaldo();
   const open = pzAdsFilaAbierta === 'billetera';
+  const monedaWallet = String((s.billetera && s.billetera.currency) || 'USD');
+  const coincide = pzBoostEsMP() ? monedaWallet === 'ARS' : monedaWallet === 'USD';
+  // (LOTE ADS-BILLETERA-DISPONIBLE) Lo que ya está corriendo se
+  // dice en su línea: el número grande de la cabecera ya es el
+  // DISPONIBLE (pzBoostSaldo neteado) y esta línea muestra lo
+  // apartado en el impulso activo — saldo disponible + apartado =
+  // el saldo entero, sin que nada se esconda. Solo con la moneda
+  // de la billetera coincidiendo con la del riel (el mismo
+  // criterio de la barra: comparar cruzado sería mentir).
+  const comp = pzBoostComprometido();
+  const compHTML = (comp > 0 && coincide)
+    ? `<div class="pz-ads-bill-sub"><span>${esc(sim + pzBoostFmtMonto(comp) + (en ? ' in your active boost' : ' en tu impulso activo'))}</span></div>`
+    : '';
   let barraHTML = '';
   if (conTotal) {
-    const monedaWallet = String((s.billetera && s.billetera.currency) || 'USD');
-    const coincide = pzBoostEsMP() ? monedaWallet === 'ARS' : monedaWallet === 'USD';
     if (coincide) {
       const montos = pzBoostMontos();
       const mSel = montos.includes(Number(s.selMonto)) ? Number(s.selMonto) : (montos.length > 1 ? montos[1] : montos[0]);
@@ -24000,7 +24011,7 @@ function pzAdsBilleteraBloqueHTML(conTotal) {
     }
   }
   const det = open ? `<div class="pz-ads-bill-det">${pzAdsBilleteraHTML()}</div>` : '';
-  return `<div class="pz-ads-bill"><button type="button" class="pz-ads-bill-head" onclick="pzAdsFilaToggle('billetera')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-bill-k">${esc(en ? 'YOUR WALLET' : 'TU BILLETERA')}</span><span class="pz-ads-bill-saldo">${esc(sim + pzBoostFmtMonto(saldo))}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${barraHTML}${det}</div>`;
+  return `<div class="pz-ads-bill"><button type="button" class="pz-ads-bill-head" onclick="pzAdsFilaToggle('billetera')" aria-expanded="${open ? 'true' : 'false'}"><span class="pz-ads-bill-k">${esc(en ? 'YOUR WALLET' : 'TU BILLETERA')}</span><span class="pz-ads-bill-saldo">${esc(sim + pzBoostFmtMonto(saldo))}<span class="pz-ads-row-ch">${open ? '▾' : '›'}</span></span></button>${compHTML}${barraHTML}${det}</div>`;
 }
 
 // (LOTE ADS-THUMB) La miniatura de un posteo en las superficies de
@@ -24641,11 +24652,34 @@ function pzBoostNewState() {
   return { elegibles: [], billetera: null, adsReady: null, motivoGate: '', connectUrl: '', conexion: null, rielAds: '', boostHabilitado: undefined, adsPermiso: undefined, conversionPendiente: undefined, selId: '', selMonto: 50, selDias: 7, selPost: null, montosAbierto: false };
 }
 
+// (LOTE ADS-BILLETERA-DISPONIBLE) El saldo crudo NO es lo que se
+// puede gastar: lo comprometido en el impulso activo (pauta +
+// gestión de las filas 'active') sigue apartado hasta que termina.
+// El servidor manda comprometido_cents y disponible_cents ya
+// neteados en GET /api/ads/billetera; acá el disponible se lee
+// contra el saldo VIGENTE del estado — las cargas parchan
+// balance_cents en el lugar y la cifra no puede quedar vieja — y
+// sin los campos nuevos (despliegue a mitad de camino) manda el
+// saldo de siempre.
+function pzBoostDisponibleCents() {
+  const b = (pzBoostState && pzBoostState.billetera) || {};
+  const bal = Number(b.balance_cents || 0);
+  if (b.disponible_cents != null && b.comprometido_cents != null) return Math.max(0, bal - Math.max(0, Number(b.comprometido_cents || 0)));
+  if (b.disponible_cents != null) return Math.max(0, Number(b.disponible_cents || 0));
+  return Math.max(0, bal);
+}
+// Lo apartado en el impulso activo, en la moneda de la billetera
+// (entera, como la pinta pzBoostSaldo): para la línea del bloque.
+function pzBoostComprometido() {
+  const b = (pzBoostState && pzBoostState.billetera) || {};
+  return Math.max(0, Math.floor(Number(b.comprometido_cents || 0) / 100));
+}
+
 function pzBoostSaldoUSD() {
   const s = pzBoostState || {};
   const b = s.billetera || {};
   if ((b.currency || 'USD') !== 'USD') return 0;
-  return Math.floor(Number(b.balance_cents || 0) / 100);
+  return Math.floor(pzBoostDisponibleCents() / 100);
 }
 
 // (LOTE RIEL-SUSCRIPCION v878) El riel de cobro es el de la suscripción
@@ -24674,8 +24708,10 @@ function pzBoostSaldo() {
   const s = pzBoostState || {};
   const b = s.billetera || {};
   // En MP el saldo es en pesos (la billetera ARS es la viva); si no, el
-  // saldo en USD de siempre (0 si la billetera es ARS vieja).
-  if (pzBoostEsMP()) return Math.floor(Number(b.balance_cents || 0) / 100);
+  // saldo en USD de siempre (0 si la billetera es ARS vieja). En ambos
+  // rieles es el DISPONIBLE (saldo menos lo comprometido en el impulso
+  // activo), nunca el crudo: es la plata que se puede gastar hoy.
+  if (pzBoostEsMP()) return Math.floor(pzBoostDisponibleCents() / 100);
   return pzBoostSaldoUSD();
 }
 function pzBoostMinTopup() {
@@ -25517,7 +25553,10 @@ function pzAdsDiferencia() {
   const selD = Number(s.selMonto);
   const pauta = montosD.includes(selD) ? selD : (montosD.length > 1 ? montosD[1] : montosD[0]);
   const total = pzBoostTotal(pauta);
-  const saldo = Math.floor(Number(s.billetera.balance_cents || 0) / 100);
+  // (LOTE ADS-BILLETERA-DISPONIBLE) La falta se mide contra el
+  // DISPONIBLE, no contra el saldo crudo: lo comprometido en el
+  // impulso activo no cubre un impulso nuevo.
+  const saldo = Math.floor(pzBoostDisponibleCents() / 100);
   const falta = total - saldo;
   if (!(falta > 0)) return null;
   return { falta, total, saldo, esMP, pauta, fee: total - pauta };

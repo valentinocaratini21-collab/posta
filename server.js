@@ -14408,6 +14408,14 @@ function adWalletMove(userId, amountCents, kind, ref, note) {
     throw e;
   }
 }
+// (LOTE ADS-BILLETERA-DISPONIBLE) Reparación única del fee del
+// impulso 25 al arrancar (idempotente, dos guardas: ver
+// repararFeeImpulso25 en ads-billetera.js). El movimiento va por
+// adWalletMove con kind 'boost_fee': saldo y ledger consistentes.
+try {
+  const rep25 = adsBilletera.repararFeeImpulso25(db, (uid, cents, ref, note) => adWalletMove(uid, cents, 'boost_fee', ref, note));
+  if (rep25 && rep25.ok && (rep25.debito || rep25.filaUpd)) console.log('[ads] reparación fee impulso 25:', JSON.stringify(rep25));
+} catch (e) { console.error('[ads] reparación fee impulso 25:', e.message); }
 // País del negocio (para el targeting de la pauta): UY si el plan es UY, si no AR
 function adCountry(userId) {
   try {
@@ -14832,6 +14840,12 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
     const uid = req.session.userId;
     const tid = pzAdsTitularId(uid);
     const w = getAdWallet(tid);
+    // (LOTE ADS-BILLETERA-DISPONIBLE) Disponible = saldo − lo
+    // comprometido en impulsos ACTIVOS del titular (pauta + gestión
+    // de cada fila 'active'): el saldo crudo solo NO es gastable
+    // mientras un impulso corre. Solo lectura: el ledger no se toca.
+    const comprometidoCents = adsBilletera.comprometidoEnActivos(db, tid);
+    const disponibleCents = adsBilletera.saldoDisponibleCents(w.balance_cents, comprometidoCents);
     let movs = [];
     try { movs = db.prepare(`SELECT kind, amount_cents, balance_after, ref, note, created_at FROM ad_transactions WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(tid); } catch (e) { movs = []; }
     let adsPermiso = null;
@@ -14862,7 +14876,7 @@ app.get('/api/ads/billetera', requireAuth, async (req, res) => {
         ]);
       }
     } catch (e) { tarjeta = null; }
-    res.json({ ok: true, balance_cents: w.balance_cents, currency: w.currency,
+    res.json({ ok: true, balance_cents: w.balance_cents, comprometido_cents: comprometidoCents, disponible_cents: disponibleCents, currency: w.currency,
       montos_usd: adsBilletera.MONTOS_CARGA_USD, dias: adsBilletera.DIAS_BILLETERA,
       // (LOTE RIEL-SUSCRIPCION v878) El riel de cobro y los montos ARS
       // (pesos enteros): la hoja y la billetera muestran la moneda del
@@ -14923,7 +14937,14 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
       let esDiferenciaARS = false;
       if (difReq && difReq.montoImpulsoARS != null) {
         const wDif = getAdWallet(uid);
-        const faltaCents = Math.round(Number(difReq.montoImpulsoARS) * 100) - (wDif.currency === 'ARS' ? Number(wDif.balance_cents || 0) : 0);
+        // (LOTE ADS-BILLETERA-DISPONIBLE · cierre) La falta se mide
+        // contra el DISPONIBLE (saldo − comprometido en impulsos
+        // activos del mismo usuario de la billetera), la misma cifra
+        // que el cliente usa para ofrecer «cargar lo que falta»:
+        // contra el saldo crudo, el servidor pedía MENOS que la
+        // pantalla cuando un impulso ya apartó plata — y la carga
+        // ofrecida moría en diferencia_invalida (409).
+        const faltaCents = Math.round(Number(difReq.montoImpulsoARS) * 100) - (wDif.currency === 'ARS' ? adsBilletera.saldoDisponibleCents(wDif.balance_cents, adsBilletera.comprometidoEnActivos(db, uid)) : 0);
         esDiferenciaARS = wDif.currency === 'ARS'
           && adsBilletera.validarPresupuestoARS(Number(difReq.montoImpulsoARS))
           && faltaCents > 0 && faltaCents % 100 === 0 && montoARS === faltaCents / 100;
@@ -14992,7 +15013,10 @@ app.post('/api/ads/billetera/cargar', requireAuth, requireTrialValid, express.js
       const objetivoCents = adsBilletera.validarMontoUSD(montoImpUSD)
         ? Math.round(montoImpUSD * 100)
         : ((adsFee.desgloseDesdeTotal(Math.round(montoImpUSD * 100)) || {}).totalCents || 0);
-      const faltaCents = objetivoCents - (wDif.currency === 'USD' ? Number(wDif.balance_cents || 0) : 0);
+      // (LOTE ADS-BILLETERA-DISPONIBLE · cierre) Ídem rama ARS: la
+      // falta va contra el DISPONIBLE, no contra el saldo crudo —
+      // cliente y servidor recomputan el mismo número.
+      const faltaCents = objetivoCents - (wDif.currency === 'USD' ? adsBilletera.saldoDisponibleCents(wDif.balance_cents, adsBilletera.comprometidoEnActivos(db, uid)) : 0);
       esDiferenciaUSD = wDif.currency === 'USD'
         && objetivoCents > 0
         && faltaCents > 0 && faltaCents % 100 === 0 && montoUSD === faltaCents / 100;
@@ -16373,7 +16397,13 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       },
       debitar: async (d) => {
         try {
-          const cents = esARS ? d.montoARS * 100 : d.montoUSD * 100;
+          // (LOTE ADS-BILLETERA-DISPONIBLE · regla del dueño 27/11)
+          // USD: el débito es pauta + gestión JUNTAS en un solo
+          // movimiento 'boost_usd' — la gestión ya no va a la
+          // tarjeta cuando paga la billetera (la costura del fee
+          // queda solo para el cobro directo: ver registrar). ARS:
+          // el monto ya es el total, con la gestión adentro.
+          const cents = esARS ? d.montoARS * 100 : d.montoUSD * 100 + (Number(d.feeCents) || 0);
           const after = adWalletMove(uid, -cents, esARS ? 'boost_ars' : 'boost_usd', d.ref, esARS ? `Impulso posteo ${d.posteoId} ${fmtARS(d.montoARS * 100)} x ${diasFinal} días` : `Impulso posteo ${d.posteoId} $${d.montoUSD} x ${diasFinal} días`);
           return { ok: true, saldoNuevo: after };
         } catch (e) { return { ok: false, motivo: 'saldo_insuficiente' }; }
@@ -16395,7 +16425,10 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
       registrar: async (rec) => {
         const monedaRec = esARS ? 'ARS' : 'USD';
         const budgetRec = esARS ? rec.montoARS * 100 : rec.montoUSD * 100;
-        const feeRec = esARS ? (Number(rec.feeCents) || 0) : 0;
+        // (LOTE ADS-BILLETERA-DISPONIBLE) La gestión queda registrada
+        // en la fila en AMBOS rieles (antes el USD guardaba 0 y el
+        // fee vivía solo en ad_fees): es el 10% que el módulo calculó.
+        const feeRec = Number(rec.feeCents) || 0;
         if (rec.tipo === 'exito') {
           db.prepare(`INSERT INTO ad_boosts
             (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, meta_campaign_id, meta_adset_id, meta_ad_id, objective, duration_days, objetivo, audiencia_json)
@@ -16407,7 +16440,14 @@ app.post('/api/ads/billetera/impulsar', requireAuth, requireTrialValid, express.
           // sus ids de Meta. Solo la rama USD (el fee de la decisión
           // es sobre la pauta en dólares) y solo con campaña real. Es
           // asíncrona y nunca frena ni rompe la respuesta del impulso.
-          if (!esARS && rec.campaignId) {
+          // (LOTE ADS-BILLETERA-DISPONIBLE · regla del dueño 27/11)
+          // La costura queda SOLO para el cobro directo: ahí la
+          // billetera no se tocó y la gestión va a la tarjeta como
+          // siempre. Cuando pagó la billetera, la gestión ya salió
+          // en el mismo movimiento 'boost_usd' (pauta + gestión
+          // juntas en debitar): disparar también la costura la
+          // cobraría dos veces.
+          if (!esARS && rec.campaignId && cobroDirectoUSD) {
             feeImpulsoTrasActivacion(uid, {
               postId: rec.posteoId, campaignId: rec.campaignId, adsetId: rec.adsetId || '',
               pautaCents: rec.spendCents, moneda: 'USD',
@@ -49881,7 +49921,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1374';
+const BUILD_ID = '20261105-v1375';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

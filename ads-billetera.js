@@ -282,7 +282,15 @@ async function impulsarConSaldo(input) {
   //   ANTES de gastar ('conversion_pendiente').
   // - ARS: el gasto ya es pesos — NO hay conversión que definir. El fee
   //   de gestión del 10% es del flujo ARS (adSplit, inyectado como
-  //   `splitARS`); el flujo USD no lleva fee (spec aprobado del flujo USD).
+  //   `splitARS`).
+  // (LOTE ADS-BILLETERA-DISPONIBLE · regla del dueño 27/11: «cuando
+  // se manda un ad, se descuenta de la billetera y se manda el 10% a
+  // Posty») El flujo USD también lleva su gestión: 10% de la pauta,
+  // redondeo al centavo (el cálculo de ads-fee.js), y sale de la
+  // BILLETERA junto con la pauta en el mismo débito — reemplaza al
+  // spec anterior, donde el fee USD no existía en este módulo e iba
+  // a la tarjeta por la costura. La costura queda solo para el
+  // cobro directo (la billetera no se toca en ese camino).
   let spendCents = 0;
   let feeCents = 0;
   if (esARS) {
@@ -299,6 +307,7 @@ async function impulsarConSaldo(input) {
     if (!(typeof spendCents === 'number' && Number.isFinite(spendCents) && spendCents > 0)) {
       return no('conversion_pendiente');
     }
+    feeCents = Math.round(montoUSD * 10); // 10% de la pauta, en centavos
   }
   const ref = esARS
     ? refDebitoBoostARS({ clienteId, posteoId, montoARS, fecha })
@@ -317,7 +326,13 @@ async function impulsarConSaldo(input) {
   // (v888) Con cobro directo no hay saldo que mirar: la billetera no se
   // toca (el saldo viejo en pesos queda como crédito en pesos).
   const cobroDirecto = !esARS && typeof cobrarDirecto === 'function';
-  if (!cobroDirecto && !(typeof saldoCents === 'number' && saldoCents >= monto * 100)) {
+  // (LOTE ADS-BILLETERA-DISPONIBLE · regla del dueño 27/11) El saldo
+  // tiene que cubrir pauta + gestión JUNTAS: es el total que la
+  // pantalla muestra (pzBoostTotal) y el total que se debita al
+  // crear el anuncio. En ARS el monto YA es el total (la gestión va
+  // dentro del presupuesto); en USD la gestión se suma acá.
+  const necesarioCents = esARS ? monto * 100 : monto * 100 + feeCents;
+  if (!cobroDirecto && !(typeof saldoCents === 'number' && saldoCents >= necesarioCents)) {
     return no('saldo_insuficiente');
   }
   if (typeof crearAnuncio !== 'function' || (typeof debitar !== 'function' && !cobroDirecto)) {
@@ -351,7 +366,7 @@ async function impulsarConSaldo(input) {
       // 'anuncio_fallido' y tampoco se debita nada.
       try {
         await registrar({
-          tipo: anuncio.motivo, posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+          tipo: anuncio.motivo, posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD, feeCents }), ref,
           anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
           adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
           error: anuncio.error || (anuncio.motivo === 'activacion_sin_dato' ? 'activación sin dato' : 'activación fallida'),
@@ -365,7 +380,7 @@ async function impulsarConSaldo(input) {
       // registrar del servidor existía sin que nadie la alimentara.
       try {
         await registrar({
-          tipo: 'error', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+          tipo: 'error', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD, feeCents }), ref,
           anuncioId: null, campaignId: null, adsetId: null, adId: null, spendCents,
           error: (anuncio && anuncio.error) || 'Meta rechazó la creación del anuncio',
         });
@@ -384,13 +399,13 @@ async function impulsarConSaldo(input) {
   try {
     deb = cobroDirecto
       ? await cobrarDirecto({ clienteId, montoUSD, ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null })
-      : await debitar({ clienteId, ...(esARS ? { montoARS } : { montoUSD }), ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null });
+      : await debitar({ clienteId, ...(esARS ? { montoARS } : { montoUSD, feeCents }), ref, campaignId: anuncio.campaignId || anuncio.anuncioId || null });
   } catch (e) { deb = { ok: false, motivo: 'saldo_insuficiente' }; }
   if (!deb || !deb.ok) {
     if (typeof registrar === 'function') {
       try {
         await registrar({
-          tipo: 'debito_fallido', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+          tipo: 'debito_fallido', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD, feeCents }), ref,
           anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
           adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
         });
@@ -401,14 +416,14 @@ async function impulsarConSaldo(input) {
   if (typeof registrar === 'function') {
     try {
       await registrar({
-        tipo: 'exito', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD }), ref,
+        tipo: 'exito', posteoId, ...(esARS ? { montoARS, feeCents } : { montoUSD, feeCents }), ref,
         anuncioId: anuncio.anuncioId || null, campaignId: anuncio.campaignId || null,
         adsetId: anuncio.adsetId || null, adId: anuncio.adId || null, spendCents,
       });
     } catch (e) { /* el registro nunca tapa un éxito real */ }
   }
   return {
-    ok: true, anuncioId: anuncio.anuncioId || null, posteoId, ...(esARS ? { montoARS } : { montoUSD }),
+    ok: true, anuncioId: anuncio.anuncioId || null, posteoId, ...(esARS ? { montoARS } : { montoUSD }), feeCents,
     dias: DIAS_BILLETERA, saldoNuevo: (deb.saldoNuevo != null ? deb.saldoNuevo : null), ref,
   };
 }
@@ -549,6 +564,105 @@ function setAutoTopup(db, userId, on) {
   return v;
 }
 
+// (LOTE ADS-BILLETERA-DISPONIBLE) El saldo crudo de la billetera NO
+// es lo disponible: hay plata que ya está comprometida en impulsos
+// activos y todavía no salió de la billetera. El ledger no se toca
+// para mirar (ningún débito nuevo nace de esta lectura): el neteo
+// es de LECTURA, para que el estado que ve el cliente diga la
+// verdad. La invariante (decisión del dueño 27/11):
+//
+//   disponible = saldo − Σ (lo debido por impulso activo − lo que
+//                           ya salió de la billetera por ese impulso)
+//
+// - Lo debido: USD = budget + fee (la gestión va APARTE de la
+//   pauta); ARS = budget (la gestión ya va DENTRO del presupuesto,
+//   adSplit).
+// - Lo que ya salió se lee del ledger: el débito del riel billetera
+//   ('boost_usd'/'boost_ars', cuyo ref nombra posteo y día —
+//   refDebitoBoost / refDebitoBoostARS — y se aparea con la fila
+//   creada ese día) y el débito de gestión 'boost_fee:<id>', que
+//   nombra la fila exacta.
+// - Un impulso SIN ningún débito asociado no compromete la
+//   billetera: su plata nunca fue de la billetera (riel del
+//   cliente: Meta le cobra directo al cliente; cobro directo y
+//   destacado: la tarjeta; caminos de operador). Solo compromete
+//   el impulso activo con débito PARCIAL — el caso del impulso 25:
+//   la reparación le debitó la gestión y su pauta quedó
+//   comprometida en la billetera por decisión del dueño.
+function comprometidoEnActivos(db, userId) {
+  let boosts = [];
+  try {
+    boosts = db.prepare(`SELECT id, post_id, budget_cents, fee_cents, currency, created_at FROM ad_boosts WHERE user_id = ? AND status = 'active'`).all(userId);
+  } catch (e) { return 0; }
+  if (!boosts.length) return 0;
+  let txs = [];
+  try {
+    txs = db.prepare(`SELECT kind, amount_cents, ref FROM ad_transactions WHERE user_id = ? AND amount_cents < 0 AND kind IN ('boost_usd', 'boost_ars', 'boost_fee')`).all(userId);
+  } catch (e) { txs = []; }
+  const porBoost = new Map();
+  const sumar = (bid, cents) => porBoost.set(bid, (porBoost.get(bid) || 0) + cents);
+  for (const b of boosts) {
+    const dia = String(b.created_at || '').slice(0, 10);
+    for (const tx of txs) {
+      const ref = String(tx.ref || '');
+      if (tx.kind === 'boost_fee') {
+        if (ref === `boost_fee:${b.id}`) sumar(b.id, -Number(tx.amount_cents || 0));
+      } else if (dia && ref.startsWith(`${tx.kind}:u${userId}:p${b.post_id}:`) && ref.endsWith(`:${dia}`)) {
+        sumar(b.id, -Number(tx.amount_cents || 0));
+      }
+    }
+  }
+  let total = 0;
+  for (const b of boosts) {
+    const deb = porBoost.get(b.id) || 0;
+    if (!(deb > 0)) continue; // sin débito asociado: no es plata de la billetera
+    const debido = b.currency === 'ARS'
+      ? Number(b.budget_cents || 0)
+      : Number(b.budget_cents || 0) + Number(b.fee_cents || 0);
+    total += Math.max(0, debido - deb);
+  }
+  return total;
+}
+function saldoDisponibleCents(balanceCents, comprometidoCents) {
+  return Math.max(0, Number(balanceCents || 0) - Math.max(0, Number(comprometidoCents || 0)));
+}
+
+// (LOTE ADS-BILLETERA-DISPONIBLE · reparación ÚNICA del impulso 25)
+// El impulso 25 (posteo 744) se creó el 25/11 por fuera del riel de
+// billetera, durante la reparación de Ads: quedó corriendo con
+// fee_cents = 0 y la gestión de Posty (10% de su pauta) nunca se
+// cobró por ningún camino. Decisión del dueño (27/11): «esos 2
+// dólares deberían haber ido para Posty» — la gestión sale de la
+// billetera del titular, como sale todo impulso de esta cuenta.
+// Dos pasos idempotentes, cada uno con su propia guarda: (1) el
+// débito 'boost_fee' con ref 'boost_fee:25' vía el mover inyectado
+// (en el servidor es adWalletMove: saldo + ledger en UNA
+// transacción); (2) fee_cents = gestión en la fila. Si el proceso
+// muere entre los dos, el próximo arranque completa el que falte;
+// con los dos hechos, nunca vuelve a tocar nada. La gestión se
+// calcula de la pauta de la fila: 10%, redondeo al centavo, el
+// mismo cálculo de ads-fee.js (desgloseFee).
+function repararFeeImpulso25(db, mover) {
+  let fila = null;
+  try { fila = db.prepare('SELECT id, user_id, post_id, budget_cents, fee_cents FROM ad_boosts WHERE id = 25').get(); } catch (e) { return { ok: false, motivo: 'sin_lectura' }; }
+  if (!fila) return { ok: false, motivo: 'sin_fila' };
+  const gestion = Math.round(Number(fila.budget_cents || 0) * 10 / 100);
+  if (!(gestion > 0)) return { ok: false, motivo: 'sin_gestion' };
+  let tx = null;
+  try { tx = db.prepare(`SELECT id FROM ad_transactions WHERE user_id = ? AND kind = 'boost_fee' AND ref = 'boost_fee:25'`).get(fila.user_id); } catch (e) { tx = null; }
+  let debito = false;
+  if (!tx) {
+    mover(fila.user_id, -gestion, 'boost_fee:25', `Gestión de Posty · impulso posteo ${fila.post_id}`);
+    debito = true;
+  }
+  let filaUpd = false;
+  if (Number(fila.fee_cents || 0) !== gestion) {
+    db.prepare('UPDATE ad_boosts SET fee_cents = ? WHERE id = 25').run(gestion);
+    filaUpd = true;
+  }
+  return { ok: true, debito, filaUpd, gestion };
+}
+
 // (LOTE BILLETERA-APPLE-PAY) Ref de la carga con Apple Pay: espacio
 // propio (carga_applepay_), distinto del de la carga con tarjeta guardada
 // (carga_) y del de MP (adtopup_). El `unico` es el sello de tiempo en
@@ -621,4 +735,7 @@ module.exports = {
   feedParaAds,
   getAutoTopup,
   setAutoTopup,
+  comprometidoEnActivos,
+  saldoDisponibleCents,
+  repararFeeImpulso25,
 };
