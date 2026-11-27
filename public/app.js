@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1375';
+const PZ_BUILD = '20261105-v1376';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -31849,8 +31849,19 @@ function pzHoyCardHTML(p, o) {
         + `</div>`;
       const esVideo = String((p && p.media_type) || '') === 'video';
       const heroImg = media ? media.replace('class="pz-hoy-thumb-img"', 'class="pz-hoy-hero-img"').replace('class="pz-hoy-thumb-video"', 'class="pz-hoy-hero-video"') : '';
+      // (LOTE REEL-ENTERO · 27/11 · orden del dueño con captura: «acá
+      // se debería poder ver el reel entero, no recortado») El reel es
+      // 9:16 y la caja del héroe es 4:5: con cover se le cortaba la
+      // primera línea del título de la portada. El video pasa a
+      // contain (marco entero, regla .pz-hoy-hero-video en styles.css)
+      // y las bandas que sobran las rellena ESTA capa: la misma
+      // portada, ampliada y difuminada detrás. La caja no cambia de
+      // tamaño y la imagen 4:5 sigue en cover, intacta. Sin portada
+      // no hay capa: las bandas quedan del color de la caja.
+      const heroBg = (esVideo && coverSrc)
+        ? `<span class="pz-hoy-hero-bg" aria-hidden="true" style="background-image:url('${esc(coverSrc)}')"></span>` : '';
       const heroMedia = heroImg
-        ? `<div class="pz-hoy-hero-media" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${heroImg}${esVideo ? `<span class="pz-hoy-hero-reel">▶ Reel</span>` : ''}</div>`
+        ? `<div class="pz-hoy-hero-media" data-pz-hoy-detalle="${esc(String(p.id))}" role="button" tabindex="0" aria-label="${en ? 'See post detail' : 'Ver el detalle del posteo'}">${heroBg}${heroImg}${esVideo ? `<span class="pz-hoy-hero-reel">▶ Reel</span>` : ''}</div>`
         : '';
       return `<article class="card pz-hoy-card pz-hoy-hero" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
         + heroMedia
@@ -41384,8 +41395,15 @@ async function approvalPostView(id) {
     : apvIsCar
       ? `<div class="hf-d-track">${apvSlides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="Posteo" loading="lazy" data-lightbox="${esc(s)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''} onerror="__imgFb(this)"></span>`).join('')}</div><button type="button" class="hf-d-arrow hf-d-arrow-prev" data-hf-car-arrow="-1" aria-label="${en ? 'Previous photo' : 'Foto anterior'}" hidden>‹</button><button type="button" class="hf-d-arrow hf-d-arrow-next" data-hf-car-arrow="1" aria-label="${en ? 'Next photo' : 'Foto siguiente'}">›</button><span class="hf-d-count">1/${apvSlides.length}</span>`
       : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="Editar este posteo"` : ''}>`;
+  // (LOTE REEL-ENTERO · 27/11) Ídem héroe de Inicio: el video del
+  // detalle iba en una caja 1:1 con cover (styles.css) y el reel 9:16
+  // salía recortado. Pasa a contain con la portada difuminada detrás
+  // (.apv-media-bg); la caja no cambia de tamaño. La imagen y el
+  // carrusel no se tocan.
+  const apvBg = (isVideo && p.cover_path)
+    ? `<span class="apv-media-bg" aria-hidden="true" style="background-image:url('${esc(String(p.cover_path))}')"></span>` : '';
   const media = p.image_path
-    ? `<div class="apv-media">${apvMediaInner}</div>${apvIsCar ? `<div class="hf-d-dots">${apvSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}`
+    ? `<div class="apv-media${isVideo ? ' apv-media-video' : ''}">${apvBg}${apvMediaInner}</div>${apvIsCar ? `<div class="hf-d-dots">${apvSlides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}`
     : '';
   const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
   const tags = String(p.hashtags || '').trim();
