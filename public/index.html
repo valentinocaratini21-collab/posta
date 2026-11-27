@@ -134,26 +134,17 @@ html.pz-appctx{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 
 <meta name="theme-color" content="#2793C8">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<!-- (LOTE APERTURA-SIN-BLANCO) Imagen de arranque de iOS: la pantalla que
-     el sistema muestra ANTES de que exista documento. Sin estas líneas,
-     iOS usa una captura guardada de la app — en los teléfonos que la
-     instalaron con la apertura vieja, esa captura es la pantalla crema
-     retirada (la cara en un círculo blanco) y ningún código de la
-     página la puede tapar, porque el sistema la pinta antes del primer
-     byte. Cada imagen ES el primer frame de la magia: el mismo degradé,
-     el glow, la cara verdadera y «Posty.» — el sistema entrega la
-     apertura y el documento sigue con la misma escena. -->
-<link rel="apple-touch-startup-image" href="/splash-1290x2796.jpg" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1320x2868.jpg" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1206x2622.jpg" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1179x2556.jpg" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1170x2532.jpg" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1284x2778.jpg" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1242x2688.jpg" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1125x2436.jpg" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-828x1792.jpg" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-1242x2208.jpg" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="/splash-750x1334.jpg" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<!-- (LOTE APERTURA-SIN-IMAGEN · decisión del dueño 27/11) SIN imagen de
+     arranque de iOS: «no hace falta poner una imagen antes, porque en el
+     videito con la magia ya aparece el avatar de Posty». La apertura es
+     SOLO la magia: ninguna foto quieta antes. Las líneas
+     apple-touch-startup-image que vivían acá (lote APERTURA-SIN-BLANCO)
+     se retiran enteras. Nota que sigue vigente de aquel lote: en los
+     teléfonos que instalaron la app con la apertura vieja, iOS guarda
+     una captura propia (la pantalla crema retirada, la cara en un
+     círculo blanco) y la pinta antes del primer byte — ningún código de
+     la página la puede tapar ni borrar; esa captura muere solo al
+     borrar la app de la pantalla de inicio y volver a sumarla. -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -705,7 +696,7 @@ html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:abs
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=979"></script>
+<script src="/app.js?v=980"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
