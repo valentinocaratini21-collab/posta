@@ -112,8 +112,10 @@ const postPropuesta = post(202, { status: 'draft', caption: 'La propuesta de ma�
 usuario(203, 'muerta@test', 'trial', { nombre: 'Prueba Muerta', ig: 'pruebamuerta', started: NOW - 30 * DIA, ends: NOW - 27 * DIA });
 // 204 · cancelada: NO aparece.
 usuario(204, 'cancelada@test', 'cancelled', { nombre: 'La Cancelada', ig: 'lacancelada', started: NOW - 20 * DIA, ends: NOW - 17 * DIA });
-// 205 · prueba pendiente de conexión CON la semana armada: aparece.
-usuario(205, 'pendiente@test', 'trial', { nombre: 'Pendiente Café', ig: 'pendientecafe', started: 0, ends: null });
+// 205 · prueba pendiente de conexión CON la semana armada y la
+// invitación vigente (LOTE CONSERJE-CARTERA-VERDAD: la pendiente
+// vencida sin conexión ya no es relación viva): aparece.
+usuario(205, 'pendiente@test', 'trial', { nombre: 'Pendiente Café', ig: 'pendientecafe', started: 0, ends: NOW + 2 * DIA });
 db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)')
   .run('pendientecafe', JSON.stringify({
     posts: [{ type: 'image' }, { type: 'carousel' }, { type: 'video' }],

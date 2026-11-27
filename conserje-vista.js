@@ -221,7 +221,15 @@ function planDePrueba(db, u) {
 //   · prueba_pendiente  — plan_status 'trial' nacida pendiente de
 //                         conexión (trial_started_at = 0, el reloj de
 //                         PRUEBA-CONECTA no arrancó) CON la semana
-//                         armada (plan en trial_cache o posteos).
+//                         armada (plan en trial_cache o posteos) Y la
+//                         invitación todavía vigente: su propio
+//                         trial_ends_at (o la extensión, o los 3 días
+//                         desde la creación) sin pasar. Vencida sin
+//                         conexión, la invitación murió: sale de la
+//                         lista (LOTE CONSERJE-CARTERA-VERDAD).
+//   · demo              — la cuenta demo de la casa (email
+//                         @bambooty.test): se ve en «Todos» con su
+//                         rótulo, jamás cuenta como cliente ni prueba.
 //   · null              — no es relación viva: su prueba corrió y
 //                         terminó, canceló, o nunca se armó. NO entra
 //                         a la lista; su ficha e historia quedan en el
@@ -265,12 +273,33 @@ function claseDeCuenta(db, u, nowMs) {
     'SELECT kind FROM login_spaces WHERE space_user_id = ? AND login_user_id = ?')
     .get(uid, conserjeRevision.OWNER_USER_ID), null);
   if (esp) return { clase: 'espacio', espacio_kind: String(esp.kind || 'negocio') };
+  // (LOTE CONSERJE-CARTERA-VERDAD) La cuenta demo de la casa (email
+  // @bambooty.test: Café Aroma) no es cliente ni prueba de nadie: su
+  // propia clase «demo» — se ve en «Todos» con su rótulo, pero jamás
+  // cuenta como cliente pago (figuraba como el ÚNICO «cliente» del
+  // panel con 0 pagos reales). El dominio es el de la casa, exacto:
+  // «.test» a secas es la convención de datos falsos de las suites
+  // (pago@real.test ES un cliente pago en ese mundo).
+  if (/@bambooty\.test$/i.test(String(u.email || ''))) return { clase: 'demo' };
   const st = String((u && u.plan_status) || '');
   if (st === 'active' || st === 'past_due') return { clase: 'pago' };
   if (st !== 'trial') return { clase: null };
   const started = (u.trial_started_at === undefined || u.trial_started_at === null)
     ? null : Number(u.trial_started_at);
   if (started === 0) {
+    // (LOTE CONSERJE-CARTERA-VERDAD) La invitación pendiente también
+    // vence: su propio trial_ends_at (o la extensión vigente, o los
+    // 3 días desde la creación si no hay fecha) es su fecha límite
+    // para conectar. Vencida sin conexión, ya no es relación viva —
+    // la cohorte del 23/11 seguía listada días después con su ventana
+    // cerrada. Si conecta tarde, vuelve sola como prueba corriendo.
+    const extP = Number(u.trial_extended_until || 0);
+    let finInv = extP > nowMs ? extP : Number(u.trial_ends_at || 0);
+    if (!finInv) {
+      const cMsP = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+      finInv = cMsP ? cMsP + TRIAL_DAYS * 86400000 : Infinity;
+    }
+    if (!(finInv > nowMs)) return { clase: null };
     // Pendiente de conexión: entra solo si su semana existe de verdad
     // (el mismo criterio con que la puerta deja invitados a medio
     // abrir fuera del roster: plan armado o posteos ya cargados).
@@ -396,7 +425,8 @@ function filaRoster(db, u, opts, nowMs) {
     : claseInfo.clase === 'espacio' ? (claseInfo.espacio_kind === 'vidriera' ? 'Vidriera de la casa' : 'Espacio de la casa')
     : claseInfo.clase === 'pago' ? 'Cliente'
     : claseInfo.clase === 'prueba_corriendo' ? 'Prueba'
-    : claseInfo.clase === 'prueba_pendiente' ? 'Prueba · sin conectar' : '';
+    : claseInfo.clase === 'prueba_pendiente' ? 'Prueba · sin conectar'
+    : claseInfo.clase === 'demo' ? 'Demo de la casa' : '';
   // La línea de estado: el hecho más urgente, en palabras llanas.
   let dot = 'grey', estado = '';
   if (etapa && etapa.clave === 'en_rojo') { dot = 'yellow'; estado = etapa.motivo || 'Necesita atención'; }
@@ -479,8 +509,11 @@ function resumenHoy(db, filas, decisionesList, opts, nowMs) {
       proximaHora = new Intl.DateTimeFormat('es', { timeZone: tzD, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(proxMs));
     }
   }
-  const suscriptores = safe(() => db.prepare(
-    `SELECT COUNT(*) AS c FROM users WHERE plan_status = 'active'`).get(), { c: 0 }).c || 0;
+  // (LOTE CONSERJE-CARTERA-VERDAD) Suscriptores = los clientes pagos
+  // de la cartera viva (clase «pago» de las filas ya computadas): el
+  // conteo crudo por plan_status contaba la demo y los espacios de
+  // la casa como suscriptores (el panel leía 4 con 0 pagos reales).
+  const suscriptores = filas.filter((f) => f.clase === 'pago').length;
   return {
     fecha_label: fechaLabel,
     publica_hoy: programadosHoy + publicadosHoy,
