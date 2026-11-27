@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1372';
+const PZ_BUILD = '20261105-v1373';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -29794,7 +29794,17 @@ function homeTileHTML(t, i) {
     // queda solo el cartel de agenda del invitado, si lo hay. La
     // carta además LATE suave (glow dorado que respira, sin cintita
     // «Siguiente»: la sacó el dueño al aprobar el mock).
-    const pillInR1 = (pillR1 && !hoyBadge) ? `<span class="hf-carta-pill">✦ ${esc(pillR1)}</span>` : '';
+    // (LOTE PILL-CORTA · dueño 26/11: «"Se postea mañana · 19:00"
+    // no entra en la imagen. Pongamos únicamente "Mañana 19:00"») La
+    // píldora de ADENTRO de la imagen va corta — día y hora, sin
+    // «Se postea» y sin el punto medio: es la única que tiene ancho
+    // de imagen. La línea de texto bajo la celda (capSubir) conserva
+    // la forma completa, que ahí sí entra y se lee como frase. La
+    // verdad no cambia: sale de la misma pzHoyPillSalida, solo se
+    // le saca el prefacio. El caso sin Instagram («Pendiente:
+    // conectá tu Instagram») no lleva ese prefacio y queda igual.
+    const pillCortaR1 = pillR1 ? pillR1.replace(/^(Se postea|Goes out) /, '').replace(' · ', ' ').replace(/^./, (c) => c.toUpperCase()) : '';
+    const pillInR1 = (pillCortaR1 && !hoyBadge) ? `<span class="hf-carta-pill">✦ ${esc(pillCortaR1)}</span>` : '';
     const capR1 = (pillR1 && !hoyBadge) ? (saleCap ? `<span class="hf-tile-cap">${saleCap}</span>` : '') : hoyBadge ? (saleCap ? `<span class="hf-tile-cap">${saleCap}</span>` : '') : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
     return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia${esPieza ? ' hf-tile-pieza' : ''}" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${piezaLock}${hoyBadge}${nuevoBadge}${glyph}${pillInR1}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
