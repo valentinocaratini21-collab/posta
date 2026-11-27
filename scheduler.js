@@ -696,10 +696,13 @@ function startScheduler(db) {
   // (LOTE POSTEO-DEL-DIA · push matutina del posteo de hoy)
   // BARRIDO MATUTINO: cada 15 min; la ventana es la hora 9:00 en zona
   // de la cuenta (decision Valentino 2/11 ~21:09) y las reglas viven
-  // en morning-post-push.js. (LOTE PUSH-LISTO-FUERA · 22/11) La push
-  // de las 9:00 («Hoy sale este») MURIÓ con la clase «posteo listo»;
-  // el barrido sigue corriendo porque garantiza que el posteo del día
-  // exista (ensureTodayPost). Ya no avisa nada.
+  // en morning-post-push.js. La push de las 9:00 («Hoy sale este»)
+  // murió el 22/11 con la clase «posteo listo» (PUSH-LISTO-FUERA) y
+  // VOLVIÓ el 27/11 por decisión del dueño (PUSH-MANANA-VUELVE,
+  // excepción puntual a esa doctrina): el barrido garantiza que el
+  // posteo del día exista (ensureTodayPost) y el envío sale del
+  // módulo con su pushFn default (el sendPush de push.js) — por eso
+  // acá solo se pasa ensureTodayPost, como siempre.
   try {
     const mpp = require('./morning-post-push');
     cron.schedule('*/15 * * * *', () => {
@@ -712,7 +715,7 @@ function startScheduler(db) {
       try { const srv = require('./server'); if (srv && typeof srv.ensureTodayPost === 'function') ensureFn = srv.ensureTodayPost; } catch (e) {}
       mpp.sendMorningPostPush(db, { ensureTodayPost: ensureFn }).catch((e) => console.error('[morning-post-push]', e.message));
     });
-    console.log('[posta] Barrido matutino del posteo del dia (sin push desde PUSH-LISTO-FUERA): cada 15 min');
+    console.log('[posta] Barrido matutino del posteo del dia (con push desde PUSH-MANANA-VUELVE): cada 15 min');
   } catch (e) { console.error('[morning-post-push] no se pudo programar:', e.message); }
   // Email «tu posteo de mañana está listo» (LOTE POST-WOW v929 · veredicto
   // Valentino 11/11): barrido cada 15 min; la ventana es la hora 9:00 en la

@@ -4,21 +4,31 @@
 // solo en 3 horas salvo que me digas lo contrario.», el que le llegó
 // al dueño a las 16:00) y el aviso de las 9:00 («Hoy sale este — sale
 // a las …» / «Today's post is ready — goes out at …»).
-//   A · Estática — los dos emisores muertos no existen; las clases que
-//       se quedan (tanda, problema, resultado de pedido, publicado)
-//       siguen cableadas y byte-intactas.
+// ACTUALIZACIÓN (LOTE PUSH-MANANA-VUELVE · 2026-11-27): por decisión
+// explícita del dueño («Reactivemosla!»), la push de las 9:00 VUELVE
+// — excepción puntual a la doctrina del 22/11, porque la pieza del
+// feed «Las dos notificaciones» (29/11) la muestra y el producto
+// tiene que hacer lo que la pieza promete. El aviso de las 3 horas
+// SIGUE MUERTO. Esta suite pasa a afirmar la verdad nueva completa:
+//   A · Estática — el emisor de las 3 horas no existe; la matutina
+//       vuelve a enviar (pushFn + default sendPush cableados); las
+//       clases que se quedan (tanda, problema, resultado de pedido,
+//       publicado) siguen cableadas y byte-intactas.
 //   B · Aprobación — el camino scheduler → approval → notify-push no
 //       produce ningún push «listo» a ninguna hora; el push de
 //       problema (no salió por falta de aprobación) sigue saliendo.
 //   C · Matutina — el barrido de las 9:00 sigue garantizando el
-//       posteo del día (ensureTodayPost) y NO envía push alguno.
+//       posteo del día (ensureTodayPost) y envía la push UNA vez por
+//       cuenta por día (dedup durable), con el texto, la hora real
+//       de salida y la foto del posteo; textos ES/EN y filtros del
+//       pick (rechazado fuera, pendiente dentro) intactos.
 //   D · Tanda — la decisión de aviso de la bandeja sigue viva: un
 //       aviso por tanda, al formarse.
-//   E · Boot real — el servidor levanta con el corte puesto.
+//   E · Boot real — el servidor levanta con la verdad nueva puesta.
 // El punto de envío se verifica en el código de decisión con el
 // transporte grabado (sin VAPID real ni servicios externos), como
-// declara el CENSO del lote. Contra la base prístina, B y C fallan
-// reproduciendo los dos envíos (el de las 16:00 y el de las 9:00).
+// declara el CENSO del lote. Contra el árbol del 22/11 (corte sin
+// revertir), C falla: no sale ninguna push de las 9:00.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -51,8 +61,8 @@ console.log('\nA · Estática');
     !np.includes('async function sendApprovalPush') && !np.includes('`Tu posteo de las ${hour} está listo') && !np.includes("'Sale solo en 3 horas salvo que me digas lo contrario.'"));
   ok('A2 el push de problema se queda: sendMissedPush definida y exportada en notify-push.js',
     np.includes('async function sendMissedPush') && np.includes('sendMissedPush }'));
-  ok('A3 la matutina no envía: morning-post-push.js no llama a pushFn ni a sendPush en ningún camino',
-    !mp.includes('await pushFn(') && !mp.includes('.sendPush(') && mp.includes('res.suppressed++'));
+  ok('A3 la matutina VUELVE a enviar (PUSH-MANANA-VUELVE): morning-post-push.js llama a pushFn y su default es el sendPush real de push.js',
+    mp.includes('await pushFn(') && mp.includes("require('./push').sendPush") && !mp.includes('res.suppressed++'));
   ok('A4 la garantía de las 9:00 sigue cableada: scheduler llama sendMorningPostPush con ensureTodayPost',
     sch.includes('mpp.sendMorningPostPush(db, { ensureTodayPost: ensureFn })'));
   ok('A5 la tanda se queda: el notify de bandeja sigue en scheduler.js y en server.js («respuestas listas para aprobar»)',
@@ -119,22 +129,43 @@ const utcStr = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
     'sent=' + (rB3 && rB3.sent));
 
   // ---------------------------------------------------------------- C
-  console.log('\nC · Matutina (el push de las 9:00)');
+  console.log('\nC · Matutina (el push de las 9:00 — volvió el 27/11)');
   const uidC = seedUser('matutina@pushfuera.test', 'UTC', 0);
   db.prepare("INSERT INTO push_subscriptions (user_id, endpoint, keys_json) VALUES (?, 'https://push.example/x', '{}')").run(uidC);
   const hoyUTC = new Date().toISOString().slice(0, 10);
-  seedPost(uidC, hoyUTC + ' 19:00:00');
+  const postC = seedPost(uidC, hoyUTC + ' 19:00:00');
   const morningCalls = [];
   let ensureCalls = 0;
-  const rC = await morning.sendMorningPostPush(db, {
+  const depsC = {
     now: new Date(hoyUTC + 'T09:30:00Z'),
     pushFn: async (uid, payload) => { morningCalls.push({ uid, payload }); return { ok: true, sent: 1 }; },
     ensureTodayPost: async () => { ensureCalls++; },
-  });
-  ok('C1 el barrido de las 9:00 NO envía push alguno', morningCalls.length === 0 && rC.sent === 0,
+  };
+  const rC = await morning.sendMorningPostPush(db, depsC);
+  ok('C1 el barrido de las 9:00 ENVÍA la push, una sola (sent=1)', morningCalls.length === 1 && rC.sent === 1,
     'envios=' + morningCalls.length + ' sent=' + rC.sent);
-  ok('C2 el envío queda suprimido y contado (suppressed=1)', (rC.suppressed || 0) === 1, JSON.stringify(rC));
-  ok('C3 la garantía de las 9:00 sigue viva: ensureTodayPost corrió para la cuenta', ensureCalls === 1, 'ensure=' + ensureCalls);
+  const plC = (morningCalls[0] || {}).payload || {};
+  ok('C2 el payload es el de la pieza: «Hoy sale este — sale a las 19:00», abre el ritual, con la foto del posteo y su postId',
+    plC.title === 'Posty' && plC.body === 'Hoy sale este — sale a las 19:00' && plC.url === '/#/app/ritual'
+      && plC.image === 'https://postycommunitymanager.com/media/prueba.jpg' && plC.data && plC.data.postId === String(postC),
+    JSON.stringify(plC));
+  const rC2 = await morning.sendMorningPostPush(db, depsC);
+  const marcaC = db.prepare('SELECT post_id FROM morning_post_push WHERE user_id = ? AND day_key = ?').get(uidC, hoyUTC);
+  ok('C3 dedup durable: el segundo barrido del día no reenvía y la marca quedó con el posteo del día',
+    rC2.sent === 0 && morningCalls.length === 1 && !!marcaC && Number(marcaC.post_id) === postC,
+    'sent2=' + rC2.sent + ' marca=' + JSON.stringify(marcaC));
+  ok('C4 la garantía de las 9:00 sigue viva: ensureTodayPost corrió para la cuenta', ensureCalls === 1, 'ensure=' + ensureCalls);
+  const tEs = morning.morningText('es', '19:00');
+  const tEn = morning.morningText('en', '7:00 PM');
+  ok('C5 los textos viven en los dos idiomas (ES/EN)',
+    tEs.body === 'Hoy sale este — sale a las 19:00' && tEn.body === "Today's post is ready — goes out at 7:00 PM",
+    JSON.stringify({ tEs, tEn }));
+  const pickC = morning.pickTodayPost([
+    { id: 901, status: 'scheduled', scheduled_at: hoyUTC + ' 18:00:00', approval: 'rejected' },
+    { id: 902, status: 'scheduled', scheduled_at: hoyUTC + ' 19:00:00', approval: 'pending' },
+  ], 'UTC', new Date(hoyUTC + 'T09:30:00Z'));
+  ok('C6 el pick conserva sus filtros: el rechazado en revisión queda fuera, el pendiente (sin revisar) entra',
+    !!pickC && pickC.id === 902, JSON.stringify(pickC));
 
   // ---------------------------------------------------------------- D
   console.log('\nD · Tanda (la clase que se queda, viva)');
@@ -183,7 +214,7 @@ const utcStr = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
   for (let i = 0; i < 60 && !up; i++) {
     try { const r = await fetch(`http://127.0.0.1:${port}/api/version`); up = r.ok; } catch (e) { await sleep(1000); }
   }
-  ok('E1 el servidor levanta con el corte puesto', up, bootLog.slice(-300));
+  ok('E1 el servidor levanta con la verdad nueva (matutina viva, 3 horas muerta)', up, bootLog.slice(-300));
   const pid = proc.pid;
   try { process.kill(pid, 'SIGTERM'); } catch (e) {}
   await sleep(1500);
