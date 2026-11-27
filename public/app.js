@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1369';
+const PZ_BUILD = '20261105-v1370';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -23436,9 +23436,18 @@ function pzAdsImpulsoTarjetaHTML(b) {
     const gast = Number(t.gastado_cents || 0);
     const pct = total > 0 ? Math.min(100, Math.round((gast / total) * 100)) : 0;
     const fmtD = (c) => (t.currency === 'USD' ? 'US$' : '$') + Math.floor(Math.max(0, c) / 100).toLocaleString(loc) + ((t.currency && t.currency !== 'USD') ? ' ' + t.currency : '');
+    // (LOTE ADS-MONTO · dueño 26/11) El GASTADO va con decimales:
+    // con centavos reales el piso a entero mostraba «US$0» y el
+    // aviso parecía no haber arrancado nunca. El total sigue entero
+    // (los presupuestos son redondos).
+    const fmtG = (c) => (t.currency === 'USD' ? 'US$' : '$') + (Math.max(0, c) / 100).toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ((t.currency && t.currency !== 'USD') ? ' ' + t.currency : '');
+    // Y la barra: con gasto real pero porcentaje que redondea a 0,
+    // se pinta un mínimo visible (3%) — el número exacto manda en el
+    // texto; la barra solo dice «ya arrancó».
+    const pctBarra = gast > 0 ? Math.max(pct, 3) : pct;
     cuerpo = `<div style="display:flex;gap:8px;margin-top:12px">${stats}</div>`
-      + `<div style="height:7px;background:rgba(255,255,255,.22);border-radius:6px;margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#FEC14D;border-radius:6px"></i></div>`
-      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-top:5px"><span>${esc(fmtD(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`;
+      + `<div style="height:7px;background:rgba(255,255,255,.22);border-radius:6px;margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:${pctBarra}%;background:#FEC14D;border-radius:6px"></i></div>`
+      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-top:5px"><span>${esc(fmtG(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`;
   } else {
     cuerpo = `<p style="margin:12px 0 0;font-size:12.5px;color:rgba(255,255,255,.88)">${esc(en ? "Meta hasn't reported numbers for this boost yet." : 'Meta todavía no reporta números de este impulso.')}</p>`
       + (t.dia ? `<p style="margin:4px 0 0;font-size:10.5px;color:rgba(255,255,255,.75)">${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</p>` : '');
