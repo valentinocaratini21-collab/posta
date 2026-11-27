@@ -3474,6 +3474,76 @@ function reimportInvitadoSiAplica(userId) {
   } catch (e) { return null; }
 }
 
+/* (LOTE CORRIDA-AUTOCOMPLETA) EL INVITADO DE LA PUERTA DEL OPERADOR
+ * NACE COMPLETO — orden del dueño (27/11, tras la tanda 2 trabada ~6 h):
+ * «Soluciona esto para que no vuelva a suceder nunca mas». La causa
+ * raíz: la puerta del operador creaba el invitado SOLO con el plan;
+ * importar la semana y arrancar el reloj eran dos pasos manuales
+ * posteriores que se podían olvidar (tanda 1: hubo que correrlos a
+ * mano tras un falso cierre; tanda 2: quedaron sin hacer por horas).
+ * EL CIERRE ÚNICO: esta función completa al invitado — importa su
+ * semana si tiene piezas y cero filas (la misma puerta de siempre,
+ * reimportInvitadoSiAplica) y arranca su reloj de 3 días si ya tiene
+ * posteos y el reloj sigue pendiente (la misma primitiva de la
+ * conexión, guestTrial.startTrialOnConnect). Corre en el mismo acto
+ * en los dos puntos donde la creación del operador se completa
+ * (pieza-mano, importar-semana) y desde el barrido autocurativo de
+ * abajo para cualquier vía que lo deje a mitad de camino.
+ * LA FIRMA DE LA PUERTA: la marca de línea a mano activa sobre la
+ * clave del invitado. Sin marca no es un invitado del operador — es
+ * un invitado orgánico, cuyo reloj arranca con SU conexión real — y
+ * esta función no lo toca: sale por 'sin-marca' sin escribir nada.
+ * Nunca tira: cualquier falla deja la cuenta como estaba y el
+ * barrido lo reintenta. */
+function completarInvitadoOperador(userId, via) {
+  const out = { aplica: false, importados: 0, reloj: false, estado: '', motivo: '' };
+  try {
+    const uid = Number(userId) || 0;
+    if (!uid) { out.motivo = 'sin-usuario'; return out; }
+    const u = db.prepare('SELECT is_guest, plan_status, trial_started_at, guest_ig, guest_domain FROM users WHERE id = ?').get(uid);
+    if (!u) { out.motivo = 'sin-usuario'; return out; }
+    if (u.is_guest !== 1 || u.plan_status !== 'trial') { out.motivo = 'no-es-invitado-trial'; return out; }
+    const ig = String(u.guest_ig || '').trim().toLowerCase();
+    const dom = String(u.guest_domain || '').trim().toLowerCase();
+    let marca = null;
+    try {
+      const claves = [];
+      const k1 = lineaMano ? lineaMano.claveCache(ig, dom) : '';
+      if (k1) claves.push(k1);
+      if (ig && dom) { const k2 = 'web:' + dom; if (!claves.includes(k2)) claves.push(k2); }
+      for (const ck of claves) {
+        const m = lineaMano.marcaActiva(db, ck);
+        if (!m) continue;
+        if (Number(m.user_id || 0) > 0 && Number(m.user_id) !== uid) { out.motivo = 'marca-de-otro'; return out; }
+        marca = m; break;
+      }
+    } catch (e) {}
+    if (!marca) { out.motivo = 'sin-marca'; return out; }
+    out.aplica = true;
+    let nPosts = db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uid).c;
+    if (nPosts === 0) {
+      const r = reimportInvitadoSiAplica(uid);
+      if (r && r.applied) out.importados = r.imported || 0;
+      else if (r && r.reason) out.motivo = r.reason;
+      nPosts = db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uid).c;
+    }
+    if (nPosts > 0 && Number(u.trial_started_at || 0) === 0) {
+      try { out.reloj = !!(guestTrial && guestTrial.startTrialOnConnect && guestTrial.startTrialOnConnect(db, uid, TRIAL_DAYS)); } catch (e) {}
+    }
+    if (nPosts > 0) {
+      const u2 = db.prepare('SELECT trial_started_at FROM users WHERE id = ?').get(uid);
+      out.estado = (u2 && Number(u2.trial_started_at || 0) > 0) ? 'completo' : 'reloj-pendiente';
+    } else {
+      out.estado = 'sin-semana';
+    }
+    if (out.importados > 0 || out.reloj) {
+      try { evTrack(uid, 'corrida_autocompletada', { via: String(via || ''), importados: out.importados, reloj: out.reloj ? 1 : 0 }); } catch (e) {}
+      console.log(`[corrida-autocompleta] uid=${uid} via=${via || ''} importados=${out.importados} reloj=${out.reloj}`);
+    }
+    return out;
+  } catch (e) { out.motivo = 'error'; return out; }
+}
+
 /* (LOTE TARTINE-FRENOS · P1) CREACIÓN TARDÍA DE UNA PIEZA RESCATADA:
  * espejo de UNA iteración de importTrialWeek para cuando la semana YA
  * se importó (importTrialWeek no puede re-correr: aborta si la cuenta
@@ -11967,7 +12037,13 @@ app.post('/api/admin/trial/pieza-mano', requireAdminToken, express.json({ limit:
     const payload = JSON.stringify(out);
     if (payload.length >= 12 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'payload demasiado grande' });
     db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(payload, cacheKey);
-    return res.json({ ok: true, cache_key: cacheKey, dia, idx, post_id: postId || null, user_id: uid || null, ...(setMedias ? { placas: setMedias.length } : {}) });
+    // (LOTE CORRIDA-AUTOCOMPLETA) La carga a mano es el último paso de
+    // la creación del operador: en el mismo acto, el invitado queda
+    // completo (semana importada + reloj arrancado) sin depender de
+    // que nadie corra importar-semana ni arrancar-reloj después.
+    let completado = null;
+    if (uid) { try { completado = completarInvitadoOperador(uid, 'pieza-mano'); } catch (e) {} }
+    return res.json({ ok: true, cache_key: cacheKey, dia, idx, post_id: postId || null, user_id: uid || null, ...(setMedias ? { placas: setMedias.length } : {}), completado });
   } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 
@@ -12022,13 +12098,65 @@ app.post('/api/admin/trial/importar-semana', requireAdminToken, express.json({ l
   if (!uid) return res.status(400).json({ ok: false, error: 'sin_invitado', detalle: 'Pasá user_id, o ig/domain/cache_key que resuelvan a un invitado.' });
   const r = reimportInvitadoSiAplica(uid);
   if (!r) return res.status(500).json({ ok: false, error: 'reimport_no_disponible' });
+  // (LOTE CORRIDA-AUTOCOMPLETA) Importar ya no deja al invitado a
+  // mitad de camino: con los posteos creados, el mismo acto arranca
+  // su reloj si seguía pendiente.
+  let completado = null;
+  if (r.applied || r.reason === 'ya-importada') { try { completado = completarInvitadoOperador(uid, 'importar-semana'); } catch (e) {} }
   const filas = db.prepare('SELECT id, media_type, status, scheduled_at FROM posts WHERE user_id = ? ORDER BY created_at ASC, id ASC').all(uid);
   const posteos = filas.map((f, i) => ({ dia: i + 1, post_id: f.id, media_type: f.media_type, status: f.status, scheduled_at: f.scheduled_at || null }));
-  const base = { user_id: uid, cache_key: r.cacheKey || cacheKeyIn || '', motivo: r.reason || '', posteos };
+  const base = { user_id: uid, cache_key: r.cacheKey || cacheKeyIn || '', motivo: r.reason || '', posteos, completado };
   if (r.applied) return res.json({ ok: true, aplicado: true, importados: r.imported || posteos.length, ...base });
   if (r.reason === 'ya-importada') return res.json({ ok: true, aplicado: false, importados: 0, ...base });
   const status = r.reason === 'sin-usuario' ? 404 : 409;
   return res.status(status).json({ ok: false, aplicado: false, importados: 0, ...base });
+});
+
+// ---------- (LOTE CORRIDA-AUTOCOMPLETA) EL BARRIDO AUTOCURATIVO ----------
+// La red de seguridad del cierre único: cada 10 minutos, todo
+// invitado de prueba creado hace más de 30 minutos pasa por
+// completarInvitadoOperador. Si alguna vía — presente o futura — lo
+// dejó con el plan solo (0 posteos o reloj pendiente), el barrido lo
+// completa solo y queda el evento corrida_autocompletada en su
+// actividad. Si no tiene semana en caché, no hay nada que importar:
+// el invitado queda marcado como problema VISIBLE en el conserje
+// (conserje-vista, tipo corrida_incompleta) — nunca en silencio.
+// Los invitados orgánicos (sin marca de línea a mano) salen por la
+// firma de la puerta sin que se les escriba nada.
+function barridoCorridaAutocompleta() {
+  const resumen = { revisados: 0, completados: 0, sin_semana: [], detalle: [] };
+  try {
+    const corte = Date.now() - 30 * 60 * 1000;
+    const filas = db.prepare(`SELECT id, created_at FROM users WHERE is_guest = 1 AND plan_status = 'trial' ORDER BY id ASC LIMIT 200`).all();
+    for (const f of filas) {
+      let creado = Number(f.created_at) || 0;
+      if (!(creado > 1e11)) {
+        const p = Date.parse(String(f.created_at || ''));
+        creado = Number.isFinite(p) ? p : 0;
+      }
+      if (!creado || creado > corte) continue;
+      const nPosts = db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(f.id).c;
+      const u = db.prepare('SELECT trial_started_at FROM users WHERE id = ?').get(f.id);
+      if (nPosts > 0 && u && Number(u.trial_started_at || 0) > 0) continue; // completo: ni se lo nombra
+      resumen.revisados++;
+      const r = completarInvitadoOperador(f.id, 'barrido');
+      if (!r || !r.aplica) continue;
+      resumen.detalle.push({ user_id: f.id, estado: r.estado, importados: r.importados, reloj: r.reloj, motivo: r.motivo || '' });
+      if (r.estado === 'completo' && (r.importados > 0 || r.reloj)) resumen.completados++;
+      if (r.estado === 'sin-semana') resumen.sin_semana.push(f.id);
+    }
+  } catch (e) { console.error('[corrida-autocompleta] barrido:', e.message); }
+  if (resumen.completados > 0 || resumen.sin_semana.length > 0) {
+    console.log(`[corrida-autocompleta] barrido: ${resumen.completados} completados, sin-semana: [${resumen.sin_semana.join(', ')}]`);
+  }
+  return resumen;
+}
+setTimeout(() => { try { barridoCorridaAutocompleta(); } catch (e) {} }, 3 * 60 * 1000);
+setInterval(() => { try { barridoCorridaAutocompleta(); } catch (e) {} }, 10 * 60 * 1000);
+// Disparo admin del barrido (mismo token que las demás rutas trial).
+app.post('/api/admin/trial/barrido-autocompleta', requireAdminToken, express.json(), (req, res) => {
+  try { res.json({ ok: true, ...barridoCorridaAutocompleta() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // ---------- (LOTE MODELO-NUEVO) EL PLAN DE LA SEMANA, EN LA CASA ----------
@@ -49928,7 +50056,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1383';
+const BUILD_ID = '20261105-v1384';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -984,6 +984,50 @@ function decisiones(db, filas, opts, nowMs) {
     }
   } catch (e) { /* sin eventos legibles: la plata no se fabrica */ }
 
+  // 3 · PROBLEMAS — el invitado de la puerta del operador incompleto
+  // (LOTE CORRIDA-AUTOCOMPLETA): invitado de prueba con más de 30
+  // minutos y CERO posteos — su semana no se importó. El barrido
+  // autocurativo lo completa solo cuando la caché trae piezas; si el
+  // invitado sigue acá es porque no tiene semana en caché o la
+  // importación no pudo: problema visible, nunca silencio.
+  try {
+    const corteCorrida = nowMs - 30 * 60 * 1000;
+    const huerfanos = safe(() => db.prepare(
+      `SELECT u.id, u.guest_ig, u.guest_domain, u.created_at FROM users u
+       WHERE u.is_guest = 1 AND u.plan_status = 'trial'
+         AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = u.id)
+       ORDER BY u.id ASC LIMIT 50`).all(), []);
+    for (const g of huerfanos) {
+      let creado = toMs(g.created_at);
+      if (!Number.isFinite(creado)) { const nC = Number(g.created_at); if (nC > 1e11) creado = nC; }
+      if (!creado || creado > corteCorrida) continue;
+      let conPiezas = false;
+      const clavesC = [];
+      if (g.guest_ig) clavesC.push(String(g.guest_ig).trim().toLowerCase());
+      if (g.guest_domain) clavesC.push('web:' + String(g.guest_domain).trim().toLowerCase());
+      for (const ck of clavesC) {
+        const rowC = safe(() => db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ck), null);
+        if (rowC && rowC.payload) {
+          try {
+            const pl = JSON.parse(rowC.payload);
+            if (Array.isArray(pl.posts) && pl.posts.some((p) => p && (p.image || p.video))) { conPiezas = true; break; }
+          } catch (e) {}
+        }
+      }
+      const profC = safe(() => db.prepare('SELECT business_name, ig_username FROM profiles WHERE user_id = ?').get(g.id), null);
+      out.push({
+        clase: 'problema',
+        tipo: 'corrida_incompleta', id: 'corrida-' + g.id, user_id: g.id,
+        business_name: (profC && profC.business_name) || '', ig_username: (profC && profC.ig_username) || (g.guest_ig || ''),
+        titulo: 'Invitado de prueba sin posteos',
+        texto: conPiezas
+          ? 'Este invitado tiene la semana en caché hace más de 30 minutos y todavía no se importó: el barrido automático no pudo completarlo.'
+          : 'Este invitado no tiene semana en caché: sin piezas cargadas, su prueba no puede arrancar.',
+        fecha: hoyKey,
+      });
+    }
+  } catch (e) { /* sin lectura de invitados: el problema no se fabrica */ }
+
   const ordenClase = { pedido: 0, decision: 1, problema: 2, plata: 3 };
   out.sort((a, b) => (ordenClase[a.clase] - ordenClase[b.clase]));
   return out;
