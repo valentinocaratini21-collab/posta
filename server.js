@@ -15785,6 +15785,61 @@ app.post('/api/admin/ads/refrescar-stats', async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: 'barrido_fallido' }); }
 });
 
+// (LOTE ADS-DIAG) Diagnóstico de la lectura de métricas de UN impulso:
+// la fila guardada, la conexión del dueño (cuenta primaria y cuentas
+// guardadas, SIN tokens), la cuenta que el env de la casa consultaría
+// y el resultado CRUDO de la consulta de insights por los dos rieles
+// (metaAds.diagBoost) + el estado real por los dos rieles
+// (leerEstadoRealBoost). Nació del impulso 25 (26/11): la campaña
+// entregaba en Meta y el panel leía cero en los dos rieles, sin causa
+// visible — las vías de lectura aplanan todo fracaso a null. Solo
+// lectura: no escribe nada ni en la base ni en Meta.
+app.post('/api/admin/ads/diagnosticar', async (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  const boostId = Number((req.body || {}).boost_id || 0);
+  const b = boostId ? db.prepare('SELECT * FROM ad_boosts WHERE id = ?').get(boostId) : null;
+  if (!b) return res.status(404).json({ ok: false, error: 'boost_no_encontrado' });
+  const out = {
+    boost: {
+      id: b.id, user_id: b.user_id, status: b.status,
+      meta_campaign_id: b.meta_campaign_id || null,
+      meta_adset_id: b.meta_adset_id || null,
+      meta_ad_id: b.meta_ad_id || null,
+      last_spend_cents: b.last_spend_cents, last_reach: b.last_reach, last_impressions: b.last_impressions,
+      stats_updated_at: b.stats_updated_at || null,
+      meta_estado: b.meta_estado || null, meta_estado_at: b.meta_estado_at || null,
+    },
+    casa_configurada: false,
+    cuenta_casa_env: (process.env.META_AD_ACCOUNT_ID || '').trim() || null,
+    conexion: null,
+    riel_cliente: null, riel_casa: null,
+    estado_cliente: null, estado_casa: null,
+  };
+  try { out.casa_configurada = metaAds.adsConfigured(); } catch (e) {}
+  let ctxU = null;
+  try {
+    const conn = getAdsConnection(b.user_id);
+    if (conn) {
+      out.conexion = {
+        primary_ad_account_id: conn.primary_ad_account_id || null,
+        suat_presente: !!conn.suat,
+        cuentas_guardadas: Array.isArray(conn.ad_accounts)
+          ? conn.ad_accounts.map((a) => (a && (a.id || a.account_id || a.act_id)) || null)
+          : [],
+      };
+      if (conn.suat && conn.primary_ad_account_id) ctxU = { token: conn.suat, adAccountId: conn.primary_ad_account_id };
+    }
+  } catch (e) {}
+  try { out.riel_cliente = ctxU ? await metaAds.diagBoost(b.meta_campaign_id, ctxU) : { error: { message: 'sin ctx del cliente (sin conexión o incompleta)' } }; }
+  catch (e) { out.riel_cliente = { error: { message: String((e && e.message) || e) } }; }
+  try { out.riel_casa = await metaAds.diagBoost(b.meta_campaign_id, null); }
+  catch (e) { out.riel_casa = { error: { message: String((e && e.message) || e) } }; }
+  try { out.estado_cliente = ctxU ? await metaAds.leerEstadoRealBoost(b, ctxU) : null; } catch (e) {}
+  try { out.estado_casa = await metaAds.leerEstadoRealBoost(b, null); } catch (e) {}
+  res.json({ ok: true, ...out });
+});
+
 // (LOTE CIERRE-ADS · FIX 1) Reconciliación ÚNICA de las huérfanas del
 // 17/11: las campañas «Posty · Impulso u<uid> · p<post>» que quedaron
 // PAUSED en Meta sin fila local con sus ids (la creación moría en el
@@ -49819,7 +49874,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1363';
+const BUILD_ID = '20261105-v1364';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

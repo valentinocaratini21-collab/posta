@@ -1110,6 +1110,60 @@ async function getBoostStatsConCtx(campaignId, ctx) {
   return statsDesdeRow(row || null);
 }
 
+// (LOTE ADS-DIAG) La MISMA consulta de insights de getBoostStats,
+// pero devuelve el resultado CRUDO en vez de aplanarlo a null:
+// qué cuenta se consultó, cuántas filas vinieron, la primera fila
+// parseada y el error COMPLETO de Meta si lo hubo. Las dos vías de
+// lectura (getBoostStats y getBoostStatsConCtx) devuelven null tanto
+// ante «cuenta equivocada» como ante «error de Meta» como ante «sin
+// datos todavía» — indistinguibles desde afuera, y el panel quedaba
+// en cero sin causa visible (impulso 25, 26/11: la campaña entregaba
+// en Meta y los dos rieles leían vacío). Solo lectura; lo consume la
+// ruta admin /api/admin/ads/diagnosticar. Nunca devuelve tokens.
+async function diagBoost(campaignId, ctx) {
+  const out = {
+    cuenta: (ctx && ctx.adAccountId) || cfg().adAccountId || null,
+    http_status: null,
+    filas: null,
+    primera_fila: null,
+    error: null,
+  };
+  if (!campaignId) { out.error = { message: 'sin campaign_id' }; return out; }
+  if (ctx && (!ctx.token || !ctx.adAccountId)) { out.error = { message: 'ctx del cliente incompleto (sin token o sin cuenta)' }; return out; }
+  if (!ctx && !adsConfigured()) { out.error = { message: 'riel de la casa no configurado' }; return out; }
+  const token = (ctx && ctx.token) || cfg().token;
+  const q = new URLSearchParams({
+    fields: 'spend,reach,impressions,clicks,actions',
+    'filtering[0][field]': 'campaign.id',
+    'filtering[0][operator]': 'IN',
+    'filtering[0][value]': JSON.stringify([String(campaignId)]),
+    access_token: token,
+  });
+  let res;
+  try {
+    res = await fetch(`${GRAPH}${act(ctx)}/insights?${q.toString()}`, { signal: AbortSignal.timeout(25000) });
+  } catch (e) {
+    out.error = { message: 'fetch sin respuesta: ' + String((e && e.message) || e) };
+    return out;
+  }
+  out.http_status = res.status;
+  const data = await res.json().catch(() => ({}));
+  if (data && data.error) {
+    out.error = {
+      code: data.error.code != null ? data.error.code : null,
+      subcode: data.error.error_subcode != null ? data.error.error_subcode : null,
+      type: data.error.type || null,
+      message: data.error.message || data.error.error_user_msg || null,
+      fbtrace_id: data.error.fbtrace_id || null,
+    };
+    return out;
+  }
+  const rows = data && Array.isArray(data.data) ? data.data : [];
+  out.filas = rows.length;
+  out.primera_fila = rows[0] ? statsDesdeRow(rows[0]) : null;
+  return out;
+}
+
 // ¿El token de Meta trae ads_management? (permiso de App Review).
 // Sin él, crear anuncios falla en Meta DESPUÉS de cobrar: por eso se
 // verifica ANTES de cualquier cobro. Devuelve { ok, hasAdsManagement }.
@@ -1296,4 +1350,4 @@ async function pausarCampanaAds(campaignId, ctx = null) {
   } catch (e) { return { ok: false, motivo: detalleErrorMeta(e) }; }
 }
 
-module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, getBoostStatsConCtx, statsDesdeRow, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta, leerEstadoRealBoost, pausarCampanaAds };
+module.exports = { adsConfigured, checkAdsPermission, checkEligibility, resolvePageId, resolverIgUserIdBoost, createBoost, getBoostStats, getBoostStatsConCtx, statsDesdeRow, diagBoost, verificarActivos, reactivarBoost, listarCampanasPorNombre, leerAnunciosDeCampana, leerAdsetDeCampana, archivarCampana, getAccountCurrency, exchangeUnifiedCode, fetchClientAssets, enumerateAdAccounts, checkClientAdsAccess, resolvePageIdWithToken, searchInterestId, searchGeo, findLookalikeAudienceId, findOrCreateEngagementAudienceId, detalleErrorMeta, leerEstadoRealBoost, pausarCampanaAds };
