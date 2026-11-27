@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1360';
+const PZ_BUILD = '20261105-v1361';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -29724,8 +29724,16 @@ function homeTileHTML(t, i) {
     // posteo de HOY, la banda «Se postea hoy · 19:00» SALE: duplica la
     // chapita HOY que ya vive dentro de la miniatura. El cartel de
     // agenda de la pieza del invitado (saleCap) se conserva.
-    const capR1 = (pillR1 && !hoyBadge) ? `<span class="hf-tile-cap"><b>✦ ${esc(pillR1)}</b>${saleCap}</span>` : hoyBadge ? (saleCap ? `<span class="hf-tile-cap">${saleCap}</span>` : '') : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
-    return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia${esPieza ? ' hf-tile-pieza' : ''}" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${piezaLock}${hoyBadge}${nuevoBadge}${glyph}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
+    // (LOTE PROXIMO-LATE · dueño 26/11 «que este latiendo» + «el "se
+    // postea manana - 19:00" adentro de la imagen») La píldora de
+    // salida vive ADENTRO de la imagen, abajo, como píldora de
+    // cristal (.hf-carta-pill): la banda de abajo ya no la repite —
+    // queda solo el cartel de agenda del invitado, si lo hay. La
+    // carta además LATE suave (glow dorado que respira, sin cintita
+    // «Siguiente»: la sacó el dueño al aprobar el mock).
+    const pillInR1 = (pillR1 && !hoyBadge) ? `<span class="hf-carta-pill">✦ ${esc(pillR1)}</span>` : '';
+    const capR1 = (pillR1 && !hoyBadge) ? (saleCap ? `<span class="hf-tile-cap">${saleCap}</span>` : '') : hoyBadge ? (saleCap ? `<span class="hf-tile-cap">${saleCap}</span>` : '') : `<span class="hf-tile-cap"><b>✦ ${esc(proxLbl)}</b>${ocChip}</span>`;
+    return `<span class="hf-cell" data-hf-filtro="pendientes"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile hf-carta-magia${esPieza ? ' hf-tile-pieza' : ''}" data-post-id="${esc(String(p.id))}" data-status="${esc(String(p.status || 'scheduled'))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" role="button" aria-label="${phEn ? 'See next post' : 'Ver próximo posteo'}">${media}${piezaLock}${hoyBadge}${nuevoBadge}${glyph}${pillInR1}<span class="hf-carta-destellos" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></span></span>${capR1}</span>`;
   }
   return `<span class="hf-cell${diaFuturaCls}" data-hf-filtro="${filtroGrupo}"${(p.subir_nuevo && p.status !== 'published') ? ' data-subir-nuevo="1"' : ''}><span class="scf-mini-x hf-tile${esPieza ? ' hf-tile-pieza' : ''}${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}${justCls}${vidCls}${p.status === 'draft' ? ' hf-tile-draft' : ''}${t.archivedExt ? ' hf-archived-tile' : ''}${despCls}${nextCls}${glyph ? ' hf-has-glyph' : ''}${chipTxt ? ' hf-has-chip' : ''}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${piezaLock}${hoyBadge}${nuevoBadge}<span class="hf-strip">${chip}${archChip}${likeInStrip ? tikSpan : ''}</span>${justChip}${glyph}${despChip}${talkBtn}${likeInStrip ? '' : tikSpan}</span>${capSubir}</span>`;
 }

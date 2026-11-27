@@ -4192,7 +4192,17 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    velo sin foto/caption/corazón/tik/detalle, carta última,
    fecha/hora reales. Los publicados NO llevan estas clases. Con
    reduced-motion los destellos se quedan fijos. */
-.hf-tile.hf-carta-magia{border:2px solid rgba(254,193,77,.9);box-shadow:0 0 10px rgba(39,147,200,.25)}
+.hf-tile.hf-carta-magia{border:2px solid rgba(254,193,77,.9);box-shadow:0 0 10px rgba(39,147,200,.25);animation:hf-carta-late 2.4s ease-in-out infinite}
+/* (LOTE PROXIMO-LATE · dueño 26/11) El latido del próximo: glow
+   dorado que respira lento y la foto crece apenas 1,5% — suave,
+   como lo aprobó en el mock. No es el latido fuerte que vetó el
+   19:45 histórico: la carta no salta, respira. */
+@keyframes hf-carta-late{0%,100%{transform:scale(1);box-shadow:0 0 8px rgba(254,193,77,.22)}50%{transform:scale(1.015);box-shadow:0 0 15px rgba(254,193,77,.45)}}
+/* La píldora de salida ADENTRO de la imagen (dueño 26/11): cristal
+   oscuro con borde dorado, abajo y centrada, letra chica para que
+   «Se postea mañana · 19:00» entre entera en la tile. */
+.hf-carta-pill{position:absolute;left:50%;transform:translateX(-50%);bottom:7px;z-index:4;pointer-events:none;background:rgba(10,30,51,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;border:1px solid rgba(254,193,77,.7);border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;letter-spacing:0;white-space:nowrap;max-width:96%;overflow:hidden;text-overflow:ellipsis}
+@media (min-width:480px){.hf-carta-pill{font-size:10px}}
 .hf-carta-destellos{position:absolute;inset:0;z-index:3;pointer-events:none}
 .hf-carta-destellos i{position:absolute;font-style:normal;line-height:1;animation:hf-carta-destello 2.4s ease-in-out infinite;text-shadow:0 0 6px currentColor}
 .hf-carta-destellos i:nth-child(1){top:6px;right:8px;font-size:17px;color:#FEC14D}
@@ -4201,7 +4211,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-carta-destellos i:nth-child(4){top:12%;left:26%;font-size:11px;color:#2793C8;animation-delay:1.5s}
 @keyframes hf-carta-destello{0%,100%{opacity:.25;transform:scale(.7) rotate(0deg)}50%{opacity:1;transform:scale(1.15) rotate(20deg)}}
 @media (prefers-reduced-motion: reduce){
-  .hf-tile.hf-carta-magia{box-shadow:0 0 12px rgba(39,147,200,.35)}
+  .hf-tile.hf-carta-magia{animation:none;box-shadow:0 0 12px rgba(39,147,200,.35)}
   .hf-carta-destellos i{animation:none;opacity:.85}
 }
 /* Ítem 3 — racha de constancia debajo del perfil. */
