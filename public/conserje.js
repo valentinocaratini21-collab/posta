@@ -92,6 +92,17 @@
   }
 
   var vista = null;
+  // (LOTE CONSERJE-VIVO) La consola se refresca sola y avisa los
+  // pedidos nuevos. Hasta hoy la vista era la foto del momento en
+  // que se abrió la página: un pedido que llegaba con la consola
+  // abierta no aparecía hasta tocar «Actualizar» (pasó el 26/11 con
+  // el pedido 1099: estaba en la cola desde las 21:33 y el dueño no
+  // lo vio en el panel). pedidosConocidos = ids de decisiones clase
+  // «pedido» de la última carga (null = todavía no hubo ninguna);
+  // pedidosSinVer = los nuevos que el aviso todavía no llevó a la
+  // vista.
+  var pedidosConocidos = null;
+  var pedidosSinVer = [];
   var selUser = null;
   var cliente = null;
   var filtro = 'todos';
@@ -1267,7 +1278,7 @@
   });
 
   // ---------------- carga ----------------
-  function cargar(recargarCliente) {
+  function cargar(recargarCliente, silencioso) {
     return api('/api/admin/conserje/vista').then(function (j) {
       if (!j || !j.ok) {
         if (j && (j.__status === 401 || j.__status === 403)) {
@@ -1275,10 +1286,11 @@
           if (gm) gm.textContent = 'Ese token no abrió la consola. Revisalo y probá de nuevo.';
           abrirGate(); return;
         }
-        toast('No se pudo cargar la consola.', 'err');
+        if (!silencioso) toast('No se pudo cargar la consola.', 'err');
         return;
       }
       vista = j;
+      detectarPedidosNuevos(j);
       renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderCola(); renderMovil(); renderDescuentos();
       // (LOTE CONSERJE-FORMA) Al abrir, el centro es la producción de
       // mañana — la vista de trabajo. La ficha se abre solo cuando el
@@ -1300,8 +1312,52 @@
           cargarCliente(selUser);
         }
       }
-    }).catch(function () { toast('No se pudo cargar la consola.', 'err'); });
+    }).catch(function () { if (!silencioso) toast('No se pudo cargar la consola.', 'err'); });
   }
+  // (LOTE CONSERJE-VIVO) ¿Qué pedidos de la lista de decisiones no
+  // estaban en la carga anterior? La primera carga solo siembra el
+  // conjunto: lo que ya estaba cuando la consola abrió no es
+  // «nuevo». Los que se resuelven salen solos de la lista de sin ver.
+  function idsPedidosDe(v) {
+    var out = {};
+    var ds = (v && (v.mano || v.decisiones)) || [];
+    for (var i = 0; i < ds.length; i++) { var d = ds[i]; if (d && (d.clase || 'pedido') === 'pedido' && d.id) out[d.id] = true; }
+    return out;
+  }
+  function detectarPedidosNuevos(j) {
+    var ahora = idsPedidosDe(j);
+    if (pedidosConocidos === null) { pedidosConocidos = ahora; return; }
+    for (var id in ahora) {
+      if (!pedidosConocidos[id] && pedidosSinVer.indexOf(id) < 0) pedidosSinVer.push(id);
+    }
+    pedidosSinVer = pedidosSinVer.filter(function (id) { return !!ahora[id]; });
+    pedidosConocidos = ahora;
+    pintarAvisoNuevos();
+  }
+  function pintarAvisoNuevos() {
+    var b = $('avisoNuevos');
+    if (!b) return;
+    if (!pedidosSinVer.length) { b.hidden = true; return; }
+    var tx = $('avisoNuevosTxt');
+    if (tx) tx.textContent = pedidosSinVer.length + (pedidosSinVer.length === 1 ? ' pedido nuevo' : ' pedidos nuevos');
+    b.hidden = false;
+  }
+  // El refresco vivo: al volver a primer plano y cada 45 s la
+  // consola se relee sola (en silencio y conservando la ficha
+  // abierta) — sin pisar jamás lo que el operador está escribiendo:
+  // si hay un texto a medio escribir en un área de respuesta, este
+  // ciclo espera al siguiente.
+  function refrescarVivo() {
+    if (!vista || document.hidden) return;
+    var a = document.activeElement;
+    if (a && a.tagName === 'TEXTAREA' && String(a.value || '').trim()) return;
+    cargar(true, true);
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) refrescarVivo(); });
+  window.addEventListener('focus', refrescarVivo);
+  window.addEventListener('pageshow', refrescarVivo);
+  setInterval(refrescarVivo, 45000);
+
   function cargarCliente(uid, postId) {
     centroModo = 'ficha';
     // (LOTE CENSO-CONSERJE-2 · F3) El posteo referido viaja en el
@@ -1610,6 +1666,21 @@
   limpiarBuscadores();
   window.addEventListener('pageshow', function (ev) { if (ev && ev.persisted) { limpiarBuscadores(); renderRoster(); } });
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
+  // (LOTE CONSERJE-VIVO) El aviso de pedidos nuevos: al tocarlo se
+  // apaga y lleva a la lista — en el teléfono, a la pestaña «Hoy»;
+  // en la compu, a la columna de decisiones con un destello.
+  var avNuevos = $('avisoNuevos');
+  if (avNuevos) avNuevos.addEventListener('click', function () {
+    pedidosSinVer = [];
+    pintarAvisoNuevos();
+    if (window.matchMedia && window.matchMedia('(max-width: 760px)').matches) {
+      mTab = 'hoy'; renderMovil();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      var dec = $('decisiones');
+      if (dec) { dec.scrollIntoView({ block: 'start', behavior: 'smooth' }); dec.classList.remove('flash'); void dec.offsetWidth; dec.classList.add('flash'); }
+    }
+  });
 
   // ---------------- gate ----------------
   function abrirGate() { $('gate').classList.add('open'); var i = $('gateToken'); if (i) i.focus(); }

@@ -818,6 +818,14 @@
     body.ficha-open #mkTop{flex-wrap:wrap;padding:12px 14px}
     body.ficha-open .center{padding:16px 14px 24px}
   }
+/* (LOTE CONSERJE-VIVO) El aviso de pedidos nuevos: píldora fija
+   arriba, visible con la consola en cualquier vista; y el destello
+   de la columna de decisiones al saltar a ella. */
+#avisoNuevos{position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:300;background:#0A1E33;color:#fff;border:1.5px solid #FEC14D;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:700;box-shadow:0 10px 30px rgba(10,30,51,.35);cursor:pointer;animation:avisoLate 1.6s ease-in-out infinite}
+#avisoNuevos[hidden]{display:none}
+@keyframes avisoLate{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.045)}}
+#decisiones.flash{animation:decFlash 1.6s ease}
+@keyframes decFlash{0%{box-shadow:0 0 0 3px #FEC14D}100%{box-shadow:0 0 0 0 rgba(254,193,77,0)}}
 </style>
 </head>
 <body>
@@ -894,6 +902,9 @@
   </section>
 </div>
 
+<!-- (LOTE CONSERJE-VIVO) El aviso de pedidos nuevos: lo muestra conserje.js cuando la consola detecta pedidos que no estaban. -->
+<button type="button" id="avisoNuevos" hidden>🔔 <span id="avisoNuevosTxt">Pedidos nuevos</span> · Ver</button>
+
 <!-- ======= LOTE CONSERJE-BANDEJA · LA CAPA MÓVIL (solo ≤760px) ======= -->
 <div id="movil" aria-label="Conserje móvil">
   <header class="m-head">
@@ -934,6 +945,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=25"></script>
+<script src="/conserje.js?v=26"></script>
 </body>
 </html>
