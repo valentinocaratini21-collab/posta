@@ -65,11 +65,11 @@ db.prepare('UPDATE users SET email = ? WHERE id = 3').run('');
   console.log('— modo y elegibilidad (unidad) —');
   const M = UN._internal.modeFor, E = UN._internal.eligible;
   ok(M(db, { auto_published: 1, approval: 'pending' }, { trust_level: 1 }) === 'autopilot', 'modo: auto_published → autopilot');
-  ok(M(db, { auto_published: 0, approval: 'pending' }, { trust_level: 0 }) === 'manual', 'modo: pending con trust 0 → manual');
+  ok(M(db, { auto_published: 0, approval: 'pending' }, { trust_level: 0 }) === 'autopilot', 'modo: pending con trust 0 → autopilot (SIN-VERIFICACION: sale solo; el aviso es su freno)');
   ok(M(db, { auto_published: 0, approval: 'pending' }, { trust_level: 1 }) === 'autopilot', 'modo: pending con trust ≥1 sale solo → autopilot');
   ok(E(db, { auto_published: 0, approval: 'pending' }, { trust_level: 2, autopilot_prenotify: 0 }) === false, 'elegibilidad: trust 2 sin aviso previo prendido → no se avisa (opt-in histórico)');
   ok(E(db, { auto_published: 0, approval: 'pending' }, { trust_level: 2, autopilot_prenotify: 1 }) === true, 'elegibilidad: trust 2 con aviso prendido → se avisa');
-  ok(E(db, { auto_published: 0, approval: 'pending' }, { trust_level: 0 }) === true, 'elegibilidad: manual pending siempre se avisa (es su última llamada)');
+  ok(E(db, { auto_published: 0, approval: 'pending' }, { trust_level: 0 }) === true, 'elegibilidad: pending trust 0 siempre se avisa (sale solo: el aviso es su freno de emergencia)');
 
   console.log('— sin push → email encolado (autopilot) —');
   process.env.RESEND_API_KEY = 'test-resend-key';
@@ -105,17 +105,15 @@ db.prepare('UPDATE users SET email = ? WHERE id = 3').run('');
   r = await UN.processUpcomingNotices(db, { pushFn: async () => { throw new Error('red caída'); } });
   ok(r.email === 1 && notified(104) === 1, 'push que tira excepción → email de respaldo (nunca se rompe el tick)');
 
-  console.log('— modo manual: asunto y link firmado de un toque —');
+  console.log('— ex manual (trust 0): ahora piloto automático, sin link de aprobación —');
   insP.run(201, 2, 'Posteo manual esperando ok', '/media/foto201.jpg', sqlIn(30), 'pending', 0, 0);
   const before201 = sentEmails.length;
   r = await UN.processUpcomingNotices(db, { pushFn: async () => ({ ok: false, reason: 'no_subs' }) });
   const mail201 = sentEmails[sentEmails.length - 1];
-  ok(sentEmails.length === before201 + 1 && r.email === 1, 'manual sin push → email');
-  ok(mail201.subject === '⏰ Sale en 30 minutos: ¿lo publicamos?', 'manual: asunto exacto de aprobación');
-  const mm = mail201.html.match(/\/api\/posts\/201\/approve\?sig=([a-f0-9]+)&exp=(\d+)/);
-  ok(!!mm, 'manual: el email lleva el link firmado de aprobación');
-  ok(!!mm && approval.verifyAction(201, 'approve', mm[1], mm[2]) === true, 'manual: el link verifica sin login (firma HMAC válida)');
-  ok(!!mm && approval.verifyAction(201, 'reject', mm[1], mm[2]) === false, 'manual: la firma está atada a la acción (no sirve para otra)');
+  ok(sentEmails.length === before201 + 1 && r.email === 1, 'ex manual sin push → email');
+  ok(mail201.subject === '⏰ Tu posteo sale en 30 minutos', 'ex manual: asunto informativo del piloto automático (ya no «¿lo publicamos?»)');
+  ok(!/\/api\/posts\/201\/approve/.test(mail201.html), 'ex manual: el email NO lleva link de aprobación (ya no hay nada que aprobar)');
+  ok(!/¿lo publicamos|aprobalo/i.test(mail201.html), 'ex manual: el email no pide ningún OK');
 
   console.log('— fail-closed honesto: sin RESEND o sin email → chat —');
   delete process.env.RESEND_API_KEY;

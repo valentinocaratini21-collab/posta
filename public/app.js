@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1378';
+const PZ_BUILD = '20261105-v1379';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -20175,15 +20175,16 @@ function postCardHTML(p, opts) {
     : isV ? `<video src="${esc(p.image_path)}"${p.cover_path ? ` poster="${esc(p.cover_path)}"` : ''} muted playsinline preload="metadata"></video>`
     : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`;
   const capFull = String(p.caption || p.source_topic || 'Posteo');
-  // (LOTE APROBAR-AUTO) 'auto' (el estado honesto de C12) también es
-  // decidible: pendiente o auto = hay algo que aprobar. El handler
-  // pcApprove ya deriva al invitado a la hoja de cuenta.
-  const canApprove = (String(p.approval) === 'pending' || String(p.approval) === 'auto') && String(p.status) === 'scheduled';
+  // (LOTE SIN-VERIFICACION + APROBALO-FUERA · dueño 27/11) El
+  // botón «Aprobar» SALE de la tarjeta: el programado sale solo a
+  // su hora en cualquier estado de aprobación (la compuerta
+  // murió en el scheduler) y aprobar ya no decide nada. Quedan
+  // Imagen, Saltar y Frenar — Frenar es el freno del dueño.
+  // pcApprove queda definido (binder dormido); ya no se rinde.
   const actions = isPub ? '' : `<div class="pcard-actions">
       ${isV ? '' : '<button type="button" data-pc-act="image">' + pzIc('image', 18) + ' Imagen</button>'}
       <button type="button" data-pc-act="skip">${pzIc('skip', 18)} Saltar</button>
       ${String(p.status) === 'scheduled' ? '<button type="button" data-pc-act="hold">' + pzIc('pause', 18) + ' Frenar</button>' : ''}
-      ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">' + pzIc('checkCircle', 18) + ' Aprobar</button>' : ''}
     </div>`;
   // TikTok (v166): solo posteos publicados y solo si el usuario conectó su
   // cuenta — el botón nace oculto y ttEnhance() lo muestra según /api/tiktok/status.
@@ -30049,6 +30050,11 @@ function homeHeadHTML(prof, bizName, opts) {
 // (antes en hf-user); la hoja y el handler no cambiaron.
 // El texto describe el comportamiento final (aviso solo si falta
 // confirmación): botón y comportamiento salen juntos en este lote.
+// (LOTE SIN-VERIFICACION · 27/11) La línea «En modo manual, nada
+// sale sin tu OK» SALE de las cuatro variantes de esta tarjeta:
+// sin compuerta de aprobación ya no hay modo en el que un
+// programado espere un OK — las demás líneas ya dicen la verdad
+// («Si no lo confirmás, igual sale a su hora»).
 function pzPubInfoHTML(en) {
   // (LOTE VERDAD-INVITADO · Blind Barber P7) El explicador describe
   // el piloto automático; para el invitado sin Instagram conectado
@@ -30064,7 +30070,6 @@ function pzPubInfoHTML(en) {
       "If you haven't confirmed a post, it warns you 30 minutes before, in case you want to stop it.",
       'If you confirmed it earlier, it goes out without notice.',
       "If you don't confirm it, it still goes out on time.",
-      'In manual mode, nothing goes out without your OK.',
     ],
   } : {
     title: '¿Cómo publica Posty?',
@@ -30073,7 +30078,6 @@ function pzPubInfoHTML(en) {
       'Si no confirmaste un posteo, te avisa 30 minutos antes, por si querés frenarlo.',
       'Si lo confirmaste antes, sale sin aviso.',
       'Si no lo confirmás, igual sale a su hora.',
-      'En modo manual, nada sale sin tu OK.',
     ],
   };
   const t = invSinIg ? (en ? {
@@ -30083,7 +30087,6 @@ function pzPubInfoHTML(en) {
       'Without Instagram connected, none of them goes out: they wait here.',
       'Once you connect your Instagram, they go out on their own, on time (autopilot).',
       "If you haven't confirmed a post, it warns you 30 minutes before, in case you want to stop it.",
-      'In manual mode, nothing goes out without your OK.',
     ],
   } : {
     title: '¿Cómo publica Posty?',
@@ -30092,7 +30095,6 @@ function pzPubInfoHTML(en) {
       'Sin Instagram conectado, no sale ninguno: quedan esperando acá.',
       'Cuando conectás tu Instagram, salen solos a su hora (piloto automático).',
       'Si no confirmaste un posteo, te avisa 30 minutos antes, por si querés frenarlo.',
-      'En modo manual, nada sale sin tu OK.',
     ],
   }) : tOrig;
   const lis = t.lines.map((l, i) => '<p class="hf-pubinfo-line"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L14.2 9.8 L22 12 L14.2 14.2 L12 22 L9.8 14.2 L2 12 L9.8 9.8 Z" fill="' + (i % 2 === 0 ? '#FEC14D' : '#2793C8') + '"/></svg><span>' + esc(l) + '</span></p>').join('');
@@ -31732,16 +31734,27 @@ function pzHoyCardHTML(p, o) {
     // solo (approval 'auto') no lleva ni botón ni línea de aprobado:
     // su estado lo lleva la píldora, como siempre.
     const pillSaleOk = (() => {
-      if (!(st === 'scheduled' && !pendiente)) return '';
+      if (st !== 'scheduled') return '';
       const t = pzHoyPillSalida(p, tz, en);
       if (!t) return '';
       if (!en && t.indexOf('Se postea ') === 0) return t.replace('Se postea ', 'Sale ') + ' ✓';
       if (en && t.indexOf('Goes out ') === 0) return t + ' ✓';
       return '';
     })();
-    const acciones = (pendiente && !saleSolo)
-      ? `<div class="pz-hoy-actions"><button type="button" class="btn btn-primary btn-publish" data-pz-hoy-aprobar="${esc(String(p.id))}" data-pz-hoy-status="${esc(st)}" data-pz-hoy-when="${esc(String(whenAttr))}">${en ? 'Approve it ✓' : 'Aprobalo ✓'}</button></div>`
-      : (pillSaleOk ? `<div class="pz-hoy-actions"><span class="pz-hoy-sale-ok">${esc(pillSaleOk)}</span></div>` : '');
+    // (LOTE SIN-VERIFICACION + APROBALO-FUERA · dueño 27/11: «El
+    // botón de "Aprobalo" me parece innecesario») El botón
+    // «Aprobalo ✓» SALE de la tarjeta (héroe y compacta): el
+    // programado sale solo a su hora en cualquier estado de
+    // aprobación — la compuerta murió en el scheduler — y la zona
+    // dice la verdad de la salida («Sale hoy · 19:00 ✓», la misma
+    // píldora) para TODO programado, ya no solo para el aprobado.
+    // El borrador no lleva zona: su decisión (aceptarlo y
+    // programarlo) vive en el detalle y en la revisión, como
+    // siempre. pzHoyAprobarUno queda definido más abajo (las
+    // suites vecinas lo ejercitan por VM); su botón ya no se
+    // rinde en ningún lado.
+    const acciones = pillSaleOk
+      ? `<div class="pz-hoy-actions"><span class="pz-hoy-sale-ok">${esc(pillSaleOk)}</span></div>` : '';
     // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La nota de la tarjeta
     // aprobada tampoco afirma la salida (ni la historia) sin conexión.
     const igOkHoy = (typeof PROFILE === 'undefined' || !PROFILE) ? true : !!PROFILE.ig_connected;
@@ -36936,15 +36949,21 @@ function pzTemaPintar() {
   } else if (tema.kind === 'hoy') {
     const p = tema.post;
     const titulo = (p.caption_corta || p.caption || '').trim() || pzTemaT('El posteo de hoy', "Today's post");
-    const meta = pzTemaT('Hoy', 'Today') + (tema.hora ? ' · ' + tema.hora : '') + ' · ' + pzTemaT('Por aprobar', 'To approve');
+    const meta = pzTemaT('Hoy', 'Today') + (tema.hora ? ' · ' + tema.hora : '');
     // (RS-5 · UN SOLO MENSAJE POR DÍA) El mensaje del día es la tarjeta
     // misma: sin «TEMA X DE N», sin «seguimos con el próximo tema».
     html = '<div class="pz-tema pz-daily-msg"><div class="pz-daily-head"><span class="pz-daily-label">' + esc(pzTemaT('HOY · EL ÚNICO MENSAJE DE POSTY', "TODAY · POSTY'S ONLY MESSAGE")) + '</span><span class="pz-daily-time">' + esc(tema.hora || '') + '</span></div>'
-      + '<p class="pz-daily-intro">' + esc(pzTemaT('Hola, este es tu posteo de hoy. Aprobalo con un toque, o cambialo tocando — sin escribir nada.', "Hi, this is today's post. Approve it with a tap, or change it by tapping — no typing needed.")) + '</p>'
+      // (LOTE SIN-VERIFICACION + APROBALO-FUERA · dueño 27/11) La
+      // tarjeta del día ya no pide aprobación: el posteo sale solo
+      // a su hora (la compuerta murió en el scheduler) y el chip
+      // «Dale ✓» sale — queda Cambialo como acción y Después para
+      // cerrarla. El camino conversado sigue: si el dueño dice
+      // «dale» escribiendo o hablando, pzTemaAprobarHoy confirma
+      // («listo ✓ queda programado») sin que nada dependa de eso.
+      + '<p class="pz-daily-intro">' + esc(pzTemaT('Hola, este es tu posteo de hoy. Sale solo a su hora — si querés cambiar algo, tocalo acá, sin escribir nada.', "Hi, this is today's post. It goes out on its own — if you want to change anything, tap here, no typing needed.")) + '</p>'
       + (p.imagen ? '<div class="pz-tema-thumb"><img src="' + esc(p.imagen) + '" alt=""><div><b>' + esc(titulo) + '</b><span>' + esc(meta) + '</span></div></div>' : '')
       + pzTemaQuickHTML([
-        { id: 'hoy-aprobar', text: pzTemaT('Dale ✓', 'Publish ✓'), primary: true },
-        { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it') },
+        { id: 'hoy-cambialo', text: pzTemaT('Cambialo', 'Change it'), primary: true },
         { id: 'hoy-despues', text: pzTemaT('Después', 'Later') },
       ])
       + '<p class="pz-one-a-day">' + esc(pzTemaT('Eso es todo por hoy: un solo mensaje de Posty por día. Mañana llega el de mañana, en este mismo hilo.', "That's all for today: one Posty message a day. Tomorrow's arrives tomorrow, in this same thread.")) + '</p>'
@@ -37058,7 +37077,7 @@ function pzTemaPosponerCambio() {
     if (tema && tema.kind === 'hoy' && tema.post && tema.post.id) PZ_TEMA_DESPUES['hoy:' + tema.post.id] = 1;
     if (tema && tema.kind === 'comentario' && tema.c && tema.c.id) PZ_TEMA_DESPUES['comentario:' + tema.c.id] = 1;
   } catch (e) {}
-  try { chatSay(pzTemaT('queda por aprobar en hoy, tal como estaba, sin cambios. recién ahora cerramos este tema.', 'it stays to approve in today, just as it was, with no changes. only now we close this topic.')); } catch (e) {}
+  try { chatSay(pzTemaT('queda como estaba, sin cambios. recién ahora cerramos este tema.', 'it stays just as it was, with no changes. only now we close this topic.')); } catch (e) {}
   setTimeout(() => { try { pzTemaAvanzar(); } catch (e) {} }, 420);
 }
 function pzTemaConfirmQuick() {
@@ -41371,7 +41390,13 @@ async function approvalPostView(id) {
   // (LOTE APROBAR-AUTO) 'auto' (C12) también se decide acá: es el
   // programado del invitado que todavía nadie aprobó. La píldora no
   // cambia («Sale solo a las …»); lo que nace es la acción.
-  const canAccept = st === 'scheduled' && (ap === 'pending' || ap === 'auto') && !p.needs_review;
+  // (LOTE SIN-VERIFICACION + APROBALO-FUERA · dueño 27/11) El
+  // botón «Aceptar» del programado SALE del detalle: ya no hay
+  // nada que aceptar — el programado sale solo a su hora en
+  // cualquier estado de aprobación (la compuerta murió en el
+  // scheduler) y el detalle muestra para todo programado la zona
+  // de la verdad de la salida (ver apvSaleZone). El «Aceptar»
+  // del BORRADOR queda: ese sí decide (lo programa), no aprueba.
   // (v931) Un posteo en revisión no se puede aceptar (el PATCH lo frena
   // con 403 in_review): se muestra el aviso y no el botón Aceptar.
   const apvInReview = !!p.needs_review;
@@ -41413,11 +41438,7 @@ async function approvalPostView(id) {
   // diálogo de Rechazar vive para programados (pendiente o aprobado) —
   // nunca para borradores, que rechazan con su propio diálogo
   // (apvCancelYes, PATCH action=cancel).
-  const actions = (canAccept || canMenu) ? `
-    ${canAccept ? `<div class="apv-actions apv-primary" id="apvActions">
-      <button class="btn btn-primary apv-accept" id="apvAccept" data-apvid="${esc(String(p.id))}">${pzIc('checkCircle', 18)} Aceptar</button>
-    </div>` : ''}
-` : '';
+  const actions = '';
   // (v326) Acciones del borrador: Aceptar lo programa en su horario propuesto
   // (el mismo flujo PATCH que usa la Agenda), Editar va al chat con el
   // prefill de siempre y Rechazar lo cancela con confirmación.
@@ -41444,19 +41465,25 @@ async function approvalPostView(id) {
   // ESTE posteo en la zona de la cuenta — + Frenar + Eliminar. Los
   // handlers son los de siempre (apvHold / apvDelete, por id). El
   // publicado conserva sus dos botones (apvMoreHTML, rama publicada).
-  const apvIsApproved = st === 'scheduled' && ap === 'approved';
+  // (LOTE SIN-VERIFICACION · 27/11) La zona de la salida ya no es
+  // solo del aprobado: TODO programado no rechazado la lleva — la
+  // verdad de la salida («Sale … ✓») + Frenar + Eliminar. Los dos
+  // estados de DETALLE-E-INICIO-SIMPLES (sin aprobar / aprobado)
+  // se unifican en este único estado: sin compuerta, no hay
+  // «antes de aprobar» — hay programado, y sale.
+  const apvSaleZone = st === 'scheduled' && ap !== 'rejected';
   const apvSaleTxt = (() => {
     try {
       const pill = (typeof pzHoyPillSalida === 'function') ? pzHoyPillSalida(p, tz, en) : '';
       if (pill) return (en ? pill : pill.replace(/^Se postea /, 'Sale ')) + ' ✓';
     } catch (e) {}
-    return en ? 'Approved ✓' : 'Aprobado ✓';
+    return '';
   })();
-  const apvDeleteBtn = (canMenu || apvIsApproved) ? `<button class="btn btn-soft apv-sec-direct" id="apvDelete" data-apvid="${esc(String(p.id))}">${pzIc('trash', 18)} ${en ? 'Delete' : 'Eliminar'}</button>` : '';
+  const apvDeleteBtn = (canMenu || apvSaleZone) ? `<button class="btn btn-soft apv-sec-direct" id="apvDelete" data-apvid="${esc(String(p.id))}">${pzIc('trash', 18)} ${en ? 'Delete' : 'Eliminar'}</button>` : '';
   const apvZonaHTML = st === 'published'
     ? apvMoreHTML(p, st, canMenu, isDraft)
-    : apvIsApproved
-      ? `<div class="apv-actions apv-primary"><div class="apv-sale-ok" role="status">${esc(apvSaleTxt)}</div></div><div class="apv-actions apv-sec-row"><button class="btn btn-soft apv-sec-direct" id="apvHold" data-apvid="${esc(String(p.id))}">⏸ ${en ? 'Hold' : 'Frenar'}</button>${apvDeleteBtn}</div>`
+    : apvSaleZone
+      ? `${apvSaleTxt ? `<div class="apv-actions apv-primary"><div class="apv-sale-ok" role="status">${esc(apvSaleTxt)}</div></div>` : ''}<div class="apv-actions apv-sec-row"><button class="btn btn-soft apv-sec-direct" id="apvHold" data-apvid="${esc(String(p.id))}">⏸ ${en ? 'Hold' : 'Frenar'}</button>${apvDeleteBtn}</div>`
       : (apvDeleteBtn ? `<div class="apv-actions apv-sec-row">${apvDeleteBtn}</div>` : '');
   const apvBack = pzApvBackHTML(en);
   // (LOTE DETALLE-3) apv: misma regla que el detalle — foto limpia

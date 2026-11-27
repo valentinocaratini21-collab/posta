@@ -502,37 +502,28 @@ async function processDuePosts(db) {
       console.log(`[posta] Post #${post.id} cancelado (rechazado por el cliente)`);
       continue;
     }
-    if (ap === 'pending') {
-      // FASE 1 — política de la escalera de confianza (reemplaza el gate de
-      // primera semana): nivel 0 → sin aprobación explícita NO sale (failed
-      // + aviso); nivel ≥1 → sale solo y queda 'auto'.
-      if (autopilot.trustLevel(db, post.user_id) < 1) {
-        db.prepare(`UPDATE posts SET status='failed', error='sin aprobación' WHERE id = ?`).run(post.id);
-        // (v198-A) También es un posteo que no salió: queda en el registro.
-        schedEvent(db, post.user_id, 'post_failed', {
-          post_id: post.id, kind: 'gate_no_approval', cause: 'sin aprobación',
-          media_type: post.media_type || '', scheduled_at: post.scheduled_at || '',
-        });
-        console.log(`[posta] Post #${post.id} no publicado: sin aprobación (trust_level 0)`);
-        try { await approval.notifyMissed(db, post, 'trust_0'); } catch (e) { console.error('[notif] missed:', e.message); }
-        continue;
-      }
-      // Nivel ≥1: sale solo; si se publica, queda 'auto' y puede graduar.
-      await publishSinglePost(db, post);
-      try {
-        const st = db.prepare(`SELECT status FROM posts WHERE id = ?`).get(post.id);
-        if (st && st.status === 'published') {
-          db.prepare(`UPDATE posts SET approval='auto' WHERE id = ?`).run(post.id);
-          autopilot.maybeGraduate(db, post.user_id);
-        }
-      } catch (e) { /* el publish ya informó su propio error */ }
-      continue;
-    }
-    // 'approved' (o 'auto' ya marcado): publicar normal.
+    // (LOTE SIN-VERIFICACION · regla del dueño 26/11 «los posteos
+    // programados salen sin verificación» + su palabra 27/11 «El
+    // botón de "Aprobalo" me parece innecesario») La aprobación YA
+    // NO es compuerta: el programado sale a su hora en cualquier
+    // estado de aprobación — pendiente incluido, con cualquier
+    // nivel de confianza. Muere el gate de la escalera (FASE 1):
+    // ya no hay failed 'sin aprobación', ni evento gate_no_approval,
+    // ni aviso «no publiqué porque no aprobaste» (notifyMissed queda
+    // sin llamador). Lo único que frena un programado es el dueño
+    // (rechazado arriba; frenado = borrador; cancelado; eliminado)
+    // y las compuertas que NO son de aprobación: plan/prueba
+    // vigente (schedCanPublish) y la marca needs_review de QA. El
+    // dato se sigue registrando: el pendiente que sale queda
+    // 'auto', como quedaba con nivel ≥1, y la graduación corre
+    // igual — la aprobación informa, ya no manda.
     await publishSinglePost(db, post);
     try {
       const st = db.prepare(`SELECT status FROM posts WHERE id = ?`).get(post.id);
-      if (st && st.status === 'published') autopilot.maybeGraduate(db, post.user_id);
+      if (st && st.status === 'published') {
+        if (ap === 'pending') db.prepare(`UPDATE posts SET approval='auto' WHERE id = ?`).run(post.id);
+        autopilot.maybeGraduate(db, post.user_id);
+      }
     } catch (e) { /* el publish ya informó su propio error */ }
   }
 }

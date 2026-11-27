@@ -31,6 +31,9 @@
 //  · manual (approval 'pending' con trust_level 0: sin su OK no sale):
 //    asunto «⏰ Sale en 30 minutos: ¿lo publicamos?» + link firmado de
 //    aprobación de un toque, sin login (approval.signAction).
+//  (LOTE SIN-VERIFICACION · 27/11: el modo 'manual' MURIÓ — sin
+//  compuerta de aprobación todo programado sale solo y el aviso es
+//  siempre el freno del piloto automático; ver modeFor.)
 //
 // Ventana: la misma del aviso histórico — posteos programados que salen
 // en (25, 35] minutos. Fail-closed y sin excepciones hacia afuera.
@@ -62,12 +65,15 @@ function markNotified(db, postId) {
 
 // ¿El posteo va a salir solo (piloto automático) o espera al dueño (manual)?
 function modeFor(db, post, user) {
-  const trust = user ? Number(user.trust_level || 0) : 0;
-  if (post.auto_published) return 'autopilot';
-  if (post.approval === 'auto') return 'autopilot';
-  if (post.approval === 'pending' && trust >= 1) return 'autopilot';
-  if (post.approval === 'approved') return 'autopilot';
-  return 'manual';
+  // (LOTE SIN-VERIFICACION · 27/11) Ya no existe el modo 'manual':
+  // sin la compuerta de aprobación, TODO programado sale solo a su
+  // hora — también el pendiente de una cuenta nivel 0 — así que el
+  // aviso de los 30 min es siempre el del piloto automático: el
+  // freno de emergencia («publico en 30 min — tocá para frenarlo»).
+  // Las ramas 'manual' de este módulo y de notify-email quedan
+  // dormidas, sin llamador posible: su premisa («sin tu OK no
+  // sale») dejó de ser verdad y su copia ya no se rinde nunca.
+  return 'autopilot';
 }
 // ¿Corresponde avisar de este posteo? (paridad con el aviso histórico:
 // nivel 1 siempre; nivel ≥2 solo si el usuario prendió el aviso previo;
@@ -81,9 +87,12 @@ function eligible(db, post, user) {
   // nunca aprueba el posteo.
   if (post.approval === 'approved' || post.approval === 'auto') return false;
   if (post.owner_liked) return false;
-  const mode = modeFor(db, post, user);
-  if (mode === 'manual') return post.approval === 'pending';
-  if (post.approval === 'pending' && trust === 0) return false; // no sale solo: no es autopilot
+  // (LOTE SIN-VERIFICACION) El pendiente sale solo en TODOS los
+  // niveles: el aviso es su freno de emergencia y no se lo puede
+  // perder justo el nivel 0, que antes era el modo 'manual'
+  // (siempre avisado). Nivel 1: siempre; nivel ≥2: el opt-in
+  // (autopilot_prenotify) de siempre.
+  if (post.approval === 'pending' && trust === 0) return true;
   if (trust === 1) return true;
   if (trust >= 2) return !!(user && user.autopilot_prenotify);
   return !!post.auto_published;
