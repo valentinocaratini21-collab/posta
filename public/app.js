@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1382';
+const PZ_BUILD = '20261105-v1383';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -3678,6 +3678,22 @@ function pzVGuardTab() {
 function pzVGuardReload(build) {
   const u = new URL(location.href);
   if (u.searchParams.get('fresh') === String(build)) return false; // ya llego con este sello
+  // (LOTE UNA-SOLA-PRESENTACION) Con la app YA pintada en este
+  // documento, la guarda no recarga en caliente: esa recarga tras el
+  // primer render era el segundo disparador de la doble
+  // presentación (el documento nuevo esperaba con el cuadro quieto
+  // de la magia sobre el Inicio ya visible — grabación del dueño,
+  // 27/11). La cura queda marcada en localStorage ('posty_cure_next')
+  // y la auto-cura del <head> la aplica en la próxima apertura,
+  // antes del primer paint. La marca una-vez-por-build NO se consume
+  // acá: si el build vuelve a subir, el pendiente se pisa con el más
+  // nuevo, como manda la deferral de ADS-SE-TRABA-AL-VOLVER. Sin
+  // pintar todavía (arranque en curso), la recarga sigue como
+  // siempre.
+  if (window.__pzAppPainted === true) {
+    try { localStorage.setItem('posty_cure_next', String(build)); } catch (e) {}
+    return false;
+  }
   const key = 'pz_vguard_' + build;
   try { if (sessionStorage.getItem(key)) return false; sessionStorage.setItem(key, String(Date.now())); } catch (e) {}
   u.searchParams.set('fresh', String(build));

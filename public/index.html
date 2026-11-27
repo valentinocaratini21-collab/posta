@@ -67,6 +67,36 @@ html.pz-appctx{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 
   try {
     var served = '__POSTY_BUILD__';
     if (!served || served.indexOf('__POSTY') === 0) return;
+    /* (LOTE UNA-SOLA-PRESENTACION) Cura diferida de la apertura
+       anterior: si una cura (esta auto-cura o la guarda de versión de
+       app.js) detectó la copia vieja DESPUÉS de que la app ya había
+       pintado, no recargó en caliente — dejó la marca
+       'posty_cure_next' en localStorage — y la recarga se aplica
+       ACÁ, antes de que este documento pinte nada: el documento
+       nuevo nace fresco y la magia suena una sola vez en él. Solo
+       en contexto app; la marca se consume al leerla y la guarda de
+       sesión del sello corta cualquier bucle. */
+    try {
+      if (window.__pzAppCtx === true) {
+        var pend = localStorage.getItem('posty_cure_next');
+        if (pend) {
+          localStorage.removeItem('posty_cure_next');
+          var yaFresco = false;
+          try { yaFresco = new URL(location.href).searchParams.get('fresh') === pend; } catch (e) {}
+          if (!yaFresco && served !== pend) {
+            try {
+              if (!sessionStorage.getItem('posty_shell_heal_' + pend)) {
+                sessionStorage.setItem('posty_shell_heal_' + pend, '1');
+                var u0 = new URL(location.href);
+                u0.searchParams.set('fresh', pend);
+                location.replace(u0.toString());
+                return;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
     fetch('/api/version?shellcheck=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -74,6 +104,20 @@ html.pz-appctx{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 
         var key = 'posty_shell_heal_' + d.build;
         try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) {}
         var go = function () {
+          /* (LOTE UNA-SOLA-PRESENTACION) Si la app YA pintó en este
+             documento, la recarga en caliente queda prohibida: era
+             el disparador de la segunda presentación (el documento
+             nuevo esperaba con el cuadro quieto de la magia sobre
+             el Inicio ya visible — grabación del dueño, 27/11). La
+             cura no se pierde: queda marcada en localStorage y se
+             aplica antes del primer paint de la próxima apertura
+             (bloque 'posty_cure_next' al inicio de este script). Si
+             la app nunca pintó (apertura muerta), la recarga de
+             rescate sigue como siempre. */
+          if (window.__pzAppPainted === true) {
+            try { localStorage.setItem('posty_cure_next', String(d.build)); } catch (e) {}
+            return;
+          }
           var u = new URL(location.href);
           u.searchParams.set('fresh', d.build);
           location.replace(u.toString());
@@ -518,6 +562,13 @@ html.pz-appctx #posty-boot .pz-boot-coin,html.pz-appctx #posty-boot .pz-boot-txt
    (pointer-events:auto): estando logueado, ningún toque puede caer
    en el formulario público de abajo. */
 #posty-boot.pz-boot-wait{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
+/* (LOTE UNA-SOLA-PRESENTACION) Cubierta plana del documento que nace
+   de una recarga dentro de la misma apertura: solo el degradé de la
+   magia, sin escenario (el nodo se quita del DOM en la activación).
+   Tapa la landing y los toques hasta que la app pinta, igual que el
+   modo espera, pero no es una presentación: no hay cara ni palabra
+   que mostrar. */
+#posty-boot.pz-boot-plain{background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);pointer-events:auto;transition:opacity .3s ease}
 /* (LOTE APERTURA-UNICA · dueño 24/11: «siguen habiendo demasiadas
    cargas en la presentación») El modo espera ya NO cambia de
    pantalla: sostiene el CUADRO FINAL de la magia — la cara y
@@ -596,6 +647,26 @@ html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:abs
     b.classList.remove('pz-magic');
     b.classList.add('pz-boot-wait');
   };
+  /* (LOTE UNA-SOLA-PRESENTACION) Documento que nace de una recarga
+     dentro de la MISMA apertura (el rescate de una apertura muerta):
+     la magia ya sonó en esta sesión y no vuelve en ninguna forma —
+     ni la animación ni su cuadro quieto, que era la segunda
+     presentación de la grabación del dueño (27/11). El boot queda
+     como cubierta PLANA: el mismo degradé y sin escenario — el nodo
+     .pzsp-stage se quita del DOM, así ninguna clase posterior
+     (espera/lento) puede volver a mostrar la cara ni la palabra.
+     La cubierta sigue tapando la landing y los toques hasta que la
+     app pinta y bootSplashOff la retira, y la salida de reintento
+     del modo lento sigue viva (regla REGRESO-NEGRO). */
+  var plainCover = function () {
+    if (!appCtx) return;
+    var b = document.getElementById('posty-boot');
+    if (!b) return;
+    var st = b.querySelector('.pzsp-stage');
+    if (st) st.remove();
+    b.classList.remove('pz-magic');
+    b.classList.add('pz-boot-plain');
+  };
   var slowMode = function () {
     var b = document.getElementById('posty-boot');
     if (!b) return;
@@ -659,7 +730,7 @@ html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:abs
        línea, para que un regreso con la API lenta nunca deje al dueño
        frente a una pantalla muerta.) */
     try {
-      if (sessionStorage.getItem('pz_splash_played') === '1') { waitMode(); return; }
+      if (sessionStorage.getItem('pz_splash_played') === '1') { plainCover(); return; }
       sessionStorage.setItem('pz_splash_played', '1');
     } catch (e) {}
     boot.classList.add('pz-magic');
@@ -696,7 +767,7 @@ html.pz-appctx #posty-boot.pz-boot-lento .pz-boot-txt{display:block;position:abs
 })();
 </script>
 <script src="/dislike.js"></script>
-<script src="/app.js?v=983"></script>
+<script src="/app.js?v=984"></script>
 <script src="/destacado.js?v=1"></script>
 <script>
 /* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
