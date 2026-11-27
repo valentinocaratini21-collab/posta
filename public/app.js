@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1366';
+const PZ_BUILD = '20261105-v1367';
 // CHUNK_V deriva de PZ_BUILD: como el BUILD se mueve en cada lote, la URL de
 // cada chunk cambia en cada lote y ningún chunk cacheado sobrevive a un
 // deploy. Hasta v1046 este valor se bumpeaba a mano en el lote que tocaba un
@@ -23334,6 +23334,12 @@ function pzAdsHistorialHTML(boosts) {
 // no devolvió para ese objetivo no viene en la lista y no se
 // pinta. La tarjeta NO es un botón ni un enlace: tocarla no abre
 // nada (el panel completo era otra opción del mock, no elegida).
+// (LOTE ADS-GLASS · dueño 26/11) Rediseño Glass de marca (opción 2
+// del mock de la tarjeta de impulso): la tarjeta activa vive sobre
+// el degradé azul de Posty, con chips de cristal, la píldora como
+// punto verde vivo + IMPULSANDO en cristal y el progreso amarillo
+// sobre riel de cristal. La tarjeta de error («no está saliendo»)
+// queda blanca: el error no se disfraza.
 function pzAdsImpulsoTarjetaHTML(b) {
   const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   const t = (b && b.tarjeta) || null;
@@ -23349,8 +23355,8 @@ function pzAdsImpulsoTarjetaHTML(b) {
       : /carousel|carrusel/i.test(mt) ? (en ? 'Your carousel' : 'Tu carrusel')
       : (en ? 'Your post' : 'Tu posteo'));
   const thumb = p.thumb_url
-    ? `<img src="${esc(p.thumb_url)}" alt="" style="width:46px;height:58px;object-fit:cover;border-radius:9px;display:block">`
-    : `<div style="width:46px;height:58px;border-radius:9px;background:linear-gradient(160deg,#2793C8,#0A1E33);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px">▶</div>`;
+    ? `<img src="${esc(p.thumb_url)}" alt="" style="width:46px;height:58px;object-fit:cover;border-radius:9px;display:block;border:1.5px solid rgba(255,255,255,.55)">`
+    : `<div style="width:46px;height:58px;border-radius:9px;border:1.5px solid rgba(255,255,255,.55);background:linear-gradient(160deg,#2793C8,#0A1E33);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px">▶</div>`;
   const etiquetas = {
     alcance: en ? 'REACH' : 'ALCANCE',
     visitas_perfil: en ? 'PROFILE VISITS' : 'VISITAS AL PERFIL',
@@ -23377,21 +23383,21 @@ function pzAdsImpulsoTarjetaHTML(b) {
   }
   let cuerpo = '';
   if (t.tiene_datos && Array.isArray(t.stats) && t.stats.length) {
-    const stats = t.stats.map((s) => `<div style="flex:1;background:#fbf7ee;border-radius:12px;padding:8px 4px;text-align:center"><b style="display:block;font-size:16px">${esc(Number(s.valor || 0).toLocaleString(loc))}</b><span style="font-size:10px;color:#7c8fa3;font-weight:600">${esc(etiquetas[s.clave] || s.clave)}</span></div>`).join('');
+    const stats = t.stats.map((s) => `<div style="flex:1;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-radius:12px;padding:8px 4px;text-align:center"><b style="display:block;font-size:16px;color:#fff">${esc(Number(s.valor || 0).toLocaleString(loc))}</b><span style="font-size:10px;color:rgba(255,255,255,.78);font-weight:600">${esc(etiquetas[s.clave] || s.clave)}</span></div>`).join('');
     const total = Number(t.total_cents || 0);
     const gast = Number(t.gastado_cents || 0);
     const pct = total > 0 ? Math.min(100, Math.round((gast / total) * 100)) : 0;
     const fmtD = (c) => (t.currency === 'USD' ? 'US$' : '$') + Math.floor(Math.max(0, c) / 100).toLocaleString(loc) + ((t.currency && t.currency !== 'USD') ? ' ' + t.currency : '');
     cuerpo = `<div style="display:flex;gap:8px;margin-top:12px">${stats}</div>`
-      + `<div style="height:7px;background:#f0e7d2;border-radius:6px;margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#FEC14D;border-radius:6px"></i></div>`
-      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:#7c8fa3;margin-top:5px"><span>${esc(fmtD(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`;
+      + `<div style="height:7px;background:rgba(255,255,255,.22);border-radius:6px;margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:#FEC14D;border-radius:6px"></i></div>`
+      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-top:5px"><span>${esc(fmtD(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`;
   } else {
-    cuerpo = `<p style="margin:12px 0 0;font-size:12.5px;color:#7c8fa3">${esc(en ? "Meta hasn't reported numbers for this boost yet." : 'Meta todavía no reporta números de este impulso.')}</p>`
-      + (t.dia ? `<p style="margin:4px 0 0;font-size:10.5px;color:#7c8fa3">${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</p>` : '');
+    cuerpo = `<p style="margin:12px 0 0;font-size:12.5px;color:rgba(255,255,255,.88)">${esc(en ? "Meta hasn't reported numbers for this boost yet." : 'Meta todavía no reporta números de este impulso.')}</p>`
+      + (t.dia ? `<p style="margin:4px 0 0;font-size:10.5px;color:rgba(255,255,255,.75)">${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</p>` : '');
   }
-  return `<div style="background:#fff;border:1.5px solid #f3c969;border-radius:18px;padding:13px 14px;box-shadow:0 2px 10px rgba(90,70,20,.07);margin-top:12px">`
-    + `<div style="display:flex;align-items:center;gap:10px">${thumb}<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.3">${esc(titulo)}</div><div style="font-size:11.5px;color:#7c8fa3">${esc(en ? 'Post' : 'Posteo')} #${esc(String(b.post_id || '?'))}</div></div>`
-    + `<span style="display:inline-block;background:#e8f6ee;color:#14703C;font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;flex:none">${esc(en ? 'BOOSTING' : 'IMPULSANDO')}</span></div>`
+  return `<div style="background:linear-gradient(168deg,#3EA6DB 0%,#2793C8 34%,#1B6FA0 68%,#0A1E33 100%);border:1.5px solid rgba(255,255,255,.35);border-radius:18px;padding:13px 14px;box-shadow:0 6px 18px rgba(10,30,51,.28);margin-top:12px;color:#fff">`
+    + `<div style="display:flex;align-items:center;gap:10px">${thumb}<div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.3">${esc(titulo)}</div><div style="font-size:11.5px;color:rgba(255,255,255,.78)">${esc(en ? 'Post' : 'Posteo')} #${esc(String(b.post_id || '?'))}</div></div>`
+    + `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 9px;flex:none"><i class="pz-ads-dot"></i>${esc(en ? 'BOOSTING' : 'IMPULSANDO')}</span></div>`
     + cuerpo + `</div>`;
 }
 
