@@ -4192,7 +4192,7 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    velo sin foto/caption/corazón/tik/detalle, carta última,
    fecha/hora reales. Los publicados NO llevan estas clases. Con
    reduced-motion los destellos se quedan fijos. */
-.hf-tile.hf-carta-magia{border:2px solid rgba(254,193,77,.9);box-shadow:0 0 10px rgba(39,147,200,.25)}
+.hf-tile.hf-carta-magia{border:2px solid rgba(254,193,77,.9);box-shadow:0 0 10px rgba(39,147,200,.25);z-index:2;animation:hf-carta-crece 4s ease-in-out infinite}
 /* (LOTE PROXIMO-LATE · dueño 26/11) El latido del próximo: glow
    dorado que respira lento y la foto crece apenas 1,5% — suave,
    como lo aprobó en el mock. No es el latido fuerte que vetó el
@@ -4202,9 +4202,14 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
    queda quieta con su borde dorado y la que se mueve es LA FOTO —
    se acerca en 1,5 s, vuelve en 1,5 s y descansa 1 s (ciclo 4 s).
    La píldora y los destellos no se mueven: son hermanos de la foto,
-   no parte de ella. */
-.hf-tile.hf-carta-magia>img,.hf-tile.hf-carta-magia>video{animation:hf-carta-zoom 4s ease-in-out infinite}
-@keyframes hf-carta-zoom{0%{transform:scale(1)}37.5%{transform:scale(1.13)}75%{transform:scale(1)}100%{transform:scale(1)}}
+   no parte de ella.
+   (LOTE PROXIMO-FUERA · corrección del dueño 26/11: «esta mal.
+   lo que se agranda no deberia ser lo de adentro del posteo,
+   sino lo de afuera!») SALE el zoom de la foto: la que crece es
+   LA TARJETA ENTERA — el marco dorado se agranda hacia afuera
+   +9% en 1,5 s, vuelve en 1,5 s y descansa 1 s (ciclo 4 s),
+   por encima de las vecinas (z-index 2). La foto no se toca. */
+@keyframes hf-carta-crece{0%{transform:scale(1)}37.5%{transform:scale(1.09)}75%{transform:scale(1)}100%{transform:scale(1)}}
 /* La píldora de salida ADENTRO de la imagen (dueño 26/11): cristal
    oscuro con borde dorado, abajo y centrada, letra chica para que
    «Se postea mañana · 19:00» entre entera en la tile. */
@@ -4219,7 +4224,6 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 @keyframes hf-carta-destello{0%,100%{opacity:.25;transform:scale(.7) rotate(0deg)}50%{opacity:1;transform:scale(1.15) rotate(20deg)}}
 @media (prefers-reduced-motion: reduce){
   .hf-tile.hf-carta-magia{animation:none;box-shadow:0 0 12px rgba(39,147,200,.35)}
-  .hf-tile.hf-carta-magia>img,.hf-tile.hf-carta-magia>video{animation:none}
   .hf-carta-destellos i{animation:none;opacity:.85}
 }
 /* Ítem 3 — racha de constancia debajo del perfil. */
