@@ -1069,11 +1069,16 @@ function statsDesdeRow(row) {
 async function getBoostStats(campaignId) {
   if (!adsConfigured() || !campaignId) return null;
   // El endpoint de insights usa query params; se arma manual:
+  // (LOTE ADS-INSIGHTS-FIX) El filtro va como UN parámetro
+  // «filtering» con el array JSON: la forma por partes
+  // filtering[0][field]/[operator]/[value] la rechaza Meta con
+  // (#100) «Value of IN should be array containing scalar items»
+  // y las dos vías de lectura lo aplanaban a null — el panel leía
+  // cero aunque la campaña entregara (impulso 25, 26/11;
+  // diagnóstico ADS-DIAG v1364, fbtrace AbQtic3FAXsBbCRcYWqtgjE).
   const q = new URLSearchParams({
     fields: 'spend,reach,impressions,clicks,actions',
-    'filtering[0][field]': 'campaign.id',
-    'filtering[0][operator]': 'IN',
-    'filtering[0][value]': JSON.stringify([String(campaignId)]),
+    filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [String(campaignId)] }]),
     access_token: cfg().token,
   });
   const res = await fetch(`${GRAPH}${act()}/insights?${q.toString()}`, { signal: AbortSignal.timeout(25000) });
@@ -1100,9 +1105,7 @@ async function getBoostStatsConCtx(campaignId, ctx) {
       ctx,
       params: {
         fields: 'spend,reach,impressions,clicks,actions',
-        'filtering[0][field]': 'campaign.id',
-        'filtering[0][operator]': 'IN',
-        'filtering[0][value]': JSON.stringify([String(campaignId)]),
+        filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [String(campaignId)] }]),
       },
     });
   } catch (e) { return null; }
@@ -1134,9 +1137,7 @@ async function diagBoost(campaignId, ctx) {
   const token = (ctx && ctx.token) || cfg().token;
   const q = new URLSearchParams({
     fields: 'spend,reach,impressions,clicks,actions',
-    'filtering[0][field]': 'campaign.id',
-    'filtering[0][operator]': 'IN',
-    'filtering[0][value]': JSON.stringify([String(campaignId)]),
+    filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [String(campaignId)] }]),
     access_token: token,
   });
   let res;
