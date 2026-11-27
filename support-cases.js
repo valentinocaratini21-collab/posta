@@ -1794,6 +1794,26 @@ function resolveVoiceRequest(db, opts) {
   safe(() => db.prepare(
     `INSERT INTO support_voz_pedidos (message_id, estado, decidido_en, visto_en) VALUES (?, 'aprobado', datetime('now'), datetime('now'))
      ON CONFLICT(message_id) DO UPDATE SET estado = 'aprobado', decidido_en = excluded.decidido_en, visto_en = COALESCE(support_voz_pedidos.visto_en, excluded.visto_en)`).run(mid), null);
+  // (LOTE IDEA-RESUELTA-SUBIR) Si el pedido ES una idea de Subir, la
+  // idea se cierra con la misma respuesta y la contestación queda
+  // estampada con su idea_id: la tarjeta de Subir del cliente lee
+  // subir_ideas.estado, y resolver solo por esta cola la dejaba en
+  // 'recibida' para siempre — la app se contradecía (cola resuelta,
+  // tarjeta «La estamos viendo»). Precedente real: mensaje 1092 de la
+  // cuenta de la casa (26/11), respondido en la cola y vivo en Subir
+  // hasta que el dueño lo señaló con captura el 27/11.
+  safe(() => {
+    let idea = db.prepare('SELECT id FROM subir_ideas WHERE message_id = ?').get(mid);
+    if (!idea) {
+      const cm = db.prepare('SELECT idea_id FROM chat_messages WHERE id = ?').get(mid);
+      if (cm && cm.idea_id) idea = db.prepare('SELECT id FROM subir_ideas WHERE id = ?').get(Number(cm.idea_id));
+    }
+    if (idea) {
+      db.prepare("UPDATE subir_ideas SET estado = 'resuelta', respuesta = ?, resuelta_at = datetime('now') WHERE id = ? AND estado != 'resuelta'").run(respuesta, Number(idea.id));
+      const rid = Number(ins.lastInsertRowid) || 0;
+      if (rid) db.prepare('UPDATE chat_messages SET idea_id = ? WHERE id = ? AND idea_id IS NULL').run(Number(idea.id), rid);
+    }
+  }, null);
   return { ok: true, message_id: mid, reply_id: Number(ins.lastInsertRowid) || null, user_id: uid, hilo, post_id: pid };
 }
 
