@@ -399,7 +399,21 @@ function captionOpenIsGarbled(caption, negocio) {
   // cosida que arranca entera en minúscula ya era el hueco aceptado
   // de la v10 y sigue igual: esta firma no lo empeora.
   if (/(?:^|[.!?…]\s+)[\s¿¡"«]*[A-ZÁÉÍÓÚÑ]/.test(masked) && /\.\s+[a-záéíóúñ]/.test(first)) return true;
-  if (/[¿¡]/.test(first.slice(1))) return true;
+  // (b-bis) LINT v14 (Juli, 2026-11-27) — la apertura ENTRECOMILLADA:
+  // id 808 real (cuenta 12, programado 2026-11-28): «¿Qué posteo hoy?»
+  // abre con comilla angular y el «¿» cae en el índice 1 — la v1 de
+  // esta firma lo marcaba empalme solo por esa posición, aunque la
+  // pregunta ABRE la línea citada, no está cosida a mitad de frase.
+  // La firma ahora mira el CONTENIDO previo: un «¿»/«¡» es apertura
+  // legítima si antes de él solo hay marcas de apertura (espacios,
+  // « » " " ' ' y los propios signos); si hay palabra o puntuación
+  // de frase antes («…haciendo ¿Cómo…?», «…, ¡Novedades…!»), sigue
+  // siendo el empalme de los ids 93/109 y cae igual que siempre.
+  {
+    for (const qm of first.matchAll(/[¿¡]/g)) {
+      if (!/^[\s«»"“”'‘’¿¡]*$/.test(first.slice(0, qm.index))) return true;
+    }
+  }
   if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(masked)) return true;
   // (d) LINT v3 (Juli, 2026-10-18) — la firma residual pre-registrada el
   // 17/10 apareció en generación NUEVA: id 406, "Lo que nos dijo una
