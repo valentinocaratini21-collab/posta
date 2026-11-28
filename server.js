@@ -8646,6 +8646,44 @@ function pzChatMsgInsert(uid, text, hilo, postId) {
   const r = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', t);
   return Number(r.lastInsertRowid) || null;
 }
+// (LOTE RECIBO-PEDIDO · dueño 28/11 00:50: «Pedí algo por mensaje y
+// no apareció nada de recibido ni que Posty ya está trabajando en
+// eso») Recibo inmediato de un pedido del cliente en la tira del
+// posteo o de la semana: la tira guarda el mensaje y — por la regla
+// del 17/11 — el programa no contesta nada hasta que bamboo lo
+// resuelve a mano; el cliente quedaba mirando el silencio. Desde
+// este lote, apenas el mensaje queda guardado, Posty responde EN EL
+// MISMO HILO con el acuse fijo humano (sin tecnicismos, pasa por el
+// mismo filtro chatLimpio que toda respuesta guardada).
+// Invariantes:
+//   · Alcance: SOLO hilo 'post'/'semana' (los pedidos que la cola
+//     pedidos-voz levanta para bamboo). El hilo 'general' conserva
+//     sus respuestas de siempre; las ideas de Subir son otro
+//     almacén y no se tocan.
+//   · UN solo acuse por mensaje del cliente, idempotente: si en el
+//     hilo ya existe CUALQUIER respuesta del asistente posterior al
+//     mensaje (el propio acuse en una re-corrida, o la respuesta
+//     real que el mismo turno ya haya guardado — ej. el texto
+//     honesto del flujo), no se agrega nada. Sin doble charla.
+//   · El acuse NO es la revisión: no crea fila en
+//     support_voz_pedidos ni marca visto/decidido (el ✓✓ sigue
+//     siendo la señal real de revisión de bamboo, por la ruta de
+//     visto de siempre), y no dispara ninguna push.
+// Devuelve el id del acuse insertado, o 0 si no correspondía.
+function pzChatReciboPedido(uid, userMsgId, hilo, postId) {
+  try {
+    if (hilo !== 'post' && hilo !== 'semana') return 0;
+    const mid = Number(userMsgId) || 0;
+    if (!mid) return 0;
+    const pid = hilo === 'post' ? (Number(postId) || 0) : 0;
+    const ya = db.prepare(`SELECT id FROM chat_messages WHERE user_id = ? AND role = 'assistant' AND hilo = ? AND COALESCE(post_id, 0) = ? AND id > ? ORDER BY id ASC LIMIT 1`).get(uid, hilo, pid, mid);
+    if (ya) return 0;
+    const ack = langOfUser(uid) === 'en' ? "Got it ✓ — I'm already working on it." : 'Recibido ✓ — ya estoy trabajando en eso.';
+    const r = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)')
+      .run(uid, 'assistant', chatLimpio.limpiarRespuestaCliente(ack), pid, hilo);
+    return Number(r.lastInsertRowid) || 0;
+  } catch (e) { return 0; }
+}
 // Detector: ¿el pedido es sobre el VIDEO/la pieza audiovisual (no sobre
 // la foto ni solo el texto)? Espejo de pzChatPedidoSobreFoto.
 function pzChatPedidoSobreVideo(text) {
@@ -20461,9 +20499,15 @@ app.post('/api/chat/hilo/log', requireAuth, (req, res) => {
     } else if (semana) { hilo = 'semana'; }
     else if (general) { hilo = 'general'; }
     else return res.status(400).json({ ok: false, error: 'Falta el destino' });
-    if (userText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', userText, pid, hilo);
+    let userMsgId = 0;
+    if (userText) { const uIns = db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', userText, pid, hilo); userMsgId = Number(uIns.lastInsertRowid) || 0; }
     if (asstText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', chatLimpio.limpiarRespuestaCliente(asstText), pid, hilo);
-    return res.json({ ok: true });
+    // (LOTE RECIBO-PEDIDO) Recibo inmediato del pedido en la tira
+    // (post/semana): corre DESPUÉS de guardar el texto del asistente
+    // del mismo turno — si el flujo ya respondió (assistant_text),
+    // pzChatReciboPedido ve esa respuesta y no agrega nada.
+    const reciboId = userMsgId ? pzChatReciboPedido(uid, userMsgId, hilo, pid) : 0;
+    return res.json({ ok: true, recibo: reciboId > 0 });
   } catch (e) { return res.status(500).json({ ok: false, error: 'No se pudo guardar el hilo' }); }
 });
 
@@ -50186,7 +50230,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1397';
+const BUILD_ID = '20261105-v1398';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
