@@ -6429,6 +6429,10 @@ body:has(.bb-app),body:has(.app-shell){background:linear-gradient(165deg,#FCF8EF
 .pz-hoy-act[disabled]{opacity:.45;cursor:default}
 /* (LOTE BOTONES-DETALLE-SIMPLES · 14/11 · Valentino: que los íconos se vean y los botones sean más simples) UN solo diseño de chip para las cuatro tarjetas: fondo plano celeste suave. El glifo lo pinta pzIc con su trazo fijo #2793C8, que sobre este fondo tiene contraste real. Salieron los tres gradientes (azul/amarillo/coral): sobre el gradiente azul, el glifo celeste era invisible (Rehacer y Editar se veían como cuadrados vacíos). */
 .pz-hoy-act-ic{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:#E9F4FA}
+/* (LOTE DETALLE-ORDEN · 28/11 · dueño: el chat para pedir el cambio manda sobre los botones) La fila de acciones del héroe vive AL PIE de la tarjeta, después de la tira de voz: compacta y discreta — sin tarjeta, sin chip de ícono, texto+ícono chicos en gris suave. La píldora verde de la salida queda bajo el caption (orden en pzHoyCardHTML). */
+.pz-hoy-acts-min{display:flex;flex-wrap:wrap;gap:4px;margin:12px 2px 0;padding-top:10px;border-top:1px solid rgba(10,30,51,.07)}
+.pz-hoy-act-min{flex:0 1 auto;max-width:none;flex-direction:row;gap:6px;background:transparent;border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;color:#5b7186;box-shadow:none}
+.pz-hoy-act-min:active{transform:none;background:rgba(10,30,51,.05)}
 .pz-hoy-redo-line{margin:0 2px 13px}
 .pz-hoy-edit{margin:0 2px 13px}
 .pz-hoy-edit-ta{width:100%;box-sizing:border-box;border:1px solid #d8dee4;border-radius:12px;padding:10px 12px;font:inherit;font-size:15px;line-height:1.45;resize:vertical;min-height:88px;background:#fff;color:var(--txt)}

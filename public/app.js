@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1399';
+const PZ_BUILD = '20261105-v1400';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -31862,19 +31862,29 @@ function pzHoyCardHTML(p, o) {
       const pillEstado = '';
       const redoLeft = (typeof hfRedoLeft === 'function') ? hfRedoLeft(p) : null;
       const redoLine = (redoLeft !== null && typeof hfRedoLineHTML === 'function') ? hfRedoLineHTML(p, en) : '';
+      // (LOTE DETALLE-ORDEN · 28/11 · dueño con captura del posteo
+      // 827: «¿el chat para pedir un cambio o los 3 botones?» — el
+      // chat MANDA) Las acciones del héroe dejan de ser tarjetas
+      // grandes: pasan a UNA fila compacta y discreta (texto + ícono
+      // chico, sin chip de color) AL PIE de la tarjeta, DESPUÉS de la
+      // tira de voz. La píldora verde de la salida sube a su lugar
+      // natural: justo bajo el caption. Mismos botones, mismos
+      // data-* y mismos handlers de siempre (pzHoyEditarAbrir /
+      // pcHold / pzHoyEliminar / pzHoyRehacer / pzHoyCambiar): solo
+      // cambia el orden y la presentación.
       const cardRehacer = (redoLeft !== null)
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-rehacer="${esc(String(p.id))}"${redoLeft > 0 ? '' : ' disabled'}><span class="pz-hoy-act-ic">${pzIc('refresh', 20)}</span>${en ? 'Redo' : 'Rehacer'}</button>`
+        ? `<button type="button" class="pz-hoy-act pz-hoy-act-min" data-pz-hoy-rehacer="${esc(String(p.id))}"${redoLeft > 0 ? '' : ' disabled'}>${pzIc('refresh', 16)}${en ? 'Redo' : 'Rehacer'}</button>`
         : '';
       const cardEditar = st === 'published'
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-cambiar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`
-        : `<button type="button" class="pz-hoy-act" data-pz-hoy-editar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('pencil', 20)}</span>${en ? 'Edit' : 'Editar'}</button>`;
+        ? `<button type="button" class="pz-hoy-act pz-hoy-act-min" data-pz-hoy-cambiar="${esc(String(p.id))}">${pzIc('pencil', 16)}${en ? 'Edit' : 'Editar'}</button>`
+        : `<button type="button" class="pz-hoy-act pz-hoy-act-min" data-pz-hoy-editar="${esc(String(p.id))}">${pzIc('pencil', 16)}${en ? 'Edit' : 'Editar'}</button>`;
       const cardFrenar = st === 'scheduled'
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-frenar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('pause', 20)}</span>${en ? 'Hold' : 'Frenar'}</button>`
+        ? `<button type="button" class="pz-hoy-act pz-hoy-act-min" data-pz-hoy-frenar="${esc(String(p.id))}">${pzIc('pause', 16)}${en ? 'Hold' : 'Frenar'}</button>`
         : '';
       const cardEliminar = st !== 'published'
-        ? `<button type="button" class="pz-hoy-act" data-pz-hoy-eliminar="${esc(String(p.id))}"><span class="pz-hoy-act-ic">${pzIc('trash', 20)}</span>${en ? 'Delete' : 'Eliminar'}</button>`
+        ? `<button type="button" class="pz-hoy-act pz-hoy-act-min" data-pz-hoy-eliminar="${esc(String(p.id))}">${pzIc('trash', 16)}${en ? 'Delete' : 'Eliminar'}</button>`
         : '';
-      const acts = `<div class="pz-hoy-acts">`
+      const acts = `<div class="pz-hoy-acts pz-hoy-acts-min">`
         + cardRehacer + cardEditar + cardFrenar + cardEliminar
         + `</div>`
         + (redoLine ? `<div class="pz-hoy-redo-line">${redoLine}</div>` : '');
@@ -31912,8 +31922,9 @@ function pzHoyCardHTML(p, o) {
         + (caption ? `<p class="pz-hoy-hero-caption">${esc(caption)}</p>` : '')
         + editBox
         + pillEstado
+        + acciones
+        + `${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}`
         + acts
-        + `${acciones}${(typeof pzVozStripHTML === 'function') ? pzVozStripHTML(p) : ''}`
         + `</article>`;
     }
     return `<article class="card pz-hoy-card" data-post-id="${esc(String(p.id))}" data-post-status="${esc(st)}">`
