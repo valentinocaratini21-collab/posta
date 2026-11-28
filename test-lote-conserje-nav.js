@@ -41,7 +41,7 @@ t('A1 el toque del roster abre la ficha (centroVista semana, sin «producto»)',
 t('A2 «Ir al próximo con problemas» también aterriza en la ficha', jsSrc.includes("selUser = sigP.user_id; centroVista = 'semana';"));
 t('A3 la marca sale de la piel completa al ir al inicio', jsSrc.includes("document.body.classList.remove('ver-escritorio');"));
 t('A4 el pie del riel dice «su ficha», como el toque nuevo', htmlSrc.includes('ves <b>su</b> ficha'));
-t('A5 sello conserje.js?v=30', htmlSrc.includes('/conserje.js?v=30'));
+t('A5 sello conserje.js?v=31', htmlSrc.includes('/conserje.js?v=31'));
 
 // ---------------------------------------------------------------------
 const SEED_BOOT = `
@@ -96,7 +96,7 @@ function puertoLibre(p) {
     }
     t('B1 el servidor levanta en el puerto libre', up, serverLog.slice(-200));
     const html = await (await fetch(base + '/conserje?token=' + TOKEN)).text();
-    t('B2 /conserje sirve con el sello v=29', html.includes('/conserje.js?v=30'));
+    t('B2 /conserje sirve con el sello v=31', html.includes('/conserje.js?v=31'));
 
     let pw = null;
     for (const cand of ['/tmp/pw-boot/node_modules/playwright-core',
@@ -122,11 +122,13 @@ function puertoLibre(p) {
       await page.click('#movil [data-mtab="negocios"]');
       await page.waitForSelector('#movil [data-mbiz="301"]', { timeout: 20000 });
       await page.click('#movil [data-mbiz="301"]');
-      await page.waitForSelector('#movil .m-ficha-head .nm', { timeout: 15000 });
+      await page.waitForSelector('#movil .ini-switch .ini-swname', { timeout: 15000 });
       await page.waitForTimeout(400);
-      const tabOn = await page.evaluate(() => { const el = document.querySelector('#centro .mktab.on'); return el ? el.textContent.trim() : ''; });
+      const bizIni = await page.evaluate(() => { const el = document.querySelector('#movil .ini-switch .ini-swname'); return el ? el.textContent : ''; });
+      await page.click('#movil [data-mact="ficha-completa"]');
+      await page.waitForSelector('#movil .m-ficha-head .nm', { timeout: 15000 });
       const biz = await page.evaluate(() => { const el = document.querySelector('#movil .m-ficha-head .nm'); return el ? el.textContent : ''; });
-      t('B4 tocar el cliente abre su ficha con la pestaña «Su ficha» activa', tabOn === 'Su ficha' && /Pago Real/.test(biz), 'tab=' + tabOn + ' biz=' + biz);
+      t('B4 tocar el cliente abre su INICIO (flechas con su nombre) y «Ver su ficha completa» abre la ficha', /Pago Real/.test(bizIni) && /Pago Real/.test(biz), 'inicio=' + bizIni + ' ficha=' + biz);
 
       // La marca, con la piel completa puesta → inicio de la bandeja, sin piel.
       await page.evaluate(() => { document.body.classList.add('ver-escritorio'); });

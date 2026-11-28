@@ -13995,6 +13995,36 @@ app.get('/api/admin/conserje/vista/producto', requireAdminToken, (req, res) => {
 // cada negocio: el dueño pide un cambio y le entra como tarea a la
 // cola del conserje (caso pedido_dueno); bamboo responde por esta
 // misma puerta (autor 'bamboo') y la respuesta cierra el caso.
+// (LOTE CONSERJE-INICIO · AGREGADO B) CORRECCIONES DEL OPERADOR —
+// el chat operador→bamboo dentro del inicio de cada cliente. El
+// dueño escribe la corrección desde la consola (estado 'nueva');
+// bamboo la marca 'aplicada' con su respuesta por la puerta de
+// estado; la lectura de «nuevas» la consume un vigilante externo
+// que le avisa a bamboo en su chat. El cliente final NUNCA ve este
+// canal: no vive en su app ni toca su hilo.
+app.post('/api/admin/conserje/correcciones', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!/^\d+$/.test(String(b.user_id || ''))) return res.status(400).json({ ok: false, error: 'sin_usuario' });
+    const r = conserjeVista.agregarCorreccion(db, Number(b.user_id), String(b.texto || ''));
+    if (!r.ok) return res.status(r.error === 'sin_usuario' ? 404 : 400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.post('/api/admin/conserje/correcciones/estado', requireAdminToken, (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!/^\d+$/.test(String(b.id || ''))) return res.status(400).json({ ok: false, error: 'sin_correccion' });
+    const r = conserjeVista.marcarCorreccion(db, Number(b.id), String(b.estado || ''), b.respuesta != null ? String(b.respuesta) : null);
+    if (!r.ok) return res.status(r.error === 'correccion_inexistente' ? 404 : 400).json(r);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+app.get('/api/admin/conserje/correcciones/nuevas', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, correcciones: conserjeVista.correccionesNuevas(db) }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
+
 app.post('/api/admin/conserje/vista/dueno-chat', requireAdminToken, (req, res) => {
   try {
     const b = req.body || {};
@@ -50156,7 +50186,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1395';
+const BUILD_ID = '20261105-v1396';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

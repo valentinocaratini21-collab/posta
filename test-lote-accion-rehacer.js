@@ -50,7 +50,7 @@ t('A2 la tarjeta post_fallido lleva el reflejo de la orden', vistaSrc.includes('
 t('A3 la puerta producir deriva a rehacer cuando viene post_id', serverSrc.includes('conserjeVista.abrirOrdenRehacer(db'));
 t('A4 el cliente pinta el botón y el estado registrado', jsSrc.includes('data-act="fallido-rehacer"') && jsSrc.includes('Orden de rehacer registrada') && jsSrc.includes('d.rehacer_pedida'));
 t('A5 el handler manda el post_id por la puerta de producir', jsSrc.includes("act === 'fallido-rehacer'") && jsSrc.includes('post_id: Number(b.getAttribute(\'data-pid\'))'));
-t('A6 sello conserje.js?v=30', htmlSrc.includes('/conserje.js?v=30'));
+t('A6 sello conserje.js?v=31', htmlSrc.includes('/conserje.js?v=31'));
 
 // ---------------------------------------------------------------------
 const SEED_BOOT = `
@@ -165,7 +165,7 @@ function puertoLibre(p) {
     t('B10 sin post_id, la orden de producción de siempre sigue andando', r6.status === 200 && r6.j.ok === true && !!r6.j.caso, JSON.stringify(r6.j).slice(0, 200));
 
     const html = await (await fetch(base + '/conserje?token=' + TOKEN)).text();
-    t('B11 /conserje sirve con el sello v=29', html.includes('/conserje.js?v=30'));
+    t('B11 /conserje sirve con el sello v=31', html.includes('/conserje.js?v=31'));
 
     // ---------------------------------------------------------------
     seccion('C · Chromium: el botón en la tarjeta');

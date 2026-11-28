@@ -75,8 +75,8 @@ t('A3 openCase engancha el hook al nacer el caso', scSrc.includes("require('./pu
 t('A4 el server registra la puerta admin de suscripción y el estado', serverSrc.includes("'/api/admin/conserje/push/suscribir'") && serverSrc.includes("'/api/admin/conserje/push/estado'") && serverSrc.includes('pushOperador.OPERADOR_USER_ID'));
 t('A5 la ruta de la idea escrita engancha su hook', serverSrc.includes('pushOperador.hookPedido(db, {'));
 t('A6 el scheduler corre el barrido junto al del vigía', schedSrc.includes('pushOperador.barrido(db, {})'));
-t('A7 el cliente ofrece activar avisos (Más + escritorio) por la puerta admin', jsSrc.includes('data-mact="avisos"') && jsSrc.includes('activarAvisosOperador') && jsSrc.includes('/api/admin/conserje/push/suscribir') && htmlSrc.includes('id="btnOpPush"'));
-t('A8 sello conserje.js?v=30', htmlSrc.includes('/conserje.js?v=30'));
+t('A7 la interfaz ya no ofrece activar avisos (apagados por el dueño, v1394); la maquinaria queda dormida', !jsSrc.includes('data-mact="avisos"') && !htmlSrc.includes('id="btnOpPush"') && jsSrc.includes('/api/admin/conserje/push/suscribir'));
+t('A8 sello conserje.js?v=31', htmlSrc.includes('/conserje.js?v=31'));
 t('A9 los textos no llevan tecnicismos (sin «caso #», sin rutas internas en el cuerpo)', !/caso #/.test(modSrc) && modSrc.includes("title: TITULO") && modSrc.includes("'/conserje?user='"));
 t('A10 el fracaso se engancha en los DOS emisores del evento post_failed (scheduler y server)', schedSrc.includes('pushOperador.hookFallo') && serverSrc.includes('pushOperador.hookFallo'));
 t('A11 el interruptor existe: avisosActivos() lee OPERADOR_AVISOS y solo «on» prende', modSrc.includes('function avisosActivos()') && modSrc.includes("process.env.OPERADOR_AVISOS === 'on'") && modSrc.includes('avisosActivos,'));
@@ -233,7 +233,7 @@ console.log('seed ok');
     t('C7 el estado refleja la suscripción', est1.ok === true && est1.suscrito === true, JSON.stringify(est1));
 
     const html = await (await fetch(base + '/conserje?token=' + TOKEN)).text();
-    t('C8 /conserje sirve con el sello v=30 y el botón de avisos', html.includes('/conserje.js?v=30') && html.includes('id="btnOpPush"'));
+    t('C8 /conserje sirve con el sello v=31 y sin botón de avisos', html.includes('/conserje.js?v=31') && !html.includes('id="btnOpPush"'));
   } finally {
     try { process.kill(serverPid, 'SIGTERM'); } catch (e) { /* ya murió */ }
     await sleep(800);

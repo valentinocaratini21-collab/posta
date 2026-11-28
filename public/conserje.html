@@ -556,6 +556,97 @@
     .m-log{padding:9px 2px;border-bottom:1px dashed #EFE3CB;font-size:13px;color:#54493A}
     .m-log .w{color:#A2937D;font-size:12px}
     .m-log .d{display:block;margin-top:2px;line-height:1.45}
+    /* (LOTE CONSERJE-INICIO) La pantalla simple de cada cliente: la
+       franja para pasar de cliente, las tarjetas de hoy y mañana, la
+       tira de su semana, pedidos, subidas, correcciones y la hoja de
+       cambio/decisión — la estética de los mocks aprobados. */
+    .ini-switch{display:flex;align-items:center;gap:8px;background:#0A1E33;border-radius:14px;padding:9px 10px;margin-bottom:12px}
+    .ini-swbtn{background:rgba(255,255,255,.14);color:#fff;border:none;font:inherit;font-weight:900;font-size:17px;width:44px;height:44px;border-radius:10px;cursor:pointer;flex:none}
+    .ini-swmid{flex:1;text-align:center;min-width:0}
+    .ini-swname{color:#fff;font-weight:900;font-size:15px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ini-swpos{color:#9FC6DE;font-size:11px;font-weight:700}
+    .ini-neg{background:#FEC14D;color:#0A1E33;border:none;font:inherit;font-weight:800;font-size:12.5px;padding:0 12px;height:44px;border-radius:10px;cursor:pointer;flex:none}
+    .ini-head{background:#fff;border:1.5px solid #F3E8D5;border-radius:20px;padding:14px 15px;margin-bottom:4px}
+    .ini-head .row1{display:flex;align-items:center;gap:11px}
+    .ini-ava{width:46px;height:46px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;flex:none}
+    .ini-head .nm{font-size:19px;font-weight:900;line-height:1.1}
+    .ini-head .hd{color:#2793C8;font-weight:600;font-size:13px}
+    .ini-clase{margin-left:auto;background:#EAF4FA;color:#1C6F9E;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;flex:none}
+    .ini-comercial{margin-top:10px;font-size:13.5px;font-weight:750;color:#0A1E33}
+    .ini-negocio{margin-top:3px;font-size:13px;color:#7A7264;font-weight:600}
+    .ini-iglink{display:inline-block;margin-top:9px;color:#1C6F9E;font-weight:800;font-size:13.5px;text-decoration:none}
+    .ini-alert{border-radius:14px;padding:11px 14px;font-size:13.5px;font-weight:650;margin-top:10px}
+    .ini-alert.rojo{background:#FDECEC;border:1.5px solid #F3C1C1;color:#8E2F26}
+    .ini-alert.ambar{background:#FFF7E0;border:1.5px solid #F0DFA6;color:#6D5510}
+    .ini-post{background:#fff;border:1.5px solid #F3E8D5;border-radius:18px;padding:12px;margin-bottom:4px;width:100%;text-align:left;font:inherit;color:#0A1E33;cursor:pointer;display:block}
+    .ini-post .row{display:flex;gap:12px;align-items:center}
+    .ini-thumb{width:58px;height:74px;border-radius:12px;object-fit:cover;flex:none;background:linear-gradient(160deg,#BFE0F2,#2793C8)}
+    .ini-thumb.ph{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:20px}
+    .ini-post .tt{font-weight:800;font-size:14.5px;line-height:1.25}
+    .ini-post .cap{font-size:12.5px;color:#7A7264;margin-top:2px}
+    .ini-chip{display:inline-block;margin-top:6px;font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:999px}
+    .ini-chip.verde{background:#DFF3DF;color:#2C6E31}
+    .ini-chip.ambar{background:#FFF3D6;color:#8A6D1A}
+    .ini-chip.rojo{background:#FDECEC;color:#8E2F26}
+    .ini-chip.gris{background:#F2EDE3;color:#7A7264}
+    .ini-post .go{font-weight:900;color:#C9BDA6;margin-left:auto}
+    .ini-acts{display:flex;gap:8px;margin-top:11px}
+    .ini-acts .btn{flex:1;justify-content:center;min-height:44px}
+    .ini-week{display:flex;gap:5px}
+    .ini-day{flex:1;background:#fff;border:1.5px solid #F3E8D5;border-radius:12px;padding:8px 2px 7px;text-align:center}
+    .ini-day .dl{font-size:11px;font-weight:900;color:#A2937D;text-transform:uppercase}
+    .ini-day .ds{font-size:15px;margin-top:2px}
+    .ini-day .dn{font-size:10px;color:#7A7264;font-weight:650;margin-top:1px;line-height:1.15}
+    .ini-day.hoy{border-color:#2793C8;box-shadow:0 0 0 1.5px #2793C8}
+    .ini-card{background:#fff;border:1.5px solid #F3E8D5;border-radius:18px;padding:12px;margin-bottom:4px}
+    .ini-ped-txt{font-size:14px;line-height:1.45}
+    .ini-resp{margin-top:9px;background:#EEF7EE;border-radius:12px;padding:9px 11px;font-size:13px;color:#2C6E31;font-weight:650}
+    .ini-calm{font-size:13.5px;color:#7A7264;font-weight:600;background:#fff;border:1.5px dashed #EFE3CB;border-radius:18px;padding:13px 14px}
+    .ini-sub{display:flex;gap:11px;align-items:center;padding:6px 0}
+    .ini-sub + .ini-sub{border-top:1px dashed #EFE3CB}
+    .ini-sub img{width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none;background:#F3EDE2}
+    .ini-sub .st{font-weight:750;font-size:13.5px}
+    .ini-sub .su{font-size:12.5px;color:#7A7264}
+    .ini-corr-msg{max-width:88%;border-radius:16px;padding:10px 12px;font-size:14px;line-height:1.45;margin-bottom:8px}
+    .ini-corr-msg.mio{margin-left:auto;background:#0A1E33;color:#fff;border-bottom-right-radius:6px}
+    .ini-corr-msg.resp{background:#EEF7EE;color:#2C6E31;border-bottom-left-radius:6px}
+    .ini-corr-msg .hace{display:block;font-size:11px;opacity:.65;margin-top:4px;font-weight:650}
+    .ini-corr-row{display:flex;gap:8px;margin-top:10px}
+    .ini-corr-row input{flex:1;font:inherit;font-size:14.5px;padding:12px;border:1.5px solid #E7DFCD;border-radius:12px;min-height:48px;background:#fff;color:#0A1E33;min-width:0}
+    .ini-corr-row .btn{min-height:48px;justify-content:center}
+    .ini-completa{width:100%;justify-content:center;min-height:48px;margin-top:14px}
+    .ini-op{background:#fff;border:1.5px solid #F3E8D5;border-radius:16px;padding:10px 13px;margin-bottom:10px}
+    .ini-oprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .ini-home{background:#fff;border:1.5px solid #F3E8D5;border-radius:20px;padding:14px 13px 11px}
+    .ini-prof{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+    .ini-pname{font-size:16.5px;font-weight:800;color:#0A1E33;line-height:1.15}
+    .ini-psub{font-size:12.5px;color:#A2937D;font-weight:650;margin-top:2px}
+    .ini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+    .ini-cell{position:relative;aspect-ratio:1;border-radius:7px;overflow:hidden;background:#F6EFE2;border:0;padding:0;display:block;width:100%;text-align:left}
+    button.ini-cell{cursor:pointer;font:inherit}
+    .ini-cell img{width:100%;height:100%;object-fit:cover;display:block}
+    .ini-cell.hoy{box-shadow:0 0 0 2px #FEC14D}
+    .ini-cellph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:19px}
+    .ini-cell.velada{background:#FBF4E6;display:flex;align-items:center;justify-content:center}
+    .ini-vel{font-size:17px;opacity:.75}
+    .ini-marca{position:absolute;left:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:10px;font-weight:750;padding:3px 7px;border-radius:999px;line-height:1.25;max-width:calc(100% - 10px)}
+    .ini-marca.hoy{background:#FEC14D;color:#0A1E33}
+    .ini-play{position:absolute;top:5px;right:6px;color:#fff;font-size:11px;text-shadow:0 1px 4px rgba(10,30,51,.6)}
+    .ini-fnote{font-size:11.5px;color:#A2937D;font-weight:600;line-height:1.45;margin-top:10px}
+    .cr-mini{display:block;font-size:11.5px;font-weight:700;color:#7A7264;margin-top:2px}
+    .cr-mini .nuevo{color:#B3261E;font-weight:900}
+    .m-biz .mini{display:block;font-size:11.5px;font-weight:700;color:#7A7264;margin-top:1px}
+    .m-biz .mini .nuevo{color:#B3261E;font-weight:900}
+    .ini-sheet-fondo{position:fixed;inset:0;background:rgba(6,20,36,.55);z-index:1200;display:flex;align-items:flex-end;justify-content:center}
+    .ini-sheet{background:#FFF9F0;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;border-radius:22px 22px 0 0;padding:16px 16px 22px;color:#0A1E33}
+    .ini-sheet .sh-head{display:flex;gap:12px;align-items:center;margin-bottom:6px}
+    .ini-sheet .sh-title{font-weight:900;font-size:16.5px;line-height:1.25}
+    .ini-sheet textarea{width:100%;font:inherit;font-size:14.5px;padding:11px;border:1.5px solid #E7DFCD;border-radius:12px;min-height:110px;background:#fff;color:#0A1E33;box-sizing:border-box}
+    .ini-alt{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:#fff;border:1.5px solid #F3E8D5;border-radius:14px;padding:9px 11px;margin-bottom:8px;font:inherit;color:#0A1E33;cursor:pointer;min-height:56px}
+    .ini-alt img{width:42px;height:52px;border-radius:9px;object-fit:cover;flex:none;background:#F3EDE2}
+    .ini-alt .at{font-weight:750;font-size:13.5px}
+    .ini-alt .as{font-size:12px;color:#7A7264}
+    .ini-sheet .btn{min-height:46px;justify-content:center}
   }
   /* (LOTE CONSERJE-ENTRADA) La bandeja en pantalla ancha: columna
      centrada de ancho de teléfono sobre el marino de la casa, con su
@@ -868,7 +959,7 @@
     <div class="ts-item" id="statGasto"><span class="ts-label">Gasto IA hoy</span><span class="ts-value">—</span></div>
     <div class="ts-item" id="statDisco" style="display:none"><span class="ts-label">Disco</span><span class="ts-value">—</span></div>
     <div class="ts-item" id="statSubs"><span class="ts-label">Suscriptores</span><span class="ts-value">—</span></div>
-    <div class="ts-actions"><button class="btn small" id="btnOpPush" type="button">🔔 Activar avisos</button><button class="btn small" id="btnRecargar" type="button">↻ Actualizar</button></div>
+    <div class="ts-actions"><button class="btn small" id="btnRecargar" type="button">↻ Actualizar</button></div>
   </header>
 
   <!-- ======= SEMÁFORO · ¿MAÑANA ESTÁ CUBIERTO? ======= -->
@@ -967,6 +1058,6 @@
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<script src="/conserje.js?v=30"></script>
+<script src="/conserje.js?v=31"></script>
 </body>
 </html>

@@ -44,6 +44,10 @@
   // mismo camino que un toque en la cartera o en la cola).
   var deepUser = Number(qs.get('user') || 0) || 0;
   var deepPost = Number(qs.get('post') || 0) || 0;
+  // (LOTE CONSERJE-INICIO · AGREGADO C) El destino de la push se
+  // consume al abrir y se limpia de la URL en el acto: no queda
+  // pegado cuando el dueño pasa a otro cliente con las flechas.
+  if (qs.get('user') || qs.get('post')) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
 
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) {
@@ -60,6 +64,13 @@
   var AVA_GRADS = ['linear-gradient(135deg,#b0722e,#6b3f14)','linear-gradient(135deg,#3a4a5a,#101c28)','linear-gradient(135deg,#c0392b,#6e1f14)','linear-gradient(135deg,#b04a8a,#5f2350)','linear-gradient(135deg,#2793C8,#0A1E33)','linear-gradient(135deg,#1E9E5A,#0d5c31)','linear-gradient(135deg,#7a4ab0,#33184a)','linear-gradient(135deg,#d4692a,#7a3410)'];
   function avaGrad(uid) { return AVA_GRADS[Math.abs(Number(uid) || 0) % AVA_GRADS.length]; }
   var rosterOrden = [];
+  // (LOTE CONSERJE-INICIO) El mini-estado de la fila del roster, en
+  // las dos pieles: hoy ✓/✗, mañana ✓/✗ y los pedidos sin revisar.
+  function miniSym(e) { return e === 'salio' ? '✓' : e === 'programado' ? '◷' : e === 'falta' ? '⚠' : e === 'fallo' ? '✗' : e === 'freno' ? '⛔' : '—'; }
+  function miniTxt(m) {
+    return 'hoy ' + miniSym(m.hoy) + ' · mañana ' + miniSym(m.manana)
+      + (m.pedidos_nuevos ? ' · <span class="nuevo">' + m.pedidos_nuevos + (m.pedidos_nuevos === 1 ? ' pedido nuevo' : ' pedidos nuevos') + '</span>' : '');
+  }
 
   function avaClass(uid) { return 'avatar a' + (Math.abs(Number(uid) || 0) % 7); }
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -314,7 +325,8 @@
         + ' <span class="cr-handle">@' + esc(f.ig_username || '—') + '</span>'
         + (meta ? '<span class="cr-meta">' + esc(meta) + '</span>' : '')
         + (f.urgencia && f.urgencia.nivel < 3 ? '<span class="cr-urg urg' + f.urgencia.nivel + '">' + esc(f.urgencia.detalle || '') + '</span>' : '')
-        + '<span class="cr-state"><span class="dot ' + dot + '"></span>' + esc(f.estado || '') + '</span></span>'
+        + '<span class="cr-state"><span class="dot ' + dot + '"></span>' + esc(f.estado || '') + '</span>'
+        + (f.mini ? '<span class="cr-mini">' + miniTxt(f.mini) + '</span>' : '') + '</span>'
         + '<span class="cr-chip ' + chipCls + '">' + esc(chipTxt) + '</span></button>';
     }).join('');
   }
@@ -1087,6 +1099,10 @@
   // por los handlers de siempre y la vista se relee entera.
   var mTab = 'hoy';
   var mFichaUid = null;
+  // (LOTE CONSERJE-INICIO) La ficha del cliente en la bandeja es su
+  // INICIO (la pantalla simple); la ficha completa de siempre queda
+  // detrás del botón «Ver su ficha completa» (mCompleta).
+  var mCompleta = false;
   function mProblemaDe(uid) {
     return ((vista && vista.mano) || []).filter(function (d) { return d.user_id === uid && (d.clase || '') === 'problema'; });
   }
@@ -1103,7 +1119,7 @@
     chip.hidden = false;
     if (n > 0) { chip.className = 'm-chip'; chip.textContent = n + (n === 1 ? ' te necesita' : ' te necesitan'); }
     else { chip.className = 'm-chip ok'; chip.textContent = '✓ Todo al día'; }
-    if (mTab === 'negocios') body.innerHTML = (mFichaUid && cliente && Number(cliente.user_id) === Number(mFichaUid)) ? mFichaHtml() : mTableroHtml();
+    if (mTab === 'negocios') body.innerHTML = (mFichaUid && cliente && Number(cliente.user_id) === Number(mFichaUid)) ? (mCompleta ? mFichaCompletaHtml() : mInicioHtml()) : mTableroHtml();
     else if (mTab === 'posteos') body.innerHTML = mPosteosHtml();
     else if (mTab === 'mas') body.innerHTML = mMasHtml();
     else if (mTab === 'descuentos') { body.innerHTML = descuentosHtml(); bindDescuentos(body); }
@@ -1181,12 +1197,190 @@
           : (f.estado || 'Todo al día'));
       return '<button class="m-biz" data-mbiz="' + f.user_id + '" type="button"><span class="dot ' + dot + '"></span>'
         + '<span><span class="nm">' + esc(f.business_name || 'Sin nombre') + '</span>'
-        + '<span class="ds" style="display:block">' + esc(ds) + '</span></span><span class="go">›</span></button>';
+        + '<span class="ds" style="display:block">' + esc(ds) + '</span>'
+        + (f.mini ? '<span class="mini">' + miniTxt(f.mini) + '</span>' : '') + '</span><span class="go">›</span></button>';
     }).join('');
     html += '<p class="m-note">Los que necesitan algo suben solos arriba.</p>';
     return html;
   }
-  function mFichaHtml() {
+  // ---------------- (LOTE CONSERJE-INICIO) el inicio del cliente ----
+  // La pantalla simple que el dueño pidió: una sola vista por cliente
+  // con el posteo de hoy, el de mañana, su semana de un vistazo, lo
+  // que pidió por el chat, lo que subió y qué se hizo con eso, su
+  // impulso y su billetera, y el chat de correcciones para bamboo.
+  // Cada sección sale de la vista del cliente (conserje-vista); lo
+  // que no tiene dato real no se pinta o dice su línea tranquila.
+  function keyMasDias(key, n) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+    if (!m) return '';
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + n));
+    function p2(x) { return String(x).padStart(2, '0'); }
+    return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate());
+  }
+  function iniOrdenClientes() {
+    if (rosterOrden && rosterOrden.length) return rosterOrden;
+    return ((vista && vista.clientes) || []).map(function (f) { return f.user_id; });
+  }
+  function stepInicioCliente(d) {
+    var orden = iniOrdenClientes();
+    if (orden.length < 2 || !mFichaUid) return;
+    var idx = orden.indexOf(Number(mFichaUid));
+    if (idx < 0) return;
+    var next = orden[(((idx + d) % orden.length) + orden.length) % orden.length];
+    if (!next || next === Number(mFichaUid)) return;
+    mFichaUid = next; selUser = next; mCompleta = false; highlightPostId = null;
+    cargarCliente(next);
+    window.scrollTo(0, 0);
+  }
+  function iniChipDe(estado) {
+    if (estado === 'publicado') return '<span class="ini-chip verde">Ya salió ✓</span>';
+    if (estado === 'programado') return '<span class="ini-chip ambar">Programado</span>';
+    if (estado === 'en_preparacion') return '<span class="ini-chip ambar">En preparación</span>';
+    if (estado === 'fallido') return '<span class="ini-chip rojo">No salió ✗</span>';
+    return '';
+  }
+  // (CORRECCIÓN DEL DUEÑO 27/11 23:5x) El bloque principal NO son
+  // tarjetas de operador: es el INICIO LITERAL del cliente, tal como
+  // lo ve en su app — su perfil y la grilla de su semana con cada
+  // posteo EN SU POSICIÓN FINAL, hoy y mañana etiquetados ADENTRO de
+  // su miniatura. Se arma de la misma semana/posteos que trae la
+  // vista (la misma fuente de «Su feed» de su ficha). Tocar una pieza
+  // abre la hoja de decisión/cambio de ese posteo.
+  function iniCeldaHtml(c, d, manKey, horaSalida) {
+    var porId = {};
+    (c.posteos || []).forEach(function (x) { porId[Number(x.id)] = x; });
+    var post = d.post_id ? porId[Number(d.post_id)] : null;
+    if (!post && c.inicio) {
+      if (d.es_hoy && c.inicio.hoy) post = c.inicio.hoy;
+      else if (manKey && d.key === manKey && c.inicio.manana) post = c.inicio.manana;
+    }
+    var esMan = manKey && d.key === manKey;
+    var hora = d.hora || (post && post.hora) || horaSalida || '';
+    var marca = '';
+    if (post) {
+      if (post.estado === 'fallido') marca = d.es_hoy ? 'Hoy · no salió' : 'No salió';
+      else if (d.es_hoy) marca = 'Hoy · ' + hora;
+      else if (esMan) marca = 'Mañana · ' + hora;
+      else if (post.estado === 'publicado') marca = 'Salió ✓';
+      else if (post.estado === 'en_preparacion') marca = esc(String(d.dia || '')) + ' · en preparación';
+      else marca = esc(String(d.dia || '')) + (hora ? ' · ' + hora : '');
+      var img = post.poster_url || post.image_url || '';
+      var esVid = /video|reel/.test(String(post.media_type || ''));
+      var marcado = highlightPostId && Number(highlightPostId) === Number(post.id);
+      return '<button class="ini-cell' + (d.es_hoy ? ' hoy' : '') + '" data-hoja-post="' + post.id + '" id="post-' + post.id + '" type="button"'
+        + (marcado ? ' style="box-shadow:0 0 0 3px #2793C8;border-color:#2793C8"' : '') + '>'
+        + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '<span class="ini-cellph" style="background:' + avaGrad(c.user_id) + '">' + esc(iniciales(c.business_name)) + '</span>')
+        + (esVid ? '<span class="ini-play">▶</span>' : '')
+        + '<span class="ini-marca' + (d.es_hoy ? ' hoy' : '') + '">' + marca + '</span></button>';
+    }
+    if (d.estado === 'frenado') {
+      return '<div class="ini-cell velada"><span class="ini-vel">⛔</span><span class="ini-marca">No sale</span></div>';
+    }
+    var marcaV = d.es_hoy ? 'Hoy' : (esMan ? 'Mañana' : esc(d.fecha || d.dia || ''));
+    var cell = '<span class="ini-vel">🔒</span>' + (marcaV ? '<span class="ini-marca' + (d.es_hoy ? ' hoy' : '') + '">' + marcaV + '</span>' : '');
+    if (d.estado === 'falta') {
+      return '<button class="ini-cell velada' + (d.es_hoy ? ' hoy' : '') + '" data-act="producir" data-fecha="' + esc(d.key) + '" type="button" title="Producir el posteo de este día">' + cell + '</button>';
+    }
+    return '<div class="ini-cell velada' + (d.es_hoy ? ' hoy' : '') + '">' + cell + '</div>';
+  }
+  function iniLiteralHtml(c) {
+    var hora = (c.inicio && c.inicio.hora_salida) || '19:00';
+    var hoyKey = '';
+    (c.semana || []).forEach(function (d) { if (d.es_hoy) hoyKey = d.key; });
+    var manKey = hoyKey ? keyMasDias(hoyKey, 1) : '';
+    var cells = (c.semana || []).map(function (d) { return iniCeldaHtml(c, d, manKey, hora); }).join('');
+    if (!cells) cells = '<div class="ini-cell velada"><span class="ini-vel">🔒</span></div><div class="ini-cell velada"><span class="ini-vel">🔒</span></div><div class="ini-cell velada"><span class="ini-vel">🔒</span></div>';
+    return '<div class="ini-home">'
+      + '<div class="ini-prof"><span class="ini-ava" style="background:' + avaGrad(c.user_id) + '">' + esc(iniciales(c.business_name)) + '</span>'
+      + '<div style="min-width:0"><div class="ini-pname">' + esc(c.business_name || 'Sin nombre') + '</div>'
+      + '<div class="ini-psub">@' + esc(c.ig_username || '—') + (c.categoria ? ' · ' + esc(c.categoria) : '') + '</div></div></div>'
+      + '<div class="ini-grid">' + cells + '</div>'
+      + '<div class="ini-fnote">Su inicio, tal como lo ve él: su semana ya en su lugar. Tocá una pieza para decidir o cambiarla.</div>'
+      + '</div>';
+  }
+  // La capa del operador, compacta, SOBRE su inicio: su clase, su
+  // momento comercial, su negocio en una línea y el salto a su IG.
+  function iniOpHtml(c, claseTxt) {
+    var inner = '';
+    if (claseTxt || c.comercial) {
+      inner += '<div class="ini-oprow">' + (claseTxt ? '<span class="ini-clase">' + esc(claseTxt.toUpperCase()) + '</span>' : '')
+        + (c.comercial ? '<span class="ini-comercial">' + esc(c.comercial.texto || '') + '</span>' : '') + '</div>';
+    }
+    if (c.negocio_linea) inner += '<div class="ini-negocio">' + esc(c.negocio_linea.texto || '') + '</div>';
+    if (c.ig_username) inner += '<a class="ini-iglink" href="https://instagram.com/' + esc(c.ig_username) + '" target="_blank" rel="noopener">Ver su Instagram ↗</a>';
+    return inner ? '<div class="ini-op">' + inner + '</div>' : '';
+  }
+  function iniPedidosHtml(c) {
+    var ps = c.pedidos || [];
+    if (!ps.length) return '<div class="ini-calm">No pidió nada por el chat.</div>';
+    return ps.map(function (pd) {
+      var chip = pd.estado === 'resuelto' ? '<span class="ini-chip verde">Resuelto</span>'
+        : pd.estado === 'en_revision' ? '<span class="ini-chip ambar">En revisión</span>'
+        : '<span class="ini-chip rojo">Nuevo</span>';
+      return '<div class="ini-card"><div class="ini-ped-txt">«' + esc(pd.texto || '') + '»</div>'
+        + '<div style="margin-top:7px">' + chip + (pd.hace ? '<span style="font-size:12px;color:#A2937D;font-weight:650;margin-left:8px">' + esc(pd.hace) + '</span>' : '') + '</div>'
+        + (pd.estado === 'resuelto' && pd.respuesta ? '<div class="ini-resp">✓ Lo resolví yo: ' + esc(pd.respuesta) + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+  function iniSubidosHtml(c) {
+    var ss = c.subidos || [];
+    if (!ss.length) return '<div class="ini-calm">Todavía no subió material — su semana se arma desde su Instagram.</div>';
+    return '<div class="ini-card">' + ss.map(function (sm) {
+      return '<div class="ini-sub">' + (sm.img ? '<img src="' + esc(sm.img) + '" alt="" loading="lazy">' : '')
+        + '<span><span class="st" style="display:block">' + esc(sm.producto || (sm.kind === 'video' ? 'Un video que subió' : 'Una foto que subió')) + '</span>'
+        + '<span class="su" style="display:block">' + esc(sm.uso || '') + '</span></span></div>';
+    }).join('') + '</div>';
+  }
+  function iniPlataHtml(c) {
+    var out = '';
+    var b = c.impulso;
+    if (b) out += '<div class="pf-line boost">🚀 Impulso activo — día ' + (b.dia != null ? b.dia : '—') + ' de ' + (b.dias_total != null ? b.dias_total : '—')
+      + ' · gastados US$ ' + (Number(b.gasto_cents || 0) / 100).toFixed(2).replace('.', ',') + ' de US$ ' + (Number(b.presupuesto_cents || 0) / 100).toFixed(0)
+      + (b.visitas_perfil != null ? ' · ' + b.visitas_perfil + ' visitas al perfil' : '') + '</div>';
+    if (c.billetera) out += '<div class="pf-line ok">💰 Billetera: US$ ' + (Number(c.billetera.saldo_cents || 0) / 100).toFixed(2).replace('.', ',') + '</div>';
+    return out;
+  }
+  function iniCorreccionesHtml(c) {
+    var cs = c.correcciones || [];
+    var hilo = cs.map(function (m) {
+      var out = '<div class="ini-corr-msg mio">' + esc(m.texto || '') + (m.hace ? '<span class="hace">' + esc(m.hace) + '</span>' : '') + '</div>';
+      if (m.estado === 'aplicada') out += '<div class="ini-corr-msg resp">Hecha ✓' + (m.respuesta ? ' — ' + esc(m.respuesta) : '') + '</div>';
+      return out;
+    }).join('');
+    return (hilo || '<div class="ini-calm">Sin correcciones todavía. Escribile a bamboo lo que haya que cambiar de este cliente.</div>')
+      + '<div class="ini-corr-row"><input id="corrIn" type="text" maxlength="1000" placeholder="Escribile una corrección a bamboo…">'
+      + '<button class="btn primary" data-act="corr-enviar" type="button">Enviar</button></div>';
+  }
+  function mInicioHtml() {
+    var c = cliente;
+    var fila = ((vista && vista.clientes) || []).filter(function (f) { return Number(f.user_id) === Number(c.user_id); })[0] || {};
+    var orden = iniOrdenClientes();
+    var pos = orden.indexOf(Number(c.user_id));
+    var claseTxt = fila.clase_label || '';
+    // 1 · la navegación del operador (no es parte de su inicio)
+    var html = '<div class="ini-switch">'
+      + '<button class="ini-swbtn" data-minav="-1" type="button" aria-label="Cliente anterior">‹</button>'
+      + '<div class="ini-swmid"><div class="ini-swname">' + esc(c.business_name || 'Sin nombre') + '</div>'
+      + '<div class="ini-swpos">cliente ' + (pos >= 0 ? (pos + 1) + ' de ' + orden.length : '—') + '</div></div>'
+      + '<button class="ini-swbtn" data-minav="1" type="button" aria-label="Cliente siguiente">›</button>'
+      + '<button class="ini-neg" data-mback type="button">Negocios</button></div>';
+    // 2 · la capa del operador, compacta, sobre su inicio
+    html += iniOpHtml(c, claseTxt);
+    // 3 · SU INICIO LITERAL: su perfil + su semana en su lugar
+    html += iniLiteralHtml(c);
+    // 4 · el resto (la capa del operador, debajo de su inicio)
+    if ((c.alertas || []).length) {
+      html += '<div style="margin-top:12px">' + c.alertas.map(function (a) { return '<div class="ini-alert ' + esc(a.tono || 'ambar') + '">⚠ ' + esc(a.texto || '') + '</div>'; }).join('') + '</div>';
+    }
+    html += '<div class="sec-t">Pidió por el chat</div>' + iniPedidosHtml(c);
+    html += '<div class="sec-t">Subió</div>' + iniSubidosHtml(c);
+    html += iniPlataHtml(c);
+    html += '<div class="sec-t">Correcciones para mí</div>' + iniCorreccionesHtml(c);
+    html += '<button class="btn ini-completa" data-mact="ficha-completa" type="button">Ver su ficha completa</button>';
+    return html;
+  }
+  function mFichaCompletaHtml() {
     var c = cliente;
     var ini = iniciales(c.business_name);
     var fila = ((vista && vista.clientes) || []).filter(function (f) { return Number(f.user_id) === Number(c.user_id); })[0] || {};
@@ -1211,13 +1405,191 @@
     var grid = (c.posteos || []).length || planCards
       ? '<div class="posts">' + (c.posteos || []).map(function (p) { return postCard(p, true, ini); }).join('') + planCards + '</div>'
       : '<div class="m-cargando">Esta cuenta todavía no tiene posteos.</div>';
-    return '<button class="m-back" data-mback type="button">← Negocios</button>'
+    return '<button class="m-back" data-mact="volver-inicio" type="button">← Su inicio</button>'
       + '<div class="m-ficha-head"><div class="nm">' + esc(c.business_name || 'Sin nombre') + '</div>'
       + '<div class="hd">@' + esc(c.ig_username || '—') + (c.categoria ? ' · ' + esc(c.categoria) : '') + '</div>'
       + '<div class="st"><span class="dot ' + dot + '"></span>' + esc(fila.estado || '') + '</div></div>'
       + mDescHtml(c)
       + '<div class="sec-t">Su semana</div>' + week
       + '<div class="sec-t">Sus posteos</div>' + grid;
+  }
+  // ---------------- la hoja de cambio / decisión ----------------
+  // (LOTE CONSERJE-INICIO · AGREGADO A) Tocar el posteo de hoy o de
+  // mañana abre SU hoja: cambiar la pieza DE VERDAD (otra pieza de su
+  // semana por set-image; su material subido por set-media), editar
+  // el texto completo (edit-caption) y las decisiones de siempre
+  // (Sale / Que no salga / Que se rehaga si falló), por las puertas
+  // admin que ya existen. Al guardar, la tarjeta del inicio se
+  // re-pinta con lo nuevo (la vista se relee entera).
+  var hojaPost = null;
+  function cerrarHojaPost() {
+    var f = $('iniSheet');
+    if (f) f.remove();
+    hojaPost = null;
+  }
+  function abrirHojaPost(postId) {
+    var c = cliente;
+    if (!c) return;
+    var post = (c.posteos || []).filter(function (x) { return Number(x.id) === Number(postId); })[0]
+      || (c.inicio && c.inicio.hoy && Number(c.inicio.hoy.id) === Number(postId) ? c.inicio.hoy : null)
+      || (c.inicio && c.inicio.manana && Number(c.inicio.manana.id) === Number(postId) ? c.inicio.manana : null);
+    if (!post) { toast('Ese posteo ya no está en su semana.', 'warn'); return; }
+    hojaPost = { post: post, caption: post.caption || '', assets: null };
+    pintarHojaPost();
+    api('/api/admin/support/conserje/posteo-media?user_id=' + c.user_id + '&post_id=' + postId).then(function (j) {
+      if (!hojaPost || Number(hojaPost.post.id) !== Number(postId) || !j || !j.ok) return;
+      hojaPost.caption = j.caption || '';
+      var ta = $('hojaCap');
+      if (ta && document.activeElement !== ta) ta.value = hojaPost.caption;
+    }).catch(function () { /* queda el caption de la vista */ });
+    api('/api/admin/support/conserje/material?user_id=' + c.user_id + '&limit=24').then(function (j) {
+      if (!hojaPost || Number(hojaPost.post.id) !== Number(postId)) return;
+      hojaPost.assets = (j && j.material) || [];
+      var box = $('hojaAlts');
+      if (box) box.innerHTML = hojaAlternativasHtml();
+    }).catch(function () { /* sin material legible: quedan las piezas de la semana */ });
+  }
+  function hojaAlternativasHtml() {
+    var c = cliente, hp = hojaPost;
+    if (!c || !hp) return '';
+    var p = hp.post;
+    var out = (c.posteos || []).filter(function (x) { return Number(x.id) !== Number(p.id) && x.status !== 'published'; }).map(function (x) {
+      var img = x.poster_url || x.image_url || '';
+      return '<button class="ini-alt" data-cambiar-desde="' + x.id + '" type="button">'
+        + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : '')
+        + '<span><span class="at" style="display:block">' + esc(x.titulo || 'Pieza de su semana') + '</span>'
+        + '<span class="as" style="display:block">De su semana · ' + esc(fechaCorta(x.dia_key) || '') + '</span></span></button>';
+    }).join('');
+    if (hp.assets === null) out += '<div class="ini-calm">Cargando su material…</div>';
+    else out += hp.assets.filter(function (a) { return a.kind === 'photo' || a.kind === 'video'; }).map(function (a) {
+      var thumb = a.thumb_path || a.file_path || '';
+      return '<button class="ini-alt" data-cambiar-asset="' + esc(a.file_path || '') + '" data-asset-kind="' + esc(a.kind || '') + '" data-asset-thumb="' + esc(a.thumb_path || '') + '" type="button">'
+        + (thumb ? '<img src="' + esc(thumb) + '" alt="" loading="lazy">' : '')
+        + '<span><span class="at" style="display:block">' + esc(a.producto || (a.kind === 'video' ? 'Un video que subió' : 'Una foto que subió')) + '</span>'
+        + '<span class="as" style="display:block">Su material subido</span></span></button>';
+    }).join('');
+    return out || '<div class="ini-calm">No hay otra pieza para poner en su lugar.</div>';
+  }
+  function pintarHojaPost() {
+    var hp = hojaPost;
+    cerrarHojaPost();
+    var c = cliente;
+    if (!c || !hp) return;
+    hojaPost = hp;
+    var p = hp.post;
+    var img = p.poster_url || p.image_url || '';
+    var esVid = /video|reel/.test(String(p.media_type || ''));
+    var fondo = document.createElement('div');
+    fondo.className = 'ini-sheet-fondo';
+    fondo.id = 'iniSheet';
+    fondo.innerHTML = '<div class="ini-sheet">'
+      + '<div class="sh-head">' + (img ? '<img class="ini-thumb" src="' + esc(img) + '" alt="">' : '<span class="ini-thumb ph">' + esc(iniciales(c.business_name)) + '</span>')
+      + '<div style="flex:1;min-width:0"><div class="sh-title">' + esc(p.titulo || 'Posteo') + '</div>'
+      + iniChipDe(p.estado) + (esVid ? '<span class="ini-chip gris">Video</span>' : '') + '</div>'
+      + '<button class="ini-swbtn" data-hoja-cerrar type="button" style="background:#F2EDE3;color:#0A1E33" aria-label="Cerrar">✕</button></div>'
+      + '<div class="sec-t">El texto</div>'
+      + '<textarea id="hojaCap" maxlength="2200" placeholder="El texto completo del posteo…">' + esc(hp.caption || '') + '</textarea>'
+      + '<div class="ini-acts"><button class="btn primary" data-hoja-caption type="button">Guardar el texto</button></div>'
+      + '<div class="sec-t">Cambiar la pieza</div><div id="hojaAlts">' + hojaAlternativasHtml() + '</div>'
+      + '<div class="sec-t">Decisión</div>'
+      + '<div class="ini-acts"><button class="btn primary" data-hoja-sale type="button">✓ Sale así</button>'
+      + '<button class="btn" data-hoja-nosale type="button">Que no salga</button></div>'
+      + (p.estado === 'fallido'
+        ? (p.rehacer_pedida
+          ? '<div class="ini-resp" style="margin-top:10px">✓ Orden de rehacer registrada (caso #' + (p.rehacer_caso_id || '—') + '): la línea a mano ya lo tiene en su cola.</div>'
+          : '<div class="ini-acts"><button class="btn" data-hoja-rehacer type="button">Que se rehaga</button></div>')
+        : '')
+      + '</div>';
+    document.body.appendChild(fondo);
+    fondo.addEventListener('click', function (ev) { onHojaClick(ev, fondo); });
+  }
+  function hojaTrasCambiar(msg) {
+    cerrarHojaPost();
+    despuesDeActuar(msg);
+  }
+  function onHojaClick(ev, fondo) {
+    var hp = hojaPost;
+    if (!hp) return;
+    var p = hp.post;
+    if (ev.target === fondo || ev.target.closest('[data-hoja-cerrar]')) { cerrarHojaPost(); return; }
+    var bCap = ev.target.closest('[data-hoja-caption]');
+    if (bCap) {
+      var txt = String(($('hojaCap') || {}).value || '');
+      if (!txt.trim()) { toast('El texto no puede quedar vacío.', 'warn'); return; }
+      bCap.disabled = true;
+      api('/api/admin/posts/' + p.id + '/edit-caption', { method: 'POST', body: { caption: txt, confirm: true } }).then(function (j) {
+        if (j && j.ok) hojaTrasCambiar('Texto guardado: el posteo sale con el texto nuevo.');
+        else { toast('No se pudo guardar el texto (' + ((j && (j.error || j.motivo)) || 'error') + ').', 'err'); bCap.disabled = false; }
+      }).catch(function () { toast('No se pudo guardar el texto.', 'err'); bCap.disabled = false; });
+      return;
+    }
+    var bDesde = ev.target.closest('[data-cambiar-desde]');
+    if (bDesde) {
+      bDesde.disabled = true;
+      api('/api/admin/posts/' + p.id + '/set-image', { method: 'POST', body: { from_post_id: Number(bDesde.getAttribute('data-cambiar-desde')) } }).then(function (j) {
+        if (j && j.ok) hojaTrasCambiar('Pieza cambiada: el posteo sale con la pieza elegida.');
+        else { toast('No se pudo cambiar la pieza (' + ((j && (j.error || j.motivo)) || 'error') + ').', 'err'); bDesde.disabled = false; }
+      }).catch(function () { toast('No se pudo cambiar la pieza.', 'err'); bDesde.disabled = false; });
+      return;
+    }
+    var bAsset = ev.target.closest('[data-cambiar-asset]');
+    if (bAsset) {
+      var ruta = bAsset.getAttribute('data-cambiar-asset');
+      var kindA = bAsset.getAttribute('data-asset-kind') || '';
+      var thumbA = bAsset.getAttribute('data-asset-thumb') || '';
+      if (!ruta) { toast('Ese material no tiene archivo.', 'err'); return; }
+      bAsset.disabled = true;
+      toast('Aplicando su material al posteo…');
+      var aDataUri = function (url) {
+        return fetch(url).then(function (r) { return r.blob(); }).then(function (blob) {
+          return new Promise(function (res, rej) {
+            var fr = new FileReader();
+            fr.onload = function () { res(String(fr.result || '')); };
+            fr.onerror = rej;
+            fr.readAsDataURL(blob);
+          });
+        });
+      };
+      aDataUri(ruta).then(function (dataUri) {
+        var bodyM = { media: dataUri };
+        if (kindA === 'video' && thumbA) {
+          return aDataUri(thumbA).then(function (coverUri) { bodyM.cover = coverUri; return bodyM; }).catch(function () { return bodyM; });
+        }
+        return bodyM;
+      }).then(function (bodyM) {
+        return api('/api/admin/posts/' + p.id + '/set-media', { method: 'POST', body: bodyM });
+      }).then(function (j) {
+        if (j && j.ok) hojaTrasCambiar('Pieza cambiada: el posteo sale con su material.');
+        else { toast('No se pudo cambiar la pieza (' + ((j && (j.error || j.motivo)) || 'error') + ').', 'err'); bAsset.disabled = false; }
+      }).catch(function () { toast('No se pudo cambiar la pieza.', 'err'); bAsset.disabled = false; });
+      return;
+    }
+    var bSale = ev.target.closest('[data-hoja-sale]');
+    if (bSale) {
+      bSale.disabled = true;
+      decidir(cliente.user_id, p.dia_key, p.id, 'sale').then(function (j) {
+        if (j && j.ok) hojaTrasCambiar('Sale así: quedó aprobado y programado.');
+        else { toast('No se pudo aprobar (' + ((j && (j.error || j.motivo)) || 'error') + ').', 'err'); bSale.disabled = false; }
+      }).catch(function () { toast('No se pudo aprobar.', 'err'); bSale.disabled = false; });
+      return;
+    }
+    var bNo = ev.target.closest('[data-hoja-nosale]');
+    if (bNo) {
+      bNo.disabled = true;
+      decidir(cliente.user_id, p.dia_key, p.id, 'no_sale').then(function (j) {
+        if (j && j.ok) hojaTrasCambiar('No sale: quedó en borrador y el día marcado.');
+        else { toast('No se pudo registrar (' + ((j && (j.error || j.motivo)) || 'error') + ').', 'err'); bNo.disabled = false; }
+      }).catch(function () { toast('No se pudo registrar.', 'err'); bNo.disabled = false; });
+      return;
+    }
+    var bRe = ev.target.closest('[data-hoja-rehacer]');
+    if (bRe) {
+      bRe.disabled = true;
+      api('/api/admin/conserje/vista/producir', { method: 'POST', body: { user_id: Number(cliente.user_id), post_id: Number(p.id), detalle: 'Que se rehaga este posteo: orden atada al posteo abierta desde su hoja en el inicio del cliente.' } }).then(function (j) {
+        if (j && j.ok) hojaTrasCambiar(j.duplicado ? 'Ese rehacer ya estaba pedido: la orden sigue en la cola.' : 'Orden de rehacer registrada: entró a la cola de producción a mano.');
+        else { toast('No se pudo pedir el rehacer (' + ((j && j.error) || 'error') + ').', 'err'); bRe.disabled = false; }
+      }).catch(function () { toast('No se pudo pedir el rehacer.', 'err'); bRe.disabled = false; });
+    }
   }
   function mPosteosHtml() {
     var m = vista && vista.manana;
@@ -1249,9 +1621,12 @@
     return html;
   }
   function mMasHtml() {
-    return '<div class="sec-t" style="margin-top:2px">Avisos</div>'
-      + '<button class="m-link" data-mact="avisos" type="button">' + (opPushSuscrito ? '🔔 Avisos activados' : '🔔 Activar avisos') + '<span class="go">' + (opPushSuscrito ? '✓' : '›') + '</span></button>'
-      + '<div class="sec-t">Accesos</div>'
+    // (LOTE CONSERJE-INICIO · nota AVISOS-APAGADOS) El botón «Activar
+    // avisos» ya no se ofrece: el dueño apagó las notificaciones de
+    // clientes por completo y el sistema de avisos quedó dormido —
+    // no tiene sentido invitar a activar algo apagado por decisión
+    // suya. La maquinaria de suscripción queda en el código, dormida.
+    return '<div class="sec-t" style="margin-top:2px">Accesos</div>'
       + '<button class="m-link" data-mact="escritorio" type="button">🖥️ Consola completa<span class="go">›</span></button>'
       + '<a class="m-link" href="/panel">🧭 Panel de soporte<span class="go">›</span></a>'
       + '<button class="m-link" data-mact="descuentos" type="button">🏷️ Descuentos por código<span class="go">›</span></button>'
@@ -1266,20 +1641,43 @@
     var tb = ev.target.closest('[data-mtab]');
     if (tb) { mTab = tb.getAttribute('data-mtab'); if (mTab !== 'negocios') mFichaUid = null; renderMovil(); window.scrollTo(0, 0); return; }
     var bz = ev.target.closest('[data-mbiz]');
-    if (bz) { mFichaUid = Number(bz.getAttribute('data-mbiz')); selUser = mFichaUid; centroVista = 'semana'; highlightPostId = null; cargarCliente(mFichaUid); window.scrollTo(0, 0); return; }
-    if (ev.target.closest('[data-mback]')) { mFichaUid = null; renderMovil(); return; }
+    if (bz) { mFichaUid = Number(bz.getAttribute('data-mbiz')); selUser = mFichaUid; mCompleta = false; centroVista = 'semana'; highlightPostId = null; cargarCliente(mFichaUid); window.scrollTo(0, 0); return; }
+    if (ev.target.closest('[data-mback]')) { mFichaUid = null; mCompleta = false; renderMovil(); return; }
+    // (LOTE CONSERJE-INICIO) Las flechas de la franja del inicio y la
+    // apertura de la hoja del posteo de hoy/mañana.
+    var nv = ev.target.closest('[data-minav]');
+    if (nv) { stepInicioCliente(Number(nv.getAttribute('data-minav')) || 0); return; }
+    var hj = ev.target.closest('[data-hoja-post]');
+    if (hj) { abrirHojaPost(Number(hj.getAttribute('data-hoja-post'))); return; }
     var ac = ev.target.closest('[data-mact]');
     if (ac) {
       var a = ac.getAttribute('data-mact');
       if (a === 'escritorio') { document.body.classList.add('ver-escritorio'); window.scrollTo(0, 0); }
-      else if (a === 'avisos') { activarAvisosOperador(); }
       else if (a === 'recargar') { cargar(true); }
       else if (a === 'descuentos') { mTab = 'descuentos'; renderMovil(); window.scrollTo(0, 0); }
+      else if (a === 'ficha-completa') { mCompleta = true; renderMovil(); window.scrollTo(0, 0); }
+      else if (a === 'volver-inicio') { mCompleta = false; renderMovil(); window.scrollTo(0, 0); }
       return;
     }
     var go = ev.target.closest('[data-goto]');
-    if (go) { mTab = 'negocios'; mFichaUid = Number(go.getAttribute('data-goto')); }
+    if (go) { mTab = 'negocios'; mCompleta = false; mFichaUid = Number(go.getAttribute('data-goto')); }
   });
+  // (LOTE CONSERJE-INICIO) Deslizar en el inicio pasa de cliente,
+  // como las flechas de la franja: un delta horizontal claro y fuera
+  // de campos de texto y de la hoja.
+  var iniTouchX = null;
+  document.addEventListener('touchstart', function (ev) {
+    if (mTab !== 'negocios' || !mFichaUid || mCompleta || !ev.changedTouches || !ev.changedTouches.length) { iniTouchX = null; return; }
+    iniTouchX = ev.changedTouches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', function (ev) {
+    if (iniTouchX == null) return;
+    var dx = ev.changedTouches[0].clientX - iniTouchX;
+    iniTouchX = null;
+    if (Math.abs(dx) < 70) return;
+    if (ev.target.closest && ev.target.closest('input, textarea, select, .ini-sheet-fondo')) return;
+    stepInicioCliente(dx < 0 ? 1 : -1);
+  }, { passive: true });
 
 
   // ---------------- Descuentos por código (LOTE DESCUENTOS-CODIGO) ----------------
@@ -1519,6 +1917,33 @@
     cargarCliente(selUser, highlightPostId);
     irAlCentro();
   }
+  // (LOTE CONSERJE-INICIO · AGREGADO C) LA REGLA del dueño: tocar una
+  // push del conserje aterriza en el INICIO de ese cliente — en la
+  // bandeja (la piel que manda, en su pestaña Negocios) y en la ficha
+  // del centro — con su posteo marcado si el aviso lo trae. La usan
+  // el arranque con ?user= y el mensaje del service worker cuando la
+  // app ya estaba abierta de fondo: nunca se queda donde estaba.
+  function abrirInicioCliente(uid, postId) {
+    var u = Number(uid) || 0;
+    if (!u) return;
+    document.body.classList.remove('ver-escritorio');
+    mTab = 'negocios';
+    mFichaUid = u;
+    mCompleta = false;
+    gotoFicha(u, postId || null);
+    window.scrollTo(0, 0);
+  }
+  // El service worker, al tocar la push con la consola ya abierta, no
+  // recarga: enfoca la ventana y pasa el destino por este canal.
+  if ('serviceWorker' in navigator) {
+    try {
+      navigator.serviceWorker.addEventListener('message', function (ev) {
+        var d = ev && ev.data;
+        if (!d || d.tipo !== 'conserje-ir') return;
+        abrirInicioCliente(d.user, d.post || null);
+      });
+    } catch (e) { /* sin canal: el aterrizaje va por la URL */ }
+  }
   function despuesDeActuar(msg) {
     if (msg) toast(msg);
     feedPorUsuario = {};
@@ -1544,6 +1969,7 @@
   }
   document.addEventListener('keydown', function (ev) {
     if (ev.target && ev.target.id === 'duenoChatIn' && ev.key === 'Enter') { var bD = document.querySelector('[data-act="dueno-enviar"]'); if (bD) bD.click(); return; }
+    if (ev.target && ev.target.id === 'corrIn' && ev.key === 'Enter') { var bCorr = document.querySelector('[data-act="corr-enviar"]'); if (bCorr) bCorr.click(); return; }
     if (!document.body.classList.contains('ficha-open')) return;
     if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
     var ae = document.activeElement;
@@ -1714,6 +2140,23 @@
       api('/api/admin/conserje/vista/producir', { method: 'POST', body: { user_id: Number(b.getAttribute('data-uid')), post_id: Number(b.getAttribute('data-pid')), detalle: 'Que se rehaga este posteo: orden atada al posteo abierta desde su tarjeta en la consola.' } })
         .then(function (j) { if (j && j.ok) despuesDeActuar(j.duplicado ? 'Ese rehacer ya estaba pedido: la orden sigue en la cola.' : 'Orden de rehacer registrada: entró a la cola de producción a mano.'); else { toast('No se pudo pedir el rehacer (' + ((j && j.error) || 'error') + ').', 'err'); re(); } })
         .catch(function () { toast('No se pudo pedir el rehacer.', 'err'); re(); });
+    } else if (act === 'corr-enviar') {
+      // (LOTE CONSERJE-INICIO · AGREGADO B) La corrección del operador
+      // para bamboo, desde el inicio del cliente: envío optimista (se
+      // pinta ya en el hilo) y refetch de la vista del cliente para
+      // confirmar contra la base.
+      var inpC = $('corrIn');
+      var txtC = inpC ? String(inpC.value || '').trim() : '';
+      if (!txtC) { toast('Escribí la corrección primero.', 'warn'); re(); return; }
+      var uidC = Number(mFichaUid || selUser) || 0;
+      if (cliente && Number(cliente.user_id) === uidC) {
+        cliente.correcciones = (cliente.correcciones || []).concat([{ id: 0, texto: txtC, estado: 'nueva', respuesta: '', hace: 'ahora' }]);
+        renderMovil();
+      }
+      api('/api/admin/conserje/correcciones', { method: 'POST', body: { user_id: uidC, texto: txtC } }).then(function (j) {
+        if (j && j.ok) { toast('Corrección enviada: bamboo la recibe.'); if (uidC) cargarCliente(uidC); }
+        else { toast('No se pudo enviar la corrección.', 'err'); if (uidC) cargarCliente(uidC); }
+      }).catch(function () { toast('No se pudo enviar la corrección.', 'err'); re(); });
     } else if (act === 'nota-guardar') {
       var notaTxt = ($('notaInput') || {}).value || '';
       api('/api/admin/support/conserje/nota', { method: 'POST', body: { user_id: selUser, nota: notaTxt } })
@@ -1770,11 +2213,11 @@
   limpiarBuscadores();
   window.addEventListener('pageshow', function (ev) { if (ev && ev.persisted) { limpiarBuscadores(); renderRoster(); } });
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
-  // (LOTE CONSERJE-PUSH-OPERADOR) El botón de avisos de la barra de
-  // escritorio: la misma activación que el de Más en el teléfono.
-  var btnOpPushEl = $('btnOpPush');
-  if (btnOpPushEl) btnOpPushEl.addEventListener('click', activarAvisosOperador);
-  opPushRefrescar();
+  // (LOTE CONSERJE-INICIO · nota AVISOS-APAGADOS) El botón de avisos
+  // de la barra de escritorio se retiró de la interfaz junto con el
+  // de Más: los avisos del operador están apagados por decisión del
+  // dueño y el sistema quedó dormido (la suscripción no se consulta
+  // ni se ofrece; la maquinaria opPush* queda en el código, inerte).
   // (LOTE CONSERJE-VIVO) El aviso de pedidos nuevos: al tocarlo se
   // apaga y lleva a la lista — en el teléfono, a la pestaña «Hoy»;
   // en la compu, a la columna de decisiones con un destello.
@@ -1808,13 +2251,13 @@
     // con token guardado: sin esto, el enlace ?user=&post= se perdía
     // al tipear el token — y también al re-entrar tras un 401.
     cargar(true).then(function () {
-      if (deepUser) { try { gotoFicha(deepUser, deepPost || null); } catch (e) {} }
+      if (deepUser) { try { abrirInicioCliente(deepUser, deepPost || null); } catch (e) {} }
     });
   });
   $('gateToken').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') $('gateBtn').click(); });
 
   if (!token) abrirGate();
   else cargar(true).then(function () {
-    if (deepUser) { try { gotoFicha(deepUser, deepPost || null); } catch (e) {} }
+    if (deepUser) { try { abrirInicioCliente(deepUser, deepPost || null); } catch (e) {} }
   });
 })();

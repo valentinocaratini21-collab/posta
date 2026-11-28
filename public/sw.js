@@ -80,7 +80,37 @@ self.addEventListener('push', (e) => {
 });
 
 function openPushUrl(url) {
+  // (LOTE CONSERJE-INICIO · AGREGADO C) LA REGLA del dueño: la push
+  // del conserje (su URL es /conserje?user=&post=) aterriza en el
+  // INICIO de ese cliente. Si ya hay una ventana del conserje, se la
+  // enfoca y se le pasa el destino por mensaje — la consola navega
+  // sola a ese cliente, sin recargar ni quedarse donde estaba. Si no
+  // hay ventana del conserje, se abre con la URL (el arranque con
+  // ?user= hace el mismo aterrizaje). Las demás push conservan el
+  // comportamiento de siempre.
+  let destino = null;
+  try { destino = new URL(url, self.location.origin); } catch (err) { destino = null; }
+  const esConserje = !!destino && destino.pathname === '/conserje';
   return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    if (esConserje) {
+      for (const c of clients) {
+        try {
+          const u = new URL(c.url);
+          if (u.origin !== self.location.origin || u.pathname !== '/conserje') continue;
+          const msg = {
+            tipo: 'conserje-ir',
+            user: Number(destino.searchParams.get('user') || 0) || 0,
+            post: Number(destino.searchParams.get('post') || 0) || 0,
+            url,
+          };
+          let enviado = false;
+          try { c.postMessage(msg); enviado = true; } catch (err) { enviado = false; }
+          if (!enviado) return c.navigate(url).then(() => c.focus());
+          return c.focus();
+        } catch (err) { /* seguir */ }
+      }
+      return self.clients.openWindow(url);
+    }
     for (const c of clients) {
       try {
         const u = new URL(c.url);

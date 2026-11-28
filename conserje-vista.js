@@ -449,6 +449,41 @@ function filaRoster(db, u, opts, nowMs) {
     estado = 'Al día · próximo ' + (k === hoyKey ? 'hoy' : (k === shiftDayKey(hoyKey, 1) ? 'mañana' : fechaCortaDeKey(k))) + (hh ? ' ' + hh : '');
   } else if (publicadoHoy) { dot = 'green'; estado = 'Al día · hoy ya publicó'; }
   else { dot = 'grey'; estado = 'Sin posteos programados'; }
+  // (LOTE CONSERJE-INICIO) El mini-estado de la fila: el posteo de hoy
+  // y el de mañana en una palabra, y los pedidos del chat que nadie
+  // revisó todavía — las dos listas (riel y tablero) lo pintan sin
+  // abrir la ficha. Sale de las mismas fuentes que la semana y que
+  // pendientesDe: lo que no se puede leer no se afirma.
+  const estadoDiaMini = (key) => {
+    if (!key) return 'nada';
+    const rowsD = safe(() => db.prepare(
+      `SELECT status, scheduled_at, published_at, created_at FROM posts
+       WHERE user_id = ? AND status IN ('published', 'scheduled', 'draft', 'failed')`).all(uid), []);
+    const rangoD = { published: 4, scheduled: 3, draft: 2, failed: 1 };
+    let bestD = null;
+    for (const r of rowsD) {
+      const tD = toMs(r.scheduled_at || r.published_at || r.created_at);
+      if (!Number.isFinite(tD)) continue;
+      if (safe(() => dayKeyInTz(new Date(tD), tz), '') !== key) continue;
+      if (!bestD || (rangoD[r.status] || 0) > (rangoD[bestD] || 0)) bestD = r.status;
+    }
+    if (bestD === 'published') return 'salio';
+    if (bestD === 'scheduled' || bestD === 'draft') return 'programado';
+    if (bestD === 'failed') return 'fallo';
+    const stopD = safe(() => db.prepare(
+      'SELECT day_key FROM day_stops WHERE user_id = ? AND day_key = ?').get(uid, key), null);
+    if (stopD) return 'freno';
+    return (claseInfo.clase === 'pago' || claseInfo.clase === 'prueba_corriendo') ? 'falta' : 'nada';
+  };
+  const pedidosNuevosMini = safe(() => db.prepare(
+    `SELECT COUNT(*) AS c FROM chat_messages m
+     WHERE m.user_id = ? AND m.role = 'user' AND m.hilo IN ('post', 'semana', 'general')
+       AND m.id IN (SELECT id FROM chat_messages WHERE user_id = ? AND role = 'user'
+                    AND hilo IN ('post', 'semana', 'general') ORDER BY id DESC LIMIT 60)
+       AND NOT EXISTS (SELECT 1 FROM support_voz_pedidos v WHERE v.message_id = m.id
+                       AND (v.estado <> 'pendiente' OR v.visto_en IS NOT NULL))`)
+    .get(uid, uid), { c: 0 }).c || 0;
+  const mini = { hoy: estadoDiaMini(hoyKey), manana: estadoDiaMini(shiftDayKey(hoyKey, 1)), pedidos_nuevos: pedidosNuevosMini };
   return {
     user_id: uid,
     // (LOTE RUIDO-ESPACIOS · detalle 10 de la auditoría) El nombre
@@ -470,7 +505,7 @@ function filaRoster(db, u, opts, nowMs) {
     publishing_stopped: !!u.publishing_stopped,
     es_invitado: !!u.is_guest, es_dueno: uid === conserjeRevision.OWNER_USER_ID,
     concierge: !!u.concierge,
-    etapa, racha, pendientes: pend,
+    etapa, racha, pendientes: pend, mini,
     proximo: prox ? { post_id: prox.id, scheduled_at: prox.scheduled_at } : null,
     plan_prueba: plan ? { estrella: plan.estrella, formatos: plan.formatos, listos, total: plan.slots.length } : null,
     tratamiento: tratamientoDe(db, uid),
@@ -1368,6 +1403,372 @@ function descuentoDe(db, uid) {
   } catch (e) { return null; }
 }
 
+// ---------------------------------------------------------------------
+// (LOTE CONSERJE-INICIO) EL INICIO DEL CLIENTE — los datos de la
+// pantalla simple que el dueño pidió: su momento comercial, su
+// negocio en una línea, sus alertas, el posteo de hoy y el de mañana,
+// lo que pidió por el chat, lo que subió y qué se hizo con eso, su
+// impulso activo, su billetera y el chat de correcciones del
+// operador. Todo sale de las fuentes reales que la consola ya lee;
+// lo que no tiene dato NO sale (la clave queda ausente o en null y
+// la pantalla esconde la sección) — nada se inventa.
+// ---------------------------------------------------------------------
+function horaEnTzTxt(ms, tz) {
+  if (!Number.isFinite(ms)) return '';
+  try { return new Intl.DateTimeFormat('es', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms)); }
+  catch (e) { return ''; }
+}
+
+// El posteo de UN día de la cuenta, con su estado en palabras de la
+// pantalla: publicado · programado · en_preparacion (borrador) ·
+// fallido. Incluye el fallido (la tarjeta de hoy lo tiene que poder
+// mostrar y rehacer), a diferencia del espejo del cliente.
+function postDelDia(db, uid, tz, key, o) {
+  if (!key) return null;
+  const rows = safe(() => db.prepare(
+    `SELECT * FROM posts WHERE user_id = ? AND status IN ('published', 'scheduled', 'draft', 'failed')`).all(Number(uid)), []);
+  const rango = { published: 4, scheduled: 3, draft: 2, failed: 1 };
+  let best = null;
+  for (const p of rows) {
+    const t = toMs(p.scheduled_at || p.published_at || p.created_at);
+    if (!Number.isFinite(t)) continue;
+    if (safe(() => dayKeyInTz(new Date(t), tz), '') !== key) continue;
+    if (!best || (rango[p.status] || 0) > (rango[best.p.status] || 0)) best = p;
+  }
+  if (!best) return null;
+  const abs = typeof o.absImageUrl === 'function' ? o.absImageUrl : null;
+  let poster = '';
+  if (typeof o.posterUrlFor === 'function') { try { poster = o.posterUrlFor(Number(uid), best) || ''; } catch (e) { poster = ''; } }
+  const t = toMs(best.scheduled_at || best.published_at || best.created_at);
+  const estado = best.status === 'published' ? 'publicado'
+    : best.status === 'scheduled' ? 'programado'
+    : best.status === 'draft' ? 'en_preparacion' : 'fallido';
+  const out = {
+    id: best.id,
+    titulo: conserjeRevision.tituloDe(best),
+    caption: trunc(best.caption || '', 500),
+    status: best.status || '', estado,
+    media_type: best.media_type || 'image', tipo: best.tipo || '',
+    image_url: abs && best.image_path && !String(best.image_path).startsWith('data:') ? abs(Number(uid), best.image_path) : '',
+    poster_url: poster,
+    dia_key: key,
+    hora: horaEnTzTxt(t, tz),
+  };
+  if (best.status === 'failed') {
+    const oc = safe(() => db.prepare(
+      "SELECT id FROM support_cases WHERE post_id = ? AND dedup_key LIKE 'vista-rehacer:%' ORDER BY id DESC LIMIT 1").get(Number(best.id)), null);
+    out.rehacer_pedida = !!oc;
+    out.rehacer_caso_id = oc ? Number(oc.id) : null;
+  }
+  return out;
+}
+
+// Su momento comercial en una línea, de su clase viva y de las
+// columnas reales de su fila (trial_started_at / trial_ends_at vía
+// claseDeCuenta; plan_status). Sin fecha de renovación guardada en
+// la base, el pago se dice a secas: «Cliente pago».
+function comercialDe(db, u, claseInfo, tz) {
+  const clase = claseInfo && claseInfo.clase;
+  if (!clase) return null;
+  if (clase === 'prueba_corriendo') {
+    const diasRestantes = claseInfo.dias_restantes != null ? claseInfo.dias_restantes : null;
+    const dia = diasRestantes != null ? Math.min(TRIAL_DAYS, Math.max(1, TRIAL_DAYS - diasRestantes + 1)) : null;
+    const termina = claseInfo.termina_key
+      ? fechaCortaDeKey(claseInfo.termina_key) + (claseInfo.termina_ms ? ' · ' + horaEnTzTxt(claseInfo.termina_ms, tz) : '')
+      : '';
+    return {
+      clase: 'prueba', dia, dias_total: TRIAL_DAYS, dias_restantes: diasRestantes,
+      termina_key: claseInfo.termina_key || '',
+      texto: 'Prueba' + (dia ? ' · día ' + dia + ' de ' + TRIAL_DAYS : '') + (termina ? ' · termina ' + termina : ''),
+    };
+  }
+  if (clase === 'prueba_pendiente') {
+    return { clase: 'prueba', pendiente_conexion: true, texto: 'Prueba · esperando que conecte su Instagram' };
+  }
+  if (clase === 'pago') {
+    return { clase: 'pago', texto: String(u.plan_status || '') === 'past_due' ? 'Cliente pago · suscripción vencida' : 'Cliente pago' };
+  }
+  if (clase === 'demo') return { clase: 'demo', texto: 'Demo de la casa' };
+  if (clase === 'espacio') return { clase: 'espacio', texto: 'Espacio de la casa' };
+  if (clase === 'casa') return { clase: 'casa', texto: 'La casa' };
+  return null;
+}
+
+// Su negocio en una línea: rubro + ciudad + producto fuerte, del
+// fundamento (la ficha que conserje-revision ya compone) y de la
+// columna city de su perfil. Lo que falta acorta la línea; sin nada,
+// la línea no existe.
+function negocioLineaDe(ficha, u) {
+  const vende = (ficha && ficha.vende) || {};
+  const rubro = String(vende.rubro || (u && u.category) || '').trim();
+  const ciudad = String((u && u.city) || '').trim();
+  const estrella = String(vende.estrella || '').trim();
+  const partes = [];
+  if (rubro) partes.push(rubro);
+  if (ciudad) partes.push(ciudad);
+  if (estrella) partes.push('su fuerte: ' + estrella);
+  if (!partes.length) return null;
+  return { rubro, ciudad, estrella, texto: partes.join(' · ') };
+}
+
+// Sus alertas: SOLO problemas reales de ESTA cuenta, con las mismas
+// fuentes que la columna de problemas de la vista (el aviso de token
+// que enciende el publicador, el posteo fallido de hoy o ayer, el
+// freno de publicación, el cobro que no entró, el invitado sin
+// semana cargada). Sin problemas, la lista sale vacía y la sección
+// no se pinta.
+function alertasDe(db, u, tz, nowMs) {
+  const uid = Number(u.id);
+  const out = [];
+  const warn = safe(() => db.prepare(
+    'SELECT ig_token_warning FROM settings WHERE user_id = ?').get(uid), null);
+  const tokenCaido = !!(warn && Number(warn.ig_token_warning) === 1);
+  if (tokenCaido) {
+    out.push({ tipo: 'conexion', tono: 'rojo', texto: 'La conexión de Instagram está caída: hasta que se reconecte, sus posteos no salen.' });
+  }
+  if (!tokenCaido) {
+    const hoyK = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+    const desde = hoyK ? shiftDayKey(hoyK, -1) : '';
+    const fallidos = safe(() => db.prepare(
+      `SELECT id, scheduled_at, created_at FROM posts WHERE user_id = ? AND status = 'failed' ORDER BY id DESC LIMIT 10`).all(uid), []);
+    for (const p of fallidos) {
+      const t = toMs(p.scheduled_at || p.created_at);
+      const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
+      if (!k || (desde && k < desde)) continue;
+      out.push({ tipo: 'post_fallido', tono: 'rojo', texto: 'Un posteo no salió.', post_id: Number(p.id) });
+      break;
+    }
+  }
+  if (u.publishing_stopped) {
+    out.push({ tipo: 'frenado', tono: 'ambar', texto: 'Las publicaciones están frenadas para esta cuenta.' });
+  }
+  if (String(u.plan_status || '') === 'past_due') {
+    out.push({ tipo: 'pago', tono: 'ambar', texto: 'El último cobro no entró: la suscripción está vencida.' });
+  }
+  if (u.is_guest && String(u.plan_status || '') === 'trial') {
+    const nPosts = safe(() => db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uid), { c: 0 }).c || 0;
+    if (!nPosts) {
+      let creado = toMs(u.created_at);
+      if (!Number.isFinite(creado)) { const nC = Number(u.created_at); if (nC > 1e11) creado = nC; }
+      if (creado && creado <= nowMs - 30 * 60 * 1000) {
+        out.push({ tipo: 'corrida', tono: 'ambar', texto: 'Su semana todavía no se cargó: su prueba no puede arrancar.' });
+      }
+    }
+  }
+  return out;
+}
+
+// Lo que pidió por el chat: la misma cola que lee la consola
+// (support-cases.voiceRequests filtrada por la cuenta), con su
+// estado en palabras de la pantalla — nuevo (nadie lo miró),
+// en_revision (ya visto, sin resolver), resuelto (con la respuesta
+// real que quedó guardada). Lo más nuevo primero, hasta 5.
+function pedidosClienteDe(db, uid, o, nowMs) {
+  const vr = safe(() => supportCases.voiceRequests(db, {
+    limit: 30, userId: Number(uid), absImageUrl: o.absImageUrl, posterUrlFor: o.posterUrlFor,
+  }), null);
+  const out = [];
+  for (const p of (vr && vr.pedidos) || []) {
+    let estado;
+    let respuesta = '';
+    if (p.es_idea) {
+      if (String(p.idea_estado || '') === 'resuelta') {
+        estado = 'resuelto';
+        const ir = safe(() => db.prepare('SELECT respuesta FROM subir_ideas WHERE id = ?').get(Number(p.idea_id)), null);
+        respuesta = String((ir && ir.respuesta) || p.respuesta || '');
+      } else estado = 'nuevo';
+    } else if (p.revision && p.revision.estado === 'pendiente') {
+      estado = p.revision.visto_en ? 'en_revision' : 'nuevo';
+    } else {
+      estado = 'resuelto';
+      respuesta = String(p.respuesta || '');
+    }
+    out.push({
+      tipo: p.es_idea ? 'idea' : 'pedido',
+      texto: trunc(p.pedido || '', 400),
+      estado,
+      respuesta: estado === 'resuelto' ? trunc(respuesta, 400) : '',
+      hace: haceLabelDe(nowMs, p.cuando_utc),
+      message_id: Number(p.id) || 0,
+      post_id: p.posteo ? Number(p.posteo.id) : 0,
+    });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+// Lo que subió: su material reciente (assets, la misma tabla que su
+// álbum) y QUÉ SE HIZO con cada pieza — afirmaciones reales, por el
+// cruce con sus posteos (la media del posteo ES el archivo del
+// asset: se cruza por nombre de archivo). Sin uso en posteos, la
+// verdad es la línea tranquila: quedó guardado para su semana.
+// OJO con los kind: cuando una foto/video del cliente pasa a ser la
+// pieza de un posteo, el pipeline la reclasifica a kind='design' —
+// si se filtra solo photo/video, justo el material USADO desaparece
+// de esta lista. Por eso entra también 'design'.
+function subidosDe(db, uid, tz, nowMs, o) {
+  const absM = typeof o.absImageUrl === 'function' ? o.absImageUrl : (x) => x;
+  const assets = safe(() => db.prepare(
+    `SELECT id, kind, file_path, thumb_path, producto, created_at FROM assets
+     WHERE user_id = ? AND kind IN ('photo','video','design') ORDER BY created_at DESC LIMIT 6`).all(Number(uid)), []);
+  if (!assets.length) return [];
+  const posts = safe(() => db.prepare(
+    `SELECT id, status, image_path, carousel_paths, scheduled_at, published_at FROM posts WHERE user_id = ?`).all(Number(uid)), []);
+  const baseDe = (p) => String(p || '').split('/').pop();
+  const hoyK = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+  const manK = hoyK ? shiftDayKey(hoyK, 1) : '';
+  return assets.map((a) => {
+    const bn = baseDe(a.file_path);
+    let usoPost = null;
+    if (bn) {
+      for (const p of posts) {
+        if (baseDe(p.image_path) === bn || String(p.carousel_paths || '').includes(bn)) { usoPost = p; break; }
+      }
+    }
+    let uso = 'Lo tengo guardado para su semana.';
+    if (usoPost) {
+      const t = toMs(usoPost.published_at || usoPost.scheduled_at);
+      const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
+      if (usoPost.status === 'published') uso = 'Salió en el posteo de ' + (k ? fechaCortaDeKey(k) : 'su semana') + '.';
+      else if (usoPost.status === 'scheduled') uso = k === hoyK ? 'Sale hoy en su posteo.' : (k === manK ? 'Sale mañana.' : 'Está en el posteo de ' + (k ? fechaCortaDeKey(k) : 'su semana') + '.');
+      else if (usoPost.status === 'draft') uso = 'Está en un posteo en preparación.';
+      else if (usoPost.status === 'failed') uso = 'Estaba en un posteo que no salió.';
+    }
+    return {
+      id: Number(a.id), kind: a.kind || 'photo',
+      img: a.thumb_path || a.file_path ? absM(Number(uid), a.thumb_path || a.file_path) : '',
+      producto: String(a.producto || ''),
+      uso, post_id: usoPost ? Number(usoPost.id) : null,
+    };
+  });
+}
+
+// Su impulso ACTIVO (el patrón de impulsosActivosDe, para una sola
+// cuenta): presupuesto, gasto y el día X de Y de ads-stats. Las
+// visitas al perfil solo con columna viva y número real.
+function impulsoClienteDe(db, uid, nowMs) {
+  const cols = safe(() => db.prepare('PRAGMA table_info(ad_boosts)').all().map((c) => c.name), []);
+  const conVisitas = cols.includes('last_visitas_perfil');
+  const b = safe(() => db.prepare(
+    `SELECT * FROM ad_boosts WHERE user_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1`).get(Number(uid)), null);
+  if (!b) return null;
+  const diaDe = safe(() => require('./ads-stats').diaDe, null);
+  const dias = diaDe ? diaDe(b, nowMs) : { dia: null, total: Math.max(1, Number(b.duration_days || 7)) };
+  const item = {
+    boost_id: Number(b.id),
+    presupuesto_cents: Math.max(0, Number(b.budget_cents || 0) || 0),
+    gasto_cents: Math.max(0, Number(b.last_spend_cents || 0) || 0),
+    moneda: String(b.currency || 'USD'),
+    dia: dias.dia, dias_total: dias.total,
+  };
+  if (conVisitas && b.last_visitas_perfil != null && Number.isFinite(Number(b.last_visitas_perfil))) {
+    item.visitas_perfil = Number(b.last_visitas_perfil);
+  }
+  return item;
+}
+
+// Su billetera de impulsos: la fila de ad_wallets, solo si tiene
+// saldo real cargado.
+function billeteraDe(db, uid) {
+  const w = safe(() => db.prepare(
+    'SELECT balance_cents, currency FROM ad_wallets WHERE user_id = ?').get(Number(uid)), null);
+  if (!w || !(Number(w.balance_cents || 0) > 0)) return null;
+  return { saldo_cents: Number(w.balance_cents), moneda: String(w.currency || 'USD') };
+}
+
+// ---------------------------------------------------------------------
+// (LOTE CONSERJE-INICIO · AGREGADO B) CORRECCIONES DEL OPERADOR —
+// el chat OPERADOR→BAMBOO dentro del inicio de cada cliente. El
+// cliente final NUNCA lo ve: no vive en su app ni en su hilo. El
+// dueño escribe la corrección; queda en estado 'nueva' hasta que
+// bamboo la aplica y la marca 'aplicada' con su respuesta. La ruta
+// de «nuevas» la lee un vigilante externo para avisarle a bamboo.
+// ---------------------------------------------------------------------
+function ensureCorrecciones(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS operador_correcciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    texto TEXT NOT NULL DEFAULT '',
+    estado TEXT NOT NULL DEFAULT 'nueva',
+    respuesta TEXT NOT NULL DEFAULT '',
+    creada_en TEXT NOT NULL DEFAULT (datetime('now')),
+    aplicada_en TEXT
+  )`);
+}
+
+function correccionesDe(db, uid, nowMs) {
+  ensureCorrecciones(db);
+  const rows = safe(() => db.prepare(
+    `SELECT id, texto, estado, respuesta, creada_en, aplicada_en FROM operador_correcciones
+     WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(Number(uid)), []);
+  return rows.reverse().map((r) => ({
+    id: Number(r.id), texto: r.texto || '',
+    estado: r.estado === 'aplicada' ? 'aplicada' : 'nueva',
+    respuesta: r.respuesta || '',
+    hace: haceLabelDe(nowMs, r.creada_en),
+    creada_en: r.creada_en || '',
+  }));
+}
+
+function agregarCorreccion(db, userId, texto) {
+  const uid = Number(userId) || 0;
+  if (!uid) return { ok: false, error: 'sin_usuario' };
+  const user = safe(() => db.prepare('SELECT id FROM users WHERE id = ?').get(uid), null);
+  if (!user) return { ok: false, error: 'sin_usuario' };
+  const t = trunc(String(texto || '').trim(), 1000);
+  if (!t) return { ok: false, error: 'sin_texto' };
+  ensureCorrecciones(db);
+  const ins = db.prepare(
+    `INSERT INTO operador_correcciones (user_id, texto) VALUES (?, ?)`).run(uid, t);
+  const row = safe(() => db.prepare(
+    'SELECT id, texto, estado, respuesta, creada_en FROM operador_correcciones WHERE id = ?')
+    .get(Number(ins.lastInsertRowid)), null);
+  if (!row) return { ok: false, error: 'no_se_guardo' };
+  return { ok: true, correccion: { id: Number(row.id), texto: row.texto || '', estado: 'nueva', respuesta: '', creada_en: row.creada_en || '' } };
+}
+
+function marcarCorreccion(db, id, estado, respuesta) {
+  const cid = Number(id) || 0;
+  if (!cid) return { ok: false, error: 'sin_correccion' };
+  const est = estado === 'aplicada' ? 'aplicada' : (estado === 'nueva' ? 'nueva' : '');
+  if (!est) return { ok: false, error: 'estado_invalido' };
+  ensureCorrecciones(db);
+  const prev = safe(() => db.prepare('SELECT id FROM operador_correcciones WHERE id = ?').get(cid), null);
+  if (!prev) return { ok: false, error: 'correccion_inexistente' };
+  const resp = respuesta != null ? trunc(String(respuesta), 1000) : null;
+  if (est === 'aplicada') {
+    if (resp != null) db.prepare(
+      `UPDATE operador_correcciones SET estado = 'aplicada', respuesta = ?, aplicada_en = datetime('now') WHERE id = ?`).run(resp, cid);
+    else db.prepare(
+      `UPDATE operador_correcciones SET estado = 'aplicada', aplicada_en = datetime('now') WHERE id = ?`).run(cid);
+  } else {
+    db.prepare(`UPDATE operador_correcciones SET estado = 'nueva', aplicada_en = NULL WHERE id = ?`).run(cid);
+  }
+  const row = safe(() => db.prepare(
+    'SELECT id, user_id, texto, estado, respuesta, creada_en, aplicada_en FROM operador_correcciones WHERE id = ?').get(cid), null);
+  return { ok: true, correccion: row ? {
+    id: Number(row.id), user_id: Number(row.user_id), texto: row.texto || '',
+    estado: row.estado, respuesta: row.respuesta || '',
+    creada_en: row.creada_en || '', aplicada_en: row.aplicada_en || null,
+  } : null };
+}
+
+function correccionesNuevas(db) {
+  ensureCorrecciones(db);
+  const rows = safe(() => db.prepare(
+    `SELECT c.id, c.user_id, c.texto, c.creada_en, p.business_name, p.ig_username
+     FROM operador_correcciones c LEFT JOIN profiles p ON p.user_id = c.user_id
+     WHERE c.estado = 'nueva' ORDER BY c.id ASC`).all(), []);
+  const nowMs = Date.now();
+  return rows.map((r) => ({
+    id: Number(r.id), user_id: Number(r.user_id),
+    negocio: String(r.business_name || '').split(' | ')[0] || '',
+    ig: r.ig_username || '',
+    texto: r.texto || '', creada_en: r.creada_en || '',
+    hace: haceLabelDe(nowMs, r.creada_en),
+  }));
+}
+
 function cliente(db, userId, opts) {
   const o = opts || {};
   const uid = Number(userId) || 0;
@@ -1375,8 +1776,8 @@ function cliente(db, userId, opts) {
   const u = safe(() => db.prepare(
     `SELECT u.id, u.email, u.plan, u.plan_status, u.is_guest, u.guest_ig, u.guest_domain,
             u.concierge, u.publishing_stopped, u.hold, u.hold_reason, u.trial_ends_at, u.trial_extended_until,
-            u.trial_started_at, u.created_at,
-            p.business_name, p.ig_username, p.category, p.ig_connected
+            u.trial_started_at, u.created_at, u.best_hour,
+            p.business_name, p.ig_username, p.category, p.ig_connected, p.city, p.subrubro
      FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`).get(uid), null);
   if (!u) return { ok: false, error: 'sin_usuario' };
   const tz = conserjeRevision.accountTz(db, uid);
@@ -1388,6 +1789,17 @@ function cliente(db, userId, opts) {
   const boost = safe(() => db.prepare(
     `SELECT id, post_id, status, budget_cents, fee_cents, error, created_at FROM ad_boosts
      WHERE user_id = ? ORDER BY id DESC LIMIT 1`).get(uid), null);
+  // (LOTE CONSERJE-INICIO) Las piezas de la pantalla simple: hoy y
+  // mañana salen computados por día (no de la lista de 12 posteos),
+  // con la hora de salida de la cuenta (la del posteo, o su mejor
+  // hora guardada).
+  const claseInfoCli = safe(() => claseDeCuenta(db, u, nowMs), { clase: null });
+  const hoyKeyCli = safe(() => dayKeyInTz(new Date(nowMs), tz), '');
+  const manKeyCli = hoyKeyCli ? shiftDayKey(hoyKeyCli, 1) : '';
+  const hoyPostCli = postDelDia(db, uid, tz, hoyKeyCli, o);
+  const manPostCli = postDelDia(db, uid, tz, manKeyCli, o);
+  const bhCli = (u.best_hour >= 9 && u.best_hour <= 21) ? Number(u.best_hour) : 19;
+  const horaSalidaCli = (manPostCli && manPostCli.hora) || (hoyPostCli && hoyPostCli.hora) || (bhCli + ':00');
   return {
     ok: true,
     ...fila,
@@ -1417,6 +1829,17 @@ function cliente(db, userId, opts) {
         cuando: a.created_at || '',
       })),
     descuento: descuentoDe(db, uid),
+    // (LOTE CONSERJE-INICIO) El inicio del cliente, en sus piezas:
+    // cada clave sale solo con su dato real detrás.
+    inicio: { hoy: hoyPostCli, manana: manPostCli, hora_salida: horaSalidaCli },
+    comercial: comercialDe(db, u, claseInfoCli, tz),
+    negocio_linea: negocioLineaDe(ficha, u),
+    alertas: alertasDe(db, u, tz, nowMs),
+    pedidos: pedidosClienteDe(db, uid, o, nowMs),
+    subidos: subidosDe(db, uid, tz, nowMs, o),
+    impulso: impulsoClienteDe(db, uid, nowMs),
+    billetera: billeteraDe(db, uid),
+    correcciones: correccionesDe(db, uid, nowMs),
   };
 }
 
@@ -2010,5 +2433,9 @@ module.exports = {
   cerrarCaso,
   duenoChatAgregar,
   duenoChatDe,
+  correccionesDe,
+  agregarCorreccion,
+  marcarCorreccion,
+  correccionesNuevas,
   vista,
 };
