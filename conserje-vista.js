@@ -913,6 +913,17 @@ function decisiones(db, filas, opts, nowMs) {
       const fallidos = safe(() => db.prepare(
         `SELECT id, caption, error, scheduled_at, created_at FROM posts
          WHERE user_id = ? AND status = 'failed' ORDER BY id DESC LIMIT 10`).all(uid), []);
+      // (LOTE CONSERJE-ACCION-REHACER) La orden de rehacer ya pedida
+      // viaja con la tarjeta: si el caso «vista-rehacer:<post>» existe,
+      // la tarjeta deja de pedir la acción y muestra el registro.
+      const ordenesRehacer = {};
+      if (fallidos.length) {
+        const idsF = fallidos.map((p) => Number(p.id));
+        const marksF = idsF.map(() => '?').join(',');
+        const rowsO = safe(() => db.prepare(
+          `SELECT id, post_id FROM support_cases WHERE post_id IN (${marksF}) AND dedup_key LIKE 'vista-rehacer:%'`).all(...idsF), []);
+        for (const oc of rowsO) ordenesRehacer[Number(oc.post_id)] = Number(oc.id);
+      }
       for (const p of fallidos) {
         const t = toMs(p.scheduled_at || p.created_at);
         const k = Number.isFinite(t) ? safe(() => dayKeyInTz(new Date(t), tz), '') : '';
@@ -924,6 +935,7 @@ function decisiones(db, filas, opts, nowMs) {
           titulo: 'Un posteo no salió',
           texto: trunc(p.error || 'La publicación falló.', 300),
           post_id: p.id, fecha: hoyKey,
+          rehacer_pedida: !!ordenesRehacer[p.id], rehacer_caso_id: ordenesRehacer[p.id] || null,
         });
       }
     }
@@ -1461,6 +1473,50 @@ function abrirOrdenProduccion(db, userId, detalle, actor) {
   return r;
 }
 
+// (LOTE CONSERJE-ACCION-REHACER) «Que se rehaga»: la orden de rehacer
+// ATADA al posteo que no salió. Entra por la MISMA fuente que
+// abrirOrdenProduccion (el caso prueba_linea_mano que la cola de
+// producción ya levanta), con dos diferencias: el caso lleva el
+// post_id de origen en su columna y el dedup es POR POSTEO
+// («vista-rehacer:<post_id>») — un toque repetido no duplica la orden
+// y otro posteo fallido de la misma cuenta sí puede tener la suya.
+// Nada se regenera solo: la orden es el despertador de la línea a
+// mano, como «Producir ahora». Fósil: un posteo que ya no está
+// 'failed' (se publicó, se descartó, se resolvió) no admite la
+// acción. Una orden por posteo, para siempre: si el caso existe
+// (abierto o ya cerrado), el toque devuelve ese caso como duplicado.
+function abrirOrdenRehacer(db, userId, postId, detalle, actor) {
+  const pid = Number(postId) || 0;
+  if (!pid) return { ok: false, error: 'sin_posteo' };
+  const post = safe(() => db.prepare(
+    'SELECT id, user_id, status, error FROM posts WHERE id = ?').get(pid), null);
+  if (!post) return { ok: false, error: 'posteo_inexistente' };
+  const uid = Number(userId) || Number(post.user_id) || 0;
+  if (Number(post.user_id) !== uid) return { ok: false, error: 'posteo_ajeno' };
+  if (String(post.status) !== 'failed') return { ok: false, error: 'posteo_no_fallido' };
+  const dedupKey = 'vista-rehacer:' + pid;
+  const prev = safe(() => db.prepare(
+    'SELECT * FROM support_cases WHERE dedup_key = ?').get(dedupKey), null);
+  if (prev) return { ok: true, caso: prev, duplicado: true };
+  const motivo = trunc(post.error || 'La publicación falló.', 300);
+  const r = supportCases.openCase(db, {
+    userId: uid, tipo: 'prueba_linea_mano', postId: pid,
+    titulo: 'Que se rehaga el posteo que no salió — orden desde la consola del conserje',
+    detalle: trunc('Rehacer el posteo #' + pid + ' que no salió. Motivo guardado: «' + motivo + '».'
+      + (detalle ? ' ' + detalle : ''), 500),
+    dueno: 'equipo', siguientePaso: 'Rehacer el posteo a mano y cargarlo con la palanca de siempre; el fallido queda como registro.',
+    dedupKey,
+  });
+  if (r && r.ok && !r.duplicado) {
+    supportCases.logTeamAction(db, {
+      actor: actor || 'equipo', action: 'rehacer_pedido',
+      userId: uid, postId: pid, caseId: r.caso ? r.caso.id : null,
+      detalle: 'Orden de rehacer el posteo #' + pid + ' abierta desde la consola (caso #' + (r.caso ? r.caso.id : '?') + ').',
+    });
+  }
+  return r;
+}
+
 function cerrarCaso(db, caseId) {
   return supportCases.closeCase(db, Number(caseId) || 0, { confirmadoPor: 'equipo — consola del conserje' });
 }
@@ -1950,6 +2006,7 @@ module.exports = {
   producto,
   marcarVozResuelto,
   abrirOrdenProduccion,
+  abrirOrdenRehacer,
   cerrarCaso,
   duenoChatAgregar,
   duenoChatDe,

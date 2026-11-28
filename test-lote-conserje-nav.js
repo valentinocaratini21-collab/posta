@@ -41,7 +41,7 @@ t('A1 el toque del roster abre la ficha (centroVista semana, sin «producto»)',
 t('A2 «Ir al próximo con problemas» también aterriza en la ficha', jsSrc.includes("selUser = sigP.user_id; centroVista = 'semana';"));
 t('A3 la marca sale de la piel completa al ir al inicio', jsSrc.includes("document.body.classList.remove('ver-escritorio');"));
 t('A4 el pie del riel dice «su ficha», como el toque nuevo', htmlSrc.includes('ves <b>su</b> ficha'));
-t('A5 sello conserje.js?v=28', htmlSrc.includes('/conserje.js?v=28'));
+t('A5 sello conserje.js?v=29', htmlSrc.includes('/conserje.js?v=29'));
 
 // ---------------------------------------------------------------------
 const SEED_BOOT = `
@@ -96,7 +96,7 @@ function puertoLibre(p) {
     }
     t('B1 el servidor levanta en el puerto libre', up, serverLog.slice(-200));
     const html = await (await fetch(base + '/conserje?token=' + TOKEN)).text();
-    t('B2 /conserje sirve con el sello v=28', html.includes('/conserje.js?v=28'));
+    t('B2 /conserje sirve con el sello v=29', html.includes('/conserje.js?v=29'));
 
     let pw = null;
     for (const cand of ['/tmp/pw-boot/node_modules/playwright-core',
@@ -114,14 +114,18 @@ function puertoLibre(p) {
       const browser = await pw.chromium.launch({ executablePath: exe || undefined, args: ['--no-sandbox'] });
       const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
       await page.goto(base + '/conserje?token=' + TOKEN, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('.client-row[data-sel="301"]', { timeout: 20000 });
-
-      // El toque en el cliente → su ficha (información), no «Su producto».
-      await page.click('.client-row[data-sel="301"]');
-      await page.waitForSelector('#centro .mkbizname', { timeout: 15000 });
+      // (ajuste del liberador, tras CONSERJE-ENTRADA) A 1280px manda la
+      // bandeja: el toque va por su lista de Negocios, y la ficha se
+      // verifica en las dos pieles (la móvil visible; el centro de la
+      // consola con su pestaña «Su ficha» activa, aunque esté oculto).
+      await page.waitForSelector('#movil [data-mtab="negocios"]', { timeout: 20000 });
+      await page.click('#movil [data-mtab="negocios"]');
+      await page.waitForSelector('#movil [data-mbiz="301"]', { timeout: 20000 });
+      await page.click('#movil [data-mbiz="301"]');
+      await page.waitForSelector('#movil .m-ficha-head .nm', { timeout: 15000 });
       await page.waitForTimeout(400);
       const tabOn = await page.evaluate(() => { const el = document.querySelector('#centro .mktab.on'); return el ? el.textContent.trim() : ''; });
-      const biz = await page.evaluate(() => { const el = document.querySelector('#centro .mkbizname'); return el ? el.textContent : ''; });
+      const biz = await page.evaluate(() => { const el = document.querySelector('#movil .m-ficha-head .nm'); return el ? el.textContent : ''; });
       t('B4 tocar el cliente abre su ficha con la pestaña «Su ficha» activa', tabOn === 'Su ficha' && /Pago Real/.test(biz), 'tab=' + tabOn + ' biz=' + biz);
 
       // La marca, con la piel completa puesta → inicio de la bandeja, sin piel.
@@ -134,7 +138,8 @@ function puertoLibre(p) {
       await page.waitForTimeout(500);
       const sinPiel = await page.evaluate(() => !document.body.classList.contains('ver-escritorio'));
       const centroTxt = await page.textContent('#centro');
-      t('B5 la marca vuelve al inicio (producción de mañana) y sale de la piel completa', sinPiel && centroTxt.includes('Producción de mañana'), 'sinPiel=' + sinPiel);
+      const movilVisible = await page.evaluate(() => getComputedStyle(document.querySelector('#movil')).display === 'flex');
+      t('B5 la marca vuelve al inicio (producción de mañana) y sale de la piel completa', sinPiel && movilVisible && centroTxt.includes('Producción de mañana'), 'sinPiel=' + sinPiel + ' movil=' + movilVisible);
       await browser.close();
     }
   } finally {

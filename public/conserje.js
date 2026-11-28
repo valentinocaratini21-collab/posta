@@ -949,8 +949,16 @@
       // abra, a diferencia de la de impulso, que sí tiene «Ver error».
       cuerpo = '<div class="d-txt">El posteo #' + (d.post_id || '—') + ' no salió. El publicador dejó este motivo:</div>'
         + '<div class="d-error open">' + esc(d.texto || '') + '</div>'
-        + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" data-goto-post="' + (d.post_id || '') + '" type="button">Ver el posteo</button>'
-        + '<button class="btn small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
+        // (LOTE CONSERJE-ACCION-REHACER) «Que se rehaga»: la orden
+        // queda atada a ESTE posteo. Si ya se pidió, la tarjeta lo
+        // muestra registrado y no vuelve a ofrecer el botón.
+        + (d.rehacer_pedida
+          ? '<div class="d-promise"><small>Rehacer</small>✓ Orden de rehacer registrada (caso #' + (d.rehacer_caso_id || '—') + '): la línea a mano ya lo tiene en su cola.</div>'
+            + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" data-goto-post="' + (d.post_id || '') + '" type="button">Ver el posteo</button>'
+            + '<button class="btn small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>'
+          : '<div class="d-actions"><button class="btn primary small" data-act="fallido-rehacer" data-uid="' + d.user_id + '" data-pid="' + (d.post_id || '') + '" type="button">Que se rehaga</button>'
+            + '<button class="btn small" data-goto="' + d.user_id + '" data-goto-post="' + (d.post_id || '') + '" type="button">Ver el posteo</button>'
+            + '<button class="btn small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>');
     } else if (d.tipo === 'conexion') {
       cuerpo = '<div class="d-txt">' + esc(d.texto || '') + '</div>'
         + '<div class="d-actions"><button class="btn primary small" data-goto="' + d.user_id + '" type="button">Ver la ficha</button></div>';
@@ -1640,6 +1648,12 @@
       api('/api/admin/conserje/vista/producir', { method: 'POST', body: { user_id: selUser, detalle: 'Falta el posteo del ' + b.getAttribute('data-fecha') + ': producirlo a mano (orden abierta desde la consola).' } })
         .then(function (j) { if (j && j.ok) despuesDeActuar(j.duplicado ? 'Esa orden ya estaba en la cola de producción.' : 'Orden abierta: entró a la cola de producción a mano.'); else { toast('No se pudo abrir la orden.', 'err'); re(); } })
         .catch(function () { toast('No se pudo abrir la orden.', 'err'); re(); });
+    } else if (act === 'fallido-rehacer') {
+      // (LOTE CONSERJE-ACCION-REHACER) La orden entra por la puerta de
+      // producir con el post_id: queda atada a ESTE posteo fallido.
+      api('/api/admin/conserje/vista/producir', { method: 'POST', body: { user_id: Number(b.getAttribute('data-uid')), post_id: Number(b.getAttribute('data-pid')), detalle: 'Que se rehaga este posteo: orden atada al posteo abierta desde su tarjeta en la consola.' } })
+        .then(function (j) { if (j && j.ok) despuesDeActuar(j.duplicado ? 'Ese rehacer ya estaba pedido: la orden sigue en la cola.' : 'Orden de rehacer registrada: entró a la cola de producción a mano.'); else { toast('No se pudo pedir el rehacer (' + ((j && j.error) || 'error') + ').', 'err'); re(); } })
+        .catch(function () { toast('No se pudo pedir el rehacer.', 'err'); re(); });
     } else if (act === 'nota-guardar') {
       var notaTxt = ($('notaInput') || {}).value || '';
       api('/api/admin/support/conserje/nota', { method: 'POST', body: { user_id: selUser, nota: notaTxt } })

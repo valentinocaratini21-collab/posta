@@ -14077,6 +14077,14 @@ app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.js
 app.post('/api/admin/conserje/vista/producir', requireAdminToken, express.json(), (req, res) => {
   try {
     const b = req.body || {};
+    // (LOTE CONSERJE-ACCION-REHACER) Con post_id, la misma puerta abre
+    // la orden de rehacer ATADA a ese posteo (la tarjeta del posteo
+    // fallido); sin post_id, la orden de producción de siempre.
+    if (b.post_id != null && Number(b.post_id) > 0) {
+      const rr = conserjeVista.abrirOrdenRehacer(db, Number(b.user_id) || 0, Number(b.post_id) || 0, b.detalle || '', 'equipo');
+      if (!rr.ok) return res.status(400).json(rr);
+      return res.json({ ok: true, caso: rr.caso ? { id: rr.caso.id, titulo: rr.caso.titulo } : null, duplicado: !!rr.duplicado, post_id: Number(b.post_id) });
+    }
     const r = conserjeVista.abrirOrdenProduccion(db, Number(b.user_id) || 0, b.detalle || '', 'equipo');
     if (!r.ok) return res.status(400).json(r);
     res.json({ ok: true, caso: r.caso ? { id: r.caso.id, titulo: r.caso.titulo } : null, duplicado: !!r.duplicado });
@@ -50066,7 +50074,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1388';
+const BUILD_ID = '20261105-v1389';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
