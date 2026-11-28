@@ -778,7 +778,21 @@ const BANNED_PHRASES = [
 
 // Señales de CTA (sin acentos): el caption tiene que pedir UNA acción concreta.
 // 'dm' se chequea aparte con word boundary para no matchear "admirar", etc.
-const CTA_SIGNALS = ['comenta', 'guarda', 'escribinos', 'pasa por', 'link', 'turno', 'pedilo', 'reserva'];
+// CTA-VOSEO (Juli, 2026-11-28 — ids reales 812/820/824, línea a mano ES
+// del 28/11): la lista solo conocía 8 señales y NO veía los imperativos
+// rioplatenses más naturales de un caption real — «encargá el tuyo» (812,
+// Malvón), «Probalo en Cadore» (820) y «Pasá a buscar la tuya» (824,
+// Atelier Fuerza) nacieron CON CTA y la puerta los rechazaba a los tres
+// por «le falta un llamado a la acción» (verificado pre-fix contra la
+// puerta viva v1398: 15/15 de la tanda ES rechazados, 3 con CTA real).
+// El match corre sobre el texto normalizado NFD (sin acentos), así que
+// las señales van sin acento y cubren voseo y tú. Guardas anti-falso-
+// positivo: 'encarga ' con espacio (no matchea «la encargada del local»)
+// y 'proba' solo en sus formas con objeto ('probalo'/'probala': no
+// matchea «probablemente»). «Te esperamos» NO es señal a propósito: es
+// invitación, no acción — el cierre en dirección/descripción sigue sin
+// CTA, como en la puerta EN.
+const CTA_SIGNALS = ['comenta', 'guarda', 'escribinos', 'escribime', 'pasa por', 'pasa a', 'link', 'turno', 'pedilo', 'pedila', 'reserva', 'encarga ', 'encargalo', 'encargala', 'probalo', 'probala', 'veni a', 'sumate', 'llamanos', 'visitanos'];
 
 // Números que figuran como promo/precio REAL (promos activas, productos/servicios,
 // datos de la web): un % en el caption solo vale si su número está en este set.
@@ -2785,7 +2799,7 @@ function repairCaptionLength(caption, target = 290) {
   const total = () => blocks.join('\n\n').length;
   if (total() <= 320) return String(caption || '');
   const splitSentences = (s) => s.split(/(?<=[.!?…])\s+/).map(x => x.trim()).filter(Boolean);
-  const hasCta = (s) => { const l = String(s || '').toLowerCase(); return CTA_SIGNALS.some(x => l.includes(x)) || /\bdm\b/.test(l); };
+  const hasCta = (s) => { const l = String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); return CTA_SIGNALS.some(x => l.includes(x)) || /\bdm\b/.test(l); };
   const tryCut = (bi, protectedIdx) => {
     const sents = splitSentences(blocks[bi]);
     if (sents.length <= 1) return false;

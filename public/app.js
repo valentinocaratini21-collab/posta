@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1398';
+const PZ_BUILD = '20261105-v1399';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
