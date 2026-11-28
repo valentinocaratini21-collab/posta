@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1391';
+const PZ_BUILD = '20261105-v1392';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -23368,13 +23368,17 @@ function pzAdsHistorialHTML(boosts) {
   return list.slice(0, 5).map((b) => {
     const dias = Number(b.duration_days) || 7;
     const alcance = Number(b.last_reach || 0);
-    const gastado = Math.floor(Number(b.last_spend_cents || 0) / 100);
+    // (LOTE ADS-EXACTO) El gastado SIN piso y con centavos, con el
+    // mismo formato de la tarjeta activa (fmtG del LOTE ADS-MONTO):
+    // el historial también mostraba «$3» por los US$ 3,28 de Meta.
+    const gastadoCents = Math.max(0, Number(b.last_spend_cents || 0) || 0);
+    const gastadoTxt = ((b.currency || 'USD') === 'USD' ? 'US$' : '$') + (gastadoCents / 100).toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ((b.currency && b.currency !== 'USD') ? ' ' + b.currency : '');
     const montoTxt = '$' + Math.floor(Number(b.budget_cents || 0) / 100).toLocaleString(loc) + ((b.currency && b.currency !== 'USD') ? ' ' + b.currency : '');
     const det = [(en ? 'Post #' : 'Posteo #') + (b.post_id || '?')];
     const fIni = fechaCorta(b.created_at); if (fIni) det.push(fIni);
     const fFin = hasta(b); if (fFin) det.push((en ? 'until ' : 'hasta ') + fFin);
     if (alcance > 0) det.push((en ? 'Reach ' : 'Alcance ') + alcance.toLocaleString(loc));
-    if (gastado > 0) det.push((en ? 'Spent $' : 'Gastado $') + gastado.toLocaleString(loc));
+    if (gastadoCents > 0) det.push((en ? 'Spent ' : 'Gastado ') + gastadoTxt);
     // (LOTE ADS-ESTRATÉGICOS) El resultado según el objetivo del
     // impulso: conversaciones si era de mensajes, clics si no. Viene
     // del servidor (lo que Meta devolvió); sin medición, no se pinta.
@@ -23462,9 +23466,20 @@ function pzAdsImpulsoTarjetaHTML(b) {
     // se pinta un mínimo visible (3%) — el número exacto manda en el
     // texto; la barra solo dice «ya arrancó».
     const pctBarra = gast > 0 ? Math.max(pct, 3) : pct;
+    // (LOTE ADS-EXACTO) La tarjeta dice DE CUÁNDO es el número: la
+    // frescura que computa el servidor desde stats_updated_at
+    // (t.actualizado_hace_min; null = sin lectura real, no se pinta).
+    // El contador de Facebook va en tiempo real y redondea; el del
+    // producto es el oficial de Insights — con la frescura a la
+    // vista, la diferencia se explica sola.
+    const frescoTxt = (t.actualizado_hace_min === null || t.actualizado_hace_min === undefined) ? ''
+      : (t.actualizado_hace_min <= 0
+        ? (en ? 'Updated just now' : 'Actualizado recién')
+        : (en ? 'Updated ' + t.actualizado_hace_min + ' min ago' : 'Actualizado hace ' + t.actualizado_hace_min + ' min'));
     cuerpo = `<div style="display:flex;gap:8px;margin-top:12px">${stats}</div>`
       + `<div style="height:7px;background:rgba(255,255,255,.22);border-radius:6px;margin-top:12px;overflow:hidden"><i style="display:block;height:100%;width:${pctBarra}%;background:#FEC14D;border-radius:6px"></i></div>`
-      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-top:5px"><span>${esc(fmtG(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`;
+      + `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:rgba(255,255,255,.85);margin-top:5px"><span>${esc(fmtG(gast))} ${esc(en ? 'of' : 'de')} ${esc(fmtD(total))}</span><span>${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia || 1))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</span></div>`
+      + (frescoTxt ? `<div style="font-size:10.5px;color:rgba(255,255,255,.75);margin-top:4px">${esc(frescoTxt)}</div>` : '');
   } else {
     cuerpo = `<p style="margin:12px 0 0;font-size:12.5px;color:rgba(255,255,255,.88)">${esc(en ? "Meta hasn't reported numbers for this boost yet." : 'Meta todavía no reporta números de este impulso.')}</p>`
       + (t.dia ? `<p style="margin:4px 0 0;font-size:10.5px;color:rgba(255,255,255,.75)">${esc(en ? 'Day' : 'Día')} ${esc(String(t.dia))} ${esc(en ? 'of' : 'de')} ${esc(String(t.dias_total || 7))}</p>` : '');

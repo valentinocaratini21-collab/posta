@@ -15956,6 +15956,11 @@ app.post('/api/admin/ads/reparar', async (req, res) => {
 
 // (LOTE ADS-STATS-FONDO · 26/11) Barrido de fondo de stats: cada 20
 // minutos refresca los impulsos activos cuya lectura ya venció (la
+// (LOTE ADS-EXACTO · 27/11) El barrido corre cada 10 minutos y la
+// caché de STATS pasa de 1 hora a 5 minutos (el estado real en Meta
+// sigue horario): el dueño comparó el panel con el aviso en tiempo
+// real de Facebook («van US$4») y el producto mostraba un número de
+// hacía una hora, encima pisado a dólares enteros.
 // misma caché horaria del GET), sin esperar a que el cliente abra la
 // pantalla de Ads — el dueño vio su aviso corriendo en Instagram y el
 // panel en cero porque nadie había abierto Ads desde que arrancó la
@@ -15966,7 +15971,7 @@ async function barridoStatsAds() {
   try { filas = db.prepare(`SELECT * FROM ad_boosts WHERE status = 'active' AND COALESCE(meta_campaign_id, '') != '' ORDER BY id ASC LIMIT 50`).all(); } catch (e) { filas = []; }
   const ctxPorUsuario = new Map();
   for (const b of filas) {
-    const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+    const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 5 * 60 * 1000);
     const staleEstado = !b.meta_estado_at || (Date.now() - new Date(b.meta_estado_at + 'Z').getTime() > 3600000);
     if (!stale && !staleEstado) continue;
     resumen.revisadas++;
@@ -15981,7 +15986,7 @@ async function barridoStatsAds() {
   }
   return resumen;
 }
-setInterval(() => { barridoStatsAds().catch(() => {}); }, 20 * 60 * 1000);
+setInterval(() => { barridoStatsAds().catch(() => {}); }, 10 * 60 * 1000);
 
 // Disparo admin del barrido de stats (el mismo token de /api/admin/ads).
 app.post('/api/admin/ads/refrescar-stats', async (req, res) => {
@@ -17184,10 +17189,14 @@ app.post('/api/ads/boost', requireAuth, requireTrialValid, async (req, res) => {
 // GET /api/ads/boosts a una sola función: la usan la pantalla al abrir
 // Y el barrido de fondo, para que los números lleguen solos sin que
 // el cliente tenga que abrir Ads.
+// (LOTE ADS-EXACTO · 27/11) La caché de STATS baja a 5 minutos: al
+// abrir la pantalla, el número de Meta es de hace minutos, no de
+// horas. La del estado real sigue en 1 hora (cambia rara vez y cada
+// lectura extra es una llamada más a Meta por impulso).
 async function pzAdsRefrescarBoost(b, ctxStats) {
 
   if (b.status !== 'active' || !b.meta_campaign_id) return;
-  const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+  const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 5 * 60 * 1000);
   // (LOTE ADS-DESTRABE-VERDAD) El estado REAL del aviso en Meta se
   // refresca con el mismo ritmo horario que las stats y queda
   // persistido (meta_estado): es la fuente de la verdad de la
@@ -17254,9 +17263,10 @@ app.get('/api/ads/boosts', requireAuth, async (req, res) => {
   // esa lectura no devuelve fila, con la cuenta de Posty (el riel
   // histórico). Los ids de campaña son únicos entre cuentas: leer en
   // la cuenta equivocada devuelve vacío, nunca números ajenos. La
-  // caché es la de siempre: lo persistido manda y se refresca a lo
-  // sumo 1 vez por hora por impulso, al leer — la pantalla no
-  // martilla a Meta en cada apertura. El UPDATE suma las dos stats
+  // caché es la de siempre: lo persistido manda y las stats se
+  // refrescan a lo sumo 1 vez cada 5 minutos por impulso, al leer
+  // (LOTE ADS-EXACTO; antes 1 vez por hora — el estado real sigue
+  // horario) — la pantalla no martilla a Meta en cada apertura. El UPDATE suma las dos stats
   // por objetivo que faltaban (visitas al perfil e interacciones).
   // Interacciones nace nullable en este lote: null = Meta no devolvió
   // esa acción y la tarjeta la omite. Visitas al perfil ya existía
@@ -50121,7 +50131,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1391';
+const BUILD_ID = '20261105-v1392';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

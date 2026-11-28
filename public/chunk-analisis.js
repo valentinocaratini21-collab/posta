@@ -2027,6 +2027,25 @@ function anaImpIrDestacado() {
   if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// (LOTE ADS-EXACTO) El dinero de un impulso con el formato vigente
+// de la tarjeta del impulso activo (app.js, fmtG del LOTE ADS-MONTO):
+// prefijo US$ en dólares y el sufijo de la moneda cuando no es USD.
+// El GASTO va SIEMPRE con centavos (conCentavos): el piso a dólares
+// enteros mostraba «Gastados $3» cuando Meta ya reportaba US$ 3,28
+// y el número del producto quedaba por debajo del aviso de Facebook.
+// El presupuesto puede ir entero (los montos que se venden son
+// redondos: 20/50/100).
+function anaDineroTxt(cents, currency, conCentavos) {
+  const loc = anaLang === 'en' ? 'en-US' : 'es-AR';
+  const cur = currency || 'USD';
+  const pre = cur === 'USD' ? 'US$' : '$';
+  const suf = cur !== 'USD' ? ' ' + cur : '';
+  const v = Math.max(0, Number(cents || 0) || 0) / 100;
+  return pre + (conCentavos
+    ? v.toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : Math.floor(v).toLocaleString(loc)) + suf;
+}
+
 // Tarjeta de campaña (mock: titular = resultado, dinero abajo, chico).
 // Solo números reales de Meta (alcance y gasto reportados) y del
 // presupuesto. "Ventas cerradas" NO se muestra: sin reporte del cliente
@@ -2047,9 +2066,11 @@ function anaCampanaActivaHTML() {
   const post = (d.feed || []).find((p) => Number(p.post_id) === Number(activa.post_id)) || (d.elegibles || []).find((e) => Number(e.post_id) === Number(activa.post_id)) || null;
   const titulo = post && post.caption ? anaCortarCaption(post.caption, 60) : anaT('Tu campaña activa', 'Your active campaign');
   const alcance = Number(activa.last_reach || 0);
-  const gastado = Math.floor(Number(activa.last_spend_cents || 0) / 100);
-  const presupuesto = Math.floor(Number(activa.budget_cents || 0) / 100);
-  const moneda = (activa.currency && activa.currency !== 'USD') ? ' ' + activa.currency : '';
+  // (LOTE ADS-EXACTO) El gastado SIN piso: los centavos reales de
+  // Meta, con el formato de anaDineroTxt — nunca más «$3» por 3,28.
+  const gastadoCents = Math.max(0, Number(activa.last_spend_cents || 0) || 0);
+  const gastadoTxt = anaDineroTxt(gastadoCents, activa.currency || 'USD', true);
+  const presupuestoTxt = anaDineroTxt(activa.budget_cents, activa.currency || 'USD', false);
   const pill = activa.status === 'active'
     ? `<span style="display:inline-flex;align-items:center;gap:6px;background:#E6F7EE;color:#0E6B4C;font-size:11.5px;font-weight:900;padding:4px 10px;border-radius:999px">● ${esc(anaT('ACTIVA', 'ACTIVE'))}</span>`
     : `<span style="display:inline-flex;align-items:center;gap:6px;background:#FFF3D6;color:#8A6D00;font-size:11.5px;font-weight:900;padding:4px 10px;border-radius:999px">● ${esc(anaT('PENDIENTE', 'PENDING'))}</span>`;
@@ -2065,9 +2086,9 @@ function anaCampanaActivaHTML() {
   const grande = alcance > 0
     ? `<div style="font-size:32px;font-weight:900;color:#0A1E33;line-height:1;margin:8px 0 2px">${alcance.toLocaleString(loc)} <span style="font-size:18px">${esc(anaT('personas alcanzadas', 'people reached'))}</span></div>`
     : `<div style="font-size:20px;font-weight:900;color:#0A1E33;line-height:1.2;margin:8px 0 2px">${esc(anaT('Todavía sin alcance reportado de Meta', 'No reach reported by Meta yet'))}</div>`;
-  const sub = gastado > 0
-    ? esc(anaT('Gastados $' + gastado.toLocaleString(loc) + moneda + ' de $' + presupuesto.toLocaleString(loc) + moneda, 'Spent $' + gastado.toLocaleString(loc) + moneda + ' of $' + presupuesto.toLocaleString(loc) + moneda)) + (diasTxt ? ' · ' + esc(diasTxt) : '')
-    : esc(anaT('Presupuesto $' + presupuesto.toLocaleString(loc) + moneda + ' · gasto todavía sin reportar de Meta', 'Budget $' + presupuesto.toLocaleString(loc) + moneda + ' · spend not reported by Meta yet')) + (diasTxt ? ' · ' + esc(diasTxt) : '');
+  const sub = gastadoCents > 0
+    ? esc(anaT('Gastados ' + gastadoTxt + ' de ' + presupuestoTxt, 'Spent ' + gastadoTxt + ' of ' + presupuestoTxt)) + (diasTxt ? ' · ' + esc(diasTxt) : '')
+    : esc(anaT('Presupuesto ' + presupuestoTxt + ' · gasto todavía sin reportar de Meta', 'Budget ' + presupuestoTxt + ' · spend not reported by Meta yet')) + (diasTxt ? ' · ' + esc(diasTxt) : '');
   return `<div class="card" id="impCampanaCard">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
       <h4 style="margin:0">${esc(titulo)}</h4>
@@ -2344,12 +2365,13 @@ function anaBilleteraHistorialHTML() {
   return boosts.slice(0, 5).map((b) => {
     const dias = Number(b.duration_days) || 7;
     const alcance = Number(b.last_reach || 0);
-    const gastado = Math.floor(Number(b.last_spend_cents || 0) / 100);
+    const gastadoCents = Math.max(0, Number(b.last_spend_cents || 0) || 0);
     const det = [anaT('Posteo #', 'Post #') + (b.post_id || '?')];
     const fIni = fechaCorta(b.created_at); if (fIni) det.push(fIni);
     const fFin = hasta(b); if (fFin) det.push(anaT('hasta ', 'until ') + fFin);
     if (alcance > 0) det.push(anaT('Alcance ', 'Reach ') + alcance.toLocaleString(loc));
-    if (gastado > 0) det.push(anaT('Gastado $', 'Spent $') + gastado.toLocaleString(loc));
+    // (LOTE ADS-EXACTO) El gastado del historial, con centavos.
+    if (gastadoCents > 0) det.push(anaT('Gastado ', 'Spent ') + anaDineroTxt(gastadoCents, b.currency || 'USD', true));
     return `<div style="padding:10px 0;border-top:1px solid #EDF1F5">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <span style="font-size:14px;font-weight:800;color:#0A1E33">${montoTxt(b)} · ${dias} ${anaT('días', 'days')}</span>

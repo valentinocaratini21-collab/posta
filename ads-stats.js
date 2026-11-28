@@ -104,6 +104,23 @@ function verdadDe(boost) {
   return { sale: false, motivo: 'sin_confirmar' };
 }
 
+// (LOTE ADS-EXACTO) La frescura de la lectura: minutos desde que
+// Meta reportó por última vez (stats_updated_at, hora UTC de la
+// base) hasta «ahora». Sin lectura real, null — la tarjeta no
+// afirma frescura de un número que no existe. 0 = recién (< 1 min).
+// La tarjeta la muestra («Actualizado hace X min») porque el
+// contador de Facebook va en tiempo real y redondea: va adelantado
+// respecto del oficial de Insights, y el cliente tiene que poder
+// ver de cuándo es el número que está mirando.
+function actualizadoHaceMin(boost, ahoraMs) {
+  const txt = String((boost && boost.stats_updated_at) || '');
+  if (!txt) return null;
+  const t = Date.parse(txt.replace(' ', 'T') + (/Z|[+-]\d{2}:?\d{2}$/.test(txt) ? '' : 'Z'));
+  if (!Number.isFinite(t)) return null;
+  const ahora = Number.isFinite(ahoraMs) ? ahoraMs : Date.now();
+  return Math.max(0, Math.floor((ahora - t) / 60000));
+}
+
 // La carga completa de la tarjeta para una fila de ad_boosts.
 // stats: hasta 3, en orden — alcance (reach de Meta), la acción
 // del objetivo, clics (clicks de Meta) — solo las que tienen dato.
@@ -129,7 +146,12 @@ function tarjetaDe(boost, ahoraMs) {
     currency: String(boost.currency || 'USD'),
     dia: dias.dia,
     dias_total: dias.total,
+    // (LOTE ADS-EXACTO) De cuándo es el número: la marca cruda y la
+    // frescura en minutos, para que la tarjeta la muestre. Sin
+    // lectura real, ambas en null — no se afirma frescura de nada.
+    stats_updated_at: tieneDatos ? String(boost.stats_updated_at) : null,
+    actualizado_hace_min: actualizadoHaceMin(boost, ahoraMs),
   };
 }
 
-module.exports = { tarjetaDe, diaDe, statDelObjetivo, verdadDe };
+module.exports = { tarjetaDe, diaDe, statDelObjetivo, verdadDe, actualizadoHaceMin };
