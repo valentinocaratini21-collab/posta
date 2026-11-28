@@ -40,6 +40,7 @@ const ritualManana = require('./ritual-manana');
 const clientDigest = require('./client-digest');
 const { dayKeyInTz } = require('./morning-post-push');
 const patronesSerie = require('./patrones-serie'); // (LOTE PATRONES-DE-SERIE) rol de la pieza en su serie + marca durable de freno
+const chatLimpio = require('./chat-limpio'); // (LOTE CHAT-SIN-TECNICISMOS) ninguna respuesta al cliente lleva ids internos, rutas /media/ ni nombres de archivo
 
 const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
 
@@ -1027,7 +1028,9 @@ function replyAsPosty(db, userId, texto, opts) {
   ensureSchema(db);
   const o = opts || {};
   const actor = o.actor || 'equipo';
-  const text = trunc((texto || '').trim(), 2000);
+  // (LOTE CHAT-SIN-TECNICISMOS) El dictado como Posty es una
+  // respuesta de cara al cliente: pasa por el mismo filtro duro.
+  const text = trunc(chatLimpio.limpiarRespuestaCliente(String(texto || '').trim()), 2000);
   if (!text) return { ok: false, error: 'texto_vacio' };
   const user = safe(() => db.prepare('SELECT id FROM users WHERE id = ?').get(Number(userId)), null);
   if (!user) return { ok: false, error: 'sin_usuario' };
@@ -1785,7 +1788,12 @@ function resolveVoiceRequest(db, opts) {
   ensureSchema(db);
   const o = opts || {};
   const mid = Number(o.messageId);
-  const respuesta = trunc(String(o.respuesta || '').trim(), 2000);
+  // (LOTE CHAT-SIN-TECNICISMOS) La respuesta que entra al hilo del
+  // cliente se limpia acá, en el punto de guardado: sin ids de
+  // material/posteo, sin rutas /media/, sin nombres de archivo —
+  // aunque el texto del operador los traiga (la captura del 27/11
+  // nació de una resolución con el dato técnico pedido por la casa).
+  const respuesta = trunc(chatLimpio.limpiarRespuestaCliente(String(o.respuesta || '').trim()), 2000);
   if (!mid) return { ok: false, error: 'sin_pedido' };
   if (!respuesta) return { ok: false, error: 'respuesta_vacia' };
   const m = safe(() => db.prepare(

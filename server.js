@@ -17,6 +17,7 @@ costs.initCosts(db, {
 const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
 const pushOperador = require('./push-operador'); // (LOTE CONSERJE-PUSH-OPERADOR) avisos push del operador, atados a la casa (user 12)
+const chatLimpio = require('./chat-limpio'); // (LOTE CHAT-SIN-TECNICISMOS) filtro duro: ninguna respuesta al cliente lleva ids internos, rutas /media/ ni nombres de archivo
 const videoEdicion = require('./video-edicion'); // (LOTE VIDEO-EDICION-AVISOS) edición automática del video del cliente (ffmpeg local, USD 0, sin IA)
 // 🌅 RITUAL DE LA MAÑANA (LOTE 5/8): día, racha, álbum y elección (módulo
 // puro + SQL); la generación de alternas frescas vive en los endpoints de
@@ -8230,7 +8231,11 @@ function chatInsertUser(db, uid, text, reply, photosJson) {
 }
 
 function pzChatSaveReply(db, uid, reply) {
-  const t = String(reply || '').trim();
+  // (LOTE CHAT-SIN-TECNICISMOS) TODA respuesta del chat que se
+  // guarda pasa por el filtro duro: sin ids de material/posteo,
+  // sin rutas /media/, sin nombres de archivo. Es el punto único
+  // de guardado del chat del producto — la red detrás del prompt.
+  const t = chatLimpio.limpiarRespuestaCliente(String(reply || '').trim());
   if (!t || t === '…') return false;
   db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', t.slice(0, 3000));
   return true;
@@ -8629,7 +8634,9 @@ function pzPushUrlCambio(hilo, postId) {
   return '/#/app/chat';
 }
 function pzChatMsgInsert(uid, text, hilo, postId) {
-  const t = String(text || '').slice(0, 3000);
+  // (LOTE CHAT-SIN-TECNICISMOS) Los mensajes del ejecutor de
+  // cambios también son respuestas al cliente: mismo filtro duro.
+  const t = chatLimpio.limpiarRespuestaCliente(String(text || '')).slice(0, 3000);
   if (hilo === 'post' && postId) {
     const r = db.prepare('INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (?,?,?,?,?)').run(uid, 'assistant', t, 'post', Number(postId));
     return Number(r.lastInsertRowid) || null;
@@ -10812,7 +10819,7 @@ app.post('/api/ideas/chat', async (req, res) => {
     // corre después de responder, nunca frena el chat; si falla (sin
     // clave, LLM caído, timeout), no se guarda nada y nada cambia.
     try { setImmediate(() => { try { memoriaCliente.extraerYGuardar(db, uid, openaiKeyFor(uid)).catch(() => {}); } catch (e) {} }); } catch (e) {}
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen || trabajoCambio || (trabajoCambioNet && trabajoCambioNet.trabajo) || null, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
+    res.json({ reply: chatLimpio.limpiarRespuestaCliente(out.reply), idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, approve: approveApplied, approveAll: approveAllApplied, reject: rejectApplied, duplicate: duplicateApplied, create: createdApplied, redo: redoneApplied, dna: dnaSaved, options: out.options || null, showDrafts, trabajo: trabajoImagen || trabajoCambio || (trabajoCambioNet && trabajoCambioNet.trabajo) || null, taste_proposal: tasteMemory.proposalPayload(db, uid, langOfUser(uid)), voz_post: vozPost || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: FT('Uh, me trabé un segundo 😅 Dame otro intento que esta sale', 'Uh, I got stuck for a second 😅 Give me another try, this one will work') });
@@ -20423,7 +20430,7 @@ app.post('/api/chat/hilo/log', requireAuth, (req, res) => {
     else if (general) { hilo = 'general'; }
     else return res.status(400).json({ ok: false, error: 'Falta el destino' });
     if (userText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', userText, pid, hilo);
-    if (asstText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', asstText, pid, hilo);
+    if (asstText) db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', chatLimpio.limpiarRespuestaCliente(asstText), pid, hilo);
     return res.json({ ok: true });
   } catch (e) { return res.status(500).json({ ok: false, error: 'No se pudo guardar el hilo' }); }
 });
@@ -21571,7 +21578,9 @@ app.post('/api/subir/idea-voz', requireAuth, (req, res) => {
     const uid = req.session.userId;
     const texto = String((req.body || {}).text || '').trim().slice(0, 2000);
     if (!texto) return res.status(400).json({ ok: false, error: 'sin_texto' });
-    const respuesta = subirIdeaRespuesta(uid, texto);
+    // (LOTE CHAT-SIN-TECNICISMOS) El acuse es plantilla, pero su eco
+    // cita el texto del cliente: pasa por el filtro duro igual.
+    const respuesta = chatLimpio.limpiarRespuestaCliente(subirIdeaRespuesta(uid, texto), langOfUser(uid) === 'en' ? 'en' : 'es');
     db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'user', texto, 0, 'general');
     db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo) VALUES (?,?,?,?,?)').run(uid, 'assistant', respuesta, 0, 'general');
     return res.json({ ok: true, respuesta, pregunta: subirIdeaEsPreguntaPlan(texto) });
@@ -21830,12 +21839,18 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver-idea', requireAdminTo
         ? `Done! Your idea is now a post${sl.dia_label ? ' — it goes out ' + sl.dia_label : ''}${sl.hora ? ' at ' + sl.hora : ''}.`
         : `¡Listo! Tu idea ya es un posteo${sl.dia_label ? ' — sale ' + sl.dia_label : ''}${sl.hora ? ' a las ' + sl.hora : ''}.`;
     }
+    // (LOTE CHAT-SIN-TECNICISMOS) La respuesta que ve el cliente —
+    // venga del texto libre del operador o de la plantilla — se
+    // limpia antes de escribirla en el hilo y en la fila de la idea:
+    // sin ids de material/posteo, sin rutas /media/, sin archivos.
+    respuesta = chatLimpio.limpiarRespuestaCliente(respuesta, lang);
+    const textoLimpio = texto ? chatLimpio.limpiarRespuestaCliente(texto, lang) : texto;
     // (LOTE RESPUESTA-HILO-IDEA) La respuesta del operador queda
     // estampada con el idea_id: es un mensaje más del MISMO hilo y la
     // tarjeta del cliente la pinta en la conversación.
     db.prepare('INSERT INTO chat_messages (user_id, role, text, post_id, hilo, idea_id) VALUES (?,?,?,?,?,?)').run(uid, 'assistant', respuesta, 0, 'general', Number(idea.id));
     db.prepare(`UPDATE subir_ideas SET estado = 'resuelta', respuesta = ?, post_id = ?, resuelta_at = datetime('now') WHERE id = ?`)
-      .run(texto, post ? Number(post.id) : null, Number(idea.id));
+      .run(textoLimpio, post ? Number(post.id) : null, Number(idea.id));
     try { conserjeVista.marcarVozResuelto(db, mid, 'equipo'); } catch (e) {}
     let pushR = { ok: false, reason: 'sin_intento' };
     try {
@@ -50131,7 +50146,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1392';
+const BUILD_ID = '20261105-v1393';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
