@@ -33,7 +33,9 @@ function schedEvent(db, userId, name, props) {
   // push (toggle users.notify_failed + dedupe de 30 min en push.js).
   // Fire-and-forget: el aviso jamás frena ni rompe la publicación.
   if (name === 'post_failed' && userId) {
-    try { require('./push').notifyPostFailed(userId).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
+    // (LOTE PUSH-DESTINO-POSTEO · 27/11) El post_id viaja en props: la
+    // push de falla aterriza en el posteo que disparó el aviso.
+    try { require('./push').notifyPostFailed(userId, { postId: props && props.post_id }).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
     // (LOTE CONSERJE-PUSH-URGENTES) El mismo fracaso avisa al OPERADOR:
     // es una de las tres urgencias que zumban en su teléfono. Mismo
     // punto que la push al cliente; el dedup durable es por posteo

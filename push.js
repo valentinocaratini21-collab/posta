@@ -498,6 +498,12 @@ async function notifyPostFailed(userId, opts = {}) {
   } catch (e) { /* la copia sale en singular */ }
   const en = u.lang === 'en';
   const multi = fails >= 2;
+  // (LOTE PUSH-DESTINO-POSTEO · 27/11) Regla del dueño 23:44: la push
+  // de falla es información de UN posteo → aterriza en ese posteo (el
+  // que disparó este aviso, también cuando la copia sale en plural).
+  // Sin post_id (camino defensivo) cae al Inicio, como hasta hoy.
+  const falloPostId = Number(opts.postId) > 0 ? Number(opts.postId) : null;
+  const falloUrl = falloPostId ? '/#/app/post/' + falloPostId : '/#/app/inicio';
   const send = opts.sendFn || sendPush;
   let r;
   // (LOTE PUSH-HUMANA · regla del dueño 27/11 22:04) La push de falla
@@ -506,16 +512,16 @@ async function notifyPostFailed(userId, opts = {}) {
   // anterior le pasaba el problema al cliente y contradecía que los
   // posteos salen igual. La resolución cierra con su push conectada
   // («Ya salió ✓») en scheduler.js, marcada por este mismo evento
-  // post_failed_push. Destino: el Inicio — no hay nada que hacer ahí.
+  // post_failed_push. Destino: el posteo que falló (falloUrl, arriba).
   try {
     r = await send(userId, en ? {
       title: multi ? "Today's posts didn't go out" : "Today's post didn't go out",
       body: "We're already on it. I'll let you know as soon as it's published.",
-      url: '/#/app/inicio',
+      url: falloUrl,
     } : {
       title: multi ? 'Tus posteos de hoy no salieron' : 'Tu posteo de hoy no salió',
       body: 'Ya lo estamos resolviendo. Te aviso apenas esté publicado.',
-      url: '/#/app/inicio',
+      url: falloUrl,
     });
   } catch (e) { r = { ok: false, reason: 'send_failed' }; }
   // El intento queda marcado SIEMPRE (haya o no suscripciones): es lo que

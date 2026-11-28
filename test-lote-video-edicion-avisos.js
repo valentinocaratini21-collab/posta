@@ -84,7 +84,7 @@ function extractFn(src, name) {
   t(srv.includes('function videoEditTiempoBucket(durSec)'), 'server: videoEditTiempoBucket definida');
   t(srv.includes('function videoEditAvisoEditando(') && srv.includes('function videoEditAvisoListo('), 'server: avisos editando/listo definidos');
   t(srv.includes('[video-listo:${postId}:${videoRel}]'), 'server: marcador [video-listo:ID:RUTA]');
-  t(srv.includes("url: '/#/app/chat'"), 'server: la push «video listo» abre el chat');
+  t(srv.includes("videoMsgId ? '/#/app/chat?msg=' + videoMsgId : '/#/app/chat'"), 'server: la push «video listo» abre el chat en el mensaje del video (regla 27/11)');
   t(srv.includes('video_listo_aviso'), 'server: idempotencia del aviso (video_listo_aviso)');
   t(srv.includes("UPDATE posts SET video_feedback = ? WHERE id = ?"), 'server: el feedback queda en posts.video_feedback');
   t(srv.includes('decime qué querés cambiar'), 'server: «Cambiar algo» pregunta qué cambiar (recortar/música/portada)');

@@ -547,7 +547,9 @@ function evTrack(userId, name, props = null, sessionId = '') {
   // (posteos trabados en publishing) avisa igual que los del scheduler —
   // mismo helper, mismo toggle y mismo dedupe (push.js). Nunca bloquea.
   if (name === 'post_failed' && userId) {
-    try { push.notifyPostFailed(userId).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
+    // (LOTE PUSH-DESTINO-POSTEO · 27/11) El post_id viaja en props: la
+    // push de falla aterriza en el posteo que disparó el aviso.
+    try { push.notifyPostFailed(userId, { postId: props && props.post_id }).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
     // (LOTE CONSERJE-PUSH-URGENTES) Y avisa al OPERADOR, como en el
     // schedEvent del scheduler: el posteo trabado que este barrido
     // marca 'failed' es una urgencia suya. Dedup por posteo.
@@ -19216,7 +19218,7 @@ async function celebratePhotoPost(uid, assetId, filePath) {
       .run(uid, imagePath, caption, hashtags, needRev, isClientPhoto, weekKey, headline, fotoVis.note || '');
     try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
     console.log(`[album] usuario ${uid}: foto ${assetId} convertida en el posteo ${ins.lastInsertRowid} ✨`);
-    try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+    try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/post/' + ins.lastInsertRowid }).catch(() => {}); } catch (e) {}
     // (foto-cliente-experto) Gatillo (b): la foto derivó en borrador.
     // Best-effort: nunca rompe el festejo; si no hay redos o no hay
     // clave, el borrador queda y el dueño usa «Mejorar» manual.
@@ -19307,7 +19309,7 @@ async function albumCrearFoto(uid, assetId, approved) {
       VALUES (?,?,?,?, 'draft', 'image', 1, 'album', ?, ?, 'foto', ?, ?)`)
       .run(uid, imagePath, caption, hashtags, isClientPhoto, weekKey, why, asset.id);
     try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
-    try { push.sendPush(uid, { title: 'Tu borrador está listo ✏️', body: 'Posty armó el borrador con tu foto. Miralo en tu semana y aprobalo cuando quieras 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+    try { push.sendPush(uid, { title: 'Tu borrador está listo ✏️', body: 'Posty armó el borrador con tu foto. Miralo en tu semana y aprobalo cuando quieras 👇', url: '/#/app/post/' + ins.lastInsertRowid }).catch(() => {}); } catch (e) {}
     return { postId: ins.lastInsertRowid, imagePath };
   } catch (e) {
     if (e && e.name === 'AiCapExceeded') return { capped: true, error: e.message };
@@ -19546,7 +19548,7 @@ async function celebrateVideoPost(uid, assetId, filePath) {
     const out = await buildClientVideoReelPost(uid, asset, 'album-video-festejo');
     if (out && out.postId) {
       console.log(`[album] usuario ${uid}: video ${assetId} convertido en el reel ${out.postId} 🎬`);
-      try { push.sendPush(uid, { title: 'Tu video ya es un reel 🎬', body: 'Posty lo convirtió en un reel listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+      try { push.sendPush(uid, { title: 'Tu video ya es un reel 🎬', body: 'Posty lo convirtió en un reel listo para publicar. Miralo en tu semana 👇', url: '/#/app/post/' + out.postId }).catch(() => {}); } catch (e) {}
     } else if (out && out.gated) {
       console.log(`[album] usuario ${uid}: video ${assetId} no festejado tras el gate: ${out.gated.join(', ')}`);
     }
@@ -19572,7 +19574,7 @@ app.post('/api/album/video-reel', requireAuth, async (req, res) => {
     if (out.error === 'no-key') return res.status(400).json({ error: 'Todavía no puedo armar reels en tu cuenta 😅 Probá de nuevo en un rato.' });
     if (!out.postId) return res.status(500).json({ error: 'No pude armar el reel 😅 Probá de nuevo en un rato.' });
     res.json({ ok: true, post_id: out.postId, url: out.url, cover: out.cover });
-    try { push.sendPush(uid, { title: 'Tu reel está listo 🎬', body: 'Tu video ya es un reel en tu semana, listo para publicar 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+    try { push.sendPush(uid, { title: 'Tu reel está listo 🎬', body: 'Tu video ya es un reel en tu semana, listo para publicar 👇', url: '/#/app/post/' + out.postId }).catch(() => {}); } catch (e) {}
   } catch (e) {
     if (e && e.code === 'AI_BUDGET') return res.status(402).json({ error: e.message });
     console.error('[album-video] reel:', e.message);
@@ -21855,7 +21857,7 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver-idea', requireAdminTo
     let pushR = { ok: false, reason: 'sin_intento' };
     try {
       pushR = await push.sendPush(uid, post
-        ? { title: lang === 'en' ? 'Your idea is now a post ✨' : 'Tu idea ya es un posteo ✨', body: lang === 'en' ? 'Tap to see the post.' : 'Tocá para ver el posteo.', url: '/#/app/subir', data: { idea_id: Number(idea.id), post_id: Number(post.id) } }
+        ? { title: lang === 'en' ? 'Your idea is now a post ✨' : 'Tu idea ya es un posteo ✨', body: lang === 'en' ? 'Tap to see the post.' : 'Tocá para ver el posteo.', url: '/#/app/post/' + Number(post.id), data: { idea_id: Number(idea.id), post_id: Number(post.id) } }
         : { title: lang === 'en' ? 'Posty replied to your idea 💬' : 'Posty respondió tu idea 💬', body: lang === 'en' ? 'Tap to read the reply.' : 'Tocá para leer la respuesta.', url: '/#/app/subir', data: { idea_id: Number(idea.id) } });
     } catch (e) { pushR = { ok: false, reason: 'push_error' }; }
     return res.json({ ok: true, idea_id: Number(idea.id), push: pushR });
@@ -36576,14 +36578,22 @@ function videoEditAvisoListo(uid, en, postId, videoRel) {
   } catch (e) { /* sin columna: seguir igual, el aviso sale una vez por construcción */ }
   const marker = `[video-listo:${postId}:${videoRel}]`;
   const msg = en ? `your video is ready ${marker}` : `tu video ya está listo ${marker}`;
-  try { db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg); } catch (e) {}
+  // (LOTE PUSH-DESTINO-POSTEO · 27/11) El resultado vive en ESTE mensaje
+  // del chat: la push aterriza en él, como «La imagen que pediste está
+  // lista» (#/app/chat?msg=<id>). Sin id (insert fallido), cae al chat.
+  let videoMsgId = null;
+  try {
+    const insMsg = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg);
+    videoMsgId = Number(insMsg.lastInsertRowid) > 0 ? Number(insMsg.lastInsertRowid) : null;
+  } catch (e) {}
+  const videoChatUrl = videoMsgId ? '/#/app/chat?msg=' + videoMsgId : '/#/app/chat';
   try {
     const { sendPush } = require('./push');
     sendPush(uid, {
       title: en ? '🎬 Your video is ready' : '🎬 Tu video ya está listo',
       body: en ? 'Posty edited it. Take a look and tell me if you like it 👌' : 'Posty lo editó. Miralo y decime si te gusta 👌',
-      url: '/#/app/chat',
-      data: { postId, url: '/#/app/chat' },
+      url: videoChatUrl,
+      data: { postId, url: videoChatUrl },
     }).catch(() => {});
   } catch (e) {}
   return true;
@@ -50146,7 +50156,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1394';
+const BUILD_ID = '20261105-v1395';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

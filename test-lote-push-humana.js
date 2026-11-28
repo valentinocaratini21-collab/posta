@@ -29,7 +29,7 @@ const R = (p) => fs.readFileSync(path.join(__dirname, p), 'utf8');
   t('A1 falla ES exacta', pushJs.includes("'Tu posteo de hoy no salió'") && pushJs.includes("'Ya lo estamos resolviendo. Te aviso apenas esté publicado.'"));
   t('A2 falla EN exacta', pushJs.includes('"Today\'s post didn\'t go out"') && pushJs.includes('"We\'re already on it. I\'ll let you know as soon as it\'s published."'));
   t('A3 la copia retirada no existe en push.js', !/Miralo cuando puedas|Miralos cuando puedas|dejé en borrador|dejé en borrador|kept it as a draft|kept them as drafts|Take a look when you can/i.test(pushJs));
-  t('A4 la falla aterriza en Inicio', pushJs.includes("url: '/#/app/inicio'"));
+  t('A4 la falla aterriza en el posteo que falló (regla 27/11; sin postId cae a Inicio)', pushJs.includes("const falloUrl = falloPostId ? '/#/app/post/' + falloPostId : '/#/app/inicio'"));
   t('A5 cierre ES exacto en scheduler', sched.includes('El posteo que se había trabado ya está publicado en tu Instagram.'));
   t('A6 cierre EN exacto en scheduler', sched.includes('The post that got stuck is now published on your Instagram.'));
   t('A7 el cierre se marca con post_recovered_push', (sched.match(/post_recovered_push/g) || []).length >= 2 && sched.includes("name = 'post_failed_push'"));

@@ -34,7 +34,8 @@
 //   (r.ok || r.sent > 0, el criterio de morning-post-push); si la
 //   push falla o no hay clave, el próximo barrido reintenta.
 // · Copia de comprobante, no conversación: el posteo YA está en su
-//   semana; el aviso lo trae a verlo (url '/#/app/inicio'). NUNCA
+//   semana; el aviso lo trae a verlo (url '/#/app/post/<id>' desde
+//   PUSH-DESTINO-POSTEO 27/11; antes '/#/app/inicio'). NUNCA
 //   «sale» ni «se publica»: en la prueba nada se postea de verdad.
 // · Idioma: el de su prueba (trial_cache.payload.lang === 'en' → EN;
 //   fallback users.lang).
@@ -139,7 +140,10 @@ async function sendTrialDayPushes(db, opts = {}) {
         try { already = db.prepare('SELECT 1 AS x FROM trial_day_push_sent WHERE user_id = ? AND post_id = ?').get(uid, p.id); } catch (e) {}
         if (already) continue;
         let r = null;
-        try { r = await pushFn(uid, { title: t.title, body: t.body, url: '/#/app/inicio', data: { postId: String(p.id), trialDay: '1' } }); }
+        // (LOTE PUSH-DESTINO-POSTEO · 27/11) Regla del dueño 23:44: la
+        // push de la prueba anuncia el posteo de hoy → aterriza en ESE
+        // posteo, no en el Inicio.
+        try { r = await pushFn(uid, { title: t.title, body: t.body, url: '/#/app/post/' + p.id, data: { postId: String(p.id), trialDay: '1' } }); }
         catch (e) { r = { ok: false, reason: 'throw:' + e.message }; }
         if (r && (r.ok || Number(r.sent) > 0)) {
           try { db.prepare('INSERT OR IGNORE INTO trial_day_push_sent (user_id, post_id, sent_at) VALUES (?,?,?)').run(uid, p.id, now); } catch (e) {}

@@ -31,11 +31,11 @@
 //   sent > 0.
 // · No se anuncia a cuentas con publishing_stopped = 1 (no van a
 //   publicar: anunciar sería mentir).
-// · Idioma: users.lang (en → EN, resto ES). URL '/#/app/ritual': el
-//   ritual vive ahí desde el lote 5/8 (antes '/#/app/inicio': el hero
-//   vivía en Inicio; ahora la push abre el posteo del día y el posteo
-//   del día se confirma ahí). El tap nativo rutea por url (push.js la
-//   incluye en el payload APNs y web).
+// · Idioma: users.lang (en → EN, resto ES). URL: fue '/#/app/ritual'
+//   desde el lote 5/8; desde PUSH-DESTINO-POSTEO (27/11, regla del
+//   dueño 23:44 «las push de posteos llevan a los posteos») es el
+//   detalle del posteo de hoy ('/#/app/post/<id>'). El tap nativo
+//   rutea por url (push.js la incluye en el payload APNs y web).
 // · La push lleva la FOTO del posteo (payload.image): solo imagen o
 //   carrusel (la primera foto); el video no lleva adjunto. La URL es
 //   absoluta con fallback canónico (postImageUrl). TRANSPORTE: el
@@ -239,7 +239,10 @@ async function sendMorningPostPush(db, opts) {
       // reintenta.
       const t = morningText(lang, saleHourInTz(post.scheduled_at, tz, lang));
       const image = postImageForPush(post);
-      const payload = { title: t.title, body: t.body, url: '/#/app/ritual', data: { postId: String(post.id) } };
+      // (LOTE PUSH-DESTINO-POSTEO · 27/11) Regla del dueño 23:44: las
+      // push que son información de posteos llevan AL POSTEO — la de la
+      // mañana aterriza en el detalle del posteo de hoy, no en el ritual.
+      const payload = { title: t.title, body: t.body, url: '/#/app/post/' + post.id, data: { postId: String(post.id) } };
       if (image) payload.image = image;
       let r = null;
       try { r = await pushFn(uid, payload); }

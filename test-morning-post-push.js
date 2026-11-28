@@ -85,7 +85,7 @@ const MON_12_BA = new Date('2026-11-02T15:00:00Z');
   ok(r1.sent === 2, 'barrido 09:00 BA: envía solo a 1 (ES) y 4 (EN), no a 2/3/5/6/7 (sent=' + r1.sent + ')');
   ok(sent.length === 2, 'dos pushes capturados');
   const p1 = sent.find((s) => s.uid === 1);
-  ok(p1 && p1.payload.body === 'Hoy sale este — sale a las 19:00' && p1.payload.url === '/#/app/ritual' && p1.payload.data.postId === '11', 'push 1: texto ES nuevo, url ritual, postId del posteo');
+  ok(p1 && p1.payload.body === 'Hoy sale este — sale a las 19:00' && p1.payload.url === '/#/app/post/11' && p1.payload.data.postId === '11', 'push 1: texto ES nuevo, url al posteo (regla 27/11), postId del posteo');
   ok(p1 && p1.payload.image === 'https://postycommunitymanager.com/media/11.jpg', 'push 1: lleva la foto del posteo adjunta (URL absoluta)');
   const p4 = sent.find((s) => s.uid === 4);
   ok(p4 && p4.payload.body === "Today's post is ready — goes out at 7:00 PM", 'push 4: texto EN nuevo');

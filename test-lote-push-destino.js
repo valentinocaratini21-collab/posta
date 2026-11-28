@@ -173,8 +173,8 @@ async function cTrial() {
   dbC.prepare("INSERT INTO posts (id, user_id, scheduled_at, status) VALUES (301, 9, '2026-11-24T19:00:00.000Z', 'scheduled')").run();
   const caps = [];
   const r = await TD.sendTrialDayPushes(dbC, { now, pushFn: async (uid, payload) => { caps.push(payload); return { ok: true, sent: 1 }; } });
-  t('C4 recibo día 2 de la prueba → Inicio (su semana vive ahí), intacto',
-    r.sent === 1 && caps.length === 1 && caps[0].url === '/#/app/inicio', JSON.stringify({ r, caps: caps.map((c) => c.url) }));
+  t('C4 recibo día 2 de la prueba → el posteo de hoy (regla 27/11), intacto',
+    r.sent === 1 && caps.length === 1 && caps[0].url === '/#/app/post/301', JSON.stringify({ r, caps: caps.map((c) => c.url) }));
 }
 
 async function cPushJs() {
