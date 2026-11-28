@@ -444,10 +444,14 @@
   /* ---------- LOTE CONSERJE-BANDEJA ---------- */
   /* El rediseño móvil del mock 1 «La bandeja» (aprobado por el dueño):
      fondo crema, tarjetas blancas, navegación inferior Hoy /
-     Negocios / Posteos / Más. Gobierna SOLO el ancho de teléfono
-     (≤760px, el corte de CONSERJE-FORMA): la consola de escritorio
-     queda intacta detrás de su media query y se vuelve a ella desde
-     Más («Consola completa» suma la clase ver-escritorio al body).
+     Negocios / Posteos / Más. (LOTE CONSERJE-ENTRADA · palabra del
+     dueño 27/11: «me lleva al conserje viejo — me tiene que llevar
+     al otro») La bandeja ES el conserje y gobierna TODOS los anchos:
+     la consola de escritorio queda como piel optativa detrás de
+     ver-escritorio (Más → «Consola completa») y se vuelve con el
+     botón flotante o con la marca. En pantallas anchas la bandeja se
+     presenta como columna centrada sobre el fondo marino (bloque
+     min-width:761px al final de esta capa).
      La capa móvil consume la MISMA vista y las MISMAS acciones: Hoy
      pinta las tarjetas de siempre (decCard) con la piel crema;
      Negocios compone el tablero semáforo desde clientes + mano y
@@ -455,7 +459,7 @@
      con las decisiones por pieza; Más trae los accesos. */
   #movil{display:none}
   #volverBandeja{display:none}
-  @media (max-width:760px){
+  @media (max-width:10000px){
     body{background:#FFF9F0}
     .bg{display:none}
     .app{display:none}
@@ -552,6 +556,15 @@
     .m-log{padding:9px 2px;border-bottom:1px dashed #EFE3CB;font-size:13px;color:#54493A}
     .m-log .w{color:#A2937D;font-size:12px}
     .m-log .d{display:block;margin-top:2px;line-height:1.45}
+  }
+  /* (LOTE CONSERJE-ENTRADA) La bandeja en pantalla ancha: columna
+     centrada de ancho de teléfono sobre el marino de la casa, con su
+     navegación inferior alineada a la misma columna. Con la piel
+     completa puesta (ver-escritorio) manda la consola de siempre. */
+  @media (min-width:761px){
+    body:not(.ver-escritorio){background:var(--navy)}
+    body:not(.ver-escritorio) #movil{max-width:520px;margin:0 auto;background:#FFF9F0;box-shadow:0 0 60px rgba(0,0,0,.45)}
+    body:not(.ver-escritorio) .m-nav{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:520px}
   }
   @media (prefers-reduced-motion:reduce){
     .pulse{animation:none}
