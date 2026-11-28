@@ -3563,7 +3563,7 @@ async function uploadAssetFile(file, kind) {
 // que el app.js?v= de los index. De PZ_BUILD derivan CHUNK_V (abajo) y la
 // guarda de versión (pzVersionGuard, tras loadChunk): una copia vieja ya no
 // puede quedar atrapada pidiendo chunks viejos ni corriendo plantilla vieja.
-const PZ_BUILD = '20261105-v1396';
+const PZ_BUILD = '20261105-v1397';
 
 // (LOTE AUTO-UPDATE · 26/11) La app se actualiza sola. La navegación
 // es por hash: una sesión abierta NUNCA recarga la página, así que
@@ -41281,19 +41281,25 @@ function apvWhenTextPub(d, tz) {
   return dl ? `Salió el ${dl} a las ${hm}` : '';
 }
 // Cuenta regresiva corta para el pill de pendiente: "en 2 h 15 min".
-function apvCountdown(d) {
+// (LOTE PILL-SIN-APROBACION) Rama EN opcional: la cuenta espejo veía la
+// cuenta regresiva en español. Sin `en`, la salida ES es byte-idéntica.
+function apvCountdown(d, en) {
   const ms = d.getTime() - Date.now();
-  if (!(ms > 0)) return 'en cualquier momento';
+  if (!(ms > 0)) return en ? 'any moment now' : 'en cualquier momento';
   const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `en ${mins} min`;
+  const pre = en ? 'in' : 'en';
+  if (mins < 60) return `${pre} ${mins} min`;
   const h = Math.floor(mins / 60), m = mins % 60;
-  if (h < 48) return `en ${h} h${m ? ` ${m} min` : ''}`;
+  if (h < 48) return `${pre} ${h} h${m ? ` ${m} min` : ''}`;
   const days = Math.floor(h / 24);
-  return `en ${days} día${days > 1 ? 's' : ''}`;
+  return en ? `in ${days} day${days > 1 ? 's' : ''}` : `en ${days} día${days > 1 ? 's' : ''}`;
 }
 function apvPill(p, d, dOk) {
   const ap = String(p.approval || ''), st = String(p.status || '');
   const tz = apvTz();
+  // (LOTE PILL-SIN-APROBACION) Señal de idioma con la misma guardia que
+  // PROFILE más abajo: sin ME en el sandbox de las suites, ES de siempre.
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   // (LOTE ILUSTRADA-BAJO-LA-VARA · pieza 7) La CONEXIÓN es una entrada
   // del estado: sin Instagram conectado, un programado en automático
   // NO sale solo — se muestra pendiente-de-conexión, nunca la salida
@@ -41314,7 +41320,10 @@ function apvPill(p, d, dOk) {
     return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ${pzIc('arrowUpRight', 14)}</a>` : ''}`;
   }
   if (st === 'published') return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
-  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">' + pzIc('alert', 12) + ' No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
+  // (LOTE PILL-SIN-APROBACION) El fallback ya no culpa a una aprobación
+  // que no existe (el scheduler ya no produce failed 'sin aprobación'):
+  // un fallido sin detalle es, simplemente, que no se pudo publicar.
+  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">' + pzIc('alert', 12) + ' No salió: ' + esc(humanError(p.error) || 'no se pudo publicar') + '</span>';
   if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">' + pzIc('reject', 15) + ' Rechazado — no se publica</span>';
   // (LOTE C12 · ESTADOS HONESTOS DEL INVITADO) Programado + 'auto' TODAVÍA
   // no salió: el texto en pasado («Salió solo») afirmaba un hecho falso.
@@ -41324,7 +41333,11 @@ function apvPill(p, d, dOk) {
   if (ap === 'auto' && !igOk) return '<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale cuando conectes tu Instagram</span>';
   if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">' + pzIc('bot', 12) + ' Salió solo (no lo viste a tiempo)</span>';
   if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">${pzIc('checkCircle', 15)} Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
-  if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;
+  // (LOTE PILL-SIN-APROBACION · orden del dueño 28/11, con captura del
+  // posteo 827) Desde SIN-VERIFICACIÓN (v1379) el posteo publica SIN
+  // aprobación: fuera el «Pendiente» que lo dejaba esperando a alguien y
+  // el condicional de aprobación de la era anterior. El posteo SALE.
+  if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ ${en ? 'Goes out' : 'Sale'} ${esc(apvCountdown(d, en))}</span>`;
   return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
 }
 function apvNotFound() {
