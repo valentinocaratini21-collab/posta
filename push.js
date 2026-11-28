@@ -500,19 +500,22 @@ async function notifyPostFailed(userId, opts = {}) {
   const multi = fails >= 2;
   const send = opts.sendFn || sendPush;
   let r;
+  // (LOTE PUSH-HUMANA · regla del dueño 27/11 22:04) La push de falla
+  // es tranquila y asume el problema: sin mencionar borradores y sin
+  // pedirle al cliente que mire nada — ningún paso para el cliente. La copia
+  // anterior le pasaba el problema al cliente y contradecía que los
+  // posteos salen igual. La resolución cierra con su push conectada
+  // («Ya salió ✓») en scheduler.js, marcada por este mismo evento
+  // post_failed_push. Destino: el Inicio — no hay nada que hacer ahí.
   try {
     r = await send(userId, en ? {
-      title: multi ? 'A few posts could not go out 😕' : 'One post could not go out 😕',
-      body: multi
-        ? 'I kept them as drafts so nothing half-done reaches your Instagram. Take a look when you can.'
-        : 'I kept it as a draft so nothing half-done reaches your Instagram. Take a look when you can.',
-      url: '/#/app/schedule',
+      title: multi ? "Today's posts didn't go out" : "Today's post didn't go out",
+      body: "We're already on it. I'll let you know as soon as it's published.",
+      url: '/#/app/inicio',
     } : {
-      title: multi ? 'Algunos posteos no pudieron salir 😕' : 'Un posteo no pudo salir 😕',
-      body: multi
-        ? 'Los dejé en borrador para que nada a medias llegue a tu Instagram. Miralos cuando puedas.'
-        : 'Lo dejé en borrador para que nada a medias llegue a tu Instagram. Miralo cuando puedas.',
-      url: '/#/app/schedule',
+      title: multi ? 'Tus posteos de hoy no salieron' : 'Tu posteo de hoy no salió',
+      body: 'Ya lo estamos resolviendo. Te aviso apenas esté publicado.',
+      url: '/#/app/inicio',
     });
   } catch (e) { r = { ok: false, reason: 'send_failed' }; }
   // El intento queda marcado SIEMPRE (haya o no suscripciones): es lo que

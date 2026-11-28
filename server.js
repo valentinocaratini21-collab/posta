@@ -8468,7 +8468,9 @@ async function pzTrabajoChatImagenRun(jobId) {
       const imgUrl = absImageUrl(uid, String(newPath));
       const pr = await push.sendPush(uid, {
         title: en ? 'The image you asked for is ready' : 'La imagen que pediste está lista',
-        body: titulo,
+        // (LOTE PUSH-HUMANA · 27/11) Plantilla fija: la push no lleva
+        // el título/caption del posteo como cuerpo.
+        body: en ? 'Tap to see it.' : 'Tocá para verla.',
         url: '/#/app/chat?msg=' + finalId,
         image: imgUrl,
         data: { trabajo_id: job.id, msg_id: finalId },
@@ -8908,7 +8910,7 @@ async function pzTrabajoChatCambioRun(jobId) {
     } catch (e) { console.error('[trabajo-cambio] settle lista:', e.message); return false; }
   };
   const avisar = async (titulo) => {
-    try { await push.sendPush(uid, { title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo', body: titulo, url: pzPushUrlCambio(job.hilo, job.post_id), data: { trabajo_id: job.id } }); } catch (e) {}
+    try { await push.sendPush(uid, { title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo', body: en ? 'Done — tap to see the change.' : 'Ya está hecho — tocá para ver el cambio.', url: pzPushUrlCambio(job.hilo, job.post_id), data: { trabajo_id: job.id } }); } catch (e) {}
   };
   const guardarVersion = (post) => {
     try {
@@ -13618,7 +13620,13 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver', requireAdminToken, 
       const en = langOfUser(r.user_id) === 'en';
       pushR = await push.sendPush(r.user_id, {
         title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo',
-        body: String(b.respuesta || '').slice(0, 140),
+        // (LOTE PUSH-HUMANA · regla del dueño 27/11 22:04) La push NO
+        // copia la respuesta del chat: plantilla fija y corta, sin
+        // tecnicismos. El detalle vive en el hilo — la copia anterior
+        // filtró «Es el material 98: /media/…mp4» al teléfono del
+        // dueño porque la respuesta traía el dato técnico que la
+        // cuenta de la casa había pedido.
+        body: en ? 'Done — tap to see the change.' : 'Ya está hecho — tocá para ver el cambio.',
         url: pzPushUrlCambio(r.hilo, r.post_id),
         data: { message_id: r.message_id },
       });
@@ -14053,7 +14061,9 @@ app.post('/api/admin/conserje/vista/voz-resuelto', requireAdminToken, express.js
           const en = langOfUser(uid) === 'en';
           const pr = await push.sendPush(uid, {
             title: en ? 'The change you asked for is ready' : 'El cambio que pediste está listo',
-            body: textoResp.slice(0, 120),
+            // (LOTE PUSH-HUMANA · 27/11) Plantilla fija, sin copiar la
+            // respuesta del chat (ver la ruta pedidos-voz/resolver).
+            body: en ? 'Done — tap to see the change.' : 'Ya está hecho — tocá para ver el cambio.',
             url: pzPushUrlCambio(m.hilo, m.post_id),
             data: { message_id: mid },
           });
@@ -21765,8 +21775,8 @@ app.post('/api/admin/support/conserje/pedidos-voz/resolver-idea', requireAdminTo
     let pushR = { ok: false, reason: 'sin_intento' };
     try {
       pushR = await push.sendPush(uid, post
-        ? { title: lang === 'en' ? 'Your idea is now a post ✨' : 'Tu idea ya es un posteo ✨', body: respuesta, url: '/#/app/subir', data: { idea_id: Number(idea.id), post_id: Number(post.id) } }
-        : { title: lang === 'en' ? 'Posty replied to your idea 💬' : 'Posty respondió tu idea 💬', body: respuesta.slice(0, 140), url: '/#/app/subir', data: { idea_id: Number(idea.id) } });
+        ? { title: lang === 'en' ? 'Your idea is now a post ✨' : 'Tu idea ya es un posteo ✨', body: lang === 'en' ? 'Tap to see the post.' : 'Tocá para ver el posteo.', url: '/#/app/subir', data: { idea_id: Number(idea.id), post_id: Number(post.id) } }
+        : { title: lang === 'en' ? 'Posty replied to your idea 💬' : 'Posty respondió tu idea 💬', body: lang === 'en' ? 'Tap to read the reply.' : 'Tocá para leer la respuesta.', url: '/#/app/subir', data: { idea_id: Number(idea.id) } });
     } catch (e) { pushR = { ok: false, reason: 'push_error' }; }
     return res.json({ ok: true, idea_id: Number(idea.id), push: pushR });
   } catch (e) { console.error('[resolver-idea]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo resolver la idea' }); }
@@ -50056,7 +50066,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1384';
+const BUILD_ID = '20261105-v1385';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

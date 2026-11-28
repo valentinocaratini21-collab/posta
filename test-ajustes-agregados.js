@@ -82,7 +82,7 @@ async function partA() {
     const spy = async (uid, payload) => { sent.push([uid, payload]); return { ok: true, sent: 1 }; };
     ev(1);
     const r1 = await push.notifyPostFailed(1, { db, sendFn: spy });
-    ok(r1.ok && sent.length === 1 && /Un posteo no pudo salir/.test(sent[0][1].title), 'primer fallo: avisa en singular');
+    ok(r1.ok && sent.length === 1 && sent[0][1].title === 'Tu posteo de hoy no salió' && sent[0][1].body === 'Ya lo estamos resolviendo. Te aviso apenas esté publicado.', 'primer fallo: avisa en singular (copia PUSH-HUMANA 27/11)');
     const marker = db.prepare("SELECT COUNT(*) AS c FROM events WHERE user_id = 1 AND name = 'post_failed_push'").get();
     ok(marker.c === 1, 'el intento deja su marcador post_failed_push');
     ev(1);
@@ -92,7 +92,7 @@ async function partA() {
     ok(!r3.ok && r3.reason === 'opted_out' && sent.length === 1, 'toggle OFF: no avisa');
     ev(3); ev(3);
     const r4 = await push.notifyPostFailed(3, { db, sendFn: spy });
-    ok(r4.ok && sent.length === 2 && /Algunos posteos/.test(sent[1][1].title), 'ráfaga (2 en 10 min): la copia dice "algunos"');
+    ok(r4.ok && sent.length === 2 && sent[1][1].title === 'Tus posteos de hoy no salieron', 'ráfaga (2 en 10 min): la copia va en plural (PUSH-HUMANA 27/11)');
   }
 
   section('A3 · scheduler.schedEvent — el evento post_failed dispara el aviso');

@@ -362,17 +362,55 @@ async function publishSinglePost(db, post, opts = {}) {
     try {
       if (notifyPushPublished) {
         const { sendPush } = require('./push');
-        const oo = db.prepare('SELECT COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
-        if (!oo || !oo.oo) {
-          await sendPush(post.user_id, isFirstPost ? {
-            title: '🎉 ¡Tu primer posteo ya salió!',
-            body: 'Posty lo publicó en tu Instagram. El primero de muchísimos 😍',
+        const uu = db.prepare('SELECT COALESCE(email_opt_out,0) AS oo, lang FROM users WHERE id = ?').get(post.user_id);
+        if (!uu || !uu.oo) {
+          const enP = uu && uu.lang === 'en';
+          // (LOTE PUSH-HUMANA · regla del dueño 27/11 22:04) Si a este
+          // cliente se le avisó una falla (evento post_failed_push de
+          // push.js) y todavía no se cerró, ESTA publicación es la
+          // resolución: la push sale conectada con aquella falla
+          // («Ya salió ✓ — el posteo que se había trabado…»), no el
+          // «ya salió» suelto que el cliente no podía unir con la
+          // falla. El cierre se marca con el evento
+          // post_recovered_push al intentarla, haya o no suscripción,
+          // para que el próximo posteo normal no herede el texto.
+          let cierre = false;
+          try {
+            const f = db.prepare("SELECT id FROM events WHERE user_id = ? AND name = 'post_failed_push' AND created_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 1").get(post.user_id);
+            if (f) {
+              const c = db.prepare("SELECT id FROM events WHERE user_id = ? AND name = 'post_recovered_push' AND id > ? LIMIT 1").get(post.user_id, f.id);
+              cierre = !c;
+            }
+          } catch (e) { /* sin eventos no hay cierre: sale el texto normal */ }
+          const payload = cierre ? (enP ? {
+            title: "It's out \u2713",
+            body: 'The post that got stuck is now published on your Instagram.',
             url: `/#/app/post/${post.id}`,
           } : {
-            title: '\u00A1Tu posteo ya sali\u00F3! \uD83D\uDCF2',
-            body: 'Posty lo public\u00F3 en tu Instagram \uD83D\uDC4F',
+            title: 'Ya salió \u2713',
+            body: 'El posteo que se había trabado ya está publicado en tu Instagram.',
+            url: `/#/app/post/${post.id}`,
+          }) : isFirstPost ? (enP ? {
+            title: '\uD83C\uDF89 Your first post is out!',
+            body: 'Posty published it on your Instagram. The first of many \uD83D\uDE0D',
+            url: `/#/app/post/${post.id}`,
+          } : {
+            title: '\uD83C\uDF89 \u00A1Tu primer posteo ya salió!',
+            body: 'Posty lo publicó en tu Instagram. El primero de muchísimos \uD83D\uDE0D',
+            url: `/#/app/post/${post.id}`,
+          }) : (enP ? {
+            title: 'Your post is out! \uD83D\uDCF2',
+            body: 'Posty published it on your Instagram \uD83D\uDC4F',
+            url: `/#/app/post/${post.id}`,
+          } : {
+            title: '\u00A1Tu posteo ya salió! \uD83D\uDCF2',
+            body: 'Posty lo publicó en tu Instagram \uD83D\uDC4F',
             url: `/#/app/post/${post.id}`,
           });
+          await sendPush(post.user_id, payload);
+          if (cierre) {
+            try { db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)').run(post.user_id, '', 'post_recovered_push', JSON.stringify({ post_id: post.id }).slice(0, 500)); } catch (e) {}
+          }
         }
       }
     } catch (e) { console.error('[push ya-salió]', e.message); }
