@@ -1048,10 +1048,44 @@
       if (el) el.scrollIntoView({ block: 'center' });
     }
   }
+  // ---------------- datos de la bandeja (LOTE CONSERJE-DATOS-BANDEJA) --
+  // La línea del preflight de la casa y los impulsos activos de la
+  // cartera, tal como los expone vista.hoy (servidor): sin corrida
+  // persistida no hay línea (nada inventado) y sin impulsos activos
+  // la tira no aparece. La usan el Hoy móvil y la franja de escritorio.
+  function datosBandejaHtml() {
+    var h = (vista && vista.hoy) || {};
+    var out = '';
+    var pf = h.preflight;
+    if (pf) {
+      if (pf.estado === 'con_defectos') {
+        out += '<div class="pf-line bad">⚠ Preflight de la casa: ' + (pf.con_defectos || 0) + ' con defectos de ' + (pf.revisados || 0) + ' revisados'
+          + (pf.causas && pf.causas.length ? ' — ' + esc(pf.causas[0]) : '') + '</div>';
+      } else {
+        out += '<div class="pf-line ok">✓ Preflight de la casa: todo sano — ' + (pf.revisados || 0) + ' revisados</div>';
+      }
+    }
+    var im = h.impulsos_activos || [];
+    for (var i = 0; i < im.length; i++) {
+      var b = im[i];
+      out += '<div class="pf-line boost">🚀 Impulso activo · ' + esc(b.negocio || '') + ' — día ' + (b.dia != null ? b.dia : '—') + ' de ' + (b.dias_total != null ? b.dias_total : '—')
+        + ' · gastados US$ ' + (Number(b.gasto_cents || 0) / 100).toFixed(2).replace('.', ',') + ' de US$ ' + (Number(b.presupuesto_cents || 0) / 100).toFixed(0)
+        + (b.visitas_perfil != null ? ' · ' + b.visitas_perfil + ' visitas al perfil' : '') + '</div>';
+    }
+    return out;
+  }
+  function renderDatosBandeja() {
+    var w = $('pfWrap');
+    if (!w) return;
+    var html = datosBandejaHtml();
+    w.innerHTML = html;
+    w.hidden = !html;
+  }
   function mHoyHtml() {
     var ds = (vista && (vista.mano || vista.decisiones)) || [];
-    if (!ds.length) return '<div class="m-done">✓ Todo resuelto — nada necesita una mano hoy.</div>';
-    var html = '';
+    var top = datosBandejaHtml();
+    if (!ds.length) return top + '<div class="m-done">✓ Todo resuelto — nada necesita una mano hoy.</div>';
+    var html = top;
     for (var g = 0; g < MANO_GRUPOS.length; g++) {
       var items = ds.filter(function (d) { return (d.clase || 'pedido') === MANO_GRUPOS[g][0]; });
       if (!items.length) continue;
@@ -1291,7 +1325,7 @@
       }
       vista = j;
       detectarPedidosNuevos(j);
-      renderTop(); renderGasto(); renderSemaforo(); renderRoster(); renderDecisiones(); renderCola(); renderMovil(); renderDescuentos();
+      renderTop(); renderGasto(); renderSemaforo(); renderDatosBandeja(); renderRoster(); renderDecisiones(); renderCola(); renderMovil(); renderDescuentos();
       // (LOTE CONSERJE-FORMA) Al abrir, el centro es la producción de
       // mañana — la vista de trabajo. La ficha se abre solo cuando el
       // dueño toca una cuenta o un ítem (el drill-in); un recargar la

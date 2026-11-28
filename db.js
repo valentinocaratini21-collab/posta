@@ -2046,4 +2046,20 @@ db.exec(`CREATE TABLE IF NOT EXISTS estrategia_semana (
   PRIMARY KEY(user_id, week_key)
 )`);
 
+// (LOTE CONSERJE-DATOS-BANDEJA · censo-conserje-3 §5.3) El resumen de
+// la ÚLTIMA corrida del preflight de la casa (preflight-casa.js): una
+// sola fila (id = 1) que cada corrida pisa con la suya. Existe porque
+// la corrida sana no abría caso ni dejaba registro — la consola del
+// conserje no tenía de dónde pintar la línea verde «todo sano». Sin
+// fila, nunca corrió: la vista no expone el campo (nada inventado).
+db.exec(`CREATE TABLE IF NOT EXISTS preflight_casa_resumen (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  ventana TEXT NOT NULL DEFAULT '',
+  revisados INTEGER NOT NULL DEFAULT 0,
+  con_defectos INTEGER NOT NULL DEFAULT 0,
+  casos INTEGER NOT NULL DEFAULT 0,
+  causas_json TEXT NOT NULL DEFAULT '[]',
+  corrida_at TEXT NOT NULL DEFAULT ''
+)`);
+
 module.exports = db;

@@ -481,6 +481,77 @@ function filaRoster(db, u, opts, nowMs) {
 // ---------------------------------------------------------------------
 // HOY — la tira superior
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// (LOTE CONSERJE-DATOS-BANDEJA · censo-conserje-3 §5.3) Los dos datos
+// que le faltaban a la tira de hoy:
+//  · preflight — el resumen de la ÚLTIMA corrida del preflight de la
+//    casa (preflight-casa.js lo persiste en preflight_casa_resumen).
+//    Sin fila (nunca corrió) el campo NO sale en la vista: la línea
+//    verde «todo sano» se pinta solo de una corrida real, y la roja
+//    lleva sus causas literales.
+//  · impulsos_activos — los impulsos EN CURSO de la cartera (status
+//    'active' de ad_boosts; un terminado no aparece), la casa primero,
+//    con presupuesto, gasto (last_spend_cents) y el día X de Y con la
+//    cuenta de ADS-STATS (ads-stats.diaDe). Las visitas al perfil
+//    salen SOLO si la columna last_visitas_perfil existe en el
+//    esquema vivo y trae número: sin columna o en null, el campo no
+//    sale — nunca un número inventado.
+// ---------------------------------------------------------------------
+function preflightDeLaVista(db) {
+  const r = safe(() => require('./preflight-casa').ultimoResumenPreflight(db), null);
+  if (!r) return null;
+  return {
+    ventana: r.ventana,
+    revisados: r.revisados,
+    con_defectos: r.con_defectos,
+    casos: r.casos,
+    estado: r.con_defectos > 0 ? 'con_defectos' : 'sano',
+    causas: r.causas,
+    corrida_at: r.corrida_at,
+  };
+}
+
+function impulsosActivosDe(db, filas, nowMs) {
+  const cols = safe(() => db.prepare('PRAGMA table_info(ad_boosts)').all().map((c) => c.name), []);
+  const conVisitas = cols.includes('last_visitas_perfil');
+  const rows = safe(() => db.prepare(
+    `SELECT b.*, p.business_name AS prof_nombre, p.ig_username AS prof_ig
+     FROM ad_boosts b LEFT JOIN profiles p ON p.user_id = b.user_id
+     WHERE b.status = 'active'`).all(), []);
+  const porUid = new Map((filas || []).map((f) => [f.user_id, f]));
+  const diaDe = safe(() => require('./ads-stats').diaDe, null);
+  const lista = rows.map((b) => {
+    const uid = Number(b.user_id);
+    const fila = porUid.get(uid);
+    const dias = diaDe ? diaDe(b, nowMs) : { dia: null, total: Math.max(1, Number(b.duration_days || 7)) };
+    const item = {
+      boost_id: Number(b.id),
+      user_id: uid,
+      negocio: (fila && fila.business_name) || String(b.prof_nombre || '').split(' | ')[0] || '',
+      ig: (fila && fila.ig_username) || b.prof_ig || '',
+      es_casa: !!((fila && fila.clase === 'casa') || uid === conserjeRevision.OWNER_USER_ID),
+      post_id: b.post_id != null ? Number(b.post_id) : null,
+      presupuesto_cents: Math.max(0, Number(b.budget_cents || 0) || 0),
+      gasto_cents: Math.max(0, Number(b.last_spend_cents || 0) || 0),
+      moneda: String(b.currency || 'USD'),
+      dia: dias.dia,
+      dias_total: dias.total,
+      started_at: b.started_at || null,
+      duracion_dias: Math.max(1, Number(b.duration_days || 7) || 7),
+    };
+    // La stat del objetivo sale solo con columna viva y número real.
+    if (conVisitas && b.last_visitas_perfil != null && Number.isFinite(Number(b.last_visitas_perfil))) {
+      item.visitas_perfil = Number(b.last_visitas_perfil);
+    }
+    return item;
+  });
+  // La casa primero; dentro de cada grupo, el que arrancó último va
+  // primero (el impulso más nuevo es el que se está mirando).
+  const iniMs = (x) => { const t = toMs(x.started_at); return Number.isFinite(t) ? t : 0; };
+  lista.sort((a, b2) => (Number(b2.es_casa) - Number(a.es_casa)) || (iniMs(b2) - iniMs(a)));
+  return lista;
+}
+
 function resumenHoy(db, filas, decisionesList, opts, nowMs) {
   const o = opts || {};
   const tzD = safe(() => conserjeRevision.ownerTz(db), 'America/New_York');
@@ -514,7 +585,7 @@ function resumenHoy(db, filas, decisionesList, opts, nowMs) {
   // conteo crudo por plan_status contaba la demo y los espacios de
   // la casa como suscriptores (el panel leía 4 con 0 pagos reales).
   const suscriptores = filas.filter((f) => f.clase === 'pago').length;
-  return {
+  const out = {
     fecha_label: fechaLabel,
     publica_hoy: programadosHoy + publicadosHoy,
     programados_hoy: programadosHoy,
@@ -532,7 +603,15 @@ function resumenHoy(db, filas, decisionesList, opts, nowMs) {
     suscriptores,
     meta_marzo: 30,
     disco_mb: (o.diskFreeMB != null ? o.diskFreeMB : null),
+    // (LOTE CONSERJE-DATOS-BANDEJA) Los impulsos en curso de la
+    // cartera, siempre presentes como lista (vacía = ninguno activo).
+    impulsos_activos: impulsosActivosDe(db, filas, nowMs),
   };
+  // (LOTE CONSERJE-DATOS-BANDEJA) El preflight entra SOLO si hay una
+  // corrida persistida: nunca corrió → el campo no existe en la vista.
+  const pf = preflightDeLaVista(db);
+  if (pf) out.preflight = pf;
+  return out;
 }
 
 // ---------------------------------------------------------------------

@@ -35,6 +35,13 @@
 //
 // Si TODO está bien: silencio total — ningún aviso, ningún caso, solo
 // la línea de log del scheduler como todo trabajo programado.
+// (LOTE CONSERJE-DATOS-BANDEJA · censo-conserje-3 §5.3) Sano o con
+// defectos, TODA corrida persiste ahora el resumen de sí misma
+// (revisados / con defectos / casos / causas / hora) en la tabla de
+// una fila preflight_casa_resumen: es la fuente de la que la consola
+// del conserje pinta la línea verde «todo sano» o la roja con su
+// causa (vista.hoy.preflight). El silencio hacia el operador no
+// cambia: sin defectos sigue sin haber caso ni aviso.
 // Si algo falla: UN caso por posteo en la vía de avisos al operador que
 // ya existe (support_cases, tipo 'preflight_casa', visible en
 // /api/admin/support/conserje/pendientes — la misma superficie que
@@ -320,7 +327,7 @@ async function runPreflightCasa(db, opts = {}) {
   // Cuentas con algo programado → solo las de la casa se revisan.
   const candidatos = db.prepare(
     `SELECT DISTINCT user_id FROM posts WHERE status = 'scheduled'`).all();
-  const resumen = { ventana: ventana.dayKey, revisados: 0, con_defectos: 0, casos: 0, duplicados: 0 };
+  const resumen = { ventana: ventana.dayKey, revisados: 0, con_defectos: 0, casos: 0, duplicados: 0, causas: [] };
   for (const c of candidatos) {
     const userId = Number(c.user_id);
     let esCasa = false;
@@ -346,6 +353,7 @@ async function runPreflightCasa(db, opts = {}) {
       }
       if (!defectos.length) continue;
       resumen.con_defectos++;
+      for (const d of defectos) resumen.causas.push(d);
       const detalle = [
         `Posteo ${post.id} · @${ig || userId} · programado para las 19:00 de hoy (Nueva York) · ${post.media_type || 'image'}${post.image_path ? ' · archivo ' + path.basename(String(post.image_path)) : ''}`,
         ...defectos.map((d, i) => `${i + 1}. ${d}`),
@@ -366,10 +374,62 @@ async function runPreflightCasa(db, opts = {}) {
   if (resumen.revisados || resumen.con_defectos) {
     log(`[preflight-casa] ${ventana.dayKey}: ${resumen.revisados} posteo(s) de la casa revisados, ${resumen.con_defectos} con defectos, ${resumen.casos} caso(s) abiertos, ${resumen.duplicados} ya avisados`);
   }
+  persistirResumen(db, resumen, nowMs);
   return resumen;
+}
+
+// ---------- (LOTE CONSERJE-DATOS-BANDEJA) el resumen persiste ----------
+// Tabla de UNA fila (id = 1, declarada en db.js; el CREATE de acá es
+// la red para correr el módulo contra una base que todavía no pasó
+// por db.js). Cada corrida pisa la fila con la suya: lo que la vista
+// lee es siempre la ÚLTIMA corrida, con su hora — nunca un resumen
+// armado de memoria. Si guardar falla, la corrida vale igual (el
+// resumen es para la consola, no una condición del chequeo).
+const DDL_RESUMEN = `CREATE TABLE IF NOT EXISTS preflight_casa_resumen (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  ventana TEXT NOT NULL DEFAULT '',
+  revisados INTEGER NOT NULL DEFAULT 0,
+  con_defectos INTEGER NOT NULL DEFAULT 0,
+  casos INTEGER NOT NULL DEFAULT 0,
+  causas_json TEXT NOT NULL DEFAULT '[]',
+  corrida_at TEXT NOT NULL DEFAULT ''
+)`;
+
+function persistirResumen(db, resumen, nowMs) {
+  try {
+    db.exec(DDL_RESUMEN);
+    db.prepare(`INSERT INTO preflight_casa_resumen (id, ventana, revisados, con_defectos, casos, causas_json, corrida_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET ventana = excluded.ventana, revisados = excluded.revisados,
+        con_defectos = excluded.con_defectos, casos = excluded.casos,
+        causas_json = excluded.causas_json, corrida_at = excluded.corrida_at`)
+      .run(resumen.ventana || '', resumen.revisados || 0, resumen.con_defectos || 0, resumen.casos || 0,
+        JSON.stringify((resumen.causas || []).slice(0, 10)),
+        new Date(nowMs).toISOString());
+  } catch (e) { /* la corrida ya pasó: el resumen no la condiciona */ }
+}
+
+// La última corrida persistida, o null si nunca corrió (o si la tabla
+// no existe): la vista expone el campo solo con fila real.
+function ultimoResumenPreflight(db) {
+  try {
+    const r = db.prepare('SELECT ventana, revisados, con_defectos, casos, causas_json, corrida_at FROM preflight_casa_resumen WHERE id = 1').get();
+    if (!r) return null;
+    let causas = [];
+    try { const p = JSON.parse(r.causas_json || '[]'); if (Array.isArray(p)) causas = p.map((c) => String(c)); } catch (e) { causas = []; }
+    return {
+      ventana: r.ventana || '',
+      revisados: Number(r.revisados) || 0,
+      con_defectos: Number(r.con_defectos) || 0,
+      casos: Number(r.casos) || 0,
+      causas,
+      corrida_at: r.corrida_at || '',
+    };
+  } catch (e) { return null; }
 }
 
 module.exports = {
   runPreflightCasa,
-  _internos: { ventana19DeHoy, leerCajasMp4, defectosDeVideo, defectosDeCupo, defectosDePortada, msDePost },
+  ultimoResumenPreflight,
+  _internos: { ventana19DeHoy, leerCajasMp4, defectosDeVideo, defectosDeCupo, defectosDePortada, msDePost, persistirResumen },
 };
