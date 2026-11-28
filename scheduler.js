@@ -34,6 +34,13 @@ function schedEvent(db, userId, name, props) {
   // Fire-and-forget: el aviso jamás frena ni rompe la publicación.
   if (name === 'post_failed' && userId) {
     try { require('./push').notifyPostFailed(userId).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
+    // (LOTE CONSERJE-PUSH-URGENTES) El mismo fracaso avisa al OPERADOR:
+    // es una de las tres urgencias que zumban en su teléfono. Mismo
+    // punto que la push al cliente; el dedup durable es por posteo
+    // (clave fallo-<post_id>), así que publish_error y la denegación
+    // de Meta — los dos emisores de este schedEvent — avisan una sola
+    // vez por posteo y nunca dos caminos duplican.
+    try { pushOperador.hookFallo(db, { user_id: userId, post_id: props && props.post_id }).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
   }
 }
 

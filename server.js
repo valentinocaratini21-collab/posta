@@ -547,6 +547,10 @@ function evTrack(userId, name, props = null, sessionId = '') {
   // mismo helper, mismo toggle y mismo dedupe (push.js). Nunca bloquea.
   if (name === 'post_failed' && userId) {
     try { push.notifyPostFailed(userId).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
+    // (LOTE CONSERJE-PUSH-URGENTES) Y avisa al OPERADOR, como en el
+    // schedEvent del scheduler: el posteo trabado que este barrido
+    // marca 'failed' es una urgencia suya. Dedup por posteo.
+    try { pushOperador.hookFallo(db, { user_id: userId, post_id: props && props.post_id }).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
   }
 }
 
@@ -50117,7 +50121,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1390';
+const BUILD_ID = '20261105-v1391';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

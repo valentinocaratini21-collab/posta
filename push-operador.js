@@ -1,26 +1,43 @@
 // push-operador.js — (LOTE CONSERJE-PUSH-OPERADOR · censo-conserje-3 §5.5)
-// Los avisos del OPERADOR con el teléfono bloqueado: lo que hoy solo ve
-// el monitor externo (el cron que lee pendientes cada minuto) le llega
-// también como push a la consola instalada, atado a su identidad — la
-// cuenta de la casa (user_id 12, la misma que conserje-revision llama
-// OWNER_USER_ID). Tres fuentes, un solo núcleo con dedup durable:
+// (AJUSTE CONSERJE-PUSH-URGENTES · orden del dueño 27/11 23:27: «no me
+// mandes push notifications de cada cosa que necesita los clientes.
+// solo mandame las urgentes: un posteo no salio, pidieron un cambio, o
+// algo de ese estilo.»)
+// Los avisos del OPERADOR con el teléfono bloqueado, atados a su
+// identidad — la cuenta de la casa (user_id 12, la misma que
+// conserje-revision llama OWNER_USER_ID). Desde el ajuste, SOLO avisa
+// lo urgente: ya pasó algo malo o el cliente está esperando. Tres
+// fuentes, un solo núcleo con dedup durable:
 //
-//   1 · Caso nuevo en la superficie de pendientes (incluido
-//       preflight_casa): hook inmediato en el punto único de apertura
-//       (support-cases.openCase llama a hookCaso cuando el caso nace,
-//       nunca cuando es duplicado) + el barrido como red.
-//   2 · Idea/pedido nuevo sin revisar: hook inmediato en la ruta de la
-//       idea escrita (POST /api/subir/idea) + el barrido sobre
-//       voiceRequests (los pedidos del chat no tienen un único punto
-//       de inserción: nacen del flujo del chat en varias rutas).
-//   3 · Pieza de mañana esperando decisión pasada la hora de corte:
-//       SOLO barrido — es un hecho del reloj, no un nacimiento. La
-//       hora de corte es la apertura de la ventana de revisión de la
-//       casa (19:00, hora del dueño — conserje-revision.estadoVentana).
+//   1 · Un posteo NO SALIÓ: hookFallo, enganchado al evento persistente
+//       post_failed (el instrumento v198-A) en sus dos emisores — el
+//       schedEvent del scheduler (la publicación de las 19:00 que
+//       marca el posteo 'failed', y la denegación de Meta que lo deja
+//       pausado sin reintento) y el evTrack de server.js (el barrido
+//       que marca 'failed' los posteos trabados en publishing). Es la
+//       misma señal que ya dispara la push de falla al CLIENTE
+//       (push.notifyPostFailed cuelga de esos dos mismos puntos).
+//   2 · Pidieron un cambio / pidieron algo: idea/pedido nuevo sin
+//       revisar — hook inmediato en la ruta de la idea escrita
+//       (POST /api/subir/idea) + el barrido sobre voiceRequests (los
+//       pedidos del chat no tienen un único punto de inserción: nacen
+//       del flujo del chat en varias rutas).
+//   3 · El cliente escribió y espera respuesta: los casos tipo
+//       'conserje' y 'prueba_retorno_dm' — hook inmediato en el punto
+//       único de apertura (support-cases.openCase llama a hookCaso
+//       cuando el caso nace, nunca cuando es duplicado) + el barrido
+//       como red sobre pendingConcierge.
+//
+// Lo que YA NO avisa (sigue existiendo en el conserje, solo deja de
+// zumbar): los casos prueba_linea_mano (órdenes internas de
+// producción: la cola de trabajo, no una urgencia), los casos
+// preflight_casa (avisos de riesgo: todavía no falló nada) y el
+// recordatorio de piezas esperando decisión (la rama del reloj se
+// eliminó entera: las decisiones viven en la bandeja, no en el push).
 //
 // Dedup (el patrón de los monitores, durable en tabla): cada aviso
-// tiene una clave estable (caso-<id> · pedido-<message_id> ·
-// idea-<idea_id>-<message_id> · decision-<post_id>-<fecha>) y la tabla
+// tiene una clave estable (fallo-<post_id> · caso-<id> ·
+// pedido-<message_id> · idea-<idea_id>-<message_id>) y la tabla
 // operador_avisos la reclama ANTES de enviar (INSERT OR IGNORE: si la
 // fila ya estaba, es duplicado y no se manda nada). Si el envío no
 // sale (sin suscripción, sin VAPID, fallo de transporte), la clave se
@@ -43,12 +60,13 @@ const push = require('./push');
 
 const OPERADOR_USER_ID = 12; // la casa (conserje-revision.OWNER_USER_ID)
 const TITULO = 'Conserje';
-// Los tipos de caso que la superficie de pendientes del operador
-// muestra (pendingConcierge): los de línea a mano / retorno /
-// preflight nacen como casos, y el mensaje en modo conserje abre el
-// suyo (tipo 'conserje', dedup por cliente en divertToConcierge).
-const TIPOS_CON_PENDIENTE = ['conserje', 'prueba_linea_mano', 'prueba_retorno_dm', 'preflight_casa'];
-const CORTE_DECISION = '19:00'; // apertura de la ventana de revisión (conserje-revision)
+// Los ÚNICOS tipos de caso que avisan (regla de urgentes): el cliente
+// escribió y espera respuesta — el mensaje en modo conserje (tipo
+// 'conserje', dedup por cliente en divertToConcierge) y el retorno del
+// invitado por DM ('prueba_retorno_dm'). Los demás tipos que la
+// superficie de pendientes muestra (línea a mano, preflight de la
+// casa) se ven en el conserje pero NO zumban.
+const TIPOS_URGENTES = ['conserje', 'prueba_retorno_dm'];
 
 function ensureSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS operador_avisos (
@@ -111,10 +129,8 @@ function avisoDeCaso(db, caso) {
   if (!uid) return null;
   const nombre = negocioTxt(nombreNegocio(db, uid, caso.business_name));
   let body = '';
-  if (caso.tipo === 'preflight_casa') body = 'El posteo de la casa de hoy está en riesgo: el chequeo encontró un problema. Entrá a verlo.';
-  else if (caso.tipo === 'conserje') body = nombre + ' te escribió y espera respuesta.';
+  if (caso.tipo === 'conserje') body = nombre + ' te escribió y espera respuesta.';
   else if (caso.tipo === 'prueba_retorno_dm') body = 'A ' + nombre + ' hay que mandarle el link de regreso por mensaje.';
-  else if (caso.tipo === 'prueba_linea_mano') body = nombre + ' necesita una mano con su prueba.';
   else body = nombre + ' tiene un caso nuevo que te necesita.';
   return {
     clave: 'caso-' + Number(caso.id),
@@ -140,17 +156,20 @@ function avisoDePedido(db, p) {
   };
 }
 
-// d = ítem clase 'decision' de vista.mano (la pieza de mañana).
-function avisoDeDecision(db, d) {
-  if (!d || !d.post_id) return null;
-  const uid = Number(d.user_id) || 0;
+// f = { user_id, post_id } del posteo que no salió (la forma que
+// emiten los dos caminos del evento post_failed). La clave es por
+// posteo: un posteo que no salió avisa UNA sola vez en la vida,
+// aunque el fracaso se registre por más de un camino.
+function avisoDeFallo(db, f) {
+  if (!f || !f.post_id) return null;
+  const uid = Number(f.user_id) || 0;
   if (!uid) return null;
-  const nombre = negocioTxt(nombreNegocio(db, uid, d.business_name));
+  const nombre = negocioTxt(nombreNegocio(db, uid, f.business_name));
   return {
-    clave: 'decision-' + Number(d.post_id) + '-' + String(d.fecha || ''),
+    clave: 'fallo-' + Number(f.post_id),
     title: TITULO,
-    body: 'La pieza de mañana de ' + nombre + ' sigue esperando tu decisión.',
-    url: linkFicha(uid, Number(d.post_id)),
+    body: 'El posteo de hoy de ' + nombre + ' no salió.',
+    url: linkFicha(uid, Number(f.post_id)),
   };
 }
 
@@ -161,7 +180,7 @@ function avisoDeDecision(db, d) {
 // error se traga y se devuelve como reason.
 async function hookCaso(db, caso, opts) {
   try {
-    if (!caso || !TIPOS_CON_PENDIENTE.includes(String(caso.tipo || ''))) return { ok: false, reason: 'tipo_sin_aviso' };
+    if (!caso || !TIPOS_URGENTES.includes(String(caso.tipo || ''))) return { ok: false, reason: 'tipo_sin_aviso' };
     const aviso = avisoDeCaso(db, caso);
     if (!aviso) return { ok: false, reason: 'sin_aviso' };
     return await avisarOperador(db, aviso, opts);
@@ -180,27 +199,47 @@ async function hookPedido(db, p, opts) {
   } catch (e) { return { ok: false, reason: 'hook_fallo' }; }
 }
 
+// El hook del posteo que no salió: lo llaman los dos emisores del
+// evento post_failed (schedEvent en scheduler.js y evTrack en
+// server.js) con el post_id del fracaso, en el mismo punto donde ya
+// cuelga la push de falla al cliente. Fire-and-forget del lado del
+// llamador; el dedup por posteo hace que avise una sola vez aunque
+// el fracaso se registre dos veces.
+async function hookFallo(db, f, opts) {
+  try {
+    const aviso = avisoDeFallo(db, f);
+    if (!aviso) return { ok: false, reason: 'sin_aviso' };
+    return await avisarOperador(db, aviso, opts);
+  } catch (e) { return { ok: false, reason: 'hook_fallo' }; }
+}
+
 // ---------------------------------------------------------------------
-// El barrido: la red de los hooks y la única vía de los hechos del
-// reloj. Lee las MISMAS superficies que leen los monitores externos
-// (pendingConcierge · voiceRequests · vista.mano) y pasa todo por el
-// núcleo con dedup — lo que el hook ya avisó, el barrido lo saltea.
+// El barrido: la red de los hooks. Lee las MISMAS superficies que
+// leen los monitores externos (pendingConcierge · voiceRequests) y
+// pasa todo por el núcleo con dedup — lo que el hook ya avisó, el
+// barrido lo saltea. Solo entran los urgentes: casos de los tipos
+// que avisan (el resto de la superficie — línea a mano, preflight —
+// se lee pero no genera aviso) y pedidos/ideas sin revisar. Los
+// posteos fallidos NO pasan por el barrido: avisan por su hook en el
+// momento del fracaso (un barrido posterior encontraría el posteo ya
+// resuelto o reprogramado y avisaría tarde y mal).
 async function barrido(db, opts) {
   const o = opts || {};
-  const nowMs = Number(o.nowMs) || Date.now();
-  const res = { casos: 0, pedidos: 0, decisiones: 0, enviados: 0 };
+  const res = { casos: 0, pedidos: 0, enviados: 0 };
   if (!db) return res;
   ensureSchema(db);
   const supportCases = require('./support-cases');
 
-  // 1 · Casos en la superficie de pendientes.
+  // 1 · Casos urgentes en la superficie de pendientes.
   try {
     const pc = supportCases.pendingConcierge(db);
     for (const p of (pc && pc.pendientes) || []) {
       let aviso = null;
       if (p.caso_id) {
         const caso = safe(() => db.prepare('SELECT * FROM support_cases WHERE id = ?').get(Number(p.caso_id)), null);
-        if (caso) aviso = avisoDeCaso(db, { ...caso, business_name: p.business_name || caso.business_name });
+        if (caso && TIPOS_URGENTES.includes(String(caso.tipo || ''))) {
+          aviso = avisoDeCaso(db, { ...caso, business_name: p.business_name || caso.business_name });
+        }
       } else if (p.user_id && p.ultimo_mensaje_en) {
         // Pendiente de chat sin caso enlazado: la clave estable es el
         // cliente + la hora de su último mensaje (un mensaje nuevo =
@@ -232,38 +271,19 @@ async function barrido(db, opts) {
     }
   } catch (e) { /* idem */ }
 
-  // 3 · Piezas de mañana esperando decisión, pasada la hora de corte
-  // (la ventana de revisión abre a las 19:00 del dueño).
-  try {
-    const conserjeRevision = require('./conserje-revision');
-    const ventana = conserjeRevision.estadoVentana(db, nowMs);
-    if (ventana && ventana.estado === 'abierta') {
-      const conserjeVista = require('./conserje-vista');
-      const v = conserjeVista.vista(db, { nowMs });
-      for (const d of (v && v.mano) || []) {
-        if (!d || d.clase !== 'decision') continue;
-        const aviso = avisoDeDecision(db, d);
-        if (!aviso) continue;
-        res.decisiones++;
-        const r = await avisarOperador(db, aviso, o);
-        if (r.ok) res.enviados++;
-      }
-    }
-  } catch (e) { /* idem */ }
-
   return res;
 }
 
 module.exports = {
   OPERADOR_USER_ID,
-  TIPOS_CON_PENDIENTE,
-  CORTE_DECISION,
+  TIPOS_URGENTES,
   ensureSchema,
   avisarOperador,
   avisoDeCaso,
   avisoDePedido,
-  avisoDeDecision,
+  avisoDeFallo,
   hookCaso,
   hookPedido,
+  hookFallo,
   barrido,
 };

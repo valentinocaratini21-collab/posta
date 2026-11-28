@@ -2,23 +2,32 @@
 
 // =====================================================================
 // LOTE CONSERJE-PUSH-OPERADOR — suite del lote (censo-conserje-3 §5.5)
+// AJUSTE CONSERJE-PUSH-URGENTES (orden del dueño 27/11 23:27): solo
+// avisan las URGENCIAS — un posteo no salió, pidieron un cambio o el
+// cliente escribió y espera respuesta. La línea a mano, el preflight
+// y el recordatorio de decisiones ya NO zumban.
 // =====================================================================
 // Los avisos del operador con el teléfono bloqueado: la suscripción
 // queda atada a la identidad del operador (la casa, user 12) por una
-// puerta admin propia; los hooks avisan cuando nace lo que hoy solo
-// ve el monitor — caso nuevo en pendientes (incluido preflight_casa),
-// idea/pedido nuevo sin revisar, pieza de mañana esperando decisión
-// pasada la hora de corte (la ventana de revisión abre 19:00, hora
-// del dueño) — cada push con su deep link a la ficha del negocio.
+// puerta admin propia. Avisan: (1) el posteo que NO SALIÓ, por el
+// hook sobre el evento post_failed en sus dos emisores (schedEvent
+// del scheduler · evTrack de server.js), una sola vez por posteo;
+// (2) la idea/el pedido nuevo sin revisar; (3) los casos en que el
+// cliente espera respuesta (conserje · prueba_retorno_dm). Cada push
+// lleva su deep link ?user=<uid> (y &post=<id> si el evento es de un
+// posteo): al tocarla, aterriza en el perfil de ESE cliente.
 // Dedup durable por clave estable: un evento repetido no duplica el
 // aviso; sin suscripción no se manda nada y la clave no se quema.
 //   A · Estática de las puntadas (módulo, hook en openCase, rutas,
-//       hook de la idea, barrido en el scheduler, cliente, sello).
-//   B · Módulo contra DB temporal con transporte capturado: el hook
-//       de casos (nace → avisa; duplicado → no; tipo fuera de
-//       pendientes → no), el desvío a conserje, el núcleo sin
-//       suscripción, el hook de la idea y el barrido completo
-//       (pedidos + idea + decisión tras el corte, sin repetir).
+//       hook de la idea, hooks del fracaso en ambos emisores, barrido
+//       en el scheduler, cliente, sello; la rama de decisiones, fuera).
+//   B · Módulo contra DB temporal con transporte capturado: los tipos
+//       que ya no avisan (preflight · línea a mano, por hook y por
+//       barrido), el retorno_dm que sí, el desvío a conserje, el
+//       núcleo sin suscripción, el hook de la idea, el barrido
+//       (pedidos + idea, sin decisiones ni tras el corte) y el hook
+//       del posteo fallido (una sola vez, con su link, sin quemar la
+//       clave cuando no hay suscripción).
 //   C · Boot real por HTTP: la puerta de suscripción ata la fila al
 //       12, el estado la refleja, sin token no pasa, sello v=30.
 //   D · La base, tras matar el servidor por su PID exacto.
@@ -51,8 +60,10 @@ const serverSrc = read('server.js');
 const schedSrc = read('scheduler.js');
 const jsSrc = read('public/conserje.js');
 const htmlSrc = read('public/conserje.html');
-t('A1 el módulo existe con su dedup durable y sus tres fuentes', modSrc.includes('operador_avisos') && modSrc.includes('INSERT OR IGNORE') && modSrc.includes('function hookCaso') && modSrc.includes('function hookPedido') && modSrc.includes('function barrido'));
-t('A2 el operador es la casa (user 12) y los tipos con aviso son los de pendientes', modSrc.includes('OPERADOR_USER_ID = 12') && modSrc.includes("'preflight_casa'") && modSrc.includes("'conserje'"));
+t('A1 el módulo existe con su dedup durable y sus tres fuentes urgentes', modSrc.includes('operador_avisos') && modSrc.includes('INSERT OR IGNORE') && modSrc.includes('function hookCaso') && modSrc.includes('function hookPedido') && modSrc.includes('function hookFallo') && modSrc.includes('function barrido'));
+t('A2 el operador es la casa (user 12) y los únicos tipos que avisan son los urgentes', modSrc.includes('OPERADOR_USER_ID = 12') && modSrc.includes("TIPOS_URGENTES = ['conserje', 'prueba_retorno_dm']"));
+t('A2b la rama de decisiones se eliminó entera (sin constructor, sin clave, sin cuerpo)', !modSrc.includes('avisoDeDecision') && !modSrc.includes("decision-'") && !modSrc.includes('esperando tu decisión') && !modSrc.includes('estadoVentana'));
+t('A2c el aviso del posteo fallido existe con su clave por posteo y su cuerpo en humano', modSrc.includes("'fallo-'") && modSrc.includes('no salió.') && modSrc.includes('function hookFallo'));
 t('A3 openCase engancha el hook al nacer el caso', scSrc.includes("require('./push-operador').hookCaso(db, caso)"));
 t('A4 el server registra la puerta admin de suscripción y el estado', serverSrc.includes("'/api/admin/conserje/push/suscribir'") && serverSrc.includes("'/api/admin/conserje/push/estado'") && serverSrc.includes('pushOperador.OPERADOR_USER_ID'));
 t('A5 la ruta de la idea escrita engancha su hook', serverSrc.includes('pushOperador.hookPedido(db, {'));
@@ -60,6 +71,7 @@ t('A6 el scheduler corre el barrido junto al del vigía', schedSrc.includes('pus
 t('A7 el cliente ofrece activar avisos (Más + escritorio) por la puerta admin', jsSrc.includes('data-mact="avisos"') && jsSrc.includes('activarAvisosOperador') && jsSrc.includes('/api/admin/conserje/push/suscribir') && htmlSrc.includes('id="btnOpPush"'));
 t('A8 sello conserje.js?v=30', htmlSrc.includes('/conserje.js?v=30'));
 t('A9 los textos no llevan tecnicismos (sin «caso #», sin rutas internas en el cuerpo)', !/caso #/.test(modSrc) && modSrc.includes("title: TITULO") && modSrc.includes("'/conserje?user='"));
+t('A10 el fracaso se engancha en los DOS emisores del evento post_failed (scheduler y server)', schedSrc.includes('pushOperador.hookFallo') && serverSrc.includes('pushOperador.hookFallo'));
 
 // ---------------------------------------------------------------------
 seccion('B · módulo — hooks y barrido con transporte capturado');
@@ -92,17 +104,24 @@ usuarioB(302, 'pago@test', 'active', { nombre: 'Pago Real', ig: 'pagoreal' });
 usuarioB(303, 'idea@test', 'active', { nombre: 'Idea Bar', ig: 'ideabar' });
 
 (async () => {
-  // B1–B4 · el hook de casos desde el punto único de apertura.
+  // B1–B4 · el hook de casos desde el punto único de apertura, con la
+  // regla de urgentes: preflight y línea a mano nacen pero NO avisan;
+  // el retorno_dm (el cliente espera) sí.
   const rPf = supportCases.openCase(db, { userId: 12, tipo: 'preflight_casa', titulo: 'Preflight: el video de hoy no tiene portada', dedupKey: 'preflight:suite' });
   await sleep(150);
-  t('B1 el caso preflight nace y el hook avisa al operador (user 12)', rPf.ok && captura.length === 1 && captura[0][0] === 12, JSON.stringify(captura).slice(0, 220));
-  t('B2 el aviso del preflight lleva su deep link a la casa y título «Conserje»', captura.length === 1 && captura[0][1].url === '/conserje?user=12' && captura[0][1].title === 'Conserje' && /en riesgo/.test(captura[0][1].body), JSON.stringify(captura[0] && captura[0][1]));
-  const rPf2 = supportCases.openCase(db, { userId: 12, tipo: 'preflight_casa', titulo: 'otra vez', dedupKey: 'preflight:suite' });
+  t('B1 el caso preflight nace pero ya NO avisa (es un riesgo, no una urgencia)', rPf.ok && captura.length === 0, 'captura=' + captura.length);
+  const rMano = supportCases.openCase(db, { userId: 302, tipo: 'prueba_linea_mano', titulo: 'Línea a mano: entrada de la prueba', dedupKey: 'mano:suite' });
   await sleep(150);
-  t('B3 el mismo caso (dedup_key) no avisa dos veces', rPf2.ok && rPf2.duplicado === true && captura.length === 1, 'captura=' + captura.length);
+  t('B2 el caso de línea a mano nace pero ya NO avisa (es la cola de trabajo)', rMano.ok && captura.length === 0, 'captura=' + captura.length);
+  const rDm = supportCases.openCase(db, { userId: 302, tipo: 'prueba_retorno_dm', titulo: 'Retorno: mandar el link de regreso', dedupKey: 'retorno:suite' });
+  await sleep(150);
+  t('B3 el caso retorno_dm SÍ avisa al operador (user 12), con su link al cliente', rDm.ok && captura.length === 1 && captura[0][0] === 12 && captura[0][1].url === '/conserje?user=302' && captura[0][1].title === 'Conserje' && /link de regreso/.test(captura[0][1].body), JSON.stringify(captura).slice(0, 260));
+  const rDm2 = supportCases.openCase(db, { userId: 302, tipo: 'prueba_retorno_dm', titulo: 'otra vez', dedupKey: 'retorno:suite' });
+  await sleep(150);
+  t('B3b el mismo caso (dedup_key) no avisa dos veces', rDm2.ok && rDm2.duplicado === true && captura.length === 1, 'captura=' + captura.length);
   const rAyuda = supportCases.openCase(db, { userId: 302, tipo: 'ayuda', titulo: 'Ayuda pedida', dedupKey: 'ayuda:suite' });
   await sleep(150);
-  t('B4 un tipo fuera de la superficie de pendientes no avisa', rAyuda.ok && captura.length === 1, 'captura=' + captura.length);
+  t('B4 un tipo fuera de los urgentes no avisa', rAyuda.ok && captura.length === 1, 'captura=' + captura.length);
 
   // B5 · el desvío a conserje (mensaje del cliente en modo conserje).
   const d1 = supportCases.divertToConcierge(db, 301, 'Hola, ¿me cambian la foto del posteo?');
@@ -124,7 +143,10 @@ usuarioB(303, 'idea@test', 'active', { nombre: 'Idea Bar', ig: 'ideabar' });
   const rIdea = await pushOperador.hookPedido(db, { user_id: 303, business_name: 'Idea Bar', es_idea: true, idea_id: 77, id: 555, posteo: null });
   t('B9 la idea nueva avisa con su negocio y su link', rIdea.ok === true && captura.length === 4 && captura[3][1].url === '/conserje?user=303' && /Idea Bar/.test(captura[3][1].body) && /idea escrita/.test(captura[3][1].body), JSON.stringify(captura[3] && captura[3][1]));
 
-  // B10–B13 · el barrido: pedidos e ideas sin revisar + dedup total.
+  // B10–B11 · el barrido: pedidos e ideas sin revisar + dedup total
+  // (los casos preflight/línea a mano sembrados arriba están en la
+  // superficie de pendientes: el barrido los lee y NO avisa — si el
+  // filtro de tipos faltara, acá saltarían envíos de más).
   const mPed = db.prepare("INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (302, 'user', '¿Me arman un posteo con la foto nueva?', 'general', 0)").run();
   const mIdea = db.prepare("INSERT INTO chat_messages (user_id, role, text, hilo, post_id) VALUES (303, 'user', 'Quiero un posteo del combo del finde', 'general', 0)").run();
   db.prepare("INSERT INTO subir_ideas (user_id, message_id, texto, asset_ids, estado) VALUES (303, ?, 'Quiero un posteo del combo del finde', '', 'recibida')").run(Number(mIdea.lastInsertRowid));
@@ -136,17 +158,32 @@ usuarioB(303, 'idea@test', 'active', { nombre: 'Idea Bar', ig: 'ideabar' });
   const b2 = await pushOperador.barrido(db, { nowMs: Date.UTC(2026, 11, 2, 15, 0) });
   t('B11 el segundo barrido no duplica ningún aviso', captura.length === antes + 2 && b2.enviados === 0, 'captura=' + captura.length + ' ' + JSON.stringify(b2));
 
-  // B12–B13 · la pieza de mañana tras la hora de corte.
+  // B12–B13 · la pieza de mañana esperando decisión: ya NO avisa
+  // nunca — ni antes ni después de la vieja hora de corte (19:00).
+  // La pieza queda sembrada como 'decision' en la superficie de la
+  // vista; el barrido la ignora por completo.
   const schedManana = new Date('2026-12-03T19:00:00-05:00').toISOString();
   db.prepare("INSERT INTO posts (user_id, image_path, caption, status, media_type, scheduled_at) VALUES (302, '/media/seed.jpg', 'La pieza de mañana', 'scheduled', 'image', ?)").run(schedManana);
   const antesCorte = captura.length;
-  const b3 = await pushOperador.barrido(db, { nowMs: Date.UTC(2026, 11, 2, 23, 0) }); // 18:00 NY: antes del corte
-  t('B12 antes de las 19:00 del dueño, la pieza en espera no avisa', captura.length === antesCorte && b3.decisiones === 0, JSON.stringify(b3) + ' captura=' + captura.length);
-  const b4 = await pushOperador.barrido(db, { nowMs: Date.UTC(2026, 11, 3, 0, 30) }); // 19:30 NY: ventana abierta
-  const dec = captura.slice(antesCorte);
-  t('B13 pasada la hora de corte, la pieza avisa con su deep link al posteo', dec.length === 1 && /user=302&post=/.test(dec[0][1].url) && /esperando tu decisión/.test(dec[0][1].body), JSON.stringify(dec).slice(0, 240) + ' ' + JSON.stringify(b4));
-  const b5 = await pushOperador.barrido(db, { nowMs: Date.UTC(2026, 11, 3, 1, 0) });
-  t('B14 y no se repite en el barrido siguiente', captura.length === antesCorte + 1 && b5.enviados === 0, 'captura=' + captura.length);
+  const b3 = await pushOperador.barrido(db, { nowMs: Date.UTC(2026, 11, 3, 0, 30) }); // 19:30 NY: la vieja ventana ya abierta
+  t('B12 pasada la hora de corte, la pieza esperando decisión NO avisa', captura.length === antesCorte && b3.enviados === 0 && (b3.decisiones === undefined || b3.decisiones === 0), JSON.stringify(b3) + ' captura=' + captura.length);
+  const b4 = await pushOperador.barrido(db, { nowMs: Date.UTC(2026, 11, 3, 1, 0) });
+  t('B13 y tampoco avisa en el barrido siguiente', captura.length === antesCorte && b4.enviados === 0, 'captura=' + captura.length);
+
+  // B14–B17 · el posteo que NO SALIÓ (hookFallo, a nivel módulo con
+  // transporte capturado; el enganche en el camino real del fracaso
+  // se chequea estático en A10: schedEvent + evTrack).
+  const antesFallo = captura.length;
+  const rF1 = await pushOperador.hookFallo(db, { user_id: 302, post_id: 9001 });
+  const f1 = captura[antesFallo];
+  t('B14 el posteo fallido avisa UNA vez, al operador, con su link al cliente y al posteo', rF1.ok === true && captura.length === antesFallo + 1 && f1[0] === 12 && f1[1].title === 'Conserje' && f1[1].body === 'El posteo de hoy de Pago Real no salió.' && f1[1].url === '/conserje?user=302&post=9001', JSON.stringify(rF1) + ' ' + JSON.stringify(f1));
+  const rF2 = await pushOperador.hookFallo(db, { user_id: 302, post_id: 9001 });
+  t('B15 el mismo posteo no avisa dos veces (dedup por posteo)', rF2.ok === false && rF2.reason === 'duplicado' && captura.length === antesFallo + 1, JSON.stringify(rF2));
+  const rF3 = await pushOperador.hookFallo(db, { user_id: 302, post_id: 9002 }, { sendFn: sendReal });
+  const filaF = db.prepare("SELECT COUNT(*) AS c FROM operador_avisos WHERE clave = 'fallo-9002'").get().c;
+  t('B16 sin suscripción, el fallo no se manda y su clave no se quema', rF3.ok === false && rF3.reason === 'no_subs' && filaF === 0 && captura.length === antesFallo + 1, JSON.stringify(rF3));
+  const rF4 = await pushOperador.hookFallo(db, { user_id: 302, post_id: 9002 });
+  t('B17 con transporte, ese mismo posteo avisa (la clave quedó libre)', rF4.ok === true && captura.length === antesFallo + 2 && captura[antesFallo + 1][1].url === '/conserje?user=302&post=9002', JSON.stringify(rF4));
 
   // ---------------------------------------------------------------
   seccion('C · boot real por HTTP — la suscripción del operador');
