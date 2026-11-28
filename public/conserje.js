@@ -60,7 +60,7 @@
   var AVA_GRADS = ['linear-gradient(135deg,#b0722e,#6b3f14)','linear-gradient(135deg,#3a4a5a,#101c28)','linear-gradient(135deg,#c0392b,#6e1f14)','linear-gradient(135deg,#b04a8a,#5f2350)','linear-gradient(135deg,#2793C8,#0A1E33)','linear-gradient(135deg,#1E9E5A,#0d5c31)','linear-gradient(135deg,#7a4ab0,#33184a)','linear-gradient(135deg,#d4692a,#7a3410)'];
   function avaGrad(uid) { return AVA_GRADS[Math.abs(Number(uid) || 0) % AVA_GRADS.length]; }
   var rosterOrden = [];
-  var autoInicioHecho = false;
+
   function avaClass(uid) { return 'avatar a' + (Math.abs(Number(uid) || 0) % 7); }
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   function fechaCorta(key) {
@@ -1332,20 +1332,12 @@
       // conserva si ya estaba abierta, sin auto-abrir ninguna.
       if (recargarCliente && selUser && centroModo === 'ficha') return cargarCliente(selUser);
       renderCentro();
-      // (LOTE CONSERJE-INICIO · pedido del dueño 24/11) El inicio del
-      // conserje ES «Su producto»: en la primera carga se abre el
-      // negocio más urgente en esa vista. El tablero «Hoy» queda a un
-      // toque. La bandera se consume una vez: las recargas y las
-      // vueltas al tablero no re-abren nada.
-      if (!autoInicioHecho) {
-        autoInicioHecho = true;
-        if (!selUser && rosterOrden.length) {
-          selUser = rosterOrden[0];
-          centroVista = 'producto';
-          renderRoster();
-          cargarCliente(selUser);
-        }
-      }
+      // (LOTE CONSERJE-NAV · palabra del dueño 27/11, que reemplaza al
+      // CONSERJE-INICIO del 24/11) La consola abre en su inicio — la
+      // producción de mañana y la bandeja — y NO auto-abre ningún
+      // negocio en «Su producto»: esa vista era adonde caía sin
+      // pedirlo («que no me lleve a esto»). La ficha de un cliente se
+      // abre solo cuando lo toca.
     }).catch(function () { if (!silencioso) toast('No se pudo cargar la consola.', 'err'); });
   }
   // (LOTE CONSERJE-VIVO) ¿Qué pedidos de la lista de decisiones no
@@ -1430,6 +1422,10 @@
   // en las dos pieles. Como las demás vueltas (data-mback, «← Hoy»),
   // no conserva lo tipeado sin guardar: la ficha se re-pinta entera.
   function irAlInicio() {
+    // (LOTE CONSERJE-NAV) La marca lleva al inicio de la NUEVA pantalla:
+    // si la consola estaba en la piel completa (ver-escritorio), la
+    // marca también sale de esa piel — el inicio es la bandeja.
+    document.body.classList.remove('ver-escritorio');
     selUser = null;
     cliente = null;
     highlightPostId = null;
@@ -1498,7 +1494,7 @@
     var ver = ev.target.closest('[data-ver]');
     if (ver) { onVerThumb(ver); return; }
     var sel = ev.target.closest('[data-sel]');
-    if (sel) { selUser = Number(sel.getAttribute('data-sel')); if (!document.body.classList.contains('ficha-open')) centroVista = 'producto'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); return; }
+    if (sel) { selUser = Number(sel.getAttribute('data-sel')); centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); return; } // (LOTE CONSERJE-NAV) Tocar un cliente abre SU FICHA (su información), como en el teléfono y en gotoFicha — nunca más la vista «Su producto»: era el pedido del dueño y el toque caía en el paginador de producto.
     var go = ev.target.closest('[data-goto]');
     if (go) { gotoFicha(go.getAttribute('data-goto'), go.getAttribute('data-goto-post')); return; }
     var f = ev.target.closest('[data-filtro]');
@@ -1531,7 +1527,7 @@
       var sigP = null;
       for (var kP = 1; kP <= ordenP.length; kP++) { var candP = ordenP[(idxP + kP) % ordenP.length]; if (candP && candP.user_id !== selUser) { sigP = candP; break; } }
       if (!sigP) { toast(ordenP.length ? 'El único con problemas es el que estás viendo.' : 'Nadie con problemas.'); re(); return; }
-      selUser = sigP.user_id; centroVista = 'producto'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); re();
+      selUser = sigP.user_id; centroVista = 'semana'; highlightPostId = null; cargarCliente(selUser); irAlCentro(); re();
     } else if (act === 'ir-manana') {
       centroModo = 'manana'; highlightPostId = null; renderCentro(); re();
     } else if (act === 'limpiar-busqueda') {

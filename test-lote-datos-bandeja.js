@@ -168,7 +168,7 @@ function seedBoost(over) {
     const ch = fs.readFileSync(path.join(__dirname, 'public/conserje.html'), 'utf8');
     t('C1 conserje.js consume hoy.preflight y hoy.impulsos_activos', cj.includes('h.preflight') && cj.includes('h.impulsos_activos') && cj.includes('datosBandejaHtml'));
     t('C2 la franja de escritorio existe y el render la llama', ch.includes('id="pfWrap"') && cj.includes('renderDatosBandeja()'));
-    t('C3 sello conserje.js?v=27', ch.includes('/conserje.js?v=27'));
+    t('C3 el sello de conserje.js avanzó (v=27 en su lote; hoy v=28 por CONSERJE-NAV)', /\/conserje\.js\?v=(2[7-9]|[3-9]\d)/.test(ch));
   }
 
   console.log(`\nDATOS-BANDEJA: ${ok} ok, ${mal} mal`);
