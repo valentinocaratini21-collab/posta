@@ -3,6 +3,18 @@
 // mandes push notifications de cada cosa que necesita los clientes.
 // solo mandame las urgentes: un posteo no salio, pidieron un cambio, o
 // algo de ese estilo.»)
+// (LOTE CONSERJE-AVISOS-APAGADOS · orden del dueño 27/11 23:48: «no
+// mandarme notificaciones de clientes. Te tenes que hacer cargo vos
+// de todo.») Las push del conserje al operador quedan APAGADAS POR
+// COMPLETO: el interruptor avisosActivos() (env OPERADOR_AVISOS ===
+// 'on', default APAGADO) cortocircuita el embudo único de envío y la
+// entrada de cada hook y del barrido ANTES de reclamar claves de
+// dedup — apagado no se manda nada, no se toca la red y no se quema
+// ninguna clave, así el historial de avisos arranca limpio si el
+// dueño los vuelve a prender. La taxonomía de urgentes de abajo
+// queda DORMIDA, intacta: es el comportamiento con el interruptor
+// prendido. Las rutas de suscripción/estado no cambian (suscribirse
+// no manda nada por sí mismo).
 // Los avisos del OPERADOR con el teléfono bloqueado, atados a su
 // identidad — la cuenta de la casa (user_id 12, la misma que
 // conserje-revision llama OWNER_USER_ID). Desde el ajuste, SOLO avisa
@@ -68,6 +80,14 @@ const TITULO = 'Conserje';
 // casa) se ven en el conserje pero NO zumban.
 const TIPOS_URGENTES = ['conserje', 'prueba_retorno_dm'];
 
+// EL INTERRUPTOR (LOTE CONSERJE-AVISOS-APAGADOS): las push del
+// conserje al operador solo existen si la env OPERADOR_AVISOS vale
+// exactamente 'on'. Sin la variable — el default — están APAGADAS.
+// Se lee en cada llamada (no se cachea al requerir el módulo).
+function avisosActivos() {
+  return process.env.OPERADOR_AVISOS === 'on';
+}
+
 function ensureSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS operador_avisos (
     clave TEXT PRIMARY KEY,
@@ -95,6 +115,9 @@ function linkFicha(uid, postId) {
 // casa, el mismo de push.notifyPostFailed con opts.sendFn).
 async function avisarOperador(db, aviso, opts) {
   const o = opts || {};
+  // Interruptor apagado: no se crea tabla, no se reclama clave, no
+  // se toca la red. TODOS los caminos pasan por este embudo.
+  if (!avisosActivos()) return { ok: false, reason: 'avisos_apagados' };
   if (!db) return { ok: false, reason: 'no_db' };
   ensureSchema(db);
   const clave = String((aviso && aviso.clave) || '');
@@ -180,6 +203,7 @@ function avisoDeFallo(db, f) {
 // error se traga y se devuelve como reason.
 async function hookCaso(db, caso, opts) {
   try {
+    if (!avisosActivos()) return { ok: false, reason: 'avisos_apagados' };
     if (!caso || !TIPOS_URGENTES.includes(String(caso.tipo || ''))) return { ok: false, reason: 'tipo_sin_aviso' };
     const aviso = avisoDeCaso(db, caso);
     if (!aviso) return { ok: false, reason: 'sin_aviso' };
@@ -193,6 +217,7 @@ async function hookCaso(db, caso, opts) {
 // chat): los cubre el barrido sobre voiceRequests.
 async function hookPedido(db, p, opts) {
   try {
+    if (!avisosActivos()) return { ok: false, reason: 'avisos_apagados' };
     const aviso = avisoDePedido(db, p);
     if (!aviso) return { ok: false, reason: 'sin_aviso' };
     return await avisarOperador(db, aviso, opts);
@@ -207,6 +232,7 @@ async function hookPedido(db, p, opts) {
 // el fracaso se registre dos veces.
 async function hookFallo(db, f, opts) {
   try {
+    if (!avisosActivos()) return { ok: false, reason: 'avisos_apagados' };
     const aviso = avisoDeFallo(db, f);
     if (!aviso) return { ok: false, reason: 'sin_aviso' };
     return await avisarOperador(db, aviso, opts);
@@ -226,6 +252,9 @@ async function hookFallo(db, f, opts) {
 async function barrido(db, opts) {
   const o = opts || {};
   const res = { casos: 0, pedidos: 0, enviados: 0 };
+  // Interruptor apagado: el barrido ni lee las superficies ni crea
+  // la tabla — devuelve el resumen en cero.
+  if (!avisosActivos()) return res;
   if (!db) return res;
   ensureSchema(db);
   const supportCases = require('./support-cases');
@@ -277,6 +306,7 @@ async function barrido(db, opts) {
 module.exports = {
   OPERADOR_USER_ID,
   TIPOS_URGENTES,
+  avisosActivos,
   ensureSchema,
   avisarOperador,
   avisoDeCaso,
