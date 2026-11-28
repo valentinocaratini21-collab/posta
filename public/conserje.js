@@ -91,6 +91,63 @@
     });
   }
 
+  // ---------------- Avisos del operador (LOTE CONSERJE-PUSH-OPERADOR) --
+  // La consola instalada ofrece activar los avisos: el permiso y la
+  // suscripción de ESTE dispositivo, registrados por la puerta admin
+  // (la consola entra con token, no con sesión de cliente) y atados a
+  // la identidad del operador en el servidor (la cuenta de la casa).
+  // El flujo de permiso/suscripción es el mismo de la app del cliente
+  // (vapid-key → permiso → pushManager.subscribe), cambia la puerta.
+  var opPushSuscrito = null; // null = todavía no se consultó el estado
+  function opPushKeyToU8(base64String) {
+    var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = window.atob(base64);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function opPushPintar() {
+    var b = $('btnOpPush');
+    if (b) b.textContent = opPushSuscrito ? '🔔 Avisos ✓' : '🔔 Activar avisos';
+    if (mTab === 'mas') renderMovil();
+  }
+  function opPushRefrescar() {
+    api('/api/admin/conserje/push/estado').then(function (j) {
+      opPushSuscrito = !!(j && j.ok && j.suscrito);
+      opPushPintar();
+    }).catch(function () { /* sin estado: el botón queda en «activar» */ });
+  }
+  function activarAvisosOperador() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast('Este dispositivo no puede recibir avisos desde acá.', 'err'); return;
+    }
+    if (Notification.permission === 'denied') {
+      toast('Los avisos están bloqueados en este dispositivo. Activalos desde los ajustes del navegador.', 'err'); return;
+    }
+    api('/api/push/vapid-key').then(function (r) {
+      if (!r || !r.key) { toast('Los avisos no están disponibles en el servidor.', 'err'); return null; }
+      var pedir = Notification.permission === 'granted' ? Promise.resolve('granted') : Notification.requestPermission();
+      return pedir.then(function (perm) {
+        if (perm !== 'granted') { toast('Sin permiso no puedo avisarte.', 'err'); return null; }
+        return navigator.serviceWorker.ready.then(function (reg) {
+          return reg.pushManager.getSubscription().then(function (sub) {
+            return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: opPushKeyToU8(r.key) });
+          });
+        });
+      });
+    }).then(function (sub) {
+      if (!sub) return;
+      var j = sub.toJSON();
+      api('/api/admin/conserje/push/suscribir', { method: 'POST', body: { endpoint: j.endpoint, keys: j.keys } }).then(function (res) {
+        if (res && res.ok) {
+          opPushSuscrito = true; opPushPintar();
+          toast('Avisos activados: te aviso cuando un negocio te necesite.');
+        } else toast('No se pudo activar el aviso en este dispositivo.', 'err');
+      }).catch(function () { toast('No se pudo activar el aviso en este dispositivo.', 'err'); });
+    }).catch(function () { toast('No se pudo activar el aviso en este dispositivo.', 'err'); });
+  }
+
   var vista = null;
   // (LOTE CONSERJE-VIVO) La consola se refresca sola y avisa los
   // pedidos nuevos. Hasta hoy la vista era la foto del momento en
@@ -1192,7 +1249,9 @@
     return html;
   }
   function mMasHtml() {
-    return '<div class="sec-t" style="margin-top:2px">Accesos</div>'
+    return '<div class="sec-t" style="margin-top:2px">Avisos</div>'
+      + '<button class="m-link" data-mact="avisos" type="button">' + (opPushSuscrito ? '🔔 Avisos activados' : '🔔 Activar avisos') + '<span class="go">' + (opPushSuscrito ? '✓' : '›') + '</span></button>'
+      + '<div class="sec-t">Accesos</div>'
       + '<button class="m-link" data-mact="escritorio" type="button">🖥️ Consola completa<span class="go">›</span></button>'
       + '<a class="m-link" href="/panel">🧭 Panel de soporte<span class="go">›</span></a>'
       + '<button class="m-link" data-mact="descuentos" type="button">🏷️ Descuentos por código<span class="go">›</span></button>'
@@ -1213,6 +1272,7 @@
     if (ac) {
       var a = ac.getAttribute('data-mact');
       if (a === 'escritorio') { document.body.classList.add('ver-escritorio'); window.scrollTo(0, 0); }
+      else if (a === 'avisos') { activarAvisosOperador(); }
       else if (a === 'recargar') { cargar(true); }
       else if (a === 'descuentos') { mTab = 'descuentos'; renderMovil(); window.scrollTo(0, 0); }
       return;
@@ -1710,6 +1770,11 @@
   limpiarBuscadores();
   window.addEventListener('pageshow', function (ev) { if (ev && ev.persisted) { limpiarBuscadores(); renderRoster(); } });
   $('btnRecargar').addEventListener('click', function () { cargar(true); });
+  // (LOTE CONSERJE-PUSH-OPERADOR) El botón de avisos de la barra de
+  // escritorio: la misma activación que el de Más en el teléfono.
+  var btnOpPushEl = $('btnOpPush');
+  if (btnOpPushEl) btnOpPushEl.addEventListener('click', activarAvisosOperador);
+  opPushRefrescar();
   // (LOTE CONSERJE-VIVO) El aviso de pedidos nuevos: al tocarlo se
   // apaga y lleva a la lista — en el teléfono, a la pestaña «Hoy»;
   // en la compu, a la columna de decisiones con un destello.

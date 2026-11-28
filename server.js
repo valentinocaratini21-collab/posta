@@ -16,6 +16,7 @@ costs.initCosts(db, {
 }); // medición de gasto de IA (api_costs) + techo mensual por usuario
 const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
+const pushOperador = require('./push-operador'); // (LOTE CONSERJE-PUSH-OPERADOR) avisos push del operador, atados a la casa (user 12)
 const videoEdicion = require('./video-edicion'); // (LOTE VIDEO-EDICION-AVISOS) edición automática del video del cliente (ffmpeg local, USD 0, sin IA)
 // 🌅 RITUAL DE LA MAÑANA (LOTE 5/8): día, racha, álbum y elección (módulo
 // puro + SQL); la generación de alternas frescas vive en los endpoints de
@@ -13537,6 +13538,37 @@ app.get('/api/admin/support/conserje/pendientes', requireAdminToken, (req, res) 
   try { res.json(supportCases.pendingConcierge(db, {})); }
   catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
 });
+// (LOTE CONSERJE-PUSH-OPERADOR) La suscripción push DEL OPERADOR: la
+// consola entra con token admin (no con la sesión de un cliente), así
+// que su registro va por esta puerta y la fila queda atada a la
+// identidad del operador — la cuenta de la casa (user 12), que es a
+// quien push-operador le manda los avisos. Misma validación y misma
+// tabla que /api/push/subscribe (webpush: endpoint https + keys).
+app.post('/api/admin/conserje/push/suscribir', requireAdminToken, (req, res) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
+      return res.status(400).json({ ok: false, error: 'Suscripción inválida' });
+    }
+    push.ensureTransportColumn(db);
+    const keysJson = JSON.stringify(keys && typeof keys === 'object' ? keys : {});
+    db.prepare(`INSERT INTO push_subscriptions (user_id, endpoint, keys_json, transport)
+      VALUES (?,?,?,'webpush')
+      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys_json = excluded.keys_json, transport = excluded.transport`)
+      .run(pushOperador.OPERADOR_USER_ID, endpoint, keysJson);
+    res.json({ ok: true, user_id: pushOperador.OPERADOR_USER_ID });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No se pudo guardar la suscripción' });
+  }
+});
+// El estado de los avisos del operador, para que la consola pinte el
+// botón como corresponde («Activar avisos» / «Avisos activados»).
+app.get('/api/admin/conserje/push/estado', requireAdminToken, (req, res) => {
+  try {
+    const r = db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(pushOperador.OPERADOR_USER_ID);
+    res.json({ ok: true, suscrito: !!(r && Number(r.c) > 0) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'soporte' }); }
+});
 app.get('/api/admin/support/conserje/panel', requireAdminToken, (req, res) => {
   try {
     const panel = supportCases.buildOwnerPanel(db, { limit: req.query.limit || 100, absImageUrl });
@@ -21693,6 +21725,17 @@ app.post('/api/subir/idea', requireAuth, (req, res) => {
     // (LOTE RESPUESTA-HILO-IDEA) El mensaje que abre la idea queda
     // también enlazado por idea_id: el hilo se lee por un solo camino.
     db.prepare('UPDATE chat_messages SET idea_id = ? WHERE id = ?').run(Number(row.id), Number(m.lastInsertRowid));
+    // (LOTE CONSERJE-PUSH-OPERADOR) Aviso al operador: nació una idea
+    // sin revisar. Fire-and-forget con dedup durable (la clave lleva
+    // idea + mensaje: un seguimiento que reabre la idea es otro
+    // mensaje y avisa de nuevo; este nacimiento, nunca dos veces).
+    try {
+      const profIdea = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid);
+      pushOperador.hookPedido(db, {
+        user_id: uid, business_name: (profIdea && profIdea.business_name) || '',
+        es_idea: true, idea_id: Number(row.id), id: Number(m.lastInsertRowid), posteo: null,
+      }).catch(() => {});
+    } catch (e) { /* el aviso nunca frena la idea */ }
     return res.json({ ok: true, idea: subirIdeaPayload(uid, row) });
   } catch (e) { console.error('[subir-idea]', e.message); return res.status(500).json({ ok: false, error: 'No se pudo guardar tu idea' }); }
 });
@@ -50074,7 +50117,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261105-v1389';
+const BUILD_ID = '20261105-v1390';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

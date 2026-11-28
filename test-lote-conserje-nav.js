@@ -41,7 +41,7 @@ t('A1 el toque del roster abre la ficha (centroVista semana, sin «producto»)',
 t('A2 «Ir al próximo con problemas» también aterriza en la ficha', jsSrc.includes("selUser = sigP.user_id; centroVista = 'semana';"));
 t('A3 la marca sale de la piel completa al ir al inicio', jsSrc.includes("document.body.classList.remove('ver-escritorio');"));
 t('A4 el pie del riel dice «su ficha», como el toque nuevo', htmlSrc.includes('ves <b>su</b> ficha'));
-t('A5 sello conserje.js?v=29', htmlSrc.includes('/conserje.js?v=29'));
+t('A5 sello conserje.js?v=30', htmlSrc.includes('/conserje.js?v=30'));
 
 // ---------------------------------------------------------------------
 const SEED_BOOT = `
@@ -96,7 +96,7 @@ function puertoLibre(p) {
     }
     t('B1 el servidor levanta en el puerto libre', up, serverLog.slice(-200));
     const html = await (await fetch(base + '/conserje?token=' + TOKEN)).text();
-    t('B2 /conserje sirve con el sello v=29', html.includes('/conserje.js?v=29'));
+    t('B2 /conserje sirve con el sello v=29', html.includes('/conserje.js?v=30'));
 
     let pw = null;
     for (const cand of ['/tmp/pw-boot/node_modules/playwright-core',

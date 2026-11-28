@@ -10,6 +10,7 @@ const publishWatchdog = require('./publish-watchdog');
 // 🛟 CONSOLA DE SOPORTE (lote consola-soporte, base v697): las alertas que
 // abren casos solas corren junto al vigía (mismo barrido + pasada al boot).
 const supportCases = require('./support-cases');
+const pushOperador = require('./push-operador'); // (LOTE CONSERJE-PUSH-OPERADOR) barrido de avisos al operador, junto al de soporte
 const conserjeRevision = require('./conserje-revision'); // (LOTE CONSERJE-REVISION, base v748) cierre de la noche 00:00
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
@@ -709,6 +710,12 @@ function startScheduler(db) {
       // 🛟 Consola de soporte: alertas → casos (mismo barrido que el vigía).
       try { supportCases.scanAlerts(db, {}); supportCases.refreshCaseStates(db, {}); }
       catch (e) { console.error('[soporte]', e.message); }
+      // 🔔 Avisos al operador (LOTE CONSERJE-PUSH-OPERADOR): la red de
+      // los hooks inmediatos — lo que nació sin hook y las piezas de
+      // mañana que siguen esperando decisión con la ventana abierta.
+      // Dedup durable en el módulo: nunca repite un aviso.
+      try { pushOperador.barrido(db, {}).catch((e) => console.error('[push-operador]', e.message)); }
+      catch (e) { console.error('[push-operador]', e.message); }
     });
     setTimeout(() => {
       try {
@@ -717,6 +724,8 @@ function startScheduler(db) {
       } catch (e) { console.error('[publish-watchdog] boot:', e.message); }
       try { supportCases.scanAlerts(db, {}); supportCases.refreshCaseStates(db, {}); }
       catch (e) { console.error('[soporte] boot:', e.message); }
+      try { pushOperador.barrido(db, {}).catch((e) => console.error('[push-operador] boot:', e.message)); }
+      catch (e) { console.error('[push-operador] boot:', e.message); }
     }, 30000);
     console.log(`[posta] Vigía de vencidos activo (barrido cada ${wdEvery} min + pasada al boot)`);
   } catch (e) {

@@ -180,6 +180,15 @@ function openCase(db, fields) {
     trunc(f.dueno || 'equipo', 80), trunc(f.siguientePaso || '', 500), dedup);
   const caso = db.prepare('SELECT * FROM support_cases WHERE id = ?').get(r.lastInsertRowid);
   addEvent(db, caso.id, { actor: 'sistema', kind: 'alerta', texto: 'Caso abierto: ' + titulo });
+  // (LOTE CONSERJE-PUSH-OPERADOR) Aviso push al operador: este es el
+  // punto único donde NACEN los casos (los duplicados por dedup_key
+  // volvieron antes, así que acá el caso siempre es nuevo). El hook
+  // filtra por tipo (solo los que la superficie de pendientes muestra)
+  // y es fire-and-forget con su dedup durable: abrir un caso jamás se
+  // frena ni se rompe por el aviso. Require perezoso: push-operador no
+  // se carga al cargar este módulo (y su barrido nos requiere a
+  // nosotros recién al correr).
+  try { require('./push-operador').hookCaso(db, caso).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
   return { ok: true, caso, duplicado: false };
 }
 
